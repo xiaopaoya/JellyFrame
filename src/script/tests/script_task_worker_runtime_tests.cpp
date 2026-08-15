@@ -41,6 +41,19 @@ ScriptTaskSupervisor make_service_stress_supervisor() {
     return ScriptTaskSupervisor(options);
 }
 
+ScriptTaskSupervisor make_frame_backpressure_supervisor() {
+    ScriptTaskSupervisorOptions options;
+    options.input_mailbox = {4, 4096};
+    options.frame_mailbox = {1, 4096};
+    options.service_request_mailbox = {4, 1024};
+    options.frame_leases = {4, 32 * 1024, 64 * 1024};
+    options.service_payload_leases = {4, 4096, 8192};
+    options.max_service_tombstones = 4;
+    options.max_native_release_intents = 4;
+    options.fatal_mailbox = {2, 40};
+    return ScriptTaskSupervisor(options);
+}
+
 ScriptTaskWorkerRuntimeOptions runtime_options() {
     ScriptTaskWorkerRuntimeOptions options;
     options.viewport = {0, 0, 160, 100};
@@ -110,6 +123,38 @@ void worker_input_publishes_value_frame() {
     check(saw_clicked, "replacement frame contains JS DOM mutation");
     check(runtime.telemetry().input_packet_seq == 2 && runtime.telemetry().js_mutation_seq > 0,
           "worker exposes monotonic value sequence telemetry");
+}
+
+void worker_retries_dirty_frame_after_ui_mailbox_backpressure() {
+    ScriptTaskSupervisor supervisor = make_frame_backpressure_supervisor();
+    const ScriptAppSession session = supervisor.begin(71);
+    ScriptTaskWorkerRuntime runtime(session, runtime_options());
+    check(runtime.initialize(
+              "<body><button id='button'>idle</button></body>",
+              "button { display: block; width: 120px; height: 40px; margin: 0; }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "backpressure worker fixture initializes");
+    check(runtime.publish_frame(supervisor).accepted(), "initial frame fills the one-slot UI mailbox");
+
+    const ScriptTaskInputCodecOptions input_options = runtime_options().input_codec;
+    check(post_script_task_input(supervisor, session, 1,
+                                 {ScriptTaskInputKind::PointerDown, 1, 1, 0, 0, 0, 1, 0, 0, {}},
+                                 input_options).accepted(),
+          "input posts while UI mailbox is full");
+    const ScriptTaskWorkerRuntimeStepResult blocked = runtime.process_one(supervisor);
+    check(blocked.packet_consumed && blocked.dom_mutated && !blocked.frame_published,
+          "dirty interaction frame remains pending after mailbox backpressure");
+
+    ScriptTaskAppFrame frame;
+    check(take_script_task_app_frame(supervisor, session, runtime_options().frame_codec, frame) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "UI consumes the older frame and releases mailbox capacity");
+    const ScriptTaskWorkerRuntimeStepResult retry = runtime.process_one(supervisor);
+    check(!retry.packet_consumed && retry.frame_published,
+          "idle worker retry publishes the retained dirty frame after capacity returns");
+    check(take_script_task_app_frame(supervisor, session, runtime_options().frame_codec, frame) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "UI receives the retried frame by value");
 }
 
 void worker_v2_publishes_clip_metadata_without_cross_task_objects() {
@@ -581,6 +626,7 @@ void worker_input_node_destruction_clears_interaction_state() {
 int script_task_worker_runtime_tests_main() {
     try {
         worker_input_publishes_value_frame();
+        worker_retries_dirty_frame_after_ui_mailbox_backpressure();
         worker_v2_publishes_clip_metadata_without_cross_task_objects();
         worker_eval_failure_becomes_value_fatal();
         worker_timer_publishes_value_frame();

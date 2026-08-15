@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Script workers now retry an already rebuilt dirty value frame when the UI
+  mailbox regains capacity, so a transient frame-mailbox rejection cannot
+  permanently strand an interaction update.
+
 - Script workers now expose a terminal `Fatal` initialization result rather
   than allowing a failed worker to create another private realm. Service
   payload intake also releases its sealed lease when copying is rejected

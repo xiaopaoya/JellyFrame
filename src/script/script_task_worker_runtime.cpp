@@ -227,7 +227,13 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::process_one(ScriptTas
         return finish(result);
     }
     ScriptTaskPacket packet;
-    if (!supervisor.take_input(packet)) return result;
+    if (!supervisor.take_input(packet)) {
+        if (has_dirty_document()) {
+            result.frame = publish_frame(supervisor);
+            result.frame_published = result.frame.accepted();
+        }
+        return finish(result);
+    }
     result.packet_consumed = true;
     if (packet.session != session_) {
         ++telemetry_.rejected_input_packets;
