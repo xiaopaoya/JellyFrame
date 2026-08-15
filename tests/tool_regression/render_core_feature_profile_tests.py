@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 BASE_FEATURES = ("core.document", "core.paint")
-LOCKED_SOURCE_HASH = "d6646c85247a0103ad3c7cdd60830612e08c4f27c80a500fb7a4d8725445fc51"
+LOCKED_SOURCE_HASH = "cc78dc3f1bac8aa03d3c928ccf5292407586fe70d08d6ecec1907d59b41609e1"
 TEST_ARGS: argparse.Namespace | None = None
 
 PROFILE_CASES = (

@@ -14,7 +14,7 @@
 | JellyFrame App Runtime | 解压后的 Core 源码归档 | `0.6.0` source profile | `verified` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 会为独立 Runtime 构建选用解压后的归档，并运行 App Runtime CTest；仍与 package 模式互斥。 |
 | Render Core standalone 测试 | 无 Runtime、无 JerryScript | `0.6.0` / ABI `1` | `verified` | 已验证独立配置、构建、CTest 和安装；package 只包含 Core target、公共头文件和能力 profile。 |
 | Render Core 源码归档 | 无 Runtime、无 JerryScript | `0.6.0` / ABI `1` | `verified` | 确定性的 `.tar.gz` 与 SHA-256 sidecar，作为 CI artifact 保留；CI 会连续打包两次并比对字节、解压、构建、运行 CTest、安装，再配置 Runtime package consumer。这不是已签名的发布产物。 |
-| JellyFrame App Runtime | 已安装 Render Core package | `0.6.0` / ABI `1` / 锁定 source manifest identity | `verified` | Runtime 使用 `JELLYFRAME_RENDER_CORE_PROVIDER=package`；会将 package manifest 与精确锁定的 source hash 比对，再复制到构建 provenance。 |
+| JellyFrame App Runtime | 已安装 Render Core package | `0.6.0` / ABI `1` / 规范化的锁定 source manifest identity | `verified` | Runtime 使用 `JELLYFRAME_RENDER_CORE_PROVIDER=package`；会将 package manifest 与精确锁定的 source hash 比对，再复制到构建 provenance。identity 会规范化文本换行，因此同一源码的 Windows 与 Unix checkout 得到相同结果。 |
 | JellyFrame App Runtime | 已安装 Render Core package | 错误版本、ABI 或 source identity | `rejected` | 配置阶段执行精确版本、engine ABI 和 source hash 检查；package 模式不允许偷偷回退到源码 Core。 |
 | App package 预检 | 生成的 Render Core capability profile | schema `1` / engine ABI `1` | `verified` | `package_app.py` 会在读取资源前校验 profile schema、已知 feature ID 和依赖闭包；缺失必需能力族会拒绝 package。 |
 | JellyFrame Script bridge | 源码内 Render Core | `0.6.0-dev` 源码线 | `独立验证` | JerryScript 仍是可选的 App Runtime 依赖；这不等于 package-mode scripting 已验证。 |
@@ -29,7 +29,7 @@ Runtime package consumer 从 `cmake/jellyframe_dependency_lock.cmake` 读取：
 ```text
 JELLYFRAME_RENDER_CORE_LOCKED_VERSION    = 0.6.0
 JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI = 1
-JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = d6646c85247a0103ad3c7cdd60830612e08c4f27c80a500fb7a4d8725445fc51
+JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = cc78dc3f1bac8aa03d3c928ccf5292407586fe70d08d6ecec1907d59b41609e1
 ```
 
 这份锁是消费者策略，不表示未来所有 Render Core 构建都必须保持同一版本。

@@ -34,8 +34,17 @@ function(jellyframe_compute_render_core_source_hash source_root)
     set(_jellyframe_render_core_hash_manifest "")
     set(_jellyframe_render_core_hash_manifest_entries)
     foreach(_jellyframe_render_core_hash_relative IN LISTS _jellyframe_render_core_hash_sources)
-        file(SHA256 "${_jellyframe_render_core_hash_root}/${_jellyframe_render_core_hash_relative}"
-            _jellyframe_render_core_hash_file)
+        # Source packages and Git checkouts may use different text line
+        # endings on Windows and Unix. Core identity describes source content,
+        # not a platform checkout representation, so normalize before hashing.
+        file(READ "${_jellyframe_render_core_hash_root}/${_jellyframe_render_core_hash_relative}"
+            _jellyframe_render_core_hash_content)
+        string(REPLACE "\r\n" "\n" _jellyframe_render_core_hash_content
+            "${_jellyframe_render_core_hash_content}")
+        string(REPLACE "\r" "\n" _jellyframe_render_core_hash_content
+            "${_jellyframe_render_core_hash_content}")
+        string(SHA256 _jellyframe_render_core_hash_file
+            "${_jellyframe_render_core_hash_content}")
         string(APPEND _jellyframe_render_core_hash_manifest
             "${_jellyframe_render_core_hash_relative}\t${_jellyframe_render_core_hash_file}\n")
         string(REPLACE "\\" "\\\\" _jellyframe_render_core_hash_json_path
