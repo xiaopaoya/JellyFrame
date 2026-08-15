@@ -17,6 +17,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Script-task service bridging now verifies a returned handle's app/token
+  ownership before invoking provider copy or release callbacks. A malformed
+  queue entry becomes a terminal `HandleRejected` value without touching a
+  different consumer's resource.
+
 - Script-task worker-inbox reception now always requires an explicit
   `ScriptAppSession`, including the dispatch helper. The old current-session
   convenience receive path has been removed so a delayed worker cannot consume

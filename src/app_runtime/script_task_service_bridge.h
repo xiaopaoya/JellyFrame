@@ -35,6 +35,7 @@ enum class ScriptTaskServicePayloadErrorCode : std::uint32_t {
     CopyUnavailable = 1,
     CopyFailed = 2,
     LeaseRejected = 3,
+    HandleRejected = 4,
 };
 
 // Supervisor-only bounded writer for a host completion representation. The
@@ -62,8 +63,9 @@ using ScriptTaskServicePayloadCopyCallback = bool (*)(void* user,
                                                       ScriptTaskServicePayloadWriter& output);
 
 // Releases the provider record and its host-table entry exactly once after a
-// completion has been copied or discarded. When absent, the bridge releases
-// only the generic host-table entry.
+// completion has been copied or discarded. The bridge verifies handle
+// ownership before this callback runs; it must not re-enter or retain the
+// bridge. When absent, the bridge releases only the generic host-table entry.
 using ScriptTaskServicePayloadReleaseCallback = bool (*)(void* user,
                                                          const HostServiceCompletion& completion);
 
@@ -112,6 +114,7 @@ struct ScriptTaskServiceBridgePumpResult {
     std::size_t released_payload_leases = 0;
     std::size_t published_payload_leases = 0;
     std::size_t payload_copy_failures = 0;
+    std::size_t payload_handle_rejections = 0;
     std::size_t payload_lease_rejections = 0;
     bool worker_inbox_full = false;
 };
@@ -197,6 +200,7 @@ private:
 
     static bool same_token(const ScriptTaskServiceToken& left, const ScriptTaskServiceToken& right);
     static bool completion_matches(const Record& record, const HostServiceCompletion& completion);
+    bool completion_result_handle_is_owned(const HostServiceCompletion& completion) const;
     bool release_completion_payload(const HostServiceCompletion& completion);
     bool release_record_completion_payload(Record& record);
     bool release_record_payload(Record& record);

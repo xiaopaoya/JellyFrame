@@ -454,6 +454,44 @@ void bridge_discards_malformed_completion_without_retiring_inflight_request() {
     assert(completion.kind == HostServiceJobKind::NetworkFetch);
 }
 
+void bridge_rejects_unowned_completion_handle_before_provider_callbacks() {
+    AppRuntimeHost host = make_host();
+    const AppInstance app = host.launch("org.example.script.unowned-handle", AppRole::App);
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(app.id);
+    PayloadAdapter adapter{&host, 0, {1, 2, 3}};
+    ScriptTaskServiceBridge bridge(host, supervisor, {4, 20, copy_payload, &adapter, release_payload, &adapter});
+    const ScriptTaskServiceSubmitResult submitted = bridge.submit(
+        session, 41, HostServiceJobKind::NetworkFetch, 0, 0, 0, 42);
+    assert(submitted.accepted());
+    HostServiceRequest request;
+    assert(host.pop_worker_request(request));
+
+    const std::uint32_t other_consumer_handle = host.handles().allocate(
+        HostServiceHandleKind::FetchResponse, app.id, 8, nullptr, request.client_token + 1);
+    assert(other_consumer_handle != 0);
+    assert(host.completions().push(complete(request, other_consumer_handle)));
+
+    AppFrameScratch scratch = make_scratch();
+    const ScriptTaskServiceBridgePumpResult rejected = bridge.pump(scratch);
+    assert(rejected.payload_handle_rejections == 1);
+    assert(rejected.payload_copy_failures == 0);
+    assert(rejected.released_completion_sources == 0);
+    assert(adapter.copy_calls == 0);
+    assert(adapter.release_calls == 0);
+    assert(host.handles().contains(other_consumer_handle));
+    assert(bridge.active_request_count() == 0);
+
+    ScriptTaskPacket packet;
+    assert(supervisor.take_input(session, packet));
+    ScriptTaskServiceCompletion completion;
+    assert(decode_script_task_service_completion(packet.payload, completion));
+    assert(completion.status == HostServiceStatus::Failed);
+    assert(completion.error_code == static_cast<std::uint32_t>(ScriptTaskServicePayloadErrorCode::HandleRejected));
+    assert(completion.payload_lease_id == 0);
+    assert(host.handles().release(other_consumer_handle));
+}
+
 void bridge_rejects_mailboxes_that_cannot_hold_completion_payloads() {
     AppRuntimeHost host = make_host();
     const AppInstance app = host.launch("org.example.script.packet-budget", AppRole::App);
@@ -512,6 +550,7 @@ int script_task_service_bridge_tests_main() {
     bridge_does_not_copy_payload_for_cancelled_inflight_completion();
     bridge_retries_after_worker_inbox_backpressure();
     bridge_discards_malformed_completion_without_retiring_inflight_request();
+    bridge_rejects_unowned_completion_handle_before_provider_callbacks();
     bridge_rejects_mailboxes_that_cannot_hold_completion_payloads();
     bridge_teardown_leaves_late_inflight_work_to_host_stale_cleanup();
     bridge_reports_payload_copy_and_lease_failures_as_terminal_values();

@@ -52,6 +52,9 @@ supervisor task 必须优先 drain request/cancel mailbox：queued job 应被移
 字节；release callback 必须在复制成功、复制失败、取消、陈旧 completion 与 teardown 时恰好一次清理服务
 provider record 和 host-table entry。worker completion sink 收到的是 `payload_lease_id`，使用
 `take_script_task_service_payload()` 复制并立即释放；它绝不能解释或保存 host handle。
+bridge 会在调用 copy/release callback 前验证 result handle 仍存在、属于 completion 的 app，并在 handle
+声明 token 时匹配该 consumer。验证失败时不会调用 callback、不会释放其他 consumer 的资源，而是向 worker
+投递 `Failed`（`errorCode=HandleRejected`）终态值。两个 callback 都不得重入或保存 bridge。
 若该 sealed lease 已失效，worker runtime 仍必须以空 payload 向已登记的 JS callback 交付一次
 `Failed` completion（`errorCode=LeaseRejected`），不能遗留一个永久等待的 callback。
 

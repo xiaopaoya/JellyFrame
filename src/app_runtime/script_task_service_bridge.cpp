@@ -295,16 +295,25 @@ void ScriptTaskServiceBridge::erase_record(std::size_t index) {
     records_.pop_back();
 }
 
-bool ScriptTaskServiceBridge::release_completion_payload(const HostServiceCompletion& completion) {
+bool ScriptTaskServiceBridge::completion_result_handle_is_owned(
+    const HostServiceCompletion& completion) const {
     if (completion.result_handle == 0) {
+        return true;
+    }
+    HostHandleInfo info;
+    return host_.handles().lookup_copy(completion.result_handle, info) &&
+           info.app_instance_id == completion.app_instance_id &&
+           (info.client_token == 0 || info.client_token == completion.client_token);
+}
+
+bool ScriptTaskServiceBridge::release_completion_payload(const HostServiceCompletion& completion) {
+    if (!completion_result_handle_is_owned(completion) || completion.result_handle == 0) {
         return false;
     }
     if (payload_release_ != nullptr) {
         return payload_release_(payload_release_user_, completion);
     }
-    HostHandleInfo info;
-    return host_.handles().lookup_copy(completion.result_handle, info) &&
-           info.app_instance_id == completion.app_instance_id && host_.handles().release(completion.result_handle);
+    return host_.handles().release(completion.result_handle);
 }
 
 bool ScriptTaskServiceBridge::release_record_completion_payload(Record& record) {
@@ -329,6 +338,14 @@ bool ScriptTaskServiceBridge::release_record_payload(Record& record) {
 void ScriptTaskServiceBridge::prepare_completion_payload(Record& record,
                                                          ScriptTaskServiceBridgePumpResult& result) {
     if (record.completion.result_handle == 0) {
+        return;
+    }
+    if (!completion_result_handle_is_owned(record.completion)) {
+        record.completion.result_handle = 0;
+        record.completion.status = HostServiceStatus::Failed;
+        record.completion.error_code = static_cast<std::uint32_t>(ScriptTaskServicePayloadErrorCode::HandleRejected);
+        record.completion.byte_count = 0;
+        ++result.payload_handle_rejections;
         return;
     }
 
