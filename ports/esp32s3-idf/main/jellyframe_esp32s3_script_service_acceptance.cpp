@@ -262,6 +262,13 @@ struct EchoState {
     std::atomic<std::uint32_t> completion_stale{0};
     std::atomic<std::uint32_t> completion_cancelled{0};
     std::atomic<std::uint32_t> completion_rejected{0};
+    std::atomic<std::uint32_t> completion_identity_kind_rejected{0};
+    std::atomic<std::uint32_t> completion_identity_app_rejected{0};
+    std::atomic<std::uint32_t> completion_identity_token_rejected{0};
+    std::atomic<std::uint32_t> completion_identity_pending_preserved{0};
+    std::atomic<std::uint32_t> completion_validation_failures{0};
+    std::atomic<std::uint32_t> provider_rejected_handle_releases{0};
+    std::atomic<std::uint32_t> host_events_observed{0};
     std::atomic<std::uint32_t> request_cancelled{0};
     std::atomic<std::uint32_t> payload_empty{0};
     std::atomic<std::uint32_t> payload_max{0};
@@ -399,15 +406,63 @@ struct EchoAdapter {
 
 bool release_echo_handle(void* raw, const jellyframe::HostServiceCompletion& completion) {
     auto* adapter = static_cast<EchoAdapter*>(raw);
-    if (adapter == nullptr || adapter->host == nullptr || completion.handle == 0) return false;
+    if (adapter == nullptr || adapter->host == nullptr || completion.result_handle == 0) return false;
     jellyframe::HostHandleInfo info;
-    if (!adapter->host->handles().lookup_copy(completion.handle, info) ||
+    if (!adapter->host->handles().lookup_copy(completion.result_handle, info) ||
         info.app_instance_id != completion.app_instance_id ||
-        !adapter->host->handles().release(completion.handle)) {
+        !adapter->host->handles().release(completion.result_handle)) {
         return false;
     }
     if (adapter->state != nullptr) adapter->state->payload_released.fetch_add(1);
     return true;
+}
+
+bool push_provider_completion(EchoState& state,
+                              jellyframe::AppRuntimeHost& host,
+                              const jellyframe::HostServiceCompletion& completion) {
+    if (host.push_completion(completion)) {
+        state.provider_completed.fetch_add(1);
+        return true;
+    }
+    state.completion_rejected.fetch_add(1);
+    if (completion.result_handle != 0 && host.handles().release(completion.result_handle)) {
+        state.provider_rejected_handle_releases.fetch_add(1);
+    }
+    return false;
+}
+
+bool validate_completion_identity(EchoState& state,
+                                  jellyframe::AppRuntimeHost& host,
+                                  const jellyframe::HostServiceCompletion& completion) {
+    const std::size_t in_flight_before = host.requests().in_flight_size();
+    jellyframe::HostServiceCompletion wrong_kind = completion;
+    wrong_kind.kind = completion.kind == jellyframe::HostServiceJobKind::ComputeJob
+        ? jellyframe::HostServiceJobKind::Other
+        : jellyframe::HostServiceJobKind::ComputeJob;
+    wrong_kind.result_handle = host.handles().allocate(
+        jellyframe::HostServiceHandleKind::Other, completion.app_instance_id, 1, nullptr, completion.client_token);
+    const bool kind_rejected = !host.push_completion(wrong_kind);
+    const bool probe_released = wrong_kind.result_handle != 0 && host.handles().release(wrong_kind.result_handle);
+
+    jellyframe::HostServiceCompletion wrong_app = completion;
+    ++wrong_app.app_instance_id;
+    wrong_app.result_handle = 0;
+    const bool app_rejected = !host.push_completion(wrong_app);
+
+    jellyframe::HostServiceCompletion wrong_token = completion;
+    ++wrong_token.client_token;
+    wrong_token.result_handle = 0;
+    const bool token_rejected = !host.push_completion(wrong_token);
+    const bool pending_preserved = host.requests().in_flight_size() == in_flight_before;
+
+    if (kind_rejected) state.completion_identity_kind_rejected.fetch_add(1);
+    if (app_rejected) state.completion_identity_app_rejected.fetch_add(1);
+    if (token_rejected) state.completion_identity_token_rejected.fetch_add(1);
+    if (pending_preserved) state.completion_identity_pending_preserved.fetch_add(1);
+    if (probe_released) state.provider_rejected_handle_releases.fetch_add(1);
+    const bool valid = kind_rejected && app_rejected && token_rejected && pending_preserved && probe_released;
+    if (!valid) state.completion_validation_failures.fetch_add(1);
+    return valid;
 }
 
 void worker_entry(void* raw) {
@@ -552,7 +607,20 @@ void supervisor_entry(void* raw) {
              static_cast<unsigned>(CONFIG_JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE));
     AppFrameScratch scratch;
     scratch.reserve_from_options({8, 8, 8, 2048, 0});
-    ScriptAppSession retired_session_pending{};
+    const HostServiceCompletion audio_event{0, HostServiceJobKind::AudioCommand,
+                                            HostServiceStatus::Completed, app.id};
+    AppFrameScratch event_scratch;
+    event_scratch.reserve_from_options({8, 8, 8, 2048, 0});
+    if (!host.push_completion(audio_event)) {
+        state->completion_validation_failures.fetch_add(1);
+    } else {
+        const auto event_pump = host.pump_frame_completions(event_scratch);
+        const bool observed = event_pump.accepted == 1 && event_scratch.accepted_completions.size() == 1 &&
+            event_scratch.accepted_completions.front().job_id == 0 &&
+            event_scratch.accepted_completions.front().kind == HostServiceJobKind::AudioCommand;
+        if (observed) state->host_events_observed.fetch_add(1);
+        else state->completion_validation_failures.fetch_add(1);
+    }
     // Keep the old provider result out of the host completion queue until the
     // replacement session is current.  AppRuntimeHost intentionally discards
     // queued completions during terminate_current(), so pushing it before the
@@ -599,8 +667,13 @@ void supervisor_entry(void* raw) {
                 result.status == HostServiceStatus::Completed) {
                 state->payload_empty.fetch_add(1);
             }
-            if (!host.push_completion(completion)) state->completion_rejected.fetch_add(1);
-            else state->provider_completed.fetch_add(1);
+            if (kScenario == 0 && state->provider_completed.load() == 0 &&
+                !validate_completion_identity(*state, host, completion)) {
+                state->fatal.store(true);
+            }
+            if (!push_provider_completion(*state, host, completion) && kScenario == 0) {
+                state->fatal.store(true);
+            }
         }
         if (kScenario == 3 &&
             state->stale_session_reopened.load() < kExpectedGenerationStale &&
@@ -624,13 +697,14 @@ void supervisor_entry(void* raw) {
             // from the idle task. Let that reclamation run before creating the
             // next private worker session.
             vTaskDelay(pdMS_TO_TICKS(60));
+            (void)protocol.begin_teardown(retired_session);
             (void)bridge.begin_teardown(retired_session);
             (void)host.terminate_current(jellyframe::AppTeardownReason::NormalExit);
-            (void)protocol.begin_teardown(retired_session);
+            (void)bridge.complete_teardown(retired_session);
+            (void)protocol.complete_teardown(retired_session);
             const auto reopened = host.launch("org.jellyframe.fixture.script_service_echo", jellyframe::AppRole::App);
             const auto reopened_session = protocol.begin(reopened.id);
             state->session = reopened_session;
-            retired_session_pending = retired_session;
             const bool terminal_replacement =
                 reopened_session.valid() &&
                 state->stale_session_reopened.load() + 1 >= kExpectedGenerationStale;
@@ -665,10 +739,8 @@ void supervisor_entry(void* raw) {
                     if (handle == 0 && stale_result.payload_size != 0) {
                         stale_completion.status = HostServiceStatus::BudgetExceeded;
                     }
-                    if (!host.push_completion(stale_completion)) {
-                        state->completion_rejected.fetch_add(1);
-                    } else {
-                        state->provider_completed.fetch_add(1);
+                    if (!push_provider_completion(*state, host, stale_completion)) {
+                        state->fatal.store(true);
                     }
                     deferred_stale_result.reset();
                 }
@@ -722,14 +794,6 @@ void supervisor_entry(void* raw) {
         state->host_stale_handles_released.fetch_add(
             static_cast<std::uint32_t>(completions.host.released_stale_handles));
         state->bridge_source_releases.fetch_add(static_cast<std::uint32_t>(completions.released_completion_sources));
-        if (retired_session_pending.valid()) {
-            // Release the bridge record after one supervisor pump. If the
-            // host completion was not in this pump batch yet, the next host
-            // pump classifies it as stale and releases its handle there.
-            (void)bridge.complete_teardown(retired_session_pending);
-            (void)protocol.complete_teardown(retired_session_pending);
-            retired_session_pending = {};
-        }
         if (next_log == 0 || esp_timer_get_time() >= next_log) {
             next_log = esp_timer_get_time() + (kScenario == 5 ? 10000000 : 5000000);
             update_memory(*state);
@@ -737,6 +801,8 @@ void supervisor_entry(void* raw) {
                      "request_cancelled=%u completion_delivered=%u completion_cancelled=%u completion_stale=%u payload_copied=%u "
                      "payload_released=%u bridge_source_releases=%u payload_empty=%u payload_max=%u payload_overlimit=%u payload_copy_failure=%u provider_failures=%u "
                      "stale_session_reopened=%u host_stale_handles_released=%u soak_relaunches=%u frames_published=%u frames_presented=%u present_failures=%u "
+                     "completion_identity_kind_rejected=%u completion_identity_app_rejected=%u completion_identity_token_rejected=%u "
+                     "completion_identity_pending_preserved=%u completion_validation_failures=%u provider_rejected_handle_releases=%u host_events_observed=%u "
                      "bridge_active=%u worker_stack_low_water_words=%u ui_stack_low_water_words=%u "
                      "supervisor_stack_low_water_words=%u provider_stack_low_water_words=%u internal_free_min=%u psram_free_min=%u status=running",
                      scenario_name(),
@@ -763,6 +829,13 @@ void supervisor_entry(void* raw) {
                      static_cast<unsigned>(state->frames_published.load()),
                      static_cast<unsigned>(state->frames_presented.load()),
                      static_cast<unsigned>(state->present_failures.load()),
+                     static_cast<unsigned>(state->completion_identity_kind_rejected.load()),
+                     static_cast<unsigned>(state->completion_identity_app_rejected.load()),
+                     static_cast<unsigned>(state->completion_identity_token_rejected.load()),
+                     static_cast<unsigned>(state->completion_identity_pending_preserved.load()),
+                     static_cast<unsigned>(state->completion_validation_failures.load()),
+                     static_cast<unsigned>(state->provider_rejected_handle_releases.load()),
+                     static_cast<unsigned>(state->host_events_observed.load()),
                      static_cast<unsigned>(bridge.active_request_count()),
                      static_cast<unsigned>(state->worker_stack_min.load()),
                      static_cast<unsigned>(state->ui_stack_min.load()),
@@ -774,7 +847,14 @@ void supervisor_entry(void* raw) {
         bool scenario_done = false;
         if (kScenario == 0) {
             scenario_done = state->completion_callbacks.load() >= kExpectedCompletions &&
-                state->provider_completed.load() >= kExpectedCompletions;
+                state->provider_completed.load() >= kExpectedCompletions &&
+                state->completion_identity_kind_rejected.load() == 1 &&
+                state->completion_identity_app_rejected.load() == 1 &&
+                state->completion_identity_token_rejected.load() == 1 &&
+                state->completion_identity_pending_preserved.load() == 1 &&
+                state->completion_validation_failures.load() == 0 &&
+                state->provider_rejected_handle_releases.load() == 1 &&
+                state->host_events_observed.load() == 1;
         } else if (kScenario == 1) {
             scenario_done = state->request_cancelled.load() >= kExpectedCancellations &&
                 provider.popped() == 0;
@@ -808,10 +888,10 @@ void supervisor_entry(void* raw) {
     state->stop.store(true);
     provider.stop();
     if (state->session.valid()) {
+        (void)protocol.begin_teardown(state->session);
         (void)bridge.begin_teardown(state->session);
         (void)host.terminate_current(jellyframe::AppTeardownReason::NormalExit);
         (void)bridge.complete_teardown(state->session);
-        (void)protocol.begin_teardown(state->session);
         (void)protocol.complete_teardown(state->session);
     }
     update_memory(*state);
@@ -820,6 +900,8 @@ void supervisor_entry(void* raw) {
              "request_cancelled=%u completion_delivered=%u completion_cancelled=%u completion_stale=%u payload_copied=%u "
              "payload_released=%u bridge_source_releases=%u payload_empty=%u payload_max=%u payload_overlimit=%u payload_copy_failure=%u provider_failures=%u "
              "stale_session_reopened=%u host_stale_handles_released=%u soak_relaunches=%u frames_published=%u frames_presented=%u present_failures=%u "
+             "completion_identity_kind_rejected=%u completion_identity_app_rejected=%u completion_identity_token_rejected=%u "
+             "completion_identity_pending_preserved=%u completion_validation_failures=%u provider_rejected_handle_releases=%u host_events_observed=%u "
              "bridge_active=%u worker_stack_low_water_words=%u ui_stack_low_water_words=%u "
              "supervisor_stack_low_water_words=%u provider_stack_low_water_words=%u internal_free_min=%u psram_free_min=%u status=%s",
              scenario_name(),
@@ -846,6 +928,13 @@ void supervisor_entry(void* raw) {
              static_cast<unsigned>(state->frames_published.load()),
              static_cast<unsigned>(state->frames_presented.load()),
              static_cast<unsigned>(state->present_failures.load()),
+             static_cast<unsigned>(state->completion_identity_kind_rejected.load()),
+             static_cast<unsigned>(state->completion_identity_app_rejected.load()),
+             static_cast<unsigned>(state->completion_identity_token_rejected.load()),
+             static_cast<unsigned>(state->completion_identity_pending_preserved.load()),
+             static_cast<unsigned>(state->completion_validation_failures.load()),
+             static_cast<unsigned>(state->provider_rejected_handle_releases.load()),
+             static_cast<unsigned>(state->host_events_observed.load()),
              static_cast<unsigned>(bridge.active_request_count()),
              static_cast<unsigned>(state->worker_stack_min.load()),
              static_cast<unsigned>(state->ui_stack_min.load()),
