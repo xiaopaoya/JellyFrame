@@ -95,7 +95,7 @@ JFDP device.
 
 The platform-independent `src/device_runtime_contracts/device_runtime_protocol.*` implements
 `JFDP/1` framing with a fixed 24-byte header, little-endian integers, a strict
-4096-byte payload limit, message-type validation and CRC32. A decoded payload is
+4096-byte payload limit, exact frame-size validation, message-type validation and CRC32. A decoded payload is
 a read-only view into the input buffer; it must be copied before crossing a task
 or asynchronous queue boundary. The protocol layer never transfers pointer
 ownership.
@@ -103,7 +103,9 @@ ownership.
 The same module provides bounded `DeviceCapabilitySnapshot` encoding and stable
 request result codes for board/profile identity, runtime version, display size,
 enabled capability bits, maximum bundle size and available storage. Strings have
-explicit limits and the payload codec does not depend on JSON, heap allocation or
+explicit limits and reject embedded NUL bytes, so a decoded identity has one
+canonical C-string representation. Install-begin also requires a nonzero declared
+bundle size. The payload codec does not depend on JSON, heap allocation or
 port-private structures.
 
 `JFDP/1` now also defines payload-versioned codecs for install begin/chunk,

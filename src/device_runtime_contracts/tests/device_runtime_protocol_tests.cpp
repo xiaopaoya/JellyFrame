@@ -89,6 +89,20 @@ void enforces_bounded_payload_and_exact_frame_size() {
     const std::uint8_t* payload = nullptr;
     assert(decode_device_frame(output.data(), kDeviceProtocolHeaderBytes - 1, header, payload) == DeviceProtocolStatus::Truncated);
     assert(payload == nullptr);
+
+    std::array<std::uint8_t, kDeviceProtocolHeaderBytes + 1> exact_frame{};
+    std::size_t exact_frame_size = 0;
+    assert(encode_device_frame(header,
+                               &byte,
+                               1,
+                               exact_frame.data(),
+                               exact_frame.size(),
+                               exact_frame_size) == DeviceProtocolStatus::Ok);
+    std::array<std::uint8_t, kDeviceProtocolHeaderBytes + 2> trailing_frame{};
+    std::copy(exact_frame.begin(), exact_frame.end(), trailing_frame.begin());
+    assert(decode_device_frame(trailing_frame.data(), trailing_frame.size(), header, payload) ==
+           DeviceProtocolStatus::InvalidArgument);
+
 }
 
 void capabilities_round_trip_without_dynamic_storage() {
@@ -127,6 +141,13 @@ void capabilities_reject_unterminated_or_truncated_values() {
     assert(encode_device_capabilities(input, encoded.data(), encoded.size(), encoded_size) == DeviceProtocolStatus::Ok);
     DeviceCapabilitySnapshot output;
     assert(decode_device_capabilities(encoded.data(), encoded_size - 1, output) == DeviceProtocolStatus::Truncated);
+
+    copy_string_literal(input.board_id, "ws147");
+    assert(encode_device_capabilities(input, encoded.data(), encoded.size(), encoded_size) == DeviceProtocolStatus::Ok);
+    constexpr std::size_t kCapabilityFixedPayloadBytes = 20;
+    encoded[kCapabilityFixedPayloadBytes + 1] = 0;
+    assert(decode_device_capabilities(encoded.data(), encoded_size, output) ==
+           DeviceProtocolStatus::InvalidArgument);
 }
 
 void discovery_request_response_loopback_preserves_session_and_capabilities() {
@@ -305,6 +326,16 @@ void typed_payloads_reject_malformed_or_ambiguous_input() {
            DeviceProtocolStatus::Ok);
     encoded[1] = 0x80;
     DeviceInstallBeginPayload decoded_begin;
+    assert(decode_device_install_begin_payload(encoded.data(), encoded_size, decoded_begin) ==
+           DeviceProtocolStatus::InvalidArgument);
+
+    begin.bundle_bytes = 0;
+    assert(encode_device_install_begin_payload(begin, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::InvalidArgument);
+    begin.bundle_bytes = 4;
+    assert(encode_device_install_begin_payload(begin, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    std::fill(encoded.begin() + 8, encoded.begin() + 12, 0);
     assert(decode_device_install_begin_payload(encoded.data(), encoded_size, decoded_begin) ==
            DeviceProtocolStatus::InvalidArgument);
 

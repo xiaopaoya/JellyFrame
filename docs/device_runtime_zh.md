@@ -77,12 +77,13 @@ D0 的 C++ 回归包含内存内 discovery request/capability response 回环，
 ### 当前可用的参考实现（D0 过渡）
 
 平台无关的 `src/device_runtime_contracts/device_runtime_protocol.*` 已提供 `JFDP/1` framing：固定 24 字节头、
-小端整数、严格 payload 上限 4096 字节、消息类型校验和 CRC32。解码得到的 payload 只是输入缓冲区的
+小端整数、严格 payload 上限 4096 字节、精确 frame size 校验、消息类型校验和 CRC32。解码得到的 payload 只是输入缓冲区的
 只读视图；跨任务或异步队列前必须复制，协议层不会转移指针所有权。
 
 同一模块还提供固定边界的 `DeviceCapabilitySnapshot` 编解码和稳定的请求结果码，包含 board/profile
-标识、runtime 版本、屏幕尺寸、启用的能力位、最大 App 包大小和可用存储。字符串有明确长度上限，
-不依赖 JSON、堆分配或端口私有结构。
+标识、runtime 版本、屏幕尺寸、启用的能力位、最大 App 包大小和可用存储。字符串有明确长度上限并拒绝 embedded NUL，
+从而让解码后的身份只有一种 canonical C-string 表示；install-begin 还要求声明的 bundle size 非零。
+payload codec 不依赖 JSON、堆分配或端口私有结构。
 
 `JFDP/1` 现在还定义了带 payload version 的安装 begin/chunk、commit/abort transaction id、
 lifecycle app id、日志查询和固定 16 字节 operation result envelope 编解码。envelope 携带稳定 result

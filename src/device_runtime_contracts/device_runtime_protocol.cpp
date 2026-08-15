@@ -172,10 +172,12 @@ DeviceProtocolStatus decode_device_frame(const std::uint8_t* input,
     if (payload_length > kDeviceProtocolMaxPayloadBytes) {
         return DeviceProtocolStatus::PayloadTooLarge;
     }
-    if (input_size != kDeviceProtocolHeaderBytes + payload_length) {
-        return DeviceProtocolStatus::Truncated;
+    const std::size_t expected_frame_size = kDeviceProtocolHeaderBytes + payload_length;
+    if (input_size != expected_frame_size) {
+        return input_size < expected_frame_size
+                   ? DeviceProtocolStatus::Truncated
+                   : DeviceProtocolStatus::InvalidArgument;
     }
-
     header.type = static_cast<DeviceMessageType>(input[5]);
     header.flags = read_u16(input + 6);
     header.session_id = read_u32(input + 8);
@@ -297,6 +299,10 @@ DeviceProtocolStatus decode_device_capabilities(const std::uint8_t* input,
                    ? DeviceProtocolStatus::Truncated
                    : DeviceProtocolStatus::InvalidArgument;
     }
+    if (std::memchr(input + kCapabilityFixedBytes, '\0', board_length) != nullptr ||
+        std::memchr(input + kCapabilityFixedBytes + board_length, '\0', runtime_length) != nullptr) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
     capabilities = {};
     capabilities.protocol_version = kDeviceProtocolVersion;
     capabilities.display_width = read_u16(input + 4);
@@ -319,7 +325,8 @@ DeviceProtocolStatus encode_device_install_begin_payload(const DeviceInstallBegi
                                                          std::size_t& output_size) {
     output_size = 0;
     std::size_t app_id_length = 0;
-    if (output == nullptr || payload.transaction_id == 0 || !has_valid_app_id(payload.app_id.data(), app_id_length)) {
+    if (output == nullptr || payload.transaction_id == 0 || payload.bundle_bytes == 0 ||
+        !has_valid_app_id(payload.app_id.data(), app_id_length)) {
         return DeviceProtocolStatus::InvalidArgument;
     }
     const std::size_t payload_size = kInstallBeginFixedBytes + app_id_length;
@@ -364,7 +371,7 @@ DeviceProtocolStatus decode_device_install_begin_payload(const std::uint8_t* inp
         return DeviceProtocolStatus::InvalidArgument;
     }
     const std::uint32_t transaction_id = read_u32(input + 4);
-    if (transaction_id == 0) {
+    if (transaction_id == 0 || read_u32(input + 8) == 0) {
         return DeviceProtocolStatus::InvalidArgument;
     }
     payload = {};
