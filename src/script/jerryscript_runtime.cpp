@@ -55,7 +55,7 @@ struct ScriptEventListener {
     EventListenerOptions options;
     bool active = false;
     bool property_handler = false;
-    bool callback_in_flight = false;
+    std::uint32_t callback_depth = 0;
     bool callback_release_pending = false;
 };
 
@@ -66,7 +66,7 @@ void release_script_event_listener_callback(ScriptEventListener& listener) {
         listener.callback_release_pending = false;
         return;
     }
-    if (listener.callback_in_flight) {
+    if (listener.callback_depth != 0) {
         listener.callback_release_pending = true;
         return;
     }
@@ -76,7 +76,10 @@ void release_script_event_listener_callback(ScriptEventListener& listener) {
 }
 
 void finish_script_event_listener_callback(ScriptEventListener& listener) {
-    listener.callback_in_flight = false;
+    if (listener.callback_depth == 0) {
+        return;
+    }
+    --listener.callback_depth;
     if (listener.callback_release_pending) {
         release_script_event_listener_callback(listener);
     }
@@ -7423,14 +7426,28 @@ std::unique_ptr<Node> JerryScriptRuntime::release_detached_node(Node& node) {
     return detached_nodes_.release_detached_node(node);
 }
 
+void JerryScriptRuntime::prune_inactive_script_event_listeners() {
+    event_listeners_.erase(
+        std::remove_if(event_listeners_.begin(), event_listeners_.end(),
+                       [](const std::unique_ptr<ScriptEventListener>& listener) {
+                           return !listener->active && listener->callback_depth == 0;
+                       }),
+        event_listeners_.end());
+}
+
+std::size_t JerryScriptRuntime::active_script_event_listener_count() const {
+    return static_cast<std::size_t>(std::count_if(
+        event_listeners_.begin(), event_listeners_.end(),
+        [](const std::unique_ptr<ScriptEventListener>& listener) {
+            return listener != nullptr && listener->active;
+        }));
+}
+
 void JerryScriptRuntime::add_script_event_listener(Node& node,
                                                    std::string type,
                                                    std::uint32_t callback_value,
                                                    EventListenerOptions options) {
-    event_listeners_.erase(std::remove_if(event_listeners_.begin(), event_listeners_.end(),
-        [](const std::unique_ptr<ScriptEventListener>& listener) {
-            return !listener->active;
-        }), event_listeners_.end());
+    prune_inactive_script_event_listeners();
     for (const auto& listener : event_listeners_) {
         if (listener->active && !listener->property_handler && listener->node == &node &&
             listener->type == type && listener->options.capture == options.capture &&
@@ -7438,7 +7455,7 @@ void JerryScriptRuntime::add_script_event_listener(Node& node,
             return;
         }
     }
-    if (event_listeners_.size() >= options_.max_event_listeners) {
+    if (active_script_event_listener_count() >= options_.max_event_listeners) {
         return;
     }
     auto listener = std::make_unique<ScriptEventListener>();
@@ -7457,13 +7474,14 @@ void JerryScriptRuntime::add_script_event_listener(Node& node,
             return;
         }
 
+        JerryScriptRuntime* const runtime = raw->runtime;
         JerryValue this_value(event.current_target() != nullptr
-            ? make_node_wrapper(*raw->runtime, *const_cast<Node*>(event.current_target()), false)
+            ? make_node_wrapper(*runtime, *const_cast<Node*>(event.current_target()), false)
             : jerry_undefined());
-        JerryValue event_object(make_event_object(*raw->runtime, event));
+        JerryValue event_object(make_event_object(*runtime, event));
         const jerry_value_t event_arg = event_object.get();
-        raw->callback_in_flight = true;
-        JerryValue result(run_with_execution_budget(*raw->runtime, [&]() {
+        ++raw->callback_depth;
+        JerryValue result(run_with_execution_budget(*runtime, [&]() {
             return jerry_call(raw->callback, this_value.get(), &event_arg, 1);
         }));
         finish_script_event_listener_callback(*raw);
@@ -7472,6 +7490,7 @@ void JerryScriptRuntime::add_script_event_listener(Node& node,
             JerryValue exception_value(jerry_exception_value(result.release(), true));
             (void) exception_value;
         }
+        runtime->prune_inactive_script_event_listeners();
     }, listener->options);
 
     event_listeners_.push_back(std::move(listener));
@@ -7511,12 +7530,9 @@ void JerryScriptRuntime::set_script_event_handler(Node& node, std::string type, 
         release_script_event_listener_callback(*listener);
         break;
     }
-    event_listeners_.erase(std::remove_if(event_listeners_.begin(), event_listeners_.end(),
-        [](const std::unique_ptr<ScriptEventListener>& listener) {
-            return !listener->active;
-        }), event_listeners_.end());
+    prune_inactive_script_event_listeners();
     if (!jerry_value_is_function(callback_value) ||
-        event_listeners_.size() >= options_.max_event_listeners) {
+        active_script_event_listener_count() >= options_.max_event_listeners) {
         return;
     }
 
@@ -7536,13 +7552,14 @@ void JerryScriptRuntime::set_script_event_handler(Node& node, std::string type, 
             return;
         }
 
+        JerryScriptRuntime* const runtime = raw->runtime;
         JerryValue this_value(event.current_target() != nullptr
-            ? make_node_wrapper(*raw->runtime, *const_cast<Node*>(event.current_target()), false)
+            ? make_node_wrapper(*runtime, *const_cast<Node*>(event.current_target()), false)
             : jerry_undefined());
-        JerryValue event_object(make_event_object(*raw->runtime, event));
+        JerryValue event_object(make_event_object(*runtime, event));
         const jerry_value_t event_arg = event_object.get();
-        raw->callback_in_flight = true;
-        JerryValue result(run_with_execution_budget(*raw->runtime, [&]() {
+        ++raw->callback_depth;
+        JerryValue result(run_with_execution_budget(*runtime, [&]() {
             return jerry_call(raw->callback, this_value.get(), &event_arg, 1);
         }));
         finish_script_event_listener_callback(*raw);
@@ -7551,6 +7568,7 @@ void JerryScriptRuntime::set_script_event_handler(Node& node, std::string type, 
             JerryValue exception_value(jerry_exception_value(result.release(), true));
             (void) exception_value;
         }
+        runtime->prune_inactive_script_event_listeners();
     }, listener->options);
 
     event_listeners_.push_back(std::move(listener));
@@ -7570,10 +7588,7 @@ void JerryScriptRuntime::add_window_event_listener(std::string type,
                                                    std::uint32_t callback_value,
                                                    std::uint32_t target_value,
                                                    EventListenerOptions options) {
-    event_listeners_.erase(std::remove_if(event_listeners_.begin(), event_listeners_.end(),
-        [](const std::unique_ptr<ScriptEventListener>& listener) {
-            return !listener->active;
-        }), event_listeners_.end());
+    prune_inactive_script_event_listeners();
     for (const auto& listener : event_listeners_) {
         if (listener->active && !listener->property_handler && listener->node == nullptr &&
             listener->type == type && listener->options.capture == options.capture &&
@@ -7582,7 +7597,7 @@ void JerryScriptRuntime::add_window_event_listener(std::string type,
             return;
         }
     }
-    if (event_listeners_.size() >= options_.max_event_listeners) {
+    if (active_script_event_listener_count() >= options_.max_event_listeners) {
         return;
     }
     auto listener = std::make_unique<ScriptEventListener>();
@@ -7629,12 +7644,9 @@ void JerryScriptRuntime::set_window_event_handler(std::string type,
         }
         break;
     }
-    event_listeners_.erase(std::remove_if(event_listeners_.begin(), event_listeners_.end(),
-        [](const std::unique_ptr<ScriptEventListener>& listener) {
-            return !listener->active;
-        }), event_listeners_.end());
+    prune_inactive_script_event_listeners();
     if (!jerry_value_is_function(callback_value) ||
-        event_listeners_.size() >= options_.max_event_listeners) {
+        active_script_event_listener_count() >= options_.max_event_listeners) {
         return;
     }
     auto listener = std::make_unique<ScriptEventListener>();

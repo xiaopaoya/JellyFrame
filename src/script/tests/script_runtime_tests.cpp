@@ -613,6 +613,56 @@ void javascript_event_handler_properties_work() {
     check(result.ok && result.value == "click;", "cleared event handler no longer runs");
 }
 
+void javascript_listener_self_replacement_reclaims_after_callback_return() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    check(button != nullptr, "self-replacing listener button exists");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    ScriptEvaluationResult result = runtime.eval(
+        "var button = document.getElementById('button');"
+        "var log = '';"
+        "var nested = false;"
+        "function replacement() { log += 'replacement;'; }"
+        "function first() {"
+        "  log += 'first;';"
+        "  if (!nested) { nested = true; button.click(); }"
+        "  button.removeEventListener('click', first);"
+        "  button.addEventListener('click', replacement);"
+        "}"
+        "button.addEventListener('click', first);"
+        "'ready';");
+    check(result.ok, "self-replacing addEventListener registration succeeds");
+
+    Event click("click", true, true);
+    dispatch_event(*button, click);
+    dispatch_event(*button, click);
+    result = runtime.eval("log + ':' + String(button.removeEventListener('click', replacement));");
+    check(result.ok && result.value == "first;first;replacement;:undefined",
+          "self-replacing addEventListener callback remains valid until return");
+    check(runtime.statistics().event_listener_count == 0,
+          "self-replaced addEventListener entries are reclaimed after callback return");
+
+    result = runtime.eval(
+        "button.onclick = function () {"
+        "  log += 'property-first;';"
+        "  button.onclick = null;"
+        "  button.onclick = function () { log += 'property-replacement;'; };"
+        "};"
+        "'ready';");
+    check(result.ok, "self-replacing property handler registration succeeds");
+
+    dispatch_event(*button, click);
+    dispatch_event(*button, click);
+    result = runtime.eval("log");
+    check(result.ok && result.value == "first;first;replacement;property-first;property-replacement;",
+          "self-replacing property handler remains valid until return");
+    check(runtime.statistics().event_listener_count == 1,
+          "only replacement property handler remains registered");
+}
+
 void javascript_form_properties_mutate_control_state() {
     HtmlParser parser;
     auto document = parser.parse(
@@ -2528,6 +2578,7 @@ int main() {
         javascript_event_prevent_default_and_remove_listener_work();
         javascript_event_object_survives_after_dispatch_as_snapshot();
         javascript_event_handler_properties_work();
+        javascript_listener_self_replacement_reclaims_after_callback_return();
         javascript_form_properties_mutate_control_state();
         javascript_dom_attribute_and_remove_ergonomics_work();
         javascript_tabindex_and_autofocus_reflection_work();

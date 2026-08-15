@@ -17,6 +17,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Script event listeners now defer physical removal while a callback is on the
+  stack, including nested dispatch. A callback may safely remove and replace
+  itself through either `addEventListener` or an `on*` property; listener
+  budgets continue to count only active registrations.
+
 - DOM subtree replacement now detaches removed nodes before their destruction
   observers run. Child-parent links are established only after insertion or
   replacement ownership succeeds, so observer callbacks cannot observe a

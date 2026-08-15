@@ -274,6 +274,8 @@ private:
     void push_route_history(std::string value);
     void replace_route_history(std::string value);
     bool traverse_route_history(int delta);
+    void prune_inactive_script_event_listeners();
+    std::size_t active_script_event_listener_count() const;
     void clear_script_event_listeners();
     std::uint32_t add_timer(std::uint32_t callback_value, std::uint32_t delay_ms, bool repeat);
     void clear_timer(std::uint32_t id);
