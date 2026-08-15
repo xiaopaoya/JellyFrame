@@ -117,25 +117,31 @@ These two `device_*` modules are not part of the App Runtime's final ownership
 model. D0 now compiles them as the independent
 `jellyframe_device_runtime_contracts` target, with tests that link that target
 without App Runtime or Render Core. Their source path remains transitional until
-the full JFDP reference-host transaction loop is complete. A port must consume
-the existing contract; it must not fork the framing, result codes or staging
-state machine. Physical extraction is complete only when the new owner also has
-versioned headers, a Runtime/Device OS compatibility entry and its own
-repository release policy.
+the typed JFDP request/response payload dispatcher and separate-owner migration
+are complete. A port must consume the existing framing, result-code and staging
+contracts; it must not fork them. Physical extraction is complete only when the
+new owner also has versioned headers, a Runtime/Device OS compatibility entry
+and its own repository release policy.
 
 The desktop reference endpoint can be selected explicitly while exercising the
 toolchain:
 
 ```text
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference info
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference list
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference install --bundle app.jfapp
+python tools/jellyframe_cli.py device --transport reference --store build/device-reference discover --json
+python tools/jellyframe_cli.py device --transport reference --store build/device-reference install --bundle app.jfapp --chunk-bytes 1024
+python tools/jellyframe_cli.py device --transport reference --store build/device-reference launch --id org.example.app
+python tools/jellyframe_cli.py device --transport reference --store build/device-reference logs --id org.example.app --json
 python tools/jellyframe_cli.py device --transport reference --store build/device-reference rollback --id org.example.app
 ```
 
-This endpoint reports `deviceAvailable=false` and cannot provide real display,
-touch, logs or device frame timing. Without `--transport reference`, the CLI
-reports that no physical transport is configured. USB, serial and Wi-Fi
+The reference host persists chunk staging separately from the registry, exposes
+`resume`, `commit`, `cancel`, `launch`, `stop`, `remove`, `logs` and `recovery`,
+and only publishes a bundle after commit. `--pause-after-chunks` is a
+reference-only test hook for exercising resume/cancel; it is not a device
+transfer option. The endpoint reports `deviceAvailable=false`: its lifecycle
+logs and recovery records are desktop reference evidence, not panel, touch,
+wire-transport or device-frame telemetry. Without `--transport reference`, the
+CLI reports that no physical transport is configured. USB, serial and Wi-Fi
 transports will be registered by their respective ports rather than inferred by
 the core.
 
@@ -164,11 +170,12 @@ firmware image and cannot replace the launcher, recovery UI or port code.
 - Add a hardware-neutral staged-install controller with injected storage
   callbacks and focused tests for offsets, replay, abort, disconnect and
   atomic commit failure.
-- Platform-independent framing, capability payloads, request result codes,
-  staged-install control and the desktop reference endpoint now exist. An
-  in-memory discovery loopback verifies request/response correlation and the
-  capability payload. A full JFDP reference-host transaction loop and the
-  separate-owner extraction remain before port integration.
+- Platform-independent framing, capability payloads, request result codes and
+  staged-install control now exist. The desktop reference host covers durable
+  discovery/list/chunked-install/commit/cancel/lifecycle/log/recovery control
+  semantics; an in-memory discovery loopback verifies request/response
+  correlation and the capability payload. Typed JFDP request/response payload
+  dispatch and separate-owner extraction remain before port integration.
 
 ### D1: First official developer image
 

@@ -91,21 +91,25 @@ Render Core。写入失败、校验失败、提交失败和主动取消都会清
 
 这两个 `device_*` 模块不属于 App Runtime 的最终所有权模型。D0 现在将它们编译为独立的
 `jellyframe_device_runtime_contracts` target，并由不链接 App Runtime 或 Render Core 的测试覆盖。
-在完整 JFDP reference-host transaction loop 完成前，源码路径仍是过渡位置。port 必须消费现有契约，
-不能复制 framing、result code 或 staging 状态机。物理迁移只有在新 owner 还具备版本化头文件、
-Runtime/Device OS 兼容矩阵登记和独立仓库发布策略后才算完成。
+在 typed JFDP request/response payload dispatcher 和独立 owner 迁移完成前，源码路径仍是过渡位置。
+port 必须消费现有 framing、result code 与 staging 契约，不能复制它们。物理迁移只有在新 owner 还具备版本化
+头文件、Runtime/Device OS 兼容矩阵登记和独立仓库发布策略后才算完成。
 
 桌面端可以显式运行 reference endpoint，以验证工具链而不误认为连接了开发板：
 
 ```text
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference info
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference list
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference install --bundle app.jfapp
+python tools/jellyframe_cli.py device --transport reference --store build/device-reference discover --json
+python tools/jellyframe_cli.py device --transport reference --store build/device-reference install --bundle app.jfapp --chunk-bytes 1024
+python tools/jellyframe_cli.py device --transport reference --store build/device-reference launch --id org.example.app
+python tools/jellyframe_cli.py device --transport reference --store build/device-reference logs --id org.example.app --json
 python tools/jellyframe_cli.py device --transport reference --store build/device-reference rollback --id org.example.app
 ```
 
-该 endpoint 的 `deviceAvailable` 固定为 false，不能提供真实显示、触控、日志或设备帧率数据。没有
-`--transport reference` 时 CLI 会明确报错；真实 USB、串口或 Wi-Fi transport 由对应 port 单独注册。
+reference host 会将 chunk staging 与 registry 分离持久化，提供 `resume`、`commit`、`cancel`、`launch`、
+`stop`、`remove`、`logs` 和 `recovery`，并且只在 commit 后发布 bundle。`--pause-after-chunks` 只是验证
+resume/cancel 的 reference-only test hook，不是设备传输选项。endpoint 的 `deviceAvailable` 固定为 false：其
+lifecycle log 和 recovery record 仅是桌面 reference 证据，不能被当作 panel、触控、wire transport 或设备帧率
+telemetry。没有 `--transport reference` 时 CLI 会明确报错；真实 USB、串口或 Wi-Fi transport 由对应 port 单独注册。
 
 ## 官方板卡 Profile
 
@@ -128,9 +132,10 @@ bundle 存储在固件镜像之外，不能替换 launcher、recovery UI 或 por
 - 定义 `JFDP/1` framing、request/result code 和 capability handshake。
 - 增加有注入式 storage callback 的平台无关 staged-install controller，并为 offset、重放、取消、断连和
   atomic commit failure 编写 focused test。
-- 已有平台无关 framing、capability payload、请求结果码、staged-install controller 和桌面 reference
-  endpoint；内存内 discovery 回环已验证 request/response 关联和 capability payload；完整 JFDP
-  reference-host transaction loop 与独立 owner 迁移仍需完成后，才能进入 port 接入。
+- 已有平台无关 framing、capability payload、请求结果码和 staged-install controller。桌面 reference host
+  已覆盖持久 discovery/list/chunked-install/commit/cancel/lifecycle/log/recovery control semantics；内存内
+  discovery 回环已验证 request/response 关联和 capability payload。typed JFDP request/response payload dispatch
+  与独立 owner 迁移仍需完成后，才能进入 port 接入。
 
 ### D1：首个官方 Developer Image
 

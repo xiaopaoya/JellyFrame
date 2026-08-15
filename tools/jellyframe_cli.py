@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 import app_registry
+import device_reference
 
 
 OFFICIAL_TRIAL_SAMPLE_NAMES = (
@@ -3009,41 +3010,77 @@ def cmd_device(args: argparse.Namespace) -> int:
         )
         return 2
 
-    store = str(args.store)
+    store = args.store
     command = args.device_command
-    if command == "info":
+    try:
+        if command in {"info", "discover"}:
+            result = device_reference.discovery(store)
+            result["operation"] = command
+        elif command in {"list", "state"}:
+            result = device_reference.app_state(store)
+            result["reference"] = device_reference.reference_metadata()
+            result["operation"] = command
+            if command == "state" and args.output:
+                app_registry.atomic_write_json(args.output, result)
+        elif command == "install":
+            result = device_reference.install(
+                store,
+                args.bundle,
+                args.allow_downgrade,
+                args.chunk_bytes,
+                args.pause_after_chunks,
+            )
+        elif command == "resume":
+            result = device_reference.resume(
+                store,
+                args.transaction_id,
+                args.bundle,
+                args.chunk_bytes,
+                args.pause_after_chunks,
+            )
+        elif command == "commit":
+            result = device_reference.commit_install(store, args.transaction_id)
+        elif command == "cancel":
+            result = device_reference.cancel(store, args.transaction_id)
+        elif command == "launch":
+            result = device_reference.launch(store, args.app_id)
+        elif command == "stop":
+            result = device_reference.stop(store, args.app_id)
+        elif command == "remove":
+            result = device_reference.remove(store, args.app_id, args.keep_data)
+        elif command == "rollback":
+            result = device_reference.rollback(store, args.app_id)
+        elif command == "logs":
+            result = device_reference.logs(store, args.app_id, args.limit)
+        elif command == "recovery":
+            result = device_reference.recovery(store)
+        else:
+            raise SystemExit(f"unsupported reference device command: {command}")
+    except device_reference.ReferenceDeviceError as error:
+        try:
+            device_reference.record_failure(store, command, error.result_code, str(error))
+        except device_reference.ReferenceDeviceError:
+            # Keep the original operation failure observable even if the
+            # reference store itself can no longer record diagnostics.
+            pass
         result = {
-            "endpoint": "desktop-reference",
-            "transport": "reference",
-            "deviceAvailable": False,
-            "runtime": "desktop-registry-reference",
-            "note": "This endpoint exercises lifecycle and registry tooling; it is not a physical board.",
+            **device_reference.reference_metadata(),
+            "operation": command,
+            "resultCode": error.result_code,
+            "message": str(error),
         }
-        print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else
-              "desktop reference endpoint (no physical device)\ntransport=reference\ndevice_available=no")
-        return 0
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"{command}: {error.result_code}: {error}", file=sys.stderr)
+        return 1
 
-    delegated = [command, "--store", store]
-    if command in {"list", "state"}:
-        if args.json:
-            delegated.append("--json")
-        if command == "state" and args.output:
-            delegated.extend(["--output", str(args.output)])
-    elif command == "install":
-        delegated.extend(["--bundle", str(args.bundle)])
-        if args.allow_downgrade:
-            delegated.append("--allow-downgrade")
-        if args.json:
-            delegated.append("--json")
-    elif command in {"remove", "rollback"}:
-        delegated.extend(["--id", args.app_id])
-        if command == "remove" and args.keep_data:
-            delegated.append("--keep-data")
-        if args.json:
-            delegated.append("--json")
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        raise SystemExit(f"unsupported reference device command: {command}")
-    return app_registry.main(delegated)
+        result_code = str(result.get("resultCode", "ok")) if isinstance(result, dict) else "ok"
+        print(f"{command}: {result_code} (desktop reference endpoint; no physical device)")
+    return 0
 
 
 def write_install_transaction_report(report_path: Path, transaction: dict, merge: bool) -> None:
@@ -3883,6 +3920,9 @@ def main() -> int:
     info = device_subparsers.add_parser("info", help="Show endpoint identity and availability.")
     info.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     info.set_defaults(func=cmd_device)
+    discover = device_subparsers.add_parser("discover", help="Run the JFDP/1 discovery semantic against the reference endpoint.")
+    discover.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    discover.set_defaults(func=cmd_device)
     list_device = device_subparsers.add_parser("list", help="List apps in the reference registry.")
     list_device.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     list_device.set_defaults(func=cmd_device)
@@ -3890,19 +3930,55 @@ def main() -> int:
     state_device.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     state_device.add_argument("--output", type=Path, help="Write state JSON to a file.")
     state_device.set_defaults(func=cmd_device)
-    install_device = device_subparsers.add_parser("install", help="Install a bundle into the reference registry.")
+    install_device = device_subparsers.add_parser("install", help="Chunk, stage and atomically install a bundle into the reference registry.")
     install_device.add_argument("--bundle", required=True, type=Path, help="Input .jfapp bundle.")
     install_device.add_argument("--allow-downgrade", action="store_true", help="Allow a lower versionCode.")
+    install_device.add_argument("--chunk-bytes", type=int, default=device_reference.DEFAULT_CHUNK_BYTES,
+                                help="Reference transfer chunk size (1..4096).")
+    install_device.add_argument("--pause-after-chunks", type=int,
+                                help="Reference-only test hook: leave the transaction receiving after this many chunks.")
     install_device.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     install_device.set_defaults(func=cmd_device)
-    for name, description in (("remove", "Remove an app from the reference registry."),
-                              ("rollback", "Rollback an app in the reference registry.")):
+    resume = device_subparsers.add_parser("resume", help="Resume a staged reference install and commit when complete.")
+    resume.add_argument("--transaction-id", required=True, type=int, help="Receiving transaction id.")
+    resume.add_argument("--bundle", required=True, type=Path, help="Original .jfapp bundle used to resume bytes.")
+    resume.add_argument("--chunk-bytes", type=int, default=device_reference.DEFAULT_CHUNK_BYTES,
+                        help="Reference transfer chunk size (1..4096).")
+    resume.add_argument("--pause-after-chunks", type=int,
+                        help="Reference-only test hook: leave the transaction receiving after this many chunks.")
+    resume.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    resume.set_defaults(func=cmd_device)
+    for name, description in (("commit", "Commit a complete staged reference install."),
+                              ("cancel", "Cancel and discard a staged reference install.")):
         command_parser = device_subparsers.add_parser(name, help=description)
-        command_parser.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
-        command_parser.add_argument("--keep-data", action="store_true",
-                                    help="Keep private data when removing an app.")
+        command_parser.add_argument("--transaction-id", required=True, type=int, help="Receiving transaction id.")
         command_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
         command_parser.set_defaults(func=cmd_device)
+    launch = device_subparsers.add_parser("launch", help="Mark an installed reference app as active.")
+    launch.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
+    launch.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    launch.set_defaults(func=cmd_device)
+    stop = device_subparsers.add_parser("stop", help="Stop the active reference app.")
+    stop.add_argument("--id", dest="app_id", help="Optional active app id guard.")
+    stop.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    stop.set_defaults(func=cmd_device)
+    remove = device_subparsers.add_parser("remove", help="Remove an app from the reference registry.")
+    remove.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
+    remove.add_argument("--keep-data", action="store_true", help="Keep app-private data.")
+    remove.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    remove.set_defaults(func=cmd_device)
+    rollback = device_subparsers.add_parser("rollback", help="Rollback an app in the reference registry.")
+    rollback.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
+    rollback.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    rollback.set_defaults(func=cmd_device)
+    logs = device_subparsers.add_parser("logs", help="Read bounded app-scoped reference lifecycle logs.")
+    logs.add_argument("--id", dest="app_id", help="Optional app id filter.")
+    logs.add_argument("--limit", type=int, default=64, help="Maximum returned entries (1..256).")
+    logs.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    logs.set_defaults(func=cmd_device)
+    recovery = device_subparsers.add_parser("recovery", help="Read reference launcher and transaction recovery state.")
+    recovery.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    recovery.set_defaults(func=cmd_device)
 
     doctor = subparsers.add_parser("doctor", help="Run repository self-checks for trial-ready sample packages.")
     doctor.add_argument("--build-dir", default=default_build_dir(), type=Path,
