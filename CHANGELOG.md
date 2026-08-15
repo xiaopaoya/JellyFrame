@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- The desktop system-survival smoke now injects its intentional lifecycle test
+  completions directly into the bounded queue. It no longer conflicts with the
+  host API's exact in-flight completion validation.
+
 - Worker-local script service callbacks now have an explicit
   `max_service_callbacks` budget and are included in script runtime statistics;
   rejected registrations never create an outbound service request.

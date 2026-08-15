@@ -1051,13 +1051,17 @@ int run_system_survival_smoke(int cycles) {
             ok = fail_system_survival_smoke("handle-allocation-failed");
             break;
         }
-        ok = host.push_completion(HostServiceCompletion{static_cast<std::uint32_t>(100 + cycle),
-                                                        HostServiceJobKind::NetworkFetch,
-                                                        HostServiceStatus::Completed,
-                                                        bad.id,
-                                                        bad_handle,
-                                                        0,
-                                                        64});
+        // This smoke exercises lifecycle discard/stale filtering, not the
+        // provider completion contract. Inject a controlled queue entry
+        // directly because AppRuntimeHost::push_completion() correctly
+        // rejects non-in-flight nonzero jobs.
+        ok = host.completions().push(HostServiceCompletion{static_cast<std::uint32_t>(100 + cycle),
+                                                           HostServiceJobKind::NetworkFetch,
+                                                           HostServiceStatus::Completed,
+                                                           bad.id,
+                                                           bad_handle,
+                                                           0,
+                                                           64});
         if (!ok) {
             ok = fail_system_survival_smoke("completion-setup-failed");
             break;
@@ -1089,13 +1093,13 @@ int run_system_survival_smoke(int cycles) {
             break;
         }
 
-        ok = host.push_completion(HostServiceCompletion{static_cast<std::uint32_t>(200 + cycle),
-                                                        HostServiceJobKind::NetworkFetch,
-                                                        HostServiceStatus::Completed,
-                                                        bad.id,
-                                                        bad_handle,
-                                                        0,
-                                                        64});
+        ok = host.completions().push(HostServiceCompletion{static_cast<std::uint32_t>(200 + cycle),
+                                                           HostServiceJobKind::NetworkFetch,
+                                                           HostServiceStatus::Completed,
+                                                           bad.id,
+                                                           bad_handle,
+                                                           0,
+                                                           64});
         if (!ok) {
             ok = fail_system_survival_smoke("stale-completion-injection-failed");
             break;
