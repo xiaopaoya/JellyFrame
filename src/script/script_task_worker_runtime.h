@@ -21,6 +21,7 @@ enum class ScriptTaskWorkerRuntimeInitStatus : std::uint8_t {
     InvalidSession,
     ParseRejected,
     BudgetRejected,
+    Fatal,
     Stopped,
 };
 

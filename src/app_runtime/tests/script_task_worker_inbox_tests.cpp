@@ -93,12 +93,30 @@ void worker_copies_and_releases_completion_payload_values() {
            ScriptTaskServicePayloadTakeStatus::NoPayload);
 }
 
+void worker_releases_payload_when_copy_is_rejected_after_teardown() {
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(34);
+    std::uint32_t lease_id = 0;
+    assert(supervisor.publish_service_payload(session, {4, 2}, lease_id) ==
+           ScriptTaskServicePayloadLeaseStatus::Accepted);
+    assert(supervisor.begin_teardown(session).session == session);
+
+    ScriptTaskServiceCompletion completion{
+        HostServiceJobKind::StorageKv, HostServiceStatus::Completed, 1, 2, lease_id, 0, 2};
+    std::vector<std::uint8_t> payload;
+    assert(take_script_task_service_payload(supervisor, session, completion, payload) ==
+           ScriptTaskServicePayloadTakeStatus::LeaseRejected);
+    assert(payload.empty());
+    assert(supervisor.complete_teardown(session).released_service_payload_leases == 0);
+}
+
 } // namespace
 
 int script_task_worker_inbox_tests_main() {
     worker_inbox_dispatches_only_input_and_completion_values();
     worker_inbox_rejects_malformed_completion_values();
     worker_copies_and_releases_completion_payload_values();
+    worker_releases_payload_when_copy_is_rejected_after_teardown();
     std::cout << "script task worker inbox tests passed\n";
     return 0;
 }

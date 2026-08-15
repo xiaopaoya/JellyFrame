@@ -127,6 +127,7 @@ bool ScriptTaskWorkerRuntime::inject_c_safe_fatal_for_test(
 ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::string_view html,
                                                                        std::string_view css) {
     if (stopped_) return ScriptTaskWorkerRuntimeInitStatus::Stopped;
+    if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
     if (!session_.valid()) return ScriptTaskWorkerRuntimeInitStatus::InvalidSession;
     if (html.empty() || html.size() > options_.budgets.max_resource_bytes ||
         css.size() > options_.budgets.max_resource_bytes || options_.viewport.width <= 0 ||

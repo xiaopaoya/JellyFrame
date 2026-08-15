@@ -17,6 +17,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Script workers now expose a terminal `Fatal` initialization result rather
+  than allowing a failed worker to create another private realm. Service
+  payload intake also releases its sealed lease when copying is rejected
+  during teardown.
+
 - Multi-stage form input now retains the initiating control identity across
   `input`, `change`, keyboard activation and synthesized click dispatch. A
   listener that destroys the control or moves focus suppresses the remaining

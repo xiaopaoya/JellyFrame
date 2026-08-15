@@ -45,14 +45,14 @@ ScriptTaskServicePayloadTakeStatus take_script_task_service_payload(
     }
     const ScriptTaskServicePayloadLeaseStatus copied = supervisor.copy_service_payload(
         session, completion.payload_lease_id, output);
-    if (copied != ScriptTaskServicePayloadLeaseStatus::Accepted) {
+    const ScriptTaskServicePayloadLeaseStatus released = supervisor.release_service_payload(
+        session, completion.payload_lease_id);
+    if (copied != ScriptTaskServicePayloadLeaseStatus::Accepted ||
+        released != ScriptTaskServicePayloadLeaseStatus::Accepted) {
         output.clear();
         return ScriptTaskServicePayloadTakeStatus::LeaseRejected;
     }
-    return supervisor.release_service_payload(session, completion.payload_lease_id) ==
-            ScriptTaskServicePayloadLeaseStatus::Accepted
-        ? ScriptTaskServicePayloadTakeStatus::Accepted
-        : ScriptTaskServicePayloadTakeStatus::LeaseRejected;
+    return ScriptTaskServicePayloadTakeStatus::Accepted;
 }
 
 } // namespace jellyframe

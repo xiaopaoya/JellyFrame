@@ -144,6 +144,9 @@ void worker_eval_failure_becomes_value_fatal() {
     check(!result.ok && runtime.fatal(), "script exception stops worker runtime");
     check(runtime.fatal_record().reason == ScriptTaskWorkerRuntimeFatalReason::ScriptException,
           "script exception maps to a value fatal reason");
+    check(runtime.initialize("<body><p>replacement</p></body>", "p { display: block; }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Fatal,
+          "fatal worker cannot reinitialize a new private realm");
 }
 
 void worker_timer_publishes_value_frame() {
