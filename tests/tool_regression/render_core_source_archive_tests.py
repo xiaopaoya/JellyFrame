@@ -115,7 +115,14 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                 self.assertIn(f"{root_name}/cmake/render_core_build.cmake", members)
                 self.assertIn(f"{root_name}/cmake/render_core_feature_registry.csv", members)
                 self.assertIn(f"{root_name}/src/render_core/tests/render_core_tests.cpp", members)
-                bundle.extractall(root / "extract")
+                # Python 3.14 changes the default extraction filter. The
+                # archive was produced by this test, but selecting the data
+                # filter now keeps the test warning-free and preserves the
+                # intended regular-file extraction semantics on newer hosts.
+                extraction_options: dict[str, str] = {}
+                if sys.version_info >= (3, 12):
+                    extraction_options["filter"] = "data"
+                bundle.extractall(root / "extract", **extraction_options)
 
             archive_source = root / "extract" / root_name
             install_dir = root / "install"
