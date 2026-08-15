@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- `ScriptAppSessionController::current_snapshot()` now returns a value rather
+  than exposing its internal session object by reference, matching the
+  supervisor's value-only session-boundary contract.
+
 - Renamed script-task cross-task contracts by ownership rather than historical
   implementation detail. The worker-to-UI queue is `frame_mailbox`, packets
   carry `frame_lease_id`, and service-bridge telemetry distinguishes completion

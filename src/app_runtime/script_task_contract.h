@@ -27,7 +27,7 @@ public:
     ScriptAppSession begin(std::uint32_t app_instance_id);
     bool accepts(const ScriptAppSession& session) const;
     bool invalidate(const ScriptAppSession& session);
-    const ScriptAppSession& current() const { return current_; }
+    ScriptAppSession current_snapshot() const { return current_; }
 
 private:
     static std::uint32_t next_nonzero(std::uint32_t value);

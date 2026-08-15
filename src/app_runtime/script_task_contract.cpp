@@ -480,7 +480,7 @@ std::uint32_t ScriptTaskSupervisor::next_nonzero(std::uint32_t value) {
 
 ScriptAppSession ScriptTaskSupervisor::begin(std::uint32_t app_instance_id) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    if (sessions_.current().valid()) {
+    if (sessions_.current_snapshot().valid()) {
         return {};
     }
     next_frame_sequence_ = 1;
@@ -494,7 +494,7 @@ bool ScriptTaskSupervisor::accepts(const ScriptAppSession& session) const {
 
 ScriptAppSession ScriptTaskSupervisor::current() const {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    return sessions_.current();
+    return sessions_.current_snapshot();
 }
 
 ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_input(const ScriptTaskPacket& packet) {
@@ -507,7 +507,7 @@ ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_input(const ScriptTaskPac
 
 bool ScriptTaskSupervisor::take_input(ScriptTaskPacket& output) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    return input_mailbox_.pop_for(sessions_.current(), output);
+    return input_mailbox_.pop_for(sessions_.current_snapshot(), output);
 }
 
 ScriptTaskFramePublishResult ScriptTaskSupervisor::publish_frame(const ScriptAppSession& session,
@@ -546,7 +546,7 @@ ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_service_completion(const 
 
 bool ScriptTaskSupervisor::take_frame_packet(ScriptTaskPacket& output) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    return frame_mailbox_.pop_for(sessions_.current(), output);
+    return frame_mailbox_.pop_for(sessions_.current_snapshot(), output);
 }
 
 ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_fatal(const ScriptTaskPacket& packet) {
@@ -559,7 +559,7 @@ ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_fatal(const ScriptTaskPac
 
 bool ScriptTaskSupervisor::take_fatal(ScriptTaskPacket& output) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    return fatal_mailbox_.pop_for(sessions_.current(), output);
+    return fatal_mailbox_.pop_for(sessions_.current_snapshot(), output);
 }
 
 ScriptTaskFrameLeaseStatus ScriptTaskSupervisor::copy_frame(const ScriptAppSession& session,
@@ -627,7 +627,7 @@ ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_service_request(const Scr
 
 bool ScriptTaskSupervisor::take_service_request(ScriptTaskPacket& output) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    return service_request_mailbox_.pop_for(sessions_.current(), output);
+    return service_request_mailbox_.pop_for(sessions_.current_snapshot(), output);
 }
 
 bool ScriptTaskSupervisor::cancel_service(const ScriptTaskServiceToken& token) {
@@ -643,7 +643,7 @@ bool ScriptTaskSupervisor::retire_service(const ScriptTaskServiceToken& token) {
 ScriptTaskServiceCompletionDisposition ScriptTaskSupervisor::consume_service_completion(
     const ScriptTaskServiceToken& token) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    return services_.consume_completion(sessions_.current(), token);
+    return services_.consume_completion(sessions_.current_snapshot(), token);
 }
 
 ScriptTaskReleaseIntentStatus ScriptTaskSupervisor::post_native_release_intent(
