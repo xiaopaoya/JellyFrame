@@ -106,13 +106,13 @@ struct ScriptTaskServiceBridgePumpResult {
     std::size_t delivered = 0;
     std::size_t cancelled = 0;
     std::size_t stale = 0;
-    std::size_t discarded_unmapped = 0;
-    std::size_t released_handles = 0;
+    // Includes unknown, duplicate and identity-mismatched host completions.
+    std::size_t discarded_unmatched_completions = 0;
+    std::size_t released_completion_sources = 0;
     std::size_t released_payload_leases = 0;
-    std::size_t payloads_published = 0;
+    std::size_t published_payload_leases = 0;
     std::size_t payload_copy_failures = 0;
     std::size_t payload_lease_rejections = 0;
-    std::size_t released_source_payloads = 0;
     bool worker_inbox_full = false;
 };
 
@@ -135,8 +135,9 @@ struct ScriptTaskServiceRequestPumpResult {
 
 struct ScriptTaskServiceBridgeTeardownResult {
     std::size_t cancelled_pending_host_jobs = 0;
-    std::size_t retained_in_flight_host_jobs = 0;
-    std::size_t released_ready_handles = 0;
+    // Jobs already accepted by the provider and awaiting a late completion.
+    std::size_t awaiting_in_flight_host_completions = 0;
+    std::size_t released_ready_completion_sources = 0;
     std::size_t released_ready_payload_leases = 0;
     std::size_t retired_records = 0;
 };

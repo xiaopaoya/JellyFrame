@@ -52,9 +52,9 @@ struct ScriptTaskPacket {
     ScriptTaskPacketKind kind = ScriptTaskPacketKind::None;
     ScriptAppSession session;
     std::uint32_t sequence = 0;
-    // FrameReady carries a sealed frame lease ID. Other packets use an empty
-    // lease ID unless a later protocol revision explicitly assigns one.
-    std::uint32_t lease_id = 0;
+    // FrameReady carries a sealed UI-frame lease ID. Other packets must leave
+    // this at zero; service payload leases are encoded in their own packet.
+    std::uint32_t frame_lease_id = 0;
     std::vector<std::uint8_t> payload;
 };
 
@@ -100,7 +100,7 @@ private:
         ScriptTaskPacketKind kind = ScriptTaskPacketKind::None;
         ScriptAppSession session;
         std::uint32_t sequence = 0;
-        std::uint32_t lease_id = 0;
+        std::uint32_t frame_lease_id = 0;
         std::vector<std::uint8_t> payload;
     };
 
@@ -306,7 +306,7 @@ struct ScriptTaskSupervisorOptions {
 struct ScriptTaskFramePublishResult {
     ScriptTaskFrameLeaseStatus lease_status = ScriptTaskFrameLeaseStatus::InvalidSession;
     ScriptTaskMailboxPostStatus mailbox_status = ScriptTaskMailboxPostStatus::InvalidPacket;
-    std::uint32_t lease_id = 0;
+    std::uint32_t frame_lease_id = 0;
 
     bool accepted() const {
         return lease_status == ScriptTaskFrameLeaseStatus::Accepted &&

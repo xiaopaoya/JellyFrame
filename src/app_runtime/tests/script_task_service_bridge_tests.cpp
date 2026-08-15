@@ -263,7 +263,7 @@ void bridge_releases_cancelled_late_completion_handles() {
     AppFrameScratch scratch = make_scratch();
     const ScriptTaskServiceBridgePumpResult pumped = bridge.pump(scratch);
     assert(pumped.cancelled == 1);
-    assert(pumped.released_source_payloads == 1);
+    assert(pumped.released_completion_sources == 1);
     assert(!host.handles().contains(handle));
     ScriptTaskPacket ignored;
     assert(!supervisor.take_frame_packet(ignored));
@@ -291,7 +291,7 @@ void bridge_does_not_copy_payload_for_cancelled_inflight_completion() {
     AppFrameScratch scratch = make_scratch();
     const ScriptTaskServiceBridgePumpResult pumped = bridge.pump(scratch);
     assert(pumped.cancelled == 1);
-    assert(pumped.payloads_published == 0);
+    assert(pumped.published_payload_leases == 0);
     assert(adapter.copy_calls == 0);
     assert(adapter.release_calls == 1);
     assert(!host.handles().contains(handle));
@@ -316,7 +316,7 @@ void bridge_reports_payload_copy_and_lease_failures_as_terminal_values() {
     AppFrameScratch scratch = make_scratch();
     const ScriptTaskServiceBridgePumpResult copy_unavailable = bridge.pump(scratch);
     assert(copy_unavailable.payload_copy_failures == 1);
-    assert(copy_unavailable.released_source_payloads == 1);
+    assert(copy_unavailable.released_completion_sources == 1);
     ScriptTaskPacket packet;
     assert(supervisor.take_input(packet));
     ScriptTaskServiceCompletion completion;
@@ -348,7 +348,7 @@ void bridge_rejects_oversized_copied_payload_without_leaking_source_handle() {
     AppFrameScratch scratch = make_scratch();
     const ScriptTaskServiceBridgePumpResult pumped = bridge.pump(scratch);
     assert(pumped.payload_copy_failures == 1);
-    assert(pumped.released_source_payloads == 1);
+    assert(pumped.released_completion_sources == 1);
     assert(adapter.release_calls == 1);
     assert(!host.handles().contains(handle));
 }
@@ -376,7 +376,7 @@ void bridge_releases_published_payload_when_teardown_precedes_delivery() {
     AppFrameScratch scratch = make_scratch();
     const ScriptTaskServiceBridgePumpResult pumped = bridge.pump(scratch);
     assert(pumped.worker_inbox_full);
-    assert(pumped.payloads_published == 1);
+    assert(pumped.published_payload_leases == 1);
     assert(!host.handles().contains(handle));
     assert(supervisor.begin_teardown(session).cancelled_service_requests == 1);
     const ScriptTaskServiceBridgeTeardownResult teardown = bridge.begin_teardown(session);
@@ -444,7 +444,7 @@ void bridge_teardown_leaves_late_inflight_work_to_host_stale_cleanup() {
     const ScriptTaskTeardownResult supervisor_begin = supervisor.begin_teardown(session);
     assert(supervisor_begin.cancelled_service_requests == 1);
     const ScriptTaskServiceBridgeTeardownResult bridge_begin = bridge.begin_teardown(session);
-    assert(bridge_begin.retained_in_flight_host_jobs == 1);
+    assert(bridge_begin.awaiting_in_flight_host_completions == 1);
     assert(bridge.active_request_count() == 1);
     assert(host.terminate_current(AppTeardownReason::RuntimeError).released_handles == 1);
     assert(!host.handles().contains(handle));

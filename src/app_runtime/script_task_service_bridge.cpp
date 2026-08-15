@@ -338,7 +338,7 @@ void ScriptTaskServiceBridge::prepare_completion_payload(Record& record,
     }
     if (!copied) {
         if (release_record_completion_payload(record)) {
-            ++result.released_source_payloads;
+            ++result.released_completion_sources;
         }
         record.completion.status = HostServiceStatus::Failed;
         record.completion.error_code = static_cast<std::uint32_t>(
@@ -353,7 +353,7 @@ void ScriptTaskServiceBridge::prepare_completion_payload(Record& record,
     const ScriptTaskServicePayloadLeaseStatus lease_status = supervisor_.publish_service_payload(
         record.token.session, payload_scratch_, payload_lease_id);
     if (release_record_completion_payload(record)) {
-        ++result.released_source_payloads;
+        ++result.released_completion_sources;
     }
     if (lease_status != ScriptTaskServicePayloadLeaseStatus::Accepted) {
         record.completion.status = lease_status == ScriptTaskServicePayloadLeaseStatus::PayloadTooLarge ||
@@ -368,7 +368,7 @@ void ScriptTaskServiceBridge::prepare_completion_payload(Record& record,
     }
     record.payload_lease_id = payload_lease_id;
     record.completion.byte_count = static_cast<std::uint32_t>(payload_scratch_.size());
-    ++result.payloads_published;
+    ++result.published_payload_leases;
 }
 
 bool ScriptTaskServiceBridge::cancel(const ScriptTaskServiceToken& token) {
@@ -471,9 +471,9 @@ ScriptTaskServiceBridgePumpResult ScriptTaskServiceBridge::pump(AppFrameScratch&
         });
         if (found == records_.end() || found->completion_ready) {
             if (release_completion_payload(completion)) {
-                ++result.released_source_payloads;
+                ++result.released_completion_sources;
             }
-            ++result.discarded_unmapped;
+            ++result.discarded_unmatched_completions;
             continue;
         }
         if (!completion_matches(*found, completion)) {
@@ -481,16 +481,16 @@ ScriptTaskServiceBridgePumpResult ScriptTaskServiceBridge::pump(AppFrameScratch&
             supervisor_.consume_service_completion(found->token);
             erase_record(static_cast<std::size_t>(found - records_.begin()));
             if (release_completion_payload(completion)) {
-                ++result.released_source_payloads;
+                ++result.released_completion_sources;
             }
-            ++result.discarded_unmapped;
+            ++result.discarded_unmatched_completions;
             continue;
         }
         found->completion = completion;
         found->completion_ready = true;
         if (found->cancelled) {
             if (release_record_completion_payload(*found)) {
-                ++result.released_source_payloads;
+                ++result.released_completion_sources;
             }
         } else {
             prepare_completion_payload(*found, result);
@@ -533,7 +533,7 @@ ScriptTaskServiceBridgeTeardownResult ScriptTaskServiceBridge::begin_teardown(co
             continue;
         }
         record.cancelled = true;
-        ++result.retained_in_flight_host_jobs;
+        ++result.awaiting_in_flight_host_completions;
         ++index;
     }
     return result;
@@ -552,7 +552,7 @@ ScriptTaskServiceBridgeTeardownResult ScriptTaskServiceBridge::complete_teardown
             continue;
         }
         if (records_[index].completion_ready && release_record_completion_payload(records_[index])) {
-            ++result.released_ready_handles;
+            ++result.released_ready_completion_sources;
         }
         if (records_[index].completion_ready && release_record_payload(records_[index])) {
             ++result.released_ready_payload_leases;

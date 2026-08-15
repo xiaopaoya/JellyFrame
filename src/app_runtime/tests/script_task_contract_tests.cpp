@@ -149,7 +149,7 @@ void supervisor_requires_ordered_value_only_teardown() {
     const ScriptTaskFramePublishResult rejected_frame = supervisor.publish_frame(active, {4, 5, 6});
     assert(rejected_frame.lease_status == ScriptTaskFrameLeaseStatus::Accepted);
     assert(rejected_frame.mailbox_status == ScriptTaskMailboxPostStatus::Full);
-    assert(rejected_frame.lease_id == 0);
+    assert(rejected_frame.frame_lease_id == 0);
     assert(supervisor.track_service({active, 5, 6}) == ScriptTaskServiceTrackStatus::Accepted);
     assert(supervisor.post_service_request({ScriptTaskPacketKind::ServiceRequest, active, 5, 0, {1}}) ==
            ScriptTaskMailboxPostStatus::Accepted);
@@ -163,7 +163,7 @@ void supervisor_requires_ordered_value_only_teardown() {
     assert(first.cancelled_service_requests == 1);
     assert(!supervisor.accepts(active));
     std::vector<std::uint8_t> copied_frame;
-    assert(supervisor.copy_frame(active, frame.lease_id, copied_frame) ==
+    assert(supervisor.copy_frame(active, frame.frame_lease_id, copied_frame) ==
            ScriptTaskFrameLeaseStatus::InvalidSession);
     assert(supervisor.post_input({ScriptTaskPacketKind::Input, active, 2, 0, {7}}) ==
            ScriptTaskMailboxPostStatus::InvalidPacket);

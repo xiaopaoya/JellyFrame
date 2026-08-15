@@ -17,6 +17,12 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Renamed script-task cross-task contracts by ownership rather than historical
+  implementation detail. The worker-to-UI queue is `frame_mailbox`, packets
+  carry `frame_lease_id`, and service-bridge telemetry distinguishes completion
+  sources, copied payload leases and late in-flight completions. This is an
+  intentional pre-1.0 API replacement; no legacy aliases are retained.
+
 - App manifests now declare the Runtime/Core pair explicitly with
   `runtime.minJellyFrame` and `runtime.minRenderCore`. Both must exactly match
   the active pre-1.0 Runtime line and its locked Render Core package; the

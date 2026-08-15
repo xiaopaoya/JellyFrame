@@ -385,10 +385,10 @@ ScriptTaskAppFrameTakeStatus take_script_task_app_frame(ScriptTaskSupervisor& su
         return ScriptTaskAppFrameTakeStatus::UnexpectedPacket;
     }
     std::vector<std::uint8_t> copied;
-    if (supervisor.copy_frame(session, packet.lease_id, copied) != ScriptTaskFrameLeaseStatus::Accepted) {
+    if (supervisor.copy_frame(session, packet.frame_lease_id, copied) != ScriptTaskFrameLeaseStatus::Accepted) {
         return ScriptTaskAppFrameTakeStatus::LeaseRejected;
     }
-    const ScriptTaskFrameLeaseStatus released = supervisor.release_frame(session, packet.lease_id);
+    const ScriptTaskFrameLeaseStatus released = supervisor.release_frame(session, packet.frame_lease_id);
     if (released != ScriptTaskFrameLeaseStatus::Accepted) {
         return ScriptTaskAppFrameTakeStatus::LeaseRejected;
     }

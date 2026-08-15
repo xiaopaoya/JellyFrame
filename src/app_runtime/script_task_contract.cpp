@@ -63,16 +63,16 @@ bool ScriptTaskMailbox::packet_is_valid(const ScriptTaskPacket& packet) const {
         return false;
     }
     if (packet.kind == ScriptTaskPacketKind::FrameReady) {
-        return packet.lease_id != 0 && packet.payload.empty();
+        return packet.frame_lease_id != 0 && packet.payload.empty();
     }
-    return packet.lease_id == 0;
+    return packet.frame_lease_id == 0;
 }
 
 void ScriptTaskMailbox::clear_slot(Slot& slot) {
     slot.kind = ScriptTaskPacketKind::None;
     slot.session = {};
     slot.sequence = 0;
-    slot.lease_id = 0;
+    slot.frame_lease_id = 0;
     slot.payload.clear();
 }
 
@@ -99,7 +99,7 @@ ScriptTaskMailboxPostStatus ScriptTaskMailbox::post(const ScriptTaskPacket& pack
     slot.kind = packet.kind;
     slot.session = packet.session;
     slot.sequence = packet.sequence;
-    slot.lease_id = packet.lease_id;
+    slot.frame_lease_id = packet.frame_lease_id;
     slot.payload.assign(packet.payload.begin(), packet.payload.end());
     ++size_;
     ++statistics_.posted;
@@ -123,7 +123,7 @@ bool ScriptTaskMailbox::pop_for(const ScriptAppSession& session, ScriptTaskPacke
         output.kind = slot.kind;
         output.session = slot.session;
         output.sequence = slot.sequence;
-        output.lease_id = slot.lease_id;
+        output.frame_lease_id = slot.frame_lease_id;
         output.payload.assign(slot.payload.begin(), slot.payload.end());
         clear_slot(slot);
         head_ = (head_ + 1) % slots_.size();
@@ -517,19 +517,19 @@ ScriptTaskFramePublishResult ScriptTaskSupervisor::publish_frame(const ScriptApp
     if (!sessions_.accepts(session)) {
         return result;
     }
-    result.lease_status = frame_leases_.publish(session, payload, result.lease_id);
+    result.lease_status = frame_leases_.publish(session, payload, result.frame_lease_id);
     if (result.lease_status != ScriptTaskFrameLeaseStatus::Accepted) {
         return result;
     }
     const ScriptTaskPacket frame{ScriptTaskPacketKind::FrameReady,
                                  session,
                                  next_frame_sequence_,
-                                 result.lease_id,
+                                 result.frame_lease_id,
                                  {}};
     result.mailbox_status = frame_mailbox_.post(frame);
     if (result.mailbox_status != ScriptTaskMailboxPostStatus::Accepted) {
-        frame_leases_.release(session, result.lease_id);
-        result.lease_id = 0;
+        frame_leases_.release(session, result.frame_lease_id);
+        result.frame_lease_id = 0;
         return result;
     }
     next_frame_sequence_ = next_nonzero(next_frame_sequence_);
