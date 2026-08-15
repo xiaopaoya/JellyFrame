@@ -477,7 +477,7 @@ void supervisor_entry(void* argument) {
     const auto normal_end = protocol.complete_teardown(first_session);
     if (normal_begin.session != first_session ||
         normal_bridge_begin.cancelled_pending_host_jobs != 0 ||
-        normal_bridge_begin.retained_in_flight_host_jobs != 0 ||
+        normal_bridge_begin.awaiting_in_flight_host_completions != 0 ||
         normal_host_end.app_instance_id != first.id ||
         normal_bridge_end.retired_records != 0 || normal_end.session != first_session) {
         state->failures.fetch_add(1);
@@ -502,7 +502,7 @@ void supervisor_entry(void* argument) {
             const auto replacement_end = protocol.complete_teardown(replacement);
             if (replacement_begin.session != replacement ||
                 replacement_bridge_begin.cancelled_pending_host_jobs != 0 ||
-                replacement_bridge_begin.retained_in_flight_host_jobs != 0 ||
+                replacement_bridge_begin.awaiting_in_flight_host_completions != 0 ||
                 replacement_host_end.app_instance_id != replacement.app_instance_id ||
                 replacement_bridge_end.retired_records != 0 ||
                 replacement_end.session != replacement) {

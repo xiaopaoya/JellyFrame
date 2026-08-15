@@ -305,7 +305,7 @@ bool retire_session(FaultState& state, ScriptTaskSupervisor& protocol,
     const auto bridge_end = bridge.complete_teardown(session);
     const auto protocol_begin = protocol.begin_teardown(session);
     const auto protocol_end = protocol.complete_teardown(session);
-    const bool ok = bridge_begin.retained_in_flight_host_jobs == 0 &&
+    const bool ok = bridge_begin.awaiting_in_flight_host_completions == 0 &&
         bridge_end.retired_records == 0 && host_end.app_instance_id == session.app_instance_id &&
         protocol_begin.session == session && protocol_end.session == session;
     if (!ok) state.teardown_failures.fetch_add(1);

@@ -2,15 +2,21 @@ set(JELLYFRAME_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../..")
 set(JELLYFRAME_COMPONENT_REQUIRES jellyframe_render_core)
 set(JELLYFRAME_SCRIPT_INCLUDE_DIRS)
 
+if(DEFINED JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+    message(FATAL_ERROR
+        "JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME was replaced by "
+        "JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME; remove the stale CMake cache entry and reconfigure.")
+endif()
+
 set(JELLYFRAME_SCRIPT_TASK_SOURCES)
 if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME)
     if(NOT JELLYFRAME_BUILD_SCRIPTING)
         message(FATAL_ERROR
             "script-task port preflight requires JELLYFRAME_BUILD_SCRIPTING=ON")
     endif()
-    if(NOT JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+    if(NOT JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         message(FATAL_ERROR
-            "script-task port preflight requires JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON")
+            "script-task port preflight requires JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON")
     endif()
     list(APPEND JELLYFRAME_SCRIPT_TASK_SOURCES
         "${JELLYFRAME_ROOT}/src/app_runtime/script_task_contract.cpp"

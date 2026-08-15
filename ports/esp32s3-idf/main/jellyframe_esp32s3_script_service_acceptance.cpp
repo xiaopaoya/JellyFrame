@@ -721,7 +721,7 @@ void supervisor_entry(void* raw) {
         state->completion_cancelled.fetch_add(static_cast<std::uint32_t>(completions.cancelled));
         state->host_stale_handles_released.fetch_add(
             static_cast<std::uint32_t>(completions.host.released_stale_handles));
-        state->bridge_source_releases.fetch_add(static_cast<std::uint32_t>(completions.released_source_payloads));
+        state->bridge_source_releases.fetch_add(static_cast<std::uint32_t>(completions.released_completion_sources));
         if (retired_session_pending.valid()) {
             // Release the bridge record after one supervisor pump. If the
             // host completion was not in this pump batch yet, the next host
