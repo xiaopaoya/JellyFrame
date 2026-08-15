@@ -23,28 +23,29 @@ struct AppRuntimeHostOptions {
 
 struct AppFrameScratch {
     std::vector<HostServiceCompletion> accepted_completions;
-    std::vector<HostServiceCompletion> completion_batch;
+    // Raw entries drained from the host queue before lifecycle filtering.
+    std::vector<HostServiceCompletion> drained_completions;
 
     void reserve_from_options(const AppRuntimeHostOptions& options) {
         if (options.max_completion_events_per_frame != 0) {
             accepted_completions.reserve(options.max_completion_events_per_frame);
-            completion_batch.reserve(options.max_completion_events_per_frame);
+            drained_completions.reserve(options.max_completion_events_per_frame);
         }
     }
 
     void begin_frame() {
         accepted_completions.clear();
-        completion_batch.clear();
+        drained_completions.clear();
     }
 
     void end_frame() {
         accepted_completions.clear();
-        completion_batch.clear();
+        drained_completions.clear();
     }
 
     void release() {
         std::vector<HostServiceCompletion>().swap(accepted_completions);
-        std::vector<HostServiceCompletion>().swap(completion_batch);
+        std::vector<HostServiceCompletion>().swap(drained_completions);
     }
 };
 

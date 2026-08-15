@@ -355,17 +355,17 @@ void frame_scratch_pump_reuses_completion_storage() {
     assert(pumped.accepted == 2);
     assert(scratch.accepted_completions.size() == 2);
     assert(scratch.accepted_completions.capacity() >= 2);
-    assert(scratch.completion_batch.size() == 2);
-    assert(scratch.completion_batch.capacity() >= 2);
+    assert(scratch.drained_completions.size() == 2);
+    assert(scratch.drained_completions.capacity() >= 2);
 
     scratch.end_frame();
     assert(scratch.accepted_completions.empty());
-    assert(scratch.completion_batch.empty());
+    assert(scratch.drained_completions.empty());
     assert(scratch.accepted_completions.capacity() >= 2);
-    assert(scratch.completion_batch.capacity() >= 2);
+    assert(scratch.drained_completions.capacity() >= 2);
     scratch.release();
     assert(scratch.accepted_completions.capacity() == 0);
-    assert(scratch.completion_batch.capacity() == 0);
+    assert(scratch.drained_completions.capacity() == 0);
 }
 
 void options_follow_host_capabilities() {

@@ -128,7 +128,7 @@ AppCompletionPumpResult AppRuntimeHost::pump_frame_completions(AppFrameScratch& 
     return lifecycle_.pump_completions(completions_,
                                        max_completion_events_per_frame_,
                                        scratch.accepted_completions,
-                                       scratch.completion_batch,
+                                       scratch.drained_completions,
                                        &handles_);
 }
 

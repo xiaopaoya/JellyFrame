@@ -23,6 +23,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   sources, copied payload leases and late in-flight completions. This is an
   intentional pre-1.0 API replacement; no legacy aliases are retained.
 
+- Clarified the Runtime frame scratch lifecycle: its raw host-queue staging
+  vector is now `drained_completions`, distinct from lifecycle-filtered
+  `accepted_completions`.
+
 - App manifests now declare the Runtime/Core pair explicitly with
   `runtime.minJellyFrame` and `runtime.minRenderCore`. Both must exactly match
   the active pre-1.0 Runtime line and its locked Render Core package; the
