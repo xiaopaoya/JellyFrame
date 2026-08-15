@@ -17,12 +17,15 @@ The source tree is split into three hardware-neutral subprojects:
 - `src/script` / `jellyframe_script`: optional JerryScript bridge. It can be
   left out of embedded builds.
 
-The repository is currently still a source monorepo, but the Render Core target
-already has an extraction boundary. Configure with
+The first history-preserving Render Core repository now exists at
+[`xiaopaoya/JellyFrame-Render-Core`](https://github.com/xiaopaoya/JellyFrame-Render-Core).
+This JellyFrame checkout temporarily retains the in-tree Core provider until
+the first signed Core release is accepted through the Runtime package lock.
+The Render Core target has an extraction boundary. Configure with
 `JELLYFRAME_BUILD_APP_RUNTIME=OFF`, `JELLYFRAME_BUILD_SCRIPTING=OFF` and the
 upper-layer examples disabled to build only Render Core. With
 `JELLYFRAME_INSTALL_RENDER_CORE=ON`, CMake exports a versioned
-`JellyFrame::jellyframe_render_core` package for the future standalone
+`JellyFrame::jellyframe_render_core` package for the standalone
 `jellyframe-render-core` repository. This staged approach keeps local cross-layer
 development cheap without making a Git submodule part of the public workflow.
 
@@ -103,7 +106,7 @@ ownership model:
 
 | Future repository | Owns | Release rhythm | Current state |
 | --- | --- | --- | --- |
-| `jellyframe-render-core` | HTML/CSS/DOM, layout, paint, input and opt-in feature families | Frequent optimization and compatibility releases | Install/export, deterministic source archive and package consumer are verified in this repository |
+| `jellyframe-render-core` | HTML/CSS/DOM, layout, paint, input and opt-in feature families | Frequent optimization and compatibility releases | Physical repository created; standalone CI, install/export and package-consumer boundaries are verified. Its initial branch is not yet a signed release. |
 | `jellyframe` | App Runtime, Japp format, JerryScript binding, desktop shell and author tools | Slower releases with App compatibility discipline | Current Runtime source boundary; accepts a locked Core package or in-tree Core |
 | `jellyframe-device-os` | Launcher, registry, Device Runtime, JFDP, board ports and official images | Experimental hardware-driven releases | Not physically extracted; D0 contracts remain in transitional locations |
 | JerryScript | Third-party scripting engine | Upstream commit/tag cadence | Optional dependency, locked by the Runtime build/port owner |

@@ -13,11 +13,14 @@ JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目�
   队列；可依赖 `render_core` 的宿主能力与预算类型。
 - `src/script` / `jellyframe_script`：可选 JerryScript 桥接层；嵌入式构建可以完全关闭。
 
-当前仓库仍是源码 monorepo，但 Render Core 已具备独立导出边界。将
+首个保留历史的 Render Core 仓库现已建立于
+[`xiaopaoya/JellyFrame-Render-Core`](https://github.com/xiaopaoya/JellyFrame-Render-Core)。
+在第一个带签名的 Core release 通过 Runtime package lock 接纳前，本 JellyFrame checkout 暂时保留
+in-tree Core provider。Render Core 已具备独立导出边界。将
 `JELLYFRAME_BUILD_APP_RUNTIME=OFF`、`JELLYFRAME_BUILD_SCRIPTING=OFF` 并关闭上层示例后，
 即可只配置和构建 Render Core。设置 `JELLYFRAME_INSTALL_RENDER_CORE=ON` 并执行
 `cmake --install`，会导出版本化的 `JellyFrame::jellyframe_render_core`、公共头文件和能力 profile，
-供未来独立的 `jellyframe-render-core` 仓库消费。这个阶段不引入 Git submodule，也不把 App Runtime、
+供独立的 `jellyframe-render-core` 仓库消费。这个阶段不引入 Git submodule，也不把 App Runtime、
 JerryScript、ports 或设备协议混入 Render Core 包。
 
 同一 checkout 还可以生成可独立使用、可复现的源码归档：
@@ -82,7 +85,7 @@ provider 指向另一个 checkout 或已解压的 Render Core 源码树。这只
 
 | 未来仓库 | 负责内容 | 迭代规律 | 当前状态 |
 | --- | --- | --- | --- |
-| `jellyframe-render-core` | HTML/CSS/DOM、layout、paint、input 和可选 feature family | 高频优化与兼容性发布 | 本仓库已验证安装/导出、确定性源码归档和 package consumer |
+| `jellyframe-render-core` | HTML/CSS/DOM、layout、paint、input 和可选 feature family | 高频优化与兼容性发布 | 物理仓库已建立；standalone CI、安装/导出与 package-consumer 边界已验证，初始分支尚非带签名 release |
 | `jellyframe` | App Runtime、Japp 格式、JerryScript binding、桌面壳和开发工具 | 慢速迭代，维护 App 兼容契约 | 当前 Runtime 源码边界；可消费锁定 Core package 或 in-tree Core |
 | `jellyframe-device-os` | launcher、registry、Device Runtime、JFDP、板卡 port 和官方镜像 | 强硬件依赖的实验性迭代 | 尚未物理迁出；D0 契约仍位于过渡位置 |
 | JerryScript | 第三方脚本引擎 | 跟随上游 commit/tag | 可选依赖，由 Runtime/port 构建锁定 |

@@ -12,6 +12,12 @@
 | `jellyframe` | Japp 格式、App Runtime、JerryScript binding、桌面壳、作者工具 | 板卡镜像策略或 Render Core 私有实现头 |
 | `jellyframe-device-os` | launcher、registry、JFDP transport、官方镜像、ports | Render Core 语义或 Runtime 私有实现 |
 
+## 迁移状态
+
+保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库已经建立，现有许可证和贡献者历史均未改变。
+其 `master` 是未签名的预发布迁移分支，而非 `0.6.0` release：这不表示许可证、贡献者政策或开源意向的改变。
+Runtime 在带签名的 Core artifact 发布并通过显式 dependency-lock 更新接纳前，仍使用 in-tree provider。
+
 ## 发布单元
 
 一份 Render Core release 包含：

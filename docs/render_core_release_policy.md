@@ -12,6 +12,15 @@ This policy governs the transition from the current monorepo boundary to an inde
 | `jellyframe` | Japp format, App Runtime, JerryScript binding, desktop shell and author tools | board image policy or private Render Core implementation headers |
 | `jellyframe-device-os` | launcher, registry, JFDP transport, official images and ports | Render Core semantics or private Runtime implementation |
 
+## Migration Status
+
+The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository has been
+created with the existing license and contributor history unchanged. Its
+`master` branch is an unsigned pre-release migration branch, not a `0.6.0`
+release: no license change, contributor-policy change or open-source intent is
+implied. The Runtime continues to use its in-tree provider until a signed Core
+artifact is released and accepted by an explicit dependency-lock update.
+
 ## Release Unit
 
 A Render Core release contains:
