@@ -464,7 +464,7 @@ std::size_t ScriptTaskReleaseIntentMailbox::discard_session(const ScriptAppSessi
 }
 
 ScriptTaskSupervisor::ScriptTaskSupervisor(ScriptTaskSupervisorOptions options)
-    : input_mailbox_(options.input_mailbox),
+    : worker_inbox_(options.worker_inbox),
       frame_mailbox_(options.frame_mailbox),
       service_request_mailbox_(options.service_request_mailbox),
       frame_leases_(options.frame_leases),
@@ -502,7 +502,7 @@ ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_input(const ScriptTaskPac
     if (packet.kind != ScriptTaskPacketKind::Input || !sessions_.accepts(packet.session)) {
         return ScriptTaskMailboxPostStatus::InvalidPacket;
     }
-    return input_mailbox_.post(packet);
+    return worker_inbox_.post(packet);
 }
 
 bool ScriptTaskSupervisor::take_worker_packet(const ScriptAppSession& session, ScriptTaskPacket& output) {
@@ -510,7 +510,7 @@ bool ScriptTaskSupervisor::take_worker_packet(const ScriptAppSession& session, S
     if (!sessions_.accepts(session)) {
         return false;
     }
-    return input_mailbox_.pop_for(session, output);
+    return worker_inbox_.pop_for(session, output);
 }
 
 ScriptTaskFramePublishResult ScriptTaskSupervisor::publish_frame(const ScriptAppSession& session,
@@ -544,7 +544,7 @@ ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_service_completion(const 
     if (packet.kind != ScriptTaskPacketKind::ServiceCompletion || !sessions_.accepts(packet.session)) {
         return ScriptTaskMailboxPostStatus::InvalidPacket;
     }
-    return input_mailbox_.post(packet);
+    return worker_inbox_.post(packet);
 }
 
 bool ScriptTaskSupervisor::take_frame_packet(ScriptTaskPacket& output) {
@@ -673,7 +673,7 @@ ScriptTaskTeardownResult ScriptTaskSupervisor::begin_teardown(const ScriptAppSes
         return result;
     }
     retiring_session_ = session;
-    result.discarded_input_packets = input_mailbox_.discard_all();
+    result.discarded_worker_inbox_packets = worker_inbox_.discard_all();
     result.discarded_frame_packets = frame_mailbox_.discard_all();
     result.discarded_service_request_packets = service_request_mailbox_.discard_all();
     result.discarded_fatal_packets = fatal_mailbox_.discard_all();

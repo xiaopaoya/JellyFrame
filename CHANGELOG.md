@@ -26,6 +26,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   reflect that it receives input and service completions. It always requires an
   explicit `ScriptAppSession`; the old current-session convenience receive path
   has been removed so a delayed worker cannot consume a newer lifetime's input.
+  `ScriptTaskSupervisorOptions::worker_inbox` and teardown's
+  `discarded_worker_inbox_packets` replace names that incorrectly implied this
+  shared channel carried raw input only.
 
 - App Runtime now rejects a nonzero `result_handle`, including one on an
   unsolicited event, unless it belongs to the completion's app instance;

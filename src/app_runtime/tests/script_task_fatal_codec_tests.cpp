@@ -11,7 +11,7 @@ namespace {
 
 ScriptTaskSupervisor make_supervisor() {
     ScriptTaskSupervisorOptions options;
-    options.input_mailbox = {2, 32};
+    options.worker_inbox = {2, 32};
     options.frame_mailbox = {2, 32};
     options.service_request_mailbox = {2, 32};
     options.frame_leases = {2, 64, 128};

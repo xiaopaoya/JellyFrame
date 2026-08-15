@@ -127,7 +127,7 @@ void signal_gate(SemaphoreHandle_t gate) {
 
 jellyframe::ScriptTaskSupervisorOptions protocol_options() {
     jellyframe::ScriptTaskSupervisorOptions options;
-    options.input_mailbox = {4, 128};
+    options.worker_inbox = {4, 128};
     options.frame_mailbox = {4, 0};
     options.frame_leases = {2, 1024, 2048};
     options.max_service_tombstones = 16;

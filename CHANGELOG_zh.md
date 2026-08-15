@@ -19,7 +19,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 - Script-task worker inbox 的接收现命名为 `take_worker_packet(...)`，明确它同时接收 input 与
   service completion。它一律要求显式传入 `ScriptAppSession`，已移除读取 current session 的便利
-  接收路径，防止延迟退出的 worker 消费新生命周期的 input。
+  接收路径，防止延迟退出的 worker 消费新生命周期的 input。`ScriptTaskSupervisorOptions::worker_inbox`
+  与 teardown 的 `discarded_worker_inbox_packets` 也替换了错误暗示该共享通道只承载 raw input 的旧名称。
 
 - App Runtime 现在会拒绝不属于 completion 所属 app instance 的非零 `result_handle`，包括
   unsolicited event 携带的句柄；显式绑定非零 client token 的 handle 还必须匹配该 consumer。

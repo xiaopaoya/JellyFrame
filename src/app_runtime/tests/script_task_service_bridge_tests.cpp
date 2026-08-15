@@ -15,7 +15,7 @@ AppRuntimeHost make_host(std::size_t capacity = 4, std::size_t completions = 4) 
 
 ScriptTaskSupervisor make_supervisor(std::size_t worker_slots = 4, std::size_t payload_bytes = 24) {
     ScriptTaskSupervisorOptions options;
-    options.input_mailbox = {worker_slots, payload_bytes};
+    options.worker_inbox = {worker_slots, payload_bytes};
     options.frame_mailbox = {2, 0};
     options.frame_leases = {2, 64, 128};
     options.max_service_tombstones = 4;
