@@ -134,7 +134,7 @@ bool ScriptTaskServiceBridge::completion_matches(const Record& record,
 ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSession& session,
                                                                std::uint32_t request_id,
                                                                HostServiceJobKind kind,
-                                                               std::uint32_t request_handle,
+                                                               std::uint32_t input_handle,
                                                                std::uint8_t priority,
                                                                std::uint32_t timeout_ms,
                                                                std::uint32_t client_token) {
@@ -179,7 +179,7 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSes
         return result;
     }
 
-    const HostServiceSubmitResult submitted = host_.submit_current(kind, request_handle, priority, timeout_ms, client_token);
+    const HostServiceSubmitResult submitted = host_.submit_current(kind, input_handle, priority, timeout_ms, client_token);
     result.host_status = submitted.rejected_status;
     if (!submitted.accepted) {
         // A rejected submit is still a terminal value that the worker must
@@ -226,7 +226,7 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit_packet(const Scrip
     return submit(packet.session,
                   request.request_id,
                   request.kind,
-                  request.request_handle,
+                  request.input_handle,
                   request.priority,
                   request.timeout_ms,
                   request.client_token);

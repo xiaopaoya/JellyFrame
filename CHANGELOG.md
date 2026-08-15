@@ -32,6 +32,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME`. A stale old CMake cache variable is
   a configure error rather than a silent fallback during this pre-1.0 line.
 
+- Renamed host-service `request_handle` to `input_handle`: the field identifies
+  an optional supervisor-owned service input, while `job_id` remains the
+  request identity.
+
 - App manifests now declare the Runtime/Core pair explicitly with
   `runtime.minJellyFrame` and `runtime.minRenderCore`. Both must exactly match
   the active pre-1.0 Runtime line and its locked Render Core package; the

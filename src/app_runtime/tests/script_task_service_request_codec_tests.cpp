@@ -22,7 +22,7 @@ void service_requests_round_trip_as_fixed_values() {
     assert(decoded.kind == expected.kind);
     assert(decoded.request_id == expected.request_id);
     assert(decoded.client_token == expected.client_token);
-    assert(decoded.request_handle == expected.request_handle);
+    assert(decoded.input_handle == expected.input_handle);
     assert(decoded.priority == expected.priority);
     assert(decoded.timeout_ms == expected.timeout_ms);
 }

@@ -49,7 +49,7 @@ ScriptTaskServiceRequestCodecStatus encode_script_task_service_request(
     output[2] = request.priority;
     put_u32(output, 4, request.request_id);
     put_u32(output, 8, request.client_token);
-    put_u32(output, 12, request.request_handle);
+    put_u32(output, 12, request.input_handle);
     put_u32(output, 16, request.timeout_ms);
     return ScriptTaskServiceRequestCodecStatus::Accepted;
 }

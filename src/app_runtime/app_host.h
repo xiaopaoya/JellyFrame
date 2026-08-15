@@ -73,7 +73,7 @@ public:
     bool resume_current();
 
     HostServiceSubmitResult submit_current(HostServiceJobKind kind,
-                                           std::uint32_t request_handle = 0,
+                                           std::uint32_t input_handle = 0,
                                            std::uint8_t priority = 0,
                                            std::uint32_t timeout_ms = 0,
                                            std::uint32_t client_token = 0);

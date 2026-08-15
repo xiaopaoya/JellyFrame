@@ -25,7 +25,7 @@ HostServiceRequestQueue::HostServiceRequestQueue(std::size_t capacity)
 
 HostServiceSubmitResult HostServiceRequestQueue::submit(HostServiceJobKind kind,
                                                         std::uint32_t app_instance_id,
-                                                        std::uint32_t request_handle,
+                                                        std::uint32_t input_handle,
                                                         std::uint8_t priority,
                                                         std::uint32_t timeout_ms,
                                                         std::uint32_t client_token) {
@@ -38,7 +38,7 @@ HostServiceSubmitResult HostServiceRequestQueue::submit(HostServiceJobKind kind,
         next_job_id_ = 1;
     }
     requests_.push_back(HostServiceRequest{
-        job_id, kind, app_instance_id, request_handle, timeout_ms, priority, client_token});
+        job_id, kind, app_instance_id, input_handle, timeout_ms, priority, client_token});
     return HostServiceSubmitResult{true, job_id, HostServiceStatus::Completed};
 }
 

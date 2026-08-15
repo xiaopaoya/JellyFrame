@@ -9,13 +9,13 @@
 
 namespace jellyframe {
 
-// Value-only request submitted by a script worker. request_handle is an
-// opaque supervisor-owned ID; it is never a pointer or a task-local address.
+// Value-only request submitted by a script worker. input_handle is an opaque
+// supervisor-owned resource ID; it is never a pointer or a task-local address.
 struct ScriptTaskServiceRequest {
     HostServiceJobKind kind = HostServiceJobKind::Other;
     std::uint32_t request_id = 0;
     std::uint32_t client_token = 0;
-    std::uint32_t request_handle = 0;
+    std::uint32_t input_handle = 0;
     std::uint8_t priority = 0;
     std::uint32_t timeout_ms = 0;
 };

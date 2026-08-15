@@ -52,7 +52,9 @@ struct HostServiceRequest {
     std::uint32_t job_id = 0;
     HostServiceJobKind kind = HostServiceJobKind::Other;
     std::uint32_t app_instance_id = 0;
-    std::uint32_t request_handle = 0;
+    // Optional supervisor-owned resource consumed by this service job.
+    // This is not the service request identity; that is job_id.
+    std::uint32_t input_handle = 0;
     std::uint32_t timeout_ms = 0;
     std::uint8_t priority = 0;
     // Identifies an internal consumer within one app instance. It is never an
@@ -85,7 +87,7 @@ public:
 
     HostServiceSubmitResult submit(HostServiceJobKind kind,
                                    std::uint32_t app_instance_id,
-                                   std::uint32_t request_handle = 0,
+                                   std::uint32_t input_handle = 0,
                                    std::uint8_t priority = 0,
                                    std::uint32_t timeout_ms = 0,
                                    std::uint32_t client_token = 0);
