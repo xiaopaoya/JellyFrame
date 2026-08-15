@@ -1,0 +1,61 @@
+name: Render Core CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  standalone:
+    name: Standalone Build And Archive
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Configure
+        run: >
+          cmake -S . -B build/release -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DJELLYFRAME_BUILD_TESTS=ON
+          -DJELLYFRAME_INSTALL_RENDER_CORE=ON
+
+      - name: Build
+        run: cmake --build build/release --parallel
+
+      - name: Run CTest
+        run: ctest --test-dir build/release --output-on-failure
+
+      - name: Install package
+        run: cmake --install build/release --prefix build/install
+
+      - name: Verify source archive
+        run: >
+          python tests/render_core_source_archive_tests.py
+          --cmake cmake
+          --source-root .
+          --generator Ninja
+
+      - name: Create source distribution
+        run: python tools/package_render_core_source.py --output-dir build/source-dist
+
+      - name: Upload source distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: jellyframe-render-core-source
+          path: build/source-dist/
+          if-no-files-found: error

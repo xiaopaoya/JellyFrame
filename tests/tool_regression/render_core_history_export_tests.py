@@ -74,6 +74,8 @@ class RenderCoreHistoryExportTests(unittest.TestCase):
             self.assertTrue((export_root / "CMakeLists.txt").is_file())
             self.assertTrue((export_root / "CMakePresets.json").is_file())
             self.assertTrue((export_root / "README.md").is_file())
+            self.assertTrue((export_root / ".github" / "workflows" / "ci.yml").is_file())
+            self.assertTrue((export_root / "tests" / "render_core_source_archive_tests.py").is_file())
             self.assertFalse((export_root / "src" / "app_runtime").exists())
             self.assertFalse((export_root / "ports").exists())
 

@@ -33,14 +33,19 @@ CORE_PATHS = (
     "cmake/render_core_version.cmake",
     "docs/render_core_release_policy.md",
     "docs/render_core_release_policy_zh.md",
+    "project_tools/render_core_ci.yml",
     "project_tools/package_render_core_source.py",
+    "tests/tool_regression/render_core_source_archive_tests.py",
 )
 
 PATH_RENAMES = (
     ("cmake/render_core_standalone_root.cmake", "CMakeLists.txt"),
     ("cmake/render_core_standalone_presets.json.in", "CMakePresets.json"),
     ("src/render_core/STANDALONE_README.md", "README.md"),
+    ("project_tools/render_core_ci.yml", ".github/workflows/ci.yml"),
     ("project_tools/package_render_core_source.py", "tools/package_render_core_source.py"),
+    ("tests/tool_regression/render_core_source_archive_tests.py",
+     "tests/render_core_source_archive_tests.py"),
     ("docs/render_core_release_policy.md", "docs/release_policy.md"),
     ("docs/render_core_release_policy_zh.md", "docs/release_policy_zh.md"),
 )
@@ -55,6 +60,8 @@ REQUIRED_EXPORT_FILES = (
     "src/render_core/layout.cpp",
     "src/render_core/tests/render_core_tests.cpp",
     "tools/package_render_core_source.py",
+    "tests/render_core_source_archive_tests.py",
+    ".github/workflows/ci.yml",
     "docs/release_policy.md",
 )
 

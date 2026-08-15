@@ -13,6 +13,7 @@ HTML/CSS compatibility tables. App authors normally start with
 | Inspect or regenerate the Render Core feature catalog | `render_core_feature_registry.py` |
 | Create a standalone Render Core source archive | `package_render_core_source.py` |
 | Rehearse a history-preserving Core repository export | `rehearse_render_core_history_export.py --output-dir build/render-core-history-export` |
+| Export the independent Core CI workflow | `render_core_ci.yml` is renamed to `.github/workflows/ci.yml` by the history-export rehearsal |
 | Generate the HTML/CSS support tables | `generate_html_support_table.py`, `generate_css_support_table.py` |
 | Import a CSS crosswork snapshot | `import_css_support_crosswork.py` |
 

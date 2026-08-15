@@ -78,6 +78,17 @@ def rewrite_text_as_crlf(path: Path) -> None:
     path.write_bytes(normalized.replace(b"\n", b"\r\n"))
 
 
+def packager_path(source_root: Path) -> Path:
+    for relative in (
+        Path("project_tools") / "package_render_core_source.py",
+        Path("tools") / "package_render_core_source.py",
+    ):
+        candidate = source_root / relative
+        if candidate.is_file():
+            return candidate
+    raise RuntimeError(f"Render Core source packager is missing under: {source_root}")
+
+
 class RenderCoreSourceArchiveTests(unittest.TestCase):
     cmake: Path
     source_root: Path
@@ -99,8 +110,8 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
         run(command, cwd=self.source_root)
 
     def test_archive_is_stable_across_text_line_endings(self) -> None:
-        packager_path = self.source_root / "project_tools" / "package_render_core_source.py"
-        packager = load_packager(packager_path)
+        source_packager = packager_path(self.source_root)
+        packager = load_packager(source_packager)
         with tempfile.TemporaryDirectory(prefix="jellyframe-render-core-line-endings-") as directory:
             root = Path(directory)
             canonical_output = root / "canonical"
@@ -123,16 +134,16 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                         path.suffix.lower() in packager.TEXT_ARCHIVE_SUFFIXES):
                     rewrite_text_as_crlf(path)
 
-            run([sys.executable, str(packager_path), "--source-root", str(self.source_root),
+            run([sys.executable, str(source_packager), "--source-root", str(self.source_root),
                  "--output-dir", str(canonical_output)], cwd=self.source_root)
-            run([sys.executable, str(packager_path), "--source-root", str(crlf_source),
+            run([sys.executable, str(source_packager), "--source-root", str(crlf_source),
                  "--output-dir", str(crlf_output)], cwd=self.source_root)
             canonical_archive = next(canonical_output.glob("jellyframe-render-core-*.tar.gz"))
             crlf_archive = crlf_output / canonical_archive.name
             self.assertEqual(canonical_archive.read_bytes(), crlf_archive.read_bytes())
 
     def test_archive_ignores_untracked_source_files(self) -> None:
-        packager = self.source_root / "project_tools" / "package_render_core_source.py"
+        packager = packager_path(self.source_root)
         with tempfile.TemporaryDirectory(prefix="jellyframe-render-core-tracked-inputs-") as directory:
             root = Path(directory)
             canonical_output = root / "canonical"
@@ -158,7 +169,7 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                 )
 
     def test_archive_is_reproducible_and_consumable(self) -> None:
-        packager = self.source_root / "project_tools" / "package_render_core_source.py"
+        packager = packager_path(self.source_root)
         with tempfile.TemporaryDirectory(prefix="jellyframe-render-core-archive-") as directory:
             root = Path(directory)
             first_output = root / "first"
