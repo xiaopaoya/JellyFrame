@@ -1,4 +1,4 @@
-#include "app_runtime/device_runtime_protocol.h"
+#include "device_runtime_contracts/device_runtime_protocol.h"
 
 #include <cstring>
 

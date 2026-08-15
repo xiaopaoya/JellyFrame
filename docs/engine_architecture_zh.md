@@ -87,13 +87,13 @@ provider 指向另一个 checkout 或已解压的 Render Core 源码树。这只
 | `jellyframe-device-os` | launcher、registry、Device Runtime、JFDP、板卡 port 和官方镜像 | 强硬件依赖的实验性迭代 | 尚未物理迁出；D0 契约仍位于过渡位置 |
 | JerryScript | 第三方脚本引擎 | 跟随上游 commit/tag | 可选依赖，由 Runtime/port 构建锁定 |
 
-`src/app_runtime/device_install_transaction.*` 和
-`src/app_runtime/device_runtime_protocol.*` 是明确的 D0 例外。它们虽然是平台无关
+`src/device_runtime_contracts/device_install_transaction.*` 和
+`src/device_runtime_contracts/device_runtime_protocol.*` 是明确的 D0 边界。它们虽然是平台无关
 契约，但表达的是设备安装和 JFDP，而不是 App Runtime 行为。它们不能进入 Render Core
 package，最终应迁移到 `jellyframe-device-os` 或小型 `device_runtime_contracts`
-package。D0 已将其编译为独立的 `jellyframe_device_runtime_contracts` target，并在不链接
-App Runtime 或 Render Core 实现对象的情况下运行测试。当前源码路径仍是过渡位置，直到完整
-reference-host loop 完成；这能避免移植侧静默复制一套协议实现。
+package。D0 将其编译为独立的 `jellyframe_device_runtime_contracts` target，并在不链接
+App Runtime 或 Render Core 实现对象的情况下运行测试。typed JFDP payload dispatch 完成前仍处于
+monorepo 过渡状态；这不表示已经存在物理设备 transport。
 
 物理拆分需要同时满足三个条件：独立可构建的 Core source archive/package、锁定 Core
 版本/ABI 的 Runtime consumer，以及不导入 Core 实现细节而消费同一 Runtime 契约的

@@ -107,16 +107,16 @@ ownership model:
 | `jellyframe-device-os` | Launcher, registry, Device Runtime, JFDP, board ports and official images | Experimental hardware-driven releases | Not physically extracted; D0 contracts remain in transitional locations |
 | JerryScript | Third-party scripting engine | Upstream commit/tag cadence | Optional dependency, locked by the Runtime build/port owner |
 
-`src/app_runtime/device_install_transaction.*` and
-`src/app_runtime/device_runtime_protocol.*` are a deliberate D0 exception. They
-are hardware-neutral contracts, but their meaning is device installation and
-JFDP rather than App Runtime behavior. They must not enter the Render Core
-package and must eventually move to `jellyframe-device-os` or a small
-`device_runtime_contracts` package. D0 already builds them as the independent
-`jellyframe_device_runtime_contracts` target and runs its tests without App
-Runtime or Render Core implementation objects. The current source path remains
-transitional so the protocol is not silently duplicated by a port while the
-full reference-host loop is completed.
+`src/device_runtime_contracts/device_install_transaction.*` and
+`src/device_runtime_contracts/device_runtime_protocol.*` are a deliberate D0
+boundary. They are hardware-neutral contracts, but their meaning is device
+installation and JFDP rather than App Runtime behavior. They must not enter the
+Render Core package and will eventually migrate to `jellyframe-device-os` or a
+small `device_runtime_contracts` package. D0 builds them as the independent
+`jellyframe_device_runtime_contracts` target and runs tests without App Runtime
+or Render Core implementation objects. This remains a monorepo transition
+while typed JFDP payload dispatch is completed; it does not imply a physical
+device transport exists.
 
 The physical split is gated by three conditions: an independently buildable
 Core source archive/package, a Runtime consumer with a locked Core version/ABI,

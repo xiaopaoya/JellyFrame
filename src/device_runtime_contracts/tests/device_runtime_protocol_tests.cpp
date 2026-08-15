@@ -1,4 +1,4 @@
-#include "app_runtime/device_runtime_protocol.h"
+#include "device_runtime_contracts/device_runtime_protocol.h"
 
 #include <array>
 #include <algorithm>
@@ -9,6 +9,12 @@
 using namespace jellyframe;
 
 namespace {
+
+template <std::size_t DestinationSize, std::size_t SourceSize>
+void copy_string_literal(char (&destination)[DestinationSize], const char (&source)[SourceSize]) {
+    static_assert(SourceSize <= DestinationSize, "string literal must fit its destination");
+    std::copy_n(source, SourceSize, destination);
+}
 
 void round_trip_preserves_value_header_and_payload() {
     const std::array<std::uint8_t, 5> payload{{1, 2, 3, 4, 5}};
@@ -85,8 +91,8 @@ void capabilities_round_trip_without_dynamic_storage() {
     input.capability_bits = DeviceCapabilityScripting | DeviceCapabilityTouch | DeviceCapabilityDeviceLogs;
     input.max_bundle_bytes = 256 * 1024;
     input.available_storage_bytes = 1024 * 1024;
-    std::strcpy(input.board_id, "ws147");
-    std::strcpy(input.runtime_version, "0.6.0-dev");
+    copy_string_literal(input.board_id, "ws147");
+    copy_string_literal(input.runtime_version, "0.6.0-dev");
 
     std::array<std::uint8_t, 128> encoded{};
     std::size_t encoded_size = 0;
@@ -140,8 +146,8 @@ void discovery_request_response_loopback_preserves_session_and_capabilities() {
     advertised.capability_bits = DeviceCapabilityTouch | DeviceCapabilityDeviceLogs;
     advertised.max_bundle_bytes = 192 * 1024;
     advertised.available_storage_bytes = 384 * 1024;
-    std::strcpy(advertised.board_id, "loopback-172x320");
-    std::strcpy(advertised.runtime_version, "0.6.0-dev");
+    copy_string_literal(advertised.board_id, "loopback-172x320");
+    copy_string_literal(advertised.runtime_version, "0.6.0-dev");
 
     std::array<std::uint8_t, 128> capability_bytes{};
     std::size_t capability_size = 0;

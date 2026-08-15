@@ -1,4 +1,4 @@
-#include "app_runtime/device_install_transaction.h"
+#include "device_runtime_contracts/device_install_transaction.h"
 
 #include <cassert>
 #include <cstdint>

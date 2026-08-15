@@ -150,10 +150,9 @@ endif()
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_runtime_version.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_render_core_provider.cmake")
 
-if(JELLYFRAME_BUILD_APP_RUNTIME)
 add_library(jellyframe_device_runtime_contracts
-    src/app_runtime/device_install_transaction.cpp
-    src/app_runtime/device_runtime_protocol.cpp
+    src/device_runtime_contracts/device_install_transaction.cpp
+    src/device_runtime_contracts/device_runtime_protocol.cpp
 )
 add_library(JellyFrame::device_runtime_contracts ALIAS jellyframe_device_runtime_contracts)
 target_include_directories(jellyframe_device_runtime_contracts
@@ -167,6 +166,7 @@ else()
     target_compile_options(jellyframe_device_runtime_contracts PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if(JELLYFRAME_BUILD_APP_RUNTIME)
 add_library(jellyframe_app_runtime
     src/app_runtime/app_budget.cpp
     src/app_runtime/app_capability_broker.cpp
@@ -378,9 +378,11 @@ if(JELLYFRAME_BUILD_TESTS)
     jellyframe_stage_sanitizer_runtime(jellyframe_app_runtime_tests)
     add_test(NAME jellyframe_app_runtime_tests COMMAND jellyframe_app_runtime_tests)
 
+    endif()
+
     set(JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES
-        src/app_runtime/tests/device_install_transaction_tests.cpp
-        src/app_runtime/tests/device_runtime_protocol_tests.cpp
+        src/device_runtime_contracts/tests/device_install_transaction_tests.cpp
+        src/device_runtime_contracts/tests/device_runtime_protocol_tests.cpp
     )
     foreach(test_source IN LISTS JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES)
         get_filename_component(test_name ${test_source} NAME_WE)
@@ -388,7 +390,7 @@ if(JELLYFRAME_BUILD_TESTS)
             PROPERTIES COMPILE_DEFINITIONS "main=${test_name}_main")
     endforeach()
     add_executable(jellyframe_device_runtime_contracts_tests
-        src/app_runtime/tests/device_runtime_contracts_tests.cpp
+        src/device_runtime_contracts/tests/device_runtime_contracts_tests.cpp
         ${JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES}
     )
     target_link_libraries(jellyframe_device_runtime_contracts_tests
@@ -397,7 +399,6 @@ if(JELLYFRAME_BUILD_TESTS)
     jellyframe_stage_sanitizer_runtime(jellyframe_device_runtime_contracts_tests)
     add_test(NAME jellyframe_device_runtime_contracts_tests
         COMMAND jellyframe_device_runtime_contracts_tests)
-    endif()
 
     if(Python3_Interpreter_FOUND)
         add_test(

@@ -93,7 +93,7 @@ JFDP device.
 
 ### Current Reference Implementation (D0 Transition)
 
-The platform-independent `src/app_runtime/device_runtime_protocol.*` implements
+The platform-independent `src/device_runtime_contracts/device_runtime_protocol.*` implements
 `JFDP/1` framing with a fixed 24-byte header, little-endian integers, a strict
 4096-byte payload limit, message-type validation and CRC32. A decoded payload is
 a read-only view into the input buffer; it must be copied before crossing a task
@@ -106,22 +106,21 @@ enabled capability bits, maximum bundle size and available storage. Strings have
 explicit limits and the payload codec does not depend on JSON, heap allocation or
 port-private structures.
 
-`src/app_runtime/device_install_transaction.*` implements a bounded, ordered and
+`src/device_runtime_contracts/device_install_transaction.*` implements a bounded, ordered and
 cancellable staging state machine through the injected `DeviceInstallStore`.
 Flash, filesystem, signature and registry policy remain in the adapter and are
 not pulled into Render Core. Write, verification, commit and explicit
 cancellation failures discard staging; a new version becomes visible only after
 atomic commit.
 
-These two `device_*` modules are not part of the App Runtime's final ownership
-model. D0 now compiles them as the independent
-`jellyframe_device_runtime_contracts` target, with tests that link that target
-without App Runtime or Render Core. Their source path remains transitional until
-the typed JFDP request/response payload dispatcher and separate-owner migration
-are complete. A port must consume the existing framing, result-code and staging
-contracts; it must not fork them. Physical extraction is complete only when the
-new owner also has versioned headers, a Runtime/Device OS compatibility entry
-and its own repository release policy.
+These two `device_*` modules are not part of the App Runtime ownership model.
+D0 places them in `src/device_runtime_contracts` and compiles them as the
+independent `jellyframe_device_runtime_contracts` target, with tests that link
+neither App Runtime nor Render Core. This remains a monorepo transition until
+the typed JFDP request/response payload dispatcher and future Device OS package
+migration are complete. A port must consume the existing framing, result-code
+and staging contracts; it must not fork them. This does not claim that USB,
+serial, Wi-Fi or any physical JFDP wire transport is implemented.
 
 The desktop reference endpoint can be selected explicitly while exercising the
 toolchain:

@@ -76,7 +76,7 @@ D0 的 C++ 回归包含内存内 discovery request/capability response 回环，
 
 ### 当前可用的参考实现（D0 过渡）
 
-平台无关的 `src/app_runtime/device_runtime_protocol.*` 已提供 `JFDP/1` framing：固定 24 字节头、
+平台无关的 `src/device_runtime_contracts/device_runtime_protocol.*` 已提供 `JFDP/1` framing：固定 24 字节头、
 小端整数、严格 payload 上限 4096 字节、消息类型校验和 CRC32。解码得到的 payload 只是输入缓冲区的
 只读视图；跨任务或异步队列前必须复制，协议层不会转移指针所有权。
 
@@ -84,16 +84,16 @@ D0 的 C++ 回归包含内存内 discovery request/capability response 回环，
 标识、runtime 版本、屏幕尺寸、启用的能力位、最大 App 包大小和可用存储。字符串有明确长度上限，
 不依赖 JSON、堆分配或端口私有结构。
 
-`src/app_runtime/device_install_transaction.*` 提供有界、有序、可取消的 staging 状态机。它只依赖
+`src/device_runtime_contracts/device_install_transaction.*` 提供有界、有序、可取消的 staging 状态机。它只依赖
 `DeviceInstallStore` 注入的存储适配器，因此不会把 flash、文件系统、签名或 registry 实现带入
 Render Core。写入失败、校验失败、提交失败和主动取消都会清理 staging；只有原子提交成功后新版本
 才可见。
 
-这两个 `device_*` 模块不属于 App Runtime 的最终所有权模型。D0 现在将它们编译为独立的
-`jellyframe_device_runtime_contracts` target，并由不链接 App Runtime 或 Render Core 的测试覆盖。
-在 typed JFDP request/response payload dispatcher 和独立 owner 迁移完成前，源码路径仍是过渡位置。
-port 必须消费现有 framing、result code 与 staging 契约，不能复制它们。物理迁移只有在新 owner 还具备版本化
-头文件、Runtime/Device OS 兼容矩阵登记和独立仓库发布策略后才算完成。
+这两个 `device_*` 模块不属于 App Runtime 的所有权模型。D0 已将它们移至
+`src/device_runtime_contracts`，并编译为独立的 `jellyframe_device_runtime_contracts` target，测试不链接
+App Runtime 或 Render Core。直到 typed JFDP request/response payload dispatcher 和未来 Device OS package
+迁移完成前，这仍是 monorepo 过渡状态。port 必须消费现有 framing、result code 与 staging 契约，不能复制它们。
+这不表示 USB、串口、Wi-Fi 或任何物理 JFDP wire transport 已经实现。
 
 桌面端可以显式运行 reference endpoint，以验证工具链而不误认为连接了开发板：
 
