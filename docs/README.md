@@ -28,7 +28,7 @@ for whether a document needs another pass after code changes.
 3. [app_author_guide.md](app_author_guide.md) if you are writing apps.
 4. [app_author_recipes.md](app_author_recipes.md) for copyable small-screen UI patterns.
 5. [developer_capability_matrix.md](developer_capability_matrix.md)
-6. [component_compatibility_matrix.md](component_compatibility_matrix.md) if you are splitting or consuming a build boundary.
+6. [component_compatibility_matrix.md](component_compatibility_matrix.md) and [render_core_release_policy.md](render_core_release_policy.md) if you are splitting or consuming a build boundary.
 7. [pre_1_0_evolution_policy.md](pre_1_0_evolution_policy.md) before changing a public or module boundary.
 8. [html_living_standard_support_table.md](html_living_standard_support_table.md) or [csswg_support_table.md](csswg_support_table.md) if you need to search Web syntax support.
 9. [app_packaging.md](../src/app_runtime/docs/app_packaging.md) if you are building local app packages.
@@ -105,6 +105,8 @@ for whether a document needs another pass after code changes.
   can-do/cannot-do contract.
 - [component_compatibility_matrix.md](component_compatibility_matrix.md): Core,
   Runtime, Device OS and package-consumer compatibility evidence.
+- [render_core_release_policy.md](render_core_release_policy.md): Core extraction,
+  release, lock, profile and history-preservation policy.
 - [html_living_standard_support_table.md](html_living_standard_support_table.md):
   full searchable HTML Living Standard support table.
 - [html_living_standard_support_table.csv](html_living_standard_support_table.csv):

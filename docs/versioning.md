@@ -90,12 +90,15 @@ Runtime parser enforce the pair together.
 - `0.5.x`: device-usability work: storage lifecycle integration, retained
   rendering slices, production image codec adapters, system shell recovery and
   broader real-device validation.
-- `0.6.x`: external developer trial. It starts only after 0.5 closes its
-  device-usability, diagnostic and host-contract gates; its focus is trial
-  feedback, distribution semantics and target-device evidence, not broad
-  browser compatibility.
-- `0.7.x` through `0.9.x`: converge independent Core/Runtime/Device OS
-  boundaries, remove remaining transitional ownership and prepare the public
+- `0.6.x`: device-path and engine-boundary closure. It owns JFDP/Device Runtime
+  contracts, Render Core extraction/release policy and only the capability
+  packs that meet their profile and evidence gates. Desktop preflight evidence
+  does not by itself permit an external hardware trial.
+- `0.7.x`: first official developer image/toolchain and the first controlled
+  external hardware trial, after installation, recovery, telemetry and tooling
+  work on a supported board is complete.
+- `0.8.x` through `0.9.x`: converge independent Core/Runtime/Device OS
+  releases, remove remaining transitional ownership and prepare the public
   contract. Breaking cleanup remains allowed when it is documented and fully
   tested.
 - `1.0`: first stable public-contract release. Manifest, capability, target

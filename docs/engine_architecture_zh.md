@@ -99,6 +99,9 @@ reference-host loop 完成；这能避免移植侧静默复制一套协议实现
 版本/ABI 的 Runtime consumer，以及不导入 Core 实现细节而消费同一 Runtime 契约的
 Device OS reference host。以上门槛都不要求 Git submodule。
 
+拆仓、发布、profile 和保留历史的具体规则见
+[render_core_release_policy_zh.md](render_core_release_policy_zh.md)。
+
 ```text
 HTML bytes/string
   -> HtmlTokenizer

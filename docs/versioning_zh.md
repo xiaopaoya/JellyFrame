@@ -70,9 +70,11 @@ summary 与原生 Runtime parser 会同步执行这对校验。
   responsive target report、有界动画、宿主服务策略、font-family 选择和 Win32 验证工具。
 - `0.5.x`：设备可用性阶段，包括 storage lifecycle 接入、retained rendering 分片、
   产品级 image codec adapter、system shell recovery 和更多实机验证。
-- `0.6.x`：外部开发者试用阶段。只有完成 0.5 的设备可用性、诊断与宿主契约关闭条件后才进入；
-  重点是试用反馈、分发语义和目标设备证据，不表示转向完整浏览器兼容。
-- `0.7.x` 至 `0.9.x`：收敛独立的 Core/Runtime/Device OS 边界，移除剩余过渡所有权并
-  准备公开契约。只要有文档和完整测试，破坏性清理仍被允许。
+- `0.6.x`：设备路径和引擎边界收束阶段。它负责 JFDP/Device Runtime 契约、Render Core
+  拆仓/发布政策，以及满足 profile 与证据门槛的能力包。桌面预检证据本身不能放行外部硬件试用。
+- `0.7.x`：首个官方 developer image/toolchain 和第一轮受控外部硬件试用；前提是受支持板卡上的
+  安装、恢复、telemetry 和工具链已完成。
+- `0.8.x` 至 `0.9.x`：收敛独立的 Core/Runtime/Device OS 发布，移除剩余过渡所有权并准备
+  公开契约。只要有文档和完整测试，破坏性清理仍被允许。
 - `1.0`：首个稳定公开契约发布。manifest、capability、target gate、诊断码和
   host-service 错误语义从此需要兼容性与审慎迁移要求。

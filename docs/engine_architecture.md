@@ -124,6 +124,9 @@ and a Device OS reference host that consumes the same Runtime contracts without
 importing Core implementation details. Git submodules are not required for any
 of these gates.
 
+The exact extraction, release, profile and history-preservation rules are
+defined in [render_core_release_policy.md](render_core_release_policy.md).
+
 ```text
 HTML bytes/string
   -> HtmlTokenizer
