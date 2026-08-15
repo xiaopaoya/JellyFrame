@@ -139,6 +139,29 @@ void sealed_lease_carries_only_serialized_frame_bytes() {
     assert(take_script_task_app_frame(supervisor, session, limits(), decoded) == ScriptTaskAppFrameTakeStatus::NoFrame);
 }
 
+void malformed_frame_releases_its_lease_before_reporting_decode_failure() {
+    ScriptTaskSupervisor supervisor({{2, 24}, {1, 0}, {1, 512, 512}, 0, 0});
+    const ScriptAppSession session = supervisor.begin(72);
+    std::vector<std::uint8_t> malformed;
+    assert(encode_script_task_app_frame(fixture(), limits(), malformed) ==
+           ScriptTaskAppFrameCodecStatus::Accepted);
+    malformed[0] = 0;
+    assert(supervisor.publish_frame(session, malformed).accepted());
+
+    ScriptTaskAppFrame output;
+    output.viewport = {1, 2, 3, 4};
+    std::uint32_t accepted_sequence = 99;
+    assert(take_script_task_app_frame(supervisor, session, limits(), output, &accepted_sequence) ==
+           ScriptTaskAppFrameTakeStatus::DecodeRejected);
+    assert(output.viewport.x == 1 && output.viewport.y == 2 && output.viewport.width == 3 &&
+           output.viewport.height == 4);
+    assert(accepted_sequence == 99);
+
+    // A capacity-one registry can accept another frame only when the malformed
+    // lease was released before the decoder reported its failure.
+    assert(supervisor.publish_frame(session, malformed).accepted());
+}
+
 void worker_frame_producer_flattens_private_layer_values_before_publish() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -200,6 +223,7 @@ int script_task_frame_codec_tests_main() {
     v2_frame_round_trip_preserves_nested_clips_and_target_references();
     v2_frame_rejects_invalid_clip_chain_and_v1_clip_downgrade();
     sealed_lease_carries_only_serialized_frame_bytes();
+    malformed_frame_releases_its_lease_before_reporting_decode_failure();
     worker_frame_producer_flattens_private_layer_values_before_publish();
     worker_frame_producer_exports_clips_only_for_v2();
     std::cout << "script task frame codec tests passed\n";
