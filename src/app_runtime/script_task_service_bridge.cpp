@@ -456,7 +456,7 @@ bool ScriptTaskServiceBridge::deliver_ready_record(std::size_t index,
     // semantics until worker-inbox capacity becomes available.
     supervisor_.track_service(record.token);
     if (posted == ScriptTaskMailboxPostStatus::Full) {
-        result.worker_mailbox_full = true;
+        result.worker_inbox_full = true;
     }
     return false;
 }

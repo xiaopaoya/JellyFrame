@@ -158,7 +158,7 @@ void supervisor_requires_ordered_value_only_teardown() {
     const ScriptTaskTeardownResult first = supervisor.begin_teardown(active);
     assert(first.session == active);
     assert(first.discarded_input_packets == 1);
-    assert(first.discarded_worker_packets == 1);
+    assert(first.discarded_frame_packets == 1);
     assert(first.discarded_service_request_packets == 1);
     assert(first.cancelled_service_requests == 1);
     assert(!supervisor.accepts(active));

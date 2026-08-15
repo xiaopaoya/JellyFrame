@@ -113,7 +113,7 @@ struct ScriptTaskServiceBridgePumpResult {
     std::size_t payload_copy_failures = 0;
     std::size_t payload_lease_rejections = 0;
     std::size_t released_source_payloads = 0;
-    bool worker_mailbox_full = false;
+    bool worker_inbox_full = false;
 };
 
 // Results of draining only the worker-to-supervisor request mailbox. Keeping

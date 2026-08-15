@@ -16,7 +16,7 @@ AppRuntimeHost make_host(std::size_t capacity = 4, std::size_t completions = 4) 
 ScriptTaskSupervisor make_supervisor(std::size_t worker_slots = 4, std::size_t payload_bytes = 24) {
     ScriptTaskSupervisorOptions options;
     options.input_mailbox = {worker_slots, payload_bytes};
-    options.worker_mailbox = {2, 0};
+    options.frame_mailbox = {2, 0};
     options.frame_leases = {2, 64, 128};
     options.max_service_tombstones = 4;
     options.max_native_release_intents = 2;
@@ -266,7 +266,7 @@ void bridge_releases_cancelled_late_completion_handles() {
     assert(pumped.released_source_payloads == 1);
     assert(!host.handles().contains(handle));
     ScriptTaskPacket ignored;
-    assert(!supervisor.take_worker_packet(ignored));
+    assert(!supervisor.take_frame_packet(ignored));
 }
 
 void bridge_does_not_copy_payload_for_cancelled_inflight_completion() {
@@ -375,7 +375,7 @@ void bridge_releases_published_payload_when_teardown_precedes_delivery() {
 
     AppFrameScratch scratch = make_scratch();
     const ScriptTaskServiceBridgePumpResult pumped = bridge.pump(scratch);
-    assert(pumped.worker_mailbox_full);
+    assert(pumped.worker_inbox_full);
     assert(pumped.payloads_published == 1);
     assert(!host.handles().contains(handle));
     assert(supervisor.begin_teardown(session).cancelled_service_requests == 1);
@@ -385,7 +385,7 @@ void bridge_releases_published_payload_when_teardown_precedes_delivery() {
     assert(supervisor.complete_teardown(session).released_service_payload_leases == 0);
 }
 
-void bridge_retries_after_worker_mailbox_backpressure() {
+void bridge_retries_after_worker_inbox_backpressure() {
     AppRuntimeHost host = make_host();
     const AppInstance app = host.launch("org.example.script.backpressure", AppRole::App);
     ScriptTaskSupervisor supervisor = make_supervisor(1);
@@ -402,7 +402,7 @@ void bridge_retries_after_worker_mailbox_backpressure() {
 
     AppFrameScratch scratch = make_scratch();
     ScriptTaskServiceBridgePumpResult pumped = bridge.pump(scratch);
-    assert(pumped.worker_mailbox_full);
+    assert(pumped.worker_inbox_full);
     assert(pumped.delivered == 0);
     assert(bridge.active_request_count() == 1);
     ScriptTaskPacket input;
@@ -470,7 +470,7 @@ int script_task_service_bridge_tests_main() {
     bridge_cancels_pending_jobs_without_leaving_tombstones();
     bridge_releases_cancelled_late_completion_handles();
     bridge_does_not_copy_payload_for_cancelled_inflight_completion();
-    bridge_retries_after_worker_mailbox_backpressure();
+    bridge_retries_after_worker_inbox_backpressure();
     bridge_rejects_mailboxes_that_cannot_hold_completion_payloads();
     bridge_teardown_leaves_late_inflight_work_to_host_stale_cleanup();
     bridge_reports_payload_copy_and_lease_failures_as_terminal_values();

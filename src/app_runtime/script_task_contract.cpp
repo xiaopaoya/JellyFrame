@@ -465,7 +465,7 @@ std::size_t ScriptTaskReleaseIntentMailbox::discard_session(const ScriptAppSessi
 
 ScriptTaskSupervisor::ScriptTaskSupervisor(ScriptTaskSupervisorOptions options)
     : input_mailbox_(options.input_mailbox),
-      worker_mailbox_(options.worker_mailbox),
+      frame_mailbox_(options.frame_mailbox),
       service_request_mailbox_(options.service_request_mailbox),
       frame_leases_(options.frame_leases),
       service_payload_leases_(options.service_payload_leases),
@@ -526,7 +526,7 @@ ScriptTaskFramePublishResult ScriptTaskSupervisor::publish_frame(const ScriptApp
                                  next_frame_sequence_,
                                  result.lease_id,
                                  {}};
-    result.mailbox_status = worker_mailbox_.post(frame);
+    result.mailbox_status = frame_mailbox_.post(frame);
     if (result.mailbox_status != ScriptTaskMailboxPostStatus::Accepted) {
         frame_leases_.release(session, result.lease_id);
         result.lease_id = 0;
@@ -544,9 +544,9 @@ ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_service_completion(const 
     return input_mailbox_.post(packet);
 }
 
-bool ScriptTaskSupervisor::take_worker_packet(ScriptTaskPacket& output) {
+bool ScriptTaskSupervisor::take_frame_packet(ScriptTaskPacket& output) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    return worker_mailbox_.pop_for(sessions_.current(), output);
+    return frame_mailbox_.pop_for(sessions_.current(), output);
 }
 
 ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_fatal(const ScriptTaskPacket& packet) {
@@ -666,7 +666,7 @@ ScriptTaskTeardownResult ScriptTaskSupervisor::begin_teardown(const ScriptAppSes
         return result;
     }
     result.discarded_input_packets = input_mailbox_.discard_all();
-    result.discarded_worker_packets = worker_mailbox_.discard_all();
+    result.discarded_frame_packets = frame_mailbox_.discard_all();
     result.discarded_service_request_packets = service_request_mailbox_.discard_all();
     result.discarded_fatal_packets = fatal_mailbox_.discard_all();
     result.cancelled_service_requests = services_.cancel_session(session);

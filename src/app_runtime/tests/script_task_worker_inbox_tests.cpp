@@ -25,7 +25,7 @@ public:
 ScriptTaskSupervisor make_supervisor() {
     ScriptTaskSupervisorOptions options;
     options.input_mailbox = {4, 32};
-    options.worker_mailbox = {2, 0};
+    options.frame_mailbox = {2, 0};
     options.frame_leases = {1, 64, 64};
     options.max_service_tombstones = 2;
     options.service_request_mailbox = {1, 20};

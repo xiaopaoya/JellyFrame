@@ -12,7 +12,7 @@ namespace {
 ScriptTaskSupervisor make_supervisor() {
     ScriptTaskSupervisorOptions options;
     options.input_mailbox = {2, 32};
-    options.worker_mailbox = {2, 32};
+    options.frame_mailbox = {2, 32};
     options.service_request_mailbox = {2, 32};
     options.frame_leases = {2, 64, 128};
     options.service_payload_leases = {2, 64, 128};
@@ -62,7 +62,7 @@ void supervisor_keeps_fatal_traffic_separate_and_bounded() {
     assert(supervisor.take_fatal(packet));
     assert(packet.kind == ScriptTaskPacketKind::FatalRecord);
     assert(packet.session == session);
-    assert(!supervisor.take_worker_packet(packet));
+    assert(!supervisor.take_frame_packet(packet));
     assert(!supervisor.take_input(packet));
 }
 

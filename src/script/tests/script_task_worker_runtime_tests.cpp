@@ -19,7 +19,7 @@ void check(bool condition, const char* message) {
 ScriptTaskSupervisor make_supervisor() {
     ScriptTaskSupervisorOptions options;
     options.input_mailbox = {16, 4096};
-    options.worker_mailbox = {16, 4096};
+    options.frame_mailbox = {16, 4096};
     options.service_request_mailbox = {16, 1024};
     options.frame_leases = {4, 32 * 1024, 64 * 1024};
     options.service_payload_leases = {4, 4096, 8192};
@@ -32,7 +32,7 @@ ScriptTaskSupervisor make_supervisor() {
 ScriptTaskSupervisor make_service_stress_supervisor() {
     ScriptTaskSupervisorOptions options;
     options.input_mailbox = {128, 4096};
-    options.worker_mailbox = {4, 32 * 1024};
+    options.frame_mailbox = {4, 32 * 1024};
     options.service_request_mailbox = {128, 1024};
     options.frame_leases = {4, 32 * 1024, 64 * 1024};
     options.service_payload_leases = {128, 4096, 64 * 1024};

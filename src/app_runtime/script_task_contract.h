@@ -291,7 +291,7 @@ private:
 
 struct ScriptTaskSupervisorOptions {
     ScriptTaskMailboxOptions input_mailbox;
-    ScriptTaskMailboxOptions worker_mailbox;
+    ScriptTaskMailboxOptions frame_mailbox;
     ScriptTaskFrameLeaseOptions frame_leases;
     std::size_t max_service_tombstones = 0;
     std::size_t max_native_release_intents = 0;
@@ -317,7 +317,7 @@ struct ScriptTaskFramePublishResult {
 struct ScriptTaskTeardownResult {
     ScriptAppSession session;
     std::size_t discarded_input_packets = 0;
-    std::size_t discarded_worker_packets = 0;
+    std::size_t discarded_frame_packets = 0;
     std::size_t discarded_service_request_packets = 0;
     std::size_t released_service_payload_leases = 0;
     std::size_t cancelled_service_requests = 0;
@@ -346,7 +346,7 @@ public:
     // Supervisor-only worker-inbox path. Service bridges may post a bounded
     // value packet alongside input, but cannot inject arbitrary packet kinds.
     ScriptTaskMailboxPostStatus post_service_completion(const ScriptTaskPacket& packet);
-    bool take_worker_packet(ScriptTaskPacket& output);
+    bool take_frame_packet(ScriptTaskPacket& output);
     ScriptTaskMailboxPostStatus post_fatal(const ScriptTaskPacket& packet);
     bool take_fatal(ScriptTaskPacket& output);
     std::size_t worker_inbox_max_payload_bytes() const {
@@ -389,7 +389,7 @@ private:
     mutable std::mutex state_mutex_;
     ScriptAppSessionController sessions_;
     ScriptTaskMailbox input_mailbox_;
-    ScriptTaskMailbox worker_mailbox_;
+    ScriptTaskMailbox frame_mailbox_;
     ScriptTaskMailbox service_request_mailbox_;
     ScriptTaskFrameLeaseRegistry frame_leases_;
     ScriptTaskFrameLeaseRegistry service_payload_leases_;

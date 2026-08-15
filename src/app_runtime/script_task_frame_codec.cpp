@@ -378,7 +378,7 @@ ScriptTaskAppFrameTakeStatus take_script_task_app_frame(ScriptTaskSupervisor& su
                                                          ScriptTaskAppFrame& output,
                                                          std::uint32_t* accepted_packet_sequence) {
     ScriptTaskPacket packet;
-    if (!supervisor.take_worker_packet(packet)) {
+    if (!supervisor.take_frame_packet(packet)) {
         return ScriptTaskAppFrameTakeStatus::NoFrame;
     }
     if (packet.kind != ScriptTaskPacketKind::FrameReady || packet.session != session) {
