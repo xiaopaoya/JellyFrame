@@ -6292,6 +6292,8 @@ void JerryScriptRuntime::forget_script_node_binding(ScriptNodeBinding& binding) 
 void JerryScriptRuntime::invalidate_script_node(Node& node) {
     if (bound_document_ == &node) {
         bound_document_ = nullptr;
+        clear_animation_frame_callbacks();
+        clear_timers();
     }
     if (active_modal_dialog_ == &node) {
         active_modal_dialog_ = nullptr;

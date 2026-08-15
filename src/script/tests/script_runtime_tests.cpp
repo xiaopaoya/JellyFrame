@@ -371,11 +371,21 @@ void javascript_runtime_drops_destroyed_bound_document() {
     auto document = make_element("document");
     JerryScriptRuntime runtime;
     runtime.bind_document(*document);
+    const ScriptEvaluationResult setup = runtime.eval(
+        "var timer = setTimeout(function () {}, 1);"
+        "var frame = requestAnimationFrame(function () {});"
+        "String(timer > 0) + ':' + String(frame > 0);");
+    check(setup.ok && setup.value == "true:true", "destroyed document fixture arms async callbacks");
 
     document.reset();
 
     check(!runtime.dispatch_visibility_change(),
           "visibility dispatch is ignored after the bound document is destroyed");
+    check(runtime.pump_timers(1) == 0 && runtime.pump_animation_frame(1) == 0,
+          "destroyed document cannot run stale async callbacks");
+    const ScriptRuntimeStatistics statistics = runtime.statistics();
+    check(statistics.timer_count == 0 && statistics.animation_frame_callback_count == 0,
+          "destroyed document releases async callback resources");
 
     auto replacement = make_element("document");
     runtime.bind_document(*replacement);

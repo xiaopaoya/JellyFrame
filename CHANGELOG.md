@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Destroying a bound document now cancels its pending script timers and
+  animation-frame callbacks, preventing background JavaScript from continuing
+  after the document lifecycle has ended.
+
 - One-shot event listeners now suppress recursive dispatch while their first
   callback is still active, then remove themselves when that outer callback
   returns.
