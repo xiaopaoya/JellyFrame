@@ -45,6 +45,14 @@ the public headers and the generated capability profile. The package is a
 build artifact boundary; it does not include App Runtime, JerryScript, ports or
 device protocols.
 
+For Core ABI `1`, all installed `render_core/*.h` headers are the C++ consumer
+surface. Consumers include those installed paths and link the exported target;
+they must not reach into a checkout through `src/` paths or compile Core source
+files themselves. There is currently no separate C ABI or private-header tier.
+Until `1.0`, an intentional API replacement requires an explicit
+version/ABI decision and an installed-package consumer regression rather than
+a compatibility alias.
+
 To validate the actual extraction boundary rather than the monorepo-only
 configuration, maintainers can create a standalone source archive:
 

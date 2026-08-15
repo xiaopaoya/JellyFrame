@@ -36,6 +36,20 @@ are selected with `JELLYFRAME_ENABLE_CANVAS2D`,
 `JELLYFRAME_ENABLE_MODERN_PAINT`, `JELLYFRAME_ENABLE_FLEX_GRID` and
 `JELLYFRAME_ENABLE_ADVANCED_FORMS`.
 
+## C++ Integration Surface
+
+For Core ABI `1`, every installed header below `render_core/` is part of the
+supported C++ integration surface. A host includes those installed paths and
+links `JellyFrame::jellyframe_render_core`; it must not include Core files by
+repository-relative `src/` paths or compile Core source files itself. This is
+the boundary used by JellyFrame Runtime and verified by an independent package
+consumer regression.
+
+The package does not currently define a separate stable C ABI or a hidden
+private-header tier. Before `1.0`, deliberate source API replacement is
+allowed only with an explicit version/ABI decision and a package-consumer
+regression update; it is not silently covered by compatibility aliases.
+
 The source manifest is an integrity/provenance identity for the source files;
 it is not a signature or release authority. Consumers should lock both package
 version and engine ABI according to their own compatibility policy.

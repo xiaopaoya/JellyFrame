@@ -158,6 +158,58 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             )
             self.assertEqual(installed_manifest, source_manifest)
 
+            # A downstream Core host must consume only the installed CMake
+            # package and installed render_core headers. This keeps the
+            # package boundary independently verifiable instead of proving it
+            # only through the Runtime's source-tree integration.
+            consumer_source = root / "render-core-package-consumer-source"
+            consumer_source.mkdir()
+            consumer_source.joinpath("CMakeLists.txt").write_text(
+                "\n".join(
+                    [
+                        "cmake_minimum_required(VERSION 3.16)",
+                        "project(RenderCorePackageConsumer LANGUAGES CXX)",
+                        "find_package(JellyFrameRenderCore 0.6.0 EXACT CONFIG REQUIRED",
+                        f"  PATHS \"{install_dir.as_posix()}\" NO_DEFAULT_PATH)",
+                        "add_executable(render_core_package_consumer main.cpp)",
+                        "target_link_libraries(render_core_package_consumer",
+                        "  PRIVATE JellyFrame::jellyframe_render_core)",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            consumer_source.joinpath("main.cpp").write_text(
+                "\n".join(
+                    [
+                        "#include <string>",
+                        "#include \"render_core/html_parser.h\"",
+                        "int main() {",
+                        "  jellyframe::HtmlParser parser;",
+                        "  const auto document = parser.parse(std::string(\"<body>package consumer</body>\"));",
+                        "  return document ? 0 : 1;",
+                        "}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            consumer_build = root / "render-core-package-consumer-build"
+            self.cmake_configure(
+                consumer_source,
+                consumer_build,
+                ["-DCMAKE_BUILD_TYPE=Release"],
+            )
+            run(
+                [str(self.cmake), "--build", str(consumer_build), "--config", "Release", "--parallel"],
+                cwd=self.source_root,
+            )
+            consumer_executable = consumer_build / (
+                "render_core_package_consumer.exe" if sys.platform.startswith("win")
+                else "render_core_package_consumer"
+            )
+            run([str(consumer_executable)], cwd=self.source_root)
+
             runtime_build = root / "runtime-package-consumer"
             self.cmake_configure(
                 self.source_root,
