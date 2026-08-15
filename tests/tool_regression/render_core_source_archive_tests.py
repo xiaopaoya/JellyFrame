@@ -5,13 +5,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
 import tarfile
 import tempfile
 import unittest
-from shutil import copytree
+from shutil import copy2, copytree
 from pathlib import Path
 
 
@@ -62,6 +63,21 @@ def run_failure(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess
     return result
 
 
+def load_packager(path: Path):
+    spec = importlib.util.spec_from_file_location("render_core_packager", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load Render Core packager: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def rewrite_text_as_crlf(path: Path) -> None:
+    content = path.read_bytes()
+    normalized = content.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    path.write_bytes(normalized.replace(b"\n", b"\r\n"))
+
+
 class RenderCoreSourceArchiveTests(unittest.TestCase):
     cmake: Path
     source_root: Path
@@ -81,6 +97,39 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             command.extend(["-G", self.generator])
         command.extend(definitions)
         run(command, cwd=self.source_root)
+
+    def test_archive_is_stable_across_text_line_endings(self) -> None:
+        packager_path = self.source_root / "project_tools" / "package_render_core_source.py"
+        packager = load_packager(packager_path)
+        with tempfile.TemporaryDirectory(prefix="jellyframe-render-core-line-endings-") as directory:
+            root = Path(directory)
+            canonical_output = root / "canonical"
+            crlf_source = root / "crlf-source"
+            crlf_output = root / "crlf"
+
+            crlf_source.mkdir()
+            copy2(self.source_root / "LICENSE", crlf_source / "LICENSE")
+            copytree(self.source_root / "cmake", crlf_source / "cmake")
+            copytree(self.source_root / "src" / "render_core", crlf_source / "src" / "render_core")
+            text_paths = [
+                crlf_source / "LICENSE",
+                *packager.source_files(crlf_source),
+                crlf_source / "cmake" / "render_core_standalone_root.cmake",
+                crlf_source / "cmake" / "render_core_standalone_presets.json.in",
+                crlf_source / "src" / "render_core" / "STANDALONE_README.md",
+            ]
+            for path in text_paths:
+                if (path.name in packager.TEXT_ARCHIVE_FILENAMES or
+                        path.suffix.lower() in packager.TEXT_ARCHIVE_SUFFIXES):
+                    rewrite_text_as_crlf(path)
+
+            run([sys.executable, str(packager_path), "--source-root", str(self.source_root),
+                 "--output-dir", str(canonical_output)], cwd=self.source_root)
+            run([sys.executable, str(packager_path), "--source-root", str(crlf_source),
+                 "--output-dir", str(crlf_output)], cwd=self.source_root)
+            canonical_archive = next(canonical_output.glob("jellyframe-render-core-*.tar.gz"))
+            crlf_archive = crlf_output / canonical_archive.name
+            self.assertEqual(canonical_archive.read_bytes(), crlf_archive.read_bytes())
 
     def test_archive_is_reproducible_and_consumable(self) -> None:
         packager = self.source_root / "project_tools" / "package_render_core_source.py"

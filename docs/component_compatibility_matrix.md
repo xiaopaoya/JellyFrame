@@ -1,6 +1,6 @@
 # Component Compatibility Matrix
 
-> Last updated: 2026-08-15; Applies to: 0.6.0-dev
+> Last updated: 2026-08-16; Applies to: 0.6.0-dev
 
 This matrix records compatibility evidence across the three planned product
 boundaries. It is intentionally narrower than the HTML/CSS capability tables:
@@ -14,7 +14,7 @@ build artifact may consume which other artifact.
 | JellyFrame App Runtime | in-tree `jellyframe_render_core` | same checkout | `verified` | Default desktop Release/Debug and non-scripting CI CTest. Use for synchronized Core/Runtime changes. |
 | JellyFrame App Runtime | unpacked Core source archive | `0.6.0` source profile | `verified` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` selects the unpacked archive for a separate Runtime build and App Runtime CTest; package mode remains mutually exclusive. |
 | Render Core standalone tests | no Runtime or JerryScript | `0.6.0` / ABI `1` | `verified` | Standalone configure, build, CTest and install path. The package contains the Core target, headers and capability profile only. |
-| Render Core source archive | no Runtime or JerryScript | `0.6.0` / ABI `1` | `verified` | Deterministic `.tar.gz` plus SHA-256 sidecar retained as a CI artifact; CI packs twice, compares bytes, extracts, builds, runs CTest, installs and configures the Runtime package consumer. It is not a signed release artifact. |
+| Render Core source archive | no Runtime or JerryScript | `0.6.0` / ABI `1` | `verified` | Deterministic `.tar.gz` plus SHA-256 sidecar retained as a CI artifact. Declared text members are normalized to LF while binary members remain opaque; CI proves equal archive bytes from equivalent CRLF/LF trees, then extracts, builds, runs CTest, installs and configures the Runtime package consumer. It is not a signed release artifact. |
 | JellyFrame App Runtime | installed Render Core package | `0.6.0` / ABI `1` / normalized locked source manifest identity | `verified` | Runtime uses `JELLYFRAME_RENDER_CORE_PROVIDER=package`; it validates the package manifest against the exact locked source hash and copies it into build provenance. The identity normalizes text line endings, so Windows and Unix checkouts of the same sources resolve identically. |
 | JellyFrame App Runtime | installed Render Core package | wrong version, ABI or source identity | `rejected` | Configure-time exact version, engine-ABI and source-hash checks. No fallback to source Core is allowed in package mode. |
 | App package preflight | generated Render Core capability profile | schema `1` / engine ABI `1` | `verified` | `package_app.py` validates profile schema, known feature IDs and dependency closure before resources are read; missing required families reject the package. |

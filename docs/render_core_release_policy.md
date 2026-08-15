@@ -1,6 +1,6 @@
 # Render Core Release And Extraction Policy
 
-> Last updated: 2026-08-15; Applies to: 0.6.0-dev
+> Last updated: 2026-08-16; Applies to: 0.6.0-dev
 
 This policy governs the transition from the current monorepo boundary to an independently governed `jellyframe-render-core` project. It complements [engine_architecture.md](engine_architecture.md); it is not a user-facing app compatibility promise.
 
@@ -23,7 +23,10 @@ A Render Core release contains:
 
 The tag signature establishes release authority. The source-manifest/checksum
 establishes artifact identity; neither replaces the other. The current
-deterministic archive is the precursor to this release unit.
+deterministic archive is the precursor to this release unit. Its declared text
+members are normalized to LF before packing, while opaque binary members stay
+byte-for-byte; equivalent CRLF/LF checkouts therefore produce the same archive
+bytes and checksum.
 
 ## Versions And Compatibility
 

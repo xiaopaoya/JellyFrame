@@ -16,6 +16,25 @@ ARCHIVE_PREFIX = "jellyframe-render-core"
 VERSION_PATTERN = re.compile(
     r'set\(JELLYFRAME_RENDER_CORE_PACKAGE_VERSION\s+"([^"]+)"', re.MULTILINE
 )
+TEXT_ARCHIVE_SUFFIXES = frozenset(
+    {
+        ".bdf",
+        ".c",
+        ".cc",
+        ".cmake",
+        ".cpp",
+        ".css",
+        ".csv",
+        ".h",
+        ".hpp",
+        ".html",
+        ".in",
+        ".json",
+        ".md",
+        ".txt",
+    }
+)
+TEXT_ARCHIVE_FILENAMES = frozenset({"CMakeLists.txt", "LICENSE"})
 
 
 def parse_args() -> argparse.Namespace:
@@ -82,6 +101,19 @@ def add_file(archive: tarfile.TarFile, name: str, content: bytes) -> None:
     archive.addfile(info, fileobj=io.BytesIO(content))
 
 
+def archive_content(path: Path) -> bytes:
+    """Return the portable archive representation for one source member.
+
+    Archive checksums are release-artifact identities, so they must not depend
+    on a contributor's Git line-ending settings. Keep opaque future assets
+    byte-for-byte: only declared text sources are normalized.
+    """
+    content = path.read_bytes()
+    if path.name not in TEXT_ARCHIVE_FILENAMES and path.suffix.lower() not in TEXT_ARCHIVE_SUFFIXES:
+        return content
+    return content.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
 def create_archive(source_root: Path, output_dir: Path) -> tuple[Path, Path]:
     source_root = source_root.resolve()
     output_dir = output_dir.resolve()
@@ -113,12 +145,12 @@ def create_archive(source_root: Path, output_dir: Path) -> tuple[Path, Path]:
     )
 
     archive_entries = {
-        f"{root_name}/CMakeLists.txt": root_cmake.read_bytes(),
-        f"{root_name}/CMakePresets.json": presets.read_bytes(),
-        f"{root_name}/README.md": standalone_readme.read_bytes(),
+        f"{root_name}/CMakeLists.txt": archive_content(root_cmake),
+        f"{root_name}/CMakePresets.json": archive_content(presets),
+        f"{root_name}/README.md": archive_content(standalone_readme),
     }
     for path in source_files(source_root):
-        archive_entries[archive_member(root_name, source_root, path)] = path.read_bytes()
+        archive_entries[archive_member(root_name, source_root, path)] = archive_content(path)
 
     with archive_path.open("wb") as raw_file:
         with gzip.GzipFile(fileobj=raw_file, mode="wb", filename="", mtime=0) as compressed:

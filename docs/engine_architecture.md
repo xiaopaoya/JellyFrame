@@ -1,6 +1,6 @@
 # Engine Architecture
 
-> Last updated: 2026-08-15; Applies to: 0.6.0-dev
+> Last updated: 2026-08-16; Applies to: 0.6.0-dev
 
 
 JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but
@@ -39,7 +39,8 @@ ctest --test-dir build\core-from-archive -C Release --output-on-failure
 The archive contains only Render Core sources, its shared CMake boundary,
 tests, standalone README and license. It contains neither Runtime nor
 JerryScript, ports, device contracts, examples or app resources. The packer
-normalizes member order and archive metadata, writes a SHA-256 sidecar, and CI
+normalizes declared text members to LF, member order and archive metadata,
+writes a SHA-256 sidecar, and CI
 extracts, builds, tests, installs and consumes the resulting package through
 the Runtime package-provider configuration. The Standalone Core CI job retains
 that archive and sidecar as a workflow artifact. This is the current extraction
