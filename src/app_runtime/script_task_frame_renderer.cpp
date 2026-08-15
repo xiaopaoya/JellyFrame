@@ -733,7 +733,7 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
     if (fallback_reason != nullptr) *fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::None;
     const auto full_frame = [&](ScriptTaskFrameRetainedReplayStatus result) {
         if (!has_valid_value_frame_shape(frame)) {
-            add_saturating(statistics_.full_frame_rejected, std::uint64_t{1});
+            add_saturating(statistics_.full_frame_render_rejected, std::uint64_t{1});
             if (status != nullptr) *status = ScriptTaskFrameRetainedReplayStatus::RenderRejected;
             return false;
         }
@@ -741,16 +741,16 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
         statistics_.canonical_output_bytes = framebuffer_bytes(target);
         const bool rendered = renderer.render_into(frame, target, background);
         if (!rendered) {
-            add_saturating(statistics_.full_frame_rejected, std::uint64_t{1});
+            add_saturating(statistics_.full_frame_render_rejected, std::uint64_t{1});
             if (status != nullptr) *status = ScriptTaskFrameRetainedReplayStatus::RenderRejected;
             return false;
         }
         if (result == ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled) {
-            add_saturating(statistics_.full_frame_disabled, std::uint64_t{1});
+            add_saturating(statistics_.full_frame_replay_disabled, std::uint64_t{1});
         } else if (result == ScriptTaskFrameRetainedReplayStatus::FullFrameNoPrevious) {
-            add_saturating(statistics_.full_frame_no_previous, std::uint64_t{1});
+            add_saturating(statistics_.full_frame_without_previous, std::uint64_t{1});
         } else {
-            add_saturating(statistics_.full_frame_ineligible, std::uint64_t{1});
+            add_saturating(statistics_.full_frame_replay_ineligible, std::uint64_t{1});
         }
         if (status != nullptr) *status = result;
         return true;
@@ -816,7 +816,7 @@ bool ScriptTaskFrameRetainedReplay::render_into(const ScriptTaskFrameRenderer& r
         if (fallback_reason != nullptr) {
             *fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::CanonicalRenderRejected;
         }
-        add_saturating(statistics_.full_frame_rejected, std::uint64_t{1});
+        add_saturating(statistics_.full_frame_render_rejected, std::uint64_t{1});
         if (status != nullptr) *status = ScriptTaskFrameRetainedReplayStatus::RenderRejected;
         return false;
     }

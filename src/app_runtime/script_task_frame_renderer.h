@@ -176,10 +176,10 @@ struct ScriptTaskFrameRetainedReplayOptions {
 };
 
 struct ScriptTaskFrameRetainedReplayStatistics {
-    std::uint64_t full_frame_disabled = 0;
-    std::uint64_t full_frame_no_previous = 0;
-    std::uint64_t full_frame_ineligible = 0;
-    std::uint64_t full_frame_rejected = 0;
+    std::uint64_t full_frame_replay_disabled = 0;
+    std::uint64_t full_frame_without_previous = 0;
+    std::uint64_t full_frame_replay_ineligible = 0;
+    std::uint64_t full_frame_render_rejected = 0;
     std::uint64_t candidates = 0;
     std::uint64_t replays = 0;
     std::uint64_t pixel_mismatch_fallbacks = 0;

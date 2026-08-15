@@ -339,15 +339,15 @@ void retained_replay_uses_conservative_fallbacks_and_commit_boundary() {
     assert(replay.observe_presented(previous, previous_image, background, 7));
     assert(replay.render_into(renderer, current, output, background, 8, &status));
     assert(status == ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
-    assert(replay.statistics().full_frame_no_previous == 1 &&
-           replay.statistics().full_frame_ineligible == 1 && replay.statistics().candidates == 0);
+    assert(replay.statistics().full_frame_without_previous == 1 &&
+           replay.statistics().full_frame_replay_ineligible == 1 && replay.statistics().candidates == 0);
 
     replay.reset();
     options.enabled = false;
     ScriptTaskFrameRetainedReplay disabled(options);
     assert(disabled.render_into(renderer, current, output, background, 7, &status));
     assert(status == ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled);
-    assert(disabled.statistics().full_frame_disabled == 1);
+    assert(disabled.statistics().full_frame_replay_disabled == 1);
 }
 
 void retained_replay_rejects_unbounded_host_painters() {
@@ -928,7 +928,7 @@ void retained_replay_preserves_last_presented_state_across_rejections() {
     assert(replay.render_into(renderer, current, actual, background, 11, &status));
     assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
     assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
-    assert(replay.statistics().full_frame_rejected == 1 && replay.statistics().replays == 2 &&
+    assert(replay.statistics().full_frame_render_rejected == 1 && replay.statistics().replays == 2 &&
            replay.statistics().pixel_mismatch_fallbacks == 0);
     assert(replay.statistics().ineligible_by_reason[
                static_cast<std::size_t>(ScriptTaskFrameRetainedReplayFallbackReason::InvalidFrame)] == 1);
