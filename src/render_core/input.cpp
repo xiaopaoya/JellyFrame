@@ -390,6 +390,10 @@ const Node* InputController::pointer_up(const PointerInput& input) {
                             return nullptr;
                         }
                         dispatch_simple_event(activation_target, "change");
+                        if (active_node_ != activation_target) {
+                            set_active_node(nullptr);
+                            return nullptr;
+                        }
                     } else {
                         set_select_popup_open(*mutable_node(activation_target), false);
                     }
@@ -407,6 +411,10 @@ const Node* InputController::pointer_up(const PointerInput& input) {
                         return nullptr;
                     }
                     dispatch_simple_event(activation_target, "change");
+                    if (active_node_ != activation_target) {
+                        set_active_node(nullptr);
+                        return nullptr;
+                    }
                 }
 #else
                 dispatch_simple_event(activation_target, "input");
@@ -415,6 +423,10 @@ const Node* InputController::pointer_up(const PointerInput& input) {
                     return nullptr;
                 }
                 dispatch_simple_event(activation_target, "change");
+                if (active_node_ != activation_target) {
+                    set_active_node(nullptr);
+                    return nullptr;
+                }
 #endif
             }
         }
@@ -473,37 +485,48 @@ bool InputController::key_down(const KeyInput& input) {
     if (focused_node_ == nullptr) {
         return false;
     }
-    if (input.code == KeyCode::Backspace && backspace_control(*mutable_node(focused_node_))) {
-        dispatch_simple_event(focused_node_, "input");
+    const Node* const target = focused_node_;
+    if (input.code == KeyCode::Backspace && backspace_control(*mutable_node(target))) {
+        dispatch_simple_event(target, "input");
         return true;
     }
     if ((input.code == KeyCode::Enter || input.code == KeyCode::Tab) &&
-        complete_text_control_from_datalist(*mutable_node(focused_node_))) {
-        dispatch_simple_event(focused_node_, "input");
-        dispatch_simple_event(focused_node_, "change");
+        complete_text_control_from_datalist(*mutable_node(target))) {
+        dispatch_simple_event(target, "input");
+        if (focused_node_ == target) {
+            dispatch_simple_event(target, "change");
+        }
         return true;
     }
-    if (input.code == KeyCode::ArrowDown && step_select_control(*mutable_node(focused_node_), 1)) {
-        dispatch_simple_event(focused_node_, "input");
-        dispatch_simple_event(focused_node_, "change");
+    if (input.code == KeyCode::ArrowDown && step_select_control(*mutable_node(target), 1)) {
+        dispatch_simple_event(target, "input");
+        if (focused_node_ == target) {
+            dispatch_simple_event(target, "change");
+        }
         return true;
     }
-    if (input.code == KeyCode::ArrowUp && step_select_control(*mutable_node(focused_node_), -1)) {
-        dispatch_simple_event(focused_node_, "input");
-        dispatch_simple_event(focused_node_, "change");
+    if (input.code == KeyCode::ArrowUp && step_select_control(*mutable_node(target), -1)) {
+        dispatch_simple_event(target, "input");
+        if (focused_node_ == target) {
+            dispatch_simple_event(target, "change");
+        }
         return true;
     }
     if ((input.code == KeyCode::Space || input.code == KeyCode::Enter) &&
-        is_form_control(*focused_node_) &&
-        activate_form_control(*mutable_node(focused_node_))) {
+        is_form_control(*target) &&
+        activate_form_control(*mutable_node(target))) {
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-        if (form_control_kind(*focused_node_) != FormControlKind::Select) {
-            dispatch_simple_event(focused_node_, "input");
-            dispatch_simple_event(focused_node_, "change");
+        if (form_control_kind(*target) != FormControlKind::Select) {
+            dispatch_simple_event(target, "input");
+            if (focused_node_ == target) {
+                dispatch_simple_event(target, "change");
+            }
         }
 #else
-        dispatch_simple_event(focused_node_, "input");
-        dispatch_simple_event(focused_node_, "change");
+        dispatch_simple_event(target, "input");
+        if (focused_node_ == target) {
+            dispatch_simple_event(target, "change");
+        }
 #endif
         return true;
     }
@@ -514,8 +537,12 @@ bool InputController::set_control_value(Node& node, std::string value) {
     if (!is_form_control(node) || !set_form_control_value(node, std::move(value))) {
         return false;
     }
+    observe_node(&node);
     dispatch_simple_event(&node, "input");
-    dispatch_simple_event(&node, "change");
+    if (observes_node(&node)) {
+        dispatch_simple_event(&node, "change");
+    }
+    unobserve_unused_nodes();
     return true;
 }
 
@@ -523,8 +550,12 @@ bool InputController::set_control_checked(Node& node, bool checked) {
     if (!is_form_control(node) || !set_form_control_checked(node, checked)) {
         return false;
     }
+    observe_node(&node);
     dispatch_simple_event(&node, "input");
-    dispatch_simple_event(&node, "change");
+    if (observes_node(&node)) {
+        dispatch_simple_event(&node, "change");
+    }
+    unobserve_unused_nodes();
     return true;
 }
 
@@ -532,8 +563,12 @@ bool InputController::set_control_selected_index(Node& node, int selected_index)
     if (!is_form_control(node) || !set_form_control_selected_index(node, selected_index)) {
         return false;
     }
+    observe_node(&node);
     dispatch_simple_event(&node, "input");
-    dispatch_simple_event(&node, "change");
+    if (observes_node(&node)) {
+        dispatch_simple_event(&node, "change");
+    }
+    unobserve_unused_nodes();
     return true;
 }
 
@@ -581,25 +616,43 @@ bool InputController::activate_focused() {
     if (focused_node_ == nullptr || disabled_target(focused_node_) || !focusable_node(focused_node_)) {
         return false;
     }
-    if (is_form_control(*focused_node_) && activate_form_control(*mutable_node(focused_node_))) {
+    const Node* const target = focused_node_;
+    if (is_form_control(*target) && activate_form_control(*mutable_node(target))) {
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-        if (form_control_kind(*focused_node_) != FormControlKind::Select) {
-            dispatch_simple_event(focused_node_, "input");
-            dispatch_simple_event(focused_node_, "change");
+        if (form_control_kind(*target) != FormControlKind::Select) {
+            dispatch_simple_event(target, "input");
+            if (focused_node_ != target) {
+                return true;
+            }
+            dispatch_simple_event(target, "change");
+            if (focused_node_ != target) {
+                return true;
+            }
         }
 #else
-        dispatch_simple_event(focused_node_, "input");
-        dispatch_simple_event(focused_node_, "change");
+        dispatch_simple_event(target, "input");
+        if (focused_node_ != target) {
+            return true;
+        }
+        dispatch_simple_event(target, "change");
+        if (focused_node_ != target) {
+            return true;
+        }
 #endif
     }
     PointerInput synthetic;
     MouseEvent click = make_mouse_event("click", synthetic);
-    dispatch_mouse_event(focused_node_, click);
+    dispatch_mouse_event(target, click);
+    if (click.target_destroyed() || focused_node_ != target) {
+        return true;
+    }
     if (!click.default_prevented()) {
-        toggle_details_from_summary(focused_node_);
+        toggle_details_from_summary(target);
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-        request_form_submit_from_control(*mutable_node(focused_node_));
-        reset_form_from_control(*mutable_node(focused_node_));
+        request_form_submit_from_control(*mutable_node(target));
+        if (focused_node_ == target) {
+            reset_form_from_control(*mutable_node(target));
+        }
 #endif
     }
     return true;
@@ -721,12 +774,13 @@ void InputController::dispatch_mouse_event(const Node* target, MouseEvent& event
     }
 }
 
-void InputController::dispatch_simple_event(const Node* target, const char* type) const {
+bool InputController::dispatch_simple_event(const Node* target, const char* type) const {
     if (target == nullptr) {
-        return;
+        return false;
     }
     Event event(type, true, false);
     dispatch_event(*target, event);
+    return !event.target_destroyed();
 }
 
 void InputController::update_hover(const Node* next_hover, const PointerInput& input) {

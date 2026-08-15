@@ -17,6 +17,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Multi-stage form input now retains the initiating control identity across
+  `input`, `change`, keyboard activation and synthesized click dispatch. A
+  listener that destroys the control or moves focus suppresses the remaining
+  stages instead of targeting a new focus node or stale address.
+
 - Destroying a bound document now cancels its pending script timers and
   animation-frame callbacks, preventing background JavaScript from continuing
   after the document lifecycle has ended.

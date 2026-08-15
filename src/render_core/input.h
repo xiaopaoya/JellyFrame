@@ -112,7 +112,7 @@ private:
     MouseEvent make_mouse_event(const char* type, const PointerInput& input) const;
     WheelEvent make_wheel_event(const WheelInput& input) const;
     void dispatch_mouse_event(const Node* target, MouseEvent& event) const;
-    void dispatch_simple_event(const Node* target, const char* type) const;
+    bool dispatch_simple_event(const Node* target, const char* type) const;
     void update_hover(const Node* next_hover, const PointerInput& input);
     static void observed_node_destroyed(Node& node, void* context);
     void observe_node(const Node* node);

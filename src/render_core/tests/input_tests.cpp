@@ -291,6 +291,48 @@ void hover_transition_stops_when_mouseout_destroys_the_new_target() {
     check(input.hovered_node() == nullptr, "destroyed hover candidate clears hover state");
 }
 
+void semantic_control_events_stop_after_target_destruction_or_focus_change() {
+    {
+        auto pipeline = build_form_pipeline("<body><input id='name' value='A'></body>");
+        Node* name = find_by_id(*pipeline.document, "name");
+        check(name != nullptr, "semantic destruction fixture input exists");
+        int input_calls = 0;
+        int change_calls = 0;
+        name->add_event_listener("input", [&](Event&) {
+            ++input_calls;
+            pipeline.document->set_text_content("replacement");
+        });
+        name->add_event_listener("change", [&](Event&) { ++change_calls; });
+
+        InputController input(*pipeline.layer_tree);
+        check(input.set_control_value(*name, "B"), "semantic value update completes before listener destruction");
+        check(input_calls == 1 && change_calls == 0,
+              "change does not dispatch to a target destroyed by input");
+    }
+
+    {
+        auto pipeline = build_form_pipeline(
+            "<body><input id='first' type='checkbox'><input id='second'></body>",
+            "input { display:block; width:80px; height:24px; }");
+        Node* first = find_by_id(*pipeline.document, "first");
+        Node* second = find_by_id(*pipeline.document, "second");
+        check(first != nullptr && second != nullptr, "focus change fixture inputs exist");
+        InputController input(*pipeline.layer_tree);
+        int first_change_calls = 0;
+        int second_change_calls = 0;
+        first->add_event_listener("input", [&](Event&) { input.set_focused_node(second); });
+        first->add_event_listener("change", [&](Event&) { ++first_change_calls; });
+        second->add_event_listener("change", [&](Event&) { ++second_change_calls; });
+        input.set_focused_node(first);
+
+        KeyInput key;
+        key.code = KeyCode::Space;
+        check(input.key_down(key), "keyboard checkbox activation succeeds");
+        check(first_change_calls == 0 && second_change_calls == 0,
+              "focus change during input does not retarget the following change event");
+    }
+}
+
 void wheel_dispatches_to_hit_target() {
     auto pipeline = build_pipeline();
     Node* two = find_by_id(*pipeline.document, "two");
@@ -983,6 +1025,7 @@ int main() {
         click_requires_same_active_target();
         input_stops_after_a_listener_destroys_its_target();
         hover_transition_stops_when_mouseout_destroys_the_new_target();
+        semantic_control_events_stop_after_target_destruction_or_focus_change();
         wheel_dispatches_to_hit_target();
     text_input_updates_focused_control_value();
     text_input_backspace_removes_whole_utf8_scalar();
