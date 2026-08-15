@@ -132,7 +132,7 @@ void update_stack(std::atomic<UBaseType_t>& target, UBaseType_t value) {
 ScriptTaskSupervisorOptions protocol_options() {
     ScriptTaskSupervisorOptions options;
     options.input_mailbox = {8, 128};
-    options.worker_mailbox = {8, 0};
+    options.frame_mailbox = {8, 0};
     options.frame_leases = {4, 64 * 1024, 128 * 1024};
     options.max_service_tombstones = 16;
     options.max_native_release_intents = 4;

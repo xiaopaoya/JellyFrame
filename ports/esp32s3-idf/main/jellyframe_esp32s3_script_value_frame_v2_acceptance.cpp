@@ -250,7 +250,7 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options() {
 jellyframe::ScriptTaskSupervisorOptions supervisor_options() {
     jellyframe::ScriptTaskSupervisorOptions result;
     result.input_mailbox = {8, 256};
-    result.worker_mailbox = {8, 256};
+    result.frame_mailbox = {8, 256};
     result.frame_leases = {4, kMaxPayloadBytes, 4 * kMaxPayloadBytes};
     result.max_service_tombstones = 8;
     result.max_native_release_intents = 4;

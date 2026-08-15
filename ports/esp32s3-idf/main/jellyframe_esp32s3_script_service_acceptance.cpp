@@ -338,7 +338,7 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options() {
 jellyframe::ScriptTaskSupervisorOptions protocol_options() {
     jellyframe::ScriptTaskSupervisorOptions options;
     options.input_mailbox = {16, 128};
-    options.worker_mailbox = {16, 0};
+    options.frame_mailbox = {16, 0};
     options.frame_leases = {8, 64 * 1024, 128 * 1024};
     options.max_service_tombstones = 32;
     options.max_native_release_intents = 8;

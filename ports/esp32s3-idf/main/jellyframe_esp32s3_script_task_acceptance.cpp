@@ -121,7 +121,7 @@ void signal_gate(SemaphoreHandle_t gate) {
 jellyframe::ScriptTaskSupervisorOptions protocol_options() {
     jellyframe::ScriptTaskSupervisorOptions options;
     options.input_mailbox = {4, 128};
-    options.worker_mailbox = {4, 0};
+    options.frame_mailbox = {4, 0};
     options.frame_leases = {2, 1024, 2048};
     options.max_service_tombstones = 16;
     options.max_native_release_intents = 4;
@@ -181,7 +181,7 @@ bool pump_supervisor(FixtureState& state,
     const jellyframe::ScriptTaskServiceBridgePumpResult completions = bridge.pump(scratch);
     update_watermarks(state);
     return requests.invalid_packets == 0 && requests.invalid_sessions == 0 &&
-           requests.invalid_tokens == 0 && !completions.worker_mailbox_full;
+           requests.invalid_tokens == 0 && !completions.worker_inbox_full;
 }
 
 bool consume_completion(FixtureState& state,
@@ -562,7 +562,7 @@ void supervisor_entry(void* argument) {
         state->late_completions_stale.fetch_add(static_cast<std::uint32_t>(late_pump.stale));
         const auto supervisor_end = protocol.complete_teardown(retired);
         state->teardown_frame_discards.fetch_add(
-            static_cast<std::uint32_t>(supervisor_begin.discarded_worker_packets +
+            static_cast<std::uint32_t>(supervisor_begin.discarded_frame_packets +
                                        supervisor_end.released_frame_leases));
         signal_gate(state->stale_ui_gate);
         if (!wait_gate(state->supervisor_ui_gate)) {
