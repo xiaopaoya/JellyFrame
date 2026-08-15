@@ -17,6 +17,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Host-service completions with a nonzero `job_id` now stage only after an
+  exact in-flight `job_id`, kind, app-instance and client-token match. This
+  prevents malformed completions from freeing an unrelated request; zero-ID
+  host events remain explicitly supported.
+
 - Script-task supervisor teardown now holds an explicit retiring-session gate:
   it rejects new workers until `complete_teardown()` releases all session-owned
   leases, tombstones and queued release intents.

@@ -88,7 +88,13 @@ void request_queue_counts_worker_owned_jobs_against_capacity() {
     const auto third = queue.submit(HostServiceJobKind::StorageKv, 1);
     assert(!third.accepted);
 
-    assert(queue.finish(request.job_id));
+    HostServiceCompletionQueue completions(1);
+    assert(!queue.stage_completion({request.job_id, request.kind, HostServiceStatus::Completed,
+                                    request.app_instance_id, 0, 0, 0, 1}));
+    assert(queue.in_flight_size() == 1);
+    assert(queue.stage_completion({request.job_id, request.kind, HostServiceStatus::Completed,
+                                   request.app_instance_id, 0, 0, 0, request.client_token}));
+    assert(queue.flush_staged_completions(completions) == 1);
     assert(queue.in_flight_size() == 0);
     const auto fourth = queue.submit(HostServiceJobKind::StorageKv, 1);
     assert(fourth.accepted);
@@ -109,7 +115,10 @@ void request_queue_keeps_in_progress_app_jobs_charged_until_worker_completion() 
     const auto third = queue.submit(HostServiceJobKind::StorageKv, 9);
     assert(third.accepted);
     assert(queue.full());
-    assert(queue.finish(request.job_id));
+    HostServiceCompletionQueue completions(1);
+    assert(queue.stage_completion({request.job_id, request.kind, HostServiceStatus::Completed,
+                                   request.app_instance_id, 0, 0, 0, request.client_token}));
+    assert(queue.flush_staged_completions(completions) == 1);
     assert(queue.in_flight_size() == 0);
 }
 
@@ -171,7 +180,10 @@ void request_queue_is_safe_for_submitter_and_worker_threads() {
         HostServiceRequest request;
         while (submitting || !queue.empty()) {
             if (queue.pop_next(request)) {
-                assert(queue.finish(request.job_id));
+                HostServiceCompletionQueue completions(1);
+                assert(queue.stage_completion({request.job_id, request.kind, HostServiceStatus::Completed,
+                                               request.app_instance_id, 0, 0, 0, request.client_token}));
+                assert(queue.flush_staged_completions(completions) == 1);
                 ++completed;
             }
         }

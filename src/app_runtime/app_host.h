@@ -87,6 +87,8 @@ public:
     AppFontLoadResult attach_current_jffont_view(const std::uint8_t* data, std::size_t size, std::string_view family);
     std::size_t clear_current_fonts();
 
+    // A zero job_id is a host-originated event with no worker request. All
+    // nonzero completion IDs must match an in-flight request exactly.
     bool push_completion(const HostServiceCompletion& completion);
     bool pop_worker_request(HostServiceRequest& request);
     bool pop_worker_request(HostServiceJobKind kind, HostServiceRequest& request);

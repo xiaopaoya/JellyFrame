@@ -105,30 +105,19 @@ bool HostServiceRequestQueue::cancel_pending(std::uint32_t job_id) {
     return true;
 }
 
-bool HostServiceRequestQueue::finish(std::uint32_t job_id) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    const auto it = std::find_if(in_progress_.begin(), in_progress_.end(), [job_id](const InFlightRequest& request) {
-        return request.request.job_id == job_id;
-    });
-    if (it == in_progress_.end()) {
-        return false;
-    }
-    in_progress_.erase(it);
-    return true;
-}
-
-bool HostServiceRequestQueue::defer_completion(const HostServiceCompletion& completion) {
+bool HostServiceRequestQueue::stage_completion(const HostServiceCompletion& completion) {
     std::lock_guard<std::mutex> lock(mutex_);
     const auto it = std::find_if(in_progress_.begin(), in_progress_.end(), [&completion](const InFlightRequest& request) {
         return request.request.job_id == completion.job_id &&
                request.request.kind == completion.kind &&
-               request.request.app_instance_id == completion.app_instance_id;
+               request.request.app_instance_id == completion.app_instance_id &&
+               request.request.client_token == completion.client_token;
     });
-    if (it == in_progress_.end() || it->has_deferred_completion) {
+    if (it == in_progress_.end() || it->has_staged_completion) {
         return false;
     }
     it->completion = completion;
-    it->has_deferred_completion = true;
+    it->has_staged_completion = true;
     return true;
 }
 
@@ -142,7 +131,8 @@ std::size_t HostServiceRequestQueue::cancel_app_instance(std::uint32_t app_insta
                                    }),
                     requests_.end());
     // A worker may already own one of these requests. Keep it charged until it
-    // posts its stale completion, then finish() releases the in-flight slot.
+    // stages its stale completion, then the completion queue releases the
+    // in-flight slot after accepting that value.
     return old_size - requests_.size();
 }
 
@@ -162,12 +152,12 @@ std::size_t HostServiceRequestQueue::in_flight_size() const {
     return in_progress_.size();
 }
 
-std::size_t HostServiceRequestQueue::deferred_completion_count() const {
+std::size_t HostServiceRequestQueue::staged_completion_count() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return static_cast<std::size_t>(std::count_if(in_progress_.begin(),
                                                    in_progress_.end(),
                                                    [](const InFlightRequest& request) {
-                                                       return request.has_deferred_completion;
+                                                       return request.has_staged_completion;
                                                    }));
 }
 
@@ -257,11 +247,11 @@ bool HostServiceCompletionQueue::full() const {
     return size_ >= capacity_;
 }
 
-std::size_t HostServiceRequestQueue::flush_deferred_completions(HostServiceCompletionQueue& completions) {
+std::size_t HostServiceRequestQueue::flush_staged_completions(HostServiceCompletionQueue& completions) {
     std::lock_guard<std::mutex> lock(mutex_);
     std::size_t flushed = 0;
     for (auto it = in_progress_.begin(); it != in_progress_.end();) {
-        if (!it->has_deferred_completion) {
+        if (!it->has_staged_completion) {
             ++it;
             continue;
         }

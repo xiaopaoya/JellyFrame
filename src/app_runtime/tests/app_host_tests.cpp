@@ -83,6 +83,8 @@ void launch_cleans_previous_instance_state() {
     const AppInstance first = host.launch("org.example.first", AppRole::App);
     const auto submitted = host.submit_current(HostServiceJobKind::NetworkFetch);
     assert(submitted.accepted);
+    HostServiceRequest worker_request;
+    assert(host.pop_worker_request(worker_request));
     const std::uint32_t handle = host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 32);
     assert(handle != 0);
     assert(host.push_completion(HostServiceCompletion{submitted.job_id,
@@ -221,6 +223,8 @@ void crash_current_tears_down_active_instance_state() {
     const AppInstance app = host.launch("org.example.crashy", AppRole::App);
     const auto request = host.submit_current(HostServiceJobKind::NetworkFetch);
     assert(request.accepted);
+    HostServiceRequest worker_request;
+    assert(host.pop_worker_request(worker_request));
     const std::uint32_t handle = host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 64);
     assert(handle != 0);
     assert(host.load_current_jffont(tiny_jffont_bytes().data(), tiny_jffont_bytes().size()).loaded());
@@ -236,7 +240,7 @@ void crash_current_tears_down_active_instance_state() {
     assert(result.crashed);
     assert(result.reason == AppTeardownReason::RuntimeError);
     assert(result.app_instance_id == app.id);
-    assert(result.cancelled_requests == 1);
+    assert(result.cancelled_requests == 0);
     assert(result.discarded_completions == 1);
     assert(result.released_handles == 1);
     assert(result.released_font_resources == 1);
@@ -252,6 +256,8 @@ void terminate_current_supports_watchdog_and_user_kill_reasons() {
     const AppInstance app = host.launch("org.example.loop", AppRole::App);
     const auto request = host.submit_current(HostServiceJobKind::NetworkFetch);
     assert(request.accepted);
+    HostServiceRequest worker_request;
+    assert(host.pop_worker_request(worker_request));
     const std::uint32_t handle = host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 64);
     assert(handle != 0);
     assert(host.push_completion(HostServiceCompletion{request.job_id,
@@ -266,7 +272,7 @@ void terminate_current_supports_watchdog_and_user_kill_reasons() {
     assert(watchdog.app_instance_id == app.id);
     assert(watchdog.reason == AppTeardownReason::ScriptWatchdog);
     assert(watchdog.crashed);
-    assert(watchdog.cancelled_requests == 1);
+    assert(watchdog.cancelled_requests == 0);
     assert(watchdog.discarded_completions == 1);
     assert(watchdog.released_handles == 1);
     assert(host.current_app_instance_id() == 0);
@@ -288,21 +294,21 @@ void frame_pump_limits_completions_and_filters_stale_instances() {
     assert(stale_handle != 0);
 
     const AppInstance second = host.launch("org.example.second", AppRole::App);
-    assert(host.push_completion(HostServiceCompletion{1,
+    assert(host.completions().push(HostServiceCompletion{1,
                                                       HostServiceJobKind::NetworkFetch,
                                                       HostServiceStatus::Completed,
                                                       first.id,
                                                       stale_handle,
                                                       0,
                                                       128}));
-    assert(host.push_completion(HostServiceCompletion{2,
+    assert(host.completions().push(HostServiceCompletion{2,
                                                       HostServiceJobKind::NetworkFetch,
                                                       HostServiceStatus::Completed,
                                                       second.id,
                                                       0,
                                                       0,
                                                       16}));
-    assert(host.push_completion(HostServiceCompletion{3,
+    assert(host.completions().push(HostServiceCompletion{3,
                                                       HostServiceJobKind::ImageDecode,
                                                       HostServiceStatus::Completed,
                                                       second.id,
@@ -342,11 +348,11 @@ void frame_scratch_pump_reuses_completion_storage() {
     scratch.reserve_from_options(options);
 
     const AppInstance app = host.launch("org.example.scratch", AppRole::App);
-    assert(host.push_completion(HostServiceCompletion{1,
+    assert(host.completions().push(HostServiceCompletion{1,
                                                       HostServiceJobKind::NetworkFetch,
                                                       HostServiceStatus::Completed,
                                                       app.id}));
-    assert(host.push_completion(HostServiceCompletion{2,
+    assert(host.completions().push(HostServiceCompletion{2,
                                                       HostServiceJobKind::StorageKv,
                                                       HostServiceStatus::Completed,
                                                       app.id}));
@@ -392,6 +398,8 @@ void budget_snapshot_reports_runtime_usage_and_caps() {
     const AppInstance app = host.launch("org.example.budget", AppRole::App);
     const auto request = host.submit_current(HostServiceJobKind::NetworkFetch);
     assert(request.accepted);
+    HostServiceRequest worker_request;
+    assert(host.pop_worker_request(worker_request));
     const std::uint32_t handle = host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 128);
     assert(handle != 0);
     assert(host.push_completion(HostServiceCompletion{request.job_id,
@@ -438,7 +446,7 @@ void budget_snapshot_reports_runtime_usage_and_caps() {
     assert(budget.app_instance_id == app.id);
     assert(budget.role == AppRole::App);
     assert(budget.state == AppLifecycleState::Foreground);
-    assert(budget.service_requests.used == 1);
+    assert(budget.service_requests.used == 0);
     assert(budget.service_requests.limit == 4);
     assert(budget.service_completions.used == 1);
     assert(budget.service_completions.limit == 4);
@@ -474,8 +482,8 @@ void budget_snapshot_reports_runtime_usage_and_caps() {
     AppRuntimeHost worker_host = make_host();
     worker_host.launch("org.example.worker-budget", AppRole::App);
     assert(worker_host.submit_current(HostServiceJobKind::NetworkFetch).accepted);
-    HostServiceRequest worker_request;
-    assert(worker_host.pop_worker_request(worker_request));
+    HostServiceRequest worker_budget_request;
+    assert(worker_host.pop_worker_request(worker_budget_request));
     const AppBudgetSnapshot worker_budget = collect_app_budget_snapshot(worker_host);
     assert(worker_budget.service_requests.used == 1);
     assert(worker_budget.service_requests.limit == 4);
@@ -533,7 +541,7 @@ void bad_app_teardown_leaves_next_app_clean_and_discards_stale_work() {
     }
     const std::uint32_t bad_handle = host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 64);
     assert(bad_handle != 0);
-    assert(host.push_completion(HostServiceCompletion{90,
+    assert(host.completions().push(HostServiceCompletion{90,
                                                       HostServiceJobKind::NetworkFetch,
                                                       HostServiceStatus::Completed,
                                                       bad.id,
@@ -556,7 +564,7 @@ void bad_app_teardown_leaves_next_app_clean_and_discards_stale_work() {
     assert(host.handles().active_count() == 0);
     assert(system_events.empty());
 
-    assert(host.push_completion(HostServiceCompletion{91,
+    assert(host.completions().push(HostServiceCompletion{91,
                                                       HostServiceJobKind::NetworkFetch,
                                                       HostServiceStatus::Completed,
                                                       bad.id,

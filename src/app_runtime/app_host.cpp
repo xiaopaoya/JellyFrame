@@ -100,13 +100,16 @@ std::size_t AppRuntimeHost::clear_current_fonts() {
 }
 
 bool AppRuntimeHost::push_completion(const HostServiceCompletion& completion) {
-    // Keep worker-owned completions in their already-reserved in-flight slot
-    // until the UI completion queue can accept them.
-    if (completions_.push(completion)) {
-        requests_.finish(completion.job_id);
-        return true;
+    if (completion.job_id == 0) {
+        return completions_.push(completion);
     }
-    return requests_.defer_completion(completion);
+    // Keep the completion in its existing in-flight slot until the UI queue
+    // accepts the already-validated value.
+    if (!requests_.stage_completion(completion)) {
+        return false;
+    }
+    requests_.flush_staged_completions(completions_);
+    return true;
 }
 
 bool AppRuntimeHost::pop_worker_request(HostServiceRequest& request) {
@@ -118,13 +121,13 @@ bool AppRuntimeHost::pop_worker_request(HostServiceJobKind kind, HostServiceRequ
 }
 
 AppCompletionPumpResult AppRuntimeHost::pump_frame_completions(std::vector<HostServiceCompletion>& accepted) {
-    requests_.flush_deferred_completions(completions_);
+    requests_.flush_staged_completions(completions_);
     return lifecycle_.pump_completions(completions_, max_completion_events_per_frame_, accepted, &handles_);
 }
 
 AppCompletionPumpResult AppRuntimeHost::pump_frame_completions(AppFrameScratch& scratch) {
     scratch.begin_frame();
-    requests_.flush_deferred_completions(completions_);
+    requests_.flush_staged_completions(completions_);
     return lifecycle_.pump_completions(completions_,
                                        max_completion_events_per_frame_,
                                        scratch.accepted_completions,

@@ -212,7 +212,16 @@ void worker_pump_normalizes_completion_identity() {
 void worker_pump_does_not_pop_when_completion_queue_is_full() {
     AppRuntimeHost host = make_host(1, 1);
     host.launch("org.example.full", AppRole::App);
-    assert(host.push_completion(HostServiceCompletion{
+    assert(!host.push_completion(HostServiceCompletion{
+        99,
+        HostServiceJobKind::Other,
+        HostServiceStatus::Completed,
+        host.current_app_instance_id(),
+        0,
+        0,
+        0,
+    }));
+    assert(host.completions().push(HostServiceCompletion{
         99,
         HostServiceJobKind::Other,
         HostServiceStatus::Completed,
@@ -245,7 +254,7 @@ void worker_completion_is_retained_when_queue_fills_after_worker_pop() {
 
     HostServiceRequest request;
     assert(host.pop_worker_request(HostServiceJobKind::NetworkFetch, request));
-    assert(host.push_completion(HostServiceCompletion{
+    assert(host.completions().push(HostServiceCompletion{
         99,
         HostServiceJobKind::Other,
         HostServiceStatus::Completed,
@@ -264,7 +273,7 @@ void worker_completion_is_retained_when_queue_fills_after_worker_pop() {
         0,
     }));
     assert(host.requests().in_flight_size() == 1);
-    assert(host.requests().deferred_completion_count() == 1);
+    assert(host.requests().staged_completion_count() == 1);
 
     std::vector<HostServiceCompletion> accepted;
     assert(host.pump_frame_completions(accepted).accepted == 1);
@@ -273,7 +282,7 @@ void worker_completion_is_retained_when_queue_fills_after_worker_pop() {
     assert(host.pump_frame_completions(accepted).accepted == 1);
     assert(accepted.front().job_id == submitted.job_id);
     assert(host.requests().in_flight_size() == 0);
-    assert(host.requests().deferred_completion_count() == 0);
+    assert(host.requests().staged_completion_count() == 0);
 }
 
 void worker_pump_respects_per_tick_request_budget() {
@@ -395,7 +404,7 @@ void worker_group_pump_stops_before_next_worker_when_completion_queue_is_full() 
     AppRuntimeHost host = make_host(4, 1);
     host.launch("org.example.group-full", AppRole::App);
     for (std::size_t index = 0; index < host.completions().capacity(); ++index) {
-        assert(host.push_completion(HostServiceCompletion{
+        assert(host.completions().push(HostServiceCompletion{
             static_cast<std::uint32_t>(99 + index),
             HostServiceJobKind::Other,
             HostServiceStatus::Completed,

@@ -98,17 +98,17 @@ public:
     bool pop_next(HostServiceJobKind kind, HostServiceRequest& request);
     bool pop_pending(std::uint32_t job_id, HostServiceRequest& request);
     bool cancel_pending(std::uint32_t job_id);
-    bool finish(std::uint32_t job_id);
-    // Retains a worker result in its existing in-flight slot when the bounded
-    // completion queue is temporarily full. No heap allocation is performed.
-    bool defer_completion(const HostServiceCompletion& completion);
-    std::size_t flush_deferred_completions(HostServiceCompletionQueue& completions);
+    // Validates and retains a worker completion in its existing in-flight slot
+    // until the bounded completion queue accepts it. No heap allocation is
+    // performed; a duplicate or mismatched completion is rejected.
+    bool stage_completion(const HostServiceCompletion& completion);
+    std::size_t flush_staged_completions(HostServiceCompletionQueue& completions);
     std::size_t cancel_app_instance(std::uint32_t app_instance_id);
     void clear();
 
     std::size_t size() const;
     std::size_t in_flight_size() const;
-    std::size_t deferred_completion_count() const;
+    std::size_t staged_completion_count() const;
     std::size_t capacity() const { return capacity_; }
     bool empty() const;
     bool full() const;
@@ -117,7 +117,7 @@ private:
     struct InFlightRequest {
         HostServiceRequest request;
         HostServiceCompletion completion;
-        bool has_deferred_completion = false;
+        bool has_staged_completion = false;
     };
 
     bool full_unlocked() const;
