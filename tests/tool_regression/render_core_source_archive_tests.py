@@ -122,12 +122,33 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             copy2(self.source_root / "LICENSE", crlf_source / "LICENSE")
             copytree(self.source_root / "cmake", crlf_source / "cmake")
             copytree(self.source_root / "src" / "render_core", crlf_source / "src" / "render_core")
+            entry_paths = [
+                packager.standalone_entry_file(
+                    self.source_root,
+                    self.source_root / "cmake" / "render_core_standalone_root.cmake",
+                    self.source_root / "CMakeLists.txt",
+                ),
+                packager.standalone_entry_file(
+                    self.source_root,
+                    self.source_root / "cmake" / "render_core_standalone_presets.json.in",
+                    self.source_root / "CMakePresets.json",
+                ),
+                packager.standalone_entry_file(
+                    self.source_root,
+                    self.source_root / "src" / "render_core" / "STANDALONE_README.md",
+                    self.source_root / "README.md",
+                ),
+            ]
+            staged_entry_paths = []
+            for source_path in entry_paths:
+                staged_path = crlf_source / source_path.relative_to(self.source_root)
+                staged_path.parent.mkdir(parents=True, exist_ok=True)
+                copy2(source_path, staged_path)
+                staged_entry_paths.append(staged_path)
             text_paths = [
                 crlf_source / "LICENSE",
                 *packager.source_files(crlf_source),
-                crlf_source / "cmake" / "render_core_standalone_root.cmake",
-                crlf_source / "cmake" / "render_core_standalone_presets.json.in",
-                crlf_source / "src" / "render_core" / "STANDALONE_README.md",
+                *staged_entry_paths,
             ]
             for path in text_paths:
                 if (path.name in packager.TEXT_ARCHIVE_FILENAMES or
@@ -250,6 +271,13 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                  "jellyframe_render_core_source_manifest.json").read_text(encoding="utf-8")
             )
             self.assertEqual(installed_manifest, source_manifest)
+
+            # The Core repository intentionally does not contain App Runtime.
+            # Its independent CI proves the archive's standalone lifecycle;
+            # JellyFrame's monorepo CI additionally proves this package is a
+            # compatible Runtime dependency.
+            if not (self.source_root / "src" / "app_runtime").is_dir():
+                return
 
             # A downstream Core host must consume only the installed CMake
             # package and installed render_core headers. This keeps the
