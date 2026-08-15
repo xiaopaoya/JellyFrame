@@ -17,6 +17,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Input dispatch now treats each pointer-event alias and hover transition as a
+  DOM-mutation boundary. If a listener destroys the active or newly hovered
+  node, later alias events are suppressed and interaction state is cleared
+  instead of retaining a stale node address.
+
 - Script event listeners now defer physical removal while a callback is on the
   stack, including nested dispatch. A callback may safely remove and replace
   itself through either `addEventListener` or an `on*` property; listener

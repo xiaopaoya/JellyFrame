@@ -233,6 +233,64 @@ void click_requires_same_active_target() {
     check(two_clicks == 0, "second button did not click without matching down");
 }
 
+void input_stops_after_a_listener_destroys_its_target() {
+    auto pipeline = build_pipeline();
+    Node* one = find_by_id(*pipeline.document, "one");
+    check(one != nullptr, "destruction fixture button exists");
+
+    int pointer_down_calls = 0;
+    int touch_start_calls = 0;
+    int mouse_down_calls = 0;
+    one->add_event_listener("pointerdown", [&](Event&) {
+        ++pointer_down_calls;
+        pipeline.document->set_text_content("replacement");
+    });
+    one->add_event_listener("touchstart", [&](Event&) { ++touch_start_calls; });
+    one->add_event_listener("mousedown", [&](Event&) { ++mouse_down_calls; });
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = 4;
+    pointer.y = 4;
+    pointer.button = PointerButton::Primary;
+    pointer.buttons = 1;
+
+    check(input.pointer_down(pointer) == nullptr,
+          "pointerdown reports no target after the target is destroyed");
+    check(pointer_down_calls == 1, "pointerdown listener runs before target destruction");
+    check(touch_start_calls == 0 && mouse_down_calls == 0,
+          "input aliases do not dispatch to a destroyed pointerdown target");
+    check(input.hovered_node() == nullptr && input.active_node() == nullptr && input.focused_node() == nullptr,
+          "destroyed pointer target clears all interaction state");
+}
+
+void hover_transition_stops_when_mouseout_destroys_the_new_target() {
+    auto pipeline = build_pipeline();
+    Node* one = find_by_id(*pipeline.document, "one");
+    Node* two = find_by_id(*pipeline.document, "two");
+    check(one != nullptr && two != nullptr && two->parent != nullptr, "hover destruction fixture exists");
+    Node* const parent = two->parent;
+
+    int two_over_calls = 0;
+    int two_move_calls = 0;
+    one->add_event_listener("mouseout", [&](Event&) { check(parent->remove_child(*two), "mouseout removes new target"); });
+    two->add_event_listener("mouseover", [&](Event&) { ++two_over_calls; });
+    two->add_event_listener("mousemove", [&](Event&) { ++two_move_calls; });
+
+    InputController input(*pipeline.layer_tree);
+    PointerInput pointer;
+    pointer.x = 4;
+    pointer.y = 4;
+    check(input.pointer_move(pointer) == one, "initial hover enters first button");
+
+    pointer.y = 44;
+    check(input.pointer_move(pointer) == nullptr,
+          "hover transition reports no target when mouseout destroys its candidate");
+    check(two_over_calls == 0 && two_move_calls == 0,
+          "destroyed hover candidate receives no further pointer events");
+    check(input.hovered_node() == nullptr, "destroyed hover candidate clears hover state");
+}
+
 void wheel_dispatches_to_hit_target() {
     auto pipeline = build_pipeline();
     Node* two = find_by_id(*pipeline.document, "two");
@@ -923,6 +981,8 @@ int main() {
         pointer_hover_down_up_and_click();
         pointer_events_without_dynamic_style_keep_document_clean();
         click_requires_same_active_target();
+        input_stops_after_a_listener_destroys_its_target();
+        hover_transition_stops_when_mouseout_destroys_the_new_target();
         wheel_dispatches_to_hit_target();
     text_input_updates_focused_control_value();
     text_input_backspace_removes_whole_utf8_scalar();

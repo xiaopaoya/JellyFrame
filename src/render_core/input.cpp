@@ -262,6 +262,9 @@ const Node* InputController::pointer_move(const PointerInput& input) {
         return target;
     }
     update_hover(target, input);
+    if (target != nullptr && hovered_node_ != target) {
+        return nullptr;
+    }
     if (active_box_ != nullptr && active_box_->node != nullptr && input.buttons != 0 &&
         form_control_kind(*active_box_->node) == FormControlKind::Range) {
         if (set_range_value_from_local_x(*mutable_node(active_box_->node),
@@ -272,7 +275,7 @@ const Node* InputController::pointer_move(const PointerInput& input) {
     }
     MouseEvent event = make_mouse_event("mousemove", input);
     dispatch_mouse_event(target, event);
-    return target;
+    return event.target_destroyed() ? nullptr : target;
 }
 
 const Node* InputController::pointer_down(const PointerInput& input) {
@@ -291,8 +294,15 @@ const Node* InputController::pointer_down(const PointerInput& input) {
         return target;
     }
     update_hover(target, input);
+    if (target != nullptr && hovered_node_ != target) {
+        set_active_node(nullptr);
+        return nullptr;
+    }
     set_active_node(target, result ? result.box : nullptr);
     set_focused_node(focusable_node(target) ? target : nullptr);
+    if (target != nullptr && active_node_ != target) {
+        return nullptr;
+    }
     if (active_box_ != nullptr && active_box_->node != nullptr &&
         form_control_kind(*active_box_->node) == FormControlKind::Range) {
         if (set_range_value_from_local_x(*mutable_node(active_box_->node),
@@ -303,10 +313,22 @@ const Node* InputController::pointer_down(const PointerInput& input) {
     }
     MouseEvent pointer = make_mouse_event("pointerdown", input);
     dispatch_mouse_event(target, pointer);
+    if (pointer.target_destroyed()) {
+        set_active_node(nullptr);
+        return nullptr;
+    }
     MouseEvent touch = make_mouse_event("touchstart", input);
     dispatch_mouse_event(target, touch);
+    if (touch.target_destroyed()) {
+        set_active_node(nullptr);
+        return nullptr;
+    }
     MouseEvent event = make_mouse_event("mousedown", input);
     dispatch_mouse_event(target, event);
+    if (event.target_destroyed()) {
+        set_active_node(nullptr);
+        return nullptr;
+    }
     return target;
 }
 
@@ -318,6 +340,10 @@ const Node* InputController::pointer_up(const PointerInput& input) {
         return target;
     }
     update_hover(target, input);
+    if (target != nullptr && hovered_node_ != target) {
+        set_active_node(nullptr);
+        return nullptr;
+    }
     MouseEvent pointer = make_mouse_event("pointerup", input);
     dispatch_mouse_event(target, pointer);
     if (pointer.target_destroyed()) {
@@ -429,7 +455,7 @@ const Node* InputController::wheel(const WheelInput& input) {
     if (target != nullptr) {
         dispatch_event(*target, event);
     }
-    return target;
+    return event.target_destroyed() ? nullptr : target;
 }
 
 bool InputController::text_input(const std::string& utf8_text) {
@@ -662,6 +688,10 @@ void InputController::observe_node(const Node* node) {
     }
 }
 
+bool InputController::observes_node(const Node* node) const {
+    return node != nullptr && std::find(observed_nodes_.begin(), observed_nodes_.end(), node) != observed_nodes_.end();
+}
+
 void InputController::unobserve_unused_nodes() {
     observed_nodes_.erase(
         std::remove_if(observed_nodes_.begin(), observed_nodes_.end(), [this](Node* node) {
@@ -703,9 +733,14 @@ void InputController::update_hover(const Node* next_hover, const PointerInput& i
     if (next_hover == hovered_node_) {
         return;
     }
+    observe_node(next_hover);
     if (hovered_node_ != nullptr) {
         MouseEvent out = make_mouse_event("mouseout", input);
         dispatch_event(*hovered_node_, out);
+    }
+    if (next_hover != nullptr && !observes_node(next_hover)) {
+        set_hovered_node(nullptr);
+        return;
     }
     set_hovered_node(next_hover);
     if (hovered_node_ != nullptr) {
