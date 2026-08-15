@@ -11,6 +11,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from shutil import copytree
 from pathlib import Path
 
 
@@ -38,6 +39,24 @@ def run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
     if result.returncode != 0:
         raise AssertionError(
             f"command failed ({result.returncode}): {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+    return result
+
+
+def run_failure(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        command,
+        cwd=cwd,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        raise AssertionError(
+            f"command unexpectedly succeeded: {' '.join(command)}\n"
             f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
     return result
@@ -158,6 +177,13 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             self.assertTrue(
                 (runtime_build / "generated" / "jellyframe_render_core_source_manifest.json").is_file()
             )
+            package_provenance = json.loads(
+                (runtime_build / "generated" /
+                 "jellyframe_render_core_provenance.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(package_provenance["sourceHash"], source_manifest["sourceHash"])
+            self.assertEqual(package_provenance["lockedSourceHash"], source_manifest["sourceHash"])
+            self.assertTrue(package_provenance["lockEnforced"])
             run(
                 [str(self.cmake), "--build", str(runtime_build), "--config", "Release",
                  "--target", "jellyframe_app_runtime_tests", "--parallel"],
@@ -199,6 +225,49 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                 ["ctest", "--test-dir", str(source_override_build), "-C", "Release",
                  "-R", "^jellyframe_app_runtime_tests$", "--output-on-failure"],
                 cwd=self.source_root,
+            )
+
+            # A package with the same version and ABI but another declared source
+            # identity must fail before Runtime targets can be generated.
+            mismatched_install_dir = root / "install-mismatched-source"
+            copytree(install_dir, mismatched_install_dir)
+            mismatched_hash = "a" * 64
+            package_config = next(mismatched_install_dir.glob(
+                "**/JellyFrameRenderCoreConfig.cmake"))
+            installed_source_manifest = (mismatched_install_dir / "share" /
+                                         "jellyframe-render-core" /
+                                         "jellyframe_render_core_source_manifest.json")
+            for file_path in (package_config, installed_source_manifest):
+                content = file_path.read_text(encoding="utf-8")
+                self.assertIn(source_manifest["sourceHash"], content)
+                file_path.write_text(content.replace(source_manifest["sourceHash"], mismatched_hash),
+                                     encoding="utf-8")
+            mismatch_build = root / "runtime-package-mismatched-source"
+            mismatch_command = [
+                str(self.cmake), "-S", str(self.source_root), "-B", str(mismatch_build),
+            ]
+            if self.generator:
+                mismatch_command.extend(["-G", self.generator])
+            mismatch_command.extend(
+                [
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    "-DJELLYFRAME_RENDER_CORE_PROVIDER=package",
+                    f"-DJELLYFRAME_RENDER_CORE_PACKAGE_DIR={mismatched_install_dir}",
+                    "-DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF",
+                    "-DJELLYFRAME_BUILD_SCRIPTING=OFF",
+                    "-DJELLYFRAME_BUILD_EXAMPLES=OFF",
+                    "-DJELLYFRAME_BUILD_BENCHMARKS=OFF",
+                    "-DJELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS=OFF",
+                    "-DJELLYFRAME_BUILD_TESTS=OFF",
+                ]
+            )
+            result = run_failure(
+                mismatch_command,
+                cwd=self.source_root,
+            )
+            self.assertRegex(
+                result.stdout + result.stderr,
+                r"source hash[\s\S]*does not[\s\S]*match locked source hash",
             )
 
 

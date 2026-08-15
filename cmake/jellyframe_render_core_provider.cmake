@@ -70,6 +70,14 @@ else()
        NOT JellyFrameRenderCore_SOURCE_HASH MATCHES "^[0-9a-fA-F]+$")
         message(FATAL_ERROR "JellyFrameRenderCore package has no valid source hash")
     endif()
+    string(TOLOWER "${JellyFrameRenderCore_SOURCE_HASH}"
+        _jellyframe_render_core_package_source_hash_normalized)
+    if(NOT _jellyframe_render_core_package_source_hash_normalized STREQUAL
+       JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH)
+        message(FATAL_ERROR
+            "JellyFrameRenderCore source hash ${JellyFrameRenderCore_SOURCE_HASH} does not match locked source hash "
+            "${JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH}")
+    endif()
     if(NOT DEFINED JellyFrameRenderCore_SOURCE_FILE_COUNT OR
        NOT JellyFrameRenderCore_SOURCE_FILE_COUNT MATCHES "^[1-9][0-9]*$")
         message(FATAL_ERROR "JellyFrameRenderCore package has no valid source file count")
@@ -111,6 +119,7 @@ else()
     set(JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_ENFORCED true)
     unset(_jellyframe_render_core_package_source_hash)
     unset(_jellyframe_render_core_package_source_hash_length)
+    unset(_jellyframe_render_core_package_source_hash_normalized)
     unset(_jellyframe_render_core_package_source_manifest)
     unset(_jellyframe_render_core_package_source_hash_position)
     unset(_jellyframe_render_core_package_source_count_position)

@@ -57,8 +57,8 @@ cmake --build build\framework-external-core --config Release `
   --target jellyframe_app_runtime_tests jellyframe_device_runtime_contracts_tests
 ```
 
-The accepted package version and engine ABI are pinned in
-`cmake/jellyframe_dependency_lock.cmake`. Package mode verifies both values and
+The accepted package version, engine ABI and deterministic source hash are pinned in
+`cmake/jellyframe_dependency_lock.cmake`. Package mode verifies all three values and
 copies the package capability profile, including its Core package version, into
 the Runtime build tree. The default
 `in-tree` mode remains the correct choice when changing Core and Runtime
@@ -68,7 +68,7 @@ Every configuration also writes
 provider, Core package version, ABI, profile filename, Runtime lock values and
 the deterministic SHA-256 source identity without embedding workstation paths.
 An installed Core package exports a matching source manifest; package consumers
-validate and copy that manifest into their generated directory. Archive both
+validate it against the lock and copy that manifest into their generated directory. Archive both
 with a Runtime or port build report. The content hash identifies exactly which
 Core source set was consumed, including a source archive or local override; it
 does not replace a release signature, a reviewed version lock or publishing

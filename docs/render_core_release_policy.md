@@ -39,9 +39,11 @@ deterministic archive is the precursor to this release unit.
 
 ## Consumer Locks
 
-JellyFrame Runtime records the exact Render Core version, ABI and release
-artifact SHA-256 in its dependency lock. A dependency update is an explicit
-reviewed change that runs:
+JellyFrame Runtime records the exact Render Core version, ABI and deterministic
+source hash in its dependency lock. The published release metadata records the
+release archive SHA-256 separately: an installed CMake package exposes a source
+manifest but cannot prove its original archive bytes. A dependency update is an
+explicit reviewed change that runs:
 
 1. Runtime tests against the installed Core package.
 2. Runtime tests against a local source override of that Core revision.
@@ -52,7 +54,7 @@ It does not infer supported features from a branch name, and it must record the
 consumed Core provenance in every image acceptance report.
 
 A lock rollback is an explicit dependency change: restore the previously
-verified exact version, ABI and artifact hash, then repeat the package-consumer
+verified exact version, ABI and source hash, then repeat the package-consumer
 tests. No consumer may silently select a newer compatible-looking Core package
 or use a floating branch as a rollback mechanism.
 

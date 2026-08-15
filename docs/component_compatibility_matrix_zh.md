@@ -1,6 +1,6 @@
 # 组件兼容性矩阵
 
-> 最后更新：2026-08-14；适用版本：0.6.0-dev
+> 最后更新：2026-08-15；适用版本：0.6.0-dev
 
 这份矩阵记录三个计划中的产品边界之间的兼容性证据。它不同于 HTML/CSS
 能力全表：能力全表描述 app 可见行为，本文件描述哪个构建产物可以消费哪个
@@ -14,8 +14,8 @@
 | JellyFrame App Runtime | 解压后的 Core 源码归档 | `0.6.0` source profile | `verified` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 会为独立 Runtime 构建选用解压后的归档，并运行 App Runtime CTest；仍与 package 模式互斥。 |
 | Render Core standalone 测试 | 无 Runtime、无 JerryScript | `0.6.0` / ABI `1` | `verified` | 已验证独立配置、构建、CTest 和安装；package 只包含 Core target、公共头文件和能力 profile。 |
 | Render Core 源码归档 | 无 Runtime、无 JerryScript | `0.6.0` / ABI `1` | `verified` | 确定性的 `.tar.gz` 与 SHA-256 sidecar，作为 CI artifact 保留；CI 会连续打包两次并比对字节、解压、构建、运行 CTest、安装，再配置 Runtime package consumer。这不是已签名的发布产物。 |
-| JellyFrame App Runtime | 已安装 Render Core package | `0.6.0` / ABI `1` / source manifest schema `1` | `verified` | Runtime 使用 `JELLYFRAME_RENDER_CORE_PROVIDER=package`；会校验 package 的 SHA-256 source manifest 并复制到构建 provenance。 |
-| JellyFrame App Runtime | 已安装 Render Core package | 错误版本或 ABI | `rejected` | 配置阶段执行精确版本和 engine ABI 检查；package 模式不允许偷偷回退到源码 Core。 |
+| JellyFrame App Runtime | 已安装 Render Core package | `0.6.0` / ABI `1` / 锁定 source manifest identity | `verified` | Runtime 使用 `JELLYFRAME_RENDER_CORE_PROVIDER=package`；会将 package manifest 与精确锁定的 source hash 比对，再复制到构建 provenance。 |
+| JellyFrame App Runtime | 已安装 Render Core package | 错误版本、ABI 或 source identity | `rejected` | 配置阶段执行精确版本、engine ABI 和 source hash 检查；package 模式不允许偷偷回退到源码 Core。 |
 | App package 预检 | 生成的 Render Core capability profile | schema `1` / engine ABI `1` | `verified` | `package_app.py` 会在读取资源前校验 profile schema、已知 feature ID 和依赖闭包；缺失必需能力族会拒绝 package。 |
 | JellyFrame Script bridge | 源码内 Render Core | `0.6.0-dev` 源码线 | `独立验证` | JerryScript 仍是可选的 App Runtime 依赖；这不等于 package-mode scripting 已验证。 |
 | App Runtime / 未来 Device OS host | `jellyframe_device_runtime_contracts` | `JFDP/1` | `verified` | 该 target 独立构建并测试 framing、typed payload 与 staging，不依赖 App Runtime 或 Render Core 的实现。其 monorepo 位置仍处于过渡期；这不是 Device OS 发布。 |
@@ -29,6 +29,7 @@ Runtime package consumer 从 `cmake/jellyframe_dependency_lock.cmake` 读取：
 ```text
 JELLYFRAME_RENDER_CORE_LOCKED_VERSION    = 0.6.0
 JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI = 1
+JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = d6646c85247a0103ad3c7cdd60830612e08c4f27c80a500fb7a4d8725445fc51
 ```
 
 这份锁是消费者策略，不表示未来所有 Render Core 构建都必须保持同一版本。
@@ -38,7 +39,7 @@ Core 可以独立演进，但 Runtime 接受新版本前，必须更新锁、运
 每次配置都会在复制或生成的 profile 旁写出
 `generated/jellyframe_render_core_provenance.json`。它是 Runtime 或 port 构建证据
 应归档的可移植记录：provider、实际 package 版本/ABI、profile 文件名、消费者锁定值和确定性
-source hash/file count。已安装 package 还必须提供匹配的 source manifest；package 模式会校验并复制它。
+source hash/file count。已安装 package 还必须提供匹配的 source manifest；package 模式会校验、与精确 lock 比对并复制它。
 该 hash 是内容身份，不替代已签名 release 或经审查的 lock。
 
 ## 证据规则

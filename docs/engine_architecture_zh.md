@@ -49,14 +49,14 @@ cmake --build build\framework-external-core --config Release `
   --target jellyframe_app_runtime_tests jellyframe_device_runtime_contracts_tests
 ```
 
-接受的 package 版本和 engine ABI 固定在
-`cmake/jellyframe_dependency_lock.cmake`。package 模式会校验这两个值，
+接受的 package 版本、engine ABI 和确定性的 source hash 固定在
+`cmake/jellyframe_dependency_lock.cmake`。package 模式会校验这三个值，
 并把包含 Core package 版本的能力 profile 复制到 Runtime 构建目录。默认的
 `in-tree` 模式仍适用于 Core 与 Runtime 同步开发；package 模式用于验证
 Core 独立发布后的消费边界。每次配置还会生成
 `generated/jellyframe_render_core_provenance.json`，其中记录选中的 provider、
 Core package 版本、ABI、profile 文件名、Runtime 锁定值和确定性的 SHA-256 source identity，
-且不写入工作站路径。已安装的 Core package 会导出匹配的 source manifest；package consumer 会校验并复制
+且不写入工作站路径。已安装的 Core package 会导出匹配的 source manifest；package consumer 会校验、与 lock 比对并复制
 该 manifest 到生成目录。Runtime 或 port 构建报告应同时归档二者。内容 hash 用于识别确切消费的
 Core source 集合，包括 source archive 或本地 override；它不替代 release signature、经审查的版本 lock
 或发布权威。Device Runtime、JFDP 协议、launcher 和硬件 port 不属于这个 package 边界。

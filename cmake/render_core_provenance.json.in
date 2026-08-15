@@ -10,5 +10,6 @@
   "sourceManifestFile": "jellyframe_render_core_source_manifest.json",
   "lockedVersion": "@JELLYFRAME_RENDER_CORE_LOCKED_VERSION@",
   "lockedEngineAbi": @JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI@,
+  "lockedSourceHash": "@JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH@",
   "lockEnforced": @JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_ENFORCED@
 }

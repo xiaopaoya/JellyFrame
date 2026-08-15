@@ -33,7 +33,7 @@ tag 签名建立发布权威；source manifest/checksum 建立 artifact identity
 
 ## Consumer Lock
 
-JellyFrame Runtime 在 dependency lock 中记录精确的 Render Core version、ABI 与 release artifact SHA-256。每一次依赖升级都是显式评审改动，必须运行：
+JellyFrame Runtime 在 dependency lock 中记录精确的 Render Core version、ABI 与确定性的 source hash。已发布 release metadata 另行记录 release archive SHA-256：已安装的 CMake package 能提供 source manifest，却无法证明其原始 archive bytes。每一次依赖升级都是显式评审改动，必须运行：
 
 1. installed Core package 上的 Runtime tests。
 2. 同一 Core revision 的 local source override Runtime tests。
@@ -41,7 +41,7 @@ JellyFrame Runtime 在 dependency lock 中记录精确的 Render Core version、
 
 Device OS pin 一个 JellyFrame Runtime release 与命名的 board feature profile；不得从 branch 名推断支持能力，并必须在每份 image 验收报告中记录 Core provenance。
 
-lock 回滚也是显式 dependency change：恢复此前已验证的精确 version、ABI 和 artifact hash，随后重新运行 package-consumer tests。consumer 不得静默选择看似兼容的新版 Core package，也不得用 floating branch 充当回滚机制。
+lock 回滚也是显式 dependency change：恢复此前已验证的精确 version、ABI 和 source hash，随后重新运行 package-consumer tests。consumer 不得静默选择看似兼容的新版 Core package，也不得用 floating branch 充当回滚机制。
 
 `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 保留为互斥的本地开发 override，不是公开部署依赖，也不替代 locked package test。
 

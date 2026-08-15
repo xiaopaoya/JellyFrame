@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 BASE_FEATURES = ("core.document", "core.paint")
+LOCKED_SOURCE_HASH = "d6646c85247a0103ad3c7cdd60830612e08c4f27c80a500fb7a4d8725445fc51"
 TEST_ARGS: argparse.Namespace | None = None
 
 PROFILE_CASES = (
@@ -130,6 +131,7 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                     self.assertEqual(provenance["profileFile"], "jellyframe_render_core_profile.json")
                     self.assertEqual(provenance["lockedVersion"], "0.6.0")
                     self.assertEqual(provenance["lockedEngineAbi"], 1)
+                    self.assertEqual(provenance["lockedSourceHash"], LOCKED_SOURCE_HASH)
                     self.assertFalse(provenance["lockEnforced"])
                     self.assertEqual(provenance["sourceManifestFile"],
                                      "jellyframe_render_core_source_manifest.json")
