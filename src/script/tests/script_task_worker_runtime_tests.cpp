@@ -290,6 +290,66 @@ void worker_service_completion_reaches_js_as_copied_value() {
     check(saw_done, "service callback sees copied payload bytes");
 }
 
+void worker_service_payload_lease_failure_completes_callback_as_error() {
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(21);
+    ScriptTaskWorkerRuntime runtime(session, runtime_options());
+    check(runtime.initialize(
+              "<body><p id='status'>idle</p></body>",
+              "p { display: block; width: 120px; height: 24px; margin: 0; }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "lease failure fixture initializes");
+    check(runtime.eval_with_supervisor(
+              supervisor,
+              "services.request(3, function (completion) {"
+              "  document.getElementById('status').textContent = "
+              "    !completion.ok && completion.errorCode === 3 && completion.payloadLength === 0 "
+              "      ? 'lease-failed' : 'unexpected';"
+              "});"
+              "'ready';").ok,
+          "lease failure service request evaluates in the worker realm");
+
+    ScriptTaskPacket request_packet;
+    check(supervisor.take_service_request(request_packet), "lease failure request reaches the service mailbox");
+    ScriptTaskServiceRequest request;
+    check(decode_script_task_service_request(request_packet.payload,
+                                              runtime_options().service_request_codec,
+                                              request) == ScriptTaskServiceRequestCodecStatus::Accepted,
+          "lease failure request remains decodable");
+    ScriptTaskServiceCompletion completion;
+    completion.kind = request.kind;
+    completion.status = HostServiceStatus::Completed;
+    completion.request_id = request.request_id;
+    completion.client_token = request.client_token;
+    completion.payload_lease_id = 1;
+    completion.byte_count = 4;
+    std::vector<std::uint8_t> completion_bytes;
+    check(encode_script_task_service_completion(completion, completion_bytes),
+          "lease failure completion encodes");
+    check(supervisor.post_service_completion(
+              {ScriptTaskPacketKind::ServiceCompletion, session, 1, 0, completion_bytes}) ==
+              ScriptTaskMailboxPostStatus::Accepted,
+          "lease failure completion reaches the worker inbox");
+
+    check(runtime.publish_frame(supervisor).accepted(), "lease failure initial frame publishes");
+    ScriptTaskAppFrame frame;
+    check(take_script_task_app_frame(supervisor, session, runtime_options().frame_codec, frame) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "lease failure initial frame is consumed");
+    const ScriptTaskWorkerRuntimeStepResult step = runtime.process_one(supervisor);
+    check(step.packet_consumed && step.service_completion_consumed && step.dom_mutated &&
+              step.service_status == HostServiceStatus::Failed && !step.fatal,
+          "lease failure reaches the callback as a terminal failed completion");
+    check(take_script_task_app_frame(supervisor, session, runtime_options().frame_codec, frame) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "lease failure callback publishes a replacement frame");
+    bool saw_failure = false;
+    for (const DisplayCommand& command : frame.display_list) {
+        if (command.text == "lease-failed") saw_failure = true;
+    }
+    check(saw_failure, "lease failure callback observes the normalized error value");
+}
+
 void worker_service_cancel_posts_only_value_identity() {
     ScriptTaskSupervisor supervisor = make_supervisor();
     const ScriptAppSession session = supervisor.begin(12);
@@ -631,6 +691,7 @@ int script_task_worker_runtime_tests_main() {
         worker_eval_failure_becomes_value_fatal();
         worker_timer_publishes_value_frame();
         worker_service_completion_reaches_js_as_copied_value();
+        worker_service_payload_lease_failure_completes_callback_as_error();
         worker_service_cancel_posts_only_value_identity();
         worker_service_completion_replay_handles_one_hundred_callbacks();
         worker_timer_exception_becomes_fatal_value();

@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Script-worker service completion handling now converts a rejected sealed
+  payload lease into one terminal failed callback instead of silently
+  abandoning the worker-local callback registration.
+
 - Script-task service bridging now rejects malformed completion identity without
   retiring the matching in-flight request. Completion matching includes service
   kind as well as job, app-instance and client-token identity.

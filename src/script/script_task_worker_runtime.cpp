@@ -250,14 +250,17 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::process_one(ScriptTas
             return result;
         }
         result.service_request_id = completion.request_id;
-        result.service_status = completion.status;
         std::vector<std::uint8_t> payload;
         const ScriptTaskServicePayloadTakeStatus payload_status =
             take_script_task_service_payload(supervisor, session_, completion, payload);
         if (payload_status == ScriptTaskServicePayloadTakeStatus::LeaseRejected) {
             ++telemetry_.service_packets_rejected;
-            return result;
+            completion.status = HostServiceStatus::Failed;
+            completion.error_code = static_cast<std::uint32_t>(
+                ScriptTaskServicePayloadErrorCode::LeaseRejected);
+            completion.byte_count = 0;
         }
+        result.service_status = completion.status;
         if (!runtime_->dispatch_script_service_completion(completion.request_id,
                                                            completion.client_token,
                                                            static_cast<std::uint8_t>(completion.status),
