@@ -114,9 +114,9 @@ installation and JFDP rather than App Runtime behavior. They must not enter the
 Render Core package and will eventually migrate to `jellyframe-device-os` or a
 small `device_runtime_contracts` package. D0 builds them as the independent
 `jellyframe_device_runtime_contracts` target and runs tests without App Runtime
-or Render Core implementation objects. This remains a monorepo transition
-while typed JFDP payload dispatch is completed; it does not imply a physical
-device transport exists.
+or Render Core implementation objects. This remains a monorepo transition until
+the future Device OS package migration; the typed JFDP desktop reference
+dispatcher does not imply a physical device transport exists.
 
 The physical split is gated by three conditions: an independently buildable
 Core source archive/package, a Runtime consumer with a locked Core version/ABI,

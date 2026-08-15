@@ -1,7 +1,9 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 
 namespace jellyframe {
 
@@ -10,6 +12,7 @@ constexpr std::size_t kDeviceProtocolHeaderBytes = 24;
 constexpr std::size_t kDeviceProtocolMaxPayloadBytes = 4096;
 constexpr std::size_t kDeviceCapabilityMaxBoardIdBytes = 63;
 constexpr std::size_t kDeviceCapabilityMaxRuntimeVersionBytes = 31;
+constexpr std::size_t kDeviceMaxAppIdBytes = 95;
 constexpr std::uint16_t kDeviceFrameFlagResponse = 1u << 0;
 
 enum class DeviceMessageType : std::uint8_t {
@@ -23,6 +26,8 @@ enum class DeviceMessageType : std::uint8_t {
     Stop = 8,
     Logs = 9,
     Recovery = 10,
+    Remove = 11,
+    Rollback = 12,
 };
 
 enum class DeviceProtocolStatus : std::uint8_t {
@@ -85,6 +90,63 @@ struct DeviceFrameHeader {
     std::uint32_t payload_crc32 = 0;
 };
 
+// All request and result payloads below start with payload version 1. Decoded
+// fixed fields are copied values. DeviceInstallChunkView aliases its input and
+// must be copied before it crosses a task or asynchronous queue boundary.
+struct DeviceInstallBeginPayload {
+    std::uint32_t transaction_id = 0;
+    std::uint32_t bundle_bytes = 0;
+    std::uint32_t bundle_crc32 = 0;
+    bool allow_downgrade = false;
+    std::array<char, kDeviceMaxAppIdBytes + 1> app_id{};
+
+    std::string_view app_id_view() const {
+        return std::string_view(app_id.data());
+    }
+};
+
+struct DeviceInstallChunkView {
+    std::uint32_t transaction_id = 0;
+    std::uint32_t offset = 0;
+    const std::uint8_t* bytes = nullptr;
+    std::size_t byte_count = 0;
+};
+
+struct DeviceTransactionPayload {
+    std::uint32_t transaction_id = 0;
+};
+
+struct DeviceAppIdPayload {
+    std::array<char, kDeviceMaxAppIdBytes + 1> app_id{};
+
+    std::string_view app_id_view() const {
+        return std::string_view(app_id.data());
+    }
+};
+
+struct DeviceLogsRequestPayload {
+    std::array<char, kDeviceMaxAppIdBytes + 1> app_id{};
+    std::uint16_t limit = 0;
+
+    std::string_view app_id_view() const {
+        return std::string_view(app_id.data());
+    }
+};
+
+enum DeviceOperationResultFlags : std::uint16_t {
+    DeviceOperationResultComplete = 1u << 0,
+    DeviceOperationResultActive = 1u << 1,
+    DeviceOperationResultLauncherActive = 1u << 2,
+};
+
+struct DeviceOperationResultPayload {
+    DeviceRequestResultCode result_code = DeviceRequestResultCode::Failed;
+    std::uint16_t flags = 0;
+    std::uint32_t transaction_id = 0;
+    std::uint32_t received_bytes = 0;
+    std::uint32_t expected_bytes = 0;
+};
+
 DeviceProtocolStatus encode_device_frame(const DeviceFrameHeader& header,
                                          const std::uint8_t* payload,
                                          std::size_t payload_size,
@@ -99,6 +161,7 @@ DeviceProtocolStatus decode_device_frame(const std::uint8_t* input,
                                          const std::uint8_t*& payload);
 
 bool is_device_message_type(std::uint8_t value);
+bool is_device_request_result_code(std::uint8_t value);
 const char* device_message_type_name(DeviceMessageType type);
 const char* device_protocol_status_name(DeviceProtocolStatus status);
 const char* device_request_result_code_name(DeviceRequestResultCode code);
@@ -110,5 +173,56 @@ DeviceProtocolStatus encode_device_capabilities(const DeviceCapabilitySnapshot& 
 DeviceProtocolStatus decode_device_capabilities(const std::uint8_t* input,
                                                 std::size_t input_size,
                                                 DeviceCapabilitySnapshot& capabilities);
+
+DeviceProtocolStatus encode_device_install_begin_payload(const DeviceInstallBeginPayload& payload,
+                                                         std::uint8_t* output,
+                                                         std::size_t output_capacity,
+                                                         std::size_t& output_size);
+DeviceProtocolStatus decode_device_install_begin_payload(const std::uint8_t* input,
+                                                         std::size_t input_size,
+                                                         DeviceInstallBeginPayload& payload);
+
+DeviceProtocolStatus encode_device_install_chunk_payload(std::uint32_t transaction_id,
+                                                         std::uint32_t offset,
+                                                         const std::uint8_t* bytes,
+                                                         std::size_t byte_count,
+                                                         std::uint8_t* output,
+                                                         std::size_t output_capacity,
+                                                         std::size_t& output_size);
+DeviceProtocolStatus decode_device_install_chunk_payload(const std::uint8_t* input,
+                                                         std::size_t input_size,
+                                                         DeviceInstallChunkView& payload);
+
+DeviceProtocolStatus encode_device_transaction_payload(const DeviceTransactionPayload& payload,
+                                                       std::uint8_t* output,
+                                                       std::size_t output_capacity,
+                                                       std::size_t& output_size);
+DeviceProtocolStatus decode_device_transaction_payload(const std::uint8_t* input,
+                                                       std::size_t input_size,
+                                                       DeviceTransactionPayload& payload);
+
+DeviceProtocolStatus encode_device_app_id_payload(const DeviceAppIdPayload& payload,
+                                                  std::uint8_t* output,
+                                                  std::size_t output_capacity,
+                                                  std::size_t& output_size);
+DeviceProtocolStatus decode_device_app_id_payload(const std::uint8_t* input,
+                                                  std::size_t input_size,
+                                                  DeviceAppIdPayload& payload);
+
+DeviceProtocolStatus encode_device_logs_request_payload(const DeviceLogsRequestPayload& payload,
+                                                        std::uint8_t* output,
+                                                        std::size_t output_capacity,
+                                                        std::size_t& output_size);
+DeviceProtocolStatus decode_device_logs_request_payload(const std::uint8_t* input,
+                                                        std::size_t input_size,
+                                                        DeviceLogsRequestPayload& payload);
+
+DeviceProtocolStatus encode_device_operation_result_payload(const DeviceOperationResultPayload& payload,
+                                                            std::uint8_t* output,
+                                                            std::size_t output_capacity,
+                                                            std::size_t& output_size);
+DeviceProtocolStatus decode_device_operation_result_payload(const std::uint8_t* input,
+                                                            std::size_t input_size,
+                                                            DeviceOperationResultPayload& payload);
 
 } // namespace jellyframe

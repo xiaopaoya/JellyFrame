@@ -19,7 +19,7 @@ build artifact may consume which other artifact.
 | JellyFrame App Runtime | installed Render Core package | wrong version or ABI | `rejected` | Configure-time exact version and engine-ABI checks. No fallback to source Core is allowed in package mode. |
 | App package preflight | generated Render Core capability profile | schema `1` / engine ABI `1` | `verified` | `package_app.py` validates profile schema, known feature IDs and dependency closure before resources are read; missing required families reject the package. |
 | JellyFrame Script bridge | in-tree Render Core | `0.6.0-dev` source line | `verified separately` | JerryScript is optional and remains an App Runtime dependency. This does not prove a package-mode scripting build. |
-| App Runtime / future Device OS host | `jellyframe_device_runtime_contracts` | `JFDP/1` | `verified` | The target builds and tests framing and staging separately, without an App Runtime or Render Core implementation dependency. Source location is transitional; this is not a Device OS release. |
+| App Runtime / future Device OS host | `jellyframe_device_runtime_contracts` | `JFDP/1` | `verified` | The target independently tests framing, typed payloads and staging, without an App Runtime or Render Core implementation dependency. Its monorepo location is transitional; this is not a Device OS release. |
 | Device Runtime / launcher | Render Core package | port-selected | `port-owned` | Requires a port-owned toolchain, memory profile, panel path and hardware report. Desktop package evidence is not a device claim. |
 | Ordinary `.jfapp` | native Render Core module | any | `unsupported by design` | App packages carry resources and declared scripts; they cannot load arbitrary executable native modules. |
 

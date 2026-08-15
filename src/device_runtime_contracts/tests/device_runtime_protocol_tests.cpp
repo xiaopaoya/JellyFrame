@@ -16,6 +16,13 @@ void copy_string_literal(char (&destination)[DestinationSize], const char (&sour
     std::copy_n(source, SourceSize, destination);
 }
 
+template <std::size_t DestinationSize, std::size_t SourceSize>
+void copy_string_literal(std::array<char, DestinationSize>& destination,
+                         const char (&source)[SourceSize]) {
+    static_assert(SourceSize <= DestinationSize, "string literal must fit its destination");
+    std::copy_n(source, SourceSize, destination.begin());
+}
+
 void round_trip_preserves_value_header_and_payload() {
     const std::array<std::uint8_t, 5> payload{{1, 2, 3, 4, 5}};
     std::array<std::uint8_t, kDeviceProtocolHeaderBytes + payload.size()> encoded{};
@@ -191,6 +198,143 @@ void discovery_request_response_loopback_preserves_session_and_capabilities() {
     assert(std::strcmp(observed.runtime_version, advertised.runtime_version) == 0);
 }
 
+void typed_install_payloads_preserve_bounded_values() {
+    DeviceInstallBeginPayload begin;
+    begin.transaction_id = 71;
+    begin.bundle_bytes = 1234;
+    begin.bundle_crc32 = 0xaabbccdd;
+    begin.allow_downgrade = true;
+    copy_string_literal(begin.app_id, "org.example.payload");
+
+    std::array<std::uint8_t, kDeviceProtocolMaxPayloadBytes> encoded{};
+    std::size_t encoded_size = 0;
+    assert(encode_device_install_begin_payload(begin, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    assert(encoded[0] == 1);
+    assert(encoded[1] == 1);
+    assert(encoded[2] == begin.app_id_view().size());
+
+    DeviceInstallBeginPayload decoded_begin;
+    assert(decode_device_install_begin_payload(encoded.data(), encoded_size, decoded_begin) ==
+           DeviceProtocolStatus::Ok);
+    assert(decoded_begin.transaction_id == begin.transaction_id);
+    assert(decoded_begin.bundle_bytes == begin.bundle_bytes);
+    assert(decoded_begin.bundle_crc32 == begin.bundle_crc32);
+    assert(decoded_begin.allow_downgrade);
+    assert(decoded_begin.app_id_view() == begin.app_id_view());
+
+    const std::array<std::uint8_t, 3> chunk_bytes{{7, 8, 9}};
+    assert(encode_device_install_chunk_payload(begin.transaction_id,
+                                               17,
+                                               chunk_bytes.data(),
+                                               chunk_bytes.size(),
+                                               encoded.data(),
+                                               encoded.size(),
+                                               encoded_size) == DeviceProtocolStatus::Ok);
+    DeviceInstallChunkView decoded_chunk;
+    assert(decode_device_install_chunk_payload(encoded.data(), encoded_size, decoded_chunk) ==
+           DeviceProtocolStatus::Ok);
+    assert(decoded_chunk.transaction_id == begin.transaction_id);
+    assert(decoded_chunk.offset == 17);
+    assert(decoded_chunk.byte_count == chunk_bytes.size());
+    assert(std::equal(chunk_bytes.begin(), chunk_bytes.end(), decoded_chunk.bytes));
+
+    DeviceTransactionPayload transaction{begin.transaction_id};
+    assert(encode_device_transaction_payload(transaction, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    DeviceTransactionPayload decoded_transaction;
+    assert(decode_device_transaction_payload(encoded.data(), encoded_size, decoded_transaction) ==
+           DeviceProtocolStatus::Ok);
+    assert(decoded_transaction.transaction_id == transaction.transaction_id);
+}
+
+void typed_lifecycle_and_result_payloads_preserve_values() {
+    std::array<std::uint8_t, kDeviceProtocolMaxPayloadBytes> encoded{};
+    std::size_t encoded_size = 0;
+
+    DeviceAppIdPayload app;
+    copy_string_literal(app.app_id, "org.example.lifecycle");
+    assert(encode_device_app_id_payload(app, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    DeviceAppIdPayload decoded_app;
+    assert(decode_device_app_id_payload(encoded.data(), encoded_size, decoded_app) ==
+           DeviceProtocolStatus::Ok);
+    assert(decoded_app.app_id_view() == app.app_id_view());
+
+    DeviceLogsRequestPayload logs;
+    logs.limit = 64;
+    assert(encode_device_logs_request_payload(logs, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    DeviceLogsRequestPayload decoded_logs;
+    assert(decode_device_logs_request_payload(encoded.data(), encoded_size, decoded_logs) ==
+           DeviceProtocolStatus::Ok);
+    assert(decoded_logs.app_id_view().empty());
+    assert(decoded_logs.limit == logs.limit);
+
+    DeviceOperationResultPayload result;
+    result.result_code = DeviceRequestResultCode::Accepted;
+    result.flags = DeviceOperationResultComplete | DeviceOperationResultActive;
+    result.transaction_id = 91;
+    result.received_bytes = 1024;
+    result.expected_bytes = 1024;
+    assert(encode_device_operation_result_payload(result, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    DeviceOperationResultPayload decoded_result;
+    assert(decode_device_operation_result_payload(encoded.data(), encoded_size, decoded_result) ==
+           DeviceProtocolStatus::Ok);
+    assert(decoded_result.result_code == result.result_code);
+    assert(decoded_result.flags == result.flags);
+    assert(decoded_result.transaction_id == result.transaction_id);
+    assert(decoded_result.received_bytes == result.received_bytes);
+    assert(decoded_result.expected_bytes == result.expected_bytes);
+
+    assert(is_device_message_type(static_cast<std::uint8_t>(DeviceMessageType::Remove)));
+    assert(is_device_message_type(static_cast<std::uint8_t>(DeviceMessageType::Rollback)));
+    assert(std::strcmp(device_message_type_name(DeviceMessageType::Remove), "remove") == 0);
+    assert(std::strcmp(device_message_type_name(DeviceMessageType::Rollback), "rollback") == 0);
+}
+
+void typed_payloads_reject_malformed_or_ambiguous_input() {
+    DeviceInstallBeginPayload begin;
+    begin.transaction_id = 1;
+    begin.bundle_bytes = 4;
+    copy_string_literal(begin.app_id, "org.example.reject");
+    std::array<std::uint8_t, 128> encoded{};
+    std::size_t encoded_size = 0;
+    assert(encode_device_install_begin_payload(begin, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    encoded[1] = 0x80;
+    DeviceInstallBeginPayload decoded_begin;
+    assert(decode_device_install_begin_payload(encoded.data(), encoded_size, decoded_begin) ==
+           DeviceProtocolStatus::InvalidArgument);
+
+    assert(encode_device_install_begin_payload(begin, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    encoded[16 + 3] = '\0';
+    assert(decode_device_install_begin_payload(encoded.data(), encoded_size, decoded_begin) ==
+           DeviceProtocolStatus::InvalidArgument);
+
+    const std::uint8_t byte = 1;
+    assert(encode_device_install_chunk_payload(1,
+                                               0,
+                                               &byte,
+                                               1,
+                                               encoded.data(),
+                                               encoded.size(),
+                                               encoded_size) == DeviceProtocolStatus::Ok);
+    encoded[2] = 2;
+    DeviceInstallChunkView decoded_chunk;
+    assert(decode_device_install_chunk_payload(encoded.data(), encoded_size, decoded_chunk) ==
+           DeviceProtocolStatus::Truncated);
+
+    encoded.fill(0);
+    encoded[0] = 1;
+    encoded[1] = 0xff;
+    DeviceOperationResultPayload decoded_result;
+    assert(decode_device_operation_result_payload(encoded.data(), 16, decoded_result) ==
+           DeviceProtocolStatus::InvalidArgument);
+}
+
 } // namespace
 
 int main() {
@@ -200,5 +344,8 @@ int main() {
     capabilities_round_trip_without_dynamic_storage();
     capabilities_reject_unterminated_or_truncated_values();
     discovery_request_response_loopback_preserves_session_and_capabilities();
+    typed_install_payloads_preserve_bounded_values();
+    typed_lifecycle_and_result_payloads_preserve_values();
+    typed_payloads_reject_malformed_or_ambiguous_input();
     return 0;
 }

@@ -106,6 +106,15 @@ enabled capability bits, maximum bundle size and available storage. Strings have
 explicit limits and the payload codec does not depend on JSON, heap allocation or
 port-private structures.
 
+`JFDP/1` now also defines payload-versioned codecs for install begin/chunk,
+commit/abort transaction ids, lifecycle app ids, log queries and a fixed 16-byte
+operation result envelope. The envelope carries a stable result code, flags,
+transaction id and received/expected byte counts. Install chunks deliberately
+decode as a bounded input view and must be copied before crossing a task
+boundary; all other decoded fields are copied values. Library entries, log
+records and recovery details are not smuggled through JSON or unbounded payloads;
+their typed record codecs remain a future protocol extension.
+
 `src/device_runtime_contracts/device_install_transaction.*` implements a bounded, ordered and
 cancellable staging state machine through the injected `DeviceInstallStore`.
 Flash, filesystem, signature and registry policy remain in the adapter and are
@@ -117,9 +126,10 @@ These two `device_*` modules are not part of the App Runtime ownership model.
 D0 places them in `src/device_runtime_contracts` and compiles them as the
 independent `jellyframe_device_runtime_contracts` target, with tests that link
 neither App Runtime nor Render Core. This remains a monorepo transition until
-the typed JFDP request/response payload dispatcher and future Device OS package
-migration are complete. A port must consume the existing framing, result-code
-and staging contracts; it must not fork them. This does not claim that USB,
+future Device OS package migration is complete. The desktop reference host
+contains a deterministic typed-frame dispatcher for the completed staging and
+lifecycle semantic loop. A port must consume the existing framing, payload,
+result-code and staging contracts; it must not fork them. This does not claim that USB,
 serial, Wi-Fi or any physical JFDP wire transport is implemented.
 
 The desktop reference endpoint can be selected explicitly while exercising the
@@ -172,9 +182,10 @@ firmware image and cannot replace the launcher, recovery UI or port code.
 - Platform-independent framing, capability payloads, request result codes and
   staged-install control now exist. The desktop reference host covers durable
   discovery/list/chunked-install/commit/cancel/lifecycle/log/recovery control
-  semantics; an in-memory discovery loopback verifies request/response
-  correlation and the capability payload. Typed JFDP request/response payload
-  dispatch and separate-owner extraction remain before port integration.
+  semantics; C++ codecs and the desktop dispatcher verify request/response
+  correlation, bounded payloads and typed status/progress results. The
+  contracts now have their own source owner, while physical Device OS package
+  extraction and a real port transport remain before port integration.
 
 ### D1: First official developer image
 

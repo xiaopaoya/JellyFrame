@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 
 
@@ -14,6 +15,7 @@ sys.path.insert(0, str(TOOLS_DIR))
 sys.path.insert(0, str(TESTS_DIR))
 
 import app_registry  # noqa: E402
+import device_reference  # noqa: E402
 from app_registry_tests import write_jfapp  # noqa: E402
 
 
@@ -179,6 +181,133 @@ class DeviceReferenceCliTests(unittest.TestCase):
             )
             self.assertEqual(remove.returncode, 0, remove.stderr)
             self.assertIsNone(app_registry.existing_app_entry(store, "org.example.lifecycle"))
+
+    def test_typed_jfdp_dispatcher_preserves_request_correlation_and_atomic_visibility(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-device-reference-jfdp-") as directory:
+            root = Path(directory)
+            store = root / "store"
+            bundle_path = root / "typed.jfapp"
+            app_id = "org.example.typed"
+            write_jfapp(bundle_path, app_id=app_id, version_code=1)
+            bundle = bundle_path.read_bytes()
+            transaction_id = 41
+            session_id = 0x1001
+
+            def dispatch(message_type: str, request_id: int, payload: bytes) -> dict:
+                response = device_reference.dispatch_jfdp_frame(
+                    store,
+                    device_reference.encode_jfdp_frame(message_type, session_id, request_id, payload),
+                )
+                decoded = device_reference.decode_jfdp_frame(response)
+                self.assertTrue(decoded["response"])
+                self.assertEqual(decoded["type"], message_type)
+                self.assertEqual(decoded["sessionId"], session_id)
+                self.assertEqual(decoded["requestId"], request_id)
+                return decoded
+
+            discovery = dispatch("discovery", 1, b"")
+            self.assertEqual(discovery["payload"][0], 1)
+            self.assertEqual(discovery["payload"][4:8], b"\x00\x00\x00\x00")
+
+            begin = dispatch(
+                "install-begin",
+                2,
+                device_reference.encode_jfdp_install_begin_payload(
+                    transaction_id,
+                    app_id,
+                    len(bundle),
+                    zlib.crc32(bundle) & 0xffffffff,
+                    False,
+                ),
+            )
+            begin_result = device_reference.decode_jfdp_operation_result(begin["payload"])
+            self.assertEqual(begin_result["resultCode"], "accepted")
+            self.assertEqual(begin_result["transactionId"], transaction_id)
+            self.assertIsNone(app_registry.existing_app_entry(store, app_id))
+
+            offset = 0
+            request_id = 3
+            while offset < len(bundle):
+                chunk = bundle[offset:offset + 256]
+                response = dispatch(
+                    "install-chunk",
+                    request_id,
+                    device_reference.encode_jfdp_install_chunk_payload(transaction_id, offset, chunk),
+                )
+                progress = device_reference.decode_jfdp_operation_result(response["payload"])
+                self.assertEqual(progress["resultCode"], "accepted")
+                offset += len(chunk)
+                request_id += 1
+            self.assertTrue(progress["flags"] & device_reference.JFDP_RESULT_COMPLETE)
+            self.assertIsNone(app_registry.existing_app_entry(store, app_id))
+
+            committed = dispatch(
+                "install-commit",
+                request_id,
+                device_reference.encode_jfdp_transaction_payload(transaction_id),
+            )
+            commit_result = device_reference.decode_jfdp_operation_result(committed["payload"])
+            self.assertEqual(commit_result["resultCode"], "ok")
+            self.assertTrue(commit_result["flags"] & device_reference.JFDP_RESULT_COMPLETE)
+            self.assertIsNotNone(app_registry.existing_app_entry(store, app_id))
+
+            launched = dispatch("launch", request_id + 1, device_reference.encode_jfdp_app_id_payload(app_id))
+            self.assertTrue(device_reference.decode_jfdp_operation_result(launched["payload"])["flags"] &
+                            device_reference.JFDP_RESULT_ACTIVE)
+            stopped = dispatch("stop", request_id + 2, device_reference.encode_jfdp_app_id_payload(app_id))
+            self.assertTrue(device_reference.decode_jfdp_operation_result(stopped["payload"])["flags"] &
+                            device_reference.JFDP_RESULT_LAUNCHER_ACTIVE)
+
+            logs = dispatch("logs", request_id + 3, device_reference.encode_jfdp_logs_request_payload(app_id, 16))
+            self.assertEqual(device_reference.decode_jfdp_operation_result(logs["payload"])["resultCode"], "ok")
+
+            removed = dispatch("remove", request_id + 4, device_reference.encode_jfdp_app_id_payload(app_id))
+            self.assertEqual(device_reference.decode_jfdp_operation_result(removed["payload"])["resultCode"], "ok")
+            self.assertIsNone(app_registry.existing_app_entry(store, app_id))
+
+    def test_typed_jfdp_dispatcher_returns_typed_error_result(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-device-reference-jfdp-") as directory:
+            store = Path(directory) / "store"
+            request = device_reference.encode_jfdp_frame(
+                "install-commit", 4, 7, device_reference.encode_jfdp_transaction_payload(999))
+            response = device_reference.decode_jfdp_frame(device_reference.dispatch_jfdp_frame(store, request))
+            result = device_reference.decode_jfdp_operation_result(response["payload"])
+            self.assertEqual(result["resultCode"], "not-found")
+            self.assertEqual(response["sessionId"], 4)
+            self.assertEqual(response["requestId"], 7)
+
+    def test_typed_jfdp_rejects_a_bundle_whose_manifest_id_differs_from_begin(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-device-reference-jfdp-") as directory:
+            root = Path(directory)
+            store = root / "store"
+            bundle_path = root / "mismatch.jfapp"
+            bundle_app_id = "org.example.bundle"
+            declared_app_id = "org.example.declared"
+            write_jfapp(bundle_path, app_id=bundle_app_id, version_code=1)
+            bundle = bundle_path.read_bytes()
+            transaction_id = 8
+
+            def dispatch(message_type: str, request_id: int, payload: bytes) -> dict:
+                response = device_reference.dispatch_jfdp_frame(
+                    store, device_reference.encode_jfdp_frame(message_type, 1, request_id, payload))
+                return device_reference.decode_jfdp_frame(response)
+
+            dispatch("install-begin", 1, device_reference.encode_jfdp_install_begin_payload(
+                transaction_id, declared_app_id, len(bundle), zlib.crc32(bundle) & 0xffffffff, False))
+            offset = 0
+            request_id = 2
+            while offset < len(bundle):
+                chunk = bundle[offset:offset + 256]
+                dispatch("install-chunk", request_id,
+                         device_reference.encode_jfdp_install_chunk_payload(transaction_id, offset, chunk))
+                offset += len(chunk)
+                request_id += 1
+            response = dispatch("install-commit", request_id,
+                                device_reference.encode_jfdp_transaction_payload(transaction_id))
+            result = device_reference.decode_jfdp_operation_result(response["payload"])
+            self.assertEqual(result["resultCode"], "integrity-failed")
+            self.assertIsNone(app_registry.existing_app_entry(store, bundle_app_id))
+            self.assertFalse(device_reference.transaction_path(store, transaction_id).exists())
 
 
 if __name__ == "__main__":

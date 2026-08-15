@@ -9,7 +9,8 @@ installation.
 ## Boundaries
 
 - `device_runtime_protocol.*` defines framing, bounded capability payloads and
-  stable request result codes.
+  stable request result codes, plus payload-versioned install, lifecycle, logs
+  and fixed status/progress result codecs.
 - `device_install_transaction.*` defines ordered, cancellable staging through
   an injected `DeviceInstallStore`.
 - `jellyframe_device_runtime_contracts` and
@@ -20,7 +21,8 @@ This module does not implement a USB, serial, Wi-Fi or other physical transport,
 filesystem/flash I/O, signature policy, app registry or Device OS launcher.
 Those are host and port responsibilities.
 
-It is a monorepo transition boundary until typed JFDP request/response payload
-dispatch and the future Device OS package migration are complete. See
-`docs/device_runtime.md` for the protocol and lifecycle contract, and
-`docs/engine_architecture.md` for repository ownership.
+It is a monorepo transition boundary until future Device OS package migration
+is complete. The desktop reference endpoint has a deterministic typed-frame
+dispatcher for the staged-install and lifecycle loop, but it is not a physical
+transport. See `docs/device_runtime.md` for the protocol and lifecycle contract,
+and `docs/engine_architecture.md` for repository ownership.

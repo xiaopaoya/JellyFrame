@@ -84,6 +84,12 @@ D0 的 C++ 回归包含内存内 discovery request/capability response 回环，
 标识、runtime 版本、屏幕尺寸、启用的能力位、最大 App 包大小和可用存储。字符串有明确长度上限，
 不依赖 JSON、堆分配或端口私有结构。
 
+`JFDP/1` 现在还定义了带 payload version 的安装 begin/chunk、commit/abort transaction id、
+lifecycle app id、日志查询和固定 16 字节 operation result envelope 编解码。envelope 携带稳定 result
+code、flags、transaction id 与 received/expected byte count。安装 chunk 有意解码为有界输入 view，跨任务前
+必须复制；其余解码字段都是复制值。app library entry、log record 与 recovery detail 不会被塞入 JSON 或无界
+payload；对应的 typed record codec 留待后续协议扩展。
+
 `src/device_runtime_contracts/device_install_transaction.*` 提供有界、有序、可取消的 staging 状态机。它只依赖
 `DeviceInstallStore` 注入的存储适配器，因此不会把 flash、文件系统、签名或 registry 实现带入
 Render Core。写入失败、校验失败、提交失败和主动取消都会清理 staging；只有原子提交成功后新版本
@@ -91,8 +97,9 @@ Render Core。写入失败、校验失败、提交失败和主动取消都会清
 
 这两个 `device_*` 模块不属于 App Runtime 的所有权模型。D0 已将它们移至
 `src/device_runtime_contracts`，并编译为独立的 `jellyframe_device_runtime_contracts` target，测试不链接
-App Runtime 或 Render Core。直到 typed JFDP request/response payload dispatcher 和未来 Device OS package
-迁移完成前，这仍是 monorepo 过渡状态。port 必须消费现有 framing、result code 与 staging 契约，不能复制它们。
+App Runtime 或 Render Core。未来 Device OS package 迁移完成前，这仍是 monorepo 过渡状态。桌面 reference host
+已包含对完成的 staging/lifecycle semantic loop 进行确定性处理的 typed-frame dispatcher。port 必须消费现有
+framing、payload、result code 与 staging 契约，不能复制它们。
 这不表示 USB、串口、Wi-Fi 或任何物理 JFDP wire transport 已经实现。
 
 桌面端可以显式运行 reference endpoint，以验证工具链而不误认为连接了开发板：
@@ -134,8 +141,8 @@ bundle 存储在固件镜像之外，不能替换 launcher、recovery UI 或 por
   atomic commit failure 编写 focused test。
 - 已有平台无关 framing、capability payload、请求结果码和 staged-install controller。桌面 reference host
   已覆盖持久 discovery/list/chunked-install/commit/cancel/lifecycle/log/recovery control semantics；内存内
-  discovery 回环已验证 request/response 关联和 capability payload。typed JFDP request/response payload dispatch
-  与独立 owner 迁移仍需完成后，才能进入 port 接入。
+  C++ codec 与桌面 dispatcher 已验证 request/response 关联、有界 payload 与 typed status/progress result。
+  契约已拥有独立 source owner；物理 Device OS package 拆分与真实 port transport 仍需在 port 接入前完成。
 
 ### D1：首个官方 Developer Image
 

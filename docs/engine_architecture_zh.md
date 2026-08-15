@@ -92,8 +92,8 @@ provider 指向另一个 checkout 或已解压的 Render Core 源码树。这只
 契约，但表达的是设备安装和 JFDP，而不是 App Runtime 行为。它们不能进入 Render Core
 package，最终应迁移到 `jellyframe-device-os` 或小型 `device_runtime_contracts`
 package。D0 将其编译为独立的 `jellyframe_device_runtime_contracts` target，并在不链接
-App Runtime 或 Render Core 实现对象的情况下运行测试。typed JFDP payload dispatch 完成前仍处于
-monorepo 过渡状态；这不表示已经存在物理设备 transport。
+App Runtime 或 Render Core 实现对象的情况下运行测试。未来 Device OS package 迁移完成前仍处于
+monorepo 过渡状态；typed JFDP desktop reference dispatcher 不表示已经存在物理设备 transport。
 
 物理拆分需要同时满足三个条件：独立可构建的 Core source archive/package、锁定 Core
 版本/ABI 的 Runtime consumer，以及不导入 Core 实现细节而消费同一 Runtime 契约的
