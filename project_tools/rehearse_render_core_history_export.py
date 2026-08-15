@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -105,14 +107,18 @@ def run(command: list[str], *, cwd: Path) -> str:
     return result.stdout.strip()
 
 
-def require_filter_repo() -> str:
+def require_filter_repo() -> list[str]:
     executable = shutil.which("git-filter-repo")
-    if executable is None:
-        raise RuntimeError(
-            "git-filter-repo is required for a history-preserving export; install it "
-            "with 'python -m pip install git-filter-repo'"
-        )
-    return executable
+    if executable is not None:
+        return [executable]
+    if importlib.util.find_spec("git_filter_repo") is not None:
+        # Windows --user installs often leave Scripts outside PATH. The module
+        # entry point avoids making that installation detail a prerequisite.
+        return [sys.executable, "-m", "git_filter_repo"]
+    raise RuntimeError(
+        "git-filter-repo is required for a history-preserving export; install it "
+        "with 'python -m pip install git-filter-repo'"
+    )
 
 
 def verify_source(source_root: Path) -> str:
@@ -143,9 +149,9 @@ def remove_readonly(function: object, path: str, exception: object) -> None:
     function(path)
 
 
-def filter_history(source_root: Path, output_dir: Path, filter_repo: str) -> None:
+def filter_history(source_root: Path, output_dir: Path, filter_repo: list[str]) -> None:
     run(["git", "clone", "--no-local", "--no-hardlinks", str(source_root), str(output_dir)], cwd=source_root)
-    command = [filter_repo, "--force"]
+    command = [*filter_repo, "--force"]
     for path in CORE_PATHS:
         command.extend(["--path", path])
     for source, destination in PATH_RENAMES:
