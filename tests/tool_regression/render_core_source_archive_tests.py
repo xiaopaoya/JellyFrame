@@ -131,6 +131,32 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             crlf_archive = crlf_output / canonical_archive.name
             self.assertEqual(canonical_archive.read_bytes(), crlf_archive.read_bytes())
 
+    def test_archive_ignores_untracked_source_files(self) -> None:
+        packager = self.source_root / "project_tools" / "package_render_core_source.py"
+        with tempfile.TemporaryDirectory(prefix="jellyframe-render-core-tracked-inputs-") as directory:
+            root = Path(directory)
+            canonical_output = root / "canonical"
+            checkout = root / "checkout"
+            checkout_output = root / "checkout-output"
+            run(["git", "clone", "--no-local", "--no-hardlinks", str(self.source_root), str(checkout)],
+                cwd=self.source_root)
+            sentinel = checkout / "src" / "render_core" / "untracked_archive_sentinel.txt"
+            sentinel.write_text("must not enter an archive\n", encoding="utf-8")
+
+            run([sys.executable, str(packager), "--source-root", str(self.source_root),
+                 "--output-dir", str(canonical_output)], cwd=self.source_root)
+            run([sys.executable, str(packager), "--source-root", str(checkout),
+                 "--output-dir", str(checkout_output)], cwd=self.source_root)
+            canonical_archive = next(canonical_output.glob("jellyframe-render-core-*.tar.gz"))
+            checkout_archive = checkout_output / canonical_archive.name
+            self.assertEqual(canonical_archive.read_bytes(), checkout_archive.read_bytes())
+            with tarfile.open(checkout_archive, "r:gz") as archive:
+                self.assertNotIn(
+                    f"{checkout_archive.name.removesuffix('.tar.gz')}/src/render_core/"
+                    "untracked_archive_sentinel.txt",
+                    archive.getnames(),
+                )
+
     def test_archive_is_reproducible_and_consumable(self) -> None:
         packager = self.source_root / "project_tools" / "package_render_core_source.py"
         with tempfile.TemporaryDirectory(prefix="jellyframe-render-core-archive-") as directory:

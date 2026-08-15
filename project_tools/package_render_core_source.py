@@ -8,6 +8,7 @@ import gzip
 import hashlib
 import io
 import re
+import subprocess
 import tarfile
 from pathlib import Path
 
@@ -63,6 +64,30 @@ def package_version(source_root: Path) -> str:
     return match.group(1)
 
 
+def git_tracked_files(source_root: Path) -> set[Path] | None:
+    """Return tracked source paths when the archive is made from a checkout.
+
+    A source archive is often made from a release checkout. In that case an
+    editor backup or an accidental in-tree build product must not become part
+    of the artifact. A standalone archive has no `.git` directory, so it
+    remains self-packable and uses its complete source tree instead.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(source_root), "ls-files", "-z", "--",
+         "LICENSE", "cmake", "src/render_core"],
+        text=False,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return {
+        source_root / Path(relative.decode("utf-8"))
+        for relative in result.stdout.split(b"\0")
+        if relative
+    }
+
+
 def source_files(source_root: Path) -> list[Path]:
     files = {
         require_file(source_root / "LICENSE"),
@@ -76,6 +101,20 @@ def source_files(source_root: Path) -> list[Path]:
     if not render_core_dir.is_dir():
         raise RuntimeError(f"Render Core source directory is missing: {render_core_dir}")
     files.update(path for path in render_core_dir.rglob("*") if path.is_file())
+    tracked_files = git_tracked_files(source_root)
+    if tracked_files is not None:
+        required_files = {
+            source_root / "LICENSE",
+            source_root / "cmake" / "JellyFrameRenderCoreConfig.cmake.in",
+            source_root / "cmake" / "render_core_feature_registry.csv",
+        }
+        missing_required = required_files - tracked_files
+        if missing_required:
+            missing = ", ".join(
+                path.relative_to(source_root).as_posix() for path in sorted(missing_required)
+            )
+            raise RuntimeError(f"tracked Render Core checkout is missing required source files: {missing}")
+        files.intersection_update(tracked_files)
     return sorted(files, key=lambda path: path.relative_to(source_root).as_posix())
 
 

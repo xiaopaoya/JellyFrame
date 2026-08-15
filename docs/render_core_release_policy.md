@@ -26,7 +26,9 @@ establishes artifact identity; neither replaces the other. The current
 deterministic archive is the precursor to this release unit. Its declared text
 members are normalized to LF before packing, while opaque binary members stay
 byte-for-byte; equivalent CRLF/LF checkouts therefore produce the same archive
-bytes and checksum.
+bytes and checksum. When run from a Git checkout, the packer admits only
+tracked Core inputs, so untracked editor or build artifacts cannot enter a
+candidate archive. A signed release is still created from the reviewed tag.
 
 ## Versions And Compatibility
 
