@@ -109,8 +109,9 @@ python project_tools\rehearse_render_core_history_export.py `
 
 It requires `git-filter-repo`, performs no mutation in the source checkout,
 and rejects an export that loses Render Core history, lacks standalone entry
-points, or retains Runtime/port paths. CI installs that tool and builds the
-filtered export. The rehearsal is evidence for extraction readiness, not the
+points, or retains Runtime/port paths. CI installs that tool, then configures,
+builds, runs CTest and installs the filtered export. The rehearsal is evidence
+for extraction readiness, not the
 actual signed repository publication.
 
 ## Extraction Gate

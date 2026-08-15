@@ -92,18 +92,24 @@ class RenderCoreHistoryExportTests(unittest.TestCase):
             self.assertEqual(len(list(archive_dir.glob("jellyframe-render-core-*.tar.gz"))), 1)
 
             build_root = root / "build"
+            install_root = root / "install"
             configure = [str(self.cmake), "-S", str(export_root), "-B", str(build_root)]
             if self.generator:
                 configure.extend(["-G", self.generator])
             configure.extend(
                 [
                     "-DCMAKE_BUILD_TYPE=Release",
-                    "-DJELLYFRAME_BUILD_TESTS=OFF",
+                    "-DJELLYFRAME_BUILD_TESTS=ON",
                     "-DJELLYFRAME_INSTALL_RENDER_CORE=ON",
                 ]
             )
             run(configure, cwd=export_root)
             run([str(self.cmake), "--build", str(build_root), "--parallel"], cwd=export_root)
+            run(["ctest", "--test-dir", str(build_root), "--output-on-failure"], cwd=export_root)
+            run([str(self.cmake), "--install", str(build_root), "--prefix", str(install_root)],
+                cwd=export_root)
+            self.assertTrue((install_root / "share" / "jellyframe-render-core" /
+                             "jellyframe_render_core_source_manifest.json").is_file())
 
 
 if __name__ == "__main__":

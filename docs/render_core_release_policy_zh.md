@@ -74,7 +74,7 @@ python project_tools\rehearse_render_core_history_export.py `
 ```
 
 该工具需要 `git-filter-repo`，不会修改源 checkout；若导出丢失 Render Core 历史、缺少 standalone
-入口，或仍包含 Runtime/port 路径则会拒绝。CI 会安装该工具并构建过滤后的导出。演练只证明拆仓准备度，
+入口，或仍包含 Runtime/port 路径则会拒绝。CI 会安装该工具，再对过滤后的导出执行 configure、build、CTest 与 install。演练只证明拆仓准备度，
 不是实际的带签名仓库发布。
 
 ## 拆仓门槛
