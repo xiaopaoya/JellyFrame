@@ -7,8 +7,8 @@ namespace jellyframe {
 
 namespace {
 
-constexpr std::uint8_t kCompletionPacketVersion = 2;
-constexpr std::size_t kCompletionPacketSize = 24;
+constexpr std::uint8_t kCompletionPacketVersion = 3;
+constexpr std::size_t kCompletionPacketSize = 28;
 
 void write_u32(std::vector<std::uint8_t>& output, std::size_t offset, std::uint32_t value) {
     output[offset] = static_cast<std::uint8_t>(value & 0xffU);
@@ -22,6 +22,16 @@ std::uint32_t read_u32(const std::vector<std::uint8_t>& input, std::size_t offse
            (static_cast<std::uint32_t>(input[offset + 1]) << 8U) |
            (static_cast<std::uint32_t>(input[offset + 2]) << 16U) |
            (static_cast<std::uint32_t>(input[offset + 3]) << 24U);
+}
+
+void write_u64(std::vector<std::uint8_t>& output, std::size_t offset, std::uint64_t value) {
+    write_u32(output, offset, static_cast<std::uint32_t>(value));
+    write_u32(output, offset + 4U, static_cast<std::uint32_t>(value >> 32U));
+}
+
+std::uint64_t read_u64(const std::vector<std::uint8_t>& input, std::size_t offset) {
+    return static_cast<std::uint64_t>(read_u32(input, offset)) |
+        (static_cast<std::uint64_t>(read_u32(input, offset + 4U)) << 32U);
 }
 
 bool known_kind(std::uint8_t value) {
@@ -76,9 +86,9 @@ bool encode_script_task_service_completion(const ScriptTaskServiceCompletion& co
     output[2] = status;
     write_u32(output, 4, completion.request_id);
     write_u32(output, 8, completion.client_token);
-    write_u32(output, 12, completion.payload_lease_id);
-    write_u32(output, 16, completion.error_code);
-    write_u32(output, 20, completion.byte_count);
+    write_u64(output, 12, completion.payload_lease_id);
+    write_u32(output, 20, completion.error_code);
+    write_u32(output, 24, completion.byte_count);
     return true;
 }
 
@@ -97,9 +107,9 @@ bool decode_script_task_service_completion(const std::vector<std::uint8_t>& inpu
     output.status = static_cast<HostServiceStatus>(input[2]);
     output.request_id = request_id;
     output.client_token = client_token;
-    output.payload_lease_id = read_u32(input, 12);
-    output.error_code = read_u32(input, 16);
-    output.byte_count = read_u32(input, 20);
+    output.payload_lease_id = read_u64(input, 12);
+    output.error_code = read_u32(input, 20);
+    output.byte_count = read_u32(input, 24);
     return true;
 }
 
@@ -329,7 +339,7 @@ bool ScriptTaskServiceBridge::release_record_payload(Record& record) {
     if (record.payload_lease_id == 0) {
         return false;
     }
-    const std::uint32_t payload_lease_id = record.payload_lease_id;
+    const ScriptTaskLeaseId payload_lease_id = record.payload_lease_id;
     record.payload_lease_id = 0;
     return supervisor_.release_service_payload(record.token.session, payload_lease_id) ==
            ScriptTaskServicePayloadLeaseStatus::Accepted;
@@ -368,7 +378,7 @@ void ScriptTaskServiceBridge::prepare_completion_payload(Record& record,
         return;
     }
 
-    std::uint32_t payload_lease_id = 0;
+    ScriptTaskLeaseId payload_lease_id = 0;
     const ScriptTaskServicePayloadLeaseStatus lease_status = supervisor_.publish_service_payload(
         record.token.session, payload_scratch_, payload_lease_id);
     if (release_record_completion_payload(record)) {

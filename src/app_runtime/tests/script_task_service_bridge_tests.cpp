@@ -13,7 +13,7 @@ AppRuntimeHost make_host(std::size_t capacity = 4, std::size_t completions = 4) 
     return AppRuntimeHost({capacity, completions, 8, 4096, 1});
 }
 
-ScriptTaskSupervisor make_supervisor(std::size_t worker_slots = 4, std::size_t payload_bytes = 24) {
+ScriptTaskSupervisor make_supervisor(std::size_t worker_slots = 4, std::size_t payload_bytes = 28) {
     ScriptTaskSupervisorOptions options;
     options.worker_inbox = {worker_slots, payload_bytes};
     options.frame_mailbox = {2, 0};
@@ -68,10 +68,17 @@ bool release_payload(void* user, const HostServiceCompletion& completion) {
 
 void completion_payload_round_trips_without_native_data() {
     const ScriptTaskServiceCompletion expected{
-        HostServiceJobKind::NetworkFetch, HostServiceStatus::Timeout, 6, 7, 8, 9, 10};
+        HostServiceJobKind::NetworkFetch,
+        HostServiceStatus::Timeout,
+        6,
+        7,
+        0x0001000000000008ULL,
+        9,
+        10,
+    };
     std::vector<std::uint8_t> encoded;
     assert(encode_script_task_service_completion(expected, encoded));
-    assert(encoded.size() == 24);
+    assert(encoded.size() == 28);
     ScriptTaskServiceCompletion decoded;
     assert(decode_script_task_service_completion(encoded, decoded));
     assert(decoded.kind == expected.kind);

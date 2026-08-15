@@ -5,7 +5,8 @@
 namespace jellyframe {
 namespace {
 
-constexpr std::uint32_t kLeaseIndexMask = 0xFFFFU;
+constexpr ScriptTaskLeaseId kLeaseIndexMask = 0xFFFFU;
+constexpr std::uint64_t kLeaseGenerationMask = 0x0000FFFFFFFFFFFFULL;
 constexpr std::size_t kMaxLeaseSlots = static_cast<std::size_t>(kLeaseIndexMask);
 
 bool same_service_token(const ScriptTaskServiceToken& left, const ScriptTaskServiceToken& right) {
@@ -165,18 +166,18 @@ ScriptTaskFrameLeaseRegistry::ScriptTaskFrameLeaseRegistry(ScriptTaskFrameLeaseO
     }
 }
 
-std::uint32_t ScriptTaskFrameLeaseRegistry::next_generation(std::uint16_t generation) {
-    ++generation;
+std::uint64_t ScriptTaskFrameLeaseRegistry::next_generation(std::uint64_t generation) {
+    generation = (generation + 1U) & kLeaseGenerationMask;
     return generation == 0 ? 1 : generation;
 }
 
-std::uint32_t ScriptTaskFrameLeaseRegistry::make_lease_id(std::size_t index, std::uint16_t generation) {
-    return (static_cast<std::uint32_t>(generation) << 16U) |
-        static_cast<std::uint32_t>(index + 1U);
+ScriptTaskLeaseId ScriptTaskFrameLeaseRegistry::make_lease_id(std::size_t index, std::uint64_t generation) {
+    return (generation << 16U) | static_cast<ScriptTaskLeaseId>(index + 1U);
 }
 
-ScriptTaskFrameLeaseRegistry::Slot* ScriptTaskFrameLeaseRegistry::slot_for_lease_id(std::uint32_t lease_id) {
-    const std::uint32_t index_value = lease_id & kLeaseIndexMask;
+ScriptTaskFrameLeaseRegistry::Slot* ScriptTaskFrameLeaseRegistry::slot_for_lease_id(
+    ScriptTaskLeaseId lease_id) {
+    const ScriptTaskLeaseId index_value = lease_id & kLeaseIndexMask;
     if (lease_id == 0 || index_value == 0) {
         return nullptr;
     }
@@ -185,11 +186,12 @@ ScriptTaskFrameLeaseRegistry::Slot* ScriptTaskFrameLeaseRegistry::slot_for_lease
         return nullptr;
     }
     Slot& slot = slots_[index];
-    const std::uint16_t generation = static_cast<std::uint16_t>(lease_id >> 16U);
+    const std::uint64_t generation = lease_id >> 16U;
     return slot.active && slot.generation == generation ? &slot : nullptr;
 }
 
-const ScriptTaskFrameLeaseRegistry::Slot* ScriptTaskFrameLeaseRegistry::slot_for_lease_id(std::uint32_t lease_id) const {
+const ScriptTaskFrameLeaseRegistry::Slot* ScriptTaskFrameLeaseRegistry::slot_for_lease_id(
+    ScriptTaskLeaseId lease_id) const {
     return const_cast<ScriptTaskFrameLeaseRegistry*>(this)->slot_for_lease_id(lease_id);
 }
 
@@ -198,13 +200,13 @@ void ScriptTaskFrameLeaseRegistry::release_slot(Slot& slot) {
     slot.payload.clear();
     slot.session = {};
     slot.active = false;
-    slot.generation = static_cast<std::uint16_t>(next_generation(slot.generation));
+    slot.generation = next_generation(slot.generation);
     --active_count_;
 }
 
 ScriptTaskFrameLeaseStatus ScriptTaskFrameLeaseRegistry::publish(const ScriptAppSession& session,
                                                                   const std::vector<std::uint8_t>& payload,
-                                                                  std::uint32_t& lease_id) {
+                                                                  ScriptTaskLeaseId& lease_id) {
     lease_id = 0;
     std::lock_guard<std::mutex> lock(mutex_);
     if (!session.valid()) {
@@ -238,7 +240,7 @@ ScriptTaskFrameLeaseStatus ScriptTaskFrameLeaseRegistry::publish(const ScriptApp
 }
 
 ScriptTaskFrameLeaseStatus ScriptTaskFrameLeaseRegistry::copy_sealed(const ScriptAppSession& session,
-                                                                      std::uint32_t lease_id,
+                                                                      ScriptTaskLeaseId lease_id,
                                                                       std::vector<std::uint8_t>& output) const {
     std::lock_guard<std::mutex> lock(mutex_);
     const Slot* slot = slot_for_lease_id(lease_id);
@@ -256,7 +258,7 @@ ScriptTaskFrameLeaseStatus ScriptTaskFrameLeaseRegistry::copy_sealed(const Scrip
 }
 
 ScriptTaskFrameLeaseStatus ScriptTaskFrameLeaseRegistry::release(const ScriptAppSession& session,
-                                                                  std::uint32_t lease_id) {
+                                                                  ScriptTaskLeaseId lease_id) {
     std::lock_guard<std::mutex> lock(mutex_);
     Slot* slot = slot_for_lease_id(lease_id);
     if (slot == nullptr) {
@@ -566,7 +568,7 @@ bool ScriptTaskSupervisor::take_fatal(ScriptTaskPacket& output) {
 }
 
 ScriptTaskFrameLeaseStatus ScriptTaskSupervisor::copy_frame(const ScriptAppSession& session,
-                                                             std::uint32_t lease_id,
+                                                             ScriptTaskLeaseId lease_id,
                                                              std::vector<std::uint8_t>& output) const {
     std::lock_guard<std::mutex> lock(state_mutex_);
     if (!sessions_.accepts(session)) {
@@ -576,7 +578,7 @@ ScriptTaskFrameLeaseStatus ScriptTaskSupervisor::copy_frame(const ScriptAppSessi
 }
 
 ScriptTaskFrameLeaseStatus ScriptTaskSupervisor::release_frame(const ScriptAppSession& session,
-                                                                std::uint32_t lease_id) {
+                                                                ScriptTaskLeaseId lease_id) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     return frame_leases_.release(session, lease_id);
 }
@@ -584,7 +586,7 @@ ScriptTaskFrameLeaseStatus ScriptTaskSupervisor::release_frame(const ScriptAppSe
 ScriptTaskServicePayloadLeaseStatus ScriptTaskSupervisor::publish_service_payload(
     const ScriptAppSession& session,
     const std::vector<std::uint8_t>& payload,
-    std::uint32_t& lease_id) {
+    ScriptTaskLeaseId& lease_id) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     if (!sessions_.accepts(session)) {
         return ScriptTaskServicePayloadLeaseStatus::InvalidSession;
@@ -594,7 +596,7 @@ ScriptTaskServicePayloadLeaseStatus ScriptTaskSupervisor::publish_service_payloa
 
 ScriptTaskServicePayloadLeaseStatus ScriptTaskSupervisor::copy_service_payload(
     const ScriptAppSession& session,
-    std::uint32_t lease_id,
+    ScriptTaskLeaseId lease_id,
     std::vector<std::uint8_t>& output) const {
     std::lock_guard<std::mutex> lock(state_mutex_);
     if (!sessions_.accepts(session)) {
@@ -605,7 +607,7 @@ ScriptTaskServicePayloadLeaseStatus ScriptTaskSupervisor::copy_service_payload(
 
 ScriptTaskServicePayloadLeaseStatus ScriptTaskSupervisor::release_service_payload(
     const ScriptAppSession& session,
-    std::uint32_t lease_id) {
+    ScriptTaskLeaseId lease_id) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     return service_payload_leases_.release(session, lease_id);
 }

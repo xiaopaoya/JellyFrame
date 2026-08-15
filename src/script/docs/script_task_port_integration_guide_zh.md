@@ -25,7 +25,7 @@ JerryScript heap 或 service bridge；普通 firmware 的行为与体积不应�
 | script worker | private DOM/realm/timer、`InputController`、`ScriptTaskAppFramePublisher`、`ScriptTaskServiceCompletionSink` | `AppRuntimeHost*`、service record、UI renderer、DMA/panel object |
 | UI task | accepted `ScriptTaskAppFrame` value、presentation renderer、framebuffer/panel、原始输入 | worker DOM/realm/wrapper、host service queue |
 
-所有 mailbox payload 都必须是值副本。frame 只能通过 session-scoped sealed lease ID 传递；service request
+所有 mailbox payload 都必须是值副本。frame 只能通过 session-scoped 64-bit sealed lease ID 传递；service request
 必须走专用 `service_request_mailbox`；service completion 与 input 共用 worker inbox；frame 不得放入这两个
 service 通道。
 
@@ -50,7 +50,7 @@ supervisor task 必须优先 drain request/cancel mailbox：queued job 应被移
 真实 completion 若带 host handle，构造 bridge 时必须提供 `max_service_payload_bytes`、
 `payload_copy` 与 `payload_release`。copy callback 只能经 `ScriptTaskServicePayloadWriter` 写入上限内的
 字节；release callback 必须在复制成功、复制失败、取消、陈旧 completion 与 teardown 时恰好一次清理服务
-provider record 和 host-table entry。worker completion sink 收到的是 `payload_lease_id`，使用
+provider record 和 host-table entry。worker completion sink 收到的是 64-bit `payload_lease_id`，使用
 `take_script_task_service_payload()` 复制并立即释放；它绝不能解释或保存 host handle。
 bridge 会在调用 copy/release callback 前验证 result handle 仍存在、属于 completion 的 app，并在 handle
 声明 token 时匹配该 consumer。验证失败时不会调用 callback、不会释放其他 consumer 的资源，而是向 worker

@@ -14,6 +14,10 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- Script-task 的 sealed frame 与 service-payload lease 现使用 64-bit 不透明 ID：16-bit slot index
+  配合 48-bit reuse generation，避免旧 lease 在原有 16-bit generation 循环后与新发布的值别名。
+  service completion 值包升级为 version 3 并携带 64-bit payload lease ID；port 必须按此契约重新编译。
+
 - Script-task service bridge 现在会在调用 provider copy/release callback 前验证返回 handle 的
   app/token 所有权。畸形 queue entry 会变成终态 `HandleRejected` 值，不会触碰其他 consumer 的资源。
 

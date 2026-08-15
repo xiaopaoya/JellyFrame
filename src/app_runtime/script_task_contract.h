@@ -7,6 +7,12 @@
 
 namespace jellyframe {
 
+// Opaque supervisor-owned identity for a sealed frame or service-payload
+// lease. It contains a 16-bit slot index and a 48-bit reuse generation, so a
+// delayed value cannot alias a newly published lease during a practical app
+// lifetime.
+using ScriptTaskLeaseId = std::uint64_t;
+
 // Identifies one isolated script-worker lifetime. These are values only: they
 // intentionally cannot encode DOM, VM or renderer ownership.
 struct ScriptAppSession {
@@ -54,7 +60,7 @@ struct ScriptTaskPacket {
     std::uint32_t sequence = 0;
     // FrameReady carries a sealed UI-frame lease ID. Other packets must leave
     // this at zero; service payload leases are encoded in their own packet.
-    std::uint32_t frame_lease_id = 0;
+    ScriptTaskLeaseId frame_lease_id = 0;
     std::vector<std::uint8_t> payload;
 };
 
@@ -100,7 +106,7 @@ private:
         ScriptTaskPacketKind kind = ScriptTaskPacketKind::None;
         ScriptAppSession session;
         std::uint32_t sequence = 0;
-        std::uint32_t frame_lease_id = 0;
+        ScriptTaskLeaseId frame_lease_id = 0;
         std::vector<std::uint8_t> payload;
     };
 
@@ -160,11 +166,11 @@ public:
 
     ScriptTaskFrameLeaseStatus publish(const ScriptAppSession& session,
                                        const std::vector<std::uint8_t>& payload,
-                                       std::uint32_t& lease_id);
+                                       ScriptTaskLeaseId& lease_id);
     ScriptTaskFrameLeaseStatus copy_sealed(const ScriptAppSession& session,
-                                           std::uint32_t lease_id,
+                                           ScriptTaskLeaseId lease_id,
                                            std::vector<std::uint8_t>& output) const;
-    ScriptTaskFrameLeaseStatus release(const ScriptAppSession& session, std::uint32_t lease_id);
+    ScriptTaskFrameLeaseStatus release(const ScriptAppSession& session, ScriptTaskLeaseId lease_id);
     std::size_t release_session(const ScriptAppSession& session);
 
     std::size_t active_count() const;
@@ -174,15 +180,15 @@ public:
 private:
     struct Slot {
         ScriptAppSession session;
-        std::uint16_t generation = 1;
+        std::uint64_t generation = 1;
         bool active = false;
         std::vector<std::uint8_t> payload;
     };
 
-    static std::uint32_t next_generation(std::uint16_t generation);
-    static std::uint32_t make_lease_id(std::size_t index, std::uint16_t generation);
-    Slot* slot_for_lease_id(std::uint32_t lease_id);
-    const Slot* slot_for_lease_id(std::uint32_t lease_id) const;
+    static std::uint64_t next_generation(std::uint64_t generation);
+    static ScriptTaskLeaseId make_lease_id(std::size_t index, std::uint64_t generation);
+    Slot* slot_for_lease_id(ScriptTaskLeaseId lease_id);
+    const Slot* slot_for_lease_id(ScriptTaskLeaseId lease_id) const;
     void release_slot(Slot& slot);
 
     std::size_t max_bytes_per_lease_ = 0;
@@ -307,7 +313,7 @@ struct ScriptTaskSupervisorOptions {
 struct ScriptTaskFramePublishResult {
     ScriptTaskFrameLeaseStatus lease_status = ScriptTaskFrameLeaseStatus::InvalidSession;
     ScriptTaskMailboxPostStatus mailbox_status = ScriptTaskMailboxPostStatus::InvalidPacket;
-    std::uint32_t frame_lease_id = 0;
+    ScriptTaskLeaseId frame_lease_id = 0;
 
     bool accepted() const {
         return lease_status == ScriptTaskFrameLeaseStatus::Accepted &&
@@ -357,20 +363,20 @@ public:
         return worker_inbox_.max_payload_bytes();
     }
     ScriptTaskFrameLeaseStatus copy_frame(const ScriptAppSession& session,
-                                          std::uint32_t lease_id,
+                                          ScriptTaskLeaseId lease_id,
                                           std::vector<std::uint8_t>& output) const;
-    ScriptTaskFrameLeaseStatus release_frame(const ScriptAppSession& session, std::uint32_t lease_id);
+    ScriptTaskFrameLeaseStatus release_frame(const ScriptAppSession& session, ScriptTaskLeaseId lease_id);
 
     // A distinct sealed registry for service-result bytes. Worker code may
     // copy a matching value and release it, but never maps host storage.
     ScriptTaskServicePayloadLeaseStatus publish_service_payload(const ScriptAppSession& session,
                                                                  const std::vector<std::uint8_t>& payload,
-                                                                 std::uint32_t& lease_id);
+                                                                 ScriptTaskLeaseId& lease_id);
     ScriptTaskServicePayloadLeaseStatus copy_service_payload(const ScriptAppSession& session,
-                                                              std::uint32_t lease_id,
+                                                              ScriptTaskLeaseId lease_id,
                                                               std::vector<std::uint8_t>& output) const;
     ScriptTaskServicePayloadLeaseStatus release_service_payload(const ScriptAppSession& session,
-                                                                 std::uint32_t lease_id);
+                                                                 ScriptTaskLeaseId lease_id);
 
     ScriptTaskServiceTrackStatus track_service(const ScriptTaskServiceToken& token);
     ScriptTaskMailboxPostStatus post_service_request(const ScriptTaskPacket& packet);

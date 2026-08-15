@@ -77,7 +77,7 @@ void worker_inbox_rejects_malformed_completion_values() {
 void worker_copies_and_releases_completion_payload_values() {
     ScriptTaskSupervisor supervisor = make_supervisor();
     const ScriptAppSession session = supervisor.begin(33);
-    std::uint32_t lease_id = 0;
+    ScriptTaskLeaseId lease_id = 0;
     assert(supervisor.publish_service_payload(session, {9, 8, 7}, lease_id) ==
            ScriptTaskServicePayloadLeaseStatus::Accepted);
     ScriptTaskServiceCompletion completion{
@@ -96,7 +96,7 @@ void worker_copies_and_releases_completion_payload_values() {
 void worker_releases_payload_when_copy_is_rejected_after_teardown() {
     ScriptTaskSupervisor supervisor = make_supervisor();
     const ScriptAppSession session = supervisor.begin(34);
-    std::uint32_t lease_id = 0;
+    ScriptTaskLeaseId lease_id = 0;
     assert(supervisor.publish_service_payload(session, {4, 2}, lease_id) ==
            ScriptTaskServicePayloadLeaseStatus::Accepted);
     assert(supervisor.begin_teardown(session).session == session);

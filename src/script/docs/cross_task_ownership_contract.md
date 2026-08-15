@@ -78,7 +78,7 @@ bounded completion path as a terminal value, rather than silently disappearing.
 The supervisor has a separate session-scoped sealed service-payload lease
 registry. `ScriptTaskServiceBridge` copies a bounded result representation
 through `ScriptTaskServicePayloadWriter`, publishes it to that registry, and
-places only the resulting lease ID in completion packet version 2. A port
+places only the resulting 64-bit lease ID in completion packet version 3. A port
 supplies supervisor-only copy and provider-release callbacks: the latter must
 release the provider record and host-table entry exactly once. Opaque host
 handles are never worker-readable data. The worker copies then releases a

@@ -17,6 +17,12 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Script-task sealed frame and service-payload leases now use a 64-bit opaque
+  ID with a 16-bit slot index and 48-bit reuse generation. This prevents an
+  old lease from aliasing a freshly published value after the former 16-bit
+  generation cycle. Service completion value packets are version 3 and carry
+  the 64-bit payload lease ID; ports must rebuild against this contract.
+
 - Script-task service bridging now verifies a returned handle's app/token
   ownership before invoking provider copy or release callbacks. A malformed
   queue entry becomes a terminal `HandleRejected` value without touching a

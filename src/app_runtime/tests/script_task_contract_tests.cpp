@@ -73,7 +73,7 @@ void sealed_frame_leases_are_session_scoped_and_reusable() {
     ScriptTaskFrameLeaseRegistry leases({2, 8, 12});
     const ScriptAppSession active = session(8, 1, 1);
     const ScriptAppSession other = session(8, 2, 2);
-    std::uint32_t lease_id = 0;
+    ScriptTaskLeaseId lease_id = 0;
     assert(leases.publish(active, {7, 8, 9}, lease_id) == ScriptTaskFrameLeaseStatus::Accepted);
     assert(lease_id != 0);
     std::vector<std::uint8_t> copied;
@@ -87,8 +87,8 @@ void sealed_frame_leases_are_session_scoped_and_reusable() {
     assert(leases.active_count() == 0);
     assert(leases.used_bytes() == 0);
 
-    std::uint32_t first = 0;
-    std::uint32_t second = 0;
+    ScriptTaskLeaseId first = 0;
+    ScriptTaskLeaseId second = 0;
     assert(leases.publish(active, {1, 2, 3, 4, 5, 6}, first) == ScriptTaskFrameLeaseStatus::Accepted);
     assert(leases.publish(active, {1, 2, 3, 4, 5, 6, 7}, second) ==
            ScriptTaskFrameLeaseStatus::ByteBudgetExceeded);
@@ -96,10 +96,32 @@ void sealed_frame_leases_are_session_scoped_and_reusable() {
     assert(leases.statistics().released_on_teardown == 1);
 }
 
+void sealed_lease_ids_do_not_alias_after_16_bit_generation_rollover() {
+    ScriptTaskFrameLeaseRegistry leases({1, 1, 1});
+    const ScriptAppSession active = session(9, 1, 1);
+    ScriptTaskLeaseId first = 0;
+    assert(leases.publish(active, {1}, first) == ScriptTaskFrameLeaseStatus::Accepted);
+    assert(leases.release(active, first) == ScriptTaskFrameLeaseStatus::Accepted);
+
+    for (std::size_t reuse = 0; reuse != 65535; ++reuse) {
+        ScriptTaskLeaseId lease_id = 0;
+        assert(leases.publish(active, {1}, lease_id) == ScriptTaskFrameLeaseStatus::Accepted);
+        assert(leases.release(active, lease_id) == ScriptTaskFrameLeaseStatus::Accepted);
+    }
+
+    ScriptTaskLeaseId current = 0;
+    assert(leases.publish(active, {2}, current) == ScriptTaskFrameLeaseStatus::Accepted);
+    std::vector<std::uint8_t> copied;
+    assert(first != current);
+    assert(leases.copy_sealed(active, first, copied) == ScriptTaskFrameLeaseStatus::StaleLease);
+    assert(leases.copy_sealed(active, current, copied) == ScriptTaskFrameLeaseStatus::Accepted);
+    assert(copied == std::vector<std::uint8_t>({2}));
+}
+
 void service_payload_leases_have_an_independent_budget_and_teardown() {
     ScriptTaskSupervisor supervisor({{1, 8}, {1, 0}, {1, 8, 8}, 0, 0, {1, 8}, {2, 6, 8}});
     const ScriptAppSession active = supervisor.begin(11);
-    std::uint32_t payload_lease = 0;
+    ScriptTaskLeaseId payload_lease = 0;
     assert(supervisor.publish_service_payload(active, {1, 2, 3, 4}, payload_lease) ==
            ScriptTaskServicePayloadLeaseStatus::Accepted);
     std::vector<std::uint8_t> copied;
@@ -210,6 +232,7 @@ int script_task_contract_tests_main() {
     mailbox_copies_values_and_discards_stale_packets();
     stale_worker_cannot_consume_new_session_input();
     sealed_frame_leases_are_session_scoped_and_reusable();
+    sealed_lease_ids_do_not_alias_after_16_bit_generation_rollover();
     service_payload_leases_have_an_independent_budget_and_teardown();
     service_tombstones_reject_cancelled_and_stale_completions();
     native_release_intents_are_value_only_and_deduplicated();

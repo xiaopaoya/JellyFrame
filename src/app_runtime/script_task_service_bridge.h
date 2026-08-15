@@ -20,7 +20,7 @@ struct ScriptTaskServiceCompletion {
     std::uint32_t client_token = 0;
     // A session-scoped sealed service-payload lease. This is never a host
     // handle and must be copied then released by the worker when nonzero.
-    std::uint32_t payload_lease_id = 0;
+    ScriptTaskLeaseId payload_lease_id = 0;
     std::uint32_t error_code = 0;
     std::uint32_t byte_count = 0;
 };
@@ -195,7 +195,7 @@ private:
         bool completion_ready = false;
         bool cancelled = false;
         HostServiceCompletion completion;
-        std::uint32_t payload_lease_id = 0;
+        ScriptTaskLeaseId payload_lease_id = 0;
     };
 
     static bool same_token(const ScriptTaskServiceToken& left, const ScriptTaskServiceToken& right);

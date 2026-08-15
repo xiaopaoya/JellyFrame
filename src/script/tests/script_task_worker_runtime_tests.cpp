@@ -259,7 +259,7 @@ void worker_service_completion_reaches_js_as_copied_value() {
     check(request.kind == HostServiceJobKind::NetworkFetch && request.request_id != 0 && request.client_token != 0,
           "service request contains only bounded scalar identity");
 
-    std::uint32_t payload_lease_id = 0;
+    ScriptTaskLeaseId payload_lease_id = 0;
     check(supervisor.publish_service_payload(session, {101, 99}, payload_lease_id) ==
               ScriptTaskServicePayloadLeaseStatus::Accepted,
           "service completion payload is sealed before delivery");
