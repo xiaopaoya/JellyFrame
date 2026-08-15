@@ -117,7 +117,7 @@ void bridge_delivers_completion_as_bounded_worker_value_packet() {
     assert(bridge.active_request_count() == 0);
 
     ScriptTaskPacket packet;
-    assert(supervisor.take_input(session, packet));
+    assert(supervisor.take_worker_packet(session, packet));
     assert(packet.kind == ScriptTaskPacketKind::ServiceCompletion);
     assert(packet.session == session);
     ScriptTaskServiceCompletion decoded;
@@ -220,7 +220,7 @@ void bridge_request_pump_reports_host_and_wire_rejections() {
     assert(completions.delivered == 1);
     assert(bridge.active_request_count() == 0);
     ScriptTaskPacket completion_packet;
-    assert(supervisor.take_input(session, completion_packet));
+    assert(supervisor.take_worker_packet(session, completion_packet));
     ScriptTaskServiceCompletion completion;
     assert(decode_script_task_service_completion(completion_packet.payload, completion));
     assert(completion.status == HostServiceStatus::BudgetExceeded);
@@ -318,7 +318,7 @@ void bridge_reports_payload_copy_and_lease_failures_as_terminal_values() {
     assert(copy_unavailable.payload_copy_failures == 1);
     assert(copy_unavailable.released_completion_sources == 1);
     ScriptTaskPacket packet;
-    assert(supervisor.take_input(session, packet));
+    assert(supervisor.take_worker_packet(session, packet));
     ScriptTaskServiceCompletion completion;
     assert(decode_script_task_service_completion(packet.payload, completion));
     assert(completion.status == HostServiceStatus::Failed);
@@ -406,7 +406,7 @@ void bridge_retries_after_worker_inbox_backpressure() {
     assert(pumped.delivered == 0);
     assert(bridge.active_request_count() == 1);
     ScriptTaskPacket input;
-    assert(supervisor.take_input(session, input));
+    assert(supervisor.take_worker_packet(session, input));
     assert(input.kind == ScriptTaskPacketKind::Input);
 
     pumped = bridge.pump(scratch);
@@ -448,7 +448,7 @@ void bridge_discards_malformed_completion_without_retiring_inflight_request() {
     assert(pumped.delivered == 1);
     assert(bridge.active_request_count() == 0);
     ScriptTaskPacket packet;
-    assert(supervisor.take_input(session, packet));
+    assert(supervisor.take_worker_packet(session, packet));
     ScriptTaskServiceCompletion completion;
     assert(decode_script_task_service_completion(packet.payload, completion));
     assert(completion.kind == HostServiceJobKind::NetworkFetch);
@@ -483,7 +483,7 @@ void bridge_rejects_unowned_completion_handle_before_provider_callbacks() {
     assert(bridge.active_request_count() == 0);
 
     ScriptTaskPacket packet;
-    assert(supervisor.take_input(session, packet));
+    assert(supervisor.take_worker_packet(session, packet));
     ScriptTaskServiceCompletion completion;
     assert(decode_script_task_service_completion(packet.payload, completion));
     assert(completion.status == HostServiceStatus::Failed);

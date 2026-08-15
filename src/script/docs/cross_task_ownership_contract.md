@@ -18,9 +18,10 @@ task-local container/arena addresses. Cross-task data is a bounded value copy or
 opaque lease ID checked against the full session.
 The supervisor serializes session transitions with mailbox admission and returns session snapshots by
 value, so teardown cannot race a worker against mutable generation storage.
-Every worker-side receive operation must pass its own `ScriptAppSession`; there
-is deliberately no "take the current worker input" convenience API. This keeps
-a delayed worker from consuming a newer lifetime's packet.
+Every worker-side `take_worker_packet(...)` operation must pass its own
+`ScriptAppSession`; there is deliberately no "take the current worker input"
+convenience API. This keeps a delayed worker from consuming a newer lifetime's
+packet.
 
 A worker publishes a sealed, immutable replacement `AppFrame`: version/session/sequence/viewport,
 POD paint commands, bounded text bytes, validated resource lease IDs and optional hit regions with numeric

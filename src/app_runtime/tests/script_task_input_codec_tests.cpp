@@ -24,7 +24,7 @@ void input_value_round_trips_and_posts_to_worker_inbox() {
     const ScriptAppSession session = supervisor.begin(90);
     assert(post_script_task_input(supervisor, session, 4, expected, limits()).accepted());
     ScriptTaskPacket packet;
-    assert(supervisor.take_input(session, packet));
+    assert(supervisor.take_worker_packet(session, packet));
     assert(packet.kind == ScriptTaskPacketKind::Input && packet.sequence == 4);
     assert(decode_script_task_input(packet.payload, limits(), decoded) == ScriptTaskInputCodecStatus::Accepted);
     assert(decoded.x == expected.x);

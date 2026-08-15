@@ -22,10 +22,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   queue entry becomes a terminal `HandleRejected` value without touching a
   different consumer's resource.
 
-- Script-task worker-inbox reception now always requires an explicit
-  `ScriptAppSession`, including the dispatch helper. The old current-session
-  convenience receive path has been removed so a delayed worker cannot consume
-  a newer worker lifetime's input.
+- Script-task worker-inbox reception is now named `take_worker_packet(...)` to
+  reflect that it receives input and service completions. It always requires an
+  explicit `ScriptAppSession`; the old current-session convenience receive path
+  has been removed so a delayed worker cannot consume a newer lifetime's input.
 
 - App Runtime now rejects a nonzero `result_handle`, including one on an
   unsolicited event, unless it belongs to the completion's app instance;

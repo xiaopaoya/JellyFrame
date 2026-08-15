@@ -64,8 +64,8 @@ void stale_worker_cannot_consume_new_session_input() {
            ScriptTaskMailboxPostStatus::Accepted);
 
     ScriptTaskPacket packet;
-    assert(!supervisor.take_input(retired, packet));
-    assert(supervisor.take_input(active, packet));
+    assert(!supervisor.take_worker_packet(retired, packet));
+    assert(supervisor.take_worker_packet(active, packet));
     assert(packet.session == active && packet.payload == std::vector<std::uint8_t>({9}));
 }
 

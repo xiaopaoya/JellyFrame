@@ -227,7 +227,7 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::process_one(ScriptTas
         return finish(result);
     }
     ScriptTaskPacket packet;
-    if (!supervisor.take_input(session_, packet)) {
+    if (!supervisor.take_worker_packet(session_, packet)) {
         if (has_dirty_document()) {
             result.frame = publish_frame(supervisor);
             result.frame_published = result.frame.accepted();

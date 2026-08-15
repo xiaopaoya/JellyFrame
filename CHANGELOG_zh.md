@@ -17,8 +17,9 @@ JellyFrame Engine 的重要变更记录在这里。
 - Script-task service bridge 现在会在调用 provider copy/release callback 前验证返回 handle 的
   app/token 所有权。畸形 queue entry 会变成终态 `HandleRejected` 值，不会触碰其他 consumer 的资源。
 
-- Script-task worker inbox 的接收现在一律要求显式传入 `ScriptAppSession`，包括 dispatch helper。
-  已移除读取 current session 的便利接收路径，防止延迟退出的 worker 消费新生命周期的 input。
+- Script-task worker inbox 的接收现命名为 `take_worker_packet(...)`，明确它同时接收 input 与
+  service completion。它一律要求显式传入 `ScriptAppSession`，已移除读取 current session 的便利
+  接收路径，防止延迟退出的 worker 消费新生命周期的 input。
 
 - App Runtime 现在会拒绝不属于 completion 所属 app instance 的非零 `result_handle`，包括
   unsolicited event 携带的句柄；显式绑定非零 client token 的 handle 还必须匹配该 consumer。

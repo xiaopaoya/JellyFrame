@@ -9,7 +9,7 @@ ScriptTaskWorkerInboxDispatchResult take_and_dispatch_script_task_worker_packet(
     ScriptTaskServiceCompletionSink& completion_sink,
     const ScriptTaskInputCodecOptions& input_options) {
     ScriptTaskPacket packet;
-    if (!supervisor.take_input(session, packet)) {
+    if (!supervisor.take_worker_packet(session, packet)) {
         return {};
     }
 

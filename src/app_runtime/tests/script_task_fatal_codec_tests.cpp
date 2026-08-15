@@ -63,7 +63,7 @@ void supervisor_keeps_fatal_traffic_separate_and_bounded() {
     assert(packet.kind == ScriptTaskPacketKind::FatalRecord);
     assert(packet.session == session);
     assert(!supervisor.take_frame_packet(packet));
-    assert(!supervisor.take_input(session, packet));
+    assert(!supervisor.take_worker_packet(session, packet));
 }
 
 } // namespace

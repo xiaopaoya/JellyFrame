@@ -505,7 +505,7 @@ ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_input(const ScriptTaskPac
     return input_mailbox_.post(packet);
 }
 
-bool ScriptTaskSupervisor::take_input(const ScriptAppSession& session, ScriptTaskPacket& output) {
+bool ScriptTaskSupervisor::take_worker_packet(const ScriptAppSession& session, ScriptTaskPacket& output) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     if (!sessions_.accepts(session)) {
         return false;

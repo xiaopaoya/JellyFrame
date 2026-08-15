@@ -40,8 +40,8 @@ app supervisor
 只会被丢弃并计数，绝不尝试解引用发送方状态。
 supervisor 会把 session transition 与 mailbox admission 放在同一短临界区，并按值返回 session snapshot；
 teardown 不会与 worker 并发读写同一份 mutable generation 状态。
-worker 侧每一次接收都必须显式传入自身的 `ScriptAppSession`；不保留“读取当前 worker input”一类的
-便利 API，避免延迟退出的 worker 消费新生命周期的 packet。
+worker 侧每一次 `take_worker_packet(...)` 接收都必须显式传入自身的 `ScriptAppSession`；不保留
+“读取当前 worker input”一类的便利 API，避免延迟退出的 worker 消费新生命周期的 packet。
 
 ## UI 帧交接
 

@@ -340,9 +340,10 @@ public:
     ScriptAppSession current() const;
 
     ScriptTaskMailboxPostStatus post_input(const ScriptTaskPacket& packet);
-    // Worker-facing receive path. A worker must name its own session so it
-    // cannot consume input belonging to a newer worker lifetime.
-    bool take_input(const ScriptAppSession& session, ScriptTaskPacket& output);
+    // Worker-facing receive path for input and service-completion values. A
+    // worker must name its own session so it cannot consume a newer lifetime's
+    // packet.
+    bool take_worker_packet(const ScriptAppSession& session, ScriptTaskPacket& output);
     ScriptTaskFramePublishResult publish_frame(const ScriptAppSession& session,
                                                const std::vector<std::uint8_t>& payload);
     // Supervisor-only worker-inbox path. Service bridges may post a bounded
