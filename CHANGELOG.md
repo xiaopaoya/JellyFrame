@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Script workers now receive inbox packets through their own session identity,
+  so a stale worker cannot consume a new worker lifetime's input even if a
+  port delays its shutdown incorrectly.
+
 - The desktop system-survival smoke now injects its intentional lifecycle test
   completions directly into the bounded queue. It no longer conflicts with the
   host API's exact in-flight completion validation.

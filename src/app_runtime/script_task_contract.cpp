@@ -510,6 +510,14 @@ bool ScriptTaskSupervisor::take_input(ScriptTaskPacket& output) {
     return input_mailbox_.pop_for(sessions_.current_snapshot(), output);
 }
 
+bool ScriptTaskSupervisor::take_input(const ScriptAppSession& session, ScriptTaskPacket& output) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (!sessions_.accepts(session)) {
+        return false;
+    }
+    return input_mailbox_.pop_for(session, output);
+}
+
 ScriptTaskFramePublishResult ScriptTaskSupervisor::publish_frame(const ScriptAppSession& session,
     const std::vector<std::uint8_t>& payload) {
     ScriptTaskFramePublishResult result;

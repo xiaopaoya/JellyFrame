@@ -53,6 +53,22 @@ void mailbox_copies_values_and_discards_stale_packets() {
            ScriptTaskMailboxPostStatus::InvalidPacket);
 }
 
+void stale_worker_cannot_consume_new_session_input() {
+    ScriptTaskSupervisor supervisor({{1, 8}, {1, 0}, {1, 8, 8}, 0, 0, {1, 8}});
+    const ScriptAppSession retired = supervisor.begin(51);
+    assert(supervisor.begin_teardown(retired).session == retired);
+    assert(supervisor.complete_teardown(retired).session == retired);
+    const ScriptAppSession active = supervisor.begin(52);
+    assert(active.valid());
+    assert(supervisor.post_input({ScriptTaskPacketKind::Input, active, 1, 0, {9}}) ==
+           ScriptTaskMailboxPostStatus::Accepted);
+
+    ScriptTaskPacket packet;
+    assert(!supervisor.take_input(retired, packet));
+    assert(supervisor.take_input(active, packet));
+    assert(packet.session == active && packet.payload == std::vector<std::uint8_t>({9}));
+}
+
 void sealed_frame_leases_are_session_scoped_and_reusable() {
     ScriptTaskFrameLeaseRegistry leases({2, 8, 12});
     const ScriptAppSession active = session(8, 1, 1);
@@ -192,6 +208,7 @@ void supervisor_requires_ordered_value_only_teardown() {
 int script_task_contract_tests_main() {
     session_generation_rejects_stale_packets();
     mailbox_copies_values_and_discards_stale_packets();
+    stale_worker_cannot_consume_new_session_input();
     sealed_frame_leases_are_session_scoped_and_reusable();
     service_payload_leases_have_an_independent_budget_and_teardown();
     service_tombstones_reject_cancelled_and_stale_completions();
