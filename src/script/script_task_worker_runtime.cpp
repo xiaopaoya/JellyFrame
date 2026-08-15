@@ -318,12 +318,12 @@ bool ScriptTaskWorkerRuntime::submit_service_request(void* user,
                                                      std::uint8_t kind,
                                                      std::uint32_t request_id,
                                                      std::uint32_t client_token,
-                                                     std::uint32_t request_handle,
+                                                     std::uint32_t input_handle,
                                                      std::uint8_t priority,
                                                      std::uint32_t timeout_ms) {
     auto* runtime = static_cast<ScriptTaskWorkerRuntime*>(user);
     return runtime != nullptr && runtime->submit_service_request_impl(
-        kind, request_id, client_token, request_handle, priority, timeout_ms);
+        kind, request_id, client_token, input_handle, priority, timeout_ms);
 }
 
 bool ScriptTaskWorkerRuntime::cancel_service_request(void* user,
@@ -336,7 +336,7 @@ bool ScriptTaskWorkerRuntime::cancel_service_request(void* user,
 bool ScriptTaskWorkerRuntime::submit_service_request_impl(std::uint8_t kind,
                                                           std::uint32_t request_id,
                                                           std::uint32_t client_token,
-                                                          std::uint32_t request_handle,
+                                                          std::uint32_t input_handle,
                                                           std::uint8_t priority,
                                                           std::uint32_t timeout_ms) {
     if (active_supervisor_ == nullptr || request_id == 0 || client_token == 0) {
@@ -346,7 +346,7 @@ bool ScriptTaskWorkerRuntime::submit_service_request_impl(std::uint8_t kind,
     request.kind = static_cast<HostServiceJobKind>(kind);
     request.request_id = request_id;
     request.client_token = client_token;
-    request.request_handle = request_handle;
+    request.input_handle = input_handle;
     request.priority = priority;
     request.timeout_ms = timeout_ms;
     const ScriptTaskServiceRequestPostResult posted = post_script_task_service_request(

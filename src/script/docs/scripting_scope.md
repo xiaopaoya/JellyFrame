@@ -16,7 +16,7 @@ frames, and the supervisor owns session, service, lease and fatal recovery.
 
 - Optional `jellyframe_script` target behind `JELLYFRAME_BUILD_SCRIPTING=ON`.
 - Optional `jellyframe_script_task_runtime` target behind both
-  `JELLYFRAME_BUILD_SCRIPTING=ON` and `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON`.
+  `JELLYFRAME_BUILD_SCRIPTING=ON` and `JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON`.
 - `JERRYSCRIPT_ROOT` can point at an official JerryScript checkout, for example
   `third_party/jerryscript`.
 - JerryScript lifecycle owned by `JerryScriptRuntime`.

@@ -1,4 +1,4 @@
-﻿#include "app_runtime/app_services.h"
+#include "app_runtime/app_services.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -59,14 +59,14 @@ void network_fetch_requires_capability_and_returns_fixture_handle() {
     check(accepted.size() == 1, "network completion accepted");
     check(accepted.front().kind == HostServiceJobKind::NetworkFetch, "network completion kind");
     check(accepted.front().status == HostServiceStatus::Completed, "network completion status");
-    check(accepted.front().handle != 0, "network response handle");
+    check(accepted.front().result_handle != 0, "network response handle");
 
-    const NetworkFetchRecord* response = network.response(accepted.front().handle);
+    const NetworkFetchRecord* response = network.response(accepted.front().result_handle);
     check(response != nullptr, "network response lookup");
     check(response->app_instance_id == host.current_app_instance_id(), "network response instance");
     check(response->status_code == 200, "network response status code");
     check(response->body == "{\"temp\":21}", "network response body");
-    check(network.release_response(host, accepted.front().handle), "network response release");
+    check(network.release_response(host, accepted.front().result_handle), "network response release");
 }
 
 void service_policy_requires_manifest_and_host_approval() {
@@ -193,9 +193,9 @@ void network_fetch_can_complete_worker_popped_request() {
     const HostServiceCompletion completion = network.complete_request(host, request);
     check(completion.kind == HostServiceJobKind::NetworkFetch, "network worker completion kind");
     check(completion.status == HostServiceStatus::Completed, "network worker completion status");
-    check(completion.handle != 0, "network worker response handle");
-    check(network.response(completion.handle) != nullptr, "network worker response stored");
-    check(network.release_response(host, completion.handle), "network worker response release");
+    check(completion.result_handle != 0, "network worker response handle");
+    check(network.response(completion.result_handle) != nullptr, "network worker response stored");
+    check(network.release_response(host, completion.result_handle), "network worker response release");
 }
 
 void network_failure_classification_is_specific() {
@@ -276,17 +276,17 @@ void image_decode_requires_capability_and_returns_surface_handle() {
     check(accepted.size() == 1, "image decode completion accepted");
     check(accepted.front().kind == HostServiceJobKind::ImageDecode, "image decode completion kind");
     check(accepted.front().status == HostServiceStatus::Completed, "image decode completion status");
-    check(accepted.front().handle != 0, "image decode surface handle");
+    check(accepted.front().result_handle != 0, "image decode surface handle");
     check(accepted.front().byte_count == pixels.size(), "image decode byte count");
 
-    const AppDecodedSurfaceRecord* surface = images.surface(accepted.front().handle);
+    const AppDecodedSurfaceRecord* surface = images.surface(accepted.front().result_handle);
     check(surface != nullptr, "image surface lookup");
     check(surface->app_instance_id == host.current_app_instance_id(), "image surface instance");
     check(surface->width == 16 && surface->height == 16, "image surface size");
     check(surface->stride_pixels == 16, "image surface stride");
     check(surface->pixel_format == HostPixelFormat::Rgb565, "image surface format");
     check(surface->pixels.size() == pixels.size(), "image surface pixels carried");
-    check(images.release_surface(host, accepted.front().handle), "image surface release");
+    check(images.release_surface(host, accepted.front().result_handle), "image surface release");
 }
 
 void image_decode_enforces_surface_budgets() {
@@ -327,9 +327,9 @@ void image_decode_can_complete_worker_popped_request() {
     const HostServiceCompletion completion = images.complete_request(host, request);
     check(completion.kind == HostServiceJobKind::ImageDecode, "image worker completion kind");
     check(completion.status == HostServiceStatus::Completed, "image worker completion status");
-    check(completion.handle != 0, "image worker surface handle");
-    check(images.surface(completion.handle) != nullptr, "image worker surface stored");
-    check(images.release_surface(host, completion.handle), "image worker surface release");
+    check(completion.result_handle != 0, "image worker surface handle");
+    check(images.surface(completion.result_handle) != nullptr, "image worker surface stored");
+    check(images.release_surface(host, completion.result_handle), "image worker surface release");
 }
 
 void image_decode_stale_worker_pending_is_collectable_after_app_switch() {
@@ -374,7 +374,7 @@ void image_surface_cache_requests_resolves_and_releases_surfaces() {
     check(cache.handle_completion(accepted.front()), "image cache handles completion");
     check(cache.state_for_url("/icon") == AppImageSurfaceState::Ready, "image cache ready state");
     check(cache.resolve_or_request(host, images, "/icon", &handle), "image cache resolves ready surface");
-    check(handle == accepted.front().handle, "image cache returns surface handle");
+    check(handle == accepted.front().result_handle, "image cache returns surface handle");
     check(images.surface(handle) != nullptr, "image cache surface exists before release");
 
     check(cache.release_all(host, images) == 1, "image cache releases one surface");
@@ -706,8 +706,8 @@ void image_surface_cache_rejects_stale_completion_instances() {
     check(!cache.handle_completion(stale_completion), "image cache rejects stale completion instance");
     check(cache.state_for_url("/stale") == AppImageSurfaceState::Pending,
           "image cache stale completion keeps pending entry unchanged");
-    if (stale_completion.handle != 0) {
-        images.release_surface(host, stale_completion.handle);
+    if (stale_completion.result_handle != 0) {
+        images.release_surface(host, stale_completion.result_handle);
     }
 }
 
@@ -747,7 +747,7 @@ void audio_command_mock_opens_controls_and_closes_streams() {
     check(accepted.size() == 1, "audio open completion accepted");
     check(accepted.front().kind == HostServiceJobKind::AudioCommand, "audio open completion kind");
     check(accepted.front().status == HostServiceStatus::Completed, "audio open completion status");
-    const std::uint32_t handle = accepted.front().handle;
+    const std::uint32_t handle = accepted.front().result_handle;
     check(handle != 0, "audio open returns handle");
     const AudioStreamRecord* stream = audio.stream(handle);
     check(stream != nullptr, "audio stream lookup");
@@ -782,7 +782,7 @@ void audio_command_mock_opens_controls_and_closes_streams() {
     check(audio.complete_next(host), "audio close completed");
     accepted = pump(host);
     check(accepted.size() == 1, "audio close completion accepted");
-    check(accepted.front().handle == handle, "audio close completion reports closed handle");
+    check(accepted.front().result_handle == handle, "audio close completion reports closed handle");
     check(audio.stream(handle) == nullptr, "audio close drops stream record");
     check(!host.handles().contains(handle), "audio close releases handle");
 }
@@ -800,8 +800,8 @@ void audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup() {
     check(second.status == AppServiceSubmitStatus::BudgetExceeded, "audio pending open counts against budget");
     check(audio.complete_next(host), "audio budget first completed");
     std::vector<HostServiceCompletion> accepted = pump(host);
-    check(accepted.size() == 1 && accepted.front().handle != 0, "audio budget first handle");
-    const std::uint32_t old_handle = accepted.front().handle;
+    check(accepted.size() == 1 && accepted.front().result_handle != 0, "audio budget first handle");
+    const std::uint32_t old_handle = accepted.front().result_handle;
 
     check(audio.submit_open(host, "/tone-b.mp3").status == AppServiceSubmitStatus::BudgetExceeded,
           "audio active stream counts against budget");
@@ -814,8 +814,8 @@ void audio_command_mock_enforces_stream_budget_and_lifecycle_cleanup() {
     check(next.accepted(), "audio next app open accepted after cleanup");
     check(audio.complete_next(host), "audio next app open completed");
     accepted = pump(host);
-    check(accepted.size() == 1 && accepted.front().handle != 0, "audio next app handle");
-    const std::uint32_t next_handle = accepted.front().handle;
+    check(accepted.size() == 1 && accepted.front().result_handle != 0, "audio next app handle");
+    const std::uint32_t next_handle = accepted.front().result_handle;
     check(audio.release_app_streams(host, host.current_app_instance_id()) == 1, "audio release app streams");
     check(audio.stream(next_handle) == nullptr, "audio release app stream record");
     check(!host.handles().contains(next_handle), "audio release app handle");
@@ -872,13 +872,13 @@ void kv_storage_is_app_private_and_async() {
     check(completed, "kv get completed");
     accepted = pump(host);
     check(accepted.size() == 1, "kv get completion");
-    check(accepted.front().handle != 0, "kv value handle");
-    const AppPrivateKvRecord* value = storage.value(accepted.front().handle);
+    check(accepted.front().result_handle != 0, "kv value handle");
+    const AppPrivateKvRecord* value = storage.value(accepted.front().result_handle);
     check(value != nullptr, "kv value lookup");
     check(value->app_id == "org.example.clock", "kv app namespace");
     check(value->key == "theme", "kv key");
     check(value->value == "dark", "kv value");
-    check(storage.release_value(host, accepted.front().handle), "kv value release");
+    check(storage.release_value(host, accepted.front().result_handle), "kv value release");
 
     host.launch("org.example.timer", AppRole::App);
     get = storage.submit_get(host, "theme");
@@ -888,7 +888,7 @@ void kv_storage_is_app_private_and_async() {
     accepted = pump(host);
     check(accepted.size() == 1, "kv private completion");
     check(accepted.front().status == HostServiceStatus::Failed, "kv private miss");
-    check(accepted.front().handle == 0, "kv private miss has no handle");
+    check(accepted.front().result_handle == 0, "kv private miss has no handle");
 }
 
 void service_records_collect_handles_released_by_lifecycle() {
@@ -919,9 +919,9 @@ void service_records_collect_handles_released_by_lifecycle() {
     std::uint32_t image_handle = 0;
     for (const HostServiceCompletion& completion : accepted) {
         if (completion.kind == HostServiceJobKind::NetworkFetch) {
-            network_handle = completion.handle;
+            network_handle = completion.result_handle;
         } else if (completion.kind == HostServiceJobKind::ImageDecode) {
-            image_handle = completion.handle;
+            image_handle = completion.result_handle;
         }
     }
     check(network_handle != 0, "resource cleanup network handle");
@@ -931,7 +931,7 @@ void service_records_collect_handles_released_by_lifecycle() {
     check(storage.complete_next(host), "resource cleanup storage get complete");
     accepted = pump(host);
     check(accepted.size() == 1, "resource cleanup storage get batch");
-    const std::uint32_t storage_handle = accepted.front().handle;
+    const std::uint32_t storage_handle = accepted.front().result_handle;
     check(storage_handle != 0, "resource cleanup storage handle");
 
     host.launch("org.example.next", AppRole::App);
@@ -1121,8 +1121,8 @@ void service_workers_do_not_consume_other_service_requests() {
     check(accepted.size() == 2, "mixed first frame completions");
     check(accepted[0].kind == HostServiceJobKind::NetworkFetch, "mixed network completion kept");
     check(accepted[1].kind == HostServiceJobKind::StorageKv, "mixed storage completion kept");
-    if (accepted[0].handle != 0) {
-        check(network.release_response(host, accepted[0].handle), "mixed network release");
+    if (accepted[0].result_handle != 0) {
+        check(network.release_response(host, accepted[0].result_handle), "mixed network release");
     }
 }
 

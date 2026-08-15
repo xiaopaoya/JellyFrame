@@ -198,7 +198,7 @@ HostServiceCompletion AppVideoFrameProviderMock::complete_request(AppRuntimeHost
                     ++record;
                 }
             }
-            completion.handle = handle;
+            completion.result_handle = handle;
             completion.byte_count = bytes;
             records_.push_back(AppVideoFrameRecord{handle, request.app_instance_id, fixture.source, fixture.codec,
                                                     fixture.width, fixture.height, fixture.stride_pixels,

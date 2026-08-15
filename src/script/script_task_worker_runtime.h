@@ -157,7 +157,7 @@ private:
                                        std::uint8_t kind,
                                        std::uint32_t request_id,
                                        std::uint32_t client_token,
-                                       std::uint32_t request_handle,
+                                       std::uint32_t input_handle,
                                        std::uint8_t priority,
                                        std::uint32_t timeout_ms);
     static bool cancel_service_request(void* user,
@@ -166,7 +166,7 @@ private:
     bool submit_service_request_impl(std::uint8_t kind,
                                      std::uint32_t request_id,
                                      std::uint32_t client_token,
-                                     std::uint32_t request_handle,
+                                     std::uint32_t input_handle,
                                      std::uint8_t priority,
                                      std::uint32_t timeout_ms);
     bool cancel_service_request_impl(std::uint32_t request_id,

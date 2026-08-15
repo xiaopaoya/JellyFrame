@@ -5,7 +5,7 @@
 #endif
 
 int script_runtime_tests_main();
-#if defined(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+#if defined(JELLYFRAME_SCRIPT_TASK_RUNTIME_ENABLED)
 int script_task_worker_runtime_tests_main();
 #endif
 
@@ -27,7 +27,7 @@ int run_test(const char* name, int (*test_main)()) {
 int main() {
     int failed = 0;
     failed += run_test("script_runtime", script_runtime_tests_main);
-#if defined(JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
+#if defined(JELLYFRAME_SCRIPT_TASK_RUNTIME_ENABLED)
     failed += run_test("script_task_worker_runtime", script_task_worker_runtime_tests_main);
 #endif
 

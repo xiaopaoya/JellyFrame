@@ -47,7 +47,7 @@ launch/fail/recover cycles without cross-App state, dangling access or system re
 
 ## Current platform-neutral foundation
 
-When both `JELLYFRAME_BUILD_SCRIPTING=ON` and `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON`, the separate
+When both `JELLYFRAME_BUILD_SCRIPTING=ON` and `JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON`, the separate
 `jellyframe_script_task_runtime` target compiles `src/app_runtime/script_task_contract.*` and implements
 and tests session generation/epoch validation,
 fixed-slot value mailboxes, session-scoped sealed frame leases, cancellation tombstones with late-
@@ -95,6 +95,10 @@ The first worker-local JS gateway now exposes constrained
 `services.request(kind, callback, options)` and `services.cancel(requestId)`:
 request metadata and cancellation identity are scalar-only, and completion
 payload bytes are copied from a sealed lease before the callback runs. A
+request option named `inputHandle` identifies an optional supervisor-owned
+input resource; it is not a completion resource. Completion results remain
+behind a supervisor lease and are copied as bytes, never exposed to JS as a
+host handle. A
 successful cancel removes the worker-local callback only after its cancel packet
 is accepted; the supervisor bridge then cancels queued work or retains an
 in-flight tombstone for late cleanup. Provider policy, real RTOS task adapter

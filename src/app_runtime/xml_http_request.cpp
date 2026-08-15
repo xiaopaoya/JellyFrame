@@ -133,8 +133,8 @@ bool AppXmlHttpRequest::handle_completion(AppRuntimeHost& host,
                                           NetworkFetchMock& network,
                                           const HostServiceCompletion& completion) {
     if (completion.kind == HostServiceJobKind::NetworkFetch && consume_abandoned_job(completion.job_id)) {
-        if (completion.handle != 0) {
-            network.release_response(host, completion.handle);
+        if (completion.result_handle != 0) {
+            network.release_response(host, completion.result_handle);
         }
         return true;
     }
@@ -142,7 +142,7 @@ bool AppXmlHttpRequest::handle_completion(AppRuntimeHost& host,
         return false;
     }
 
-    if (completion.status != HostServiceStatus::Completed || completion.handle == 0) {
+    if (completion.status != HostServiceStatus::Completed || completion.result_handle == 0) {
         finish_error(completion.status == HostServiceStatus::Timeout
             ? AppXhrEventKind::Timeout
             : completion.status == HostServiceStatus::Cancelled
@@ -151,10 +151,10 @@ bool AppXmlHttpRequest::handle_completion(AppRuntimeHost& host,
         return true;
     }
 
-    const NetworkFetchRecord* record = network.response(completion.handle);
+    const NetworkFetchRecord* record = network.response(completion.result_handle);
     if (record == nullptr) {
         finish_error(AppXhrEventKind::Error);
-        network.release_response(host, completion.handle);
+        network.release_response(host, completion.result_handle);
         return true;
     }
 
@@ -168,7 +168,7 @@ bool AppXmlHttpRequest::handle_completion(AppRuntimeHost& host,
     sent_ = false;
     push_event(AppXhrEventKind::Load);
     push_event(AppXhrEventKind::LoadEnd);
-    network.release_response(host, completion.handle);
+    network.release_response(host, completion.result_handle);
     return true;
 }
 

@@ -67,7 +67,9 @@ struct HostServiceCompletion {
     HostServiceJobKind kind = HostServiceJobKind::Other;
     HostServiceStatus status = HostServiceStatus::Failed;
     std::uint32_t app_instance_id = 0;
-    std::uint32_t handle = 0;
+    // Optional host-owned resource produced by this job. It is never the
+    // request input resource and must be released by the completion consumer.
+    std::uint32_t result_handle = 0;
     std::uint32_t error_code = 0;
     std::uint32_t byte_count = 0;
     std::uint32_t client_token = 0;

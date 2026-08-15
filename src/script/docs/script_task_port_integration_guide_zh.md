@@ -11,7 +11,7 @@
 
 ```text
 JELLYFRAME_BUILD_SCRIPTING=ON
-JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON
+JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON
 ```
 
 此时链接 `jellyframe_script_task_runtime`。任一开关关闭时，不得为 script worker 保留 stack、mailbox、

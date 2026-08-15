@@ -411,13 +411,13 @@ struct ScriptRuntimeAccess {
 
     static bool submit_script_service_request(JerryScriptRuntime& runtime,
                                               std::uint8_t kind,
-                                              std::uint32_t request_handle,
+                                              std::uint32_t input_handle,
                                               std::uint8_t priority,
                                               std::uint32_t timeout_ms,
                                               std::uint32_t callback_value,
                                               std::uint32_t& request_id) {
         return runtime.submit_script_service_request(kind,
-                                                     request_handle,
+                                                     input_handle,
                                                      priority,
                                                      timeout_ms,
                                                      callback_value,
@@ -857,14 +857,14 @@ jerry_value_t script_service_request(const jerry_call_info_t* call_info_p,
     if (kind < 0 || kind > 255) {
         return throw_type_error("services.request kind is invalid");
     }
-    std::uint32_t request_handle = 0;
+    std::uint32_t input_handle = 0;
     std::uint8_t priority = 0;
     std::uint32_t timeout_ms = 0;
     if (args_count > 2 && jerry_value_is_object(args_p[2])) {
-        JerryValue handle(jerry_object_get_sz(args_p[2], "requestHandle"));
+        JerryValue handle(jerry_object_get_sz(args_p[2], "inputHandle"));
         JerryValue priority_value(jerry_object_get_sz(args_p[2], "priority"));
         JerryValue timeout(jerry_object_get_sz(args_p[2], "timeoutMs"));
-        request_handle = timer_id_from_value(handle.get());
+        input_handle = timer_id_from_value(handle.get());
         const int priority_value_int = int_from_value(priority_value.get(), 0);
         priority = static_cast<std::uint8_t>(std::clamp(priority_value_int, 0, 255));
         timeout_ms = delay_from_value(timeout.get());
@@ -873,7 +873,7 @@ jerry_value_t script_service_request(const jerry_call_info_t* call_info_p,
     std::uint32_t request_id = 0;
     if (!ScriptRuntimeAccess::submit_script_service_request(*runtime,
                                                              static_cast<std::uint8_t>(kind),
-                                                             request_handle,
+                                                             input_handle,
                                                              priority,
                                                              timeout_ms,
                                                              args_p[1],
@@ -6636,7 +6636,7 @@ void JerryScriptRuntime::bind_document(Node& document) {
 }
 
 bool JerryScriptRuntime::submit_script_service_request(std::uint8_t kind,
-                                                       std::uint32_t request_handle,
+                                                       std::uint32_t input_handle,
                                                        std::uint8_t priority,
                                                        std::uint32_t timeout_ms,
                                                        std::uint32_t callback_value,
@@ -6659,7 +6659,7 @@ bool JerryScriptRuntime::submit_script_service_request(std::uint8_t kind,
     service_callbacks_.push_back(std::move(callback));
 
     if (!service_request_submit_(service_request_user_, kind, allocated_request_id, client_token,
-                                 request_handle, priority, timeout_ms)) {
+                                 input_handle, priority, timeout_ms)) {
         const auto it = std::find_if(service_callbacks_.begin(), service_callbacks_.end(),
                                      [allocated_request_id, client_token](const auto& entry) {
                                          return entry != nullptr && entry->request_id == allocated_request_id &&
@@ -7053,23 +7053,23 @@ bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& com
             return false;
         }
         if (completion.kind == HostServiceJobKind::NetworkFetch && retired_network_fetch_ != nullptr) {
-            if (!retired_network_fetch_->release_response(*retired_service_host_, completion.handle)) {
-                retired_service_host_->handles().release(completion.handle);
+            if (!retired_network_fetch_->release_response(*retired_service_host_, completion.result_handle)) {
+                retired_service_host_->handles().release(completion.result_handle);
             }
             return true;
         }
         if (completion.kind == HostServiceJobKind::LocationSnapshot && retired_location_snapshot_ != nullptr) {
-            if (!retired_location_snapshot_->release_snapshot(*retired_service_host_, completion.handle)) {
-                retired_service_host_->handles().release(completion.handle);
+            if (!retired_location_snapshot_->release_snapshot(*retired_service_host_, completion.result_handle)) {
+                retired_service_host_->handles().release(completion.result_handle);
             }
             return true;
         }
-        if (completion.handle != 0) {
+        if (completion.result_handle != 0) {
             HostHandleInfo info;
-            if (retired_service_host_->handles().lookup_copy(completion.handle, info) &&
+            if (retired_service_host_->handles().lookup_copy(completion.result_handle, info) &&
                 info.app_instance_id == retired_service_app_instance_id_ &&
                 info.client_token == retired_service_client_token_) {
-                retired_service_host_->handles().release(completion.handle);
+                retired_service_host_->handles().release(completion.result_handle);
             }
         }
         return true;
@@ -7087,9 +7087,9 @@ bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& com
                                             return request->active && request->job_id == completion.job_id;
                                         });
         if (found == geolocation_requests_.end()) {
-            if (completion.handle != 0) {
-                if (!location->release_snapshot(*host, completion.handle)) {
-                    host->handles().release(completion.handle);
+            if (completion.result_handle != 0) {
+                if (!location->release_snapshot(*host, completion.result_handle)) {
+                    host->handles().release(completion.result_handle);
                 }
             }
             return true;
@@ -7104,12 +7104,12 @@ bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& com
         request->success_callback = 0;
         request->error_callback = 0;
 
-        if (completion.status == HostServiceStatus::Completed && completion.handle != 0) {
-            const AppLocationSnapshotRecord* snapshot = location->snapshot(completion.handle);
+        if (completion.status == HostServiceStatus::Completed && completion.result_handle != 0) {
+            const AppLocationSnapshotRecord* snapshot = location->snapshot(completion.result_handle);
             if (snapshot != nullptr) {
                 const AppLocationSnapshotRecord snapshot_copy = *snapshot;
-                if (!location->release_snapshot(*host, completion.handle)) {
-                    host->handles().release(completion.handle);
+                if (!location->release_snapshot(*host, completion.result_handle)) {
+                    host->handles().release(completion.result_handle);
                 }
                 if (success_callback != 0 && jerry_value_is_function(success_callback)) {
                     JerryValue position(make_geolocation_position_object(snapshot_copy));
@@ -7127,7 +7127,7 @@ bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& com
                     jerry_value_free(success_callback);
                 }
             } else {
-                host->handles().release(completion.handle);
+                host->handles().release(completion.result_handle);
                 call_geolocation_error(*this, error_callback, AppDeviceFailureReason::SampleUnavailable);
             }
         } else {
@@ -7156,10 +7156,10 @@ bool JerryScriptRuntime::handle_host_completion(const HostServiceCompletion& com
         }
     }
     if (matched_xhr == nullptr) {
-        if (completion.kind == HostServiceJobKind::NetworkFetch && completion.handle != 0 &&
+        if (completion.kind == HostServiceJobKind::NetworkFetch && completion.result_handle != 0 &&
             completion.client_token == service_client_token_) {
-            if (!network_fetch_->release_response(*app_host_, completion.handle)) {
-                app_host_->handles().release(completion.handle);
+            if (!network_fetch_->release_response(*app_host_, completion.result_handle)) {
+                app_host_->handles().release(completion.result_handle);
             }
             return true;
         }

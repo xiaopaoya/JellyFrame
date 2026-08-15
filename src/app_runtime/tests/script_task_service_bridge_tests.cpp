@@ -56,14 +56,14 @@ bool copy_payload(void* user,
                   ScriptTaskServicePayloadWriter& output) {
     auto& adapter = *static_cast<PayloadAdapter*>(user);
     ++adapter.copy_calls;
-    return adapter.allow_copy && completion.handle == adapter.expected_handle && output.append(adapter.payload);
+    return adapter.allow_copy && completion.result_handle == adapter.expected_handle && output.append(adapter.payload);
 }
 
 bool release_payload(void* user, const HostServiceCompletion& completion) {
     auto& adapter = *static_cast<PayloadAdapter*>(user);
     ++adapter.release_calls;
-    return completion.handle == adapter.expected_handle && adapter.host != nullptr &&
-           adapter.host->handles().release(completion.handle);
+    return completion.result_handle == adapter.expected_handle && adapter.host != nullptr &&
+           adapter.host->handles().release(completion.result_handle);
 }
 
 void completion_payload_round_trips_without_native_data() {

@@ -69,9 +69,9 @@ void video_frame_returns_latest_surface_and_drops_old_one() {
           "same source does not queue stale frames");
     check(provider.complete_next(host), "first frame completed");
     const auto first = pump(host);
-    check(first.size() == 1 && first[0].handle != 0 && first[0].kind == HostServiceJobKind::VideoFrameDecode,
+    check(first.size() == 1 && first[0].result_handle != 0 && first[0].kind == HostServiceJobKind::VideoFrameDecode,
           "first frame completion returns handle");
-    const std::uint32_t old_handle = first[0].handle;
+    const std::uint32_t old_handle = first[0].result_handle;
     const AppVideoFrameRecord* old_frame = provider.frame(old_handle);
     check(old_frame != nullptr && old_frame->pts_ms == 100 && !old_frame->dropped_previous,
           "first frame record is bounded");
@@ -80,13 +80,13 @@ void video_frame_returns_latest_surface_and_drops_old_one() {
           "second frame request accepted");
     check(provider.complete_next(host), "second frame completed");
     const auto second = pump(host);
-    check(second.size() == 1 && second[0].handle != 0, "second frame completion returns handle");
+    check(second.size() == 1 && second[0].result_handle != 0, "second frame completion returns handle");
     check(provider.frame(old_handle) == nullptr && !host.handles().contains(old_handle),
           "old latest frame released before replacement");
-    const AppVideoFrameRecord* latest = provider.frame(second[0].handle);
-    check(latest != nullptr && latest->dropped_previous && provider.latest_frame_handle("/preview.mjpg") == second[0].handle,
+    const AppVideoFrameRecord* latest = provider.frame(second[0].result_handle);
+    check(latest != nullptr && latest->dropped_previous && provider.latest_frame_handle("/preview.mjpg") == second[0].result_handle,
           "latest frame replaces stale frame");
-    check(provider.release_frame(host, second[0].handle), "latest frame explicitly released");
+    check(provider.release_frame(host, second[0].result_handle), "latest frame explicitly released");
 }
 
 void video_frame_keeps_displayed_frame_when_replacement_has_no_handle_budget() {
@@ -97,8 +97,8 @@ void video_frame_keeps_displayed_frame_when_replacement_has_no_handle_budget() {
           "initial frame request accepted");
     check(provider.complete_next(host), "initial frame completed");
     const auto first = pump(host);
-    check(first.size() == 1 && first[0].handle != 0, "initial frame handle allocated");
-    const std::uint32_t old_handle = first[0].handle;
+    check(first.size() == 1 && first[0].result_handle != 0, "initial frame handle allocated");
+    const std::uint32_t old_handle = first[0].result_handle;
 
     check(provider.request_next_frame(host, {"/preview.mjpg", AppVideoFrameCodec::Mjpeg}).accepted(),
           "replacement request accepted");

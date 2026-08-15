@@ -36,6 +36,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   an optional supervisor-owned service input, while `job_id` remains the
   request identity.
 
+- Renamed host-service completion `handle` to `result_handle`, making the
+  direction of resource ownership explicit relative to request `input_handle`.
+  The nonstandard script service gateway now uses matching JS option
+  `inputHandle`, replacing `requestHandle` without an alias.
+
 - App manifests now declare the Runtime/Core pair explicitly with
   `runtime.minJellyFrame` and `runtime.minRenderCore`. Both must exactly match
   the active pre-1.0 Runtime line and its locked Render Core package; the

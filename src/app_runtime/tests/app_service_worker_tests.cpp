@@ -29,7 +29,7 @@ public:
         last_request = request;
         HostServiceCompletion completion;
         completion.status = status;
-        completion.handle = handle;
+        completion.result_handle = handle;
         completion.error_code = error_code;
         completion.byte_count = byte_count;
         return completion;
@@ -183,7 +183,7 @@ void worker_pump_processes_only_selected_service_kind() {
     host.pump_frame_completions(accepted);
     assert(accepted.size() == 1);
     assert(accepted.front().kind == HostServiceJobKind::StorageKv);
-    assert(accepted.front().handle == 42);
+    assert(accepted.front().result_handle == 42);
 }
 
 void worker_pump_normalizes_completion_identity() {
@@ -490,15 +490,15 @@ void worker_group_pump_handles_real_network_and_storage_mocks_across_ticks() {
             assert(completion.status == HostServiceStatus::Completed);
             if (completion.kind == HostServiceJobKind::NetworkFetch) {
                 ++network_completions;
-                assert(completion.handle != 0);
-                assert(network.response(completion.handle) != nullptr);
-                assert(network.release_response(host, completion.handle));
+                assert(completion.result_handle != 0);
+                assert(network.response(completion.result_handle) != nullptr);
+                assert(network.release_response(host, completion.result_handle));
                 ++released_network_handles;
             } else if (completion.kind == HostServiceJobKind::StorageKv) {
                 ++storage_completions;
-                if (completion.handle != 0) {
-                    assert(storage.value(completion.handle) != nullptr);
-                    assert(storage.release_value(host, completion.handle));
+                if (completion.result_handle != 0) {
+                    assert(storage.value(completion.result_handle) != nullptr);
+                    assert(storage.release_value(host, completion.result_handle));
                     ++released_storage_handles;
                 }
             } else {
@@ -593,26 +593,26 @@ void worker_group_pump_handles_mixed_media_and_system_events_across_ticks() {
             assert(completion.status == HostServiceStatus::Completed);
             if (completion.kind == HostServiceJobKind::NetworkFetch) {
                 ++network_completions;
-                assert(completion.handle != 0);
-                assert(network.release_response(host, completion.handle));
+                assert(completion.result_handle != 0);
+                assert(network.release_response(host, completion.result_handle));
             } else if (completion.kind == HostServiceJobKind::StorageKv) {
                 ++storage_completions;
             } else if (completion.kind == HostServiceJobKind::ImageDecode) {
                 ++image_completions;
-                assert(completion.handle != 0);
-                assert(images.release_surface(host, completion.handle));
+                assert(completion.result_handle != 0);
+                assert(images.release_surface(host, completion.result_handle));
             } else if (completion.kind == HostServiceJobKind::AudioCommand) {
                 ++audio_completions;
-                assert(completion.handle != 0);
-                assert(audio.release_stream(host, completion.handle));
+                assert(completion.result_handle != 0);
+                assert(audio.release_stream(host, completion.result_handle));
             } else if (completion.kind == HostServiceJobKind::SensorSample) {
                 ++sensor_completions;
-                assert(completion.handle != 0);
-                assert(sensors.release_sample(host, completion.handle));
+                assert(completion.result_handle != 0);
+                assert(sensors.release_sample(host, completion.result_handle));
             } else if (completion.kind == HostServiceJobKind::LocationSnapshot) {
                 ++location_completions;
-                assert(completion.handle != 0);
-                assert(location.release_snapshot(host, completion.handle));
+                assert(completion.result_handle != 0);
+                assert(location.release_snapshot(host, completion.result_handle));
             } else {
                 assert(false && "unexpected mixed worker completion kind");
             }

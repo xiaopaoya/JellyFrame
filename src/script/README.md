@@ -17,7 +17,7 @@ JerryScript, including bounded inline style mutation, frame-snapshot geometry
 and opt-in Canvas 2D V0.4. It is disabled unless
 `JELLYFRAME_BUILD_SCRIPTING=ON` is set. RTOS script-App task isolation is a
 separate optional module and additionally requires
-`JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON`.
+`JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON`.
 Product builds should use a JerryScript library built with `JERRY_VM_HALT=ON`
 when script execution budgets are required.
 
@@ -31,9 +31,12 @@ slice is `ScriptTaskWorkerRuntime`: it owns a private parsed document,
 `JerryScriptRuntime`, render/layout/layer data and `InputController`, and
 publishes only sealed `ScriptTaskAppFrame` values. Worker-local timer and
 animation callbacks use the same private realm and publish mutated DOM through
-the same sealed-frame path. The constrained `services.request(kind, callback)`
- gateway accepts only scalar request metadata; completions are copied into a
- bounded byte array before the JS callback runs. `services.cancel(requestId)`
+the same sealed-frame path. The constrained
+`services.request(kind, callback, options)` gateway accepts only scalar request
+metadata. Its optional `inputHandle` identifies a supervisor-owned request
+input; a completion's returned resource is never exposed as a host handle and
+is copied into a bounded byte array before the JS callback runs.
+`services.cancel(requestId)`
  posts a separate value-only cancellation packet; the supervisor bridge resolves
  queued versus in-flight cancellation and keeps late completion cleanup outside
  the worker realm. Provider policy, fatal worker boundaries, and the RTOS task

@@ -276,7 +276,7 @@ HostServiceCompletion AppSensorSampleMock::complete_request(AppRuntimeHost& host
             completion.status = HostServiceStatus::BudgetExceeded;
             completion.error_code = kDeviceErrorBudgetExceeded;
         } else {
-            completion.handle = handle;
+            completion.result_handle = handle;
             completion.byte_count = bytes;
             records_.push_back(AppSensorSampleRecord{
                 handle,
@@ -457,7 +457,7 @@ HostServiceCompletion AppLocationSnapshotMock::complete_request(AppRuntimeHost& 
             completion.status = HostServiceStatus::BudgetExceeded;
             completion.error_code = kDeviceErrorBudgetExceeded;
         } else {
-            completion.handle = handle;
+            completion.result_handle = handle;
             completion.byte_count = bytes;
             records_.push_back(AppLocationSnapshotRecord{
                 handle,

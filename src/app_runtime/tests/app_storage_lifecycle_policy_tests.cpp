@@ -145,9 +145,9 @@ void apply_lifecycle_flushes_pending_writes_on_exit() {
     accepted.clear();
     host.pump_frame_completions(accepted);
     check(accepted.size() == 1, "stored value completion accepted");
-    const AppPrivateKvRecord* record = storage.value(accepted.front().handle);
+    const AppPrivateKvRecord* record = storage.value(accepted.front().result_handle);
     check(record != nullptr && record->value == "dark", "flushed value is readable after relaunch");
-    storage.release_value(host, accepted.front().handle);
+    storage.release_value(host, accepted.front().result_handle);
 }
 
 void apply_lifecycle_respects_flush_budget_and_reports_remaining_work() {

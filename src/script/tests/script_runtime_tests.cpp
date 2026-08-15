@@ -1,4 +1,4 @@
-﻿#include "script/jerryscript_runtime.h"
+#include "script/jerryscript_runtime.h"
 
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_host_data.h"
@@ -1744,11 +1744,11 @@ void cleared_services_reclaim_late_runtime_completion_only() {
     runtime.clear_app_services();
     const HostServiceCompletion completion = network.complete_request(host, request);
     check(completion.client_token == request.client_token, "worker completion preserves the client token");
-    check(completion.handle != 0, "late worker completion allocates a response handle");
+    check(completion.result_handle != 0, "late worker completion allocates a response handle");
     check(runtime.handle_host_completion(completion), "cleared runtime consumes its late completion");
     check(host.handles().active_count() == 1 && host.handles().contains(non_script_handle),
           "late runtime completion does not release non-script app handles");
-    check(network.response(completion.handle) == nullptr, "late runtime response record is reclaimed");
+    check(network.response(completion.result_handle) == nullptr, "late runtime response record is reclaimed");
 }
 
 void javascript_runtime_respects_timer_and_listener_budgets() {

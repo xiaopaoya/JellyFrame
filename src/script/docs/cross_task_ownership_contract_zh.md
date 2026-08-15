@@ -122,7 +122,7 @@ wrapper 或 callback 重新绑定给下一个 app。
 
 ## 当前平台无关基础设施
 
-当同时启用 `JELLYFRAME_BUILD_SCRIPTING=ON` 与 `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON` 时，独立
+当同时启用 `JELLYFRAME_BUILD_SCRIPTING=ON` 与 `JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON` 时，独立
 `jellyframe_script_task_runtime` target 会编译 `src/app_runtime/script_task_contract.*`，并实现和单测：
 session generation/epoch 校验、固定槽
 值 mailbox、session-scoped sealed frame lease、服务取消 tombstone/迟到 completion 分类、去重的
@@ -160,8 +160,9 @@ worker-owned 对象内持有解析后的 document、同线程 JerryScript bindin
 frame。Node 销毁观察器现在可组合注册，重建 layer tree 时会重新绑定交互状态；事件 dispatch 会报告目标已
 销毁，使 pointer-up 不再继续执行依赖旧 Node 的默认动作。真实 RTOS task adapter 和
 worker fatal boundary 仍是后续工作。当前 worker-local JS gateway 已提供受限的
-`services.request(kind, callback, options)` 与 `services.cancel(requestId)`：请求元数据和取消身份只有标量，completion 在 sealed lease 复制并释放后
-才以 `payloadBytes` 副本交给 JS callback。`services.cancel(requestId)` 只在取消 value packet 成功进入
+`services.request(kind, callback, options)` 与 `services.cancel(requestId)`：请求元数据和取消身份只有标量。
+可选 `inputHandle` 只表示 supervisor-owned 的请求输入资源，绝不是 completion result；完成结果始终留在
+supervisor lease 后方，仅在复制并释放后以 `payloadBytes` 副本交给 JS callback。`services.cancel(requestId)` 只在取消 value packet 成功进入
 mailbox 后移除 worker-local callback；supervisor bridge 再区分 queued/in-flight，迟到 completion 由
 tombstone 消费并回收。provider policy、真实 RTOS task adapter 和 fatal boundary 仍是后续工作。port
 不得用裸指针填补这些协议空缺。

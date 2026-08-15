@@ -294,23 +294,23 @@ void ScriptTaskServiceBridge::erase_record(std::size_t index) {
 }
 
 bool ScriptTaskServiceBridge::release_completion_payload(const HostServiceCompletion& completion) {
-    if (completion.handle == 0) {
+    if (completion.result_handle == 0) {
         return false;
     }
     if (payload_release_ != nullptr) {
         return payload_release_(payload_release_user_, completion);
     }
     HostHandleInfo info;
-    return host_.handles().lookup_copy(completion.handle, info) &&
-           info.app_instance_id == completion.app_instance_id && host_.handles().release(completion.handle);
+    return host_.handles().lookup_copy(completion.result_handle, info) &&
+           info.app_instance_id == completion.app_instance_id && host_.handles().release(completion.result_handle);
 }
 
 bool ScriptTaskServiceBridge::release_record_completion_payload(Record& record) {
-    if (record.completion.handle == 0) {
+    if (record.completion.result_handle == 0) {
         return false;
     }
     const HostServiceCompletion completion = record.completion;
-    record.completion.handle = 0;
+    record.completion.result_handle = 0;
     return release_completion_payload(completion);
 }
 
@@ -326,7 +326,7 @@ bool ScriptTaskServiceBridge::release_record_payload(Record& record) {
 
 void ScriptTaskServiceBridge::prepare_completion_payload(Record& record,
                                                          ScriptTaskServiceBridgePumpResult& result) {
-    if (record.completion.handle == 0) {
+    if (record.completion.result_handle == 0) {
         return;
     }
 

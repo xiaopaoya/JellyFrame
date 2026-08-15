@@ -963,6 +963,10 @@ if(JELLYFRAME_BUILD_TESTS)
             ${JELLYFRAME_SCRIPT_TEST_SOURCES}
         )
         target_link_libraries(jellyframe_script_tests PRIVATE jellyframe_script)
+        if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
+            target_compile_definitions(jellyframe_script_tests
+                PRIVATE JELLYFRAME_SCRIPT_TASK_RUNTIME_ENABLED=1)
+        endif()
         jellyframe_enable_test_asserts(jellyframe_script_tests)
         jellyframe_stage_sanitizer_runtime(jellyframe_script_tests)
         add_test(NAME jellyframe_script_tests COMMAND jellyframe_script_tests)

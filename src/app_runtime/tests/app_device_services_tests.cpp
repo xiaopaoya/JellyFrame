@@ -105,16 +105,16 @@ void sensor_sample_requires_capability_and_returns_handle() {
     check(accepted.size() == 1, "sensor completion accepted");
     check(accepted.front().kind == HostServiceJobKind::SensorSample, "sensor completion kind");
     check(accepted.front().status == HostServiceStatus::Completed, "sensor completion status");
-    check(accepted.front().handle != 0, "sensor completion handle");
+    check(accepted.front().result_handle != 0, "sensor completion handle");
 
-    const AppSensorSampleRecord* sample = sensors.sample(accepted.front().handle);
+    const AppSensorSampleRecord* sample = sensors.sample(accepted.front().result_handle);
     check(sample != nullptr, "sensor sample lookup");
     check(sample->app_instance_id == host.current_app_instance_id(), "sensor sample instance");
     check(sample->kind == AppSensorKind::Accelerometer, "sensor sample kind");
     check(sample->timestamp_ms == 1000, "sensor timestamp");
     check(sample->x == 0.1f, "sensor x value");
     check(sample->accuracy == 0.9f, "sensor accuracy value");
-    check(sensors.release_sample(host, accepted.front().handle), "sensor sample release");
+    check(sensors.release_sample(host, accepted.front().result_handle), "sensor sample release");
 }
 
 void sensor_sample_reports_missing_data_and_record_budget() {
@@ -141,13 +141,13 @@ void sensor_sample_reports_missing_data_and_record_budget() {
     check(over_budget.status == AppServiceSubmitStatus::BudgetExceeded, "sensor pending counts against budget");
     check(sensors.complete_next(host), "sensor pending budget complete");
     accepted = pump(host);
-    check(accepted.size() == 1 && accepted.front().handle != 0, "sensor pending budget handle");
-    check(sensors.release_sample(host, accepted.front().handle), "sensor pending budget release");
+    check(accepted.size() == 1 && accepted.front().result_handle != 0, "sensor pending budget handle");
+    check(sensors.release_sample(host, accepted.front().result_handle), "sensor pending budget release");
 
     check(sensors.submit_sample(host, AppSensorKind::Accelerometer).accepted(), "sensor budget submit");
     check(sensors.complete_next(host), "sensor budget complete");
     accepted = pump(host);
-    check(accepted.size() == 1 && accepted.front().handle != 0, "sensor budget handle");
+    check(accepted.size() == 1 && accepted.front().result_handle != 0, "sensor budget handle");
     over_budget = sensors.submit_sample(host, AppSensorKind::Accelerometer);
     check(over_budget.status == AppServiceSubmitStatus::BudgetExceeded, "sensor record budget");
     check(classify_app_device_failure(over_budget.status,
@@ -155,7 +155,7 @@ void sensor_sample_reports_missing_data_and_record_budget() {
                                       over_budget.error_code) ==
               AppDeviceFailureReason::RecordBudgetExceeded,
           "sensor record budget classification");
-    check(sensors.release_sample(host, accepted.front().handle), "sensor budget release");
+    check(sensors.release_sample(host, accepted.front().result_handle), "sensor budget release");
 }
 
 void sensor_samples_follow_app_instance_lifetime() {
@@ -173,8 +173,8 @@ void sensor_samples_follow_app_instance_lifetime() {
     check(sensors.submit_sample(host, AppSensorKind::Accelerometer).accepted(), "sensor lifetime submit current");
     check(sensors.complete_next(host), "sensor lifetime complete current");
     const std::vector<HostServiceCompletion> accepted = pump(host);
-    check(accepted.size() == 1 && accepted.front().handle != 0, "sensor lifetime handle");
-    const std::uint32_t handle = accepted.front().handle;
+    check(accepted.size() == 1 && accepted.front().result_handle != 0, "sensor lifetime handle");
+    const std::uint32_t handle = accepted.front().result_handle;
     host.launch("org.example.third", AppRole::App);
     check(!host.handles().contains(handle), "sensor lifetime host handle released");
     check(sensors.collect_released_samples(host) == 1, "sensor stale records collected");
@@ -219,15 +219,15 @@ void location_snapshot_requires_capability_and_returns_handle() {
     check(accepted.size() == 1, "location completion accepted");
     check(accepted.front().kind == HostServiceJobKind::LocationSnapshot, "location completion kind");
     check(accepted.front().status == HostServiceStatus::Completed, "location completion status");
-    check(accepted.front().handle != 0, "location completion handle");
+    check(accepted.front().result_handle != 0, "location completion handle");
 
-    const AppLocationSnapshotRecord* snapshot = location.snapshot(accepted.front().handle);
+    const AppLocationSnapshotRecord* snapshot = location.snapshot(accepted.front().result_handle);
     check(snapshot != nullptr, "location snapshot lookup");
     check(snapshot->app_instance_id == host.current_app_instance_id(), "location snapshot instance");
     check(snapshot->latitude == 31.2304, "location latitude");
     check(snapshot->longitude == 121.4737, "location longitude");
     check(snapshot->accuracy_m == 8.0f, "location accuracy");
-    check(location.release_snapshot(host, accepted.front().handle), "location snapshot release");
+    check(location.release_snapshot(host, accepted.front().result_handle), "location snapshot release");
 }
 
 void location_snapshot_reports_missing_data_and_budget() {
@@ -253,16 +253,16 @@ void location_snapshot_reports_missing_data_and_budget() {
     check(over_budget.status == AppServiceSubmitStatus::BudgetExceeded, "location pending counts against budget");
     check(location.complete_next(host), "location pending budget complete");
     accepted = pump(host);
-    check(accepted.size() == 1 && accepted.front().handle != 0, "location pending budget handle");
-    check(location.release_snapshot(host, accepted.front().handle), "location pending budget release");
+    check(accepted.size() == 1 && accepted.front().result_handle != 0, "location pending budget handle");
+    check(location.release_snapshot(host, accepted.front().result_handle), "location pending budget release");
 
     check(location.submit_position(host).accepted(), "location budget submit");
     check(location.complete_next(host), "location budget complete");
     accepted = pump(host);
-    check(accepted.size() == 1 && accepted.front().handle != 0, "location budget handle");
+    check(accepted.size() == 1 && accepted.front().result_handle != 0, "location budget handle");
     over_budget = location.submit_position(host);
     check(over_budget.status == AppServiceSubmitStatus::BudgetExceeded, "location record budget");
-    check(location.release_snapshot(host, accepted.front().handle), "location budget release");
+    check(location.release_snapshot(host, accepted.front().result_handle), "location budget release");
 }
 
 void location_stale_worker_pending_is_collectable_after_app_switch() {
@@ -302,11 +302,11 @@ void device_workers_do_not_consume_other_service_requests() {
     check(accepted.size() == 2, "mixed completions accepted");
     check(accepted[0].kind == HostServiceJobKind::SensorSample, "mixed first sensor");
     check(accepted[1].kind == HostServiceJobKind::NetworkFetch, "mixed second network");
-    if (accepted[0].handle != 0) {
-        check(sensors.release_sample(host, accepted[0].handle), "mixed sensor release");
+    if (accepted[0].result_handle != 0) {
+        check(sensors.release_sample(host, accepted[0].result_handle), "mixed sensor release");
     }
-    if (accepted[1].handle != 0) {
-        check(network.release_response(host, accepted[1].handle), "mixed network release");
+    if (accepted[1].result_handle != 0) {
+        check(network.release_response(host, accepted[1].result_handle), "mixed network release");
     }
 }
 

@@ -236,8 +236,8 @@ void bench_compute_job_mock(std::size_t capacity) {
         accepted.clear();
         host.pump_frame_completions(accepted);
         for (const HostServiceCompletion& completion : accepted) {
-            if (completion.handle != 0) {
-                compute.release_result(host, completion.handle);
+            if (completion.result_handle != 0) {
+                compute.release_result(host, completion.result_handle);
             }
         }
     }
@@ -282,8 +282,8 @@ void bench_network_fetch_mock(std::size_t capacity) {
         accepted.clear();
         host.pump_frame_completions(accepted);
         for (const HostServiceCompletion& completion : accepted) {
-            if (completion.handle != 0) {
-                network.release_response(host, completion.handle);
+            if (completion.result_handle != 0) {
+                network.release_response(host, completion.result_handle);
             }
         }
     }
@@ -314,8 +314,8 @@ void bench_kv_storage_mock(std::size_t capacity) {
         accepted.clear();
         host.pump_frame_completions(accepted);
         for (const HostServiceCompletion& completion : accepted) {
-            if (completion.handle != 0) {
-                storage.release_value(host, completion.handle);
+            if (completion.result_handle != 0) {
+                storage.release_value(host, completion.result_handle);
             }
         }
     }
@@ -337,8 +337,8 @@ void bench_image_decode_mock(std::size_t capacity) {
         accepted.clear();
         host.pump_frame_completions(accepted);
         for (const HostServiceCompletion& completion : accepted) {
-            if (completion.handle != 0) {
-                images.release_surface(host, completion.handle);
+            if (completion.result_handle != 0) {
+                images.release_surface(host, completion.result_handle);
             }
         }
     }
@@ -362,8 +362,8 @@ void bench_audio_command_mock(std::size_t capacity) {
         accepted.clear();
         host.pump_frame_completions(accepted);
         for (const HostServiceCompletion& completion : accepted) {
-            if (completion.handle != 0) {
-                handles.push_back(completion.handle);
+            if (completion.result_handle != 0) {
+                handles.push_back(completion.result_handle);
             }
         }
     }
@@ -415,8 +415,8 @@ void bench_sensor_sample_mock(std::size_t capacity) {
         accepted.clear();
         host.pump_frame_completions(accepted);
         for (const HostServiceCompletion& completion : accepted) {
-            if (completion.handle != 0) {
-                sensors.release_sample(host, completion.handle);
+            if (completion.result_handle != 0) {
+                sensors.release_sample(host, completion.result_handle);
             }
         }
     }
@@ -438,8 +438,8 @@ void bench_location_snapshot_mock(std::size_t capacity) {
         accepted.clear();
         host.pump_frame_completions(accepted);
         for (const HostServiceCompletion& completion : accepted) {
-            if (completion.handle != 0) {
-                location.release_snapshot(host, completion.handle);
+            if (completion.result_handle != 0) {
+                location.release_snapshot(host, completion.result_handle);
             }
         }
     }

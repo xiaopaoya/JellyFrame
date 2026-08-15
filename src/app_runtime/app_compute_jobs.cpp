@@ -1,4 +1,4 @@
-﻿#include "app_runtime/app_compute_jobs.h"
+#include "app_runtime/app_compute_jobs.h"
 
 #include <algorithm>
 #include <limits>
@@ -180,7 +180,7 @@ HostServiceCompletion AppComputeJobMock::complete_request(AppRuntimeHost& host,
                 completion.status = HostServiceStatus::BudgetExceeded;
                 completion.error_code = kComputeErrorResultHandleBudget;
             } else {
-                completion.handle = handle;
+                completion.result_handle = handle;
                 completion.byte_count = bytes;
                 records_.push_back(AppComputeResultRecord{handle, request.app_instance_id,
                                                            pending->operation, pending->result.output});

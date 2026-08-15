@@ -79,7 +79,7 @@ using ScriptServiceRequestSubmitCallback = bool (*)(void* user,
                                                      std::uint8_t kind,
                                                      std::uint32_t request_id,
                                                      std::uint32_t client_token,
-                                                     std::uint32_t request_handle,
+                                                     std::uint32_t input_handle,
                                                      std::uint8_t priority,
                                                      std::uint32_t timeout_ms);
 
@@ -310,7 +310,7 @@ private:
     void clear_script_local_storage_bindings();
     void install_script_service_gateway();
     bool submit_script_service_request(std::uint8_t kind,
-                                       std::uint32_t request_handle,
+                                       std::uint32_t input_handle,
                                        std::uint8_t priority,
                                        std::uint32_t timeout_ms,
                                        std::uint32_t callback_value,

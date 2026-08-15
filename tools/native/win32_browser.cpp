@@ -4539,8 +4539,8 @@ private:
                     completion.status != HostServiceStatus::Completed) {
                     report_image_cache_state(&diagnostics_, image_cache_, image_src);
                 }
-            } else if (completion.kind == HostServiceJobKind::ImageDecode && completion.handle != 0) {
-                debug_images_.release_surface(app_runtime_, completion.handle);
+            } else if (completion.kind == HostServiceJobKind::ImageDecode && completion.result_handle != 0) {
+                debug_images_.release_surface(app_runtime_, completion.result_handle);
             }
         }
         if (image_handled != 0 && image_dirty_fallback_needed && document_ != nullptr) {

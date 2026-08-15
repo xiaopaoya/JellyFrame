@@ -1,4 +1,4 @@
-﻿#include "app_runtime/app_compute_jobs.h"
+#include "app_runtime/app_compute_jobs.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -45,11 +45,11 @@ void compute_job_requires_capability_and_returns_bounded_result() {
     check(completions.size() == 1, "compute completion accepted");
     check(completions.front().kind == HostServiceJobKind::ComputeJob, "compute completion kind");
     check(completions.front().status == HostServiceStatus::Completed, "compute completion status");
-    check(completions.front().handle != 0 && completions.front().byte_count == 3, "compute result handle bounded");
-    const AppComputeResultRecord* record = jobs.result(completions.front().handle);
+    check(completions.front().result_handle != 0 && completions.front().byte_count == 3, "compute result handle bounded");
+    const AppComputeResultRecord* record = jobs.result(completions.front().result_handle);
     check(record != nullptr && record->operation == "summarize" && record->output == std::vector<std::uint8_t>({9, 8, 7}),
           "compute result is isolated behind host handle");
-    check(jobs.release_result(host, completions.front().handle), "compute result release");
+    check(jobs.release_result(host, completions.front().result_handle), "compute result release");
 }
 
 void compute_job_enforces_input_job_and_result_budgets() {
@@ -81,7 +81,7 @@ void compute_job_cleans_stale_results_and_worker_jobs() {
     check(jobs.submit(host, AppComputeJobRequest{"x", {}}).accepted(), "first job submitted");
     check(jobs.complete_next(host), "first job completed");
     const auto first = pump(host);
-    check(first.size() == 1 && first.front().handle != 0, "first result delivered");
+    check(first.size() == 1 && first.front().result_handle != 0, "first result delivered");
     host.launch("org.example.compute.two", AppRole::App);
     check(jobs.collect_released_results(host) == 1, "old app compute handle collected");
     check(jobs.submit(host, AppComputeJobRequest{"x", {}}).accepted(), "second job submitted");

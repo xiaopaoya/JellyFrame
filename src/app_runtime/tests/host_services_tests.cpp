@@ -345,7 +345,7 @@ void cancelled_completion_preserves_request_identity() {
     assert(completion.kind == HostServiceJobKind::BundleRemove);
     assert(completion.status == HostServiceStatus::Cancelled);
     assert(completion.app_instance_id == 77);
-    assert(completion.handle == 0);
+    assert(completion.result_handle == 0);
     assert(completion.error_code == 0);
     assert(completion.client_token == 91);
 }

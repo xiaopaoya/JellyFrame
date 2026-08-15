@@ -42,7 +42,7 @@ depend on JerryScript directly, filesystem/network implementations, RTOS APIs
 or platform drivers.
 
 When both `JELLYFRAME_BUILD_SCRIPTING=ON` and
-`JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON`, the separate
+`JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON`, the separate
 `jellyframe_script_task_runtime` target provides value-only script-task
 sessions, bounded mailboxes, sealed frame leases, cancellation tombstones,
 native-release intents and the `AppRuntimeHost` service bridge. Keeping this

@@ -539,7 +539,7 @@ HostServiceCompletion NetworkFetchMock::complete_request(AppRuntimeHost& host,
             completion.status = HostServiceStatus::BudgetExceeded;
             completion.error_code = kServiceErrorBudgetExceeded;
         } else {
-            completion.handle = handle;
+            completion.result_handle = handle;
             completion.byte_count = static_cast<std::uint32_t>(pending->fixture.body.size());
             records_.push_back(NetworkFetchRecord{
                 handle,
@@ -1050,7 +1050,7 @@ HostServiceCompletion ImageDecodeMock::complete_request(AppRuntimeHost& host,
             completion.status = HostServiceStatus::BudgetExceeded;
             completion.error_code = 507;
         } else {
-            completion.handle = handle;
+            completion.result_handle = handle;
             completion.byte_count = static_cast<std::uint32_t>(decoded_bytes);
             records_.push_back(AppDecodedSurfaceRecord{
                 handle,
@@ -1611,8 +1611,8 @@ bool AppImageSurfaceCache::handle_completion(const HostServiceCompletion& comple
     entry->error_code = completion.error_code;
     entry->app_instance_id = completion.app_instance_id;
     entry->submit_status = AppServiceSubmitStatus::Accepted;
-    if (completion.status == HostServiceStatus::Completed && completion.handle != 0) {
-        entry->handle = completion.handle;
+    if (completion.status == HostServiceStatus::Completed && completion.result_handle != 0) {
+        entry->handle = completion.result_handle;
         entry->decoded_bytes = completion.byte_count;
         entry->last_used_tick = use_tick_++;
         entry->state = AppImageSurfaceState::Ready;

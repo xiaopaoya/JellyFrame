@@ -14,7 +14,7 @@ supervisor 持有 session、service、lease 和 fatal recovery。
 
 - 由 `JELLYFRAME_BUILD_SCRIPTING=ON` 控制的可选 `jellyframe_script` target。
 - 由 `JELLYFRAME_BUILD_SCRIPTING=ON` 和
-  `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME=ON` 共同控制的可选
+  `JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON` 共同控制的可选
   `jellyframe_script_task_runtime` target。
 - `JERRYSCRIPT_ROOT` 可以指向官方 JerryScript checkout，例如 `third_party/jerryscript`。
 - `JerryScriptRuntime` 管理 JerryScript 生命周期。

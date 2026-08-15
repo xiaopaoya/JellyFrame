@@ -95,10 +95,10 @@ AppCompletionPumpResult AppLifecycleController::pump_completions(HostServiceComp
             continue;
         }
         ++result.stale;
-        if (handles != nullptr && completion.handle != 0) {
+        if (handles != nullptr && completion.result_handle != 0) {
             HostHandleInfo info;
-            if (handles->lookup_copy(completion.handle, info) && info.app_instance_id == completion.app_instance_id &&
-                handles->release(completion.handle)) {
+            if (handles->lookup_copy(completion.result_handle, info) && info.app_instance_id == completion.app_instance_id &&
+                handles->release(completion.result_handle)) {
                 ++result.released_stale_handles;
             }
         }
