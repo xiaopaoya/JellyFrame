@@ -47,7 +47,6 @@ def package_version(source_root: Path) -> str:
 def source_files(source_root: Path) -> list[Path]:
     files = {
         require_file(source_root / "LICENSE"),
-        require_file(source_root / "src" / "render_core" / "STANDALONE_README.md"),
         require_file(source_root / "cmake" / "JellyFrameRenderCoreConfig.cmake.in"),
         require_file(source_root / "cmake" / "render_core_feature_registry.csv"),
     }
@@ -59,6 +58,12 @@ def source_files(source_root: Path) -> list[Path]:
         raise RuntimeError(f"Render Core source directory is missing: {render_core_dir}")
     files.update(path for path in render_core_dir.rglob("*") if path.is_file())
     return sorted(files, key=lambda path: path.relative_to(source_root).as_posix())
+
+
+def standalone_entry_file(source_root: Path, monorepo_path: Path, standalone_path: Path) -> Path:
+    if monorepo_path.is_file():
+        return monorepo_path
+    return require_file(standalone_path)
 
 
 def archive_member(root_name: str, source_root: Path, path: Path) -> str:
@@ -91,9 +96,21 @@ def create_archive(source_root: Path, output_dir: Path) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     archive_path = output_dir / f"{root_name}.tar.gz"
     checksum_path = archive_path.with_suffix(archive_path.suffix + ".sha256")
-    root_cmake = require_file(source_root / "cmake" / "render_core_standalone_root.cmake")
-    presets = require_file(source_root / "cmake" / "render_core_standalone_presets.json.in")
-    standalone_readme = require_file(source_root / "src" / "render_core" / "STANDALONE_README.md")
+    root_cmake = standalone_entry_file(
+        source_root,
+        source_root / "cmake" / "render_core_standalone_root.cmake",
+        source_root / "CMakeLists.txt",
+    )
+    presets = standalone_entry_file(
+        source_root,
+        source_root / "cmake" / "render_core_standalone_presets.json.in",
+        source_root / "CMakePresets.json",
+    )
+    standalone_readme = standalone_entry_file(
+        source_root,
+        source_root / "src" / "render_core" / "STANDALONE_README.md",
+        source_root / "README.md",
+    )
 
     archive_entries = {
         f"{root_name}/CMakeLists.txt": root_cmake.read_bytes(),

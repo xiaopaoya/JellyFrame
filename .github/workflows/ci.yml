@@ -255,11 +255,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+
+      - name: Install history-export tool
+        run: python -m pip install --disable-pip-version-check git-filter-repo
 
       - name: Configure Render Core only
         run: >
@@ -287,6 +292,13 @@ jobs:
       - name: Verify standalone Render Core source archive
         run: >
           python tests/tool_regression/render_core_source_archive_tests.py
+          --cmake cmake
+          --source-root .
+          --generator Ninja
+
+      - name: Rehearse history-preserving Render Core export
+        run: >
+          python tests/tool_regression/render_core_history_export_tests.py
           --cmake cmake
           --source-root .
           --generator Ninja

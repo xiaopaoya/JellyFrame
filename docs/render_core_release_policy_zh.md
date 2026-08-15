@@ -64,6 +64,19 @@ Core release 是源码/package 基础设施，不是一份通用 native firmware
 
 日常开发不使用 Git submodule；lock 加已发布 package 才是发布依赖机制。
 
+## 演练
+
+首次建仓前，在可丢弃目录中对 committed HEAD 运行演练：
+
+```powershell
+python project_tools\rehearse_render_core_history_export.py `
+  --output-dir build\render-core-history-export
+```
+
+该工具需要 `git-filter-repo`，不会修改源 checkout；若导出丢失 Render Core 历史、缺少 standalone
+入口，或仍包含 Runtime/port 路径则会拒绝。CI 会安装该工具并构建过滤后的导出。演练只证明拆仓准备度，
+不是实际的带签名仓库发布。
+
 ## 拆仓门槛
 
 四条验证路径在一个 release candidate 上全部绿色，且不存在 Runtime/port 私有 include 反向进入 Core 后，才可物理拆分。第一个高价值 Core 能力包必须在受治理边界上开发，紧随拆仓或与其同一发布窗口完成；大量新 CSS 工作不得继续堆积在过渡 monorepo。
