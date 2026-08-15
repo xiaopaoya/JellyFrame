@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const childProcess = require("child_process");
 const vscode = require("vscode");
+const { selectBuildDirectory } = require("./build_profiles");
 
 let outputChannel;
 let reportPanel;
@@ -50,34 +51,49 @@ function appRequiresScripting(root) {
 
 function nativeBuildDir(context, preferScripting = false) {
   const configured = config().get("buildDir", "").trim();
-  if (configured) {
-    return path.isAbsolute(configured) ? configured : path.resolve(repoRoot(context), configured);
+  const resolvedConfigured = configured
+    ? (path.isAbsolute(configured) ? configured : path.resolve(repoRoot(context), configured))
+    : "";
+  return selectBuildDirectory(repoRoot(context), resolvedConfigured, preferScripting);
+}
+
+function buildDirectoryError(context, selection) {
+  const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
+  const code = selection?.issue?.code;
+  if (code === "legacy-script-task-option") {
+    return chinese
+      ? "桌面构建仍使用已废弃的 JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME。请清除该构建目录后，使用 JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME 重新配置。"
+      : "The desktop build still uses deprecated JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME. Clear that build directory and reconfigure with JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME.";
   }
-  const ordinaryCandidates = [
-    path.join(repoRoot(context), "build", "desktop-release", "Release"),
-    path.join(repoRoot(context), "build", "desktop-debug", "Debug"),
-    // Compatibility for worktrees created before the named build layout.
-    path.join(repoRoot(context), "build", "Release"),
-    path.join(repoRoot(context), "build", "Debug"),
-    path.join(repoRoot(context), "build-script", "Release")
-  ];
-  const scriptingCandidates = [
-    path.join(repoRoot(context), "build", "desktop-scripting-release", "Release"),
-    path.join(repoRoot(context), "build", "desktop-scripting-debug", "Debug"),
-    path.join(repoRoot(context), "build", "scripting-ci-local", "Release"),
-    path.join(repoRoot(context), "build", "scripting-ci-local", "Debug"),
-    path.join(repoRoot(context), "build", "scripting-on-local", "Release"),
-    path.join(repoRoot(context), "build-script", "Release")
-  ];
-  const candidates = preferScripting
-    ? [...scriptingCandidates, ...ordinaryCandidates]
-    : ordinaryCandidates;
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
+  if (code === "scripting-disabled") {
+    return chinese
+      ? "当前 App 需要脚本构建，但所选桌面构建未启用 JELLYFRAME_BUILD_SCRIPTING=ON。"
+      : "This App needs a scripting build, but the selected desktop build was configured without JELLYFRAME_BUILD_SCRIPTING=ON.";
   }
-  return path.join(repoRoot(context), "build", "desktop-release", "Release");
+  if (code === "missing-directory" || code === "missing-cache") {
+    return chinese
+      ? "所选桌面构建不是可用的 CMake 构建输出。请在设置中选择实际的 Release/Debug 输出目录。"
+      : "The selected desktop build is not a usable CMake build output. Choose the actual Release/Debug output directory in Settings.";
+  }
+  if (selection?.issue?.requiresScripting) {
+    return chinese
+      ? "未找到当前的脚本桌面构建。请配置 build/desktop-scripting-release（或 desktop-scripting-debug），并启用 JELLYFRAME_BUILD_SCRIPTING=ON。"
+      : "No current scripting desktop build was found. Configure build/desktop-scripting-release (or desktop-scripting-debug) with JELLYFRAME_BUILD_SCRIPTING=ON.";
+  }
+  return chinese
+    ? "未找到当前的桌面构建。请配置 build/desktop-release 或 build/desktop-debug。"
+    : "No current desktop build was found. Configure build/desktop-release or build/desktop-debug.";
+}
+
+function requireNativeBuildDir(context, preferScripting = false) {
+  const selection = nativeBuildDir(context, preferScripting);
+  if (selection.buildDirectory) {
+    return selection.buildDirectory;
+  }
+  const message = buildDirectoryError(context, selection);
+  ensureOutputChannel().appendLine(`JellyFrame build selection: ${message}`);
+  vscode.window.showErrorMessage(message);
+  return undefined;
 }
 
 function debugLauncherPath(context) {
@@ -381,10 +397,14 @@ async function runPackageCommand(context, commandName, resourceUri) {
       ? "选择渲染验证方式"
       : "Choose render verification mode");
     if (frameScript) {
+      const nativeBuildDirectory = requireNativeBuildDir(context, appRequiresScripting(root));
+      if (!nativeBuildDirectory) {
+        return;
+      }
       const frameOutputDir = path.join(buildDir(context), "debug", `${base}-check-frames`);
       const montage = path.join(buildDir(context), "debug", `${base}-check-montage.bmp`);
       args.push(
-        "--build-dir", nativeBuildDir(context, appRequiresScripting(root)),
+        "--build-dir", nativeBuildDirectory,
         "--frame-script", frameScript,
         "--frame-output-dir", frameOutputDir,
         "--frame-montage", montage
@@ -452,12 +472,16 @@ async function debugExternalApp(context, resourceUri) {
     vscode.window.showErrorMessage(`Missing debug launcher: ${launcher}`);
     return;
   }
+  const nativeBuildDirectory = requireNativeBuildDir(context, appRequiresScripting(root));
+  if (!nativeBuildDirectory) {
+    return;
+  }
   ensureBuildDir(context);
   const base = outputBase(root);
   const runtimeLog = path.join(buildDir(context), `vscode-${base}-debug-runtime.log`);
   const report = path.join(buildDir(context), `vscode-${base}-debug-report.json`);
   runDetachedPython(context, launcher, [
-    "--build-dir", nativeBuildDir(context, appRequiresScripting(root)),
+    "--build-dir", nativeBuildDirectory,
     "--app", root,
     "--runtime-log", runtimeLog,
     "--wait"
@@ -471,7 +495,7 @@ async function debugExternalApp(context, resourceUri) {
         "check",
         "--root", root,
         "--target", selectedTarget,
-        "--build-dir", nativeBuildDir(context, appRequiresScripting(root)),
+        "--build-dir", nativeBuildDirectory,
         "--report", report,
         "--runtime-log", runtimeLog,
         "--font-budget", config().get("fontBudget", "16x16")
@@ -1100,11 +1124,14 @@ async function debugApp(context, resourceUri) {
     vscode.window.showErrorMessage(`Missing debug launcher: ${launcher}`);
     return;
   }
+  const nativeBuildDirectory = requireNativeBuildDir(context, appRequiresScripting(root));
+  if (!nativeBuildDirectory) {
+    return;
+  }
   if (embeddedDebugSession) {
     const previous = embeddedDebugSession;
     await stopEmbeddedDebugSession(previous, 'Replacing the previous debug session...');
   }
-  const nativeBuildDirectory = nativeBuildDir(context, appRequiresScripting(root));
   ensureBuildDir(context);
   const sessionRoot = path.join(buildDir(context), 'debug', 'vscode-sessions');
   fs.mkdirSync(sessionRoot, { recursive: true });
@@ -1271,6 +1298,10 @@ async function runFrameScript(context, resourceUri) {
     return;
   }
   ensureBuildDir(context);
+  const nativeBuildDirectory = requireNativeBuildDir(context, appRequiresScripting(root));
+  if (!nativeBuildDirectory) {
+    return;
+  }
   const output = path.join(buildDir(context), "debug", `${outputBase(root)}-frames`);
   fs.mkdirSync(output, { recursive: true });
   const capture = path.join(output, "montage.bmp");
@@ -1279,7 +1310,7 @@ async function runFrameScript(context, resourceUri) {
     "preview",
     "--root", root,
     "--target", selectedTarget,
-    "--build-dir", nativeBuildDir(context, appRequiresScripting(root)),
+    "--build-dir", nativeBuildDirectory,
     "--output", capture,
     "--report", report,
     "--frame-script", selected[0].fsPath,
@@ -1399,7 +1430,8 @@ class JellyFrameStatusProvider {
     const root = currentPackageRoot();
     const hasPackage = Boolean(root);
     const app = hasPackage ? path.basename(root) : "No package selected";
-    const build = nativeBuildDir(this.context);
+    const selection = nativeBuildDir(this.context, appRequiresScripting(root));
+    const build = selection.buildDirectory || buildDirectoryError(this.context, selection);
     const pipeline = lastReport?.pipelineDiagnostics?.summary;
     const performance = lastReport?.performanceSummary;
     const hasRenderData = Boolean(lastReport?.pipelineDiagnostics?.format)

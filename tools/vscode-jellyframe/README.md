@@ -1,6 +1,6 @@
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-08-10; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-16; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -67,9 +67,12 @@ use the Extensions view's `Install from VSIX...` action and select the generated
 repository, set `jellyframe.repoRoot`; `jellyframe.buildDir` is optional. The
 extension prefers `build/desktop-release/Release`, then
 `build/desktop-debug/Debug`.
-For an app whose manifest declares `runtime.script`, the extension prefers an
-existing `build/desktop-scripting-release/Release` or other scripting build unless
-`jellyframe.buildDir` is explicitly set.
+For an app whose manifest declares `runtime.script`, the extension uses only
+`build/desktop-scripting-release/Release` or `build/desktop-scripting-debug/Debug`
+unless `jellyframe.buildDir` is explicitly set. A selected build must have
+`JELLYFRAME_BUILD_SCRIPTING=ON`; builds that retain the pre-1.0
+`JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME` cache option are rejected with a
+reconfigure instruction instead of being run accidentally.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
 

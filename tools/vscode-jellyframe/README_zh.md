@@ -1,6 +1,6 @@
 # JellyFrame VS Code 工具
 
-> 最后更新：2026-08-10；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-16；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里检查、预览、调试和
 打包 JellyFrame App。安装后可以从左侧 JellyFrame 活动栏、资源管理器/编辑器右键菜单
@@ -54,8 +54,10 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 安装到仓库之外时，在设置中填写 `jellyframe.repoRoot`；`jellyframe.buildDir`
 可选，用于指定桌面运行目录。扩展优先使用 `build/desktop-release/Release`，其次使用
 `build/desktop-debug/Debug`。
-如果 App manifest 声明了 `runtime.script`，未显式设置 `jellyframe.buildDir` 时会优先寻找
-`build/desktop-scripting-release/Release` 或其他脚本构建。
+如果 App manifest 声明了 `runtime.script`，未显式设置 `jellyframe.buildDir` 时扩展只会使用
+`build/desktop-scripting-release/Release` 或 `build/desktop-scripting-debug/Debug`。所选构建必须启用
+`JELLYFRAME_BUILD_SCRIPTING=ON`；仍保留 1.0 前
+`JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME` cache 项的构建会被拒绝，并提示重新配置，而不会被意外运行。
 
 使用 `JellyFrame: Show Last Report` 可以重新打开最近一次报告面板。
 
