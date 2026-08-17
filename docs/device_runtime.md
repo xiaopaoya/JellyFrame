@@ -218,6 +218,8 @@ firmware image and cannot replace the launcher, recovery UI or port code.
   The future physical client belongs to Device OS tooling and may be invoked by
   the Runtime CLI/extension through an explicit provider boundary; do not turn
   the reference command into a guessed serial or board transport.
+  [device_tool_provider_contract.md](device_tool_provider_contract.md) defines
+  that draft host-side boundary and its adoption gate.
 
 ### D3: External pilot
 

@@ -164,6 +164,7 @@ bundle 存储在固件镜像之外，不能替换 launcher、recovery UI 或 por
 - VS Code 提供设备视图及连接、安装/更新、启动、停止、删除、日志和 runtime capability 操作。
 - 桌面预览与设备调试保持区分。设备帧时间必须来自设备 telemetry，不能从 Win32 推断。
 - 桌面 contract reference 保持为 `jellyframe_cli.py device-reference`。未来 physical client 属于 Device OS tooling，可由 Runtime CLI/extension 通过明确 provider boundary 调用；不得把 reference command 改造成猜测式 serial 或板卡 transport。
+  [device_tool_provider_contract_zh.md](device_tool_provider_contract_zh.md) 定义该 host-side boundary 草案及接入 gate。
 
 ### D3：外部试用
 

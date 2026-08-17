@@ -59,6 +59,7 @@
 - [app_lifecycle_zh.md](../src/app_runtime/docs/app_lifecycle_zh.md)：面向 app 作者的安装、启动、挂起、恢复、
   service completion 和 recovery 生命周期行为。
 - [device_runtime_zh.md](device_runtime_zh.md)：官方 developer image、设备部署和工具链的产品边界与交付计划。
+- [device_tool_provider_contract_zh.md](device_tool_provider_contract_zh.md)：未来 Device OS client 与 Runtime CLI/VS Code 的边界；尚未实现。
 - [jfdp_v1_port_acceptance_zh.md](jfdp_v1_port_acceptance_zh.md)：第一条 physical developer transport 的字节流、malformed-frame 与证据 gate。
 - [authorized_file_broker_zh.md](../src/app_runtime/docs/authorized_file_broker_zh.md)：面向文件管理器和系统组件的宿主持有授权文件访问边界。
 - [host_optional_services_zh.md](../src/app_runtime/docs/host_optional_services_zh.md)：图片/音频/轻量视频、网络数据和安装式 bundle 的可选宿主服务契约。

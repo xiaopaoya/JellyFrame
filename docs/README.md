@@ -75,6 +75,8 @@ for whether a document needs another pass after code changes.
   for install, launch, suspend, resume, service completion and recovery.
 - [device_runtime.md](device_runtime.md): product boundary and delivery plan for
   official developer images, device deployment and tooling.
+- [device_tool_provider_contract.md](device_tool_provider_contract.md): future
+  Device OS client boundary for Runtime CLI and VS Code; not yet implemented.
 - [jfdp_v1_port_acceptance.md](jfdp_v1_port_acceptance.md): byte-stream,
   malformed-frame and evidence gate for the first physical developer transport.
 - [authorized_file_broker.md](../src/app_runtime/docs/authorized_file_broker.md): host-owned
