@@ -11,4 +11,4 @@ set(JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI "1")
 # release-artifact metadata because they are not available from an installed
 # CMake package.
 set(JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH
-    "cc78dc3f1bac8aa03d3c928ccf5292407586fe70d08d6ecec1907d59b41609e1")
+    "c0740548398f1678e2fb73d5272992627d8ce279b60f5256f23d53f5209af413")

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tarfile
@@ -108,6 +109,25 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             command.extend(["-G", self.generator])
         command.extend(definitions)
         run(command, cwd=self.source_root)
+
+    def runtime_consumer_checkout(self, root: Path, source_hash: str) -> Path:
+        """Stage a consumer fixture whose lock accepts this test archive only."""
+        checkout = root / "runtime-consumer-source"
+        run(["git", "clone", "--no-local", "--no-hardlinks", str(self.source_root), str(checkout)],
+            cwd=self.source_root)
+        lock_path = checkout / "cmake" / "jellyframe_dependency_lock.cmake"
+        lock = lock_path.read_text(encoding="utf-8")
+        updated_lock, substitutions = re.subn(
+            r'(set\(JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH\s+)'
+            r'("[0-9a-f]{64}")',
+            rf'\1"{source_hash}"',
+            lock,
+            count=1,
+            flags=re.VERBOSE,
+        )
+        self.assertEqual(substitutions, 1, "runtime dependency lock has one source hash")
+        lock_path.write_text(updated_lock, encoding="utf-8")
+        return checkout
 
     def test_archive_is_stable_across_text_line_endings(self) -> None:
         source_packager = packager_path(self.source_root)
@@ -279,6 +299,8 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             if not (self.source_root / "src" / "app_runtime").is_dir():
                 return
 
+            runtime_consumer_source = self.runtime_consumer_checkout(root, source_manifest["sourceHash"])
+
             # A downstream Core host must consume only the installed CMake
             # package and installed render_core headers. This keeps the
             # package boundary independently verifiable instead of proving it
@@ -333,7 +355,7 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
 
             runtime_build = root / "runtime-package-consumer"
             self.cmake_configure(
-                self.source_root,
+                runtime_consumer_source,
                 runtime_build,
                 [
                     "-DCMAKE_BUILD_TYPE=Release",
@@ -360,17 +382,17 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             run(
                 [str(self.cmake), "--build", str(runtime_build), "--config", "Release",
                  "--target", "jellyframe_app_runtime_tests", "--parallel"],
-                cwd=self.source_root,
+                cwd=runtime_consumer_source,
             )
             run(
                 ["ctest", "--test-dir", str(runtime_build), "-C", "Release",
                  "-R", "^jellyframe_app_runtime_tests$", "--output-on-failure"],
-                cwd=self.source_root,
+                cwd=runtime_consumer_source,
             )
 
             source_override_build = root / "runtime-source-override"
             self.cmake_configure(
-                self.source_root,
+                runtime_consumer_source,
                 source_override_build,
                 [
                     "-DCMAKE_BUILD_TYPE=Release",
@@ -392,12 +414,12 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             run(
                 [str(self.cmake), "--build", str(source_override_build), "--config", "Release",
                  "--target", "jellyframe_app_runtime_tests", "--parallel"],
-                cwd=self.source_root,
+                cwd=runtime_consumer_source,
             )
             run(
                 ["ctest", "--test-dir", str(source_override_build), "-C", "Release",
                  "-R", "^jellyframe_app_runtime_tests$", "--output-on-failure"],
-                cwd=self.source_root,
+                cwd=runtime_consumer_source,
             )
 
             # A package with the same version and ABI but another declared source
@@ -417,7 +439,7 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                                      encoding="utf-8")
             mismatch_build = root / "runtime-package-mismatched-source"
             mismatch_command = [
-                str(self.cmake), "-S", str(self.source_root), "-B", str(mismatch_build),
+                str(self.cmake), "-S", str(runtime_consumer_source), "-B", str(mismatch_build),
             ]
             if self.generator:
                 mismatch_command.extend(["-G", self.generator])
@@ -436,7 +458,7 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             )
             result = run_failure(
                 mismatch_command,
-                cwd=self.source_root,
+                cwd=runtime_consumer_source,
             )
             self.assertRegex(
                 result.stdout + result.stderr,

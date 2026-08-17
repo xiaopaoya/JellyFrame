@@ -13,7 +13,7 @@
 | JellyFrame App Runtime | 源码内 `jellyframe_render_core` | 同一 checkout | `verified` | 默认桌面 Release/Debug 和非 scripting CI CTest。适合同步修改 Core 与 Runtime。 |
 | JellyFrame App Runtime | 解压后的 Core 源码归档 | `0.6.0` source profile | `verified` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 会为独立 Runtime 构建选用解压后的归档，并运行 App Runtime CTest；仍与 package 模式互斥。 |
 | Render Core standalone 测试 | 无 Runtime、无 JerryScript | `0.6.0` / ABI `1` | `verified` | 已验证独立配置、构建、CTest 和安装；package 只包含 Core target、公共头文件和能力 profile。 |
-| Render Core 源码归档 | 无 Runtime、无 JerryScript | `0.6.0` / ABI `1` | `verified` | 确定性的 `.tar.gz` 与 SHA-256 sidecar，作为 CI artifact 保留。声明为文本的成员会规范为 LF，不透明二进制成员保持原样；CI 会用等价的 CRLF/LF 源树证明 archive 字节相同，再解压、构建、运行 CTest、安装并配置 Runtime package consumer。这不是已签名的发布产物。 |
+| Render Core 源码归档 | 无 Runtime、无 JerryScript | `0.6.0` / ABI `1` | `released` | 带签名 `v0.6.0` release 的确定性 `.tar.gz` 与 SHA-256 sidecar。声明为文本的成员会规范为 LF，不透明二进制成员保持原样；CI 会用等价的 CRLF/LF 源树证明 archive 字节相同，再解压、构建、运行 CTest、安装并配置 Runtime package consumer。 |
 | JellyFrame App Runtime | 已安装 Render Core package | `0.6.0` / ABI `1` / 规范化的锁定 source manifest identity | `verified` | Runtime 使用 `JELLYFRAME_RENDER_CORE_PROVIDER=package`；会将 package manifest 与精确锁定的 source hash 比对，再复制到构建 provenance。identity 会规范化文本换行，因此同一源码的 Windows 与 Unix checkout 得到相同结果。 |
 | JellyFrame App Runtime | 已安装 Render Core package | 错误版本、ABI 或 source identity | `rejected` | 配置阶段执行精确版本、engine ABI 和 source hash 检查；package 模式不允许偷偷回退到源码 Core。 |
 | App package 预检 | 生成的 Render Core capability profile | schema `1` / engine ABI `1` | `verified` | `package_app.py` 会在读取资源前校验 profile schema、已知 feature ID 和依赖闭包；缺失必需能力族会拒绝 package。 |
@@ -29,10 +29,16 @@ Runtime package consumer 从 `cmake/jellyframe_dependency_lock.cmake` 读取：
 ```text
 JELLYFRAME_RENDER_CORE_LOCKED_VERSION    = 0.6.0
 JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI = 1
-JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = cc78dc3f1bac8aa03d3c928ccf5292407586fe70d08d6ecec1907d59b41609e1
+JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = c0740548398f1678e2fb73d5272992627d8ce279b60f5256f23d53f5209af413
 ```
 
 这份锁是消费者策略，不表示未来所有 Render Core 构建都必须保持同一版本。
+
+当前接纳的 release 是 [`v0.6.0`](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.6.0)。
+其确定性 source archive 的 SHA-256 为
+`18a413f508b4b854a824ec0ea1e761b729c1d364e1dc3a24a4e82b861baafcf6`。
+该 release-artifact identity 与 source manifest 分开记录，因为已安装的 CMake package
+无法证明自己来自哪一份 archive。
 Core 可以独立演进，但 Runtime 接受新版本前，必须更新锁、运行 package-consumer
 构建，并审阅能力 profile。
 

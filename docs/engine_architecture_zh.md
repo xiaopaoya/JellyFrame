@@ -37,8 +37,8 @@ ctest --test-dir build\core-from-archive -C Release --output-on-failure
 Runtime、JerryScript、ports、设备契约、示例或 app 资源。打包器会将声明为文本的成员规范为 LF，并规范化成员顺序与
 归档元数据，写出 SHA-256 sidecar；CI 会解压、构建、测试、安装，并由 Runtime 的
 package-provider 配置消费生成的 package。Standalone Core CI job 会将该归档和 sidecar
-保留为 workflow artifact。这是当前的迁出门槛，不表示它已成为独立治理的 Git 仓库或已签名
-发布版本。
+保留为 workflow artifact。独立治理的仓库现已发布带签名的 `v0.6.0`；consumer 仍只能通过
+显式 dependency-lock 更新接纳它。
 
 App Runtime 可以消费已经安装的 Render Core 包，而不编译当前 checkout 中的
 Render Core 源码：
@@ -85,7 +85,7 @@ provider 指向另一个 checkout 或已解压的 Render Core 源码树。这只
 
 | 未来仓库 | 负责内容 | 迭代规律 | 当前状态 |
 | --- | --- | --- | --- |
-| `jellyframe-render-core` | HTML/CSS/DOM、layout、paint、input 和可选 feature family | 高频优化与兼容性发布 | 物理仓库已建立；standalone CI、安装/导出与 package-consumer 边界已验证，初始分支尚非带签名 release |
+| `jellyframe-render-core` | HTML/CSS/DOM、layout、paint、input 和可选 feature family | 高频优化与兼容性发布 | 物理仓库已建立；带签名的 `v0.6.0`、standalone CI、安装/导出与 package-consumer 边界均已验证。 |
 | `jellyframe` | App Runtime、Japp 格式、JerryScript binding、桌面壳和开发工具 | 慢速迭代，维护 App 兼容契约 | 当前 Runtime 源码边界；可消费锁定 Core package 或 in-tree Core |
 | `jellyframe-device-os` | launcher、registry、Device Runtime、JFDP、板卡 port 和官方镜像 | 强硬件依赖的实验性迭代 | 尚未物理迁出；D0 契约仍位于过渡位置 |
 | JerryScript | 第三方脚本引擎 | 跟随上游 commit/tag | 可选依赖，由 Runtime/port 构建锁定 |

@@ -46,8 +46,9 @@ normalizes declared text members to LF, member order and archive metadata,
 writes a SHA-256 sidecar, and CI
 extracts, builds, tests, installs and consumes the resulting package through
 the Runtime package-provider configuration. The Standalone Core CI job retains
-that archive and sidecar as a workflow artifact. This is the current extraction
-gate; it is not yet a separately governed Git repository or signed release.
+that archive and sidecar as a workflow artifact. The independently governed
+repository has now published signed `v0.6.0`; consumers still accept it only
+through an explicit dependency-lock update.
 
 The App Runtime can consume that installed package without compiling the Render
 Core sources from this checkout:
@@ -106,7 +107,7 @@ ownership model:
 
 | Future repository | Owns | Release rhythm | Current state |
 | --- | --- | --- | --- |
-| `jellyframe-render-core` | HTML/CSS/DOM, layout, paint, input and opt-in feature families | Frequent optimization and compatibility releases | Physical repository created; standalone CI, install/export and package-consumer boundaries are verified. Its initial branch is not yet a signed release. |
+| `jellyframe-render-core` | HTML/CSS/DOM, layout, paint, input and opt-in feature families | Frequent optimization and compatibility releases | Physical repository created; signed `v0.6.0`, standalone CI, install/export and package-consumer boundaries are verified. |
 | `jellyframe` | App Runtime, Japp format, JerryScript binding, desktop shell and author tools | Slower releases with App compatibility discipline | Current Runtime source boundary; accepts a locked Core package or in-tree Core |
 | `jellyframe-device-os` | Launcher, registry, Device Runtime, JFDP, board ports and official images | Experimental hardware-driven releases | Not physically extracted; D0 contracts remain in transitional locations |
 | JerryScript | Third-party scripting engine | Upstream commit/tag cadence | Optional dependency, locked by the Runtime build/port owner |
