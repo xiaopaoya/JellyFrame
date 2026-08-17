@@ -1,6 +1,6 @@
 # JellyFrame
 
-> 最后更新：2026-08-14；适用版本：0.6.0-dev
+> 最后更新：2026-08-18；适用版本：0.6.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -155,8 +155,8 @@ python tools\jellyframe_cli.py check `
 它明确不模拟真实显示和触控：
 
 ```powershell
-python tools\jellyframe_cli.py device --transport reference --store build\device-reference info
-python tools\jellyframe_cli.py device --transport reference --store build\device-reference list
+python tools\jellyframe_cli.py device-reference --store build\device-reference info
+python tools\jellyframe_cli.py device-reference --store build\device-reference list
 ```
 
 ## 可选脚本构建

@@ -3001,17 +3001,10 @@ def cmd_registry(args: argparse.Namespace) -> int:
     return app_registry.main(registry_args)
 
 
-def cmd_device(args: argparse.Namespace) -> int:
-    """Run the explicit desktop reference endpoint, never a physical device."""
-    if args.transport != "reference":
-        print(
-            "device transport is not configured; use --transport reference for the desktop registry reference endpoint",
-            file=sys.stderr,
-        )
-        return 2
-
+def cmd_device_reference(args: argparse.Namespace) -> int:
+    """Run the desktop JFDP contract reference, never a physical device."""
     store = args.store
-    command = args.device_command
+    command = args.reference_command
     try:
         if command in {"info", "discover"}:
             result = device_reference.discovery(store)
@@ -3905,31 +3898,27 @@ def main() -> int:
                           help="Arguments passed to tools/app_registry.py.")
     registry.set_defaults(func=cmd_registry)
 
-    device = subparsers.add_parser(
-        "device",
-        help="Use a physical device transport or the explicitly named desktop reference endpoint.",
+    device_reference_parser = subparsers.add_parser(
+        "device-reference",
+        help="Exercise the desktop JFDP contract reference; no physical device is contacted.",
+        description="Exercise the desktop JFDP contract reference; no physical device is contacted.",
     )
-    device.add_argument(
-        "--transport",
-        choices=["reference"],
-        help="Transport adapter. Physical transports are added by ports; none is implied by default.",
-    )
-    device.add_argument("--store", required=True, type=Path,
-                        help="Reference endpoint registry directory.")
-    device_subparsers = device.add_subparsers(dest="device_command", required=True)
+    device_reference_parser.add_argument("--store", required=True, type=Path,
+                                         help="Reference endpoint registry directory.")
+    device_subparsers = device_reference_parser.add_subparsers(dest="reference_command", required=True)
     info = device_subparsers.add_parser("info", help="Show endpoint identity and availability.")
     info.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    info.set_defaults(func=cmd_device)
+    info.set_defaults(func=cmd_device_reference)
     discover = device_subparsers.add_parser("discover", help="Run the JFDP/1 discovery semantic against the reference endpoint.")
     discover.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    discover.set_defaults(func=cmd_device)
+    discover.set_defaults(func=cmd_device_reference)
     list_device = device_subparsers.add_parser("list", help="List apps in the reference registry.")
     list_device.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    list_device.set_defaults(func=cmd_device)
+    list_device.set_defaults(func=cmd_device_reference)
     state_device = device_subparsers.add_parser("state", help="Print launcher state from the reference registry.")
     state_device.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     state_device.add_argument("--output", type=Path, help="Write state JSON to a file.")
-    state_device.set_defaults(func=cmd_device)
+    state_device.set_defaults(func=cmd_device_reference)
     install_device = device_subparsers.add_parser("install", help="Chunk, stage and atomically install a bundle into the reference registry.")
     install_device.add_argument("--bundle", required=True, type=Path, help="Input .jfapp bundle.")
     install_device.add_argument("--allow-downgrade", action="store_true", help="Allow a lower versionCode.")
@@ -3938,7 +3927,7 @@ def main() -> int:
     install_device.add_argument("--pause-after-chunks", type=int,
                                 help="Reference-only test hook: leave the transaction receiving after this many chunks.")
     install_device.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    install_device.set_defaults(func=cmd_device)
+    install_device.set_defaults(func=cmd_device_reference)
     resume = device_subparsers.add_parser("resume", help="Resume a staged reference install and commit when complete.")
     resume.add_argument("--transaction-id", required=True, type=int, help="Receiving transaction id.")
     resume.add_argument("--bundle", required=True, type=Path, help="Original .jfapp bundle used to resume bytes.")
@@ -3947,38 +3936,38 @@ def main() -> int:
     resume.add_argument("--pause-after-chunks", type=int,
                         help="Reference-only test hook: leave the transaction receiving after this many chunks.")
     resume.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    resume.set_defaults(func=cmd_device)
+    resume.set_defaults(func=cmd_device_reference)
     for name, description in (("commit", "Commit a complete staged reference install."),
                               ("cancel", "Cancel and discard a staged reference install.")):
         command_parser = device_subparsers.add_parser(name, help=description)
         command_parser.add_argument("--transaction-id", required=True, type=int, help="Receiving transaction id.")
         command_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-        command_parser.set_defaults(func=cmd_device)
+        command_parser.set_defaults(func=cmd_device_reference)
     launch = device_subparsers.add_parser("launch", help="Mark an installed reference app as active.")
     launch.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
     launch.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    launch.set_defaults(func=cmd_device)
+    launch.set_defaults(func=cmd_device_reference)
     stop = device_subparsers.add_parser("stop", help="Stop the active reference app.")
     stop.add_argument("--id", dest="app_id", help="Optional active app id guard.")
     stop.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    stop.set_defaults(func=cmd_device)
+    stop.set_defaults(func=cmd_device_reference)
     remove = device_subparsers.add_parser("remove", help="Remove an app from the reference registry.")
     remove.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
     remove.add_argument("--keep-data", action="store_true", help="Keep app-private data.")
     remove.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    remove.set_defaults(func=cmd_device)
+    remove.set_defaults(func=cmd_device_reference)
     rollback = device_subparsers.add_parser("rollback", help="Rollback an app in the reference registry.")
     rollback.add_argument("--id", dest="app_id", required=True, help="Installed app id.")
     rollback.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    rollback.set_defaults(func=cmd_device)
+    rollback.set_defaults(func=cmd_device_reference)
     logs = device_subparsers.add_parser("logs", help="Read bounded app-scoped reference lifecycle logs.")
     logs.add_argument("--id", dest="app_id", help="Optional app id filter.")
     logs.add_argument("--limit", type=int, default=64, help="Maximum returned entries (1..256).")
     logs.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    logs.set_defaults(func=cmd_device)
+    logs.set_defaults(func=cmd_device_reference)
     recovery = device_subparsers.add_parser("recovery", help="Read reference launcher and transaction recovery state.")
     recovery.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    recovery.set_defaults(func=cmd_device)
+    recovery.set_defaults(func=cmd_device_reference)
 
     doctor = subparsers.add_parser("doctor", help="Run repository self-checks for trial-ready sample packages.")
     doctor.add_argument("--build-dir", default=default_build_dir(), type=Path,

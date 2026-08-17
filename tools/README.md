@@ -1,6 +1,6 @@
 # Tools
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-18; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Desktop developer tools for packaging, validation and editor integration.
 
@@ -11,7 +11,7 @@ Choose by task before opening the directory:
 | Create, check, preview or package an app | `jellyframe_cli.py`, `package_app.py`, `templates/` | App author |
 | Inspect pixels, layout, events or a frame script | `debug/README.md` then `native/README.md` | App author, UI reviewer |
 | Validate installed apps and launcher recovery | `jellyframe_cli.py`, `app_registry.py`, `schemas/` | Host/runtime developer |
-| Exercise JFDP/1 control semantics without a board | `jellyframe_cli.py device --transport reference` | Runtime/transport developer |
+| Exercise desktop JFDP/1 control semantics without a board | `jellyframe_cli.py device-reference` | Runtime/transport developer |
 | Check build slicing, link ownership or desktop speed | `../project_tools/render_core_feature_registry.py`, `../project_tools/check_render_core_link_map.py`, `../project_tools/benchmark_guard.py` | Render Core maintainer |
 | Refresh HTML/CSS audit tables | `../project_tools/generate_html_support_table.py`, `../project_tools/generate_css_support_table.py`, `../project_tools/import_css_support_crosswork.py` | Compatibility maintainer |
 | Work in VS Code | `vscode-jellyframe/README.md` | App author, extension maintainer |

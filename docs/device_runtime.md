@@ -148,11 +148,11 @@ The desktop reference endpoint can be selected explicitly while exercising the
 toolchain:
 
 ```text
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference discover --json
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference install --bundle app.jfapp --chunk-bytes 1024
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference launch --id org.example.app
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference logs --id org.example.app --json
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference rollback --id org.example.app
+python tools/jellyframe_cli.py device-reference --store build/device-reference discover --json
+python tools/jellyframe_cli.py device-reference --store build/device-reference install --bundle app.jfapp --chunk-bytes 1024
+python tools/jellyframe_cli.py device-reference --store build/device-reference launch --id org.example.app
+python tools/jellyframe_cli.py device-reference --store build/device-reference logs --id org.example.app --json
+python tools/jellyframe_cli.py device-reference --store build/device-reference rollback --id org.example.app
 ```
 
 The reference host persists chunk staging separately from the registry, exposes
@@ -161,10 +161,11 @@ and only publishes a bundle after commit. `--pause-after-chunks` is a
 reference-only test hook for exercising resume/cancel; it is not a device
 transfer option. The endpoint reports `deviceAvailable=false`: its lifecycle
 logs and recovery records are desktop reference evidence, not panel, touch,
-wire-transport or device-frame telemetry. Without `--transport reference`, the
-CLI reports that no physical transport is configured. USB, serial and Wi-Fi
-transports will be registered by their respective ports rather than inferred by
-the core.
+wire-transport or device-frame telemetry. The command is deliberately named
+`device-reference`: the Runtime does not yet expose a `device` command because
+no physical transport is configured. USB, serial and Wi-Fi transports will be
+registered by their respective Device OS tools rather than inferred by the
+core.
 
 ## Official Board Profiles
 
@@ -213,6 +214,10 @@ firmware image and cannot replace the launcher, recovery UI or port code.
   stop, remove, logs and runtime capabilities.
 - Keep desktop preview separate from device debug. A reported device frame time
   must come from device telemetry, never inferred from Win32.
+- The desktop contract reference remains `jellyframe_cli.py device-reference`.
+  The future physical client belongs to Device OS tooling and may be invoked by
+  the Runtime CLI/extension through an explicit provider boundary; do not turn
+  the reference command into a guessed serial or board transport.
 
 ### D3: External pilot
 

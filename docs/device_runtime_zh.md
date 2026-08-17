@@ -113,18 +113,18 @@ framing、payload、result code 与 staging 契约，不能复制它们。
 桌面端可以显式运行 reference endpoint，以验证工具链而不误认为连接了开发板：
 
 ```text
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference discover --json
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference install --bundle app.jfapp --chunk-bytes 1024
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference launch --id org.example.app
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference logs --id org.example.app --json
-python tools/jellyframe_cli.py device --transport reference --store build/device-reference rollback --id org.example.app
+python tools/jellyframe_cli.py device-reference --store build/device-reference discover --json
+python tools/jellyframe_cli.py device-reference --store build/device-reference install --bundle app.jfapp --chunk-bytes 1024
+python tools/jellyframe_cli.py device-reference --store build/device-reference launch --id org.example.app
+python tools/jellyframe_cli.py device-reference --store build/device-reference logs --id org.example.app --json
+python tools/jellyframe_cli.py device-reference --store build/device-reference rollback --id org.example.app
 ```
 
 reference host 会将 chunk staging 与 registry 分离持久化，提供 `resume`、`commit`、`cancel`、`launch`、
 `stop`、`remove`、`logs` 和 `recovery`，并且只在 commit 后发布 bundle。`--pause-after-chunks` 只是验证
 resume/cancel 的 reference-only test hook，不是设备传输选项。endpoint 的 `deviceAvailable` 固定为 false：其
 lifecycle log 和 recovery record 仅是桌面 reference 证据，不能被当作 panel、触控、wire transport 或设备帧率
-telemetry。没有 `--transport reference` 时 CLI 会明确报错；真实 USB、串口或 Wi-Fi transport 由对应 port 单独注册。
+telemetry。该命令刻意命名为 `device-reference`：没有真实 transport 时 Runtime 不提供 `device` 命令；真实 USB、串口或 Wi-Fi transport 由对应 Device OS 工具单独注册，而不是由 core 猜测。
 
 ## 官方板卡 Profile
 
@@ -163,6 +163,7 @@ bundle 存储在固件镜像之外，不能替换 launcher、recovery UI 或 por
 - CLI 支持设备发现和显式设备选择。
 - VS Code 提供设备视图及连接、安装/更新、启动、停止、删除、日志和 runtime capability 操作。
 - 桌面预览与设备调试保持区分。设备帧时间必须来自设备 telemetry，不能从 Win32 推断。
+- 桌面 contract reference 保持为 `jellyframe_cli.py device-reference`。未来 physical client 属于 Device OS tooling，可由 Runtime CLI/extension 通过明确 provider boundary 调用；不得把 reference command 改造成猜测式 serial 或板卡 transport。
 
 ### D3：外部试用
 

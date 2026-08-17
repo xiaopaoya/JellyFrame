@@ -1,6 +1,6 @@
 # JellyFrame
 
-> Last updated: 2026-08-14; Applies to: 0.6.0-dev
+> Last updated: 2026-08-18; Applies to: 0.6.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -178,8 +178,8 @@ the install, list, rollback and remove flow. It deliberately does not simulate
 real display or touch:
 
 ```powershell
-python tools\jellyframe_cli.py device --transport reference --store build\device-reference info
-python tools\jellyframe_cli.py device --transport reference --store build\device-reference list
+python tools\jellyframe_cli.py device-reference --store build\device-reference info
+python tools\jellyframe_cli.py device-reference --store build\device-reference list
 ```
 
 ## Optional Scripting Build

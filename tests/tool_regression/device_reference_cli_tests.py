@@ -115,11 +115,14 @@ class DeviceReferenceCliTests(unittest.TestCase):
         for name, encoded in actual.items():
             self.assertEqual(encoded, vectors[name], name)
 
-    def test_requires_explicit_reference_transport(self):
-        with tempfile.TemporaryDirectory(prefix="jellyframe-device-reference-") as directory:
-            result = self.run_cli("device", "--store", directory, "info")
-            self.assertEqual(result.returncode, 2)
-            self.assertIn("--transport reference", result.stderr)
+    def test_device_reference_command_is_explicit_and_physical_device_is_not_exposed(self):
+        help_result = self.run_cli("device-reference", "--help")
+        self.assertEqual(help_result.returncode, 0, help_result.stderr)
+        self.assertIn("no physical device is contacted", help_result.stdout)
+
+        device_result = self.run_cli("device", "--help")
+        self.assertEqual(device_result.returncode, 2)
+        self.assertIn("invalid choice", device_result.stderr)
 
     def test_reference_endpoint_runs_install_list_state_remove(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-device-reference-") as directory:
@@ -129,26 +132,26 @@ class DeviceReferenceCliTests(unittest.TestCase):
             write_jfapp(bundle, app_id="org.example.reference", version_code=1)
 
             install = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store),
+                "device-reference", "--store", str(store),
                 "install", "--bundle", str(bundle), "--json",
             )
             self.assertEqual(install.returncode, 0, install.stderr)
             self.assertEqual(json.loads(install.stdout)["id"], "org.example.reference")
 
             listing = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "list", "--json",
+                "device-reference", "--store", str(store), "list", "--json",
             )
             self.assertEqual(listing.returncode, 0, listing.stderr)
             self.assertEqual(len(json.loads(listing.stdout)["apps"]), 1)
 
             state = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "state", "--json",
+                "device-reference", "--store", str(store), "state", "--json",
             )
             self.assertEqual(state.returncode, 0, state.stderr)
             self.assertEqual(json.loads(state.stdout)["summary"]["launchableCount"], 1)
 
             remove = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store),
+                "device-reference", "--store", str(store),
                 "remove", "--id", "org.example.reference", "--json",
             )
             self.assertEqual(remove.returncode, 0, remove.stderr)
@@ -167,13 +170,13 @@ class DeviceReferenceCliTests(unittest.TestCase):
             write_jfapp(cancelled_bundle, app_id="org.example.cancelled", version_code=1)
 
             discovery = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "discover", "--json",
+                "device-reference", "--store", str(store), "discover", "--json",
             )
             self.assertEqual(discovery.returncode, 0, discovery.stderr)
             self.assertFalse(json.loads(discovery.stdout)["deviceAvailable"])
 
             paused = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "install",
+                "device-reference", "--store", str(store), "install",
                 "--bundle", str(first_bundle), "--chunk-bytes", "64", "--pause-after-chunks", "1", "--json",
             )
             self.assertEqual(paused.returncode, 0, paused.stderr)
@@ -182,20 +185,20 @@ class DeviceReferenceCliTests(unittest.TestCase):
             transaction_id = paused_result["transactionId"]
 
             no_partial = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "list", "--json",
+                "device-reference", "--store", str(store), "list", "--json",
             )
             self.assertEqual(no_partial.returncode, 0, no_partial.stderr)
             self.assertEqual(len(json.loads(no_partial.stdout)["apps"]), 0)
 
             incomplete_commit = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "commit",
+                "device-reference", "--store", str(store), "commit",
                 "--transaction-id", str(transaction_id), "--json",
             )
             self.assertEqual(incomplete_commit.returncode, 1)
             self.assertEqual(json.loads(incomplete_commit.stdout)["resultCode"], "invalid-request")
 
             recovery = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "recovery", "--json",
+                "device-reference", "--store", str(store), "recovery", "--json",
             )
             self.assertEqual(recovery.returncode, 0, recovery.stderr)
             recovery_result = json.loads(recovery.stdout)
@@ -203,45 +206,45 @@ class DeviceReferenceCliTests(unittest.TestCase):
             self.assertEqual(recovery_result["lastFailure"]["reason"], "invalid-request")
 
             resumed = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "resume",
+                "device-reference", "--store", str(store), "resume",
                 "--transaction-id", str(transaction_id), "--bundle", str(first_bundle), "--chunk-bytes", "64", "--json",
             )
             self.assertEqual(resumed.returncode, 0, resumed.stderr)
             self.assertEqual(json.loads(resumed.stdout)["versionCode"], 1)
 
             launch = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "launch",
+                "device-reference", "--store", str(store), "launch",
                 "--id", "org.example.lifecycle", "--json",
             )
             self.assertEqual(launch.returncode, 0, launch.stderr)
             self.assertTrue(json.loads(launch.stdout)["active"])
             stop = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "stop", "--json",
+                "device-reference", "--store", str(store), "stop", "--json",
             )
             self.assertEqual(stop.returncode, 0, stop.stderr)
             self.assertFalse(json.loads(stop.stdout)["active"])
 
             update = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "install",
+                "device-reference", "--store", str(store), "install",
                 "--bundle", str(second_bundle), "--chunk-bytes", "64", "--json",
             )
             self.assertEqual(update.returncode, 0, update.stderr)
             self.assertEqual(json.loads(update.stdout)["versionCode"], 2)
             rollback = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "rollback",
+                "device-reference", "--store", str(store), "rollback",
                 "--id", "org.example.lifecycle", "--json",
             )
             self.assertEqual(rollback.returncode, 0, rollback.stderr)
             self.assertEqual(json.loads(rollback.stdout)["versionCode"], 1)
 
             cancelled = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "install",
+                "device-reference", "--store", str(store), "install",
                 "--bundle", str(cancelled_bundle), "--chunk-bytes", "64", "--pause-after-chunks", "1", "--json",
             )
             self.assertEqual(cancelled.returncode, 0, cancelled.stderr)
             cancelled_id = json.loads(cancelled.stdout)["transactionId"]
             cancel = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "cancel",
+                "device-reference", "--store", str(store), "cancel",
                 "--transaction-id", str(cancelled_id), "--json",
             )
             self.assertEqual(cancel.returncode, 0, cancel.stderr)
@@ -249,7 +252,7 @@ class DeviceReferenceCliTests(unittest.TestCase):
             self.assertIsNone(app_registry.existing_app_entry(store, "org.example.cancelled"))
 
             logs = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "logs",
+                "device-reference", "--store", str(store), "logs",
                 "--id", "org.example.lifecycle", "--json",
             )
             self.assertEqual(logs.returncode, 0, logs.stderr)
@@ -259,7 +262,7 @@ class DeviceReferenceCliTests(unittest.TestCase):
             self.assertIn("rollback", events)
 
             remove = self.run_cli(
-                "device", "--transport", "reference", "--store", str(store), "remove",
+                "device-reference", "--store", str(store), "remove",
                 "--id", "org.example.lifecycle", "--json",
             )
             self.assertEqual(remove.returncode, 0, remove.stderr)
