@@ -189,6 +189,7 @@ cmake --build build/desktop-scripting-release --config Release
 - `src/render_core`：平台无关 HTML/CSS/DOM/rendering 核心。
 - `src/app_runtime`：app 生命周期与可选 host-service helper。
 - `docs/device_runtime_zh.md`：官方开发板镜像、设备生命周期和未来传输接入规划。
+- `docs/device_image_lifecycle_port_acceptance_zh.md`：physical JFDP/1 wire pass 后的持久 staging、registry 与 launcher recovery gate。
 - `src/script`：可选 JerryScript 绑定层。
 - `samples`：app packages 和 app 生命周期样例。
 - `tests`：平台无关回归测试。

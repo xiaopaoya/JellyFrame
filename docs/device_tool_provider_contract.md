@@ -1,6 +1,6 @@
 # Device OS Tool Provider Contract
 
-> Last updated: 2026-08-18; Applies to: JellyFrame `0.6.0-dev`; Status: draft; physical provider not implemented
+> Last updated: 2026-08-18; Applies to: 0.6.0-dev; Status: draft; physical provider not implemented
 
 This host-process contract separates Runtime author tools from physical board
 dependencies. It is not `JFDP/1`, does not change its wire bytes and does not

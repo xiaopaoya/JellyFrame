@@ -215,6 +215,8 @@ with the runtime execution budget.
 - `src/app_runtime`: app lifecycle and optional host-service helpers.
 - `docs/device_runtime.md`: official board images, device lifecycle and future
   transport integration plan.
+- `docs/device_image_lifecycle_port_acceptance.md`: persistent staging,
+  registry and launcher-recovery gate after a physical JFDP/1 wire pass.
 - `src/script`: optional JerryScript binding layer.
 - `samples`: app packages and app lifecycle samples.
 - `tests`: platform-neutral regression tests.

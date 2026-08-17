@@ -1,6 +1,6 @@
 # JFDP/1 物理传输验收
 
-> 最后更新：2026-08-18；适用：`JFDP/1`、JellyFrame `0.6.0-dev`
+> 最后更新：2026-08-18；适用版本：0.6.0-dev；协议：JFDP/1
 
 这是第一条真实 JellyFrame Device Protocol 传输的移植侧验收契约，适用于 USB CDC、USB Serial/JTAG、UART、Wi-Fi 或 host bridge。它不实现 transport，不授予原始设备访问能力，也不把桌面 reference endpoint 伪装成硬件证据。
 

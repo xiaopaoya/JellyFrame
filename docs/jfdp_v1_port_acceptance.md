@@ -1,6 +1,6 @@
 # JFDP/1 Physical Transport Acceptance
 
-> Last updated: 2026-08-18; Applies to: `JFDP/1`, JellyFrame `0.6.0-dev`
+> Last updated: 2026-08-18; Applies to: 0.6.0-dev; Protocol: JFDP/1
 
 This is the port-side acceptance contract for the first real JellyFrame Device Protocol transport. It applies to USB CDC, USB Serial/JTAG, UART, Wi-Fi or a host bridge. It does not implement a transport, grant raw device access or turn the desktop reference endpoint into hardware evidence.
 

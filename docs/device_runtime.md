@@ -141,8 +141,11 @@ neither App Runtime nor Render Core. This remains a monorepo transition until
 future Device OS package migration is complete. The desktop reference host
 contains a deterministic typed-frame dispatcher for the completed staging and
 lifecycle semantic loop. A port must consume the existing framing, payload,
-result-code and staging contracts; it must not fork them. This does not claim that USB,
-serial, Wi-Fi or any physical JFDP wire transport is implemented.
+result-code and staging contracts; it must not fork them. The WS147 native USB
+Serial/JTAG adapter has passed the physical wire-only acceptance matrix for one
+documented image/configuration. That does not make the desktop reference
+endpoint physical and does not prove persistent storage, launcher recovery or
+author tools; see [device_image_lifecycle_port_acceptance.md](device_image_lifecycle_port_acceptance.md).
 
 The desktop reference endpoint can be selected explicitly while exercising the
 toolchain:
@@ -162,10 +165,10 @@ reference-only test hook for exercising resume/cancel; it is not a device
 transfer option. The endpoint reports `deviceAvailable=false`: its lifecycle
 logs and recovery records are desktop reference evidence, not panel, touch,
 wire-transport or device-frame telemetry. The command is deliberately named
-`device-reference`: the Runtime does not yet expose a `device` command because
-no physical transport is configured. USB, serial and Wi-Fi transports will be
-registered by their respective Device OS tools rather than inferred by the
-core.
+`device-reference`: Runtime deliberately does not expose a `device` command
+because it does not configure or guess physical endpoints. USB, serial and
+Wi-Fi transports are registered by their respective Device OS tools rather
+than inferred by the core.
 
 ## Official Board Profiles
 
@@ -197,8 +200,9 @@ firmware image and cannot replace the launcher, recovery UI or port code.
   discovery/list/chunked-install/commit/cancel/lifecycle/log/recovery control
   semantics; C++ codecs and the desktop dispatcher verify request/response
   correlation, bounded payloads and typed status/progress results. The
-  contracts now have their own source owner, while physical Device OS package
-  extraction and a real port transport remain before port integration.
+  contracts now have their own source owner. One WS147 port adapter has passed
+  physical wire acceptance; Device OS package extraction and persistent image
+  lifecycle integration remain open.
 
 ### D1: First official developer image
 
@@ -206,6 +210,9 @@ firmware image and cannot replace the launcher, recovery UI or port code.
   USB developer transport adapter.
 - Implement only the D0 control operations required by the first workflow.
 - Publish one board/profile manifest and a recoverable factory flashing tool.
+- The USB adapter's byte-stream preflight is closed for one WS147 acceptance
+  configuration. Persistent installation and launcher recovery remain open
+  under the separate lifecycle gate.
 
 ### D2: Author tooling
 

@@ -73,6 +73,9 @@ Before a physical developer transport is accepted, run
 vectors, partial reads, coalesced frames, malformed inputs, request correlation
 and required evidence. Passing it is a wire gate only, not a claim that the
 full developer-image lifecycle or external trial is ready.
+After that gate, a developer image must pass
+[device_image_lifecycle_port_acceptance.md](device_image_lifecycle_port_acceptance.md)
+before its staging storage, registry or launcher path is considered usable by app authors.
 
 ## Porting Phases
 

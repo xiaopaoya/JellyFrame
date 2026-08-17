@@ -107,8 +107,10 @@ Render Core。写入失败、校验失败、提交失败和主动取消都会清
 `src/device_runtime_contracts`，并编译为独立的 `jellyframe_device_runtime_contracts` target，测试不链接
 App Runtime 或 Render Core。未来 Device OS package 迁移完成前，这仍是 monorepo 过渡状态。桌面 reference host
 已包含对完成的 staging/lifecycle semantic loop 进行确定性处理的 typed-frame dispatcher。port 必须消费现有
-framing、payload、result code 与 staging 契约，不能复制它们。
-这不表示 USB、串口、Wi-Fi 或任何物理 JFDP wire transport 已经实现。
+framing、payload、result code 与 staging 契约，不能复制它们。WS147 native USB Serial/JTAG adapter 已在一个文档化
+image/configuration 上通过 physical wire-only acceptance matrix；这不会把 desktop reference endpoint 变成物理设备，
+也不证明 persistent storage、launcher recovery 或作者工具已完成，详见
+[device_image_lifecycle_port_acceptance_zh.md](device_image_lifecycle_port_acceptance_zh.md)。
 
 桌面端可以显式运行 reference endpoint，以验证工具链而不误认为连接了开发板：
 
@@ -150,13 +152,16 @@ bundle 存储在固件镜像之外，不能替换 launcher、recovery UI 或 por
 - 已有平台无关 framing、capability payload、请求结果码和 staged-install controller。桌面 reference host
   已覆盖持久 discovery/list/chunked-install/commit/cancel/lifecycle/log/recovery control semantics；内存内
   C++ codec 与桌面 dispatcher 已验证 request/response 关联、有界 payload 与 typed status/progress result。
-  契约已拥有独立 source owner；物理 Device OS package 拆分与真实 port transport 仍需在 port 接入前完成。
+  契约已拥有独立 source owner；一条 WS147 port adapter 已通过 physical wire acceptance，Device OS package
+  拆分与 persistent image lifecycle integration 仍未关闭。
 
 ### D1：首个官方 Developer Image
 
 - 为 ESP32-S3 1.47 增加 storage partition、不可替换 launcher/fallback 和 USB 开发者传输 adapter。
 - 只实现 D0 首条工作流所需的控制操作。
 - 发布一份板卡/profile manifest 与可恢复的 factory flash 工具。
+- USB adapter 的 byte-stream preflight 已在一个 WS147 acceptance configuration 上关闭；persistent install 与
+  launcher recovery 仍受独立 lifecycle gate 约束，尚未关闭。
 
 ### D2：作者工具
 

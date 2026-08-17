@@ -51,6 +51,9 @@ physical developer transport 被接纳前，必须执行
 [jfdp_v1_port_acceptance_zh.md](jfdp_v1_port_acceptance_zh.md)。该文覆盖 exact wire vector、partial read、
 coalesced frame、malformed input、request correlation 与证据要求。通过它只表示 wire gate 通过，不代表完整
 developer-image lifecycle 或外部试用已经就绪。
+通过该 gate 后，developer image 还必须通过
+[device_image_lifecycle_port_acceptance_zh.md](device_image_lifecycle_port_acceptance_zh.md)，其 staging storage、
+registry 或 launcher path 才能被视为可供 App 作者使用。
 
 ## 移植阶段
 
