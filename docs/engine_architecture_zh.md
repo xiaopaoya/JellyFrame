@@ -1,6 +1,6 @@
 # 引擎架构
 
-> 最后更新：2026-08-16；适用版本：0.6.0-dev
+> 最后更新：2026-08-18；适用版本：0.6.0-dev
 
 
 JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目标使用更小的数据结构，并明确裁剪功能边界。
@@ -15,8 +15,8 @@ JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目�
 
 首个保留历史的 Render Core 仓库现已建立于
 [`xiaopaoya/JellyFrame-Render-Core`](https://github.com/xiaopaoya/JellyFrame-Render-Core)。
-在第一个带签名的 Core release 通过 Runtime package lock 接纳前，本 JellyFrame checkout 暂时保留
-in-tree Core provider。Render Core 已具备独立导出边界。将
+本 JellyFrame checkout 保留 in-tree Core provider 用于同步开发。首个带签名的 Core release
+`v0.6.0` 已通过 Runtime package lock 接纳，并由 release-boundary CI 消费。Render Core 已具备独立导出边界。将
 `JELLYFRAME_BUILD_APP_RUNTIME=OFF`、`JELLYFRAME_BUILD_SCRIPTING=OFF` 并关闭上层示例后，
 即可只配置和构建 Render Core。设置 `JELLYFRAME_INSTALL_RENDER_CORE=ON` 并执行
 `cmake --install`，会导出版本化的 `JellyFrame::jellyframe_render_core`、公共头文件和能力 profile，
@@ -35,10 +35,10 @@ ctest --test-dir build\core-from-archive -C Release --output-on-failure
 
 归档只包含 Render Core 源码、共享 CMake 边界、测试、独立 README 和许可证；不包含
 Runtime、JerryScript、ports、设备契约、示例或 app 资源。打包器会将声明为文本的成员规范为 LF，并规范化成员顺序与
-归档元数据，写出 SHA-256 sidecar；CI 会解压、构建、测试、安装，并由 Runtime 的
-package-provider 配置消费生成的 package。Standalone Core CI job 会将该归档和 sidecar
-保留为 workflow artifact。独立治理的仓库现已发布带签名的 `v0.6.0`；consumer 仍只能通过
-显式 dependency-lock 更新接纳它。
+归档元数据，写出 SHA-256 sidecar。CI 会分别验证这一 monorepo export，并下载已发布的
+`v0.6.0` artifact、校验其记录的 archive SHA-256，再构建、安装并由 Runtime 的
+package-provider 配置消费该 release package。Standalone Core CI job 会将 monorepo 归档和
+sidecar 保留为 workflow artifact；consumer 仍只能通过显式 dependency-lock 更新接纳已发布 release。
 
 App Runtime 可以消费已经安装的 Render Core 包，而不编译当前 checkout 中的
 Render Core 源码：
@@ -76,8 +76,9 @@ packer、已安装 bundle registry 与原生桌面 package parser 都会拒绝�
 跨仓库开发时，可以用 `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 让 `in-tree`
 provider 指向另一个 checkout 或已解压的 Render Core 源码树。这只是本地开发覆盖项，
 不是第二套公开依赖机制；package 模式和源码覆盖不能同时使用。CI 会以解压归档作为
-覆盖源构建并运行 App Runtime 测试。覆盖目录必须提供 Render Core 的 `cmake/` 边界和
-`src/render_core/`，原有 feature profile 与源码归属检查仍然生效。
+覆盖源构建并运行 App Runtime 测试。覆盖目录必须提供 Render Core 的 CMake 边界和其文档化
+源码布局（`v0.6.0` archive 使用 `src/` 加 `include/render_core/`）；原有 feature profile
+与源码归属检查仍然生效。
 
 ## 计划中的仓库边界
 

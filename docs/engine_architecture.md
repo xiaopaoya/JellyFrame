@@ -1,6 +1,6 @@
 # Engine Architecture
 
-> Last updated: 2026-08-16; Applies to: 0.6.0-dev
+> Last updated: 2026-08-18; Applies to: 0.6.0-dev
 
 
 JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but
@@ -19,8 +19,9 @@ The source tree is split into three hardware-neutral subprojects:
 
 The first history-preserving Render Core repository now exists at
 [`xiaopaoya/JellyFrame-Render-Core`](https://github.com/xiaopaoya/JellyFrame-Render-Core).
-This JellyFrame checkout temporarily retains the in-tree Core provider until
-the first signed Core release is accepted through the Runtime package lock.
+This JellyFrame checkout retains the in-tree Core provider for synchronized
+development. The first signed Core release, `v0.6.0`, is accepted through the
+Runtime package lock and is the artifact used by the release-boundary CI.
 The Render Core target has an extraction boundary. Configure with
 `JELLYFRAME_BUILD_APP_RUNTIME=OFF`, `JELLYFRAME_BUILD_SCRIPTING=OFF` and the
 upper-layer examples disabled to build only Render Core. With
@@ -43,12 +44,12 @@ The archive contains only Render Core sources, its shared CMake boundary,
 tests, standalone README and license. It contains neither Runtime nor
 JerryScript, ports, device contracts, examples or app resources. The packer
 normalizes declared text members to LF, member order and archive metadata,
-writes a SHA-256 sidecar, and CI
-extracts, builds, tests, installs and consumes the resulting package through
-the Runtime package-provider configuration. The Standalone Core CI job retains
-that archive and sidecar as a workflow artifact. The independently governed
-repository has now published signed `v0.6.0`; consumers still accept it only
-through an explicit dependency-lock update.
+writes a SHA-256 sidecar. CI separately validates this monorepo export and
+downloads the published `v0.6.0` artifact, verifies its recorded archive
+SHA-256, then builds, installs and consumes that released package through the
+Runtime package-provider configuration. The Standalone Core CI job retains the
+monorepo archive and sidecar as workflow artifacts; consumers still accept the
+published release only through an explicit dependency-lock update.
 
 The App Runtime can consume that installed package without compiling the Render
 Core sources from this checkout:
@@ -96,9 +97,10 @@ the in-tree provider at a checked-out or unpacked Render Core source tree. It
 is a local development override, not a second public dependency mechanism;
 package mode and source override are mutually exclusive. CI validates the
 unpacked-archive form by building and running the App Runtime tests against it.
-The override must provide the Render Core `cmake/` boundary and
-`src/render_core/` tree, and the normal Core feature profile and source-
-ownership checks still apply.
+The override must provide the Render Core CMake boundary and its documented
+source layout (the `v0.6.0` archive uses `src/` plus
+`include/render_core/`); the normal Core feature-profile and source-ownership
+checks still apply.
 
 ## Planned Repository Boundaries
 

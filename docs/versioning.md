@@ -1,6 +1,6 @@
 # Versioning
 
-> Last updated: 2026-08-15; Applies to: 0.6.0-dev
+> Last updated: 2026-08-18; Applies to: 0.6.0-dev
 
 JellyFrame Engine uses a lightweight semantic versioning scheme:
 
@@ -41,7 +41,7 @@ The planned repositories do not share one release number:
 
 | Stream | Example | Contract owner |
 | --- | --- | --- |
-| Render Core | `0.6.x-dev` | Core API/ABI, feature profile schema and renderer behavior |
+| Render Core | `0.6.0` (released) | Core API/ABI, feature profile schema and renderer behavior |
 | JellyFrame Runtime | `0.6.x-dev` | Japp format, App Runtime and JerryScript binding |
 | JellyFrame Device OS | `0.1.x-dev` | launcher, registry, device lifecycle, images and ports |
 | JFDP | `JFDP/1` | device control framing and result-code compatibility |
@@ -90,10 +90,11 @@ Runtime parser enforce the pair together.
 - `0.5.x`: device-usability work: storage lifecycle integration, retained
   rendering slices, production image codec adapters, system shell recovery and
   broader real-device validation.
-- `0.6.x`: device-path and engine-boundary closure. It owns JFDP/Device Runtime
-  contracts, Render Core extraction/release policy and only the capability
-  packs that meet their profile and evidence gates. Desktop preflight evidence
-  does not by itself permit an external hardware trial.
+- `0.6.x`: device-path and engine-boundary closure. The first signed Render
+  Core `0.6.0` release and Runtime lock are closed; this line owns JFDP/Device
+  Runtime contracts and only the capability packs that meet their profile and
+  evidence gates. Desktop preflight evidence does not by itself permit an
+  external hardware trial.
 - `0.7.x`: first official developer image/toolchain and the first controlled
   external hardware trial, after installation, recovery, telemetry and tooling
   work on a supported board is complete.
