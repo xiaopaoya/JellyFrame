@@ -1,6 +1,6 @@
 # JellyFrame Device Runtime
 
-> 最后更新：2026-08-15；适用版本：0.6.0-dev；当前开发线：0.6.0
+> 最后更新：2026-08-18；适用版本：0.6.0-dev；当前开发线：0.6.0
 
 ## 目的
 
@@ -73,6 +73,11 @@ adapter 的端口必须在传输 App 前告知工具。
 request id。其余 flag bit 预留：接收方保留帧内数值，但在后续协议版本定义前不得赋予含义。
 D0 的 C++ 回归包含内存内 discovery request/capability response 回环，它只证明这条 framing
 契约；不代表已存在物理 transport，也不表示桌面 registry reference endpoint 已经是 JFDP 设备。
+
+`tests/fixtures/jfdp_v1_wire_vectors.txt` 是 frame header、capability snapshot、staged-install
+payload 与 lifecycle/result payload 的规范字节级 fixture。C++ contract target 与 Python desktop
+reference 会独立编码每一条 vector。物理 transport 在被接纳为 `JFDP/1` endpoint 前必须通过同一组
+vector；这只验证 wire contract，不把 reference endpoint 宣称为硬件。
 
 ### 当前可用的参考实现（D0 过渡）
 

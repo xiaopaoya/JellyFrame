@@ -6,6 +6,7 @@
 
 int device_install_transaction_tests_main();
 int device_runtime_protocol_tests_main();
+int device_protocol_vector_tests_main();
 
 namespace {
 
@@ -26,6 +27,7 @@ int main() {
     int failed = 0;
     failed += run_test("device_install_transaction", device_install_transaction_tests_main);
     failed += run_test("device_runtime_protocol", device_runtime_protocol_tests_main);
+    failed += run_test("device_protocol_vectors", device_protocol_vector_tests_main);
     if (failed != 0) {
         std::cerr << failed << " device runtime contract test group(s) failed\n";
         return 1;

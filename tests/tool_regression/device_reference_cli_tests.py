@@ -20,6 +20,24 @@ from app_registry_tests import write_jfapp  # noqa: E402
 
 
 CLI = REPO_ROOT / "tools" / "jellyframe_cli.py"
+WIRE_VECTOR_FILE = REPO_ROOT / "tests" / "fixtures" / "jfdp_v1_wire_vectors.txt"
+
+
+def load_wire_vectors() -> dict[str, bytes]:
+    vectors: dict[str, bytes] = {}
+    for raw_line in WIRE_VECTOR_FILE.read_text(encoding="ascii").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, separator, encoded = line.partition("=")
+        if not separator or not name or not encoded or len(encoded) % 2:
+            raise AssertionError(f"invalid JFDP wire vector: {raw_line}")
+        if name in vectors:
+            raise AssertionError(f"duplicate JFDP wire vector: {name}")
+        vectors[name] = bytes.fromhex(encoded)
+    if not vectors:
+        raise AssertionError("JFDP wire vector fixture is empty")
+    return vectors
 
 
 class DeviceReferenceCliTests(unittest.TestCase):
@@ -31,6 +49,35 @@ class DeviceReferenceCliTests(unittest.TestCase):
             capture_output=True,
             check=False,
         )
+
+    def test_jfdp_wire_vectors_match_reference_codecs(self):
+        vectors = load_wire_vectors()
+        app_id = "org.jellyframe.demo"
+        actual = {
+            "frame-discovery": device_reference.encode_jfdp_frame(
+                "discovery", 0x01020304, 0x10203040
+            ),
+            "capabilities-reference": device_reference._jfdp_reference_capabilities(),
+            "install-begin": device_reference.encode_jfdp_install_begin_payload(
+                0x11223344, app_id, 0x12345, 0x89ABCDEF, True
+            ),
+            "install-chunk": device_reference.encode_jfdp_install_chunk_payload(
+                0x11223344, 0x20, bytes((0x00, 0x7F, 0x80, 0xFF))
+            ),
+            "transaction": device_reference.encode_jfdp_transaction_payload(0x11223344),
+            "app-id": device_reference.encode_jfdp_app_id_payload(app_id),
+            "logs": device_reference.encode_jfdp_logs_request_payload(app_id, 16),
+            "operation-result": device_reference.encode_jfdp_operation_result(
+                "accepted",
+                flags=device_reference.JFDP_RESULT_COMPLETE,
+                transaction_id=0x11223344,
+                received_bytes=0x100,
+                expected_bytes=0x12345,
+            ),
+        }
+        self.assertEqual(set(vectors), set(actual))
+        for name, encoded in actual.items():
+            self.assertEqual(encoded, vectors[name], name)
 
     def test_requires_explicit_reference_transport(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-device-reference-") as directory:

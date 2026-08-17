@@ -1,6 +1,6 @@
 # JellyFrame Device Runtime
 
-> Last updated: 2026-08-15; Applies to: 0.6.0-dev; active development line: 0.6.0
+> Last updated: 2026-08-18; Applies to: 0.6.0-dev; active development line: 0.6.0
 
 ## Purpose
 
@@ -90,6 +90,13 @@ The D0 C++ regression includes an in-memory discovery request/capability
 response loopback. It proves this framing contract only; it is not a physical
 transport or a claim that the desktop registry reference endpoint is already a
 JFDP device.
+
+`tests/fixtures/jfdp_v1_wire_vectors.txt` is the canonical byte-level fixture
+for the frame header, capability snapshot, staged-install payloads and
+lifecycle/result payloads. The C++ contract target and the Python desktop
+reference independently encode every vector. A physical transport must pass
+the same vectors before it is accepted as a `JFDP/1` endpoint; this verifies
+the wire contract without claiming that the reference endpoint is hardware.
 
 ### Current Reference Implementation (D0 Transition)
 

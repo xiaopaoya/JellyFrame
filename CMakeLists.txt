@@ -383,6 +383,7 @@ if(JELLYFRAME_BUILD_TESTS)
     set(JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES
         src/device_runtime_contracts/tests/device_install_transaction_tests.cpp
         src/device_runtime_contracts/tests/device_runtime_protocol_tests.cpp
+        src/device_runtime_contracts/tests/device_protocol_vector_tests.cpp
     )
     foreach(test_source IN LISTS JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES)
         get_filename_component(test_name ${test_source} NAME_WE)
@@ -396,6 +397,8 @@ if(JELLYFRAME_BUILD_TESTS)
     target_link_libraries(jellyframe_device_runtime_contracts_tests
         PRIVATE jellyframe_device_runtime_contracts)
     jellyframe_enable_test_asserts(jellyframe_device_runtime_contracts_tests)
+    target_compile_definitions(jellyframe_device_runtime_contracts_tests PRIVATE
+        JELLYFRAME_DEVICE_PROTOCOL_VECTOR_FILE="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/jfdp_v1_wire_vectors.txt")
     jellyframe_stage_sanitizer_runtime(jellyframe_device_runtime_contracts_tests)
     add_test(NAME jellyframe_device_runtime_contracts_tests
         COMMAND jellyframe_device_runtime_contracts_tests)
