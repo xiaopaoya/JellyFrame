@@ -829,6 +829,12 @@ extern "C" void app_main(void) {
     } else {
         ESP_LOGI(tag, "Timer UI task started");
     }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_JFDP_TRANSPORT_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_jfdp_transport_acceptance_task()) {
+        ESP_LOGE(tag, "failed to start JFDP/1 transport acceptance task");
+    } else {
+        ESP_LOGI(tag, "JFDP/1 transport acceptance task started");
+    }
 #elif CONFIG_JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK
     if (!jellyframe_esp32s3::start_band_shell_ui_task()) {
         ESP_LOGE(tag, "failed to start Band System Shell UI task");

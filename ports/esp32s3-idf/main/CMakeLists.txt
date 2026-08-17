@@ -81,6 +81,7 @@ idf_component_register(
         "jellyframe_esp32s3_font.cpp"
         "jellyframe_esp32s3_hal.cpp"
         "jellyframe_esp32s3_image.cpp"
+        "jellyframe_esp32s3_jfdp_transport.cpp"
         "jellyframe_esp32s3_input.cpp"
         "jellyframe_esp32s3_resources.cpp"
         "jellyframe_esp32s3_soc_power_acceptance.cpp"
@@ -101,10 +102,12 @@ idf_component_register(
         esp_timer
         freertos
         driver
+        esp_driver_usb_serial_jtag
         esp_lcd
         heap
         log
         jellyframe_app_runtime
+        jellyframe_device_runtime_contracts
         jellyframe_render_core
         ${JELLYFRAME_ESP32S3_SCRIPT_REQUIRES}
 )

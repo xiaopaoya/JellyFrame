@@ -17,6 +17,14 @@ config JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK
         bundle, dispatches bounded board input events, updates the timer once
         per second and publishes port telemetry.
 
+config JELLYFRAME_ESP32S3_RUN_JFDP_TRANSPORT_ACCEPTANCE
+    bool "Run JFDP/1 USB Serial/JTAG transport acceptance"
+    help
+        Starts a transport-only JFDP/1 endpoint on the ESP32-S3 native USB
+        Serial/JTAG CDC interface. This profile owns that byte stream and must
+        not share it with the ESP-IDF console. It uses only bounded in-memory
+        staging and never publishes an App registry entry.
+
 config JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK
     bool "Start 172x320 Band System Shell UI task"
     help
