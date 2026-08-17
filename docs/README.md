@@ -1,6 +1,6 @@
 # JellyFrame Documentation Index
 
-> Last updated: 2026-08-14; Applies to: 0.6.0-dev
+> Last updated: 2026-08-18; Applies to: 0.6.0-dev
 
 This directory contains technical documents: module behavior, supported subsets,
 interfaces and host contracts. These docs should stay close to the code.
@@ -15,7 +15,7 @@ for whether a document needs another pass after code changes.
 | --- | --- | --- |
 | App author | `../HOW_TO_START.md`, `app_author_guide.md` | capability table, recipes, target presets and `../tools/README.md` |
 | Render Core contributor | `engine_architecture.md`, `../src/render_core/README.md` | scope docs beside the affected module and the feature matrix |
-| Port maintainer | `porting_work_guide.md`, `embedded_hal_api.md` | `../ports/<port>/README.md`, framebuffer/text docs and port-owned reports |
+| Port maintainer | `porting_work_guide.md`, `embedded_hal_api.md` | `jfdp_v1_port_acceptance.md` for a developer transport, `../ports/<port>/README.md`, framebuffer/text docs and port-owned reports |
 | Runtime/host maintainer | `../src/app_runtime/README.md` | lifecycle, packaging, services and authorization contracts |
 | Device-runtime maintainer | `device_runtime.md` | official board profiles, device protocol and port integration |
 | Script/runtime maintainer | `../src/script/README.md` | scripting scope and cross-task ownership contract |
@@ -75,6 +75,8 @@ for whether a document needs another pass after code changes.
   for install, launch, suspend, resume, service completion and recovery.
 - [device_runtime.md](device_runtime.md): product boundary and delivery plan for
   official developer images, device deployment and tooling.
+- [jfdp_v1_port_acceptance.md](jfdp_v1_port_acceptance.md): byte-stream,
+  malformed-frame and evidence gate for the first physical developer transport.
 - [authorized_file_broker.md](../src/app_runtime/docs/authorized_file_broker.md): host-owned
   authorized file access boundary for file-manager and system-component flows.
 - [host_optional_services.md](../src/app_runtime/docs/host_optional_services.md): optional host-service

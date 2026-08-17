@@ -58,11 +58,34 @@ class DeviceReferenceCliTests(unittest.TestCase):
                 "discovery", 0x01020304, 0x10203040
             ),
             "capabilities-reference": device_reference._jfdp_reference_capabilities(),
+            "frame-capabilities-response": device_reference.encode_jfdp_frame(
+                "discovery",
+                0x01020304,
+                0x10203040,
+                device_reference._jfdp_reference_capabilities(),
+                response=True,
+            ),
             "install-begin": device_reference.encode_jfdp_install_begin_payload(
                 0x11223344, app_id, 0x12345, 0x89ABCDEF, True
             ),
+            "frame-install-begin": device_reference.encode_jfdp_frame(
+                "install-begin",
+                0x0A0B0C0D,
+                0x01020304,
+                device_reference.encode_jfdp_install_begin_payload(
+                    0x11223344, app_id, 0x12345, 0x89ABCDEF, True
+                ),
+            ),
             "install-chunk": device_reference.encode_jfdp_install_chunk_payload(
                 0x11223344, 0x20, bytes((0x00, 0x7F, 0x80, 0xFF))
+            ),
+            "frame-install-chunk": device_reference.encode_jfdp_frame(
+                "install-chunk",
+                0x0A0B0C0D,
+                0x01020305,
+                device_reference.encode_jfdp_install_chunk_payload(
+                    0x11223344, 0x20, bytes((0x00, 0x7F, 0x80, 0xFF))
+                ),
             ),
             "transaction": device_reference.encode_jfdp_transaction_payload(0x11223344),
             "app-id": device_reference.encode_jfdp_app_id_payload(app_id),
@@ -73,6 +96,19 @@ class DeviceReferenceCliTests(unittest.TestCase):
                 transaction_id=0x11223344,
                 received_bytes=0x100,
                 expected_bytes=0x12345,
+            ),
+            "frame-install-commit-response": device_reference.encode_jfdp_frame(
+                "install-commit",
+                0x0A0B0C0D,
+                0x01020306,
+                device_reference.encode_jfdp_operation_result(
+                    "accepted",
+                    flags=device_reference.JFDP_RESULT_COMPLETE,
+                    transaction_id=0x11223344,
+                    received_bytes=0x100,
+                    expected_bytes=0x12345,
+                ),
+                response=True,
             ),
         }
         self.assertEqual(set(vectors), set(actual))

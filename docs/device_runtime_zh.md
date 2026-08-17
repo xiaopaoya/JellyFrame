@@ -78,6 +78,8 @@ D0 的 C++ 回归包含内存内 discovery request/capability response 回环，
 payload 与 lifecycle/result payload 的规范字节级 fixture。C++ contract target 与 Python desktop
 reference 会独立编码每一条 vector。物理 transport 在被接纳为 `JFDP/1` endpoint 前必须通过同一组
 vector；这只验证 wire contract，不把 reference endpoint 宣称为硬件。
+[jfdp_v1_port_acceptance_zh.md](jfdp_v1_port_acceptance_zh.md) 规定了该 gate 所需的 physical
+stream fragmentation、malformed frame 与报告证据。
 
 ### 当前可用的参考实现（D0 过渡）
 

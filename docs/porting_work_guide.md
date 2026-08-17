@@ -1,6 +1,6 @@
 # JellyFrame Porting Work Guide
 
-> Last updated: 2026-08-03; Applies to: 0.5.0
+> Last updated: 2026-08-18; Applies to: 0.6.0-dev
 
 
 This guide is for developers porting JellyFrame to ESP32-S3, RTOS hosts, LVGL
@@ -58,6 +58,21 @@ hardware-porting tasks:
 
 If a product requires those capabilities, plan a mainline core milestone first
 instead of forcing them into a board port.
+
+## Official Developer Image Work
+
+An official developer image is a Device OS product boundary, not a variation of
+the display bring-up phases below. It requires protected launcher/fallback,
+persistent registry and staging storage, a board/profile manifest and one real
+developer transport. The platform-neutral `JFDP/1` codec lives in
+`src/device_runtime_contracts`; USB/serial/Wi-Fi byte streams and storage
+adapters belong in the port.
+
+Before a physical developer transport is accepted, run
+[jfdp_v1_port_acceptance.md](jfdp_v1_port_acceptance.md). It covers exact wire
+vectors, partial reads, coalesced frames, malformed inputs, request correlation
+and required evidence. Passing it is a wire gate only, not a claim that the
+full developer-image lifecycle or external trial is ready.
 
 ## Porting Phases
 

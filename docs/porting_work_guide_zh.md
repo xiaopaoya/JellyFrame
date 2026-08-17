@@ -1,6 +1,6 @@
 # JellyFrame 移植工作指导
 
-> 最后更新：2026-08-03；适用版本：0.5.0
+> 最后更新：2026-08-18；适用版本：0.6.0-dev
 
 
 本文面向正在把 JellyFrame 移植到 ESP32-S3、RTOS、LVGL 宿主或自定义可穿戴硬件的开发者。它不是浏览器功能说明，而是移植侧的任务书：每个模块需要交付什么、应该如何接入当前核心、如何验收，以及当前核心已经提供了哪些可直接使用的能力。
@@ -39,6 +39,18 @@
 - 在 ESP32-S3 第一版中实现无完整 framebuffer 的 tiled renderer、复杂文字 shaping、图片解码或网络安全模型。
 
 如果产品必须依赖这些能力，应先回到主线核心规划新里程碑；不要把它们硬塞进板级 port。
+
+## 官方 Developer Image 工作
+
+官方 developer image 是 Device OS 产品边界，不是下面 display bring-up 阶段的一个变体。它需要受保护的
+launcher/fallback、持久 registry 与 staging storage、board/profile manifest 和一条真实 developer
+transport。平台无关 `JFDP/1` codec 位于 `src/device_runtime_contracts`；USB/serial/Wi-Fi 字节流与 storage
+adapter 属于 port。
+
+physical developer transport 被接纳前，必须执行
+[jfdp_v1_port_acceptance_zh.md](jfdp_v1_port_acceptance_zh.md)。该文覆盖 exact wire vector、partial read、
+coalesced frame、malformed input、request correlation 与证据要求。通过它只表示 wire gate 通过，不代表完整
+developer-image lifecycle 或外部试用已经就绪。
 
 ## 移植阶段
 

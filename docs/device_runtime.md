@@ -97,6 +97,9 @@ lifecycle/result payloads. The C++ contract target and the Python desktop
 reference independently encode every vector. A physical transport must pass
 the same vectors before it is accepted as a `JFDP/1` endpoint; this verifies
 the wire contract without claiming that the reference endpoint is hardware.
+[jfdp_v1_port_acceptance.md](jfdp_v1_port_acceptance.md) defines the required
+physical stream-fragmentation, malformed-frame and report evidence for that
+gate.
 
 ### Current Reference Implementation (D0 Transition)
 

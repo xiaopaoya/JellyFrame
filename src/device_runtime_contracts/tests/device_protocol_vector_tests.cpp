@@ -75,6 +75,22 @@ void assert_encoded_equals(const std::array<std::uint8_t, Capacity>& encoded,
     assert(std::equal(encoded.begin(), encoded.begin() + encoded_size, expected.begin()));
 }
 
+void assert_frame_vector(const std::vector<WireVector>& vectors,
+                         const char* name,
+                         const DeviceFrameHeader& header,
+                         const std::uint8_t* payload,
+                         std::size_t payload_size) {
+    std::array<std::uint8_t, kDeviceProtocolHeaderBytes + kDeviceProtocolMaxPayloadBytes> encoded{};
+    std::size_t encoded_size = 0;
+    assert(encode_device_frame(header,
+                               payload,
+                               payload_size,
+                               encoded.data(),
+                               encoded.size(),
+                               encoded_size) == DeviceProtocolStatus::Ok);
+    assert_encoded_equals(encoded, encoded_size, vector_bytes(vectors, name));
+}
+
 void copy_string(std::array<char, kDeviceMaxAppIdBytes + 1>& destination, const char* value) {
     const std::size_t length = std::strlen(value);
     assert(length < destination.size());
@@ -102,6 +118,13 @@ void canonical_wire_vectors_match_reference_contract() {
            DeviceProtocolStatus::Ok);
     assert_encoded_equals(encoded, encoded_size, vector_bytes(vectors, "capabilities-reference"));
 
+    frame = {};
+    frame.type = DeviceMessageType::Discovery;
+    frame.flags = kDeviceFrameFlagResponse;
+    frame.session_id = 0x01020304u;
+    frame.request_id = 0x10203040u;
+    assert_frame_vector(vectors, "frame-capabilities-response", frame, encoded.data(), encoded_size);
+
     DeviceInstallBeginPayload begin;
     begin.transaction_id = 0x11223344u;
     begin.bundle_bytes = 0x12345u;
@@ -112,6 +135,12 @@ void canonical_wire_vectors_match_reference_contract() {
            DeviceProtocolStatus::Ok);
     assert_encoded_equals(encoded, encoded_size, vector_bytes(vectors, "install-begin"));
 
+    frame = {};
+    frame.type = DeviceMessageType::InstallBegin;
+    frame.session_id = 0x0a0b0c0du;
+    frame.request_id = 0x01020304u;
+    assert_frame_vector(vectors, "frame-install-begin", frame, encoded.data(), encoded_size);
+
     const std::array<std::uint8_t, 4> chunk{{0x00, 0x7f, 0x80, 0xff}};
     assert(encode_device_install_chunk_payload(0x11223344u,
                                                0x20u,
@@ -121,6 +150,12 @@ void canonical_wire_vectors_match_reference_contract() {
                                                encoded.size(),
                                                encoded_size) == DeviceProtocolStatus::Ok);
     assert_encoded_equals(encoded, encoded_size, vector_bytes(vectors, "install-chunk"));
+
+    frame = {};
+    frame.type = DeviceMessageType::InstallChunk;
+    frame.session_id = 0x0a0b0c0du;
+    frame.request_id = 0x01020305u;
+    assert_frame_vector(vectors, "frame-install-chunk", frame, encoded.data(), encoded_size);
 
     DeviceTransactionPayload transaction;
     transaction.transaction_id = 0x11223344u;
@@ -150,6 +185,13 @@ void canonical_wire_vectors_match_reference_contract() {
     assert(encode_device_operation_result_payload(result, encoded.data(), encoded.size(), encoded_size) ==
            DeviceProtocolStatus::Ok);
     assert_encoded_equals(encoded, encoded_size, vector_bytes(vectors, "operation-result"));
+
+    frame = {};
+    frame.type = DeviceMessageType::InstallCommit;
+    frame.flags = kDeviceFrameFlagResponse;
+    frame.session_id = 0x0a0b0c0du;
+    frame.request_id = 0x01020306u;
+    assert_frame_vector(vectors, "frame-install-commit-response", frame, encoded.data(), encoded_size);
 }
 
 } // namespace
