@@ -15,6 +15,14 @@ The port must implement DeviceInstallStore from device_runtime_contracts/device_
 - abort_staging(transaction_id) is idempotent and scoped to that transaction, including a partially-created staging object after a failed begin.
 - DeviceInstallChunkView.bytes is copied before asynchronous storage work or a cross-task handoff.
 
+`DeviceInstallStore::verify_staging()` must inspect staged bytes through
+`DeviceBundleReader` and `inspect_device_bundle(...)`, with the board profile's
+explicit bundle/resource/summary budgets. It must persist or revalidate the
+accepted descriptor before publication. AppList and Recovery responses use the
+typed `DeviceAppListPayload` and `DeviceRecoveryDetailPayload` codecs. Installed
+app start and failure fallback use `AppInstalledBundleBinding`, not a
+fixed-fixture loader or a port-private registry-to-HTML shortcut.
+
 Third-party bundles must live outside immutable firmware, launcher and fallback assets. JFDP accepts only documented bounded operations; it must not become raw flash, arbitrary file or native-command access.
 
 ## Required durable model

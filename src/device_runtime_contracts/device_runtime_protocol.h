@@ -13,6 +13,8 @@ constexpr std::size_t kDeviceProtocolMaxPayloadBytes = 4096;
 constexpr std::size_t kDeviceCapabilityMaxBoardIdBytes = 63;
 constexpr std::size_t kDeviceCapabilityMaxRuntimeVersionBytes = 31;
 constexpr std::size_t kDeviceMaxAppIdBytes = 95;
+constexpr std::size_t kDeviceMaxVersionNameBytes = 63;
+constexpr std::size_t kDeviceAppListMaxEntries = 24;
 constexpr std::uint16_t kDeviceFrameFlagResponse = 1u << 0;
 
 enum class DeviceMessageType : std::uint8_t {
@@ -133,6 +135,67 @@ struct DeviceLogsRequestPayload {
     }
 };
 
+enum class DeviceAppLibraryState : std::uint8_t {
+    Installed = 0,
+    Disabled = 1,
+    Failed = 2,
+};
+
+enum DeviceAppLibraryEntryFlags : std::uint8_t {
+    DeviceAppLibraryEntryRollbackAvailable = 1u << 0,
+};
+
+struct DeviceAppLibraryEntry {
+    std::array<char, kDeviceMaxAppIdBytes + 1> app_id{};
+    std::array<char, kDeviceMaxVersionNameBytes + 1> version_name{};
+    std::uint32_t version_code = 0;
+    std::uint32_t bundle_bytes = 0;
+    DeviceAppLibraryState state = DeviceAppLibraryState::Installed;
+    std::uint8_t flags = 0;
+
+    std::string_view app_id_view() const {
+        return std::string_view(app_id.data());
+    }
+
+    std::string_view version_name_view() const {
+        return std::string_view(version_name.data());
+    }
+};
+
+struct DeviceAppListPayload {
+    std::uint32_t registry_generation = 0;
+    std::array<DeviceAppLibraryEntry, kDeviceAppListMaxEntries> entries{};
+    std::size_t entry_count = 0;
+};
+
+enum class DeviceRecoveryReason : std::uint8_t {
+    None = 0,
+    RegistryInvalid = 1,
+    StagingDiscarded = 2,
+    AppLoadFailure = 3,
+    AppRuntimeFailure = 4,
+    AppBudgetExceeded = 5,
+    LauncherFallback = 6,
+};
+
+enum DeviceRecoveryFlags : std::uint16_t {
+    DeviceRecoveryLauncherActive = 1u << 0,
+    DeviceRecoveryAppDisabled = 1u << 1,
+    DeviceRecoveryRollbackAvailable = 1u << 2,
+};
+
+struct DeviceRecoveryDetailPayload {
+    std::array<char, kDeviceMaxAppIdBytes + 1> app_id{};
+    std::uint32_t registry_generation = 0;
+    std::uint32_t recovery_sequence = 0;
+    DeviceRecoveryReason reason = DeviceRecoveryReason::None;
+    std::uint16_t flags = 0;
+
+    std::string_view app_id_view() const {
+        return std::string_view(app_id.data());
+    }
+};
+
 enum DeviceOperationResultFlags : std::uint16_t {
     DeviceOperationResultComplete = 1u << 0,
     DeviceOperationResultActive = 1u << 1,
@@ -217,6 +280,22 @@ DeviceProtocolStatus decode_device_logs_request_payload(const std::uint8_t* inpu
                                                         std::size_t input_size,
                                                         DeviceLogsRequestPayload& payload);
 
+DeviceProtocolStatus encode_device_app_list_payload(const DeviceAppListPayload& payload,
+                                                    std::uint8_t* output,
+                                                    std::size_t output_capacity,
+                                                    std::size_t& output_size);
+DeviceProtocolStatus decode_device_app_list_payload(const std::uint8_t* input,
+                                                    std::size_t input_size,
+                                                    DeviceAppListPayload& payload);
+
+DeviceProtocolStatus encode_device_recovery_detail_payload(const DeviceRecoveryDetailPayload& payload,
+                                                           std::uint8_t* output,
+                                                           std::size_t output_capacity,
+                                                           std::size_t& output_size);
+DeviceProtocolStatus decode_device_recovery_detail_payload(const std::uint8_t* input,
+                                                           std::size_t input_size,
+                                                           DeviceRecoveryDetailPayload& payload);
+
 DeviceProtocolStatus encode_device_operation_result_payload(const DeviceOperationResultPayload& payload,
                                                             std::uint8_t* output,
                                                             std::size_t output_capacity,
@@ -224,5 +303,8 @@ DeviceProtocolStatus encode_device_operation_result_payload(const DeviceOperatio
 DeviceProtocolStatus decode_device_operation_result_payload(const std::uint8_t* input,
                                                             std::size_t input_size,
                                                             DeviceOperationResultPayload& payload);
+
+const char* device_app_library_state_name(DeviceAppLibraryState state);
+const char* device_recovery_reason_name(DeviceRecoveryReason reason);
 
 } // namespace jellyframe

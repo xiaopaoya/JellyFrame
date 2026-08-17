@@ -34,7 +34,7 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
   RGB332、Gray8、单色输出的 framebuffer adapter。
 - 桌面检查工具、伪浏览器、Win32 验证壳、管线 diagnostics、app packer、字体资源检查、
   字体包生成器，以及面向 App 作者的 VS Code 扩展。
-- Device Runtime 正在形成：平台无关的安装事务和 `JFDP/1` framing 已进入 App Runtime，
+- Device Runtime 正在形成：平台无关的安装事务和 `JFDP/1` framing 已进入独立 device-runtime contracts，
   桌面 reference endpoint 可先验证生命周期工具链；真实开发板传输仍由 port 提供。
 
 精确的支持/降级/延后功能见

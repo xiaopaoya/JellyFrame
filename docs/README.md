@@ -73,6 +73,9 @@ for whether a document needs another pass after code changes.
   resource-bundle workflow.
 - [app_lifecycle.md](../src/app_runtime/docs/app_lifecycle.md): app-author lifecycle behavior
   for install, launch, suspend, resume, service completion and recovery.
+- [installed_bundle_binding.md](../src/app_runtime/docs/installed_bundle_binding.md):
+  committed `.jfapp` lease ownership, Runtime launch ordering and protected
+  launcher fallback for a Device OS.
 - [device_runtime.md](device_runtime.md): product boundary and delivery plan for
   official developer images, device deployment and tooling.
 - [device_tool_provider_contract.md](device_tool_provider_contract.md): future

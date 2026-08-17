@@ -1,6 +1,6 @@
 # App Runtime
 
-> Last updated: 2026-08-15; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-18; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 `app_runtime` contains hardware-neutral helpers for installable JellyFrame apps.
 
@@ -8,6 +8,8 @@
 
 - App lifecycle and install/update/delete behavior: `docs/app_lifecycle.md` and
   `docs/app_packaging.md`.
+- Device OS installed-bundle ownership, launch and launcher fallback:
+  `docs/installed_bundle_binding.md`.
 - Host service policy and data boundaries: `docs/host_optional_services.md` and
   `docs/runtime_data_api.md`.
 - Authorized file access: `docs/authorized_file_broker.md`.

@@ -315,6 +315,76 @@ void typed_lifecycle_and_result_payloads_preserve_values() {
     assert(std::strcmp(device_message_type_name(DeviceMessageType::Rollback), "rollback") == 0);
 }
 
+void app_list_and_recovery_payloads_preserve_bounded_values() {
+    std::array<std::uint8_t, kDeviceProtocolMaxPayloadBytes> encoded{};
+    std::size_t encoded_size = 0;
+
+    DeviceAppListPayload list;
+    list.registry_generation = 73;
+    list.entry_count = 2;
+    copy_string_literal(list.entries[0].app_id, "org.example.alpha");
+    copy_string_literal(list.entries[0].version_name, "1.2.3");
+    list.entries[0].version_code = 10203;
+    list.entries[0].bundle_bytes = 12345;
+    list.entries[0].state = DeviceAppLibraryState::Installed;
+    list.entries[0].flags = DeviceAppLibraryEntryRollbackAvailable;
+    copy_string_literal(list.entries[1].app_id, "org.example.beta");
+    copy_string_literal(list.entries[1].version_name, "2.0.0-dev");
+    list.entries[1].version_code = 20000;
+    list.entries[1].bundle_bytes = 9876;
+    list.entries[1].state = DeviceAppLibraryState::Failed;
+
+    assert(encode_device_app_list_payload(list, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    assert(encoded[0] == 1);
+    assert(encoded[1] == 2);
+    assert(encoded[2] == 0);
+    assert(encoded[3] == 0);
+    DeviceAppListPayload decoded_list;
+    assert(decode_device_app_list_payload(encoded.data(), encoded_size, decoded_list) == DeviceProtocolStatus::Ok);
+    assert(decoded_list.registry_generation == list.registry_generation);
+    assert(decoded_list.entry_count == list.entry_count);
+    assert(decoded_list.entries[0].app_id_view() == list.entries[0].app_id_view());
+    assert(decoded_list.entries[0].version_name_view() == list.entries[0].version_name_view());
+    assert(decoded_list.entries[0].version_code == list.entries[0].version_code);
+    assert(decoded_list.entries[0].bundle_bytes == list.entries[0].bundle_bytes);
+    assert(decoded_list.entries[0].state == list.entries[0].state);
+    assert(decoded_list.entries[0].flags == list.entries[0].flags);
+    assert(decoded_list.entries[1].state == DeviceAppLibraryState::Failed);
+
+    DeviceRecoveryDetailPayload recovery;
+    copy_string_literal(recovery.app_id, "org.example.beta");
+    recovery.registry_generation = 74;
+    recovery.recovery_sequence = 11;
+    recovery.reason = DeviceRecoveryReason::AppRuntimeFailure;
+    recovery.flags = DeviceRecoveryLauncherActive | DeviceRecoveryAppDisabled |
+                     DeviceRecoveryRollbackAvailable;
+    assert(encode_device_recovery_detail_payload(recovery, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    DeviceRecoveryDetailPayload decoded_recovery;
+    assert(decode_device_recovery_detail_payload(encoded.data(), encoded_size, decoded_recovery) ==
+           DeviceProtocolStatus::Ok);
+    assert(decoded_recovery.app_id_view() == recovery.app_id_view());
+    assert(decoded_recovery.registry_generation == recovery.registry_generation);
+    assert(decoded_recovery.recovery_sequence == recovery.recovery_sequence);
+    assert(decoded_recovery.reason == recovery.reason);
+    assert(decoded_recovery.flags == recovery.flags);
+    assert(std::strcmp(device_app_library_state_name(DeviceAppLibraryState::Failed), "failed") == 0);
+    assert(std::strcmp(device_recovery_reason_name(DeviceRecoveryReason::AppRuntimeFailure),
+                       "app-runtime-failure") == 0);
+
+    DeviceRecoveryDetailPayload no_recovery;
+    no_recovery.registry_generation = 75;
+    assert(encode_device_recovery_detail_payload(no_recovery, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    assert(encoded_size == 16);
+    assert(decode_device_recovery_detail_payload(encoded.data(), encoded_size, decoded_recovery) ==
+           DeviceProtocolStatus::Ok);
+    assert(decoded_recovery.reason == DeviceRecoveryReason::None);
+    assert(decoded_recovery.app_id_view().empty());
+    assert(decoded_recovery.registry_generation == 75);
+}
+
 void typed_payloads_reject_malformed_or_ambiguous_input() {
     DeviceInstallBeginPayload begin;
     begin.transaction_id = 1;
@@ -364,6 +434,56 @@ void typed_payloads_reject_malformed_or_ambiguous_input() {
     DeviceOperationResultPayload decoded_result;
     assert(decode_device_operation_result_payload(encoded.data(), 16, decoded_result) ==
            DeviceProtocolStatus::InvalidArgument);
+
+    DeviceAppListPayload list;
+    list.entry_count = 1;
+    copy_string_literal(list.entries[0].app_id, "org.example.reject");
+    copy_string_literal(list.entries[0].version_name, "1.0.0");
+    list.entries[0].bundle_bytes = 1;
+    std::array<std::uint8_t, kDeviceProtocolMaxPayloadBytes> list_bytes{};
+    std::size_t list_size = 0;
+    assert(encode_device_app_list_payload(list, list_bytes.data(), list_bytes.size(), list_size) ==
+           DeviceProtocolStatus::Ok);
+    DeviceAppListPayload decoded_list;
+    assert(decode_device_app_list_payload(list_bytes.data(), list_size - 1, decoded_list) ==
+           DeviceProtocolStatus::Truncated);
+    list_bytes[2] = 1;
+    assert(decode_device_app_list_payload(list_bytes.data(), list_size, decoded_list) ==
+           DeviceProtocolStatus::InvalidArgument);
+    list_bytes[2] = 0;
+    list_bytes[8 + 2] = 0xff;
+    assert(decode_device_app_list_payload(list_bytes.data(), list_size, decoded_list) ==
+           DeviceProtocolStatus::InvalidArgument);
+    list_bytes[8 + 2] = static_cast<std::uint8_t>(DeviceAppLibraryState::Installed);
+    list_bytes[8 + 3] = 0x80;
+    assert(decode_device_app_list_payload(list_bytes.data(), list_size, decoded_list) ==
+           DeviceProtocolStatus::InvalidArgument);
+
+    list_bytes[8 + 3] = 0;
+    std::fill(list_bytes.begin() + 8 + 8, list_bytes.begin() + 8 + 12, 0);
+    assert(decode_device_app_list_payload(list_bytes.data(), list_size, decoded_list) ==
+           DeviceProtocolStatus::InvalidArgument);
+
+    DeviceRecoveryDetailPayload recovery;
+    copy_string_literal(recovery.app_id, "org.example.reject");
+    recovery.reason = DeviceRecoveryReason::AppLoadFailure;
+    assert(encode_device_recovery_detail_payload(recovery, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    DeviceRecoveryDetailPayload decoded_recovery;
+    encoded[13] = 1;
+    assert(decode_device_recovery_detail_payload(encoded.data(), encoded_size, decoded_recovery) ==
+           DeviceProtocolStatus::InvalidArgument);
+    encoded[13] = 0;
+    encoded[1] = 0xff;
+    assert(decode_device_recovery_detail_payload(encoded.data(), encoded_size, decoded_recovery) ==
+           DeviceProtocolStatus::InvalidArgument);
+
+    DeviceRecoveryDetailPayload no_recovery;
+    assert(encode_device_recovery_detail_payload(no_recovery, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    encoded[12] = 1;
+    assert(decode_device_recovery_detail_payload(encoded.data(), encoded_size, decoded_recovery) ==
+           DeviceProtocolStatus::InvalidArgument);
 }
 
 } // namespace
@@ -377,6 +497,7 @@ int main() {
     discovery_request_response_loopback_preserves_session_and_capabilities();
     typed_install_payloads_preserve_bounded_values();
     typed_lifecycle_and_result_payloads_preserve_values();
+    app_list_and_recovery_payloads_preserve_bounded_values();
     typed_payloads_reject_malformed_or_ambiguous_input();
     return 0;
 }

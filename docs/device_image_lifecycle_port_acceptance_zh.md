@@ -15,6 +15,12 @@ port 必须复用 device_runtime_contracts/device_install_transaction.h 的 Devi
 - abort_staging(transaction_id) 必须幂等且仅作用于该 transaction，包括 begin 失败时已部分创建的 staging object。
 - DeviceInstallChunkView.bytes 在异步 storage 或跨 task 交接前必须复制。
 
+`DeviceInstallStore::verify_staging()` 必须通过 `DeviceBundleReader` 与
+`inspect_device_bundle(...)` 检查 staging bytes，并传入 board profile 明确的 bundle/resource/summary budget。
+发布前必须持久化或重新验证已接受的 descriptor。AppList 与 Recovery response 使用 typed
+`DeviceAppListPayload`、`DeviceRecoveryDetailPayload` codec。installed app 启动与 failure fallback 使用
+`AppInstalledBundleBinding`，不得使用固定 fixture loader 或 port-private registry-to-HTML shortcut。
+
 第三方 bundle 必须置于不可变 firmware、launcher 和 fallback assets 之外。JFDP 只能提供文档化的有界操作；不得成为 raw flash、任意文件或 native command 通道。
 
 ## 必需的耐久模型

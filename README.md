@@ -45,7 +45,8 @@ targets and documentation use `JellyFrame`.
   diagnostics, app packer, font-resource checker, font-pack generator and a
   VS Code extension for app authors.
 - Device Runtime is being assembled: the platform-neutral install transaction
-  and `JFDP/1` framing now live in App Runtime, with a desktop reference endpoint
+  and `JFDP/1` framing now live in the platform-neutral device-runtime contracts,
+  with a desktop reference endpoint
   for lifecycle tooling. Physical-board transport remains port-owned.
 
 For the exact supported/degraded/deferred feature set, read

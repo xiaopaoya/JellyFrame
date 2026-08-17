@@ -5,6 +5,7 @@
 #endif
 
 int device_install_transaction_tests_main();
+int device_bundle_tests_main();
 int device_runtime_protocol_tests_main();
 int device_protocol_vector_tests_main();
 
@@ -25,6 +26,7 @@ int run_test(const char* name, int (*test_main)()) {
 
 int main() {
     int failed = 0;
+    failed += run_test("device_bundle", device_bundle_tests_main);
     failed += run_test("device_install_transaction", device_install_transaction_tests_main);
     failed += run_test("device_runtime_protocol", device_runtime_protocol_tests_main);
     failed += run_test("device_protocol_vectors", device_protocol_vector_tests_main);

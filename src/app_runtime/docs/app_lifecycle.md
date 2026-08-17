@@ -1,6 +1,6 @@
 # App Lifecycle
 
-> Last updated: 2026-08-15; Applies to: 0.6.0-dev; active development line: 0.6.0
+> Last updated: 2026-08-18; Applies to: 0.6.0-dev; active development line: 0.6.0
 
 This document is the app-author view of JellyFrame lifecycle behavior. It
 summarizes what an app can rely on when it is installed, launched, suspended,
@@ -74,6 +74,13 @@ The host should pump each frame in this order:
 Slow work such as network fetch, image decode, audio playback, file access and
 bundle installation must run as host jobs outside the UI task. The completion
 returns to the active instance on a later frame.
+
+For a Device OS persistent app library, the port must acquire a committed,
+validated bundle through `AppInstalledBundleBinding`; it must not pass a raw
+partition pointer or staging buffer directly to the loader. The binding keeps
+bundle ownership in the supervisor task, releases it after normal host teardown
+and returns a load/runtime failure to a protected launcher. See
+`installed_bundle_binding.md`.
 
 ## Suspend, Resume And Visibility
 

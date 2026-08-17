@@ -58,6 +58,8 @@
 - [app_packaging_zh.md](../src/app_runtime/docs/app_packaging_zh.md)：app 包格式、manifest 和资源包工作流。
 - [app_lifecycle_zh.md](../src/app_runtime/docs/app_lifecycle_zh.md)：面向 app 作者的安装、启动、挂起、恢复、
   service completion 和 recovery 生命周期行为。
+- [installed_bundle_binding_zh.md](../src/app_runtime/docs/installed_bundle_binding_zh.md)：
+  Device OS 的 committed `.jfapp` lease 所有权、Runtime 启动顺序和 protected launcher fallback。
 - [device_runtime_zh.md](device_runtime_zh.md)：官方 developer image、设备部署和工具链的产品边界与交付计划。
 - [device_tool_provider_contract_zh.md](device_tool_provider_contract_zh.md)：未来 Device OS client 与 Runtime CLI/VS Code 的边界；尚未实现。
 - [jfdp_v1_port_acceptance_zh.md](jfdp_v1_port_acceptance_zh.md)：第一条 physical developer transport 的字节流、malformed-frame 与证据 gate。

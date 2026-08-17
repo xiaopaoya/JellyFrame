@@ -13,6 +13,9 @@ constexpr std::size_t kInstallChunkFixedBytes = 12;
 constexpr std::size_t kTransactionFixedBytes = 8;
 constexpr std::size_t kAppIdFixedBytes = 4;
 constexpr std::size_t kLogsRequestFixedBytes = 4;
+constexpr std::size_t kAppListFixedBytes = 8;
+constexpr std::size_t kAppListEntryFixedBytes = 12;
+constexpr std::size_t kRecoveryDetailFixedBytes = 16;
 constexpr std::size_t kOperationResultFixedBytes = 16;
 constexpr std::uint8_t kInstallBeginFlagAllowDowngrade = 1u << 0;
 
@@ -51,6 +54,19 @@ std::size_t bounded_c_string_length(const char* value, std::size_t capacity) {
 bool has_valid_app_id(const char* value, std::size_t& length) {
     length = bounded_c_string_length(value, kDeviceMaxAppIdBytes + 1);
     return length != 0 && length <= kDeviceMaxAppIdBytes;
+}
+
+bool has_valid_bounded_string(const char* value, std::size_t capacity, std::size_t& length) {
+    length = bounded_c_string_length(value, capacity);
+    return length != 0 && length < capacity;
+}
+
+bool is_device_app_library_state(std::uint8_t value) {
+    return value <= static_cast<std::uint8_t>(DeviceAppLibraryState::Failed);
+}
+
+bool is_device_recovery_reason(std::uint8_t value) {
+    return value <= static_cast<std::uint8_t>(DeviceRecoveryReason::LauncherFallback);
 }
 
 DeviceProtocolStatus decode_app_id(const std::uint8_t* input,
@@ -571,6 +587,187 @@ DeviceProtocolStatus decode_device_logs_request_payload(const std::uint8_t* inpu
     return DeviceProtocolStatus::Ok;
 }
 
+DeviceProtocolStatus encode_device_app_list_payload(const DeviceAppListPayload& payload,
+                                                    std::uint8_t* output,
+                                                    std::size_t output_capacity,
+                                                    std::size_t& output_size) {
+    output_size = 0;
+    if (output == nullptr || payload.entry_count > kDeviceAppListMaxEntries || payload.entry_count > 0xffu) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    std::size_t payload_size = kAppListFixedBytes;
+    std::array<std::size_t, kDeviceAppListMaxEntries> app_id_lengths{};
+    std::array<std::size_t, kDeviceAppListMaxEntries> version_lengths{};
+    for (std::size_t index = 0; index < payload.entry_count; ++index) {
+        const DeviceAppLibraryEntry& entry = payload.entries[index];
+        if (!has_valid_app_id(entry.app_id.data(), app_id_lengths[index]) ||
+            !has_valid_bounded_string(entry.version_name.data(), entry.version_name.size(), version_lengths[index]) ||
+            entry.bundle_bytes == 0 ||
+            !is_device_app_library_state(static_cast<std::uint8_t>(entry.state)) ||
+            (entry.flags & ~DeviceAppLibraryEntryRollbackAvailable) != 0) {
+            return DeviceProtocolStatus::InvalidArgument;
+        }
+        payload_size += kAppListEntryFixedBytes + app_id_lengths[index] + version_lengths[index];
+        if (payload_size > kDeviceProtocolMaxPayloadBytes) {
+            return DeviceProtocolStatus::PayloadTooLarge;
+        }
+    }
+    if (output_capacity < payload_size) {
+        return DeviceProtocolStatus::BufferTooSmall;
+    }
+    output[0] = kDevicePayloadVersion;
+    output[1] = static_cast<std::uint8_t>(payload.entry_count);
+    output[2] = 0;
+    output[3] = 0;
+    write_u32(output + 4, payload.registry_generation);
+    std::size_t cursor = kAppListFixedBytes;
+    for (std::size_t index = 0; index < payload.entry_count; ++index) {
+        const DeviceAppLibraryEntry& entry = payload.entries[index];
+        output[cursor] = static_cast<std::uint8_t>(app_id_lengths[index]);
+        output[cursor + 1] = static_cast<std::uint8_t>(version_lengths[index]);
+        output[cursor + 2] = static_cast<std::uint8_t>(entry.state);
+        output[cursor + 3] = entry.flags;
+        write_u32(output + cursor + 4, entry.version_code);
+        write_u32(output + cursor + 8, entry.bundle_bytes);
+        cursor += kAppListEntryFixedBytes;
+        std::memcpy(output + cursor, entry.app_id.data(), app_id_lengths[index]);
+        cursor += app_id_lengths[index];
+        std::memcpy(output + cursor, entry.version_name.data(), version_lengths[index]);
+        cursor += version_lengths[index];
+    }
+    output_size = cursor;
+    return DeviceProtocolStatus::Ok;
+}
+
+DeviceProtocolStatus decode_device_app_list_payload(const std::uint8_t* input,
+                                                    std::size_t input_size,
+                                                    DeviceAppListPayload& payload) {
+    payload = {};
+    if (input == nullptr) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    if (input_size < kAppListFixedBytes) {
+        return DeviceProtocolStatus::Truncated;
+    }
+    if (input[0] != kDevicePayloadVersion) {
+        return DeviceProtocolStatus::UnsupportedVersion;
+    }
+    if (input[2] != 0 || input[3] != 0 || input[1] > kDeviceAppListMaxEntries) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    payload.registry_generation = read_u32(input + 4);
+    payload.entry_count = input[1];
+    std::size_t cursor = kAppListFixedBytes;
+    for (std::size_t index = 0; index < payload.entry_count; ++index) {
+        if (input_size - cursor < kAppListEntryFixedBytes) {
+            return DeviceProtocolStatus::Truncated;
+        }
+        const std::size_t app_id_length = input[cursor];
+        const std::size_t version_length = input[cursor + 1];
+        const std::uint8_t state = input[cursor + 2];
+        const std::uint8_t flags = input[cursor + 3];
+        const std::uint32_t version_code = read_u32(input + cursor + 4);
+        const std::uint32_t bundle_bytes = read_u32(input + cursor + 8);
+        if (app_id_length == 0 || app_id_length > kDeviceMaxAppIdBytes || version_length == 0 ||
+            version_length > kDeviceMaxVersionNameBytes || bundle_bytes == 0 || !is_device_app_library_state(state) ||
+            (flags & ~DeviceAppLibraryEntryRollbackAvailable) != 0) {
+            return DeviceProtocolStatus::InvalidArgument;
+        }
+        cursor += kAppListEntryFixedBytes;
+        const std::size_t string_bytes = app_id_length + version_length;
+        if (input_size - cursor < string_bytes) {
+            return DeviceProtocolStatus::Truncated;
+        }
+        if (std::memchr(input + cursor, '\0', app_id_length) != nullptr ||
+            std::memchr(input + cursor + app_id_length, '\0', version_length) != nullptr) {
+            return DeviceProtocolStatus::InvalidArgument;
+        }
+        DeviceAppLibraryEntry& entry = payload.entries[index];
+        std::memcpy(entry.app_id.data(), input + cursor, app_id_length);
+        cursor += app_id_length;
+        std::memcpy(entry.version_name.data(), input + cursor, version_length);
+        cursor += version_length;
+        entry.version_code = version_code;
+        entry.bundle_bytes = bundle_bytes;
+        entry.state = static_cast<DeviceAppLibraryState>(state);
+        entry.flags = flags;
+    }
+    return cursor == input_size ? DeviceProtocolStatus::Ok : DeviceProtocolStatus::InvalidArgument;
+}
+
+DeviceProtocolStatus encode_device_recovery_detail_payload(const DeviceRecoveryDetailPayload& payload,
+                                                           std::uint8_t* output,
+                                                           std::size_t output_capacity,
+                                                           std::size_t& output_size) {
+    output_size = 0;
+    std::size_t app_id_length = 0;
+    const bool empty_recovery = payload.reason == DeviceRecoveryReason::None;
+    if (output == nullptr ||
+        (empty_recovery
+             ? (bounded_c_string_length(payload.app_id.data(), payload.app_id.size()) != 0 || payload.recovery_sequence != 0 ||
+                payload.flags != 0)
+             : !has_valid_app_id(payload.app_id.data(), app_id_length)) ||
+        !is_device_recovery_reason(static_cast<std::uint8_t>(payload.reason)) ||
+        (payload.flags & ~(DeviceRecoveryLauncherActive | DeviceRecoveryAppDisabled | DeviceRecoveryRollbackAvailable)) != 0) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    const std::size_t payload_size = kRecoveryDetailFixedBytes + app_id_length;
+    if (output_capacity < payload_size) {
+        return DeviceProtocolStatus::BufferTooSmall;
+    }
+    output[0] = kDevicePayloadVersion;
+    output[1] = static_cast<std::uint8_t>(payload.reason);
+    write_u16(output + 2, payload.flags);
+    write_u32(output + 4, payload.registry_generation);
+    write_u32(output + 8, payload.recovery_sequence);
+    output[12] = static_cast<std::uint8_t>(app_id_length);
+    output[13] = 0;
+    output[14] = 0;
+    output[15] = 0;
+    std::memcpy(output + kRecoveryDetailFixedBytes, payload.app_id.data(), app_id_length);
+    output_size = payload_size;
+    return DeviceProtocolStatus::Ok;
+}
+
+DeviceProtocolStatus decode_device_recovery_detail_payload(const std::uint8_t* input,
+                                                           std::size_t input_size,
+                                                           DeviceRecoveryDetailPayload& payload) {
+    payload = {};
+    if (input == nullptr) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    if (input_size < kRecoveryDetailFixedBytes) {
+        return DeviceProtocolStatus::Truncated;
+    }
+    if (input[0] != kDevicePayloadVersion) {
+        return DeviceProtocolStatus::UnsupportedVersion;
+    }
+    const std::size_t app_id_length = input[12];
+    const std::uint16_t flags = read_u16(input + 2);
+    const bool empty_recovery = input[1] == static_cast<std::uint8_t>(DeviceRecoveryReason::None);
+    if (!is_device_recovery_reason(input[1]) ||
+        (empty_recovery ? (app_id_length != 0 || read_u32(input + 8) != 0 || flags != 0)
+                        : (app_id_length == 0 || app_id_length > kDeviceMaxAppIdBytes)) ||
+        input[13] != 0 || input[14] != 0 || input[15] != 0 ||
+        (flags & ~(DeviceRecoveryLauncherActive | DeviceRecoveryAppDisabled | DeviceRecoveryRollbackAvailable)) != 0) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    if (input_size != kRecoveryDetailFixedBytes + app_id_length) {
+        return input_size < kRecoveryDetailFixedBytes + app_id_length
+                   ? DeviceProtocolStatus::Truncated
+                   : DeviceProtocolStatus::InvalidArgument;
+    }
+    if (std::memchr(input + kRecoveryDetailFixedBytes, '\0', app_id_length) != nullptr) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    std::memcpy(payload.app_id.data(), input + kRecoveryDetailFixedBytes, app_id_length);
+    payload.reason = static_cast<DeviceRecoveryReason>(input[1]);
+    payload.flags = flags;
+    payload.registry_generation = read_u32(input + 4);
+    payload.recovery_sequence = read_u32(input + 8);
+    return DeviceProtocolStatus::Ok;
+}
+
 DeviceProtocolStatus encode_device_operation_result_payload(const DeviceOperationResultPayload& payload,
                                                             std::uint8_t* output,
                                                             std::size_t output_capacity,
@@ -617,6 +814,28 @@ DeviceProtocolStatus decode_device_operation_result_payload(const std::uint8_t* 
     payload.received_bytes = read_u32(input + 8);
     payload.expected_bytes = read_u32(input + 12);
     return DeviceProtocolStatus::Ok;
+}
+
+const char* device_app_library_state_name(DeviceAppLibraryState state) {
+    switch (state) {
+    case DeviceAppLibraryState::Installed: return "installed";
+    case DeviceAppLibraryState::Disabled: return "disabled";
+    case DeviceAppLibraryState::Failed: return "failed";
+    }
+    return "installed";
+}
+
+const char* device_recovery_reason_name(DeviceRecoveryReason reason) {
+    switch (reason) {
+    case DeviceRecoveryReason::None: return "none";
+    case DeviceRecoveryReason::RegistryInvalid: return "registry-invalid";
+    case DeviceRecoveryReason::StagingDiscarded: return "staging-discarded";
+    case DeviceRecoveryReason::AppLoadFailure: return "app-load-failure";
+    case DeviceRecoveryReason::AppRuntimeFailure: return "app-runtime-failure";
+    case DeviceRecoveryReason::AppBudgetExceeded: return "app-budget-exceeded";
+    case DeviceRecoveryReason::LauncherFallback: return "launcher-fallback";
+    }
+    return "none";
 }
 
 } // namespace jellyframe

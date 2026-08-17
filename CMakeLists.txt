@@ -151,6 +151,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_runtime_version.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_render_core_provider.cmake")
 
 add_library(jellyframe_device_runtime_contracts
+    src/device_runtime_contracts/device_bundle.cpp
     src/device_runtime_contracts/device_install_transaction.cpp
     src/device_runtime_contracts/device_runtime_protocol.cpp
 )
@@ -176,6 +177,7 @@ add_library(jellyframe_app_runtime
     src/app_runtime/app_frame_policy.cpp
     src/app_runtime/app_host.cpp
     src/app_runtime/app_host_data.cpp
+    src/app_runtime/app_installed_bundle.cpp
     src/app_runtime/app_lifecycle.cpp
     src/app_runtime/app_load_telemetry.cpp
     src/app_runtime/app_service_worker.cpp
@@ -352,6 +354,7 @@ if(JELLYFRAME_BUILD_TESTS)
         src/app_runtime/tests/app_frame_policy_tests.cpp
         src/app_runtime/tests/app_host_data_tests.cpp
         src/app_runtime/tests/app_host_tests.cpp
+        src/app_runtime/tests/app_installed_bundle_tests.cpp
         src/app_runtime/tests/app_lifecycle_tests.cpp
         src/app_runtime/tests/app_load_telemetry_tests.cpp
         src/app_runtime/tests/app_service_worker_tests.cpp
@@ -381,6 +384,7 @@ if(JELLYFRAME_BUILD_TESTS)
     endif()
 
     set(JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES
+        src/device_runtime_contracts/tests/device_bundle_tests.cpp
         src/device_runtime_contracts/tests/device_install_transaction_tests.cpp
         src/device_runtime_contracts/tests/device_runtime_protocol_tests.cpp
         src/device_runtime_contracts/tests/device_protocol_vector_tests.cpp

@@ -123,9 +123,11 @@ commit/abort transaction ids, lifecycle app ids, log queries and a fixed 16-byte
 operation result envelope. The envelope carries a stable result code, flags,
 transaction id and received/expected byte counts. Install chunks deliberately
 decode as a bounded input view and must be copied before crossing a task
-boundary; all other decoded fields are copied values. Library entries, log
-records and recovery details are not smuggled through JSON or unbounded payloads;
-their typed record codecs remain a future protocol extension.
+boundary; all other decoded fields are copied values. AppList has a bounded
+registry generation plus at most 24 typed library entries (id, version, code,
+bundle bytes, state and rollback flag). Recovery has a bounded app id, registry
+generation, sequence, stable reason and launcher/disable/rollback flags. These
+records are never smuggled through JSON or port-private structs.
 
 `src/device_runtime_contracts/device_install_transaction.*` implements a bounded, ordered and
 cancellable staging state machine through the injected `DeviceInstallStore`.
@@ -133,6 +135,15 @@ Flash, filesystem, signature and registry policy remain in the adapter and are
 not pulled into Render Core. Write, verification, commit and explicit
 cancellation failures discard staging; a new version becomes visible only after
 atomic commit.
+
+`src/device_runtime_contracts/device_bundle.*` is the device-suitable JFAPPV0
+reader. It validates header/reserved fields, whole-bundle CRC32, section
+ranges, every resource path/hash/CRC and the bounded summary identity/version
+subset without filesystem, Python, Render Core or heap requirements. A port
+sets its own size/resource limits through `DeviceBundleValidationPolicy` during
+staging verification. `src/app_runtime/app_installed_bundle.*` then defines the
+separate committed-bundle lease and protected-launcher lifecycle boundary; see
+`src/app_runtime/docs/installed_bundle_binding.md`.
 
 These two `device_*` modules are not part of the App Runtime ownership model.
 D0 places them in `src/device_runtime_contracts` and compiles them as the

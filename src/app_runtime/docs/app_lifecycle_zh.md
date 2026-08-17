@@ -1,6 +1,6 @@
 # App 生命周期
 
-> 最后更新：2026-08-15；适用版本：0.6.0-dev；当前开发线：0.6.0
+> 最后更新：2026-08-18；适用版本：0.6.0-dev；当前开发线：0.6.0
 
 本文是 app 作者视角的 JellyFrame 生命周期说明，描述一个 app 在安装、启动、挂起、恢复、终止和卸载时
 可以依赖什么行为。宿主和开发板移植实现细节见 `host_optional_services_zh.md`。
@@ -55,6 +55,11 @@ teardown 协议。该协议仍是实际多任务脚本 App 的前置条件。
 
 网络请求、图片解码、音频播放、文件访问和 bundle 安装等慢工作必须作为 UI task 外的宿主 job 执行。
 completion 会在后续帧回到 active instance。
+
+Device OS 的 persistent app library 必须通过 `AppInstalledBundleBinding` 获取已经 committed 且通过
+校验的 bundle；不得把 raw partition pointer 或 staging buffer 直接交给 loader。binding 将 bundle
+所有权留在 supervisor task，正常 host teardown 后再释放，并在 load/runtime failure 时返回 protected
+launcher。详见 `installed_bundle_binding_zh.md`。
 
 ## 挂起、恢复与可见性
 

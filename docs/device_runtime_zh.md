@@ -95,13 +95,21 @@ payload codec 不依赖 JSON、堆分配或端口私有结构。
 `JFDP/1` 现在还定义了带 payload version 的安装 begin/chunk、commit/abort transaction id、
 lifecycle app id、日志查询和固定 16 字节 operation result envelope 编解码。envelope 携带稳定 result
 code、flags、transaction id 与 received/expected byte count。安装 chunk 有意解码为有界输入 view，跨任务前
-必须复制；其余解码字段都是复制值。app library entry、log record 与 recovery detail 不会被塞入 JSON 或无界
-payload；对应的 typed record codec 留待后续协议扩展。
+必须复制；其余解码字段都是复制值。AppList 是有界 registry generation 加最多 24 条 typed library entry
+（id、version、code、bundle bytes、state、rollback flag）。Recovery 则包含有界 app id、registry generation、
+sequence、稳定 reason 与 launcher/disable/rollback flag。它们不能被塞入 JSON 或 port-private struct。
 
 `src/device_runtime_contracts/device_install_transaction.*` 提供有界、有序、可取消的 staging 状态机。它只依赖
 `DeviceInstallStore` 注入的存储适配器，因此不会把 flash、文件系统、签名或 registry 实现带入
 Render Core。写入失败、校验失败、提交失败和主动取消都会清理 staging；只有原子提交成功后新版本
 才可见。
+
+`src/device_runtime_contracts/device_bundle.*` 是适用于 device 的 JFAPPV0 reader。它不依赖 filesystem、
+Python、Render Core 或 heap，并校验 header/reserved field、whole-bundle CRC32、section range、每一条
+resource 的 path/hash/CRC 及有界 summary identity/version 子集。port 在 staging verification 中通过
+`DeviceBundleValidationPolicy` 给出自身的 size/resource limit。随后
+`src/app_runtime/app_installed_bundle.*` 单独定义 committed-bundle lease 与 protected-launcher lifecycle
+边界，详见 `src/app_runtime/docs/installed_bundle_binding_zh.md`。
 
 这两个 `device_*` 模块不属于 App Runtime 的所有权模型。D0 已将它们移至
 `src/device_runtime_contracts`，并编译为独立的 `jellyframe_device_runtime_contracts` target，测试不链接
