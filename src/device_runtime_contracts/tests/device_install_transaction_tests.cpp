@@ -149,6 +149,19 @@ void store_write_failure_discards_partial_staging() {
     assert(store.active == 0);
 }
 
+void store_begin_failure_discards_partial_staging() {
+    TestStore store;
+    store.begin_ok = false;
+    DeviceInstallTransaction transaction = make_transaction();
+
+    assert(transaction.begin(17, "org.example.begin-failure", 1, 0, false, store).status ==
+           DeviceInstallStatus::StoreRejected);
+    assert(transaction.phase() == DeviceInstallPhase::Idle);
+    assert(store.begins == 1);
+    assert(store.aborts == 1);
+    assert(store.active == 0);
+}
+
 void rejects_embedded_nul_in_app_id() {
     TestStore store;
     DeviceInstallTransaction transaction = make_transaction();
@@ -165,6 +178,7 @@ int main() {
     integrity_and_commit_failure_discard_staging();
     abort_and_limits_leave_no_active_transaction();
     store_write_failure_discards_partial_staging();
+    store_begin_failure_discards_partial_staging();
     rejects_embedded_nul_in_app_id();
     return 0;
 }

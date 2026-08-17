@@ -57,8 +57,11 @@ struct DeviceInstallResult {
     }
 };
 
-// Implemented by a port or desktop reference host. The adapter owns all I/O,
-// bundle parsing, integrity checks and atomic registry publication.
+// Implemented by a port or desktop reference host. Every method is scoped to
+// request.transaction_id. begin/write/verify must never publish an app.
+// commit_staging returns true only after durable atomic publication; a false
+// result leaves the previously published registry unchanged. abort_staging is
+// idempotent and may be called after any failed begin/write/verify/commit path.
 class DeviceInstallStore {
 public:
     virtual ~DeviceInstallStore() = default;

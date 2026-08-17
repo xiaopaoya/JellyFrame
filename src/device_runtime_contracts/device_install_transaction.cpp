@@ -39,6 +39,9 @@ DeviceInstallResult DeviceInstallTransaction::begin(std::uint32_t transaction_id
     next.bundle_crc32 = bundle_crc32;
     next.allow_downgrade = allow_downgrade;
     if (!store.begin_staging(next)) {
+        // A port may have created a partial staging object before reporting a
+        // failure. The transaction controller owns cleanup on every failure path.
+        store.abort_staging(next.transaction_id);
         return result(DeviceInstallStatus::StoreRejected);
     }
 
