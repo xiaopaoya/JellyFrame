@@ -79,6 +79,8 @@ idf_component_register(
     SRCS
         "main.cpp"
         "jellyframe_esp32s3_font.cpp"
+        "jellyframe_esp32s3_device_image_lifecycle.cpp"
+        "jellyframe_esp32s3_device_image_store.cpp"
         "jellyframe_esp32s3_hal.cpp"
         "jellyframe_esp32s3_image.cpp"
         "jellyframe_esp32s3_jfdp_transport.cpp"
@@ -100,6 +102,7 @@ idf_component_register(
         "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}"
     REQUIRES
         esp_timer
+        esp_partition
         freertos
         driver
         esp_driver_usb_serial_jtag

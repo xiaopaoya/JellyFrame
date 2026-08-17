@@ -829,6 +829,12 @@ extern "C" void app_main(void) {
     } else {
         ESP_LOGI(tag, "Timer UI task started");
     }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_DEVICE_IMAGE_LIFECYCLE_ACCEPTANCE
+    if (!jellyframe_esp32s3::start_device_image_lifecycle_task()) {
+        ESP_LOGE(tag, "failed to start Developer Image lifecycle task");
+    } else {
+        ESP_LOGI(tag, "Developer Image lifecycle task started");
+    }
 #elif CONFIG_JELLYFRAME_ESP32S3_RUN_JFDP_TRANSPORT_ACCEPTANCE
     if (!jellyframe_esp32s3::start_jfdp_transport_acceptance_task()) {
         ESP_LOGE(tag, "failed to start JFDP/1 transport acceptance task");

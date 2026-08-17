@@ -25,6 +25,25 @@ config JELLYFRAME_ESP32S3_RUN_JFDP_TRANSPORT_ACCEPTANCE
         not share it with the ESP-IDF console. It uses only bounded in-memory
         staging and never publishes an App registry entry.
 
+config JELLYFRAME_ESP32S3_RUN_DEVICE_IMAGE_LIFECYCLE_ACCEPTANCE
+    bool "Run Developer Image persistent lifecycle acceptance"
+    help
+        Starts the JFDP/1 endpoint backed by the raw `storage` partition.
+        Staging is verified as JFAPPV0 before a redundant registry record
+        atomically publishes it. This profile owns native USB Serial/JTAG and
+        must not share that byte stream with the ESP-IDF console.
+
+config JELLYFRAME_ESP32S3_DEVICE_IMAGE_TEST_FAULT_POINT
+    int "Developer Image acceptance fault point"
+    depends on JELLYFRAME_ESP32S3_RUN_DEVICE_IMAGE_LIFECYCLE_ACCEPTANCE
+    range 0 8
+    default 0
+    help
+        Test-only persistent lifecycle interruption selector. Zero is normal;
+        nonzero values reset after begin, first/last chunk, verification or
+        registry publication, corrupt both registry records on boot, or reject
+        registry publication. It is never enabled by a product profile.
+
 config JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK
     bool "Start 172x320 Band System Shell UI task"
     help
