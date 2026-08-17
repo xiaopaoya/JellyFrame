@@ -1,6 +1,6 @@
 # Device OS Tool Provider Contract
 
-> Last updated: 2026-08-18; Applies to: JellyFrame `0.6.0-dev`; Status: draft, not implemented
+> Last updated: 2026-08-18; Applies to: JellyFrame `0.6.0-dev`; Status: draft; physical provider not implemented
 
 This host-process contract separates Runtime author tools from physical board
 dependencies. It is not `JFDP/1`, does not change its wire bytes and does not
@@ -15,6 +15,10 @@ package preflight, desktop debugging and editor UX. Render Core owns none.
 `jellyframe_cli.py device-reference` remains a desktop control-semantics
 fixture. It must not become a serial fallback or dynamically load a hardware
 plugin. A physical provider is configured explicitly by Device OS tooling.
+
+`tools/device_provider_contract.py` already validates bounded JSON result
+envelopes for future Runtime tooling. It opens no transport and cannot discover
+or control a board; the physical provider remains Device OS work.
 
 ## Provider Invocation
 

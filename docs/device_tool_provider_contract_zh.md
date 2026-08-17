@@ -1,6 +1,6 @@
 # Device OS 工具 Provider 契约
 
-> 最后更新：2026-08-18；适用：JellyFrame `0.6.0-dev`；状态：草案，尚未实现
+> 最后更新：2026-08-18；适用：JellyFrame `0.6.0-dev`；状态：草案；physical provider 尚未实现
 
 本 host-process contract 用于隔离 Runtime 作者工具与物理板卡依赖。它不是 `JFDP/1`，不改变
 wire bytes，也不把桌面 reference endpoint 变成 device transport。
@@ -13,6 +13,9 @@ Render Core 不负责这些内容。
 
 `jellyframe_cli.py device-reference` 仍是桌面 control-semantics fixture，不能变成 serial fallback 或
 动态加载 hardware plugin。physical provider 只能由 Device OS tooling 显式配置。
+
+`tools/device_provider_contract.py` 已能为未来 Runtime tooling 校验有界 JSON result envelope。它不打开
+transport，不能 discover 或控制开发板；physical provider 仍属于 Device OS 工作。
 
 ## Provider 调用
 
