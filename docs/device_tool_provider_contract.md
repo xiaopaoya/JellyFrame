@@ -76,12 +76,17 @@ bytes, flash addresses, filesystem paths, private keys or native handles.
 
 ## JSONL And Adoption
 
-For `--output jsonl`, every line retains format, operation and request id, has a
-strictly increasing `sequence`, and is `progress`, `log` or one final `result`.
-Missing, duplicate or out-of-order terminal events are provider failures, never
-successful installs. Cancellation must report whether the provider confirmed
-the JFDP transaction cancellation; killing a host process is not proof that
-staging was cleared.
+For `--output jsonl`, the stream is at most 256 KiB and 1024 non-empty lines.
+Every line carries `format`, `formatVersion`, `operation`, `requestId`,
+`sequence` and `provider`; `sequence` is a positive, strictly increasing
+uint32. A `progress` event adds only `progress.completedBytes` and
+`progress.totalBytes`; a `log` event adds only `log.level`, `log.appId` and
+`log.message`. `level` is `debug`, `info`, `warn` or `error`. The one final
+`result` uses the ordinary result envelope plus `sequence` and must be the last
+line. Missing, duplicate or out-of-order terminal events, or any identity
+change inside a stream, are provider failures, never successful installs.
+Cancellation must report whether the provider confirmed the JFDP transaction
+cancellation; killing a host process is not proof that staging was cleared.
 
 Before Runtime CLI or VS Code consumes a provider, Device OS must deliver the
 same-image/profile JFDP wire-acceptance report, a validated

@@ -15,12 +15,15 @@ from typing import Any
 FORMAT = "jellyframe.device-provider"
 FORMAT_VERSION = 0
 MAX_DOCUMENT_BYTES = 64 * 1024
+MAX_JSONL_BYTES = 256 * 1024
+MAX_JSONL_EVENTS = 1024
 MAX_LOG_RECORDS = 256
 MAX_REQUEST_ID_BYTES = 64
 MAX_FEATURE_FAMILIES = 64
 OPERATIONS = frozenset({"discover", "info", "install", "launch", "stop", "remove", "rollback", "logs", "recovery"})
 RESULT_CODES = frozenset({"ok", "accepted", "queued", "invalid-request", "busy", "unsupported", "denied", "not-found", "stale-session", "stale-request", "payload-too-large", "integrity-failed", "storage-full", "cancelled", "failed", "transport-unavailable", "protocol-mismatch", "provider-failed"})
 FEATURE_FAMILY_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{0,95}$")
+LOG_LEVELS = frozenset({"debug", "info", "warn", "error"})
 
 
 class ProviderContractError(ValueError):
@@ -46,6 +49,41 @@ def _object(value: Any, name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ProviderContractError(f"{name} must be an object")
     return value
+
+
+def _positive_uint32(value: Any, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not 0 < value <= 0xFFFFFFFF:
+        raise ProviderContractError(f"{name} must be a positive uint32")
+    return value
+
+
+def _provider(value: Any) -> dict[str, Any]:
+    provider = _object(value, "provider")
+    if set(provider) != {"id", "version"}:
+        raise ProviderContractError("provider has unknown or missing fields")
+    _string(provider["id"], "provider.id")
+    _string(provider["version"], "provider.version")
+    return provider
+
+
+def _envelope(value: Any, name: str, kind: str, require_sequence: bool) -> dict[str, Any]:
+    event = _object(value, name)
+    required = {"format", "formatVersion", "kind", "operation", "requestId", "provider"}
+    if require_sequence:
+        required.add("sequence")
+    if not required.issubset(event):
+        raise ProviderContractError(f"{name} has missing fields")
+    if event["format"] != FORMAT or event["formatVersion"] != FORMAT_VERSION or event["kind"] != kind:
+        raise ProviderContractError(f"unsupported {name} format")
+    if event["operation"] not in OPERATIONS:
+        raise ProviderContractError(f"unsupported {name} operation")
+    request_id = _string(event["requestId"], "requestId", MAX_REQUEST_ID_BYTES)
+    if not request_id.isascii():
+        raise ProviderContractError("requestId must be ASCII")
+    _provider(event["provider"])
+    if require_sequence:
+        _positive_uint32(event["sequence"], "sequence")
+    return event
 
 
 def _validate_device(value: Any, name: str) -> None:
@@ -78,31 +116,18 @@ def _validate_device(value: Any, name: str) -> None:
             raise ProviderContractError(f"{name}.capabilities.{field} is invalid")
 
 
-def parse_provider_result(data: bytes | str) -> dict[str, Any]:
-    raw = data.encode("utf-8") if isinstance(data, str) else data
-    if not isinstance(raw, bytes) or len(raw) > MAX_DOCUMENT_BYTES:
-        raise ProviderContractError("provider result exceeds the document budget")
-    try:
-        result = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_duplicates)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ProviderContractError(f"invalid provider JSON: {error}") from error
-    result = _object(result, "result")
+def _validate_result(value: Any, require_sequence: bool = False) -> dict[str, Any]:
+    result = _envelope(value, "result", "result", require_sequence)
     allowed = {"format", "formatVersion", "kind", "operation", "requestId", "resultCode", "provider", "devices", "device", "message", "transaction", "progress", "logs", "recovery"}
+    if require_sequence:
+        allowed.add("sequence")
     required = {"format", "formatVersion", "kind", "operation", "requestId", "resultCode", "provider"}
+    if require_sequence:
+        required.add("sequence")
     if not required.issubset(result) or not set(result).issubset(allowed):
         raise ProviderContractError("provider result has unknown or missing fields")
-    if result["format"] != FORMAT or result["formatVersion"] != FORMAT_VERSION or result["kind"] != "result":
-        raise ProviderContractError("unsupported provider result format")
-    if result["operation"] not in OPERATIONS or result["resultCode"] not in RESULT_CODES:
+    if result["resultCode"] not in RESULT_CODES:
         raise ProviderContractError("unsupported provider operation or result code")
-    request_id = _string(result["requestId"], "requestId", MAX_REQUEST_ID_BYTES)
-    if not request_id.isascii():
-        raise ProviderContractError("requestId must be ASCII")
-    provider = _object(result["provider"], "provider")
-    if set(provider) != {"id", "version"}:
-        raise ProviderContractError("provider has unknown or missing fields")
-    _string(provider["id"], "provider.id")
-    _string(provider["version"], "provider.version")
     if "devices" in result:
         if not isinstance(result["devices"], list) or len(result["devices"]) > 32:
             raise ProviderContractError("devices is invalid")
@@ -113,3 +138,84 @@ def parse_provider_result(data: bytes | str) -> dict[str, Any]:
     if "logs" in result and (not isinstance(result["logs"], list) or len(result["logs"]) > MAX_LOG_RECORDS):
         raise ProviderContractError("logs is invalid")
     return result
+
+
+def _parse_json(raw: bytes, name: str) -> dict[str, Any]:
+    try:
+        return _object(json.loads(raw.decode("utf-8"), object_pairs_hook=_no_duplicates), name)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ProviderContractError(f"invalid {name} JSON: {error}") from error
+
+
+def parse_provider_result(data: bytes | str) -> dict[str, Any]:
+    raw = data.encode("utf-8") if isinstance(data, str) else data
+    if not isinstance(raw, bytes) or len(raw) > MAX_DOCUMENT_BYTES:
+        raise ProviderContractError("provider result exceeds the document budget")
+    return _validate_result(_parse_json(raw, "provider result"))
+
+
+def _validate_stream_progress(value: Any) -> dict[str, Any]:
+    event = _envelope(value, "progress event", "progress", True)
+    if set(event) != {"format", "formatVersion", "kind", "operation", "requestId", "sequence", "provider", "progress"}:
+        raise ProviderContractError("progress event has unknown or missing fields")
+    progress = _object(event["progress"], "progress")
+    if set(progress) != {"completedBytes", "totalBytes"}:
+        raise ProviderContractError("progress has unknown or missing fields")
+    completed = progress["completedBytes"]
+    total = _positive_uint32(progress["totalBytes"], "progress.totalBytes")
+    if (not isinstance(completed, int) or isinstance(completed, bool) or
+            not 0 <= completed <= total):
+        raise ProviderContractError("progress.completedBytes is invalid")
+    return event
+
+
+def _validate_stream_log(value: Any) -> dict[str, Any]:
+    event = _envelope(value, "log event", "log", True)
+    if set(event) != {"format", "formatVersion", "kind", "operation", "requestId", "sequence", "provider", "log"}:
+        raise ProviderContractError("log event has unknown or missing fields")
+    log = _object(event["log"], "log")
+    if set(log) != {"level", "appId", "message"} or log["level"] not in LOG_LEVELS:
+        raise ProviderContractError("log has unknown or missing fields")
+    _string(log["appId"], "log.appId", 96)
+    _string(log["message"], "log.message", 1024)
+    return event
+
+
+def parse_provider_jsonl(data: bytes | str) -> list[dict[str, Any]]:
+    """Parse one bounded provider operation stream with one ordered terminal result."""
+    raw = data.encode("utf-8") if isinstance(data, str) else data
+    if not isinstance(raw, bytes) or not raw or len(raw) > MAX_JSONL_BYTES:
+        raise ProviderContractError("provider JSONL exceeds the stream budget")
+    lines = raw.splitlines()
+    if not lines or len(lines) > MAX_JSONL_EVENTS or any(not line.strip() for line in lines):
+        raise ProviderContractError("provider JSONL has invalid line boundaries")
+    events: list[dict[str, Any]] = []
+    previous_sequence = 0
+    stream_identity: tuple[str, str, str, str] | None = None
+    for index, line in enumerate(lines):
+        event = _parse_json(line, f"provider JSONL line {index + 1}")
+        kind = event.get("kind")
+        if kind == "progress":
+            event = _validate_stream_progress(event)
+        elif kind == "log":
+            event = _validate_stream_log(event)
+        elif kind == "result":
+            event = _validate_result(event, require_sequence=True)
+        else:
+            raise ProviderContractError("provider JSONL has an unsupported event kind")
+        sequence = event["sequence"]
+        if sequence <= previous_sequence:
+            raise ProviderContractError("provider JSONL sequence is not strictly increasing")
+        previous_sequence = sequence
+        provider = event["provider"]
+        identity = (event["operation"], event["requestId"], provider["id"], provider["version"])
+        if stream_identity is None:
+            stream_identity = identity
+        elif identity != stream_identity:
+            raise ProviderContractError("provider JSONL stream identity changed")
+        if kind == "result" and index != len(lines) - 1:
+            raise ProviderContractError("provider JSONL terminal result is not final")
+        events.append(event)
+    if events[-1]["kind"] != "result":
+        raise ProviderContractError("provider JSONL is missing a terminal result")
+    return events

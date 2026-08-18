@@ -64,9 +64,13 @@ private key 或 native handle。
 
 ## JSONL 与接入
 
-`--output jsonl` 的每行保留 format、operation、request id，含严格递增的 `sequence`，`kind` 只能为
-`progress`、`log` 或唯一的最终 `result`。终态缺失、重复或乱序均是 provider failure，不能显示 install 成功。
-取消时必须报告 provider 是否确认 JFDP transaction cancellation；仅 kill host process 不代表 staging 已清理。
+`--output jsonl` stream 最多 256 KiB、1024 条非空行。每行都带有 `format`、`formatVersion`、`operation`、
+`requestId`、`sequence` 和 `provider`；`sequence` 是正的严格递增 uint32。`progress` event 只能额外携带
+`progress.completedBytes` 与 `progress.totalBytes`；`log` event 只能额外携带 `log.level`、`log.appId` 和
+`log.message`，其中 `level` 只能是 `debug`、`info`、`warn` 或 `error`。唯一最终 `result` 使用普通 result
+envelope 加 `sequence`，且必须是最后一行。终态缺失、重复或乱序，或 stream 内任何 identity 改变均为 provider
+failure，不能显示 install 成功。取消时必须报告 provider 是否确认 JFDP transaction cancellation；仅 kill host
+process 不代表 staging 已清理。
 
 Runtime CLI 或 VS Code 消费 provider 前，Device OS 必须交付同 image/profile 的 JFDP wire-acceptance report、
 已校验的 `device_image_manifest_zh.md` record、覆盖 no-device/protocol mismatch/storage full/interrupted transfer 的

@@ -19,6 +19,14 @@ def result(**extra: object) -> dict:
     return base
 
 
+def event(kind: str, sequence: int, **extra: object) -> dict:
+    base = {"format": contract.FORMAT, "formatVersion": contract.FORMAT_VERSION,
+            "kind": kind, "operation": "install", "requestId": "host-42", "sequence": sequence,
+            "provider": {"id": "jellyframe-device", "version": "0.1.0-dev"}}
+    base.update(extra)
+    return base
+
+
 class DeviceProviderContractTests(unittest.TestCase):
     def test_accepts_bounded_discovery(self):
         parsed = contract.parse_provider_result(json.dumps(result(devices=[device()])))
@@ -43,6 +51,38 @@ class DeviceProviderContractTests(unittest.TestCase):
         invalid["capabilities"]["featureFamilies"] = ["core.document", "core.document"]
         with self.assertRaises(contract.ProviderContractError):
             contract.parse_provider_result(json.dumps(result(devices=[invalid])))
+
+    def test_accepts_ordered_jsonl_progress_log_and_result(self):
+        stream = "\n".join((
+            json.dumps(event("progress", 1, progress={"completedBytes": 0, "totalBytes": 1500})),
+            json.dumps(event("log", 2, log={"level": "info", "appId": "org.example.app", "message": "installing"})),
+            json.dumps(event("result", 3, resultCode="ok", device=device())),
+        ))
+        parsed = contract.parse_provider_jsonl(stream)
+        self.assertEqual([item["kind"] for item in parsed], ["progress", "log", "result"])
+
+    def test_rejects_jsonl_without_terminal_or_with_identity_drift(self):
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_jsonl(json.dumps(event("progress", 1, progress={"completedBytes": 0, "totalBytes": 1})))
+        changed = event("result", 2, resultCode="ok")
+        changed["requestId"] = "host-43"
+        stream = "\n".join((
+            json.dumps(event("progress", 1, progress={"completedBytes": 0, "totalBytes": 1})),
+            json.dumps(changed),
+        ))
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_jsonl(stream)
+
+    def test_rejects_jsonl_out_of_order_or_early_terminal(self):
+        terminal = event("result", 2, resultCode="ok")
+        late = event("log", 3, log={"level": "info", "appId": "org.example.app", "message": "late"})
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_jsonl("\n".join((json.dumps(terminal), json.dumps(late))))
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_jsonl("\n".join((
+                json.dumps(event("progress", 2, progress={"completedBytes": 0, "totalBytes": 1})),
+                json.dumps(event("result", 1, resultCode="ok")),
+            )))
         invalid = device()
         invalid["capabilities"]["featureFamilies"] = ["Core Document"]
         with self.assertRaises(contract.ProviderContractError):
