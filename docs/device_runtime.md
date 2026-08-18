@@ -211,9 +211,9 @@ firmware image and cannot replace the launcher, recovery UI or port code.
   discovery/list/chunked-install/commit/cancel/lifecycle/log/recovery control
   semantics; C++ codecs and the desktop dispatcher verify request/response
   correlation, bounded payloads and typed status/progress results. The
-  contracts now have their own source owner. One WS147 port adapter has passed
-  physical wire acceptance; Device OS package extraction and persistent image
-  lifecycle integration remain open.
+  contracts now have their own source owner. The WS147 port adapter has passed
+  physical wire and A1-2 persistent image lifecycle acceptance at `743a011`;
+  Device OS package extraction remains open.
 
 ### D1: First official developer image
 
@@ -221,9 +221,10 @@ firmware image and cannot replace the launcher, recovery UI or port code.
   USB developer transport adapter.
 - Implement only the D0 control operations required by the first workflow.
 - Publish one board/profile manifest and a recoverable factory flashing tool.
-- The USB adapter's byte-stream preflight is closed for one WS147 acceptance
-  configuration. Persistent installation and launcher recovery remain open
-  under the separate lifecycle gate.
+- The USB adapter's byte-stream preflight and persistent installation/launcher
+  recovery gate are closed for one WS147 acceptance configuration at
+  `743a011`. Board/profile release metadata and a factory recovery procedure
+  remain open.
 
 ### D2: Author tooling
 

@@ -71,7 +71,7 @@ Unsupported lifecycle operations may be rejected, but never silently reported as
 
 A versioned report directory must include Runtime and Device OS commit; image/profile and storage configuration; JFDP fixture SHA-256; exact uncommitted port changes if any; image and fixture hashes; build/flash logs; raw host capture; machine-readable summary; each interruption point and post-boot observation.
 
-Include counters for staging begin/write/verify/commit/abort, registry publication, recovery/fallback entries, rejected requests, reconnects, resets and watchdogs. Report memory/queue watermarks where available, otherwise state the limitation and structural bounds. Confirm manually that launcher/fallback and both fixture version markers are visually distinguishable.
+Include counters for staging begin/write/verify/commit/abort, registry publication, recovery/fallback entries, rejected requests, reconnects, resets and watchdogs. Report memory/queue watermarks where available, otherwise state the limitation and structural bounds. This gate may establish launch/fallback through typed binding and resource-read results; actual installed-App DOM/panel rendering, visual comparison and input are A2 end-to-end evidence, not a substitute claim for this storage lifecycle gate.
 
 Separate verdicts for wire acceptance, storage lifecycle, launcher recovery and tooling. Passing a reference dispatcher or a disconnect-only test is not evidence for persistent interruption safety.
 

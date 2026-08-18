@@ -160,16 +160,16 @@ bundle 存储在固件镜像之外，不能替换 launcher、recovery UI 或 por
 - 已有平台无关 framing、capability payload、请求结果码和 staged-install controller。桌面 reference host
   已覆盖持久 discovery/list/chunked-install/commit/cancel/lifecycle/log/recovery control semantics；内存内
   C++ codec 与桌面 dispatcher 已验证 request/response 关联、有界 payload 与 typed status/progress result。
-  契约已拥有独立 source owner；一条 WS147 port adapter 已通过 physical wire acceptance，Device OS package
-  拆分与 persistent image lifecycle integration 仍未关闭。
+  契约已拥有独立 source owner；WS147 port adapter 已在 `743a011` 通过 physical wire 与 A1-2 persistent image
+  lifecycle 验收，Device OS package 拆分仍未关闭。
 
 ### D1：首个官方 Developer Image
 
 - 为 ESP32-S3 1.47 增加 storage partition、不可替换 launcher/fallback 和 USB 开发者传输 adapter。
 - 只实现 D0 首条工作流所需的控制操作。
 - 发布一份板卡/profile manifest 与可恢复的 factory flash 工具。
-- USB adapter 的 byte-stream preflight 已在一个 WS147 acceptance configuration 上关闭；persistent install 与
-  launcher recovery 仍受独立 lifecycle gate 约束，尚未关闭。
+- USB adapter 的 byte-stream preflight、persistent install 与 launcher recovery gate 已在一个 WS147 acceptance
+  configuration 的 `743a011` 上关闭；board/profile release metadata 与 factory recovery procedure 仍未关闭。
 
 ### D2：作者工具
 

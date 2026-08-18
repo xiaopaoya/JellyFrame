@@ -69,7 +69,7 @@ port 必须提供可重复的 interruption hook：test-only controlled reset、s
 
 版本化报告目录必须包含 Runtime/Device OS commit；image/profile 与 storage 配置；JFDP fixture SHA-256；未提交 port change（如有）；image 和 fixture hash；build/flash log；raw host capture；machine-readable summary；每个 interruption point 与 reboot 后 observation。
 
-还必须包含 staging begin/write/verify/commit/abort、registry publication、recovery/fallback、rejected request、reconnect、reset、watchdog 计数。可用时报告 memory/queue watermark，否则说明限制与结构上限。人工确认 launcher/fallback 与两种 fixture version marker 可在视觉上区分。
+还必须包含 staging begin/write/verify/commit/abort、registry publication、recovery/fallback、rejected request、reconnect、reset、watchdog 计数。可用时报告 memory/queue watermark，否则说明限制与结构上限。本 gate 可以通过 typed binding 与 resource-read 结果证明 launch/fallback；已安装 App 的 DOM/panel 渲染、可视对比与输入属于 A2 的端到端证据，不能用它们替代或冒充本 storage lifecycle gate 的结论。
 
 报告必须分开给出 wire acceptance、storage lifecycle、launcher recovery 与 tooling verdict。reference dispatcher 或仅断线测试不能证明 persistent interruption safety。
 
