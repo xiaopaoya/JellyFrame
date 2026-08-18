@@ -51,7 +51,7 @@ summary 与原生 Runtime parser 会同步执行这对校验。
 - 当前源码版本记录在 `VERSION`。
 - 面向用户可见的变更记录在 `CHANGELOG.md` 和 `CHANGELOG_zh.md`。
 - Release CTest 必须保持有效：测试二进制会显式取消 `NDEBUG`，若 `assert(...)` 被关闭则构建失败。CI 也会运行 Debug CTest。Linux CI 额外以 AddressSanitizer 和 UndefinedBehaviorSanitizer 运行非 scripting 的核心/工具覆盖；可选 JerryScript bridge 仍需兼容 sanitizer 工具链，才能关闭其独立的 sanitizer 关卡。
-  本地 Windows Clang sanitizer 使用 `RelWithDebInfo`：Debug CRT 与动态 ASan runtime 不兼容；CMake 会把该 runtime 部署到 sanitizer 测试二进制旁。
+  本地 Windows Clang sanitizer 构建保留 Debug 符号和断言，但会选择 release dynamic CRT：Debug CRT 与 LLVM 动态 ASan runtime 不兼容；CMake 会把该 runtime 部署到 sanitizer 测试二进制旁。
 - 公开文档提供英文和中文版本。中文文件使用 `_zh` 后缀。
 - 公开 Markdown 文档顶部带一行轻量新鲜度信息：
   `最后更新：YYYY-MM-DD；适用版本：VERSION`。当文档的契约、示例或操作说明变化时更新这行。

@@ -89,6 +89,13 @@ if(JELLYFRAME_ENABLE_SANITIZERS)
             "JELLYFRAME_ENABLE_SANITIZERS requires a Clang/GCC-style toolchain; "
             "use the dedicated MSVC AddressSanitizer build or configure with clang-cl.")
     endif()
+    if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        # The Debug CRT and LLVM's dynamic ASan runtime use incompatible
+        # allocation domains. Keep Debug symbols/asserts, but select the
+        # release dynamic CRT for a valid sanitizer process.
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING
+            "MSVC runtime selected for Windows Clang sanitizer builds" FORCE)
+    endif()
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
     add_link_options(-fsanitize=address,undefined)
 
