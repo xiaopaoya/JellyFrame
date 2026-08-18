@@ -153,10 +153,10 @@ future Device OS package migration is complete. The desktop reference host
 contains a deterministic typed-frame dispatcher for the completed staging and
 lifecycle semantic loop. A port must consume the existing framing, payload,
 result-code and staging contracts; it must not fork them. The WS147 native USB
-Serial/JTAG adapter has passed the physical wire-only acceptance matrix for one
-documented image/configuration. That does not make the desktop reference
-endpoint physical and does not prove persistent storage, launcher recovery or
-author tools; see [device_image_lifecycle_port_acceptance.md](device_image_lifecycle_port_acceptance.md).
+Serial/JTAG adapter has passed physical wire and persistent lifecycle
+acceptance at `743a011`. That does not make the desktop reference endpoint
+physical and does not prove installed-App rendering or author tools; see
+[device_image_lifecycle_port_acceptance.md](device_image_lifecycle_port_acceptance.md).
 
 The desktop reference endpoint can be selected explicitly while exercising the
 toolchain:

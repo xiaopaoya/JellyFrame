@@ -8,6 +8,7 @@ pulling board dependencies into this repository.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 
@@ -16,8 +17,10 @@ FORMAT_VERSION = 0
 MAX_DOCUMENT_BYTES = 64 * 1024
 MAX_LOG_RECORDS = 256
 MAX_REQUEST_ID_BYTES = 64
+MAX_FEATURE_FAMILIES = 64
 OPERATIONS = frozenset({"discover", "info", "install", "launch", "stop", "remove", "rollback", "logs", "recovery"})
 RESULT_CODES = frozenset({"ok", "accepted", "queued", "invalid-request", "busy", "unsupported", "denied", "not-found", "stale-session", "stale-request", "payload-too-large", "integrity-failed", "storage-full", "cancelled", "failed", "transport-unavailable", "protocol-mismatch", "provider-failed"})
+FEATURE_FAMILY_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{0,95}$")
 
 
 class ProviderContractError(ValueError):
@@ -62,9 +65,14 @@ def _validate_device(value: Any, name: str) -> None:
     if set(display) != {"width", "height", "shape"} or not all(isinstance(display[key], int) and display[key] > 0 for key in ("width", "height")):
         raise ProviderContractError(f"{name}.capabilities.display is invalid")
     _string(display["shape"], f"{name}.capabilities.display.shape", 32)
-    if (not isinstance(capabilities["featureFamilies"], list) or
-            any(not isinstance(item, str) or not item for item in capabilities["featureFamilies"])):
+    feature_families = capabilities["featureFamilies"]
+    if (not isinstance(feature_families, list) or len(feature_families) > MAX_FEATURE_FAMILIES or
+            len(set(feature_families)) != len(feature_families)):
         raise ProviderContractError(f"{name}.capabilities.featureFamilies is invalid")
+    for index, family in enumerate(feature_families):
+        _string(family, f"{name}.capabilities.featureFamilies[{index}]", 96)
+        if FEATURE_FAMILY_RE.fullmatch(family) is None:
+            raise ProviderContractError(f"{name}.capabilities.featureFamilies[{index}] is invalid")
     for field in ("maxBundleBytes", "availableStorageBytes"):
         if not isinstance(capabilities[field], int) or capabilities[field] < 0:
             raise ProviderContractError(f"{name}.capabilities.{field} is invalid")

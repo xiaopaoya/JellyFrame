@@ -115,10 +115,9 @@ resource 的 path/hash/CRC 及有界 summary identity/version 子集。port 在 
 `src/device_runtime_contracts`，并编译为独立的 `jellyframe_device_runtime_contracts` target，测试不链接
 App Runtime 或 Render Core。未来 Device OS package 迁移完成前，这仍是 monorepo 过渡状态。桌面 reference host
 已包含对完成的 staging/lifecycle semantic loop 进行确定性处理的 typed-frame dispatcher。port 必须消费现有
-framing、payload、result code 与 staging 契约，不能复制它们。WS147 native USB Serial/JTAG adapter 已在一个文档化
-image/configuration 上通过 physical wire-only acceptance matrix；这不会把 desktop reference endpoint 变成物理设备，
-也不证明 persistent storage、launcher recovery 或作者工具已完成，详见
-[device_image_lifecycle_port_acceptance_zh.md](device_image_lifecycle_port_acceptance_zh.md)。
+framing、payload、result code 与 staging 契约，不能复制它们。WS147 native USB Serial/JTAG adapter 已在 `743a011`
+通过 physical wire 与 persistent lifecycle acceptance；这不会把 desktop reference endpoint 变成物理设备，也不证明
+已安装 App 的 rendering 或作者工具已完成，详见 [device_image_lifecycle_port_acceptance_zh.md](device_image_lifecycle_port_acceptance_zh.md)。
 
 桌面端可以显式运行 reference endpoint，以验证工具链而不误认为连接了开发板：
 

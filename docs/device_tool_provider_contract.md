@@ -1,6 +1,6 @@
 # Device OS Tool Provider Contract
 
-> Last updated: 2026-08-18; Applies to: 0.6.0-dev; Status: draft; physical provider not implemented
+> Last updated: 2026-08-19; Applies to: 0.6.0-dev; Status: draft; physical provider not implemented
 
 This host-process contract separates Runtime author tools from physical board
 dependencies. It is not `JFDP/1`, does not change its wire bytes and does not
@@ -68,7 +68,8 @@ with a 64-byte maximum.
 `discover` returns a bounded `devices` array. A usable record contains stable
 opaque `endpointId`, board/profile/image/runtime identities, `JFDP/1`,
 connection state, display shape/size, enabled feature families, maximum bundle
-bytes and available storage. Other operations return one selected device plus
+bytes and available storage. Feature-family IDs are unique lowercase ASCII
+`[a-z0-9][a-z0-9.-]{0,95}` values, with at most 64 entries. Other operations return one selected device plus
 optional typed transaction, progress, logs or recovery data. A result is at
 most 64 KiB; a log result has at most 256 records. It must not expose raw bundle
 bytes, flash addresses, filesystem paths, private keys or native handles.

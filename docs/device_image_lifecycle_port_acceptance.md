@@ -1,6 +1,6 @@
 # Developer Image Lifecycle Acceptance
 
-> Last updated: 2026-08-18; Applies to: 0.6.0-dev; Protocol: JFDP/1
+> Last updated: 2026-08-19; Applies to: 0.6.0-dev; Protocol: JFDP/1
 
 This is the A1-2 acceptance gate for the first official Developer Image. It follows, but does not replace, [JFDP/1 Physical Transport Acceptance](jfdp_v1_port_acceptance.md). It proves persistent staged installation, registry publication and launcher recovery on one concrete board image. It is not a general filesystem test, firmware-update protocol, marketplace, remote-download service or performance benchmark.
 

@@ -1,6 +1,6 @@
 # Device OS 工具 Provider 契约
 
-> 最后更新：2026-08-18；适用版本：0.6.0-dev；状态：草案；physical provider 尚未实现
+> 最后更新：2026-08-19；适用版本：0.6.0-dev；状态：草案；physical provider 尚未实现
 
 本 host-process contract 用于隔离 Runtime 作者工具与物理板卡依赖。它不是 `JFDP/1`，不改变
 wire bytes，也不把桌面 reference endpoint 变成 device transport。
@@ -58,7 +58,7 @@ stderr；`--output json` 的 stdout 仅有一个 UTF-8 JSON document，`--output
 
 `discover` 返回有界 `devices` array。可用 record 包含稳定 opaque `endpointId`、board/profile/image/runtime
 identity、`JFDP/1`、connection state、display shape/size、enabled feature family、maximum bundle bytes 和
-available storage。其他操作返回一个 selected device 和可选 typed transaction、progress、logs、recovery data。
+available storage。feature-family ID 必须唯一、使用小写 ASCII `[a-z0-9][a-z0-9.-]{0,95}`，且最多 64 项。其他操作返回一个 selected device 和可选 typed transaction、progress、logs、recovery data。
 result 最大 64 KiB，log result 最多 256 records。禁止传出 raw bundle bytes、flash address、filesystem path、
 private key 或 native handle。
 

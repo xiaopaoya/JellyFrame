@@ -76,6 +76,9 @@ full developer-image lifecycle or external trial is ready.
 After that gate, a developer image must pass
 [device_image_lifecycle_port_acceptance.md](device_image_lifecycle_port_acceptance.md)
 before its staging storage, registry or launcher path is considered usable by app authors.
+The resulting release must publish a measured
+[Developer Image manifest](device_image_manifest.md) and a factory recovery
+procedure; do not reuse fixture or desktop-reference values.
 
 ## Porting Phases
 

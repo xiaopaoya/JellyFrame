@@ -54,6 +54,8 @@ developer-image lifecycle 或外部试用已经就绪。
 通过该 gate 后，developer image 还必须通过
 [device_image_lifecycle_port_acceptance_zh.md](device_image_lifecycle_port_acceptance_zh.md)，其 staging storage、
 registry 或 launcher path 才能被视为可供 App 作者使用。
+随后 release 必须发布实测的 [Developer Image manifest](device_image_manifest_zh.md) 与 factory recovery
+procedure；不得复用 fixture 或 desktop-reference 的值。
 
 ## 移植阶段
 

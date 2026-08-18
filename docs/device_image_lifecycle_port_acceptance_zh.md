@@ -1,6 +1,6 @@
 # Developer Image 生命周期验收
 
-> 最后更新：2026-08-18；适用版本：0.6.0-dev；协议：JFDP/1
+> 最后更新：2026-08-19；适用版本：0.6.0-dev；协议：JFDP/1
 
 这是首个官方 Developer Image 的 A1-2 验收 gate。它必须在 [JFDP/1 物理传输验收](jfdp_v1_port_acceptance_zh.md) 之后执行，但不取代后者；它证明一个具体板卡镜像的持久 staged install、registry 发布和 launcher 恢复。它不是通用文件系统测试、固件升级协议、市场、远程下载服务或性能 benchmark。
 

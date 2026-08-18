@@ -38,6 +38,16 @@ class DeviceProviderContractTests(unittest.TestCase):
         with self.assertRaises(contract.ProviderContractError):
             contract.parse_provider_result(json.dumps(result(logs=[{}] * 257)))
 
+    def test_rejects_ambiguous_feature_families(self):
+        invalid = device()
+        invalid["capabilities"]["featureFamilies"] = ["core.document", "core.document"]
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(result(devices=[invalid])))
+        invalid = device()
+        invalid["capabilities"]["featureFamilies"] = ["Core Document"]
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(result(devices=[invalid])))
+
 
 if __name__ == "__main__":
     unittest.main()
