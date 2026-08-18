@@ -169,7 +169,8 @@ bundle 存储在固件镜像之外，不能替换 launcher、recovery UI 或 por
 - 只实现 D0 首条工作流所需的控制操作。
 - 发布一份板卡/profile manifest 与可恢复的 factory flash 工具。
 - USB adapter 的 byte-stream preflight、persistent install 与 launcher recovery gate 已在一个 WS147 acceptance
-  configuration 的 `743a011` 上关闭；board/profile release metadata 与 factory recovery procedure 仍未关闭。
+  configuration 的 `743a011` 上关闭；`device_image_manifest_zh.md` 已固定平台无关 release identity 与 provider
+  matching contract，实际 measured value 的 WS147 manifest 与 factory recovery procedure 仍未关闭。
 
 ### D2：作者工具
 

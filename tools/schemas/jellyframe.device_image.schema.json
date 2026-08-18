@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jellyframe.dev/schemas/jellyframe.device_image.schema.json",
+  "title": "JellyFrame Developer Image Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "formatVersion", "imageId", "imageVersion", "runtimeVersion", "renderCore", "source", "board", "profile", "transport", "storage", "recovery"],
+  "properties": {
+    "format": {"const": "jellyframe.device-image"},
+    "formatVersion": {"const": 0},
+    "imageId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,95}$"},
+    "imageVersion": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"},
+    "runtimeVersion": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"},
+    "renderCore": {"type": "object", "additionalProperties": false, "required": ["version", "abi"], "properties": {"version": {"type": "string"}, "abi": {"type": "integer", "minimum": 1}}},
+    "source": {"type": "object", "additionalProperties": false, "required": ["revision", "firmwareSha256"], "properties": {"revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "firmwareSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}},
+    "board": {"type": "object", "additionalProperties": false, "required": ["id", "display"], "properties": {"id": {"type": "string"}, "display": {"type": "object", "additionalProperties": false, "required": ["width", "height", "shape"], "properties": {"width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1}, "shape": {"type": "string"}}}}},
+    "profile": {"type": "object", "additionalProperties": false, "required": ["id", "featureFamilies"], "properties": {"id": {"type": "string"}, "featureFamilies": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"type": "string"}}}},
+    "transport": {"type": "object", "additionalProperties": false, "required": ["protocol", "kind"], "properties": {"protocol": {"const": "JFDP/1"}, "kind": {"type": "string"}}},
+    "storage": {"type": "object", "additionalProperties": false, "required": ["maxBundleBytes"], "properties": {"maxBundleBytes": {"type": "integer", "minimum": 1}}},
+    "recovery": {"type": "object", "additionalProperties": false, "required": ["procedureId", "factoryImageSha256"], "properties": {"procedureId": {"type": "string"}, "factoryImageSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}
+  }
+}

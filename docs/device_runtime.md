@@ -223,8 +223,9 @@ firmware image and cannot replace the launcher, recovery UI or port code.
 - Publish one board/profile manifest and a recoverable factory flashing tool.
 - The USB adapter's byte-stream preflight and persistent installation/launcher
   recovery gate are closed for one WS147 acceptance configuration at
-  `743a011`. Board/profile release metadata and a factory recovery procedure
-  remain open.
+  `743a011`. `device_image_manifest.md` now fixes the platform-neutral release
+  identity and provider matching contract. A WS147 manifest with measured
+  values and a factory recovery procedure remain open.
 
 ### D2: Author tooling
 

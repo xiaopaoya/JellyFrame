@@ -69,6 +69,6 @@ private key 或 native handle。
 取消时必须报告 provider 是否确认 JFDP transaction cancellation；仅 kill host process 不代表 staging 已清理。
 
 Runtime CLI 或 VS Code 消费 provider 前，Device OS 必须交付同 image/profile 的 JFDP wire-acceptance report、
-覆盖 no-device/protocol mismatch/storage full/interrupted transfer 的确定性 JSON/JSONL fixture，以及版本化的
-discovery/install/update/rollback/remove/log/reconnect report。满足后 Runtime 才可增加真实 `device` command 或
-VS Code device selector。
+已校验的 `device_image_manifest_zh.md` record、覆盖 no-device/protocol mismatch/storage full/interrupted transfer 的
+确定性 JSON/JSONL fixture，以及版本化的 discovery/install/update/rollback/remove/log/reconnect report。host 必须在
+部署前将 discovery data 与该 manifest 匹配。满足后 Runtime 才可增加真实 `device` command 或 VS Code device selector。

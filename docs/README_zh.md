@@ -62,6 +62,7 @@
   Device OS 的 committed `.jfapp` lease 所有权、Runtime 启动顺序和 protected launcher fallback。
 - [device_runtime_zh.md](device_runtime_zh.md)：官方 developer image、设备部署和工具链的产品边界与交付计划。
 - [device_tool_provider_contract_zh.md](device_tool_provider_contract_zh.md)：未来 Device OS client 与 Runtime CLI/VS Code 的边界；尚未实现。
+- [device_image_manifest_zh.md](device_image_manifest_zh.md)：不可变 Developer Image 的 identity、provenance 与 provider-compatibility 契约。
 - [jfdp_v1_port_acceptance_zh.md](jfdp_v1_port_acceptance_zh.md)：第一条 physical developer transport 的字节流、malformed-frame 与证据 gate。
 - [device_image_lifecycle_port_acceptance_zh.md](device_image_lifecycle_port_acceptance_zh.md)：首个 Developer Image 的持久 staging、registry publication 与 launcher recovery gate。
 - [authorized_file_broker_zh.md](../src/app_runtime/docs/authorized_file_broker_zh.md)：面向文件管理器和系统组件的宿主持有授权文件访问边界。

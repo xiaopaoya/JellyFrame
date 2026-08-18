@@ -80,6 +80,8 @@ for whether a document needs another pass after code changes.
   official developer images, device deployment and tooling.
 - [device_tool_provider_contract.md](device_tool_provider_contract.md): future
   Device OS client boundary for Runtime CLI and VS Code; not yet implemented.
+- [device_image_manifest.md](device_image_manifest.md): immutable Developer
+  Image identity, provenance and provider-compatibility contract.
 - [jfdp_v1_port_acceptance.md](jfdp_v1_port_acceptance.md): byte-stream,
   malformed-frame and evidence gate for the first physical developer transport.
 - [device_image_lifecycle_port_acceptance.md](device_image_lifecycle_port_acceptance.md):

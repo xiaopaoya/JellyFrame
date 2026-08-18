@@ -83,7 +83,9 @@ the JFDP transaction cancellation; killing a host process is not proof that
 staging was cleared.
 
 Before Runtime CLI or VS Code consumes a provider, Device OS must deliver the
-same-image/profile JFDP wire-acceptance report, deterministic JSON/JSONL
-fixtures for no-device/protocol mismatch/storage full/interrupted transfer, and
-a versioned discovery/install/update/rollback/remove/log/reconnect report.
-Only then may Runtime add a real `device` command or VS Code add a selector.
+same-image/profile JFDP wire-acceptance report, a validated
+`device_image_manifest.md` record, deterministic JSON/JSONL fixtures for
+no-device/protocol mismatch/storage full/interrupted transfer, and a versioned
+discovery/install/update/rollback/remove/log/reconnect report. The host must
+match discovery data against that manifest before deploying. Only then may
+Runtime add a real `device` command or VS Code add a selector.

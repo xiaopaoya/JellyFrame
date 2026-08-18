@@ -1,6 +1,6 @@
 # Schemas
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-19; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 JSON Schema files for JellyFrame app packages and tool inputs.
 
@@ -14,6 +14,7 @@ helper extension. They are not used by embedded runtime code.
 | `jellyframe.installed_apps.registry.schema.json` | registry tools | Installed app state |
 | `jellyframe.app_manager.state.schema.json` | launcher/manager tools | Derived app-manager state |
 | `jellyframe.install_candidate.schema.json` | install flow | Host-verified install candidate |
+| `jellyframe.device_image.schema.json` | Device OS release tooling and future device provider | Immutable Developer Image identity and compatibility record |
 
 Schema validity is necessary input hygiene; it does not grant a runtime
 capability or replace the developer capability matrix.
@@ -29,3 +30,7 @@ capability or replace the developer capability matrix.
   installed-app registry mock schema. `status` is limited to `installed`,
   `disabled` and `failed`; `rollback-ready` is a derived display state from the
   optional `rollback` record, not a persistent status value.
+- `jellyframe.device_image.schema.json`: Device OS Developer Image release
+  identity. It records provenance, board/profile, JFDP transport, bundle cap
+  and factory-recovery identity; it does not expose raw transport details or
+  replace the provider contract.
