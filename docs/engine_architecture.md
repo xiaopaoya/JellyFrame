@@ -1,6 +1,6 @@
 # Engine Architecture
 
-> Last updated: 2026-08-18; Applies to: 0.6.0-dev
+> Last updated: 2026-08-19; Applies to: 0.6.0-dev
 
 
 JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but
@@ -133,6 +133,29 @@ of these gates.
 
 The exact extraction, release, profile and history-preservation rules are
 defined in [render_core_release_policy.md](render_core_release_policy.md).
+
+## Modularity Status
+
+Repository modularity and internal feature modularity are separate claims.
+The Core/Runtime package boundary is closed: Core has an independent,
+history-preserving repository, signed `v0.6.0` release, standalone
+archive/install path, locked Runtime package consumer, provenance record and
+local source override. The Device OS boundary is not physically extracted yet;
+its launcher, registry, ports and image tooling must move together rather than
+being copied piecemeal into Runtime or Core.
+
+Render Core feature families are compile-time profile choices, not runtime
+native plugins. Canvas2D, modern paint, flex/grid paint ordering and advanced
+form submission have explicit source selection and feature-off fallbacks.
+`core.document` and `core.paint` remain mandatory baselines. Large baseline
+implementations such as style resolution, layout, layer construction and the
+software renderer are intentionally not split solely by file size: an internal
+split requires a dependency, allocation and hot-path audit that preserves the
+current no-indirection boundary. Apps never ship native rendering modules.
+
+Before a new Core release is admitted, maintainers must run the relevant
+standalone, package-consumer and source-override checks; an internal split also
+needs a documented dependency, allocation and hot-path review.
 
 ```text
 HTML bytes/string

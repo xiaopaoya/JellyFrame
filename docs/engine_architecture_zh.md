@@ -1,6 +1,6 @@
 # 引擎架构
 
-> 最后更新：2026-08-18；适用版本：0.6.0-dev
+> 最后更新：2026-08-19；适用版本：0.6.0-dev
 
 
 JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目标使用更小的数据结构，并明确裁剪功能边界。
@@ -105,6 +105,22 @@ Device OS reference host。以上门槛都不要求 Git submodule。
 
 拆仓、发布、profile 和保留历史的具体规则见
 [render_core_release_policy_zh.md](render_core_release_policy_zh.md)。
+
+## 模块化状态
+
+仓库模块化和内部 feature 模块化是两项不同结论。Core/Runtime 的 package boundary 已关闭：Core
+已有保留历史的独立仓库、带签名的 `v0.6.0` release、standalone archive/install 路径、锁定的 Runtime
+package consumer、provenance record 和本地 source override。Device OS boundary 尚未物理迁出；其 launcher、
+registry、port 和 image tooling 应整体迁移，不能零散复制进 Runtime 或 Core。
+
+Render Core feature family 是 compile-time profile choice，不是运行时 native plugin。Canvas2D、modern paint、
+flex/grid paint ordering 和 advanced form submission 已有明确 source selection 与 feature-off fallback。`core.document`
+和 `core.paint` 仍是必选 baseline。style resolution、layout、layer construction、software renderer 等大 baseline
+实现不会只因文件大小就拆分：内部拆分必须先完成 dependency、allocation、hot-path audit，并维持当前的
+no-indirection boundary。App 永远不携带 native rendering module。
+
+接纳新的 Core release 前，maintainer 必须完成相应 standalone、package-consumer 与 source-override 检查；
+内部拆分还必须留下 dependency、allocation 与 hot-path review 结论。
 
 ```text
 HTML bytes/string
