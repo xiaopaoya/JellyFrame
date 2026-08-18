@@ -34,7 +34,9 @@ ctest --test-dir build\core-from-archive -C Release --output-on-failure
 ```
 
 归档只包含 Render Core 源码、共享 CMake 边界、测试、独立 README 和许可证；不包含
-Runtime、JerryScript、ports、设备契约、示例或 app 资源。打包器会将声明为文本的成员规范为 LF，并规范化成员顺序与
+Runtime、JerryScript、ports、设备契约、示例或 app 资源。in-tree 的 Core-only 配置也会显式设置
+`JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS=OFF`；Device contracts 为 Device OS 工作保留独立的显式构建模式。
+打包器会将声明为文本的成员规范为 LF，并规范化成员顺序与
 归档元数据，写出 SHA-256 sidecar。CI 会分别验证这一 monorepo export，并下载已发布的
 `v0.6.0` artifact、校验其记录的 archive SHA-256，再构建、安装并由 Runtime 的
 package-provider 配置消费该 release package。Standalone Core CI job 会将 monorepo 归档和
@@ -110,7 +112,8 @@ Device OS reference host。以上门槛都不要求 Git submodule。
 
 仓库模块化和内部 feature 模块化是两项不同结论。Core/Runtime 的 package boundary 已关闭：Core
 已有保留历史的独立仓库、带签名的 `v0.6.0` release、standalone archive/install 路径、锁定的 Runtime
-package consumer、provenance record 和本地 source override。Device OS boundary 尚未物理迁出；其 launcher、
+package consumer、provenance record 和本地 source override。in-tree Core-only 配置也有独立回归检查，确保不会创建
+Device contracts target 或测试。Device OS boundary 尚未物理迁出；其 launcher、
 registry、port 和 image tooling 应整体迁移，不能零散复制进 Runtime 或 Core。
 
 Render Core feature family 是 compile-time profile choice，不是运行时 native plugin。Canvas2D、modern paint、

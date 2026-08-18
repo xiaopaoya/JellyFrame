@@ -11,6 +11,15 @@ option(JELLYFRAME_BUILD_TESTS "Build JellyFrame regression tests" ON)
 option(JELLYFRAME_BUILD_BENCHMARKS "Build JellyFrame microbenchmarks" ON)
 option(JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS "Register sample and external-trial CTest coverage" ON)
 option(JELLYFRAME_BUILD_APP_RUNTIME "Build the JellyFrame App Runtime layer" ON)
+if(JELLYFRAME_BUILD_APP_RUNTIME)
+    set(_JELLYFRAME_DEFAULT_BUILD_DEVICE_RUNTIME_CONTRACTS ON)
+else()
+    set(_JELLYFRAME_DEFAULT_BUILD_DEVICE_RUNTIME_CONTRACTS OFF)
+endif()
+option(JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS
+       "Build platform-neutral Device Runtime contracts"
+       ${_JELLYFRAME_DEFAULT_BUILD_DEVICE_RUNTIME_CONTRACTS})
+unset(_JELLYFRAME_DEFAULT_BUILD_DEVICE_RUNTIME_CONTRACTS)
 option(JELLYFRAME_INSTALL_RENDER_CORE "Install the standalone Render Core CMake package" OFF)
 set(JELLYFRAME_RENDER_CORE_PROVIDER "in-tree" CACHE STRING
     "Render Core provider: in-tree or package")
@@ -48,6 +57,11 @@ include(GNUInstallDirs)
 if(JELLYFRAME_BUILD_SCRIPTING AND NOT JELLYFRAME_BUILD_APP_RUNTIME)
     message(FATAL_ERROR
         "JELLYFRAME_BUILD_SCRIPTING requires JELLYFRAME_BUILD_APP_RUNTIME=ON")
+endif()
+
+if(JELLYFRAME_BUILD_APP_RUNTIME AND NOT JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS)
+    message(FATAL_ERROR
+        "JELLYFRAME_BUILD_APP_RUNTIME requires JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS=ON")
 endif()
 
 if(NOT JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree" AND
@@ -150,21 +164,23 @@ endif()
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_runtime_version.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_render_core_provider.cmake")
 
-add_library(jellyframe_device_runtime_contracts
-    src/device_runtime_contracts/device_bundle.cpp
-    src/device_runtime_contracts/device_install_transaction.cpp
-    src/device_runtime_contracts/device_runtime_protocol.cpp
-)
-add_library(JellyFrame::device_runtime_contracts ALIAS jellyframe_device_runtime_contracts)
-target_include_directories(jellyframe_device_runtime_contracts
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-target_compile_features(jellyframe_device_runtime_contracts PUBLIC cxx_std_17)
-if(MSVC)
-    target_compile_options(jellyframe_device_runtime_contracts PRIVATE /W4)
-else()
-    target_compile_options(jellyframe_device_runtime_contracts PRIVATE -Wall -Wextra -Wpedantic)
+if(JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS)
+    add_library(jellyframe_device_runtime_contracts
+        src/device_runtime_contracts/device_bundle.cpp
+        src/device_runtime_contracts/device_install_transaction.cpp
+        src/device_runtime_contracts/device_runtime_protocol.cpp
+    )
+    add_library(JellyFrame::device_runtime_contracts ALIAS jellyframe_device_runtime_contracts)
+    target_include_directories(jellyframe_device_runtime_contracts
+        PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_compile_features(jellyframe_device_runtime_contracts PUBLIC cxx_std_17)
+    if(MSVC)
+        target_compile_options(jellyframe_device_runtime_contracts PRIVATE /W4)
+    else()
+        target_compile_options(jellyframe_device_runtime_contracts PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
 endif()
 
 if(JELLYFRAME_BUILD_APP_RUNTIME)
@@ -383,46 +399,52 @@ if(JELLYFRAME_BUILD_TESTS)
 
     endif()
 
-    set(JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES
-        src/device_runtime_contracts/tests/device_bundle_tests.cpp
-        src/device_runtime_contracts/tests/device_install_transaction_tests.cpp
-        src/device_runtime_contracts/tests/device_runtime_protocol_tests.cpp
-        src/device_runtime_contracts/tests/device_protocol_vector_tests.cpp
-    )
-    foreach(test_source IN LISTS JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES)
-        get_filename_component(test_name ${test_source} NAME_WE)
-        set_source_files_properties(${test_source}
-            PROPERTIES COMPILE_DEFINITIONS "main=${test_name}_main")
-    endforeach()
-    add_executable(jellyframe_device_runtime_contracts_tests
-        src/device_runtime_contracts/tests/device_runtime_contracts_tests.cpp
-        ${JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES}
-    )
-    target_link_libraries(jellyframe_device_runtime_contracts_tests
-        PRIVATE jellyframe_device_runtime_contracts)
-    jellyframe_enable_test_asserts(jellyframe_device_runtime_contracts_tests)
-    target_compile_definitions(jellyframe_device_runtime_contracts_tests PRIVATE
-        JELLYFRAME_DEVICE_PROTOCOL_VECTOR_FILE="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/jfdp_v1_wire_vectors.txt")
-    jellyframe_stage_sanitizer_runtime(jellyframe_device_runtime_contracts_tests)
-    add_test(NAME jellyframe_device_runtime_contracts_tests
-        COMMAND jellyframe_device_runtime_contracts_tests)
+    if(JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS)
+        set(JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES
+            src/device_runtime_contracts/tests/device_bundle_tests.cpp
+            src/device_runtime_contracts/tests/device_install_transaction_tests.cpp
+            src/device_runtime_contracts/tests/device_runtime_protocol_tests.cpp
+            src/device_runtime_contracts/tests/device_protocol_vector_tests.cpp
+        )
+        foreach(test_source IN LISTS JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES)
+            get_filename_component(test_name ${test_source} NAME_WE)
+            set_source_files_properties(${test_source}
+                PROPERTIES COMPILE_DEFINITIONS "main=${test_name}_main")
+        endforeach()
+        add_executable(jellyframe_device_runtime_contracts_tests
+            src/device_runtime_contracts/tests/device_runtime_contracts_tests.cpp
+            ${JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES}
+        )
+        target_link_libraries(jellyframe_device_runtime_contracts_tests
+            PRIVATE jellyframe_device_runtime_contracts)
+        jellyframe_enable_test_asserts(jellyframe_device_runtime_contracts_tests)
+        target_compile_definitions(jellyframe_device_runtime_contracts_tests PRIVATE
+            JELLYFRAME_DEVICE_PROTOCOL_VECTOR_FILE="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/jfdp_v1_wire_vectors.txt")
+        jellyframe_stage_sanitizer_runtime(jellyframe_device_runtime_contracts_tests)
+        add_test(NAME jellyframe_device_runtime_contracts_tests
+            COMMAND jellyframe_device_runtime_contracts_tests)
+    endif()
 
     if(Python3_Interpreter_FOUND)
-        add_test(
-            NAME jellyframe_device_reference_cli_tests
-            COMMAND ${Python3_EXECUTABLE}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/device_reference_cli_tests.py
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-        add_test(
-            NAME jellyframe_device_provider_contract_tests
-            COMMAND ${Python3_EXECUTABLE}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/device_provider_contract_tests.py
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-        add_test(
-            NAME jellyframe_tool_package_preflight_tests
-            COMMAND ${Python3_EXECUTABLE}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_preflight_tests.py
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        if(JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS)
+            add_test(
+                NAME jellyframe_device_reference_cli_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/device_reference_cli_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            add_test(
+                NAME jellyframe_device_provider_contract_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/device_provider_contract_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        endif()
+        if(JELLYFRAME_BUILD_APP_RUNTIME)
+            add_test(
+                NAME jellyframe_tool_package_preflight_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_preflight_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        endif()
 
         if(JELLYFRAME_BUILD_RENDER_CORE_TESTS)
             add_test(
@@ -458,6 +480,14 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_feature_registry_tests.py
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            add_test(
+                NAME jellyframe_render_core_build_boundary_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_build_boundary_tests.py
+                        --cmake ${CMAKE_COMMAND}
+                        --source-root ${CMAKE_CURRENT_SOURCE_DIR}
+                        --generator ${CMAKE_GENERATOR}
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         endif()
 
         add_test(
@@ -472,17 +502,19 @@ if(JELLYFRAME_BUILD_TESTS)
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/css_support_table_tests.py
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-        add_test(
-            NAME jellyframe_documentation_freshness
-            COMMAND ${Python3_EXECUTABLE}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/documentation_freshness_tests.py
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        if(JELLYFRAME_BUILD_APP_RUNTIME)
+            add_test(
+                NAME jellyframe_documentation_freshness
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/documentation_freshness_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-        add_test(
-            NAME jellyframe_tool_app_registry_tests
-            COMMAND ${Python3_EXECUTABLE}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/app_registry_tests.py
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            add_test(
+                NAME jellyframe_tool_app_registry_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/app_registry_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        endif()
 
         if(JELLYFRAME_BUILD_EXAMPLES AND JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS)
             add_test(

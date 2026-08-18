@@ -272,6 +272,7 @@ jobs:
           cmake -S . -B build/render-core-standalone -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DJELLYFRAME_BUILD_APP_RUNTIME=OFF
+          -DJELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS=OFF
           -DJELLYFRAME_BUILD_SCRIPTING=OFF
           -DJELLYFRAME_BUILD_EXAMPLES=OFF
           -DJELLYFRAME_BUILD_BENCHMARKS=OFF

@@ -42,7 +42,10 @@ ctest --test-dir build\core-from-archive -C Release --output-on-failure
 
 The archive contains only Render Core sources, its shared CMake boundary,
 tests, standalone README and license. It contains neither Runtime nor
-JerryScript, ports, device contracts, examples or app resources. The packer
+JerryScript, ports, device contracts, examples or app resources. The in-tree
+Core-only configuration also sets `JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS=OFF`;
+the Device contracts have a separate explicit build mode for Device OS work.
+The packer
 normalizes declared text members to LF, member order and archive metadata,
 writes a SHA-256 sidecar. CI separately validates this monorepo export and
 downloads the published `v0.6.0` artifact, verifies its recorded archive
@@ -140,7 +143,9 @@ Repository modularity and internal feature modularity are separate claims.
 The Core/Runtime package boundary is closed: Core has an independent,
 history-preserving repository, signed `v0.6.0` release, standalone
 archive/install path, locked Runtime package consumer, provenance record and
-local source override. The Device OS boundary is not physically extracted yet;
+local source override. The in-tree Core-only configuration is independently
+checked to ensure it does not create Device contracts targets or tests. The
+Device OS boundary is not physically extracted yet;
 its launcher, registry, ports and image tooling must move together rather than
 being copied piecemeal into Runtime or Core.
 
