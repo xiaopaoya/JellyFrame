@@ -383,6 +383,20 @@ void app_list_and_recovery_payloads_preserve_bounded_values() {
     assert(decoded_recovery.reason == DeviceRecoveryReason::None);
     assert(decoded_recovery.app_id_view().empty());
     assert(decoded_recovery.registry_generation == 75);
+
+    DeviceRecoveryDetailPayload global_recovery;
+    global_recovery.registry_generation = 76;
+    global_recovery.recovery_sequence = 1;
+    global_recovery.reason = DeviceRecoveryReason::RegistryInvalid;
+    global_recovery.flags = DeviceRecoveryLauncherActive;
+    assert(encode_device_recovery_detail_payload(global_recovery, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    assert(encoded_size == 16);
+    assert(decode_device_recovery_detail_payload(encoded.data(), encoded_size, decoded_recovery) ==
+           DeviceProtocolStatus::Ok);
+    assert(decoded_recovery.reason == DeviceRecoveryReason::RegistryInvalid);
+    assert(decoded_recovery.app_id_view().empty());
+    assert(decoded_recovery.registry_generation == 76);
 }
 
 void typed_payloads_reject_malformed_or_ambiguous_input() {

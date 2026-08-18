@@ -702,11 +702,16 @@ DeviceProtocolStatus encode_device_recovery_detail_payload(const DeviceRecoveryD
     output_size = 0;
     std::size_t app_id_length = 0;
     const bool empty_recovery = payload.reason == DeviceRecoveryReason::None;
+    app_id_length = bounded_c_string_length(payload.app_id.data(), payload.app_id.size());
     if (output == nullptr ||
         (empty_recovery
              ? (bounded_c_string_length(payload.app_id.data(), payload.app_id.size()) != 0 || payload.recovery_sequence != 0 ||
                 payload.flags != 0)
-             : !has_valid_app_id(payload.app_id.data(), app_id_length)) ||
+             // A damaged registry or a discarded staging transaction has no
+             // trustworthy app identity to report. Such global recovery
+             // events are still meaningful typed diagnostics.
+             : (app_id_length > kDeviceMaxAppIdBytes ||
+                (app_id_length != 0 && !has_valid_app_id(payload.app_id.data(), app_id_length)))) ||
         !is_device_recovery_reason(static_cast<std::uint8_t>(payload.reason)) ||
         (payload.flags & ~(DeviceRecoveryLauncherActive | DeviceRecoveryAppDisabled | DeviceRecoveryRollbackAvailable)) != 0) {
         return DeviceProtocolStatus::InvalidArgument;
@@ -747,7 +752,7 @@ DeviceProtocolStatus decode_device_recovery_detail_payload(const std::uint8_t* i
     const bool empty_recovery = input[1] == static_cast<std::uint8_t>(DeviceRecoveryReason::None);
     if (!is_device_recovery_reason(input[1]) ||
         (empty_recovery ? (app_id_length != 0 || read_u32(input + 8) != 0 || flags != 0)
-                        : (app_id_length == 0 || app_id_length > kDeviceMaxAppIdBytes)) ||
+                        : app_id_length > kDeviceMaxAppIdBytes) ||
         input[13] != 0 || input[14] != 0 || input[15] != 0 ||
         (flags & ~(DeviceRecoveryLauncherActive | DeviceRecoveryAppDisabled | DeviceRecoveryRollbackAvailable)) != 0) {
         return DeviceProtocolStatus::InvalidArgument;
