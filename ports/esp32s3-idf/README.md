@@ -657,6 +657,18 @@ and port telemetry. They are not yet a final board shell: low-power policy,
 app lifecycle isolation and product-level resource packaging still need their
 own host integration.
 
+## WS147 Developer Image Release
+
+The WS147 Developer Image identity record is
+[`releases/ws147-developer-image-0.1.0-dev.json`](releases/ws147-developer-image-0.1.0-dev.json).
+It binds the exact factory-app and raw factory-image SHA-256 values to the
+WS147 `rect-172x320` profile, JFDP/1 USB Serial/JTAG transport, supported
+feature families, and 327680-byte bundle budget. Use only the accompanying
+[`releases/ws147-usb-recovery-v1.md`](releases/ws147-usb-recovery-v1.md)
+procedure to write that raw 16 MB factory image. This release evidence covers
+Developer Image recovery and JFDP lifecycle transport; it is not panel or
+touch acceptance evidence.
+
 ## Board Bring-Up Checklist
 
 1. Replace the no-op `Rgb565Panel` path with your board's panel driver.

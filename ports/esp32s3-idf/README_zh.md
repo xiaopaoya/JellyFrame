@@ -19,4 +19,14 @@
 `resources/app/` 中的页面按 smoke、shell、性能 workload、负向资源验收分类；它们不是
 面向外部作者的模板。新 app 从 `../../tools/templates/apps/` 开始。
 
+## WS147 Developer Image 发布材料
+
+WS147 Developer Image 的不可变 identity 记录位于
+[`releases/ws147-developer-image-0.1.0-dev.json`](releases/ws147-developer-image-0.1.0-dev.json)。
+它将精确的 factory app 与完整 factory image SHA-256 绑定到 WS147
+`rect-172x320` profile、JFDP/1 USB Serial/JTAG transport、已支持 feature family
+及 327680-byte bundle 上限。写入这份 16 MB raw factory image 时只能遵循配套的
+[`releases/ws147-usb-recovery-v1.md`](releases/ws147-usb-recovery-v1.md)。本发布证据
+只覆盖 Developer Image recovery 和 JFDP lifecycle transport，不替代面板或触摸验收。
+
 构建目录、生成 C++ 资源表、串口日志和实机报告均为本地产物，不进入可移植源码提交。
