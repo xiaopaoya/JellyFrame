@@ -118,6 +118,7 @@ App Runtime 或 Render Core。未来 Device OS package 迁移完成前，这仍�
 framing、payload、result code 与 staging 契约，不能复制它们。WS147 native USB Serial/JTAG adapter 已在 `743a011`
 通过 physical wire 与 persistent lifecycle acceptance；这不会把 desktop reference endpoint 变成物理设备，也不证明
 已安装 App 的 rendering 或作者工具已完成，详见 [device_image_lifecycle_port_acceptance_zh.md](device_image_lifecycle_port_acceptance_zh.md)。
+具体 A2 缺口、实现和验收出口见 [device_os_a2_readiness_zh.md](device_os_a2_readiness_zh.md)。
 
 桌面端可以显式运行 reference endpoint，以验证工具链而不误认为连接了开发板：
 
@@ -178,6 +179,8 @@ bundle 存储在固件镜像之外，不能替换 launcher、recovery UI 或 por
 - 桌面预览与设备调试保持区分。设备帧时间必须来自设备 telemetry，不能从 Win32 推断。
 - 桌面 contract reference 保持为 `jellyframe_cli.py device-reference`。未来 physical client 属于 Device OS tooling，可由 Runtime CLI/extension 通过明确 provider boundary 调用；不得把 reference command 改造成猜测式 serial 或板卡 transport。
   [device_tool_provider_contract_zh.md](device_tool_provider_contract_zh.md) 定义该 host-side boundary 草案及接入 gate。
+  Device OS 的具体实现、fixture 与实机出口以
+  [device_os_a2_readiness_zh.md](device_os_a2_readiness_zh.md) 为准；没有对应证据不得将 D2 标为完成。
 
 ### D3：外部试用
 

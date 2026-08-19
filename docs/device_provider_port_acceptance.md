@@ -5,6 +5,8 @@
 This is the A2 handoff for a physical Device OS provider. It verifies the
 host-process boundary used by `jellyframe_cli.py device`; it does not replace
 the JFDP wire, Developer Image lifecycle, panel or touch acceptance gates.
+The full A2 readiness boundary, including installed-App execution, is defined
+in [device_os_a2_readiness.md](device_os_a2_readiness.md).
 
 ## Scope
 

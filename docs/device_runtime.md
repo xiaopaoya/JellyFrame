@@ -156,7 +156,8 @@ result-code and staging contracts; it must not fork them. The WS147 native USB
 Serial/JTAG adapter has passed physical wire and persistent lifecycle
 acceptance at `743a011`. That does not make the desktop reference endpoint
 physical and does not prove installed-App rendering or author tools; see
-[device_image_lifecycle_port_acceptance.md](device_image_lifecycle_port_acceptance.md).
+[device_image_lifecycle_port_acceptance.md](device_image_lifecycle_port_acceptance.md)
+and [device_os_a2_readiness.md](device_os_a2_readiness.md).
 
 The desktop reference endpoint can be selected explicitly while exercising the
 toolchain:
@@ -239,7 +240,10 @@ firmware image and cannot replace the launcher, recovery UI or port code.
   the Runtime CLI/extension through an explicit provider boundary; do not turn
   the reference command into a guessed serial or board transport.
   [device_tool_provider_contract.md](device_tool_provider_contract.md) defines
-  that draft host-side boundary and its adoption gate.
+  that host-side boundary and its adoption gate. The concrete Device OS work,
+  fixtures and physical exit criteria are tracked in
+  [device_os_a2_readiness.md](device_os_a2_readiness.md); D2 is not complete
+  until those criteria have evidence.
 
 ### D3: External pilot
 

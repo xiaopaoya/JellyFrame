@@ -4,6 +4,8 @@
 
 这是物理 Device OS provider 的 A2 交接单。它验证 `jellyframe_cli.py device` 使用的
 host-process 边界，不替代 JFDP wire、Developer Image lifecycle、panel 或 touch 验收。
+完整 A2 就绪边界及已安装 App 执行要求见
+[device_os_a2_readiness_zh.md](device_os_a2_readiness_zh.md)。
 
 ## 范围
 
