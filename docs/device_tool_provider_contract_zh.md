@@ -22,9 +22,9 @@ transport，不能 discover 或控制开发板；physical provider 仍属于 Dev
 第一版 Device OS 应交付一个暂名 `jellyframe-device` 的可执行文件，并提供 machine-readable mode：
 
 ```text
-jellyframe-device --output json discover
-jellyframe-device --output json --selector <endpoint-id> install --bundle <absolute-jfapp-path>
-jellyframe-device --output json --selector <endpoint-id> logs --id <app-id>
+jellyframe-device --output json --request-id <host-id> discover
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> install --bundle <absolute-jfapp-path>
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> logs --id <app-id>
 ```
 
 这只是 provider contract，不是当前 Runtime command。Runtime CLI/VS Code 只能调用已配置的 absolute
@@ -33,6 +33,9 @@ stderr；`--output json` 的 stdout 仅有一个 UTF-8 JSON document，`--output
 
 退出码：`resultCode=ok` 或 `accepted` 时为 `0`；设备操作失败为 `1`；无效调用为 `2`；transport 不可用为
 `3`；protocol/image 不兼容为 `4`；provider failure 为 `5`。
+
+每次 machine-readable 调用都必须传入 `--request-id`。Runtime host 生成该值、原样传递，并拒绝 request ID
+或 operation 与请求不一致的结果；provider 不得自行生成或改写它。
 
 ## Result Envelope
 

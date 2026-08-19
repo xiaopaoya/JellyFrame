@@ -26,9 +26,9 @@ The first Device OS release should ship one executable, provisionally
 `jellyframe-device`, with a machine-readable mode:
 
 ```text
-jellyframe-device --output json discover
-jellyframe-device --output json --selector <endpoint-id> install --bundle <absolute-jfapp-path>
-jellyframe-device --output json --selector <endpoint-id> logs --id <app-id>
+jellyframe-device --output json --request-id <host-id> discover
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> install --bundle <absolute-jfapp-path>
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> logs --id <app-id>
 ```
 
 This is a provider contract, not a current Runtime command. Runtime CLI and VS
@@ -40,6 +40,10 @@ stderr. `--output json` writes exactly one UTF-8 JSON document to stdout;
 Exit status: `0` for `resultCode=ok` or `accepted`; `1` for device-operation
 failure; `2` for invalid invocation; `3` for unavailable transport; `4` for
 protocol/image incompatibility; `5` for provider failure.
+
+`--request-id` is required for every machine-readable invocation. The Runtime
+host generates it, passes it unchanged and rejects a result whose request ID or
+operation differs. Providers must not synthesize or rewrite it.
 
 ## Result Envelope
 

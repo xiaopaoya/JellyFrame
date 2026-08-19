@@ -115,21 +115,26 @@ class DeviceReferenceCliTests(unittest.TestCase):
         for name, encoded in actual.items():
             self.assertEqual(encoded, vectors[name], name)
 
-    def test_device_reference_command_is_explicit_and_physical_device_is_not_exposed(self):
+    def test_device_commands_require_an_explicit_provider_and_keep_reference_separate(self):
         help_result = self.run_cli("device-reference", "--help")
         self.assertEqual(help_result.returncode, 0, help_result.stderr)
         self.assertIn("no physical device is contacted", help_result.stdout)
 
         device_result = self.run_cli("device", "--help")
-        self.assertEqual(device_result.returncode, 2)
-        self.assertIn("invalid choice", device_result.stderr)
+        self.assertEqual(device_result.returncode, 0, device_result.stderr)
+        self.assertIn("no serial or USB endpoint", device_result.stdout)
+        self.assertIn("is inferred", device_result.stdout)
+        missing_provider = self.run_cli("device", "discover")
+        self.assertEqual(missing_provider.returncode, 2)
+        self.assertIn("--provider", missing_provider.stderr)
 
     def test_reference_endpoint_runs_install_list_state_remove(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-device-reference-") as directory:
             root = Path(directory)
             bundle = root / "sample.jfapp"
             store = root / "store"
-            write_jfapp(bundle, app_id="org.example.reference", version_code=1)
+            write_jfapp(bundle, app_id="org.example.reference", version_code=1,
+                        min_render_core=app_registry.active_render_core_release_version())
 
             install = self.run_cli(
                 "device-reference", "--store", str(store),
@@ -165,9 +170,13 @@ class DeviceReferenceCliTests(unittest.TestCase):
             first_bundle = root / "first.jfapp"
             second_bundle = root / "second.jfapp"
             cancelled_bundle = root / "cancelled.jfapp"
-            write_jfapp(first_bundle, app_id="org.example.lifecycle", version_code=1)
-            write_jfapp(second_bundle, app_id="org.example.lifecycle", version_code=2, version_name="2.0.0")
-            write_jfapp(cancelled_bundle, app_id="org.example.cancelled", version_code=1)
+            render_core = app_registry.active_render_core_release_version()
+            write_jfapp(first_bundle, app_id="org.example.lifecycle", version_code=1,
+                        min_render_core=render_core)
+            write_jfapp(second_bundle, app_id="org.example.lifecycle", version_code=2,
+                        version_name="2.0.0", min_render_core=render_core)
+            write_jfapp(cancelled_bundle, app_id="org.example.cancelled", version_code=1,
+                        min_render_core=render_core)
 
             discovery = self.run_cli(
                 "device-reference", "--store", str(store), "discover", "--json",
@@ -274,7 +283,8 @@ class DeviceReferenceCliTests(unittest.TestCase):
             store = root / "store"
             bundle_path = root / "typed.jfapp"
             app_id = "org.example.typed"
-            write_jfapp(bundle_path, app_id=app_id, version_code=1)
+            write_jfapp(bundle_path, app_id=app_id, version_code=1,
+                        min_render_core=app_registry.active_render_core_release_version())
             bundle = bundle_path.read_bytes()
             transaction_id = 41
             session_id = 0x1001
@@ -369,7 +379,8 @@ class DeviceReferenceCliTests(unittest.TestCase):
             bundle_path = root / "mismatch.jfapp"
             bundle_app_id = "org.example.bundle"
             declared_app_id = "org.example.declared"
-            write_jfapp(bundle_path, app_id=bundle_app_id, version_code=1)
+            write_jfapp(bundle_path, app_id=bundle_app_id, version_code=1,
+                        min_render_core=app_registry.active_render_core_release_version())
             bundle = bundle_path.read_bytes()
             transaction_id = 8
 

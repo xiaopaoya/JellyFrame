@@ -444,6 +444,11 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/device_provider_contract_tests.py
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            add_test(
+                NAME jellyframe_device_provider_client_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/device_provider_client_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         endif()
         if(JELLYFRAME_BUILD_APP_RUNTIME)
             add_test(

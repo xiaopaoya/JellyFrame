@@ -10,6 +10,8 @@ import tempfile
 from pathlib import Path
 
 import app_registry
+import device_image_manifest
+import device_provider_client
 import device_reference
 
 
@@ -3076,6 +3078,32 @@ def cmd_device_reference(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_device(args: argparse.Namespace) -> int:
+    """Query a configured Device OS provider without inferring a transport."""
+    try:
+        result = device_provider_client.invoke_provider(
+            args.provider,
+            args.device_command,
+            selector=getattr(args, "selector", None),
+            timeout_seconds=args.timeout,
+        )
+        manifest_path = args.manifest
+        if manifest_path is not None:
+            manifest = device_image_manifest.parse_device_image_manifest(manifest_path.read_bytes())
+            devices = result.get("devices", [])
+            if "device" in result:
+                devices = [result["device"]]
+            for device in devices:
+                device_image_manifest.validate_provider_device(manifest, device)
+    except (device_provider_client.DeviceProviderClientError,
+            device_image_manifest.DeviceImageManifestError,
+            OSError) as error:
+        print(f"device {args.device_command}: {error}", file=sys.stderr)
+        return 4
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if result["resultCode"] in {"ok", "accepted"} else 1
+
+
 def write_install_transaction_report(report_path: Path, transaction: dict, merge: bool) -> None:
     if merge and report_path.is_file():
         report = json.loads(report_path.read_text(encoding="utf-8-sig"))
@@ -3897,6 +3925,24 @@ def main() -> int:
     registry.add_argument("registry_args", nargs=argparse.REMAINDER,
                           help="Arguments passed to tools/app_registry.py.")
     registry.set_defaults(func=cmd_registry)
+
+    device = subparsers.add_parser(
+        "device",
+        help="Query an explicitly configured Device OS provider.",
+        description="Query an explicitly configured Device OS provider; no serial or USB endpoint is inferred.",
+    )
+    device.add_argument("--provider", required=True, type=Path,
+                        help="Absolute path to the Device OS provider executable.")
+    device.add_argument("--manifest", type=Path,
+                        help="Optional Developer Image manifest used to validate returned device identity.")
+    device.add_argument("--timeout", type=int, default=30,
+                        help="Provider timeout in seconds (1..300).")
+    device_subparsers = device.add_subparsers(dest="device_command", required=True)
+    device_discover = device_subparsers.add_parser("discover", help="List provider-reported devices.")
+    device_discover.set_defaults(func=cmd_device)
+    device_info = device_subparsers.add_parser("info", help="Read one provider-reported device identity.")
+    device_info.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
+    device_info.set_defaults(func=cmd_device)
 
     device_reference_parser = subparsers.add_parser(
         "device-reference",
