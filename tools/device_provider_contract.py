@@ -18,12 +18,15 @@ MAX_DOCUMENT_BYTES = 64 * 1024
 MAX_JSONL_BYTES = 256 * 1024
 MAX_JSONL_EVENTS = 1024
 MAX_LOG_RECORDS = 256
+MAX_APP_LIST_ENTRIES = 24
 MAX_REQUEST_ID_BYTES = 64
 MAX_FEATURE_FAMILIES = 64
-OPERATIONS = frozenset({"discover", "info", "install", "cancel", "launch", "stop", "remove", "rollback", "logs", "recovery"})
+OPERATIONS = frozenset({"discover", "info", "list", "install", "cancel", "launch", "stop", "remove", "rollback", "logs", "recovery"})
 RESULT_CODES = frozenset({"ok", "accepted", "queued", "invalid-request", "busy", "unsupported", "denied", "not-found", "stale-session", "stale-request", "payload-too-large", "integrity-failed", "storage-full", "cancelled", "failed", "transport-unavailable", "protocol-mismatch", "provider-failed"})
 FEATURE_FAMILY_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{0,95}$")
 LOG_LEVELS = frozenset({"debug", "info", "warn", "error"})
+APP_LIBRARY_STATES = frozenset({"installed", "disabled", "failed"})
+RECOVERY_REASONS = frozenset({"none", "registry-invalid", "staging-discarded", "app-load-failure", "app-runtime-failure", "app-budget-exceeded", "launcher-fallback"})
 
 
 class ProviderContractError(ValueError):
@@ -54,6 +57,18 @@ def _object(value: Any, name: str) -> dict[str, Any]:
 def _positive_uint32(value: Any, name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or not 0 < value <= 0xFFFFFFFF:
         raise ProviderContractError(f"{name} must be a positive uint32")
+    return value
+
+
+def _uint32(value: Any, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 0xFFFFFFFF:
+        raise ProviderContractError(f"{name} must be a uint32")
+    return value
+
+
+def _optional_string(value: Any, name: str, maximum: int = 256) -> str:
+    if not isinstance(value, str) or len(value.encode("utf-8")) > maximum:
+        raise ProviderContractError(f"{name} must be a UTF-8 string no longer than {maximum} bytes")
     return value
 
 
@@ -112,13 +127,76 @@ def _validate_device(value: Any, name: str) -> None:
         if FEATURE_FAMILY_RE.fullmatch(family) is None:
             raise ProviderContractError(f"{name}.capabilities.featureFamilies[{index}] is invalid")
     for field in ("maxBundleBytes", "availableStorageBytes"):
-        if not isinstance(capabilities[field], int) or capabilities[field] < 0:
-            raise ProviderContractError(f"{name}.capabilities.{field} is invalid")
+        _uint32(capabilities[field], f"{name}.capabilities.{field}")
+
+
+def _validate_app_library_entry(value: Any, name: str) -> None:
+    entry = _object(value, name)
+    required = {"appId", "versionName", "versionCode", "bundleBytes", "state", "rollbackAvailable"}
+    if set(entry) != required:
+        raise ProviderContractError(f"{name} has unknown or missing fields")
+    _string(entry["appId"], f"{name}.appId", 96)
+    _string(entry["versionName"], f"{name}.versionName", 64)
+    _positive_uint32(entry["versionCode"], f"{name}.versionCode")
+    _uint32(entry["bundleBytes"], f"{name}.bundleBytes")
+    if entry["state"] not in APP_LIBRARY_STATES or not isinstance(entry["rollbackAvailable"], bool):
+        raise ProviderContractError(f"{name} has invalid state or rollback availability")
+
+
+def _validate_logs(value: Any, name: str) -> None:
+    if not isinstance(value, list) or len(value) > MAX_LOG_RECORDS:
+        raise ProviderContractError(f"{name} is invalid")
+    for index, record in enumerate(value):
+        _validate_stream_log({
+            "format": FORMAT,
+            "formatVersion": FORMAT_VERSION,
+            "kind": "log",
+            "operation": "logs",
+            "requestId": "provider-result",
+            "sequence": index + 1,
+            "provider": {"id": "provider-result", "version": "0"},
+            "log": record,
+        })
+
+
+def _validate_transaction(value: Any) -> None:
+    transaction = _object(value, "transaction")
+    if set(transaction) != {"id", "receivedBytes", "expectedBytes", "complete", "active"}:
+        raise ProviderContractError("transaction has unknown or missing fields")
+    _positive_uint32(transaction["id"], "transaction.id")
+    received = _uint32(transaction["receivedBytes"], "transaction.receivedBytes")
+    expected = _uint32(transaction["expectedBytes"], "transaction.expectedBytes")
+    if received > expected or not isinstance(transaction["complete"], bool) or not isinstance(transaction["active"], bool):
+        raise ProviderContractError("transaction is invalid")
+
+
+def _validate_progress(value: Any) -> None:
+    progress = _object(value, "progress")
+    if set(progress) != {"completedBytes", "totalBytes"}:
+        raise ProviderContractError("progress has unknown or missing fields")
+    completed = _uint32(progress["completedBytes"], "progress.completedBytes")
+    total = _positive_uint32(progress["totalBytes"], "progress.totalBytes")
+    if completed > total:
+        raise ProviderContractError("progress.completedBytes is invalid")
+
+
+def _validate_recovery(value: Any) -> None:
+    recovery = _object(value, "recovery")
+    required = {"appId", "registryGeneration", "recoverySequence", "reason", "launcherActive", "appDisabled", "rollbackAvailable"}
+    if set(recovery) != required:
+        raise ProviderContractError("recovery has unknown or missing fields")
+    _optional_string(recovery["appId"], "recovery.appId", 96)
+    _uint32(recovery["registryGeneration"], "recovery.registryGeneration")
+    _uint32(recovery["recoverySequence"], "recovery.recoverySequence")
+    if (recovery["reason"] not in RECOVERY_REASONS or
+            not all(isinstance(recovery[field], bool) for field in
+                    ("launcherActive", "appDisabled", "rollbackAvailable"))):
+        raise ProviderContractError("recovery is invalid")
 
 
 def _validate_result(value: Any, require_sequence: bool = False) -> dict[str, Any]:
     result = _envelope(value, "result", "result", require_sequence)
-    allowed = {"format", "formatVersion", "kind", "operation", "requestId", "resultCode", "provider", "devices", "device", "message", "transaction", "progress", "logs", "recovery", "cancellation"}
+    allowed = {"format", "formatVersion", "kind", "operation", "requestId", "resultCode", "provider", "devices", "device", "apps", "registryGeneration", "message", "transaction", "progress", "logs", "recovery", "cancellation"}
     if require_sequence:
         allowed.add("sequence")
     required = {"format", "formatVersion", "kind", "operation", "requestId", "resultCode", "provider"}
@@ -135,12 +213,42 @@ def _validate_result(value: Any, require_sequence: bool = False) -> dict[str, An
             _validate_device(device, f"devices[{index}]")
     if "device" in result:
         _validate_device(result["device"], "device")
-    if "logs" in result and (not isinstance(result["logs"], list) or len(result["logs"]) > MAX_LOG_RECORDS):
-        raise ProviderContractError("logs is invalid")
+    if "apps" in result:
+        if not isinstance(result["apps"], list) or len(result["apps"]) > MAX_APP_LIST_ENTRIES:
+            raise ProviderContractError("apps is invalid")
+        app_ids: set[str] = set()
+        for index, app in enumerate(result["apps"]):
+            _validate_app_library_entry(app, f"apps[{index}]")
+            app_id = app["appId"]
+            if app_id in app_ids:
+                raise ProviderContractError("apps contains duplicate appId")
+            app_ids.add(app_id)
+    if "registryGeneration" in result:
+        _uint32(result["registryGeneration"], "registryGeneration")
+    if ("apps" in result) != ("registryGeneration" in result):
+        raise ProviderContractError("apps and registryGeneration must appear together")
+    if "message" in result:
+        _string(result["message"], "message", 1024)
+    if "transaction" in result:
+        _validate_transaction(result["transaction"])
+    if "progress" in result:
+        _validate_progress(result["progress"])
+    if "logs" in result:
+        _validate_logs(result["logs"], "logs")
+    if "recovery" in result:
+        _validate_recovery(result["recovery"])
+        if (not result["recovery"]["appId"] and
+                (result["recovery"]["appDisabled"] or result["recovery"]["rollbackAvailable"])):
+            raise ProviderContractError("device-wide recovery cannot carry app state")
     if "cancellation" in result:
         cancellation = _object(result["cancellation"], "cancellation")
         if set(cancellation) != {"confirmed"} or not isinstance(cancellation["confirmed"], bool):
             raise ProviderContractError("cancellation is invalid")
+    if result["resultCode"] in {"ok", "accepted"}:
+        if result["operation"] == "list" and "apps" not in result:
+            raise ProviderContractError("successful list result is missing apps")
+        if result["operation"] == "recovery" and "recovery" not in result:
+            raise ProviderContractError("successful recovery result is missing recovery")
     return result
 
 

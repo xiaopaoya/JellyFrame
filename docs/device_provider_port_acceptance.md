@@ -58,13 +58,15 @@ USB endpoint identity, firmware hash and build configuration.
 1. `discover` returns exactly the published board/profile/image/runtime,
    display, feature families, bundle limit and current available storage.
 2. `info` for its returned opaque selector reports the same identity.
-3. Install a checked `.jfapp`; retain JSONL progress and terminal result, then
+3. `list` returns a typed AppList with a registry generation; `recovery` returns
+   a typed recovery record without serial-text parsing.
+4. Install a checked `.jfapp`; retain JSONL progress and terminal result, then
    verify with `info`/device state that the app can launch.
-4. Begin a second install, cancel it through the provider, and prove the
+5. Begin a second install, cancel it through the provider, and prove the
    prior committed App remains launchable after reconnect or reboot.
-5. Read bounded app-scoped logs and demonstrate that diagnostics are not mixed
+6. Read bounded app-scoped logs and demonstrate that diagnostics are not mixed
    into stdout JSONL.
-6. Attempt a manifest mismatch and a storage-full/oversize bundle. Both must
+7. Attempt a manifest mismatch and a storage-full/oversize bundle. Both must
    fail without publishing a partial App.
 
 Do not claim cancellation from host-process termination, USB disconnect alone

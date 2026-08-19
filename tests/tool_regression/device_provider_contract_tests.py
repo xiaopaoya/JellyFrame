@@ -27,6 +27,17 @@ def event(kind: str, sequence: int, **extra: object) -> dict:
     return base
 
 
+def app_entry() -> dict:
+    return {"appId": "org.example.app", "versionName": "1.2.3", "versionCode": 7,
+            "bundleBytes": 2048, "state": "installed", "rollbackAvailable": True}
+
+
+def recovery() -> dict:
+    return {"appId": "org.example.app", "registryGeneration": 42, "recoverySequence": 9,
+            "reason": "app-runtime-failure", "launcherActive": True, "appDisabled": True,
+            "rollbackAvailable": True}
+
+
 class DeviceProviderContractTests(unittest.TestCase):
     def test_accepts_bounded_discovery(self):
         parsed = contract.parse_provider_result(json.dumps(result(devices=[device()])))
@@ -57,6 +68,38 @@ class DeviceProviderContractTests(unittest.TestCase):
         self.assertTrue(contract.parse_provider_result(json.dumps(accepted))["cancellation"]["confirmed"])
         with self.assertRaises(contract.ProviderContractError):
             contract.parse_provider_result(json.dumps(result(operation="cancel", cancellation={"confirmed": "yes"})))
+
+    def test_accepts_typed_app_list_and_recovery_results(self):
+        app_list = result(operation="list", apps=[app_entry()], registryGeneration=42)
+        parsed_list = contract.parse_provider_result(json.dumps(app_list))
+        self.assertEqual(parsed_list["apps"][0]["versionCode"], 7)
+        recovery_result = result(operation="recovery", recovery=recovery())
+        self.assertEqual(contract.parse_provider_result(json.dumps(recovery_result))["recovery"]["reason"],
+                         "app-runtime-failure")
+
+    def test_rejects_untyped_or_incomplete_app_list_and_recovery_results(self):
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(result(operation="list")))
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(result(operation="list", apps=[app_entry()])))
+        invalid_app = app_entry()
+        invalid_app["state"] = "running"
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(
+                result(operation="list", apps=[invalid_app], registryGeneration=1)))
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(
+                result(operation="list", apps=[app_entry(), app_entry()], registryGeneration=1)))
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(result(operation="recovery")))
+        invalid_recovery = recovery()
+        invalid_recovery["launcherActive"] = "yes"
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(result(operation="recovery", recovery=invalid_recovery)))
+        device_recovery = recovery()
+        device_recovery["appId"] = ""
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(result(operation="recovery", recovery=device_recovery)))
 
     def test_accepts_ordered_jsonl_progress_log_and_result(self):
         stream = "\n".join((

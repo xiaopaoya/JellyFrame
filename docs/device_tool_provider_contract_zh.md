@@ -24,6 +24,7 @@ transport，不能 discover 或控制开发板；physical provider 仍属于 Dev
 ```text
 jellyframe-device --output json --request-id <host-id> discover
 jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> info
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> list
 jellyframe-device --output jsonl --request-id <host-id> --selector <endpoint-id> install --bundle <absolute-jfapp-path>
 jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> launch --id <app-id>
 jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> stop --id <app-id>
@@ -61,7 +62,7 @@ jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> 
 }
 ```
 
-`operation` 只能是 `discover`、`info`、`install`、`cancel`、`launch`、`stop`、`remove`、`rollback`、`logs` 或
+`operation` 只能是 `discover`、`info`、`list`、`install`、`cancel`、`launch`、`stop`、`remove`、`rollback`、`logs` 或
 `recovery`。适用时沿用文档化 JFDP result-code name；provider 专属值仅有
 `transport-unavailable`、`protocol-mismatch`、`provider-failed`。`requestId` 由 host 生成，只含 ASCII，
 最长 64 bytes。
@@ -71,6 +72,21 @@ identity、`JFDP/1`、connection state、display shape/size、enabled feature fa
 available storage。feature-family ID 必须唯一、使用小写 ASCII `[a-z0-9][a-z0-9.-]{0,95}`，且最多 64 项。其他操作返回一个 selected device 和可选 typed transaction、progress、logs、recovery data。
 result 最大 64 KiB，log result 最多 256 records。禁止传出 raw bundle bytes、flash address、filesystem path、
 private key 或 native handle。
+
+`list` 映射 JFDP AppList payload，返回 `apps` 与 `registryGeneration`，二者必须同时出现。最多 24 条 entry；
+每条 entry 必须且只能包含 `appId`、`versionName`、`versionCode`、`bundleBytes`、`state`（`installed`、`disabled`
+或 `failed`）及 `rollbackAvailable`。成功的 `list` 必须包含这两个字段。
+
+`recovery` 映射 JFDP recovery-detail payload。成功 result 必须且只能携带 `appId`（仅 device-wide recovery
+可为空）、`registryGeneration`、`recoverySequence`、`reason`、`launcherActive`、`appDisabled` 与
+`rollbackAvailable`。`reason` 只能是 `none`、`registry-invalid`、`staging-discarded`、`app-load-failure`、
+`app-runtime-failure`、`app-budget-exceeded` 或 `launcher-fallback`。
+
+可选 `transaction` 必须且只能是 `id`、`receivedBytes`、`expectedBytes`、`complete`、`active`；byte count
+均为 uint32，且 received 不得大于 expected。可选 `progress` 必须且只能是 `completedBytes` 与 `totalBytes`，
+并遵守同一范围。terminal `logs` 最多 256 条，每条必须且只能包含 `level`、`appId` 与 `message`，level
+vocabulary 与 JSONL log event 相同。这些字段刻意与 typed JFDP payload 对齐；provider 不得改为序列化
+registry 或 task-private structure。
 
 ## JSONL 与接入
 

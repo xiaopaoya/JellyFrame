@@ -81,7 +81,7 @@ class DeviceCliTests(unittest.TestCase):
         command = [sys.executable, str(ROOT / "tools" / "jellyframe_cli.py"), "device", "--help"]
         result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
-        for operation in ("launch", "stop", "remove", "rollback", "recovery"):
+        for operation in ("list", "launch", "stop", "remove", "rollback", "recovery"):
             self.assertIn(operation, result.stdout)
         remove = subprocess.run(
             [sys.executable, str(ROOT / "tools" / "jellyframe_cli.py"), "device", "--provider",

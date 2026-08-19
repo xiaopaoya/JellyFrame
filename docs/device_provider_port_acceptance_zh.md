@@ -52,10 +52,11 @@ provenance、manifest SHA-256、board、USB endpoint identity、firmware hash �
 
 1. `discover` 精确返回已发布 board/profile/image/runtime、display、feature families、bundle limit 与当前 storage。
 2. 对返回的 opaque selector 执行 `info`，identity 必须一致。
-3. 安装一份已检查 `.jfapp`，归档 JSONL progress/terminal，再验证 App 可 launch。
-4. 开始第二次 install，经 provider `cancel`，并在 reconnect 或 reboot 后证明旧 committed App 仍可 launch。
-5. 读取有界 app-scoped logs，证明 stdout JSONL 未混入 diagnostics。
-6. 触发 manifest mismatch 与 storage-full/oversize bundle；两者均不得发布 partial App。
+3. `list` 返回带 registry generation 的 typed AppList，`recovery` 返回 typed recovery record，不得解析 serial text。
+4. 安装一份已检查 `.jfapp`，归档 JSONL progress/terminal，再验证 App 可 launch。
+5. 开始第二次 install，经 provider `cancel`，并在 reconnect 或 reboot 后证明旧 committed App 仍可 launch。
+6. 读取有界 app-scoped logs，证明 stdout JSONL 未混入 diagnostics。
+7. 触发 manifest mismatch 与 storage-full/oversize bundle；两者均不得发布 partial App。
 
 不得以 kill host process、仅 USB disconnect 或 MCU reset 声称取消。JSON 中不得暴露 flash address、任意文件、
 raw serial console、private key 或 JFDP handle。

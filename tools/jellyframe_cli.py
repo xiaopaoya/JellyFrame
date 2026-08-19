@@ -3967,6 +3967,9 @@ def main() -> int:
     device_info = device_subparsers.add_parser("info", help="Read one provider-reported device identity.")
     device_info.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
     device_info.set_defaults(func=cmd_device)
+    device_list = device_subparsers.add_parser("list", help="List installed apps through the configured provider.")
+    device_list.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
+    device_list.set_defaults(func=cmd_device)
     device_install = device_subparsers.add_parser(
         "install", help="Install an existing .jfapp through provider JSONL progress.")
     device_install.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")

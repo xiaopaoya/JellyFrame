@@ -28,6 +28,7 @@ The first Device OS release should ship one executable, provisionally
 ```text
 jellyframe-device --output json --request-id <host-id> discover
 jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> info
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> list
 jellyframe-device --output jsonl --request-id <host-id> --selector <endpoint-id> install --bundle <absolute-jfapp-path>
 jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> launch --id <app-id>
 jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> stop --id <app-id>
@@ -71,7 +72,7 @@ top-level fields so the host cannot silently ignore a contract change.
 }
 ```
 
-`operation` is `discover`, `info`, `install`, `cancel`, `launch`, `stop`, `remove`,
+`operation` is `discover`, `info`, `list`, `install`, `cancel`, `launch`, `stop`, `remove`,
 `rollback`, `logs` or `recovery`. Reuse documented JFDP result-code names when
 applicable; the only provider-specific values are `transport-unavailable`,
 `protocol-mismatch` and `provider-failed`. `requestId` is host-generated ASCII
@@ -85,6 +86,27 @@ bytes and available storage. Feature-family IDs are unique lowercase ASCII
 optional typed transaction, progress, logs or recovery data. A result is at
 most 64 KiB; a log result has at most 256 records. It must not expose raw bundle
 bytes, flash addresses, filesystem paths, private keys or native handles.
+
+`list` maps the JFDP AppList payload and returns `apps` with
+`registryGeneration`; the two fields always appear together. There are at most
+24 entries. Every entry is exactly `appId`, `versionName`, `versionCode`,
+`bundleBytes`, `state` (`installed`, `disabled` or `failed`) and
+`rollbackAvailable`. A successful `list` always includes both fields.
+
+`recovery` maps the JFDP recovery-detail payload. A successful result carries
+exactly `appId` (empty only for device-wide recovery), `registryGeneration`,
+`recoverySequence`, `reason`, `launcherActive`, `appDisabled`, and
+`rollbackAvailable`. `reason` is one of `none`, `registry-invalid`,
+`staging-discarded`, `app-load-failure`, `app-runtime-failure`,
+`app-budget-exceeded`, or `launcher-fallback`.
+
+An optional `transaction` is exactly `id`, `receivedBytes`, `expectedBytes`,
+`complete`, and `active`; all byte counts are uint32 and received bytes cannot
+exceed expected bytes. An optional `progress` is exactly `completedBytes` and
+`totalBytes` with the same bound. Terminal `logs` contains at most 256 records,
+each exactly `level`, `appId`, and `message`, using the same level vocabulary as
+JSONL log events. These names deliberately mirror the typed JFDP payloads;
+providers must not serialize registry or task-private structures instead.
 
 ## JSONL And Adoption
 
