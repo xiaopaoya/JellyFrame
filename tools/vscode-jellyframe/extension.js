@@ -114,6 +114,21 @@ function showOutputChannel() {
   ensureOutputChannel(true);
 }
 
+function discoverDevice(context) {
+  const provider = config().get("deviceProvider", "").trim();
+  if (!provider || !path.isAbsolute(provider)) {
+    vscode.window.showWarningMessage("Configure JellyFrame: Device Provider with an absolute provider path first.");
+    return;
+  }
+  const args = ["device", "--provider", provider];
+  const manifest = config().get("deviceManifest", "").trim();
+  if (manifest) {
+    args.push("--manifest", path.isAbsolute(manifest) ? manifest : path.resolve(repoRoot(context), manifest));
+  }
+  args.push("discover");
+  runCli(context, args);
+}
+
 function runCli(context, args) {
   return runCliWithOptions(context, args, {});
 }
@@ -1870,7 +1885,8 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.package", (resourceUri) => runPackageCommand(context, "package", resourceUri)),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),
-    vscode.commands.registerCommand("jellyframe.showOutput", () => showOutputChannel())
+    vscode.commands.registerCommand("jellyframe.showOutput", () => showOutputChannel()),
+    vscode.commands.registerCommand("jellyframe.deviceDiscover", () => discoverDevice(context))
   );
 }
 

@@ -28,6 +28,7 @@
     "onCommand:jellyframe.newFromTemplate",
     "onCommand:jellyframe.showReport",
     "onCommand:jellyframe.showOutput"
+    ,"onCommand:jellyframe.deviceDiscover"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -91,6 +92,11 @@
         "command": "jellyframe.showOutput",
         "title": "%command.showOutput%",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "jellyframe.deviceDiscover",
+        "title": "%command.deviceDiscover%",
+        "icon": "$(plug)"
       }
     ],
     "submenus": [
@@ -176,6 +182,10 @@
         {
           "command": "jellyframe.showOutput",
           "group": "report@2"
+        },
+        {
+          "command": "jellyframe.deviceDiscover",
+          "group": "device@1"
         }
       ],
       "explorer/context": [
@@ -320,6 +330,16 @@
           "type": "string",
           "default": "16x16",
           "description": "%configuration.fontBudget%"
+        },
+        "jellyframe.deviceProvider": {
+          "type": "string",
+          "default": "",
+          "description": "%configuration.deviceProvider%"
+        },
+        "jellyframe.deviceManifest": {
+          "type": "string",
+          "default": "",
+          "description": "%configuration.deviceManifest%"
         }
       }
     },

@@ -13,6 +13,7 @@
   "command.newFromTemplate": "JellyFrame：从模板新建 App",
   "command.showReport": "JellyFrame：显示最近报告",
   "command.showOutput": "JellyFrame：查看运行日志",
+  "command.deviceDiscover": "JellyFrame：发现设备",
   "menu.label": "JellyFrame",
   "menu.packageLabel": "JellyFrame 包操作",
   "menu.editorLabel": "JellyFrame App",
@@ -25,4 +26,6 @@
   "configuration.pythonPath": "运行 tools/jellyframe_cli.py 使用的 Python 可执行文件。",
   "configuration.defaultTarget": "传递给 JellyFrame CLI 命令的默认 target preset。",
   "configuration.fontBudget": "字体资源检查使用的默认字形预算。"
+  ,"configuration.deviceProvider": "Device OS provider 可执行文件的绝对路径；安装受支持的 developer image provider 前请留空。"
+  ,"configuration.deviceManifest": "可选的 Developer Image manifest，用于验证发现的设备身份。"
 }
