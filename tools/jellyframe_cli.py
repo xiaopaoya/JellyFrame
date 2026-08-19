@@ -3096,6 +3096,10 @@ def cmd_device(args: argparse.Namespace) -> int:
             provider_arguments.extend(["--id", args.app_id, "--limit", str(args.limit)])
         elif args.device_command == "cancel":
             provider_arguments.extend(["--transaction-id", str(args.transaction_id)])
+        elif args.device_command in {"launch", "stop", "remove", "rollback"}:
+            provider_arguments.extend(["--id", args.app_id])
+            if args.device_command == "remove" and args.keep_data:
+                provider_arguments.append("--keep-data")
         result = device_provider_client.invoke_provider(
             args.provider,
             args.device_command,
@@ -3982,6 +3986,23 @@ def main() -> int:
     device_logs.add_argument("--id", dest="app_id", required=True, help="Installed app ID.")
     device_logs.add_argument("--limit", type=int, default=128, help="Maximum provider log records (1..256).")
     device_logs.set_defaults(func=cmd_device)
+    for name, description in (
+        ("launch", "Launch one installed app through the configured provider."),
+        ("stop", "Stop one installed app through the configured provider."),
+        ("remove", "Remove one installed app through the configured provider."),
+        ("rollback", "Roll back one installed app through the configured provider."),
+    ):
+        device_app_command = device_subparsers.add_parser(name, help=description)
+        device_app_command.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
+        device_app_command.add_argument("--id", dest="app_id", required=True, help="Installed app ID.")
+        if name == "remove":
+            device_app_command.add_argument("--keep-data", action="store_true",
+                                            help="Request that the provider preserve app-private data.")
+        device_app_command.set_defaults(func=cmd_device)
+    device_recovery = device_subparsers.add_parser(
+        "recovery", help="Read launcher and recovery state through the configured provider.")
+    device_recovery.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
+    device_recovery.set_defaults(func=cmd_device)
 
     device_reference_parser = subparsers.add_parser(
         "device-reference",

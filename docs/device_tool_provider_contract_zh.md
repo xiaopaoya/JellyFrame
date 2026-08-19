@@ -23,14 +23,20 @@ transport，不能 discover 或控制开发板；physical provider 仍属于 Dev
 
 ```text
 jellyframe-device --output json --request-id <host-id> discover
-jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> install --bundle <absolute-jfapp-path>
-jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> logs --id <app-id>
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> info
+jellyframe-device --output jsonl --request-id <host-id> --selector <endpoint-id> install --bundle <absolute-jfapp-path>
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> launch --id <app-id>
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> stop --id <app-id>
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> remove --id <app-id> [--keep-data]
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> rollback --id <app-id>
+jellyframe-device --output jsonl --request-id <host-id> --selector <endpoint-id> logs --id <app-id>
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> recovery
 ```
 
-这是 provider contract。Runtime CLI 当前只暴露 `device discover`、`device info` 与 `device install`；
-VS Code 后续复用同一 client。它们只能调用已配置的 absolute provider path，不能从 PATH 推断 executable，
-也不能猜测 COM port、USB identity 或 network host。诊断写入
-stderr；`--output json` 的 stdout 仅有一个 UTF-8 JSON document，`--output jsonl` 为 UTF-8 JSON Lines。
+这是 provider contract。Runtime CLI 通过已配置 provider path 暴露对应的 `device` command；它不内置 provider，
+也不能从 `PATH` 推断 executable、猜测 COM port、USB identity 或 network host。已安装同一 App identity 时，
+`install` 也是 update。VS Code 在 provider fixture 通过后复用同一 client。诊断写入 stderr；`--output json`
+的 stdout 仅有一个 UTF-8 JSON document，`--output jsonl` 为 UTF-8 JSON Lines。
 
 退出码：`resultCode=ok` 或 `accepted` 时为 `0`；设备操作失败为 `1`；无效调用为 `2`；transport 不可用为
 `3`；protocol/image 不兼容为 `4`；provider failure 为 `5`。
@@ -76,7 +82,8 @@ envelope 加 `sequence`，且必须是最后一行。终态缺失、重复或乱
 failure，不能显示 install 成功。`cancel` 必须返回 boolean `cancellation.confirmed`；Runtime 只将 `true` 视为
 取消成功。仅 kill host process 不代表 staging 已清理。
 
-Runtime CLI 或 VS Code 消费 provider 前，Device OS 必须交付同 image/profile 的 JFDP wire-acceptance report、
-已校验的 `device_image_manifest_zh.md` record、覆盖 no-device/protocol mismatch/storage full/interrupted transfer 的
-确定性 JSON/JSONL fixture，以及版本化的 discovery/install/update/rollback/remove/log/reconnect report。host 必须在
-部署前将 discovery data 与该 manifest 匹配。满足后 Runtime 才可增加真实 `device` command 或 VS Code device selector。
+在向作者交付 physical provider 或把它接入 VS Code 部署 UI 前，Device OS 必须交付同 image/profile 的 JFDP
+wire-acceptance report、已校验的 `device_image_manifest_zh.md` record、覆盖 no-device/protocol mismatch/storage
+full/interrupted transfer 的确定性 JSON/JSONL fixture，以及版本化的 discovery/install/update/rollback/remove/log/
+reconnect report。host 必须在部署前将 discovery data 与该 manifest 匹配。在此之前，CLI command 仅是显式的
+contract client，不得被当作 physical provider 已存在的证据。

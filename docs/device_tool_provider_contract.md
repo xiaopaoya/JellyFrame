@@ -27,14 +27,21 @@ The first Device OS release should ship one executable, provisionally
 
 ```text
 jellyframe-device --output json --request-id <host-id> discover
-jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> install --bundle <absolute-jfapp-path>
-jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> logs --id <app-id>
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> info
+jellyframe-device --output jsonl --request-id <host-id> --selector <endpoint-id> install --bundle <absolute-jfapp-path>
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> launch --id <app-id>
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> stop --id <app-id>
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> remove --id <app-id> [--keep-data]
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> rollback --id <app-id>
+jellyframe-device --output jsonl --request-id <host-id> --selector <endpoint-id> logs --id <app-id>
+jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> recovery
 ```
 
-This is a provider contract. Runtime CLI currently exposes `device discover`,
-`device info` and `device install`; VS Code will reuse the same client. They
-invoke only a configured absolute provider path and never infer a COM
-port, USB identity, network host or executable from PATH. Diagnostics go to
+This is a provider contract. Runtime CLI exposes matching `device` commands
+through a configured provider path; it ships no provider and never infers a
+COM port, USB identity, network host or executable from `PATH`. `install`
+also performs an update when the bundle identity is already installed. VS Code
+will reuse this same client once provider fixtures pass. Diagnostics go to
 stderr. `--output json` writes exactly one UTF-8 JSON document to stdout;
 `--output jsonl` writes UTF-8 JSON Lines.
 
@@ -94,10 +101,12 @@ change inside a stream, are provider failures, never successful installs.
 value other than `true` as a failed cancellation; killing a host process is not
 proof that staging was cleared.
 
-Before Runtime CLI or VS Code consumes a provider, Device OS must deliver the
-same-image/profile JFDP wire-acceptance report, a validated
+Before a physical provider is presented to authors or bound into the VS Code
+deployment UI, Device OS must deliver the same-image/profile JFDP
+wire-acceptance report, a validated
 `device_image_manifest.md` record, deterministic JSON/JSONL fixtures for
 no-device/protocol mismatch/storage full/interrupted transfer, and a versioned
 discovery/install/update/rollback/remove/log/reconnect report. The host must
-match discovery data against that manifest before deploying. Only then may
-Runtime add a real `device` command or VS Code add a selector.
+match discovery data against that manifest before deploying. The CLI commands
+remain an explicit contract client until then; they are not evidence that a
+physical provider exists.
