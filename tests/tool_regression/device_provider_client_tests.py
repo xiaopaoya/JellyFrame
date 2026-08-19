@@ -91,6 +91,20 @@ class DeviceProviderClientTests(unittest.TestCase):
                 with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "exit status"):
                     device_provider_client.invoke_provider(provider, "discover", request_id="jf-test")
 
+            failed_with_success_exit = subprocess.CompletedProcess(
+                [], 0, result("discover", "jf-test", "storage-full"), b""
+            )
+            with patch("device_provider_client.subprocess.run", return_value=failed_with_success_exit):
+                with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "storage-full"):
+                    device_provider_client.invoke_provider(provider, "discover", request_id="jf-test")
+
+            unavailable_with_wrong_exit = subprocess.CompletedProcess(
+                [], 1, result("discover", "jf-test", "transport-unavailable"), b""
+            )
+            with patch("device_provider_client.subprocess.run", return_value=unavailable_with_wrong_exit):
+                with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "expected 3"):
+                    device_provider_client.invoke_provider(provider, "discover", request_id="jf-test")
+
 
 if __name__ == "__main__":
     unittest.main()

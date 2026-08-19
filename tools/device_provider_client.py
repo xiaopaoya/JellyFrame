@@ -29,6 +29,20 @@ def _provider_path(value: Path) -> Path:
     return path
 
 
+def _expected_exit_status(result_code: str) -> int:
+    if result_code in {"ok", "accepted"}:
+        return 0
+    if result_code == "invalid-request":
+        return 2
+    if result_code == "transport-unavailable":
+        return 3
+    if result_code == "protocol-mismatch":
+        return 4
+    if result_code == "provider-failed":
+        return 5
+    return 1
+
+
 def invoke_provider(
     provider: Path,
     operation: str,
@@ -66,6 +80,10 @@ def invoke_provider(
     terminal = result[-1] if stream else result
     if terminal["operation"] != operation or terminal["requestId"] != request:
         raise DeviceProviderClientError("provider response does not match the requested operation")
-    if completed.returncode and terminal["resultCode"] in {"ok", "accepted"}:
-        raise DeviceProviderClientError("provider exit status conflicts with its successful result")
+    expected_returncode = _expected_exit_status(terminal["resultCode"])
+    if completed.returncode != expected_returncode:
+        raise DeviceProviderClientError(
+            "provider exit status conflicts with resultCode "
+            f"{terminal['resultCode']}: expected {expected_returncode}, got {completed.returncode}"
+        )
     return result
