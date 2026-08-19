@@ -11,6 +11,7 @@ let lastReport;
 let lastReportCommand;
 let lastPackageRoot;
 let lastCapturePath;
+let lastDeviceDiscovery;
 let statusProvider;
 let embeddedDebugSession;
 
@@ -126,7 +127,17 @@ function discoverDevice(context) {
     args.push("--manifest", path.isAbsolute(manifest) ? manifest : path.resolve(repoRoot(context), manifest));
   }
   args.push("discover");
-  runCli(context, args);
+  runCliWithOptions(context, args, {
+    onStdout: (stdout) => {
+      try {
+        const result = JSON.parse(stdout);
+        lastDeviceDiscovery = Array.isArray(result.devices) ? result.devices : [];
+        statusProvider?.refresh();
+      } catch (_) {
+        lastDeviceDiscovery = undefined;
+      }
+    }
+  });
 }
 
 function runCli(context, args) {
@@ -147,8 +158,10 @@ function runCliWithOptions(context, args, options) {
     shell: false
   });
   let failedToStart = false;
+  let stdout = "";
   child.stdout.on("data", (chunk) => {
     const text = chunk.toString();
+    stdout += text;
     channel.append(text);
   });
   child.stderr.on("data", (chunk) => {
@@ -180,6 +193,9 @@ function runCliWithOptions(context, args, options) {
     }
     if (options.onClose) {
       options.onClose(code);
+    }
+    if (code === 0 && options.onStdout) {
+      options.onStdout(stdout);
     }
   });
 }
@@ -1459,6 +1475,10 @@ class JellyFrameStatusProvider {
       workflow: "工作流",
       reports: "报告与日志",
       environment: "环境",
+      device: "设备",
+      discoverDevice: "发现设备",
+      noDeviceSession: "尚未发现设备",
+      connectedDevices: "已连接",
       package: "App 包",
       noPackage: "未识别 App",
       build: "桌面构建",
@@ -1487,6 +1507,10 @@ class JellyFrameStatusProvider {
       workflow: "Workflow",
       reports: "Reports & Logs",
       environment: "Environment",
+      device: "Device",
+      discoverDevice: "Discover device",
+      noDeviceSession: "No device discovered",
+      connectedDevices: "Connected",
       package: "App package",
       noPackage: "No App detected",
       build: "Desktop build",
@@ -1542,6 +1566,14 @@ class JellyFrameStatusProvider {
         this.item(chinese ? "脚本运行时" : "Script runtime",
           appRequiresScripting(root || "") ? (chinese ? "已启用" : "Enabled") : (chinese ? "未启用" : "Not enabled"),
           undefined, undefined, "symbol-event"),
+      ]),
+      this.group(labels.device, "plug", [
+        this.item(labels.discoverDevice, "", undefined, "jellyframe.deviceDiscover", "plug"),
+        this.item(labels.connectedDevices,
+          Array.isArray(lastDeviceDiscovery)
+            ? `${lastDeviceDiscovery.filter((device) => device.connected).length}/${lastDeviceDiscovery.length}`
+            : labels.noDeviceSession,
+          undefined, undefined, "device-mobile"),
       ]),
     ];
   }
