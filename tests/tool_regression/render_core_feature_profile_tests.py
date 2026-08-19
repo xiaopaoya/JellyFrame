@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 BASE_FEATURES = ("core.document", "core.paint")
-LOCKED_SOURCE_HASH = "c0740548398f1678e2fb73d5272992627d8ce279b60f5256f23d53f5209af413"
+LOCKED_SOURCE_HASH = "105d016677a689a4cc352884464aa552aa023f72c20c8b25eed12bc9b797c52b"
 TEST_ARGS: argparse.Namespace | None = None
 
 PROFILE_CASES = (
@@ -120,16 +120,16 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                         expected_features.append("graphics.canvas2d")
 
                     self.assertEqual(profile["schemaVersion"], 1)
-                    self.assertEqual(profile["packageVersion"], "0.6.0")
+                    self.assertEqual(profile["packageVersion"], "0.6.1")
                     self.assertEqual(profile["profileId"], profile_id)
                     self.assertEqual(profile["features"], expected_features)
                     self.assertEqual(provenance["schemaVersion"], 1)
                     self.assertEqual(provenance["consumer"], "jellyframe-runtime")
                     self.assertEqual(provenance["provider"], "in-tree")
-                    self.assertEqual(provenance["packageVersion"], "0.6.0")
+                    self.assertEqual(provenance["packageVersion"], "0.6.1")
                     self.assertEqual(provenance["engineAbi"], 1)
                     self.assertEqual(provenance["profileFile"], "jellyframe_render_core_profile.json")
-                    self.assertEqual(provenance["lockedVersion"], "0.6.0")
+                    self.assertEqual(provenance["lockedVersion"], "0.6.1")
                     self.assertEqual(provenance["lockedEngineAbi"], 1)
                     self.assertEqual(provenance["lockedSourceHash"], LOCKED_SOURCE_HASH)
                     self.assertFalse(provenance["lockEnforced"])

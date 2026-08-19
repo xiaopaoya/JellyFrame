@@ -90,6 +90,22 @@ def packager_path(source_root: Path) -> Path:
     raise RuntimeError(f"Render Core source packager is missing under: {source_root}")
 
 
+def built_executable(build_dir: Path, target: str, configuration: str) -> Path:
+    """Return the executable location for single- and multi-config generators."""
+    suffix = ".exe" if sys.platform.startswith("win") else ""
+    candidates = (
+        build_dir / f"{target}{suffix}",
+        build_dir / configuration / f"{target}{suffix}",
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError(
+        f"built executable for {target!r} was not found under {build_dir}: "
+        + ", ".join(str(candidate) for candidate in candidates)
+    )
+
+
 class RenderCoreSourceArchiveTests(unittest.TestCase):
     cmake: Path
     source_root: Path
@@ -110,7 +126,9 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
         command.extend(definitions)
         run(command, cwd=self.source_root)
 
-    def runtime_consumer_checkout(self, root: Path, source_hash: str) -> Path:
+    def runtime_consumer_checkout(
+        self, root: Path, source_hash: str, package_version: str
+    ) -> Path:
         """Stage a consumer fixture whose lock accepts this test archive only."""
         checkout = root / "runtime-consumer-source"
         run(["git", "clone", "--no-local", "--no-hardlinks", str(self.source_root), str(checkout)],
@@ -126,6 +144,14 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             flags=re.VERBOSE,
         )
         self.assertEqual(substitutions, 1, "runtime dependency lock has one source hash")
+        updated_lock, substitutions = re.subn(
+            r'(set\(JELLYFRAME_RENDER_CORE_LOCKED_VERSION\s+)("[^"]+")',
+            rf'\1"{package_version}"',
+            updated_lock,
+            count=1,
+            flags=re.VERBOSE,
+        )
+        self.assertEqual(substitutions, 1, "runtime dependency lock has one package version")
         lock_path.write_text(updated_lock, encoding="utf-8")
         return checkout
 
@@ -188,14 +214,17 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="jellyframe-render-core-tracked-inputs-") as directory:
             root = Path(directory)
             canonical_output = root / "canonical"
+            canonical_checkout = root / "canonical-checkout"
             checkout = root / "checkout"
             checkout_output = root / "checkout-output"
+            run(["git", "clone", "--no-local", "--no-hardlinks", str(self.source_root),
+                 str(canonical_checkout)], cwd=self.source_root)
             run(["git", "clone", "--no-local", "--no-hardlinks", str(self.source_root), str(checkout)],
                 cwd=self.source_root)
             sentinel = checkout / "src" / "render_core" / "untracked_archive_sentinel.txt"
             sentinel.write_text("must not enter an archive\n", encoding="utf-8")
 
-            run([sys.executable, str(packager), "--source-root", str(self.source_root),
+            run([sys.executable, str(packager), "--source-root", str(canonical_checkout),
                  "--output-dir", str(canonical_output)], cwd=self.source_root)
             run([sys.executable, str(packager), "--source-root", str(checkout),
                  "--output-dir", str(checkout_output)], cwd=self.source_root)
@@ -252,6 +281,14 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                 bundle.extractall(root / "extract", **extraction_options)
 
             archive_source = root / "extract" / root_name
+            version_text = (archive_source / "cmake" / "render_core_version.cmake").read_text(
+                encoding="utf-8"
+            )
+            version_match = re.search(
+                r'set\(JELLYFRAME_RENDER_CORE_PACKAGE_VERSION\s+"([^"]+)"', version_text
+            )
+            self.assertIsNotNone(version_match, "archive declares a package version")
+            package_version = version_match.group(1)
             install_dir = root / "install"
             run([str(self.cmake), "--preset", "default"], cwd=archive_source)
             core_build = archive_source / "build" / "default"
@@ -299,7 +336,9 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             if not (self.source_root / "src" / "app_runtime").is_dir():
                 return
 
-            runtime_consumer_source = self.runtime_consumer_checkout(root, source_manifest["sourceHash"])
+            runtime_consumer_source = self.runtime_consumer_checkout(
+                root, source_manifest["sourceHash"], package_version
+            )
 
             # A downstream Core host must consume only the installed CMake
             # package and installed render_core headers. This keeps the
@@ -312,7 +351,7 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                     [
                         "cmake_minimum_required(VERSION 3.16)",
                         "project(RenderCorePackageConsumer LANGUAGES CXX)",
-                        "find_package(JellyFrameRenderCore 0.6.0 EXACT CONFIG REQUIRED",
+                        f"find_package(JellyFrameRenderCore {package_version} EXACT CONFIG REQUIRED",
                         f"  PATHS \"{install_dir.as_posix()}\" NO_DEFAULT_PATH)",
                         "add_executable(render_core_package_consumer main.cpp)",
                         "target_link_libraries(render_core_package_consumer",
@@ -347,9 +386,8 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                 [str(self.cmake), "--build", str(consumer_build), "--config", "Release", "--parallel"],
                 cwd=self.source_root,
             )
-            consumer_executable = consumer_build / (
-                "render_core_package_consumer.exe" if sys.platform.startswith("win")
-                else "render_core_package_consumer"
+            consumer_executable = built_executable(
+                consumer_build, "render_core_package_consumer", "Release"
             )
             run([str(consumer_executable)], cwd=self.source_root)
 

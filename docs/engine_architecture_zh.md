@@ -16,7 +16,7 @@ JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目�
 首个保留历史的 Render Core 仓库现已建立于
 [`xiaopaoya/JellyFrame-Render-Core`](https://github.com/xiaopaoya/JellyFrame-Render-Core)。
 本 JellyFrame checkout 保留 in-tree Core provider 用于同步开发。首个带签名的 Core release
-`v0.6.0` 已通过 Runtime package lock 接纳，并由 release-boundary CI 消费。Render Core 已具备独立导出边界。将
+`v0.6.0` 建立了边界；Runtime 当前通过 package lock 接纳 `v0.6.1`，并由 release-boundary CI 消费。Render Core 已具备独立导出边界。将
 `JELLYFRAME_BUILD_APP_RUNTIME=OFF`、`JELLYFRAME_BUILD_SCRIPTING=OFF` 并关闭上层示例后，
 即可只配置和构建 Render Core。设置 `JELLYFRAME_INSTALL_RENDER_CORE=ON` 并执行
 `cmake --install`，会导出版本化的 `JellyFrame::jellyframe_render_core`、公共头文件和能力 profile，
@@ -27,8 +27,8 @@ JerryScript、ports 或设备协议混入 Render Core 包。
 
 ```powershell
 python project_tools\package_render_core_source.py --output-dir build\dist
-tar -xzf build\dist\jellyframe-render-core-0.6.0.tar.gz -C build\unpacked
-cmake -S build\unpacked\jellyframe-render-core-0.6.0 -B build\core-from-archive
+tar -xzf build\dist\jellyframe-render-core-0.6.1.tar.gz -C build\unpacked
+cmake -S build\unpacked\jellyframe-render-core-0.6.1 -B build\core-from-archive
 cmake --build build\core-from-archive --config Release --parallel
 ctest --test-dir build\core-from-archive -C Release --output-on-failure
 ```
@@ -38,7 +38,7 @@ Runtime、JerryScript、ports、设备契约、示例或 app 资源。in-tree �
 `JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS=OFF`；Device contracts 为 Device OS 工作保留独立的显式构建模式。
 打包器会将声明为文本的成员规范为 LF，并规范化成员顺序与
 归档元数据，写出 SHA-256 sidecar。CI 会分别验证这一 monorepo export，并下载已发布的
-`v0.6.0` artifact、校验其记录的 archive SHA-256，再构建、安装并由 Runtime 的
+`v0.6.1` artifact、校验其记录的 archive SHA-256，再构建、安装并由 Runtime 的
 package-provider 配置消费该 release package。Standalone Core CI job 会将 monorepo 归档和
 sidecar 保留为 workflow artifact；consumer 仍只能通过显式 dependency-lock 更新接纳已发布 release。
 
@@ -79,7 +79,7 @@ packer、已安装 bundle registry 与原生桌面 package parser 都会拒绝�
 provider 指向另一个 checkout 或已解压的 Render Core 源码树。这只是本地开发覆盖项，
 不是第二套公开依赖机制；package 模式和源码覆盖不能同时使用。CI 会以解压归档作为
 覆盖源构建并运行 App Runtime 测试。覆盖目录必须提供 Render Core 的 CMake 边界和其文档化
-源码布局（`v0.6.0` archive 使用 `src/` 加 `include/render_core/`）；原有 feature profile
+源码布局（`v0.6.1` archive 使用 `src/` 加 `include/render_core/`）；原有 feature profile
 与源码归属检查仍然生效。
 
 ## 计划中的仓库边界
@@ -88,7 +88,7 @@ provider 指向另一个 checkout 或已解压的 Render Core 源码树。这只
 
 | 未来仓库 | 负责内容 | 迭代规律 | 当前状态 |
 | --- | --- | --- | --- |
-| `jellyframe-render-core` | HTML/CSS/DOM、layout、paint、input 和可选 feature family | 高频优化与兼容性发布 | 物理仓库已建立；带签名的 `v0.6.0`、standalone CI、安装/导出与 package-consumer 边界均已验证。 |
+| `jellyframe-render-core` | HTML/CSS/DOM、layout、paint、input 和可选 feature family | 高频优化与兼容性发布 | 物理仓库已建立；首个带签名的 `v0.6.0`、当前锁定的 `v0.6.1`、standalone CI、安装/导出与 package-consumer 边界均已验证。 |
 | `jellyframe` | App Runtime、Japp 格式、JerryScript binding、桌面壳和开发工具 | 慢速迭代，维护 App 兼容契约 | 当前 Runtime 源码边界；可消费锁定 Core package 或 in-tree Core |
 | `jellyframe-device-os` | launcher、registry、Device Runtime、JFDP、板卡 port 和官方镜像 | 强硬件依赖的实验性迭代 | 尚未物理迁出；D0 契约仍位于过渡位置 |
 | JerryScript | 第三方脚本引擎 | 跟随上游 commit/tag | 可选依赖，由 Runtime/port 构建锁定 |
@@ -111,7 +111,7 @@ Device OS reference host。以上门槛都不要求 Git submodule。
 ## 模块化状态
 
 仓库模块化和内部 feature 模块化是两项不同结论。Core/Runtime 的 package boundary 已关闭：Core
-已有保留历史的独立仓库、带签名的 `v0.6.0` release、standalone archive/install 路径、锁定的 Runtime
+已有保留历史的独立仓库、首个带签名的 `v0.6.0` release、当前锁定的 `v0.6.1`、standalone archive/install 路径、Runtime
 package consumer、provenance record 和本地 source override。in-tree Core-only 配置也有独立回归检查，确保不会创建
 Device contracts target 或测试。Device OS boundary 尚未物理迁出；其 launcher、
 registry、port 和 image tooling 应整体迁移，不能零散复制进 Runtime 或 Core。

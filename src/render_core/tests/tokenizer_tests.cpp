@@ -1,9 +1,11 @@
 ﻿#include "render_core/html_parser.h"
 #include "render_core/html_tokenizer.h"
 
+#include <array>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using namespace jellyframe;
@@ -294,6 +296,40 @@ void parser_reports_tokenizer_and_tree_recovery_diagnostics() {
     check(has_diagnostic_code(diagnostics, "html-raw-text-unclosed"), "unclosed raw text is reported");
 }
 
+void parser_malformed_corpus_stays_within_budgets() {
+    static constexpr std::array<std::string_view, 9> kCorpus = {
+        "<",
+        "</",
+        "<!-- unterminated comment",
+        "<![CDATA[unterminated",
+        "<div data-state='unterminated><span>text",
+        "<script>if (value < 3) { view.innerHTML = '<div>'; }",
+        "<body><div a=1 a=2 bad<'x'><span/><missing></body>",
+        "<ul><li><li><li><div><p><section>deep",
+        "<style>.x { content: '<'; } .y { color: red; }",
+    };
+
+    HtmlParserOptions options;
+    options.max_nodes = 24;
+    options.max_depth = 6;
+    options.max_attributes_per_element = 4;
+    options.max_tag_name_bytes = 16;
+    options.max_attribute_name_bytes = 16;
+    options.max_attribute_value_bytes = 32;
+    options.max_text_token_bytes = 64;
+
+    HtmlParser parser;
+    for (const std::string_view source : kCorpus) {
+        const HtmlParseResult result = parser.parse_with_diagnostics(std::string(source), options);
+        check(result.document != nullptr, "malformed corpus still returns a document");
+        const DomStatistics statistics = compute_dom_statistics(*result.document);
+        check(statistics.node_count <= options.max_nodes, "malformed corpus keeps the node budget");
+        check(statistics.max_depth <= options.max_depth, "malformed corpus keeps the depth budget");
+        check(statistics.max_attributes_per_element <= options.max_attributes_per_element,
+              "malformed corpus keeps the attribute budget");
+    }
+}
+
 void streaming_tokenizer_matches_vector_tokenizer() {
     const std::string source = "<div a=1>&amp;<script>x < y</script></div>";
     HtmlTokenizer tokenizer;
@@ -332,6 +368,7 @@ int main() {
         parser_reports_resource_limit_diagnostics();
         parser_node_budget_caps_synthetic_and_authored_nodes_together();
         parser_reports_tokenizer_and_tree_recovery_diagnostics();
+        parser_malformed_corpus_stays_within_budgets();
         streaming_tokenizer_matches_vector_tokenizer();
     } catch (const std::exception& error) {
         std::cerr << "tokenizer test failed: " << error.what() << '\n';

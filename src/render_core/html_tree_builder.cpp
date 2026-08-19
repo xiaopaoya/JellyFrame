@@ -42,6 +42,14 @@ bool is_block_start(std::string_view tag_name) {
     return contains_name(kBlockElements, tag_name);
 }
 
+std::size_t node_depth(const Node& node) {
+    std::size_t depth = 0;
+    for (const Node* current = &node; current != nullptr; current = current->parent) {
+        ++depth;
+    }
+    return depth;
+}
+
 } // namespace
 
 HtmlTreeBuilder::HtmlTreeBuilder(Node& document, const HtmlParserOptions& options)
@@ -80,8 +88,16 @@ bool HtmlTreeBuilder::can_add_node() {
     return false;
 }
 
-bool HtmlTreeBuilder::can_descend() {
-    if (open_elements_.size() < options_.max_depth) {
+bool HtmlTreeBuilder::can_add_child(const Node& parent) {
+    if (node_depth(parent) < options_.max_depth) {
+        return true;
+    }
+    diagnostics_ |= HtmlParserDiagnosticDepthLimit;
+    return false;
+}
+
+bool HtmlTreeBuilder::can_descend(const Node& node) {
+    if (node_depth(node) < options_.max_depth) {
         return true;
     }
     diagnostics_ |= HtmlParserDiagnosticDepthLimit;
@@ -89,7 +105,7 @@ bool HtmlTreeBuilder::can_descend() {
 }
 
 Node* HtmlTreeBuilder::append_element(Node& parent, const HtmlToken& token) {
-    if (!can_add_node()) {
+    if (!can_add_node() || !can_add_child(parent)) {
         return nullptr;
     }
     auto element = make_element(token.name);
@@ -107,7 +123,7 @@ Node* HtmlTreeBuilder::append_element(Node& parent, const HtmlToken& token) {
 }
 
 Node* HtmlTreeBuilder::append_synthetic_element(Node& parent, std::string_view tag_name) {
-    if (!can_add_node()) {
+    if (!can_add_node() || !can_add_child(parent)) {
         return nullptr;
     }
     ++node_count_;
@@ -182,7 +198,7 @@ Node* HtmlTreeBuilder::ensure_body() {
     if (body_ == nullptr) {
         return nullptr;
     }
-    if (can_descend()) {
+    if (can_descend(*body_)) {
         open_elements_.push_back(body_);
     }
     return body_;
@@ -242,7 +258,7 @@ void HtmlTreeBuilder::start_tag(const HtmlToken& token) {
                           "Self-closing slash on a non-void HTML element was ignored",
                           appended->tag_name);
     }
-    if (!is_void_element(appended->tag_name) && can_descend()) {
+    if (!is_void_element(appended->tag_name) && can_descend(*appended)) {
         open_elements_.push_back(appended);
     }
 }
@@ -268,7 +284,7 @@ void HtmlTreeBuilder::start_head(const HtmlToken& token) {
     } else {
         merge_attributes(*head_, token);
     }
-    if (head_ != nullptr && open_elements_.back() != head_ && can_descend()) {
+    if (head_ != nullptr && open_elements_.back() != head_ && can_descend(*head_)) {
         open_elements_.push_back(head_);
     }
 }
@@ -286,7 +302,7 @@ void HtmlTreeBuilder::start_body(const HtmlToken& token) {
     } else {
         merge_attributes(*body_, token);
     }
-    if (body_ != nullptr && open_elements_.back() != body_ && can_descend()) {
+    if (body_ != nullptr && open_elements_.back() != body_ && can_descend(*body_)) {
         open_elements_.push_back(body_);
     }
 }
@@ -297,7 +313,7 @@ void HtmlTreeBuilder::append_to_head(const HtmlToken& token) {
         return;
     }
     Node* appended = append_element(*head, token);
-    if (appended != nullptr && !is_void_element(appended->tag_name) && can_descend()) {
+    if (appended != nullptr && !is_void_element(appended->tag_name) && can_descend(*appended)) {
         open_elements_.push_back(appended);
     }
 }
@@ -402,7 +418,7 @@ void HtmlTreeBuilder::text(std::string_view data) {
         return;
     }
 
-    if (!can_add_node()) {
+    if (!can_add_node() || !can_add_child(*open_elements_.back())) {
         return;
     }
     ++node_count_;

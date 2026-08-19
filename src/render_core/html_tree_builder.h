@@ -20,7 +20,8 @@ public:
 
 private:
     bool can_add_node();
-    bool can_descend();
+    bool can_add_child(const Node& parent);
+    bool can_descend(const Node& node);
     Node* append_element(Node& parent, const HtmlToken& token);
     Node* append_synthetic_element(Node& parent, std::string_view tag_name);
     Node* find_open_element(std::string_view tag_name) const;

@@ -6,6 +6,19 @@ This is the A1-2 acceptance gate for the first official Developer Image. It foll
 
 ## Gate and scope
 
+### Accepted WS147 baseline
+
+The first published WS147 Developer Image passed this gate on 2026-08-19 at
+source revision `fbf10784ac8ce38f41ced40fa013a43564c992c8`. Its manifest is
+`org.jellyframe.ws147.developer@0.1.0-dev`; the factory image write was hash
+verified, boot selected protected launcher with `RegistryInvalid`, and the
+`org.jellyframe.device.lifecycle@1.0.0` fixture was installed and launched
+through JFDP/1 without reflashing. The published report records 9 transmitted,
+9 received and 0 timed-out frames, with zero panic, watchdog, reset-loop, DMA,
+SPI, panel and present errors. This confirms the A1-2 lifecycle and the image
+manifest/factory-recovery sub-item; it is not A2 installed-App rendering,
+input or author-tool evidence.
+
 Before this gate starts, the exact image/profile must have a passing JFDP/1 wire report. The WS147 native USB Serial/JTAG transport passed that wire-only gate on 2026-08-18 using fixture SHA-256 345d2c6bafadfdfab86af216b428c437fd34e0b9b3adfd16687662da494ef3bb. That evidence does not prove this lifecycle gate, and a later image change requires a compatibility assessment or a new wire report.
 
 The port must implement DeviceInstallStore from device_runtime_contracts/device_install_transaction.h rather than duplicate the transaction state machine:
@@ -75,4 +88,4 @@ Include counters for staging begin/write/verify/commit/abort, registry publicati
 
 Separate verdicts for wire acceptance, storage lifecycle, launcher recovery and tooling. Passing a reference dispatcher or a disconnect-only test is not evidence for persistent interruption safety.
 
-A1-2 passes only when all applicable cases are deterministic, every failed or interrupted publication preserves the previous committed state, and every recovery returns to protected launcher/fallback without watchdog, MCU reset loop or reflashing. A1 remains open until the board/profile manifest, factory recovery procedure and A2 author-tool workflow pass separately.
+A1-2 passes only when all applicable cases are deterministic, every failed or interrupted publication preserves the previous committed state, and every recovery returns to protected launcher/fallback without watchdog, MCU reset loop or reflashing. The WS147 board/profile manifest and factory recovery procedure now pass separately; A1 remains open until the A2 author-tool workflow passes.

@@ -73,7 +73,7 @@ tree-construction 机器。目标是有韧性的 app-runtime parsing：常见结
 ## 当前默认值
 
 - `max_nodes`：8192
-- `max_depth`：64
+- `max_depth`：64；启用文档结构合成时，计入合成的 `document` 根节点。
 - `max_attributes_per_element`：64
 - `synthesize_document_structure`：true
 - DOM text 保留作者空白。Render/layout 在显示期处理普通文本折叠和保留空白上下文。

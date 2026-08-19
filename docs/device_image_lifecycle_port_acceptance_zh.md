@@ -6,6 +6,16 @@
 
 ## 前置 gate 与范围
 
+### 已接纳的 WS147 基线
+
+首个已发布 WS147 Developer Image 于 2026-08-19、source revision
+`fbf10784ac8ce38f41ced40fa013a43564c992c8` 通过本 gate。其 manifest 为
+`org.jellyframe.ws147.developer@0.1.0-dev`；factory image 写入已经 hash 验证，启动后以
+`RegistryInvalid` 进入 protected launcher，并可无需重新烧录地经由 JFDP/1 安装并启动
+`org.jellyframe.device.lifecycle@1.0.0` fixture。已发布报告记录 9 transmitted、9 received、0 timeout，
+且 panic、watchdog、reset-loop、DMA、SPI、panel、present 错误均为零。这确认 A1-2 lifecycle 与
+image manifest/factory-recovery 子项；它不是 A2 的 installed-App rendering、input 或作者工具证据。
+
 开始前，精确 image/profile 必须已有通过的 JFDP/1 wire report。WS147 native USB Serial/JTAG 已在 2026-08-18 以 fixture SHA-256 345d2c6bafadfdfab86af216b428c437fd34e0b9b3adfd16687662da494ef3bb 通过 wire-only gate。这份证据不等于本生命周期 gate；之后 image 发生变化时，必须评估兼容性，必要时重新出具 wire report。
 
 port 必须复用 device_runtime_contracts/device_install_transaction.h 的 DeviceInstallStore，不得复制 transaction state machine：
@@ -73,4 +83,4 @@ port 必须提供可重复的 interruption hook：test-only controlled reset、s
 
 报告必须分开给出 wire acceptance、storage lifecycle、launcher recovery 与 tooling verdict。reference dispatcher 或仅断线测试不能证明 persistent interruption safety。
 
-只有所有适用 case 均确定性通过、每个失败/中断发布都保留先前 committed state，且所有 recovery 均无需 watchdog、MCU reset loop 或重新烧录而回到 protected launcher/fallback 时，A1-2 才能通过。A1 仍须等待 board/profile manifest、factory recovery procedure 和 A2 作者工具流程分别验收。
+只有所有适用 case 均确定性通过、每个失败/中断发布都保留先前 committed state，且所有 recovery 均无需 watchdog、MCU reset loop 或重新烧录而回到 protected launcher/fallback 时，A1-2 才能通过。WS147 的 board/profile manifest 与 factory recovery procedure 已分别通过；A1 仍须等待 A2 作者工具流程验收。

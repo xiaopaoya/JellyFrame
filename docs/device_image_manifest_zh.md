@@ -21,7 +21,7 @@ compatibility check；两者都会拒绝 unknown field 与 duplicate JSON member
   "imageId": "org.jellyframe.ws147.developer",
   "imageVersion": "0.1.0-dev",
   "runtimeVersion": "0.6.0-dev",
-  "renderCore": { "version": "0.6.0", "abi": 1 },
+  "renderCore": { "version": "0.6.1", "abi": 1 },
   "source": {
     "revision": "<40-lowercase-hex>",
     "firmwareSha256": "<64-lowercase-hex>"
@@ -60,10 +60,16 @@ discovery result，再精确比较 board ID、profile ID、image version、Runti
 仍属于 Device OS；该契约只在不把 USB、serial、board dependency 引入 JellyFrame
 Runtime 的前提下提供稳定、可测试的输入。
 
-## WS147 A1 Handoff
+## WS147 已发布基线
 
-WS147 port owner 必须随 board/profile release 和 factory recovery procedure 发布
-该 manifest，其值必须对应 physical image 而不是 generic fixture。已验收的
-persistent lifecycle baseline 通过 `743a011` 记录 source lineage，并保留 lifecycle
-report 的 firmware/bundle hash。后续 image revision 必须发布新的 manifest 并做
-compatibility assessment，不能复用旧 image identity。
+WS147 Developer Image manifest 与 factory procedure 已发布并完成实机验证。2026-08-19 基线为
+`org.jellyframe.ws147.developer@0.1.0-dev`，source revision
+`fbf10784ac8ce38f41ced40fa013a43564c992c8`，Runtime `0.6.0-dev`、Render Core
+`0.6.1` / ABI `1`、profile `rect-172x320`。firmware SHA-256 为
+`e7eb9b16cce5d9e781fc93717826192781b652704e91d1859f353f74e5cfaacc`；16 MB factory image SHA-256 为
+`6f3360753422c60ba32a1cee92fd01575e64ae41433acc31b9fb35d527bad2e1`。
+
+严格 manifest/provider 检查与 offset zero 的完整 factory 写入均已在 WS147 验证：recovery 以
+`RegistryInvalid` 进入 protected launcher，随后无需重新烧录即可通过 JFDP 安装并启动 lifecycle fixture。
+这只关闭 A1 的 manifest/factory-recovery 子项。未来 image revision 必须重新发布 manifest、hash 并做
+compatibility assessment，不能复用此 image identity。

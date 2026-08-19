@@ -23,7 +23,7 @@ duplicate JSON members.
   "imageId": "org.jellyframe.ws147.developer",
   "imageVersion": "0.1.0-dev",
   "runtimeVersion": "0.6.0-dev",
-  "renderCore": { "version": "0.6.0", "abi": 1 },
+  "renderCore": { "version": "0.6.1", "abi": 1 },
   "source": {
     "revision": "<40-lowercase-hex>",
     "firmwareSha256": "<64-lowercase-hex>"
@@ -66,11 +66,20 @@ attempt an install. The physical provider itself remains Device OS work; this
 contract gives it a stable, testable input without importing USB, serial or
 board dependencies into JellyFrame Runtime.
 
-## WS147 A1 Handoff
+## WS147 Published Baseline
 
-The WS147 port owner must publish this manifest with the board/profile release
-and factory recovery procedure. Its values must correspond to the physical
-image, not a generic fixture. For the accepted persistent lifecycle baseline,
-record the source lineage through `743a011` and preserve the lifecycle report's
-firmware and bundle hashes. A future image revision needs a new manifest and a
-compatibility assessment; it cannot reuse the old image identity.
+The WS147 Developer Image manifest and factory procedure are now published and
+physically verified. The 2026-08-19 baseline is
+`org.jellyframe.ws147.developer@0.1.0-dev`, source revision
+`fbf10784ac8ce38f41ced40fa013a43564c992c8`, Runtime `0.6.0-dev`, Render Core
+`0.6.1` / ABI `1`, and profile `rect-172x320`. Its firmware SHA-256 is
+`e7eb9b16cce5d9e781fc93717826192781b652704e91d1859f353f74e5cfaacc`; its
+16 MB factory image SHA-256 is
+`6f3360753422c60ba32a1cee92fd01575e64ae41433acc31b9fb35d527bad2e1`.
+
+The strict manifest/provider check and a complete factory write at offset zero
+were verified on WS147: recovery selected the protected launcher with
+`RegistryInvalid`, then a JFDP lifecycle fixture was installed and launched
+without reflashing. This closes the manifest/factory-recovery A1 sub-item only.
+A future image revision needs a new manifest, hashes and compatibility
+assessment; it cannot reuse this image identity.

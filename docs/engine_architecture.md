@@ -20,8 +20,9 @@ The source tree is split into three hardware-neutral subprojects:
 The first history-preserving Render Core repository now exists at
 [`xiaopaoya/JellyFrame-Render-Core`](https://github.com/xiaopaoya/JellyFrame-Render-Core).
 This JellyFrame checkout retains the in-tree Core provider for synchronized
-development. The first signed Core release, `v0.6.0`, is accepted through the
-Runtime package lock and is the artifact used by the release-boundary CI.
+development. The first signed Core release, `v0.6.0`, established the
+boundary. The Runtime currently accepts `v0.6.1` through its package lock;
+that artifact is used by the release-boundary CI.
 The Render Core target has an extraction boundary. Configure with
 `JELLYFRAME_BUILD_APP_RUNTIME=OFF`, `JELLYFRAME_BUILD_SCRIPTING=OFF` and the
 upper-layer examples disabled to build only Render Core. With
@@ -34,8 +35,8 @@ The same checkout can create a self-contained, reproducible source archive:
 
 ```powershell
 python project_tools\package_render_core_source.py --output-dir build\dist
-tar -xzf build\dist\jellyframe-render-core-0.6.0.tar.gz -C build\unpacked
-cmake -S build\unpacked\jellyframe-render-core-0.6.0 -B build\core-from-archive
+tar -xzf build\dist\jellyframe-render-core-0.6.1.tar.gz -C build\unpacked
+cmake -S build\unpacked\jellyframe-render-core-0.6.1 -B build\core-from-archive
 cmake --build build\core-from-archive --config Release --parallel
 ctest --test-dir build\core-from-archive -C Release --output-on-failure
 ```
@@ -48,7 +49,7 @@ the Device contracts have a separate explicit build mode for Device OS work.
 The packer
 normalizes declared text members to LF, member order and archive metadata,
 writes a SHA-256 sidecar. CI separately validates this monorepo export and
-downloads the published `v0.6.0` artifact, verifies its recorded archive
+downloads the published `v0.6.1` artifact, verifies its recorded archive
 SHA-256, then builds, installs and consumes that released package through the
 Runtime package-provider configuration. The Standalone Core CI job retains the
 monorepo archive and sidecar as workflow artifacts; consumers still accept the
@@ -101,7 +102,7 @@ is a local development override, not a second public dependency mechanism;
 package mode and source override are mutually exclusive. CI validates the
 unpacked-archive form by building and running the App Runtime tests against it.
 The override must provide the Render Core CMake boundary and its documented
-source layout (the `v0.6.0` archive uses `src/` plus
+source layout (the `v0.6.1` archive uses `src/` plus
 `include/render_core/`); the normal Core feature-profile and source-ownership
 checks still apply.
 
@@ -112,7 +113,7 @@ ownership model:
 
 | Future repository | Owns | Release rhythm | Current state |
 | --- | --- | --- | --- |
-| `jellyframe-render-core` | HTML/CSS/DOM, layout, paint, input and opt-in feature families | Frequent optimization and compatibility releases | Physical repository created; signed `v0.6.0`, standalone CI, install/export and package-consumer boundaries are verified. |
+| `jellyframe-render-core` | HTML/CSS/DOM, layout, paint, input and opt-in feature families | Frequent optimization and compatibility releases | Physical repository created; first signed `v0.6.0`, currently locked `v0.6.1`, standalone CI, install/export and package-consumer boundaries are verified. |
 | `jellyframe` | App Runtime, Japp format, JerryScript binding, desktop shell and author tools | Slower releases with App compatibility discipline | Current Runtime source boundary; accepts a locked Core package or in-tree Core |
 | `jellyframe-device-os` | Launcher, registry, Device Runtime, JFDP, board ports and official images | Experimental hardware-driven releases | Not physically extracted; D0 contracts remain in transitional locations |
 | JerryScript | Third-party scripting engine | Upstream commit/tag cadence | Optional dependency, locked by the Runtime build/port owner |
@@ -141,7 +142,8 @@ defined in [render_core_release_policy.md](render_core_release_policy.md).
 
 Repository modularity and internal feature modularity are separate claims.
 The Core/Runtime package boundary is closed: Core has an independent,
-history-preserving repository, signed `v0.6.0` release, standalone
+history-preserving repository, first signed `v0.6.0` release and currently
+locked `v0.6.1`, standalone
 archive/install path, locked Runtime package consumer, provenance record and
 local source override. The in-tree Core-only configuration is independently
 checked to ensure it does not create Device contracts targets or tests. The

@@ -79,7 +79,8 @@ input does not corrupt the entire tree, and pathological input is bounded.
 ## Current Defaults
 
 - `max_nodes`: 8192
-- `max_depth`: 64
+- `max_depth`: 64, including the synthetic `document` root when document
+  structure synthesis is enabled.
 - `max_attributes_per_element`: 64
 - `synthesize_document_structure`: true
 - DOM text preserves author whitespace. Render/layout perform display-time
