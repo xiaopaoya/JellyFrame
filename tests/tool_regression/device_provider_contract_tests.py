@@ -52,6 +52,12 @@ class DeviceProviderContractTests(unittest.TestCase):
         with self.assertRaises(contract.ProviderContractError):
             contract.parse_provider_result(json.dumps(result(devices=[invalid])))
 
+    def test_accepts_only_explicit_cancellation_confirmation(self):
+        accepted = result(operation="cancel", cancellation={"confirmed": True})
+        self.assertTrue(contract.parse_provider_result(json.dumps(accepted))["cancellation"]["confirmed"])
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(result(operation="cancel", cancellation={"confirmed": "yes"})))
+
     def test_accepts_ordered_jsonl_progress_log_and_result(self):
         stream = "\n".join((
             json.dumps(event("progress", 1, progress={"completedBytes": 0, "totalBytes": 1500})),

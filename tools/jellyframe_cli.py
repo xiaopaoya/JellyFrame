@@ -3094,6 +3094,8 @@ def cmd_device(args: argparse.Namespace) -> int:
             if not 1 <= args.limit <= 256:
                 raise OSError("log limit must be between 1 and 256")
             provider_arguments.extend(["--id", args.app_id, "--limit", str(args.limit)])
+        elif args.device_command == "cancel":
+            provider_arguments.extend(["--transaction-id", str(args.transaction_id)])
         result = device_provider_client.invoke_provider(
             args.provider,
             args.device_command,
@@ -3103,6 +3105,8 @@ def cmd_device(args: argparse.Namespace) -> int:
             timeout_seconds=args.timeout,
         )
         terminal = result[-1] if stream else result
+        if args.device_command == "cancel" and not terminal.get("cancellation", {}).get("confirmed", False):
+            raise device_provider_client.DeviceProviderClientError("provider did not confirm cancellation")
         manifest_path = args.manifest
         if manifest_path is not None:
             manifest = device_image_manifest.parse_device_image_manifest(manifest_path.read_bytes())
@@ -3967,6 +3971,11 @@ def main() -> int:
     device_install.add_argument("--allow-downgrade", action="store_true",
                                 help="Request a documented lower-version install where the image permits it.")
     device_install.set_defaults(func=cmd_device)
+    device_cancel = device_subparsers.add_parser(
+        "cancel", help="Cancel a provider transaction only when cancellation is confirmed.")
+    device_cancel.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
+    device_cancel.add_argument("--transaction-id", required=True, type=int, help="Provider transaction ID to cancel.")
+    device_cancel.set_defaults(func=cmd_device)
     device_logs = device_subparsers.add_parser(
         "logs", help="Read bounded app-scoped provider logs through JSONL.")
     device_logs.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")

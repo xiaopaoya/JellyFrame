@@ -55,7 +55,7 @@ stderr；`--output json` 的 stdout 仅有一个 UTF-8 JSON document，`--output
 }
 ```
 
-`operation` 只能是 `discover`、`info`、`install`、`launch`、`stop`、`remove`、`rollback`、`logs` 或
+`operation` 只能是 `discover`、`info`、`install`、`cancel`、`launch`、`stop`、`remove`、`rollback`、`logs` 或
 `recovery`。适用时沿用文档化 JFDP result-code name；provider 专属值仅有
 `transport-unavailable`、`protocol-mismatch`、`provider-failed`。`requestId` 由 host 生成，只含 ASCII，
 最长 64 bytes。
@@ -73,8 +73,8 @@ private key 或 native handle。
 `progress.completedBytes` 与 `progress.totalBytes`；`log` event 只能额外携带 `log.level`、`log.appId` 和
 `log.message`，其中 `level` 只能是 `debug`、`info`、`warn` 或 `error`。唯一最终 `result` 使用普通 result
 envelope 加 `sequence`，且必须是最后一行。终态缺失、重复或乱序，或 stream 内任何 identity 改变均为 provider
-failure，不能显示 install 成功。取消时必须报告 provider 是否确认 JFDP transaction cancellation；仅 kill host
-process 不代表 staging 已清理。
+failure，不能显示 install 成功。`cancel` 必须返回 boolean `cancellation.confirmed`；Runtime 只将 `true` 视为
+取消成功。仅 kill host process 不代表 staging 已清理。
 
 Runtime CLI 或 VS Code 消费 provider 前，Device OS 必须交付同 image/profile 的 JFDP wire-acceptance report、
 已校验的 `device_image_manifest_zh.md` record、覆盖 no-device/protocol mismatch/storage full/interrupted transfer 的

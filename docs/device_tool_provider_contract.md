@@ -64,7 +64,7 @@ top-level fields so the host cannot silently ignore a contract change.
 }
 ```
 
-`operation` is `discover`, `info`, `install`, `launch`, `stop`, `remove`,
+`operation` is `discover`, `info`, `install`, `cancel`, `launch`, `stop`, `remove`,
 `rollback`, `logs` or `recovery`. Reuse documented JFDP result-code names when
 applicable; the only provider-specific values are `transport-unavailable`,
 `protocol-mismatch` and `provider-failed`. `requestId` is host-generated ASCII
@@ -90,8 +90,9 @@ uint32. A `progress` event adds only `progress.completedBytes` and
 `result` uses the ordinary result envelope plus `sequence` and must be the last
 line. Missing, duplicate or out-of-order terminal events, or any identity
 change inside a stream, are provider failures, never successful installs.
-Cancellation must report whether the provider confirmed the JFDP transaction
-cancellation; killing a host process is not proof that staging was cleared.
+`cancel` returns `cancellation.confirmed` as a boolean. Runtime treats any
+value other than `true` as a failed cancellation; killing a host process is not
+proof that staging was cleared.
 
 Before Runtime CLI or VS Code consumes a provider, Device OS must deliver the
 same-image/profile JFDP wire-acceptance report, a validated

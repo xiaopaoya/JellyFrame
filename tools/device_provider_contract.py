@@ -20,7 +20,7 @@ MAX_JSONL_EVENTS = 1024
 MAX_LOG_RECORDS = 256
 MAX_REQUEST_ID_BYTES = 64
 MAX_FEATURE_FAMILIES = 64
-OPERATIONS = frozenset({"discover", "info", "install", "launch", "stop", "remove", "rollback", "logs", "recovery"})
+OPERATIONS = frozenset({"discover", "info", "install", "cancel", "launch", "stop", "remove", "rollback", "logs", "recovery"})
 RESULT_CODES = frozenset({"ok", "accepted", "queued", "invalid-request", "busy", "unsupported", "denied", "not-found", "stale-session", "stale-request", "payload-too-large", "integrity-failed", "storage-full", "cancelled", "failed", "transport-unavailable", "protocol-mismatch", "provider-failed"})
 FEATURE_FAMILY_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{0,95}$")
 LOG_LEVELS = frozenset({"debug", "info", "warn", "error"})
@@ -118,7 +118,7 @@ def _validate_device(value: Any, name: str) -> None:
 
 def _validate_result(value: Any, require_sequence: bool = False) -> dict[str, Any]:
     result = _envelope(value, "result", "result", require_sequence)
-    allowed = {"format", "formatVersion", "kind", "operation", "requestId", "resultCode", "provider", "devices", "device", "message", "transaction", "progress", "logs", "recovery"}
+    allowed = {"format", "formatVersion", "kind", "operation", "requestId", "resultCode", "provider", "devices", "device", "message", "transaction", "progress", "logs", "recovery", "cancellation"}
     if require_sequence:
         allowed.add("sequence")
     required = {"format", "formatVersion", "kind", "operation", "requestId", "resultCode", "provider"}
@@ -137,6 +137,10 @@ def _validate_result(value: Any, require_sequence: bool = False) -> dict[str, An
         _validate_device(result["device"], "device")
     if "logs" in result and (not isinstance(result["logs"], list) or len(result["logs"]) > MAX_LOG_RECORDS):
         raise ProviderContractError("logs is invalid")
+    if "cancellation" in result:
+        cancellation = _object(result["cancellation"], "cancellation")
+        if set(cancellation) != {"confirmed"} or not isinstance(cancellation["confirmed"], bool):
+            raise ProviderContractError("cancellation is invalid")
     return result
 
 
