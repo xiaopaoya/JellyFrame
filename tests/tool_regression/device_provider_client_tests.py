@@ -68,6 +68,24 @@ class DeviceProviderClientTests(unittest.TestCase):
                 )
             self.assertEqual([event["kind"] for event in events], ["progress", "result"])
             self.assertEqual(run.call_args.args[0][2], "jsonl")
+
+    def test_stream_accepts_bounded_log_events(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            provider = Path(directory) / "provider.exe"
+            provider.write_bytes(b"")
+            stream = (
+                b'{"format":"jellyframe.device-provider","formatVersion":0,"kind":"log",'
+                b'"operation":"logs","requestId":"jf-test","sequence":1,'
+                b'"provider":{"id":"test","version":"0.1"},'
+                b'"log":{"level":"info","appId":"org.example.app","message":"started"}}\n'
+                + result("logs", "jf-test").replace(b'"kind":"result",', b'"kind":"result","sequence":2,')
+            )
+            completed = subprocess.CompletedProcess([], 0, stream, b"")
+            with patch("device_provider_client.subprocess.run", return_value=completed):
+                events = device_provider_client.invoke_provider(
+                    provider, "logs", stream=True, request_id="jf-test"
+                )
+            self.assertEqual(events[0]["log"]["message"], "started")
             conflicting = subprocess.CompletedProcess([], 1, result("discover", "jf-test"), b"")
             with patch("device_provider_client.subprocess.run", return_value=conflicting):
                 with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "exit status"):
