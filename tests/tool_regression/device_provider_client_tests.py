@@ -50,6 +50,24 @@ class DeviceProviderClientTests(unittest.TestCase):
             with patch("device_provider_client.subprocess.run", return_value=mismatched):
                 with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "does not match"):
                     device_provider_client.invoke_provider(provider, "discover", request_id="jf-test")
+
+    def test_stream_returns_ordered_progress_and_terminal_result(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            provider = Path(directory) / "provider.exe"
+            provider.write_bytes(b"")
+            stream = (
+                b'{"format":"jellyframe.device-provider","formatVersion":0,"kind":"progress",'
+                b'"operation":"install","requestId":"jf-test","sequence":1,'
+                b'"provider":{"id":"test","version":"0.1"},"progress":{"completedBytes":4,"totalBytes":8}}\n'
+                + result("install", "jf-test").replace(b'"kind":"result",', b'"kind":"result","sequence":2,')
+            )
+            completed = subprocess.CompletedProcess([], 0, stream, b"")
+            with patch("device_provider_client.subprocess.run", return_value=completed) as run:
+                events = device_provider_client.invoke_provider(
+                    provider, "install", stream=True, request_id="jf-test"
+                )
+            self.assertEqual([event["kind"] for event in events], ["progress", "result"])
+            self.assertEqual(run.call_args.args[0][2], "jsonl")
             conflicting = subprocess.CompletedProcess([], 1, result("discover", "jf-test"), b"")
             with patch("device_provider_client.subprocess.run", return_value=conflicting):
                 with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "exit status"):

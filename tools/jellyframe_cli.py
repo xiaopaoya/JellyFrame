@@ -3081,18 +3081,30 @@ def cmd_device_reference(args: argparse.Namespace) -> int:
 def cmd_device(args: argparse.Namespace) -> int:
     """Query a configured Device OS provider without inferring a transport."""
     try:
+        provider_arguments: list[str] = []
+        stream = args.device_command == "install"
+        if args.device_command == "install":
+            if not args.bundle.is_absolute() or not args.bundle.is_file() or args.bundle.suffix != ".jfapp":
+                raise OSError("install bundle must be an existing absolute .jfapp file")
+            bundle = args.bundle.resolve()
+            provider_arguments.extend(["--bundle", str(bundle)])
+            if args.allow_downgrade:
+                provider_arguments.append("--allow-downgrade")
         result = device_provider_client.invoke_provider(
             args.provider,
             args.device_command,
             selector=getattr(args, "selector", None),
+            arguments=provider_arguments,
+            stream=stream,
             timeout_seconds=args.timeout,
         )
+        terminal = result[-1] if stream else result
         manifest_path = args.manifest
         if manifest_path is not None:
             manifest = device_image_manifest.parse_device_image_manifest(manifest_path.read_bytes())
-            devices = result.get("devices", [])
-            if "device" in result:
-                devices = [result["device"]]
+            devices = terminal.get("devices", [])
+            if "device" in terminal:
+                devices = [terminal["device"]]
             for device in devices:
                 device_image_manifest.validate_provider_device(manifest, device)
     except (device_provider_client.DeviceProviderClientError,
@@ -3101,7 +3113,7 @@ def cmd_device(args: argparse.Namespace) -> int:
         print(f"device {args.device_command}: {error}", file=sys.stderr)
         return 4
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result["resultCode"] in {"ok", "accepted"} else 1
+    return 0 if terminal["resultCode"] in {"ok", "accepted"} else 1
 
 
 def write_install_transaction_report(report_path: Path, transaction: dict, merge: bool) -> None:
@@ -3943,6 +3955,14 @@ def main() -> int:
     device_info = device_subparsers.add_parser("info", help="Read one provider-reported device identity.")
     device_info.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
     device_info.set_defaults(func=cmd_device)
+    device_install = device_subparsers.add_parser(
+        "install", help="Install an existing .jfapp through provider JSONL progress.")
+    device_install.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
+    device_install.add_argument("--bundle", required=True, type=Path,
+                                help="Existing absolute .jfapp bundle; packaging is a separate step.")
+    device_install.add_argument("--allow-downgrade", action="store_true",
+                                help="Request a documented lower-version install where the image permits it.")
+    device_install.set_defaults(func=cmd_device)
 
     device_reference_parser = subparsers.add_parser(
         "device-reference",

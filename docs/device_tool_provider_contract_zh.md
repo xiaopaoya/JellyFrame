@@ -27,8 +27,9 @@ jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> 
 jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> logs --id <app-id>
 ```
 
-这只是 provider contract，不是当前 Runtime command。Runtime CLI/VS Code 只能调用已配置的 absolute
-provider path，不能从 PATH 推断 executable，也不能猜测 COM port、USB identity 或 network host。诊断写入
+这是 provider contract。Runtime CLI 当前只暴露 `device discover`、`device info` 与 `device install`；
+VS Code 后续复用同一 client。它们只能调用已配置的 absolute provider path，不能从 PATH 推断 executable，
+也不能猜测 COM port、USB identity 或 network host。诊断写入
 stderr；`--output json` 的 stdout 仅有一个 UTF-8 JSON document，`--output jsonl` 为 UTF-8 JSON Lines。
 
 退出码：`resultCode=ok` 或 `accepted` 时为 `0`；设备操作失败为 `1`；无效调用为 `2`；transport 不可用为

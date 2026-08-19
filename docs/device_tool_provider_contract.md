@@ -31,8 +31,9 @@ jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> 
 jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> logs --id <app-id>
 ```
 
-This is a provider contract, not a current Runtime command. Runtime CLI and VS
-Code invoke only a configured absolute provider path. They never infer a COM
+This is a provider contract. Runtime CLI currently exposes `device discover`,
+`device info` and `device install`; VS Code will reuse the same client. They
+invoke only a configured absolute provider path and never infer a COM
 port, USB identity, network host or executable from PATH. Diagnostics go to
 stderr. `--output json` writes exactly one UTF-8 JSON document to stdout;
 `--output jsonl` writes UTF-8 JSON Lines.
