@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <string>
+
 namespace jellyframe_esp32s3 {
 
 bool start_timer_ui_task();
@@ -14,6 +17,16 @@ bool start_resource_failure_task();
 bool start_image_acceptance_task();
 bool start_jfdp_transport_acceptance_task();
 bool start_device_image_lifecycle_task();
+struct InstalledBundleUiSession;
+
+// The Device Runtime passes a copied entry document to this task. No registry,
+// bundle lease, transport buffer, or renderer object crosses the task boundary.
+bool start_installed_bundle_ui_task(std::string app_id,
+                                    std::uint32_t generation,
+                                    std::string entry_document,
+                                    InstalledBundleUiSession*& session);
+bool stop_installed_bundle_ui_task(InstalledBundleUiSession*& session,
+                                   std::uint32_t timeout_ms = 3000);
 bool start_app_runtime_recovery_acceptance_task();
 bool start_script_task_value_protocol_acceptance_task();
 bool start_script_app_acceptance_task();

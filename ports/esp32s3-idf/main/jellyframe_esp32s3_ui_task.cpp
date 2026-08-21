@@ -10,6 +10,7 @@
 #include "jellyframe_esp32s3_resources.h"
 
 #include "app_runtime/app_host.h"
+#include "device_runtime_contracts/device_bundle.h"
 #include "render_core/bitmap_font.h"
 #include "render_core/budget.h"
 #include "render_core/css_parser.h"
@@ -34,6 +35,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
 
@@ -145,6 +147,12 @@
 #endif
 
 namespace jellyframe_esp32s3 {
+
+struct InstalledBundleUiSession {
+    TaskHandle_t task = nullptr;
+    SemaphoreHandle_t stopped = nullptr;
+};
+
 namespace {
 
 constexpr const char* kTag = "JellyFrameUi";
@@ -367,9 +375,17 @@ struct TimerUiTaskContext {
     bool screen_is_on = true;
     std::uint64_t next_power_transition_us = 0;
     bool panel_scroll_probe_awaiting_reentry = false;
+    bool installed_bundle_app = false;
+    std::string installed_app_id;
+    std::uint32_t installed_generation = 0;
+    std::string installed_entry_document;
+    InstalledBundleUiSession* installed_session = nullptr;
 };
 
 const char* ui_task_kind(const TimerUiTaskContext& context) {
+    if (context.installed_bundle_app) {
+        return "installed-bundle";
+    }
     if (context.scroll_benchmark) {
         return "scroll";
     }
@@ -791,11 +807,20 @@ bool load_timer_document(TimerUiTaskContext& context) {
     ResourceBundleContext resource_context = make_resource_context(context.budgets, context.document_url, &stats);
 
     std::string html;
-    if (!load_resource(jellyframe::HostResourceRequest{jellyframe::HostResourceKind::Other, context.document_url, {}},
-                       html,
-                       &resource_context)) {
-        ESP_LOGE(kTag, "ui task failed: %s not found in resource bundle", std::string(context.document_url).c_str());
-        return false;
+    if (context.installed_bundle_app) {
+        html = context.installed_entry_document;
+        if (html.empty()) {
+            ESP_LOGE(kTag, "installed app entry is empty app=%s generation=%u",
+                     context.installed_app_id.c_str(), static_cast<unsigned>(context.installed_generation));
+            return false;
+        }
+    } else {
+        if (!load_resource(jellyframe::HostResourceRequest{jellyframe::HostResourceKind::Other, context.document_url, {}},
+                           html,
+                           &resource_context)) {
+            ESP_LOGE(kTag, "ui task failed: %s not found in resource bundle", std::string(context.document_url).c_str());
+            return false;
+        }
     }
 
     jellyframe::HtmlParser html_parser;
@@ -823,14 +848,22 @@ bool load_timer_document(TimerUiTaskContext& context) {
 #endif
 
     ESP_LOGI(kTag,
-             "ui_task resources entry=%s html_bytes=%u css_bytes=%u loads=%u missing=%u rejected=%u",
-             std::string(context.document_url).c_str(),
+             "ui_task resources entry=%s html_bytes=%u css_bytes=%u loads=%u missing=%u rejected=%u installed=%d generation=%u",
+             context.installed_bundle_app ? context.installed_app_id.c_str() : std::string(context.document_url).c_str(),
              static_cast<unsigned>(html.size()),
              static_cast<unsigned>(css.size()),
              static_cast<unsigned>(stats.successful_loads),
              static_cast<unsigned>(stats.missing_loads),
-             static_cast<unsigned>(stats.rejected_loads));
+             static_cast<unsigned>(stats.rejected_loads),
+             context.installed_bundle_app ? 1 : 0,
+             static_cast<unsigned>(context.installed_generation));
     return true;
+}
+
+void signal_installed_session(TimerUiTaskContext& context) {
+    if (context.installed_session != nullptr && context.installed_session->stopped != nullptr) {
+        xSemaphoreGive(context.installed_session->stopped);
+    }
 }
 
 int resolve_scroll_y(const jellyframe::Node& node, int max_scroll_y, void* raw_context) {
@@ -1844,6 +1877,10 @@ void run_retained_ui_task(void* raw_context) {
     const std::uint64_t cold_document_load_start = esp_timer_get_time();
     if (!load_timer_document(*context) || !prepare_buffers(*context)) {
         boards::release_board_runtime(context->board_runtime);
+        signal_installed_session(*context);
+        // Free DOM, pipeline, frame buffers, and input state before deleting
+        // the FreeRTOS task. vTaskDelete() does not unwind this C++ frame.
+        context.reset();
         vTaskDelete(nullptr);
         return;
     }
@@ -1853,7 +1890,7 @@ void run_retained_ui_task(void* raw_context) {
         CONFIG_JELLYFRAME_ESP32S3_TIMER_UI_AUTOSTART;
     if (context->band_shell) {
         bind_band_navigation(*context);
-    } else if (!context->scroll_benchmark && !context->gradient_fastpath_benchmark && !context->forms_advanced_acceptance) {
+    } else if (!context->installed_bundle_app && !context->scroll_benchmark && !context->gradient_fastpath_benchmark && !context->forms_advanced_acceptance) {
         bind_timer_events(*context);
     }
 
@@ -2145,6 +2182,9 @@ void run_retained_ui_task(void* raw_context) {
 
         context->frame_scratch.end_frame();
         context->app_scratch.end_frame();
+        if (context->installed_bundle_app && ulTaskNotifyTake(pdTRUE, 0) != 0) {
+            break;
+        }
         if ((context->scroll_benchmark && context->scroll_autorun) || context->gradient_fastpath_benchmark) {
             const std::uint64_t now_after_frame_us = esp_timer_get_time();
             if (now_after_frame_us < next_tick_us) {
@@ -2159,24 +2199,34 @@ void run_retained_ui_task(void* raw_context) {
             vTaskDelay(pdMS_TO_TICKS(CONFIG_JELLYFRAME_ESP32S3_UI_TASK_TICK_MS));
         }
     }
+    boards::release_board_runtime(context->board_runtime);
+    signal_installed_session(*context);
+    // Installed app tasks own their Render Core state. Releasing it here is
+    // required before the lifecycle endpoint may launch a new generation.
+    context.reset();
+    vTaskDelete(nullptr);
 }
 
 } // namespace
 
-bool start_ui_task(TimerUiTaskContext* context, const char* task_name) {
+bool start_ui_task(TimerUiTaskContext* context, const char* task_name, TaskHandle_t* handle = nullptr) {
     if (context == nullptr) {
         return false;
     }
+    TaskHandle_t task = nullptr;
     const BaseType_t ok = xTaskCreate(run_retained_ui_task,
-                                       task_name,
-                                       CONFIG_JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE,
-                                       context,
-                                       CONFIG_JELLYFRAME_ESP32S3_UI_TASK_PRIORITY,
-                                       nullptr);
+                                      task_name,
+                                      CONFIG_JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE,
+                                      context,
+                                      CONFIG_JELLYFRAME_ESP32S3_UI_TASK_PRIORITY,
+                                      &task);
     if (ok != pdPASS) {
         delete context;
         ESP_LOGE(kTag, "UI task creation failed");
         return false;
+    }
+    if (handle != nullptr) {
+        *handle = task;
     }
     return true;
 }
@@ -2305,6 +2355,62 @@ bool start_app_runtime_recovery_acceptance_task() {
     context->telemetry_case = "app_runtime_native_recovery_cumulative";
     context->telemetry_app_id = "org.jellyframe.system.launcher";
     return start_ui_task(context, "jellyframe_app_recovery");
+}
+
+bool start_installed_bundle_ui_task(std::string app_id,
+                                    std::uint32_t generation,
+                                    std::string entry_document,
+                                    InstalledBundleUiSession*& session) {
+    session = nullptr;
+    if (app_id.empty() || app_id.size() > jellyframe::kDeviceBundleMaxAppIdBytes ||
+        entry_document.empty() || entry_document.size() > 16u * 1024u) {
+        return false;
+    }
+    auto* next_session = new (std::nothrow) InstalledBundleUiSession();
+    auto* context = new (std::nothrow) TimerUiTaskContext();
+    if (next_session == nullptr || context == nullptr) {
+        delete next_session;
+        delete context;
+        return false;
+    }
+    next_session->stopped = xSemaphoreCreateBinary();
+    if (next_session->stopped == nullptr) {
+        delete next_session;
+        delete context;
+        return false;
+    }
+    context->installed_bundle_app = true;
+    context->installed_app_id = std::move(app_id);
+    context->installed_generation = generation;
+    context->installed_entry_document = std::move(entry_document);
+    context->installed_session = next_session;
+    context->telemetry_case = "installed_bundle_ui_cumulative";
+    context->telemetry_app_id = context->installed_app_id.c_str();
+    if (!start_ui_task(context, "jellyframe_app", &next_session->task)) {
+        vSemaphoreDelete(next_session->stopped);
+        delete next_session;
+        return false;
+    }
+    session = next_session;
+    return true;
+}
+
+bool stop_installed_bundle_ui_task(InstalledBundleUiSession*& session, std::uint32_t timeout_ms) {
+    if (session == nullptr) {
+        return true;
+    }
+    if (session->task == nullptr || session->stopped == nullptr) {
+        return false;
+    }
+    xTaskNotifyGive(session->task);
+    const BaseType_t stopped = xSemaphoreTake(session->stopped, pdMS_TO_TICKS(timeout_ms));
+    if (stopped != pdTRUE) {
+        return false;
+    }
+    vSemaphoreDelete(session->stopped);
+    delete session;
+    session = nullptr;
+    return true;
 }
 
 } // namespace jellyframe_esp32s3
