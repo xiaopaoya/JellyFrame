@@ -81,6 +81,16 @@ reconfigure instruction instead of being run accidentally.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
 
+## Device OS Provider
+
+Install a board-specific Developer Image provider separately. In Settings, set
+`jellyframe.deviceProvider` to the absolute path of its
+`jellyframe-device.cmd`, and set `jellyframe.deviceManifest` to the matching
+Developer Image manifest. Run `JellyFrame: Discover Device`, then
+`JellyFrame: Device Info` to verify the selected endpoint's wire identity.
+The extension only invokes the configured provider through the CLI: it does
+not package a provider, scan serial ports, or offer a serial fallback.
+
 `JellyFrame: Validate App Package` is the fast, package-only gate. It checks the
 manifest, entry point, local resources, references and declared budgets without
 starting Render Core or asking for a viewport, measuring layout, frame time or

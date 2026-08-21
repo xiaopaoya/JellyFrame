@@ -4,22 +4,53 @@
 It is a host-side adapter for JFDP/1 over the board's native USB Serial/JTAG
 endpoint; it does not scan ports or parse the ESP-IDF console.
 
+## Standalone Release
+
+`package_ws147_device_provider.py` creates a versioned WS147 Developer Image
+archive containing the provider, its strict manifest parser, one exact
+firmware binary, a complete 16 MiB factory image, the manifest, recovery
+procedure and `SHA256SUMS.txt`.
+
+The archive is intentionally board-specific. It contains no serial-port scan,
+serial-console parser or fallback provider. Its provider release record is
+currently `jellyframe-device@0.1.0-dev`.
+
+```powershell
+python ports\esp32s3-idf\tools\device_provider\package_ws147_device_provider.py `
+  --firmware <firmware.bin> `
+  --factory-image <factory-16mb.bin> `
+  --source-revision <40-lowercase-hex> `
+  --image-version 0.6.0-a2 `
+  --output <release-directory>
+```
+
+The factory image input must be an offset-zero, complete 16 MiB image created
+from the same firmware build. The packager writes both firmware and factory
+SHA-256 values into the immutable Developer Image manifest.
+
 ## Installation
 
 Copy this directory to a stable local location, copy
 `jellyframe-device.config.example.json` to `jellyframe-device.config.json`,
-then set the physical port and the absolute path to the released Developer
-Image manifest. `endpointId` is a user-chosen opaque identifier and must not
-contain a COM port, path, secret, or flash address.
+then set the physical port and the released Developer Image manifest.
+Release archives use a manifest path relative to the configuration file;
+absolute paths also work. `endpointId` is a user-chosen opaque identifier and
+must not contain a COM port, path, secret, or flash address.
 
 The provider finds its adjacent `jellyframe-device.config.json`, or a caller
 may set `JELLYFRAME_DEVICE_CONFIG` to an absolute configuration path. The
 Runtime CLI receives the absolute path to `jellyframe-device.cmd`; it does not
 receive a COM port and does not infer one.
 
-The provider requires Python 3 and `pyserial`. It owns the serial handle for
-one invocation, emits only provider JSON/JSONL to stdout, and writes transport
-diagnostics only to stderr.
+The provider requires Python 3.10+ and `pyserial==3.5` from `requirements.txt`.
+It owns the serial handle for one invocation, emits only provider JSON/JSONL to
+stdout, and writes transport diagnostics only to stderr.
+
+For VS Code, set `jellyframe.deviceProvider` to the absolute path of this
+`jellyframe-device.cmd` and `jellyframe.deviceManifest` to the matching
+manifest. Run Discover Device, then Device Info. The extension only invokes
+this explicit provider through `jellyframe_cli.py`; it neither embeds the
+provider nor infers a serial endpoint.
 
 ## Test Fixtures
 

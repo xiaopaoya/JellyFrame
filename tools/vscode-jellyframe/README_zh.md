@@ -63,6 +63,14 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 
 使用 `JellyFrame: Show Last Report` 可以重新打开最近一次报告面板。
 
+## Device OS Provider
+
+开发板专用的 Developer Image provider 需要单独安装。在设置中将
+`jellyframe.deviceProvider` 设为其 `jellyframe-device.cmd` 的绝对路径，将
+`jellyframe.deviceManifest` 设为匹配的 Developer Image manifest。先运行
+“JellyFrame：发现设备”，再运行“JellyFrame：读取设备身份”核对所选 endpoint 的 wire
+identity。扩展只会经 CLI 调用已配置的 provider；不会打包 provider、扫描串口或提供串口 fallback。
+
 “验证 App 包”是快速的纯包门禁：检查 manifest、入口、资源、引用和声明预算，适合频繁运行，
 不会启动 Render Core，也不会询问分辨率、测量布局、帧时间或真实设备性能。
 “检查 App 渲染”会先做同样的结构验证，再选择目标 viewport，运行 Render Core 预检、响应式布局和字体检查；

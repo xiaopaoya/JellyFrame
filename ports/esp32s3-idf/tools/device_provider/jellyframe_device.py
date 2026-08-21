@@ -19,13 +19,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+# `importlib`-based contract tests do not add this script directory to
+# sys.path, unlike normal script execution and the release .cmd entry point.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from provider_version import PROVIDER_VERSION
+
 ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(ROOT / "tools"))
+# Release archives ship the strict manifest parser beside the provider.  The
+# repository copy continues to use the shared source, so a release does not
+# require a cloned JellyFrame checkout on the author machine.
+_bundled_lib = Path(__file__).resolve().parent / "lib"
+sys.path.insert(0, str(_bundled_lib if _bundled_lib.is_dir() else ROOT / "tools"))
 
 from device_image_manifest import DeviceImageManifestError, parse_device_image_manifest
 
 
-PROVIDER = {"id": "jellyframe-device", "version": "0.1.0-dev"}
+PROVIDER = {"id": "jellyframe-device", "version": PROVIDER_VERSION}
 FORMAT = "jellyframe.device-provider"
 HEADER_BYTES = 24
 MAX_PAYLOAD = 4096
@@ -468,6 +477,8 @@ def load_config(path_text: str | None) -> ProviderConfig:
                 not isinstance(port, str) or not port or not isinstance(baud, int) or not 9600 <= baud <= 1000000):
             raise ValueError("configuration values are invalid")
         manifest_path = Path(value["manifest"]).expanduser()
+        if not manifest_path.is_absolute():
+            manifest_path = path.parent / manifest_path
         manifest = parse_device_image_manifest(manifest_path.read_bytes())
     except (OSError, ValueError, json.JSONDecodeError, DeviceImageManifestError) as error:
         raise ProviderError("provider-failed", "provider configuration is invalid") from error
