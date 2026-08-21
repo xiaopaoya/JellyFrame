@@ -177,7 +177,11 @@ bool DeviceImageStore::begin_staging(const DeviceInstallRequest& request) {
     if (staging_slot_ == kNoSlot) {
         return false;
     }
-    if (!erase_slot(staging_slot_)) {
+    // The registry records the exact trusted bundle length, so bytes beyond
+    // this package are never readable by a committed lease.  Erasing only
+    // the incoming package's sector range keeps InstallBegin bounded on the
+    // USB endpoint without weakening staging isolation.
+    if (!erase_slot_range(staging_slot_, request.bundle_bytes)) {
         return false;
     }
     staging_active_ = true;
@@ -282,7 +286,7 @@ void DeviceImageStore::abort_staging(std::uint32_t transaction_id) {
     if (!staging_active_ || transaction_id != staging_transaction_id_) {
         return;
     }
-    (void)erase_slot(staging_slot_);
+    (void)erase_slot_range(staging_slot_, staging_bundle_bytes_);
     staging_active_ = false;
     staging_verified_ = false;
     staging_transaction_id_ = 0;
@@ -432,8 +436,19 @@ bool DeviceImageStore::erase_slot(std::uint8_t slot) {
     if (partition_ == nullptr || slot >= kBundleSlots) {
         return false;
     }
-    const std::uint32_t bytes = bundle_slot_bytes(partition_);
-    return esp_partition_erase_range(partition_, kStorageHeaderBytes + slot * bytes, bytes) == ESP_OK;
+    return erase_slot_range(slot, bundle_slot_bytes(partition_));
+}
+
+bool DeviceImageStore::erase_slot_range(std::uint8_t slot, std::uint32_t bytes) {
+    if (partition_ == nullptr || slot >= kBundleSlots) {
+        return false;
+    }
+    const std::uint32_t slot_bytes = bundle_slot_bytes(partition_);
+    if (bytes == 0 || bytes > slot_bytes || bytes > UINT32_MAX - (kFlashSectorBytes - 1u)) {
+        return false;
+    }
+    const std::uint32_t erased_bytes = (bytes + kFlashSectorBytes - 1u) & ~(kFlashSectorBytes - 1u);
+    return esp_partition_erase_range(partition_, kStorageHeaderBytes + slot * slot_bytes, erased_bytes) == ESP_OK;
 }
 
 bool DeviceImageStore::read_slot(std::uint8_t slot, std::uint32_t offset, void* output, std::size_t size) const {

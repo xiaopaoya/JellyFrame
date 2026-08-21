@@ -30,6 +30,12 @@ FORMAT = "jellyframe.device-provider"
 HEADER_BYTES = 24
 MAX_PAYLOAD = 4096
 RESPONSE_FLAG = 1
+# Most control requests are RAM-only and must fail quickly.  Install begin,
+# commit and abort can synchronously erase or inspect a raw flash slot, so
+# those explicitly opt in to the longer, still bounded deadline below.
+CONTROL_REQUEST_TIMEOUT_SECONDS = 3.0
+INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS = 30.0
+INSTALL_CONTROL_WAIT_SECONDS = INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS + 3.0
 DISCOVERY, APP_LIST, INSTALL_BEGIN, INSTALL_CHUNK, INSTALL_COMMIT, INSTALL_ABORT, LAUNCH, STOP, LOGS, RECOVERY, REMOVE, ROLLBACK, IDENTITY = range(1, 14)
 RESULT_CODES = {
     0: "ok", 1: "accepted", 2: "queued", 3: "invalid-request", 4: "busy",
@@ -121,7 +127,7 @@ class LiveInstallSession:
             except OSError:
                 return
             with connection:
-                connection.settimeout(2)
+                connection.settimeout(INSTALL_CONTROL_WAIT_SECONDS)
                 try:
                     raw = connection.recv(512)
                     request = json.loads(raw.decode("ascii"))
@@ -132,7 +138,7 @@ class LiveInstallSession:
                         response = {"confirmed": False, "resultCode": "invalid-request"}
                     else:
                         self.cancel_requested.set()
-                        self.finished.wait(8)
+                        self.finished.wait(INSTALL_CONTROL_WAIT_SECONDS)
                         response = self._result if self.finished.is_set() else {
                             "confirmed": False, "resultCode": "transport-unavailable"}
                 except (OSError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
@@ -167,6 +173,7 @@ def request_live_cancel(endpoint_id: str, transaction_id: int) -> dict[str, Any]
                 not isinstance(state.get("port"), int) or not isinstance(state.get("token"), str)):
             return None
         with socket.create_connection(("127.0.0.1", state["port"]), timeout=3) as connection:
+            connection.settimeout(INSTALL_CONTROL_WAIT_SECONDS)
             connection.sendall(json.dumps({"version": 1, "transactionId": transaction_id,
                                            "token": state["token"]}, separators=(",", ":")).encode("ascii"))
             response = json.loads(connection.recv(512).decode("ascii"))
@@ -405,9 +412,12 @@ class Wire:
             self.serial.close()
             self.serial = None
 
-    def request(self, message_type: int, payload: bytes = b"") -> bytes:
+    def request(self, message_type: int, payload: bytes = b"",
+                timeout_seconds: float = CONTROL_REQUEST_TIMEOUT_SECONDS) -> bytes:
         if self.serial is None:
             raise ProviderError("transport-unavailable", "configured endpoint is unavailable")
+        if not 0.1 <= timeout_seconds <= INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS:
+            raise ProviderError("provider-failed", "JFDP request timeout is outside the provider bound")
         request_id = self.request_id
         self.request_id += 1
         outgoing = frame(message_type, self.session_id, request_id, payload)
@@ -416,7 +426,7 @@ class Wire:
             self.serial.flush()
         except Exception as error:
             raise ProviderError("transport-unavailable", "failed to write configured endpoint") from error
-        deadline = time.monotonic() + 3.0
+        deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             try:
                 data = self.serial.read(512)
@@ -634,7 +644,8 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
             return exit_code_for(result_code), [envelope(args.operation, args.request_id, result_code, device=device,
                                                          **operation_result_fields(result))]
         if args.operation == "cancel":
-            result = decode_result(wire.request(INSTALL_ABORT, transaction_payload(args.transaction_id)))
+            result = decode_result(wire.request(INSTALL_ABORT, transaction_payload(args.transaction_id),
+                                                INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS))
             confirmed = result["resultCode"] == "cancelled"
             provider_code = "ok" if confirmed else result["resultCode"]
             return exit_code_for(provider_code), [envelope("cancel", args.request_id, provider_code, device=device, cancellation={"confirmed": confirmed}, **result)]
@@ -652,14 +663,16 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
             transaction = int(time.monotonic_ns() & 0xffffffff) or 1
             events: list[dict[str, Any]] = []
             sequence = 1
-            begin = decode_result(wire.request(INSTALL_BEGIN, begin_payload(transaction, app_id, bundle, args.allow_downgrade)))
+            begin = decode_result(wire.request(INSTALL_BEGIN, begin_payload(transaction, app_id, bundle, args.allow_downgrade),
+                                               INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS))
             if begin["resultCode"] != "accepted":
                 return exit_code_for(begin["resultCode"]), [stream_event("result", "install", args.request_id, sequence, resultCode=begin["resultCode"], device=device, transaction=begin["transaction"])]
             live_session = LiveInstallSession(config.endpoint_id, transaction)
             try:
                 for offset in range(0, len(bundle), 1024):
                     if live_session.cancel_requested.is_set():
-                        aborted = decode_result(wire.request(INSTALL_ABORT, transaction_payload(transaction)))
+                        aborted = decode_result(wire.request(INSTALL_ABORT, transaction_payload(transaction),
+                                                            INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS))
                         confirmed = aborted["resultCode"] == "cancelled"
                         live_session.finish(confirmed, aborted["resultCode"])
                         events.append(stream_event("result", "install", args.request_id, sequence,
@@ -675,14 +688,16 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
                                                progress={"completedBytes": progress["transaction"]["receivedBytes"], "totalBytes": len(bundle)}))
                     sequence += 1
                 if live_session.cancel_requested.is_set():
-                    aborted = decode_result(wire.request(INSTALL_ABORT, transaction_payload(transaction)))
+                    aborted = decode_result(wire.request(INSTALL_ABORT, transaction_payload(transaction),
+                                                        INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS))
                     confirmed = aborted["resultCode"] == "cancelled"
                     live_session.finish(confirmed, aborted["resultCode"])
                     events.append(stream_event("result", "install", args.request_id, sequence,
                                                resultCode=aborted["resultCode"], device=device,
                                                transaction=aborted["transaction"]))
                     return exit_code_for(aborted["resultCode"]), events
-                committed = decode_result(wire.request(INSTALL_COMMIT, transaction_payload(transaction)))
+                committed = decode_result(wire.request(INSTALL_COMMIT, transaction_payload(transaction),
+                                                        INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS))
                 live_session.finish(False, committed["resultCode"])
                 events.append(stream_event("result", "install", args.request_id, sequence, resultCode=committed["resultCode"],
                                            device=device, transaction=committed["transaction"]))

@@ -57,6 +57,7 @@ private:
     bool load_registry();
     bool publish_registry();
     bool erase_slot(std::uint8_t slot);
+    bool erase_slot_range(std::uint8_t slot, std::uint32_t bytes);
     bool read_slot(std::uint8_t slot, std::uint32_t offset, void* output, std::size_t size) const;
     bool write_slot(std::uint8_t slot, std::uint32_t offset, const void* bytes, std::size_t size);
     bool validate_record(const BundleRecord& record, jellyframe::DeviceBundleDescriptor* descriptor) const;
