@@ -4,10 +4,15 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import secrets
+import socket
 import struct
 import sys
+import tempfile
+import threading
 import time
 import zlib
 from dataclasses import dataclass
@@ -25,7 +30,7 @@ FORMAT = "jellyframe.device-provider"
 HEADER_BYTES = 24
 MAX_PAYLOAD = 4096
 RESPONSE_FLAG = 1
-DISCOVERY, APP_LIST, INSTALL_BEGIN, INSTALL_CHUNK, INSTALL_COMMIT, INSTALL_ABORT, LAUNCH, STOP, LOGS, RECOVERY, REMOVE, ROLLBACK = range(1, 13)
+DISCOVERY, APP_LIST, INSTALL_BEGIN, INSTALL_CHUNK, INSTALL_COMMIT, INSTALL_ABORT, LAUNCH, STOP, LOGS, RECOVERY, REMOVE, ROLLBACK, IDENTITY = range(1, 14)
 RESULT_CODES = {
     0: "ok", 1: "accepted", 2: "queued", 3: "invalid-request", 4: "busy",
     5: "unsupported", 6: "denied", 7: "not-found", 8: "stale-session",
@@ -37,6 +42,15 @@ RECOVERY_REASONS = {
     0: "none", 1: "registry-invalid", 2: "staging-discarded", 3: "app-load-failure",
     4: "app-runtime-failure", 5: "app-budget-exceeded", 6: "launcher-fallback",
 }
+FEATURE_FAMILIES = {
+    1 << 0: "core.document",
+    1 << 1: "core.paint",
+    1 << 2: "css.flex-grid",
+    1 << 3: "css.modern-paint",
+    1 << 4: "forms.advanced",
+    1 << 5: "graphics.canvas2d",
+}
+LOG_LEVELS = {0: "debug", 1: "info", 2: "warn", 3: "error"}
 
 
 class ProviderError(RuntimeError):
@@ -67,6 +81,101 @@ class ProviderConfig:
     baud: int
     manifest_path: Path
     manifest: dict[str, Any]
+
+
+def live_session_path(endpoint_id: str) -> Path:
+    digest = hashlib.sha256(endpoint_id.encode("ascii")).hexdigest()[:24]
+    root = Path(tempfile.gettempdir()) / "jellyframe-device-sessions"
+    root.mkdir(parents=True, exist_ok=True)
+    return root / f"{digest}.json"
+
+
+class LiveInstallSession:
+    """A local control channel whose owner is the only process holding USB."""
+
+    def __init__(self, endpoint_id: str, transaction_id: int) -> None:
+        self.path = live_session_path(endpoint_id)
+        self.transaction_id = transaction_id
+        self.token = secrets.token_hex(24)
+        self.cancel_requested = threading.Event()
+        self.finished = threading.Event()
+        self._result: dict[str, Any] = {"confirmed": False, "resultCode": "failed"}
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._socket.bind(("127.0.0.1", 0))
+        self._socket.listen(2)
+        self._socket.settimeout(0.2)
+        port = int(self._socket.getsockname()[1])
+        self.path.write_text(json.dumps({"version": 1, "transactionId": transaction_id,
+                                         "port": port, "token": self.token}, separators=(",", ":")),
+                             encoding="ascii")
+        self._thread = threading.Thread(target=self._serve, name="jfdp-install-control", daemon=True)
+        self._thread.start()
+
+    def _serve(self) -> None:
+        while not self.finished.is_set():
+            try:
+                connection, _ = self._socket.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            with connection:
+                connection.settimeout(2)
+                try:
+                    raw = connection.recv(512)
+                    request = json.loads(raw.decode("ascii"))
+                    valid = (isinstance(request, dict) and request.get("version") == 1 and
+                             request.get("transactionId") == self.transaction_id and
+                             secrets.compare_digest(str(request.get("token", "")), self.token))
+                    if not valid:
+                        response = {"confirmed": False, "resultCode": "invalid-request"}
+                    else:
+                        self.cancel_requested.set()
+                        self.finished.wait(8)
+                        response = self._result if self.finished.is_set() else {
+                            "confirmed": False, "resultCode": "transport-unavailable"}
+                except (OSError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
+                    response = {"confirmed": False, "resultCode": "invalid-request"}
+                try:
+                    connection.sendall(json.dumps(response, separators=(",", ":")).encode("ascii"))
+                except OSError:
+                    pass
+
+    def finish(self, confirmed: bool, result_code: str) -> None:
+        self._result = {"confirmed": confirmed, "resultCode": result_code}
+        self.finished.set()
+
+    def close(self) -> None:
+        if not self.finished.is_set():
+            self.finish(False, "failed")
+        try:
+            self._socket.close()
+        finally:
+            self._thread.join(timeout=1)
+            try:
+                self.path.unlink()
+            except FileNotFoundError:
+                pass
+
+
+def request_live_cancel(endpoint_id: str, transaction_id: int) -> dict[str, Any] | None:
+    path = live_session_path(endpoint_id)
+    try:
+        state = json.loads(path.read_text(encoding="ascii"))
+        if (not isinstance(state, dict) or state.get("version") != 1 or state.get("transactionId") != transaction_id or
+                not isinstance(state.get("port"), int) or not isinstance(state.get("token"), str)):
+            return None
+        with socket.create_connection(("127.0.0.1", state["port"]), timeout=3) as connection:
+            connection.sendall(json.dumps({"version": 1, "transactionId": transaction_id,
+                                           "token": state["token"]}, separators=(",", ":")).encode("ascii"))
+            response = json.loads(connection.recv(512).decode("ascii"))
+        if not isinstance(response, dict) or not isinstance(response.get("confirmed"), bool) or \
+                not isinstance(response.get("resultCode"), str):
+            return None
+        return response
+    except (OSError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
 
 
 def frame(message_type: int, session: int, request: int, payload: bytes = b"") -> bytes:
@@ -190,6 +299,72 @@ def decode_recovery(payload: bytes) -> dict[str, Any]:
             "appDisabled": bool(flags & 2), "rollbackAvailable": bool(flags & 4)}
 
 
+def decode_identity(payload: bytes) -> dict[str, Any]:
+    if len(payload) < 16 or payload[0] != 1 or payload[6:8] != b"\0\0":
+        raise ProviderError("protocol-mismatch", "device returned invalid image identity")
+    image_bytes, profile_bytes, version_bytes, core_bytes, revision_bytes = payload[1:6]
+    if (not image_bytes or not profile_bytes or not version_bytes or not core_bytes or revision_bytes != 40 or
+            len(payload) != 16 + image_bytes + profile_bytes + version_bytes + core_bytes + revision_bytes):
+        raise ProviderError("protocol-mismatch", "device image identity length is invalid")
+    abi, feature_bits = struct.unpack_from("<II", payload, 8)
+    if not abi or feature_bits & ~sum(FEATURE_FAMILIES) or not feature_bits & 0x3:
+        raise ProviderError("protocol-mismatch", "device image identity feature bits are invalid")
+    cursor = 16
+    try:
+        image_id = payload[cursor:cursor + image_bytes].decode("utf-8"); cursor += image_bytes
+        profile_id = payload[cursor:cursor + profile_bytes].decode("utf-8"); cursor += profile_bytes
+        image_version = payload[cursor:cursor + version_bytes].decode("utf-8"); cursor += version_bytes
+        core_version = payload[cursor:cursor + core_bytes].decode("utf-8"); cursor += core_bytes
+        revision = payload[cursor:cursor + revision_bytes].decode("ascii")
+    except UnicodeDecodeError as error:
+        raise ProviderError("protocol-mismatch", "device image identity strings are invalid") from error
+    if any(not value or "\0" in value for value in (image_id, profile_id, image_version, core_version)):
+        raise ProviderError("protocol-mismatch", "device image identity strings are invalid")
+    if len(revision) != 40 or any(value not in "0123456789abcdef" for value in revision):
+        raise ProviderError("protocol-mismatch", "device source revision is invalid")
+    return {"imageId": image_id, "profileId": profile_id, "imageVersion": image_version,
+            "renderCoreVersion": core_version, "sourceRevision": revision, "renderCoreAbi": abi,
+            "featureFamilies": [name for bit, name in FEATURE_FAMILIES.items() if feature_bits & bit]}
+
+
+def logs_payload(app_id: str, limit: int) -> bytes:
+    value = app_id.encode("utf-8")
+    if len(value) > 95 or not 1 <= limit <= 11 or b"\0" in value:
+        raise ProviderError("invalid-request", "logs request is invalid")
+    return bytes((1, len(value))) + struct.pack("<H", limit) + value
+
+
+def decode_logs(payload: bytes) -> tuple[int, list[dict[str, Any]]]:
+    if len(payload) < 8 or payload[0] != 1 or payload[2:4] != b"\0\0" or payload[1] > 11:
+        raise ProviderError("protocol-mismatch", "device returned invalid app logs")
+    count = payload[1]
+    dropped = struct.unpack_from("<I", payload, 4)[0]
+    cursor = 8
+    records: list[dict[str, Any]] = []
+    for _ in range(count):
+        if len(payload) - cursor < 16:
+            raise ProviderError("protocol-mismatch", "device app log is truncated")
+        app_bytes, message_bytes, level, reserved, generation, timestamp = struct.unpack_from("<BBBBIQ", payload, cursor)
+        cursor += 16
+        if (not app_bytes or app_bytes > 95 or not message_bytes or message_bytes > 255 or level not in LOG_LEVELS or
+                reserved or len(payload) - cursor < app_bytes + message_bytes):
+            raise ProviderError("protocol-mismatch", "device app log entry is invalid")
+        try:
+            record_app_id = payload[cursor:cursor + app_bytes].decode("utf-8")
+            cursor += app_bytes
+            message = payload[cursor:cursor + message_bytes].decode("utf-8")
+            cursor += message_bytes
+        except UnicodeDecodeError as error:
+            raise ProviderError("protocol-mismatch", "device app log UTF-8 is invalid") from error
+        if "\0" in record_app_id or "\0" in message:
+            raise ProviderError("protocol-mismatch", "device app log contains NUL")
+        records.append({"level": LOG_LEVELS[level], "appId": record_app_id, "generation": generation,
+                        "timestampMs": str(timestamp), "message": message})
+    if cursor != len(payload):
+        raise ProviderError("protocol-mismatch", "device app logs have trailing data")
+    return dropped, records
+
+
 class Wire:
     def __init__(self, config: ProviderConfig):
         self.config = config
@@ -289,13 +464,20 @@ def load_config(path_text: str | None) -> ProviderConfig:
     return ProviderConfig(endpoint_id, port, baud, manifest_path.resolve(), manifest)
 
 
-def device_from_capabilities(config: ProviderConfig, capabilities: dict[str, Any]) -> dict[str, Any]:
+def device_from_capabilities(config: ProviderConfig, capabilities: dict[str, Any], identity: dict[str, Any]) -> dict[str, Any]:
     manifest = config.manifest
     display = manifest["board"]["display"]
     expected = (manifest["board"]["id"], manifest["runtimeVersion"], display["width"], display["height"], manifest["storage"]["maxBundleBytes"])
     actual = (capabilities["boardId"], capabilities["runtimeVersion"], capabilities["width"], capabilities["height"], capabilities["maxBundleBytes"])
     if actual != expected:
         raise ProviderError("protocol-mismatch", "configured endpoint does not match its Developer Image manifest")
+    expected_identity = (manifest["imageId"], manifest["profile"]["id"], manifest["imageVersion"],
+                         manifest["renderCore"]["version"], manifest["source"]["revision"],
+                         manifest["renderCore"]["abi"])
+    actual_identity = (identity["imageId"], identity["profileId"], identity["imageVersion"],
+                       identity["renderCoreVersion"], identity["sourceRevision"], identity["renderCoreAbi"])
+    if actual_identity != expected_identity or set(identity["featureFamilies"]) != set(manifest["profile"]["featureFamilies"]):
+        raise ProviderError("protocol-mismatch", "wire-attested image identity does not match the Developer Image manifest")
     return {
         "endpointId": config.endpoint_id,
         "boardId": manifest["board"]["id"],
@@ -306,7 +488,7 @@ def device_from_capabilities(config: ProviderConfig, capabilities: dict[str, Any
         "connected": True,
         "capabilities": {
             "display": display,
-            "featureFamilies": manifest["profile"]["featureFamilies"],
+            "featureFamilies": identity["featureFamilies"],
             "maxBundleBytes": capabilities["maxBundleBytes"],
             "availableStorageBytes": capabilities["availableStorageBytes"],
         },
@@ -335,8 +517,14 @@ def fixture_device() -> dict[str, Any]:
     return {"endpointId": "fixture-ws147", "boardId": "ws147", "profileId": "rect-172x320",
             "imageVersion": "0.1.0-dev", "runtimeVersion": "0.6.0-dev", "protocol": "JFDP/1", "connected": True,
             "capabilities": {"display": {"width": 172, "height": 320, "shape": "rect"},
-                             "featureFamilies": ["core.document"], "maxBundleBytes": 327680,
+                             "featureFamilies": ["core.document", "core.paint"], "maxBundleBytes": 327680,
                              "availableStorageBytes": 163840}}
+
+
+def fixture_identity() -> dict[str, Any]:
+    return {"imageId": "org.jellyframe.fixture", "profileId": "rect-172x320", "imageVersion": "0.1.0-dev",
+            "renderCoreVersion": "0.6.1", "sourceRevision": "0" * 40, "renderCoreAbi": 1,
+            "featureFamilies": ["core.document", "core.paint"]}
 
 
 def run_fixture(args: argparse.Namespace) -> tuple[int, list[dict[str, Any]]]:
@@ -361,10 +549,11 @@ def run_fixture(args: argparse.Namespace) -> tuple[int, list[dict[str, Any]]]:
         return 1, [envelope(operation, args.request_id, "failed", cancellation={"confirmed": False})]
     if name == "bounded-logs":
         events = [stream_event("log", operation, args.request_id, index + 1,
-                               log={"level": "info", "appId": "org.jellyframe.fixture", "message": f"log-{index}"})
+                               log={"level": "info", "appId": "org.jellyframe.fixture", "generation": 1,
+                                    "timestampMs": str(index + 1), "message": f"log-{index}"})
                   for index in range(min(args.limit, 3))]
         events.append(stream_event("result", operation, args.request_id, len(events) + 1, resultCode="ok",
-                                   logs=[event["log"] for event in events]))
+                                   logSummary={"returnedRecords": len(events), "droppedRecords": 0}))
         return 0, events
     raise ProviderError("invalid-request", "unknown provider fixture")
 
@@ -414,17 +603,25 @@ def reject_duplicate_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int, list[dict[str, Any]]]:
+    if args.operation == "cancel":
+        live = request_live_cancel(config.endpoint_id, args.transaction_id)
+        if live is not None:
+            confirmed = live["confirmed"] and live["resultCode"] == "cancelled"
+            result_code = "ok" if confirmed else live["resultCode"]
+            return exit_code_for(result_code), [envelope("cancel", args.request_id, result_code,
+                                                         cancellation={"confirmed": confirmed})]
     wire = Wire(config)
     try:
         wire.open()
         capabilities = decode_capabilities(wire.request(DISCOVERY))
-        device = device_from_capabilities(config, capabilities)
+        identity = decode_identity(wire.request(IDENTITY))
+        device = device_from_capabilities(config, capabilities, identity)
         if args.operation == "discover":
             return 0, [envelope("discover", args.request_id, "ok", devices=[device])]
         if args.selector != config.endpoint_id:
             raise ProviderError("invalid-request", "selector does not identify this configured endpoint")
         if args.operation == "info":
-            return 0, [envelope("info", args.request_id, "ok", device=device)]
+            return 0, [envelope("info", args.request_id, "ok", device=device, identity=identity)]
         if args.operation == "list":
             generation, apps = decode_list(wire.request(APP_LIST))
             return 0, [envelope("list", args.request_id, "ok", device=device, apps=apps, registryGeneration=generation)]
@@ -442,7 +639,13 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
             provider_code = "ok" if confirmed else result["resultCode"]
             return exit_code_for(provider_code), [envelope("cancel", args.request_id, provider_code, device=device, cancellation={"confirmed": confirmed}, **result)]
         if args.operation == "logs":
-            raise ProviderError("unsupported", "WS147 Developer Image does not yet expose typed app logs")
+            dropped, records = decode_logs(wire.request(LOGS, logs_payload(args.app_id, args.limit)))
+            events = [stream_event("log", "logs", args.request_id, index + 1, log=record)
+                      for index, record in enumerate(records)]
+            events.append(stream_event("result", "logs", args.request_id, len(events) + 1, resultCode="ok",
+                                       device=device,
+                                       logSummary={"returnedRecords": len(records), "droppedRecords": dropped}))
+            return 0, events
         if args.operation == "install":
             app_id = read_bundle_identity(args.bundle)
             bundle = args.bundle.read_bytes()
@@ -452,18 +655,40 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
             begin = decode_result(wire.request(INSTALL_BEGIN, begin_payload(transaction, app_id, bundle, args.allow_downgrade)))
             if begin["resultCode"] != "accepted":
                 return exit_code_for(begin["resultCode"]), [stream_event("result", "install", args.request_id, sequence, resultCode=begin["resultCode"], device=device, transaction=begin["transaction"])]
-            for offset in range(0, len(bundle), 1024):
-                chunk = bundle[offset:offset + 1024]
-                progress = decode_result(wire.request(INSTALL_CHUNK, chunk_payload(transaction, offset, chunk)))
-                if progress["resultCode"] != "accepted":
-                    return exit_code_for(progress["resultCode"]), [*events, stream_event("result", "install", args.request_id, sequence, resultCode=progress["resultCode"], device=device, transaction=progress["transaction"])]
-                events.append(stream_event("progress", "install", args.request_id, sequence,
-                                           progress={"completedBytes": progress["transaction"]["receivedBytes"], "totalBytes": len(bundle)}))
-                sequence += 1
-            committed = decode_result(wire.request(INSTALL_COMMIT, transaction_payload(transaction)))
-            events.append(stream_event("result", "install", args.request_id, sequence, resultCode=committed["resultCode"],
-                                       device=device, transaction=committed["transaction"]))
-            return exit_code_for(committed["resultCode"]), events
+            live_session = LiveInstallSession(config.endpoint_id, transaction)
+            try:
+                for offset in range(0, len(bundle), 1024):
+                    if live_session.cancel_requested.is_set():
+                        aborted = decode_result(wire.request(INSTALL_ABORT, transaction_payload(transaction)))
+                        confirmed = aborted["resultCode"] == "cancelled"
+                        live_session.finish(confirmed, aborted["resultCode"])
+                        events.append(stream_event("result", "install", args.request_id, sequence,
+                                                   resultCode=aborted["resultCode"], device=device,
+                                                   transaction=aborted["transaction"]))
+                        return exit_code_for(aborted["resultCode"]), events
+                    chunk = bundle[offset:offset + 1024]
+                    progress = decode_result(wire.request(INSTALL_CHUNK, chunk_payload(transaction, offset, chunk)))
+                    if progress["resultCode"] != "accepted":
+                        live_session.finish(False, progress["resultCode"])
+                        return exit_code_for(progress["resultCode"]), [*events, stream_event("result", "install", args.request_id, sequence, resultCode=progress["resultCode"], device=device, transaction=progress["transaction"])]
+                    events.append(stream_event("progress", "install", args.request_id, sequence,
+                                               progress={"completedBytes": progress["transaction"]["receivedBytes"], "totalBytes": len(bundle)}))
+                    sequence += 1
+                if live_session.cancel_requested.is_set():
+                    aborted = decode_result(wire.request(INSTALL_ABORT, transaction_payload(transaction)))
+                    confirmed = aborted["resultCode"] == "cancelled"
+                    live_session.finish(confirmed, aborted["resultCode"])
+                    events.append(stream_event("result", "install", args.request_id, sequence,
+                                               resultCode=aborted["resultCode"], device=device,
+                                               transaction=aborted["transaction"]))
+                    return exit_code_for(aborted["resultCode"]), events
+                committed = decode_result(wire.request(INSTALL_COMMIT, transaction_payload(transaction)))
+                live_session.finish(False, committed["resultCode"])
+                events.append(stream_event("result", "install", args.request_id, sequence, resultCode=committed["resultCode"],
+                                           device=device, transaction=committed["transaction"]))
+                return exit_code_for(committed["resultCode"]), events
+            finally:
+                live_session.close()
         raise ProviderError("invalid-request", "unsupported operation")
     finally:
         wire.close()

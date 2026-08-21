@@ -67,11 +67,15 @@ void blend_pixel(jellyframe::Color& destination, jellyframe::Color source) {
 
 } // namespace
 
-void BmpImageAdapter::configure(const jellyframe::HostBudgets& budgets, std::string_view base_url) {
+void BmpImageAdapter::configure(const jellyframe::HostBudgets& budgets,
+                                std::string_view base_url,
+                                const ResourceBundle* bundle) {
     resource_stats_ = {};
     stats_ = {};
     entries_.clear();
-    resource_context_ = make_resource_context(budgets, base_url, &resource_stats_);
+    resource_context_ = bundle != nullptr
+        ? make_resource_context(budgets, base_url, *bundle, &resource_stats_)
+        : make_resource_context(budgets, base_url, &resource_stats_);
 }
 
 BmpImageAdapter::Entry* BmpImageAdapter::find(std::string_view url) {

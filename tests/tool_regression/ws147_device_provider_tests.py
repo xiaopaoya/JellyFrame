@@ -106,6 +106,51 @@ class Ws147DeviceProviderTests(unittest.TestCase):
         self.assertEqual(provider.operation_result_fields({"transaction": {"id": 0}}), {})
         self.assertEqual(provider.operation_result_fields({"transaction": {"id": 7}})["transaction"]["id"], 7)
 
+    def test_live_install_control_confirms_only_owner_reported_abort(self) -> None:
+        spec = importlib.util.spec_from_file_location("ws147_device_provider_live", PROVIDER)
+        assert spec is not None and spec.loader is not None
+        provider = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = provider
+        spec.loader.exec_module(provider)
+        endpoint = "fixture-live-cancel"
+        session = provider.LiveInstallSession(endpoint, 77)
+        try:
+            result: dict[str, object] = {}
+
+            def request() -> None:
+                result.update(provider.request_live_cancel(endpoint, 77) or {})
+
+            import threading
+            thread = threading.Thread(target=request)
+            thread.start()
+            self.assertTrue(session.cancel_requested.wait(1))
+            session.finish(True, "cancelled")
+            thread.join(2)
+            self.assertEqual(result, {"confirmed": True, "resultCode": "cancelled"})
+        finally:
+            session.close()
+        self.assertIsNone(provider.request_live_cancel(endpoint, 77))
+
+    def test_identity_and_typed_logs_decoders_reject_unbounded_shapes(self) -> None:
+        spec = importlib.util.spec_from_file_location("ws147_device_provider_typed", PROVIDER)
+        assert spec is not None and spec.loader is not None
+        provider = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = provider
+        spec.loader.exec_module(provider)
+        identity = (bytes((1, 3, 3, 3, 5, 40, 0, 0)) + (1).to_bytes(4, "little") + (3).to_bytes(4, "little") +
+                    b"imgprover0.6.1" + b"0" * 40)
+        decoded = provider.decode_identity(identity)
+        self.assertEqual(decoded["featureFamilies"], ["core.document", "core.paint"])
+        with self.assertRaises(provider.ProviderError):
+            provider.decode_identity(identity[:-1])
+        payload = (bytes((1, 1, 0, 0)) + (0).to_bytes(4, "little") +
+                   bytes((3, 4, 1, 0)) + (2).to_bytes(4, "little") + (99).to_bytes(8, "little") +
+                   b"app" + b"log!")
+        dropped, records = provider.decode_logs(payload)
+        self.assertEqual((dropped, records[0]["timestampMs"]), (0, "99"))
+        with self.assertRaises(provider.ProviderError):
+            provider.decode_logs(payload + b"x")
+
     def test_jfapp_identity_comes_from_bundle_not_package_report(self) -> None:
         spec = importlib.util.spec_from_file_location("ws147_device_provider", PROVIDER)
         assert spec is not None and spec.loader is not None

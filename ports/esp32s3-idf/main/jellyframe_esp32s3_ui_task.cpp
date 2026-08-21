@@ -379,6 +379,7 @@ struct TimerUiTaskContext {
     std::string installed_app_id;
     std::uint32_t installed_generation = 0;
     std::string installed_entry_document;
+    InstalledResourceSnapshot installed_resources;
     InstalledBundleUiSession* installed_session = nullptr;
 };
 
@@ -804,7 +805,12 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
 
 bool load_timer_document(TimerUiTaskContext& context) {
     ResourceLoadStats stats;
-    ResourceBundleContext resource_context = make_resource_context(context.budgets, context.document_url, &stats);
+    const ResourceBundle* resource_bundle = context.installed_bundle_app
+        ? &context.installed_resources.bundle
+        : nullptr;
+    ResourceBundleContext resource_context = resource_bundle != nullptr
+        ? make_resource_context(context.budgets, context.document_url, *resource_bundle, &stats)
+        : make_resource_context(context.budgets, context.document_url, &stats);
 
     std::string html;
     if (context.installed_bundle_app) {
@@ -830,11 +836,20 @@ bool load_timer_document(TimerUiTaskContext& context) {
         return false;
     }
 
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+    context.image_adapter.configure(context.budgets, context.document_url, resource_bundle);
+#endif
+
     const std::string css = jellyframe::combine_author_css("",
                                                            *context.document,
                                                            load_linked_stylesheet,
                                                            &resource_context,
                                                            jellyframe::document_style_collection_options_from_budgets(context.budgets));
+    const std::vector<jellyframe::DocumentScript> scripts = jellyframe::collect_classic_scripts(
+        *context.document,
+        load_classic_script,
+        &resource_context,
+        jellyframe::document_script_collection_options_from_budgets(context.budgets));
     jellyframe::CssParser css_parser;
     jellyframe::Stylesheet stylesheet = css_parser.parse(
         css, jellyframe::css_parser_options_from_budgets(context.budgets));
@@ -848,10 +863,11 @@ bool load_timer_document(TimerUiTaskContext& context) {
 #endif
 
     ESP_LOGI(kTag,
-             "ui_task resources entry=%s html_bytes=%u css_bytes=%u loads=%u missing=%u rejected=%u installed=%d generation=%u",
+             "ui_task resources entry=%s html_bytes=%u css_bytes=%u scripts=%u loads=%u missing=%u rejected=%u installed=%d generation=%u",
              context.installed_bundle_app ? context.installed_app_id.c_str() : std::string(context.document_url).c_str(),
              static_cast<unsigned>(html.size()),
              static_cast<unsigned>(css.size()),
+             static_cast<unsigned>(scripts.size()),
              static_cast<unsigned>(stats.successful_loads),
              static_cast<unsigned>(stats.missing_loads),
              static_cast<unsigned>(stats.rejected_loads),
@@ -2359,11 +2375,15 @@ bool start_app_runtime_recovery_acceptance_task() {
 
 bool start_installed_bundle_ui_task(std::string app_id,
                                     std::uint32_t generation,
+                                    std::string entry_path,
                                     std::string entry_document,
+                                    InstalledResourceSnapshot resources,
                                     InstalledBundleUiSession*& session) {
     session = nullptr;
     if (app_id.empty() || app_id.size() > jellyframe::kDeviceBundleMaxAppIdBytes ||
-        entry_document.empty() || entry_document.size() > 16u * 1024u) {
+        entry_path.empty() || entry_path.size() > jellyframe::kDeviceBundleMaxEntryPathBytes ||
+        entry_document.empty() || entry_document.size() > 16u * 1024u ||
+        !resources.rebuild_views()) {
         return false;
     }
     auto* next_session = new (std::nothrow) InstalledBundleUiSession();
@@ -2382,7 +2402,15 @@ bool start_installed_bundle_ui_task(std::string app_id,
     context->installed_bundle_app = true;
     context->installed_app_id = std::move(app_id);
     context->installed_generation = generation;
+    context->document_url = std::move(entry_path);
     context->installed_entry_document = std::move(entry_document);
+    context->installed_resources = std::move(resources);
+    if (!context->installed_resources.rebuild_views()) {
+        vSemaphoreDelete(next_session->stopped);
+        delete next_session;
+        delete context;
+        return false;
+    }
     context->installed_session = next_session;
     context->telemetry_case = "installed_bundle_ui_cumulative";
     context->telemetry_app_id = context->installed_app_id.c_str();

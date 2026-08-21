@@ -4,6 +4,7 @@
 
 #include "app_runtime/app_installed_bundle.h"
 #include "device_runtime_contracts/device_install_transaction.h"
+#include "render_core/html_parser.h"
 
 #include "driver/usb_serial_jtag.h"
 #include "esp_log.h"
@@ -13,7 +14,9 @@
 #include "freertos/task.h"
 
 #include <array>
+#include <algorithm>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -27,6 +30,96 @@ constexpr std::uint32_t kUsbBufferBytes = 1024;
 constexpr TickType_t kUsbIoTimeout = pdMS_TO_TICKS(50);
 constexpr std::int64_t kPartialFrameTimeoutUs = 500000;
 constexpr std::size_t kInstalledAppEntryMaxBytes = 16u * 1024u;
+constexpr std::size_t kInstalledResourceMaxBytes = 48u * 1024u;
+constexpr std::size_t kInstalledResourceSnapshotMaxBytes = 96u * 1024u;
+constexpr std::size_t kInstalledResourceSnapshotMaxEntries = 16u;
+
+constexpr char kImageId[] = "org.jellyframe.ws147.developer";
+constexpr char kProfileId[] = "rect-172x320";
+constexpr char kImageVersion[] = "0.6.0-a2";
+#ifndef JELLYFRAME_ESP32S3_SOURCE_REVISION
+#define JELLYFRAME_ESP32S3_SOURCE_REVISION "0000000000000000000000000000000000000000"
+#endif
+#ifndef JELLYFRAME_ESP32S3_RENDER_CORE_VERSION
+#define JELLYFRAME_ESP32S3_RENDER_CORE_VERSION "0.6.1"
+#endif
+#ifndef JELLYFRAME_ESP32S3_RENDER_CORE_ABI
+#define JELLYFRAME_ESP32S3_RENDER_CORE_ABI 1
+#endif
+
+jellyframe::HostResourceKind resource_kind_for_path(std::string_view path) {
+    const std::size_t dot = path.rfind('.');
+    if (dot == std::string_view::npos) return jellyframe::HostResourceKind::Other;
+    const std::string_view suffix = path.substr(dot);
+    if (suffix == ".css") return jellyframe::HostResourceKind::Stylesheet;
+    if (suffix == ".js") return jellyframe::HostResourceKind::ClassicScript;
+    if (suffix == ".bmp" || suffix == ".png" || suffix == ".jpg" || suffix == ".jpeg" ||
+        suffix == ".gif" || suffix == ".webp") return jellyframe::HostResourceKind::Image;
+    return jellyframe::HostResourceKind::Other;
+}
+
+void collect_resource_references(const jellyframe::Node& node,
+                                 std::vector<std::pair<jellyframe::HostResourceKind, std::string>>& output) {
+    const std::string& src = node.attribute("src");
+    const std::string& href = node.attribute("href");
+    if (node.tag_name == "link" && node.attribute("rel") == "stylesheet" && !href.empty()) {
+        output.emplace_back(jellyframe::HostResourceKind::Stylesheet, href);
+    } else if (node.tag_name == "script" && !src.empty()) {
+        output.emplace_back(jellyframe::HostResourceKind::ClassicScript, src);
+    } else if ((node.tag_name == "img" || node.tag_name == "source") && !src.empty()) {
+        output.emplace_back(jellyframe::HostResourceKind::Image, src);
+    }
+    for (const auto& child : node.children) {
+        collect_resource_references(*child, output);
+    }
+}
+
+bool snapshot_active_resources(const jellyframe::AppInstalledBundleBinding& binding,
+                               const jellyframe::DeviceBundleDescriptor& descriptor,
+                               std::string_view entry_document,
+                               InstalledResourceSnapshot& snapshot) {
+    snapshot.clear();
+    jellyframe::HtmlParser parser;
+    const std::unique_ptr<jellyframe::Node> document = parser.parse(
+        std::string(entry_document), jellyframe::HtmlParserOptions{});
+    if (!document) {
+        return false;
+    }
+    std::vector<std::pair<jellyframe::HostResourceKind, std::string>> references;
+    collect_resource_references(*document, references);
+    for (const auto& reference : references) {
+        std::string path;
+        if (!resolve_local_resource_url(reference.second, descriptor.summary.entry_path_view(), path)) {
+            return false;
+        }
+        bool already_loaded = false;
+        for (const InstalledResourceSnapshotEntry& entry : snapshot.entries) {
+            if (entry.url == path) {
+                already_loaded = true;
+                break;
+            }
+        }
+        if (already_loaded) continue;
+        if (snapshot.entries.size() >= kInstalledResourceSnapshotMaxEntries) {
+            return false;
+        }
+        std::vector<std::uint8_t> bytes(kInstalledResourceMaxBytes);
+        std::size_t read_bytes = 0;
+        if (binding.read_active_resource(path, bytes.data(), bytes.size(), read_bytes) != DeviceBundleStatus::Ok ||
+            read_bytes == 0 || read_bytes > kInstalledResourceMaxBytes ||
+            snapshot.total_bytes > kInstalledResourceSnapshotMaxBytes - read_bytes) {
+            return false;
+        }
+        bytes.resize(read_bytes);
+        const jellyframe::HostResourceKind path_kind = resource_kind_for_path(path);
+        if (path_kind != reference.first) {
+            return false;
+        }
+        snapshot.total_bytes += read_bytes;
+        snapshot.entries.push_back(InstalledResourceSnapshotEntry{std::move(path), path_kind, std::move(bytes)});
+    }
+    return snapshot.rebuild_views();
+}
 
 DeviceRequestResultCode result_code(DeviceInstallStatus status) {
     switch (status) {
@@ -71,6 +164,8 @@ public:
         case DeviceMessageType::Discovery: send_capabilities(request); return;
         case DeviceMessageType::AppList: send_app_list(request); return;
         case DeviceMessageType::Recovery: send_recovery(request); return;
+        case DeviceMessageType::Identity: send_identity(request); return;
+        case DeviceMessageType::Logs: send_logs(request, payload, request.payload_length); return;
         default: break;
         }
 
@@ -94,6 +189,27 @@ public:
     JfdpTransportCounters& counters() { return counters_; }
 
 private:
+    static constexpr std::size_t kAppLogCapacity = 32;
+
+    void record_app_log(DeviceAppLogLevel level, std::string_view app_id, std::uint32_t generation,
+                        std::string_view message) {
+        if (app_id.empty() || app_id.size() > kDeviceMaxAppIdBytes || message.size() > kDeviceAppLogMaxMessageBytes) {
+            return;
+        }
+        if (app_log_count_ == app_logs_.size()) {
+            for (std::size_t index = 1; index < app_logs_.size(); ++index) app_logs_[index - 1] = app_logs_[index];
+            --app_log_count_;
+            ++app_log_overwrites_;
+        }
+        DeviceAppLogEntry& entry = app_logs_[app_log_count_++];
+        entry = {};
+        std::memcpy(entry.app_id.data(), app_id.data(), app_id.size());
+        std::memcpy(entry.message.data(), message.data(), message.size());
+        entry.generation = generation;
+        entry.timestamp_ms = static_cast<std::uint64_t>(esp_timer_get_time() / 1000);
+        entry.level = level;
+    }
+
     bool stop_active_ui() {
         if (!stop_installed_bundle_ui_task(ui_session_)) {
             ESP_LOGE("JellyFrameDevice", "installed app UI did not stop before lifecycle transition");
@@ -220,8 +336,11 @@ private:
             return;
         }
         std::string entry_document(reinterpret_cast<const char*>(entry_bytes.data()), read_bytes);
-        if (!start_installed_bundle_ui_task(std::string(app_id.app_id_view()), store_.registry_generation(),
-                                            std::move(entry_document), ui_session_)) {
+        InstalledResourceSnapshot resources;
+        if (!snapshot_active_resources(binding_, descriptor, entry_document, resources) ||
+            !start_installed_bundle_ui_task(std::string(app_id.app_id_view()), store_.registry_generation(),
+                                            std::string(descriptor.summary.entry_path_view()), std::move(entry_document),
+                                            std::move(resources), ui_session_)) {
             (void)recover_to_launcher(DeviceRecoveryReason::AppLoadFailure, app_id.app_id_view());
             result.result_code = DeviceRequestResultCode::Failed;
             result.flags = DeviceOperationResultLauncherActive;
@@ -231,6 +350,8 @@ private:
                  std::string(app_id.app_id_view()).c_str(),
                  static_cast<unsigned>(store_.registry_generation()),
                  static_cast<unsigned>(read_bytes));
+        record_app_log(DeviceAppLogLevel::Info, app_id.app_id_view(), store_.registry_generation(),
+                       "installed bundle launched");
         result.result_code = DeviceRequestResultCode::Ok;
         result.flags = DeviceOperationResultComplete | DeviceOperationResultActive;
     }
@@ -249,6 +370,8 @@ private:
             return;
         }
         (void)binding_.terminate_current(host_, AppTeardownReason::NormalExit);
+        record_app_log(DeviceAppLogLevel::Info, app_id.app_id_view(), store_.registry_generation(),
+                       "installed bundle stopped");
         result.result_code = DeviceRequestResultCode::Ok;
         result.flags = DeviceOperationResultComplete;
     }
@@ -289,7 +412,7 @@ private:
         DeviceCapabilitySnapshot capabilities{};
         capabilities.display_width = 172;
         capabilities.display_height = 320;
-        capabilities.capability_bits = DeviceCapabilityTouch;
+        capabilities.capability_bits = DeviceCapabilityTouch | DeviceCapabilityDeviceLogs;
         capabilities.max_bundle_bytes = DeviceImageStore::kMaxBundleBytes;
         capabilities.available_storage_bytes = store_.available_storage_bytes();
         // This is the release board identity, not a board-driver label. The
@@ -300,6 +423,65 @@ private:
         std::size_t size = 0;
         if (encode_device_capabilities(capabilities, payload.data(), payload.size(), size) == DeviceProtocolStatus::Ok) {
             send_payload(request, payload.data(), size);
+        }
+    }
+
+    void send_identity(const DeviceFrameHeader& request) {
+        DeviceImageIdentityPayload identity{};
+        std::memcpy(identity.image_id.data(), kImageId, sizeof(kImageId));
+        std::memcpy(identity.profile_id.data(), kProfileId, sizeof(kProfileId));
+        std::memcpy(identity.image_version.data(), kImageVersion, sizeof(kImageVersion));
+        std::memcpy(identity.render_core_version.data(), JELLYFRAME_ESP32S3_RENDER_CORE_VERSION,
+                    sizeof(JELLYFRAME_ESP32S3_RENDER_CORE_VERSION));
+        std::memcpy(identity.source_revision.data(), JELLYFRAME_ESP32S3_SOURCE_REVISION,
+                    sizeof(JELLYFRAME_ESP32S3_SOURCE_REVISION));
+        identity.render_core_abi = JELLYFRAME_ESP32S3_RENDER_CORE_ABI;
+        identity.feature_family_bits = DeviceRenderCoreFeatureDocument | DeviceRenderCoreFeaturePaint;
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
+        identity.feature_family_bits |= DeviceRenderCoreFeatureFlexGrid;
+#endif
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+        identity.feature_family_bits |= DeviceRenderCoreFeatureModernPaint;
+#endif
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+        identity.feature_family_bits |= DeviceRenderCoreFeatureAdvancedForms;
+#endif
+#if JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED
+        identity.feature_family_bits |= DeviceRenderCoreFeatureCanvas2d;
+#endif
+        std::array<std::uint8_t, 384> payload{};
+        std::size_t size = 0;
+        if (encode_device_image_identity_payload(identity, payload.data(), payload.size(), size) == DeviceProtocolStatus::Ok) {
+            send_payload(request, payload.data(), size);
+        }
+    }
+
+    void send_logs(const DeviceFrameHeader& request, const std::uint8_t* bytes, std::size_t size) {
+        DeviceLogsRequestPayload logs_request{};
+        if (decode_device_logs_request_payload(bytes, size, logs_request) != DeviceProtocolStatus::Ok ||
+            logs_request.limit == 0 || logs_request.limit > kDeviceAppLogMaxEntries) {
+            DeviceOperationResultPayload result{};
+            result.result_code = DeviceRequestResultCode::InvalidRequest;
+            send_result(request, result);
+            return;
+        }
+        DeviceAppLogsPayload logs{};
+        std::size_t matches = 0;
+        for (std::size_t index = 0; index < app_log_count_; ++index) {
+            if (app_logs_[index].app_id_view() == logs_request.app_id_view()) ++matches;
+        }
+        const std::size_t returned = std::min<std::size_t>(matches, logs_request.limit);
+        logs.dropped_records = static_cast<std::uint32_t>(matches - returned + app_log_overwrites_);
+        const std::size_t first = matches - returned;
+        std::size_t seen = 0;
+        for (std::size_t index = 0; index < app_log_count_; ++index) {
+            if (app_logs_[index].app_id_view() != logs_request.app_id_view()) continue;
+            if (seen++ >= first) logs.entries[logs.entry_count++] = app_logs_[index];
+        }
+        std::array<std::uint8_t, kDeviceProtocolMaxPayloadBytes> payload{};
+        std::size_t payload_size = 0;
+        if (encode_device_app_logs_payload(logs, payload.data(), payload.size(), payload_size) == DeviceProtocolStatus::Ok) {
+            send_payload(request, payload.data(), payload_size);
         }
     }
 
@@ -359,6 +541,9 @@ private:
     ProtectedLauncher launcher_;
     AppInstalledBundleBinding binding_;
     InstalledBundleUiSession* ui_session_ = nullptr;
+    std::array<DeviceAppLogEntry, kAppLogCapacity> app_logs_{};
+    std::size_t app_log_count_ = 0;
+    std::uint32_t app_log_overwrites_ = 0;
 };
 
 void device_image_lifecycle_task(void*) {

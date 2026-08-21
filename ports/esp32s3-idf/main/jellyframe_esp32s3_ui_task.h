@@ -1,5 +1,7 @@
 #pragma once
 
+#include "jellyframe_esp32s3_resources.h"
+
 #include <cstdint>
 #include <string>
 
@@ -23,7 +25,9 @@ struct InstalledBundleUiSession;
 // bundle lease, transport buffer, or renderer object crosses the task boundary.
 bool start_installed_bundle_ui_task(std::string app_id,
                                     std::uint32_t generation,
+                                    std::string entry_path,
                                     std::string entry_document,
+                                    InstalledResourceSnapshot resources,
                                     InstalledBundleUiSession*& session);
 bool stop_installed_bundle_ui_task(InstalledBundleUiSession*& session,
                                    std::uint32_t timeout_ms = 3000);

@@ -31,7 +31,9 @@ struct ImageAdapterStats {
 
 class BmpImageAdapter final {
 public:
-    void configure(const jellyframe::HostBudgets& budgets, std::string_view base_url);
+    void configure(const jellyframe::HostBudgets& budgets,
+                   std::string_view base_url,
+                   const ResourceBundle* bundle = nullptr);
 
     bool resolve(const jellyframe::Node& node,
                  jellyframe::ImageResolveKind kind,
