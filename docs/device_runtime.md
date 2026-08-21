@@ -1,6 +1,6 @@
 # JellyFrame Device Runtime
 
-> Last updated: 2026-08-18; Applies to: 0.6.0-dev; active development line: 0.6.0
+> Last updated: 2026-08-21; Applies to: 0.6.0-dev; active development line: 0.6.0
 
 ## Purpose
 
@@ -112,22 +112,26 @@ ownership.
 
 The same module provides bounded `DeviceCapabilitySnapshot` encoding and stable
 request result codes for board/profile identity, runtime version, display size,
-enabled capability bits, maximum bundle size and available storage. Strings have
-explicit limits and reject embedded NUL bytes, so a decoded identity has one
-canonical C-string representation. Install-begin also requires a nonzero declared
-bundle size. The payload codec does not depend on JSON, heap allocation or
-port-private structures.
+enabled capability bits, maximum bundle size and available storage. The separate
+empty-request `Identity` message returns the attested image/profile/version,
+Render Core version and ABI, 40-character source revision, and complete stable
+feature-family bitset. Strings have explicit limits and reject embedded NUL
+bytes, so a decoded identity has one canonical C-string representation.
+Install-begin also requires a nonzero declared bundle size. The payload codec
+does not depend on JSON, heap allocation or port-private structures.
 
 `JFDP/1` now also defines payload-versioned codecs for install begin/chunk,
-commit/abort transaction ids, lifecycle app ids, log queries and a fixed 16-byte
+commit/abort transaction ids, lifecycle app ids, log queries/responses and a fixed 16-byte
 operation result envelope. The envelope carries a stable result code, flags,
 transaction id and received/expected byte counts. Install chunks deliberately
 decode as a bounded input view and must be copied before crossing a task
 boundary; all other decoded fields are copied values. AppList has a bounded
 registry generation plus at most 24 typed library entries (id, version, code,
 bundle bytes, state and rollback flag). Recovery has a bounded app id, registry
-generation, sequence, stable reason and launcher/disable/rollback flags. These
-records are never smuggled through JSON or port-private structs.
+generation, sequence, stable reason and launcher/disable/rollback flags. Logs responses
+contain at most 11 typed records, each with a copied app id, generation,
+timestamp, level and 255-byte maximum message, plus a dropped-record count.
+These records are never smuggled through JSON or port-private structs.
 
 `src/device_runtime_contracts/device_install_transaction.*` implements a bounded, ordered and
 cancellable staging state machine through the injected `DeviceInstallStore`.

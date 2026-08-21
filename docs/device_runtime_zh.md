@@ -1,6 +1,6 @@
 # JellyFrame Device Runtime
 
-> 最后更新：2026-08-18；适用版本：0.6.0-dev；当前开发线：0.6.0
+> 最后更新：2026-08-21；适用版本：0.6.0-dev；当前开发线：0.6.0
 
 ## 目的
 
@@ -88,16 +88,19 @@ stream fragmentation、malformed frame 与报告证据。
 只读视图；跨任务或异步队列前必须复制，协议层不会转移指针所有权。
 
 同一模块还提供固定边界的 `DeviceCapabilitySnapshot` 编解码和稳定的请求结果码，包含 board/profile
-标识、runtime 版本、屏幕尺寸、启用的能力位、最大 App 包大小和可用存储。字符串有明确长度上限并拒绝 embedded NUL，
-从而让解码后的身份只有一种 canonical C-string 表示；install-begin 还要求声明的 bundle size 非零。
-payload codec 不依赖 JSON、堆分配或端口私有结构。
+标识、runtime 版本、屏幕尺寸、启用的能力位、最大 App 包大小和可用存储。独立的空请求 `Identity` message 返回
+经过证明的 image/profile/version、Render Core version/ABI、40 字符 source revision 与完整稳定 feature-family bitset。
+字符串有明确长度上限并拒绝 embedded NUL，从而让解码后的身份只有一种 canonical C-string 表示；install-begin
+还要求声明的 bundle size 非零。payload codec 不依赖 JSON、堆分配或端口私有结构。
 
 `JFDP/1` 现在还定义了带 payload version 的安装 begin/chunk、commit/abort transaction id、
-lifecycle app id、日志查询和固定 16 字节 operation result envelope 编解码。envelope 携带稳定 result
+lifecycle app id、日志查询/响应和固定 16 字节 operation result envelope 编解码。envelope 携带稳定 result
 code、flags、transaction id 与 received/expected byte count。安装 chunk 有意解码为有界输入 view，跨任务前
 必须复制；其余解码字段都是复制值。AppList 是有界 registry generation 加最多 24 条 typed library entry
 （id、version、code、bundle bytes、state、rollback flag）。Recovery 则包含有界 app id、registry generation、
-sequence、稳定 reason 与 launcher/disable/rollback flag。它们不能被塞入 JSON 或 port-private struct。
+sequence、稳定 reason 与 launcher/disable/rollback flag。Logs response 最多 11 条 typed record，每条复制
+app id、generation、timestamp、level 和最多 255-byte message，并带 dropped-record count。它们不能被塞入 JSON
+或 port-private struct。
 
 `src/device_runtime_contracts/device_install_transaction.*` 提供有界、有序、可取消的 staging 状态机。它只依赖
 `DeviceInstallStore` 注入的存储适配器，因此不会把 flash、文件系统、签名或 registry 实现带入

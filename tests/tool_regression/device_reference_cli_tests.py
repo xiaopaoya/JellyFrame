@@ -65,6 +65,38 @@ class DeviceReferenceCliTests(unittest.TestCase):
                 device_reference._jfdp_reference_capabilities(),
                 response=True,
             ),
+            "image-identity": device_reference.encode_jfdp_image_identity_payload(
+                image_id="org.jellyframe.ws147.developer",
+                profile_id="rect-172x320",
+                image_version="0.1.0-dev",
+                render_core_version="0.6.1",
+                source_revision="0123456789abcdef0123456789abcdef01234567",
+                render_core_abi=1,
+                feature_family_bits=(
+                    device_reference.JFDP_RENDER_CORE_FEATURE_DOCUMENT |
+                    device_reference.JFDP_RENDER_CORE_FEATURE_PAINT |
+                    device_reference.JFDP_RENDER_CORE_FEATURE_ADVANCED_FORMS |
+                    device_reference.JFDP_RENDER_CORE_FEATURE_CANVAS2D
+                ),
+            ),
+            "frame-identity-response": device_reference.encode_jfdp_frame(
+                "identity", 0x01020304, 0x10203040,
+                device_reference.encode_jfdp_image_identity_payload(
+                    image_id="org.jellyframe.ws147.developer",
+                    profile_id="rect-172x320",
+                    image_version="0.1.0-dev",
+                    render_core_version="0.6.1",
+                    source_revision="0123456789abcdef0123456789abcdef01234567",
+                    render_core_abi=1,
+                    feature_family_bits=(
+                        device_reference.JFDP_RENDER_CORE_FEATURE_DOCUMENT |
+                        device_reference.JFDP_RENDER_CORE_FEATURE_PAINT |
+                        device_reference.JFDP_RENDER_CORE_FEATURE_ADVANCED_FORMS |
+                        device_reference.JFDP_RENDER_CORE_FEATURE_CANVAS2D
+                    ),
+                ),
+                response=True,
+            ),
             "install-begin": device_reference.encode_jfdp_install_begin_payload(
                 0x11223344, app_id, 0x12345, 0x89ABCDEF, True
             ),
@@ -89,7 +121,13 @@ class DeviceReferenceCliTests(unittest.TestCase):
             ),
             "transaction": device_reference.encode_jfdp_transaction_payload(0x11223344),
             "app-id": device_reference.encode_jfdp_app_id_payload(app_id),
-            "logs": device_reference.encode_jfdp_logs_request_payload(app_id, 16),
+            "logs": device_reference.encode_jfdp_logs_request_payload(app_id, 11),
+            "app-logs": device_reference.encode_jfdp_app_logs_payload([
+                {"appId": "org.example.alpha", "message": "runtime started",
+                 "generation": 18, "timestampMs": 123456789, "level": "info"},
+                {"appId": "org.example.beta", "message": "budget exceeded",
+                 "generation": 19, "timestampMs": 123456999, "level": "error"},
+            ], dropped_records=3),
             "operation-result": device_reference.encode_jfdp_operation_result(
                 "accepted",
                 flags=device_reference.JFDP_RESULT_COMPLETE,
@@ -354,7 +392,7 @@ class DeviceReferenceCliTests(unittest.TestCase):
             self.assertTrue(device_reference.decode_jfdp_operation_result(stopped["payload"])["flags"] &
                             device_reference.JFDP_RESULT_LAUNCHER_ACTIVE)
 
-            logs = dispatch("logs", request_id + 3, device_reference.encode_jfdp_logs_request_payload(app_id, 16))
+            logs = dispatch("logs", request_id + 3, device_reference.encode_jfdp_logs_request_payload(app_id, 11))
             self.assertEqual(device_reference.decode_jfdp_operation_result(logs["payload"])["resultCode"], "ok")
 
             removed = dispatch("remove", request_id + 4, device_reference.encode_jfdp_app_id_payload(app_id))

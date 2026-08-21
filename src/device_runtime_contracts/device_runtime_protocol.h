@@ -12,9 +12,16 @@ constexpr std::size_t kDeviceProtocolHeaderBytes = 24;
 constexpr std::size_t kDeviceProtocolMaxPayloadBytes = 4096;
 constexpr std::size_t kDeviceCapabilityMaxBoardIdBytes = 63;
 constexpr std::size_t kDeviceCapabilityMaxRuntimeVersionBytes = 31;
+constexpr std::size_t kDeviceIdentityMaxImageIdBytes = 95;
+constexpr std::size_t kDeviceIdentityMaxProfileIdBytes = 63;
+constexpr std::size_t kDeviceIdentityMaxImageVersionBytes = 63;
+constexpr std::size_t kDeviceIdentityMaxRenderCoreVersionBytes = 31;
+constexpr std::size_t kDeviceIdentitySourceRevisionBytes = 40;
 constexpr std::size_t kDeviceMaxAppIdBytes = 95;
 constexpr std::size_t kDeviceMaxVersionNameBytes = 63;
 constexpr std::size_t kDeviceAppListMaxEntries = 24;
+constexpr std::size_t kDeviceAppLogMaxEntries = 11;
+constexpr std::size_t kDeviceAppLogMaxMessageBytes = 255;
 constexpr std::uint16_t kDeviceFrameFlagResponse = 1u << 0;
 
 enum class DeviceMessageType : std::uint8_t {
@@ -30,6 +37,7 @@ enum class DeviceMessageType : std::uint8_t {
     Recovery = 10,
     Remove = 11,
     Rollback = 12,
+    Identity = 13,
 };
 
 enum class DeviceProtocolStatus : std::uint8_t {
@@ -72,6 +80,26 @@ enum DeviceCapability : std::uint32_t {
     DeviceCapabilityStorageKv = 1u << 6,
 };
 
+// The device identity response is the source of the complete Render Core
+// feature-family set reported to author tooling. These values are stable
+// protocol names, not build-option or port-private flags.
+enum DeviceRenderCoreFeatureFamily : std::uint32_t {
+    DeviceRenderCoreFeatureDocument = 1u << 0,
+    DeviceRenderCoreFeaturePaint = 1u << 1,
+    DeviceRenderCoreFeatureFlexGrid = 1u << 2,
+    DeviceRenderCoreFeatureModernPaint = 1u << 3,
+    DeviceRenderCoreFeatureAdvancedForms = 1u << 4,
+    DeviceRenderCoreFeatureCanvas2d = 1u << 5,
+};
+
+constexpr std::uint32_t kDeviceRenderCoreFeatureFamilyKnownMask =
+    DeviceRenderCoreFeatureDocument |
+    DeviceRenderCoreFeaturePaint |
+    DeviceRenderCoreFeatureFlexGrid |
+    DeviceRenderCoreFeatureModernPaint |
+    DeviceRenderCoreFeatureAdvancedForms |
+    DeviceRenderCoreFeatureCanvas2d;
+
 struct DeviceCapabilitySnapshot {
     std::uint8_t protocol_version = kDeviceProtocolVersion;
     std::uint16_t display_width = 0;
@@ -81,6 +109,24 @@ struct DeviceCapabilitySnapshot {
     std::uint32_t available_storage_bytes = 0;
     char board_id[kDeviceCapabilityMaxBoardIdBytes + 1]{};
     char runtime_version[kDeviceCapabilityMaxRuntimeVersionBytes + 1]{};
+};
+
+// DeviceMessageType::Identity response. The request has an empty payload.
+// All values are copied and do not expose storage/registry-owned memory.
+struct DeviceImageIdentityPayload {
+    std::array<char, kDeviceIdentityMaxImageIdBytes + 1> image_id{};
+    std::array<char, kDeviceIdentityMaxProfileIdBytes + 1> profile_id{};
+    std::array<char, kDeviceIdentityMaxImageVersionBytes + 1> image_version{};
+    std::array<char, kDeviceIdentityMaxRenderCoreVersionBytes + 1> render_core_version{};
+    std::array<char, kDeviceIdentitySourceRevisionBytes + 1> source_revision{};
+    std::uint32_t render_core_abi = 0;
+    std::uint32_t feature_family_bits = 0;
+
+    std::string_view image_id_view() const { return std::string_view(image_id.data()); }
+    std::string_view profile_id_view() const { return std::string_view(profile_id.data()); }
+    std::string_view image_version_view() const { return std::string_view(image_version.data()); }
+    std::string_view render_core_version_view() const { return std::string_view(render_core_version.data()); }
+    std::string_view source_revision_view() const { return std::string_view(source_revision.data()); }
 };
 
 struct DeviceFrameHeader {
@@ -133,6 +179,32 @@ struct DeviceLogsRequestPayload {
     std::string_view app_id_view() const {
         return std::string_view(app_id.data());
     }
+};
+
+enum class DeviceAppLogLevel : std::uint8_t {
+    Debug = 0,
+    Info = 1,
+    Warning = 2,
+    Error = 3,
+};
+
+// DeviceMessageType::Logs response. A device returns the newest records that
+// fit one bounded payload and reports how many matching records it omitted.
+struct DeviceAppLogEntry {
+    std::array<char, kDeviceMaxAppIdBytes + 1> app_id{};
+    std::array<char, kDeviceAppLogMaxMessageBytes + 1> message{};
+    std::uint32_t generation = 0;
+    std::uint64_t timestamp_ms = 0;
+    DeviceAppLogLevel level = DeviceAppLogLevel::Info;
+
+    std::string_view app_id_view() const { return std::string_view(app_id.data()); }
+    std::string_view message_view() const { return std::string_view(message.data()); }
+};
+
+struct DeviceAppLogsPayload {
+    std::uint32_t dropped_records = 0;
+    std::array<DeviceAppLogEntry, kDeviceAppLogMaxEntries> entries{};
+    std::size_t entry_count = 0;
 };
 
 enum class DeviceAppLibraryState : std::uint8_t {
@@ -237,6 +309,14 @@ DeviceProtocolStatus decode_device_capabilities(const std::uint8_t* input,
                                                 std::size_t input_size,
                                                 DeviceCapabilitySnapshot& capabilities);
 
+DeviceProtocolStatus encode_device_image_identity_payload(const DeviceImageIdentityPayload& payload,
+                                                          std::uint8_t* output,
+                                                          std::size_t output_capacity,
+                                                          std::size_t& output_size);
+DeviceProtocolStatus decode_device_image_identity_payload(const std::uint8_t* input,
+                                                          std::size_t input_size,
+                                                          DeviceImageIdentityPayload& payload);
+
 DeviceProtocolStatus encode_device_install_begin_payload(const DeviceInstallBeginPayload& payload,
                                                          std::uint8_t* output,
                                                          std::size_t output_capacity,
@@ -280,6 +360,14 @@ DeviceProtocolStatus decode_device_logs_request_payload(const std::uint8_t* inpu
                                                         std::size_t input_size,
                                                         DeviceLogsRequestPayload& payload);
 
+DeviceProtocolStatus encode_device_app_logs_payload(const DeviceAppLogsPayload& payload,
+                                                    std::uint8_t* output,
+                                                    std::size_t output_capacity,
+                                                    std::size_t& output_size);
+DeviceProtocolStatus decode_device_app_logs_payload(const std::uint8_t* input,
+                                                    std::size_t input_size,
+                                                    DeviceAppLogsPayload& payload);
+
 DeviceProtocolStatus encode_device_app_list_payload(const DeviceAppListPayload& payload,
                                                     std::uint8_t* output,
                                                     std::size_t output_capacity,
@@ -305,6 +393,7 @@ DeviceProtocolStatus decode_device_operation_result_payload(const std::uint8_t* 
                                                             DeviceOperationResultPayload& payload);
 
 const char* device_app_library_state_name(DeviceAppLibraryState state);
+const char* device_app_log_level_name(DeviceAppLogLevel level);
 const char* device_recovery_reason_name(DeviceRecoveryReason reason);
 
 } // namespace jellyframe

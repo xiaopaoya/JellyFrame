@@ -1,13 +1,14 @@
 # Device OS A2 Readiness And Implementation Requirements
 
-> Last updated: 2026-08-19; Applies to: 0.6.0-dev; Status: implementation prerequisite stage
+> Last updated: 2026-08-21; Applies to: 0.6.0-dev; Status: implementation prerequisite stage
 
 ## Current Conclusion
 
 **A2 is not ready for delivery acceptance and must not open an external developer
 trial.**
 
-The mainline now supplies the hardware-neutral control plane: JFDP/1 and the
+The mainline now supplies the hardware-neutral control plane: JFDP/1, typed
+Identity and Logs payloads, and the
 install contracts, Developer Image manifests, a strict provider JSON/JSONL
 parser, an explicit provider host client, CLI `discover/info/install/cancel/logs`
 entry points, and VS Code discovery-session state. This proves that the host
@@ -15,8 +16,12 @@ does not guess ports, fabricate cancellation, or silently accept mismatched
 provider output. It does not prove that a usable Device OS provider exists, or
 that an installed App can render, receive input, emit logs, or recover.
 
-WS147 has A1 storage/recovery and factory-image evidence. It is not a
-substitute for end-to-end A2 author-tool to installed-App evidence.
+WS147 has A1 storage/recovery and factory-image evidence. The 2026-08-21
+provider run also demonstrates 30 lifecycle cycles through installed entry
+HTML, but A2 remains **partial**: its provider has not yet wire-attested
+Identity/complete feature families, typed Logs, bounded linked-resource loading
+or confirmed live cancellation/session evidence. None of this is a substitute
+for end-to-end A2 author-tool to installed-App evidence.
 
 ## Ownership And Completion
 
@@ -78,7 +83,8 @@ runtime:
 3. The UI task decodes and presents frames, and converts input to value-only
    packets. App fatal or load failure returns to the protected launcher.
 4. Runtime/launcher emit bounded app-scoped logs carrying app ID, generation,
-   and timestamp; the provider only forwards those records.
+   timestamp and level; the provider only forwards the typed, copied records
+   (at most 11 records and 255 bytes per message).
 5. `stop/remove/rollback` first stop input and services, wait for teardown, and
    only then mutate the registry. An old frame or generation may never present
    after a new App starts.
@@ -112,7 +118,8 @@ not claim physical evidence.
 
 1. Fix one published Developer Image/manifest/provider version and confirm that
    JFDP wire and A1 recovery have not regressed.
-2. Confirm `discover -> info` matches manifest identity exactly.
+2. Confirm `discover -> info` matches manifest identity exactly, including the
+   JFDP Identity Render Core version, revision, ABI and feature families.
 3. From VS Code or CLI, install an actual `.jfapp`; retain JSONL, registry,
    launch marker, panel, and input-response evidence.
 4. Exercise update, rollback, remove, load failure, runtime fatal, and

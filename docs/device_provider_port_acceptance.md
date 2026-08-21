@@ -1,6 +1,6 @@
 # Device Provider Port Acceptance
 
-> Last updated: 2026-08-19; Applies to: 0.6.0-dev; Protocol: JFDP/1
+> Last updated: 2026-08-21; Applies to: 0.6.0-dev; Protocol: JFDP/1
 
 This is the A2 handoff for a physical Device OS provider. It verifies the
 host-process boundary used by `jellyframe_cli.py device`; it does not replace
@@ -22,7 +22,7 @@ jellyframe-device --output json --request-id <id> discover
 jellyframe-device --output json --request-id <id> --selector <endpoint> info
 jellyframe-device --output jsonl --request-id <id> --selector <endpoint> install --bundle <absolute.jfapp>
 jellyframe-device --output json --request-id <id> --selector <endpoint> cancel --transaction-id <id>
-jellyframe-device --output jsonl --request-id <id> --selector <endpoint> logs --id <app-id> --limit <1..256>
+jellyframe-device --output jsonl --request-id <id> --selector <endpoint> logs --id <app-id> --limit <1..11>
 ```
 
 The provider must implement the exact result/JSONL schema in
@@ -44,7 +44,7 @@ for these cases:
 | interrupted transfer | JSONL reports a stable failure/cancellation; staging is not published |
 | confirmed cancellation | `cancel` returns `cancellation.confirmed=true` only after the JFDP transaction is cancelled |
 | unconfirmed cancellation | `cancel` returns `confirmed=false` or failure; host must treat it as failure |
-| log bounds | `logs` emits at most the requested limit, never more than 256 records |
+| log bounds | `logs` emits at most the requested limit, never more than 11 typed records; every message is at most 255 bytes |
 
 Fixtures must preserve the input request ID and operation in every response.
 They may not use the desktop reference registry as a physical-device stand-in.
@@ -57,7 +57,9 @@ USB endpoint identity, firmware hash and build configuration.
 
 1. `discover` returns exactly the published board/profile/image/runtime,
    display, feature families, bundle limit and current available storage.
-2. `info` for its returned opaque selector reports the same identity.
+2. `info` for its returned opaque selector returns both a `device` and its
+   matching typed JFDP `identity`, including Render Core version, source
+   revision, ABI and complete feature-family set.
 3. `list` returns a typed AppList with a registry generation; `recovery` returns
    a typed recovery record without serial-text parsing.
 4. Install a checked `.jfapp`; retain JSONL progress and terminal result, then
@@ -75,9 +77,12 @@ console data, private keys or JFDP handles in JSON.
 
 ## Evidence And Exit
 
-Archive a versioned directory containing `report.md`, `summary.json`, raw
-provider stdout/stderr for each case, CLI commands, provider fixture sources,
-manifest, build/flash logs and the exact `.jfapp` hashes. `summary.json` must
+Archive a versioned directory containing `report.md`, `summary.json`, direct
+provider stdout as `provider.stdout.raw.jsonl` (or `.json`), provider stderr as
+`provider.stderr.raw.log`, separately captured CLI stdout as `cli.stdout.json`,
+CLI stderr, commands, provider fixture sources, manifest, build/flash logs and
+the exact `.jfapp` hashes. CLI pretty-printed output is not provider raw
+stdout. `summary.json` must
 separately state discovery, identity matching, install, cancellation, logs,
 reconnect/reboot, watchdog/reset and transport/panel error counts.
 

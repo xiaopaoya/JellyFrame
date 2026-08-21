@@ -1,18 +1,20 @@
 # Device OS A2 就绪度与实现要求
 
-> 最后更新：2026-08-19；适用版本：0.6.0-dev；状态：实现前置阶段
+> 最后更新：2026-08-21；适用版本：0.6.0-dev；状态：实现前置阶段
 
 ## 当前结论
 
 **尚不能交付 A2 验收，更不能开始外部开发者试用。**
 
-当前主线已完成平台无关控制面：JFDP/1 与安装契约、Developer Image manifest、严格 provider
+当前主线已完成平台无关控制面：JFDP/1、typed Identity/Logs payload、安装契约、Developer Image manifest、严格 provider
 JSON/JSONL parser、显式 provider host client、CLI 的 `discover/info/install/cancel/logs` 入口，以及
 VS Code 的 discovery session 状态。这些只证明 host 不会猜测端口、不会伪造取消，也不会静默接受不匹配
 的 provider 输出；它们不等于存在可用的 Device OS provider、安装后 App 渲染、输入、日志或恢复闭环。
 
-WS147 已有 A1 storage/recovery 与 factory image 证据。它不能替代 A2 的 author-tool 到实际已安装 App
-的端到端证据。
+WS147 已有 A1 storage/recovery 与 factory image 证据。2026-08-21 provider run 已证明 30 个已安装 entry HTML
+lifecycle cycle，但 A2 仍为 **partial**：provider 尚未完成 wire-attested Identity/完整 feature family、typed Logs、
+有界 linked-resource loading 与已确认的 live cancellation/session 证据。这些都不能替代 A2 的 author-tool 到实际
+已安装 App 的端到端证据。
 
 ## 所有权与完成度
 
@@ -58,7 +60,8 @@ LayerNode、arena 地址均不得跨任务/跨进程传递。
 2. 创建 App Runtime（需要时 script worker）与 Render Core document；资源、frame、input 和 service 仍只通过
    已有 value-only 协议交接。
 3. UI task 解码/呈现 frame，并把输入转为 value-only packet；App fatal/load failure 返回 protected launcher。
-4. App-scoped log 由 Runtime/launcher 带 app ID、generation、timestamp 输出；provider 只转发有界记录。
+4. App-scoped log 由 Runtime/launcher 带 app ID、generation、timestamp、level 输出；provider 只转发 typed copy，
+   每个 response 至多 11 条，每条 message 至多 255 bytes。
 5. stop/remove/rollback 与正在运行的 App 有明确顺序：停止输入和 service、等待 teardown、再改变 registry；
    不得让旧 frame 或旧 generation 在新 App 后 present。
 
@@ -83,7 +86,8 @@ fixtures 必须可在无板卡 host 上运行；它们测试 provider contract�
 ## WS147 A2 实机验收顺序
 
 1. 固定一份已发布 Developer Image/manifest/provider 版本，复核 JFDP wire 与 A1 recovery 没有回归。
-2. `discover -> info` 与 manifest identity 完全匹配。
+2. `discover -> info` 与 manifest identity 完全匹配，包括 JFDP Identity 中的 Render Core version、revision、ABI 与
+   feature families。
 3. 从 VS Code 或 CLI 对一个实际 `.jfapp` 执行 install；记录 JSONL、registry、launch marker、panel 及输入响应。
 4. update、rollback、remove、load failure、runtime fatal、mid-install cancel 各做一次 reconnect/reboot 后检查。
 5. 读取 app-scoped logs，确认诊断不污染 provider stdout，且不存在 watchdog、reset loop、DMA/SPI/panel 错误。

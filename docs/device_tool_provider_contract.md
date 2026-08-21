@@ -1,6 +1,6 @@
 # Device OS Tool Provider Contract
 
-> Last updated: 2026-08-19; Applies to: 0.6.0-dev; Status: draft; physical provider not implemented
+> Last updated: 2026-08-21; Applies to: 0.6.0-dev; Status: draft; physical provider delivery pending A2 closure
 
 This host-process contract separates Runtime author tools from physical board
 dependencies. It is not `JFDP/1`, does not change its wire bytes and does not
@@ -83,9 +83,20 @@ opaque `endpointId`, board/profile/image/runtime identities, `JFDP/1`,
 connection state, display shape/size, enabled feature families, maximum bundle
 bytes and available storage. Feature-family IDs are unique lowercase ASCII
 `[a-z0-9][a-z0-9.-]{0,95}` values, with at most 64 entries. Other operations return one selected device plus
-optional typed transaction, progress, logs or recovery data. A result is at
-most 64 KiB; a log result has at most 256 records. It must not expose raw bundle
-bytes, flash addresses, filesystem paths, private keys or native handles.
+optional typed transaction, progress, log summary or recovery data. A result is
+at most 64 KiB. It must not expose raw bundle bytes, flash addresses,
+filesystem paths, private keys or native handles.
+
+`info` is backed by the typed `JFDP/1 Identity` response. In addition to the
+device record used for discovery, it must attest `imageId`, `profileId`,
+`imageVersion`, `renderCoreVersion`, a lowercase 40-character source revision,
+nonzero Render Core ABI, and the complete feature-family set. The stable wire
+bits map to `core.document`, `core.paint`, `css.flex-grid`,
+`css.modern-paint`, `forms.advanced`, and `graphics.canvas2d`; document and
+paint are mandatory. A successful `info` result carries both `device` and an
+`identity` object with exactly those seven camel-case fields; its `profileId`
+and `imageVersion` must match `device`. A provider must report these
+device-derived values, not a host configuration guess.
 
 `list` maps the JFDP AppList payload and returns `apps` with
 `registryGeneration`; the two fields always appear together. There are at most
@@ -103,21 +114,28 @@ exactly `appId` (empty only for device-wide recovery), `registryGeneration`,
 An optional `transaction` is exactly `id`, `receivedBytes`, `expectedBytes`,
 `complete`, and `active`; all byte counts are uint32 and received bytes cannot
 exceed expected bytes. An optional `progress` is exactly `completedBytes` and
-`totalBytes` with the same bound. Terminal `logs` contains at most 256 records,
-each exactly `level`, `appId`, and `message`, using the same level vocabulary as
-JSONL log events. These names deliberately mirror the typed JFDP payloads;
-providers must not serialize registry or task-private structures instead.
+`totalBytes` with the same bound. A successful terminal `logs` result contains
+only `logSummary`, exactly `returnedRecords` and `droppedRecords`. Individual
+records are JSONL events, never a duplicate terminal list. This mirrors the
+typed JFDP Logs response: at most 11 records per response, each with `level`,
+`appId`, uint32 `generation`, decimal-string uint64 `timestampMs`, and a
+message of at most 255 UTF-8 bytes. The decimal string preserves timestamps in
+JavaScript clients. Providers must not serialize registry or task-private
+structures instead.
 
 ## JSONL And Adoption
 
 For `--output jsonl`, the stream is at most 256 KiB and 1024 non-empty lines.
 Every line carries `format`, `formatVersion`, `operation`, `requestId`,
 `sequence` and `provider`; `sequence` is a positive, strictly increasing
-uint32. A `progress` event adds only `progress.completedBytes` and
-`progress.totalBytes`; a `log` event adds only `log.level`, `log.appId` and
-`log.message`. `level` is `debug`, `info`, `warn` or `error`. The one final
-`result` uses the ordinary result envelope plus `sequence` and must be the last
-line. Missing, duplicate or out-of-order terminal events, or any identity
+uint32. Only `install` may emit `progress`, adding only
+`progress.completedBytes` and `progress.totalBytes`. Only `logs` may emit a
+`log` event. Its record contains exactly `level`, `appId`, `generation`,
+`timestampMs`, and `message`; `level` is `debug`, `info`, `warn` or `error`.
+The one final `result` uses the ordinary result envelope plus `sequence` and
+must be the last line. For a successful `logs` stream,
+`logSummary.returnedRecords` must exactly equal the number of emitted log
+events. Missing, duplicate or out-of-order terminal events, or any identity
 change inside a stream, are provider failures, never successful installs.
 `cancel` returns `cancellation.confirmed` as a boolean. Runtime treats any
 value other than `true` as a failed cancellation; killing a host process is not

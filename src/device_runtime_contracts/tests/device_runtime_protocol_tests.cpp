@@ -219,6 +219,64 @@ void discovery_request_response_loopback_preserves_session_and_capabilities() {
     assert(std::strcmp(observed.runtime_version, advertised.runtime_version) == 0);
 }
 
+void image_identity_and_app_logs_payloads_preserve_bounded_values() {
+    std::array<std::uint8_t, kDeviceProtocolMaxPayloadBytes> encoded{};
+    std::size_t encoded_size = 0;
+
+    DeviceImageIdentityPayload identity;
+    copy_string_literal(identity.image_id, "org.jellyframe.ws147.developer");
+    copy_string_literal(identity.profile_id, "rect-172x320");
+    copy_string_literal(identity.image_version, "0.1.0-dev");
+    copy_string_literal(identity.render_core_version, "0.6.1");
+    copy_string_literal(identity.source_revision, "0123456789abcdef0123456789abcdef01234567");
+    identity.render_core_abi = 1;
+    identity.feature_family_bits = DeviceRenderCoreFeatureDocument |
+                                   DeviceRenderCoreFeaturePaint |
+                                   DeviceRenderCoreFeatureAdvancedForms |
+                                   DeviceRenderCoreFeatureCanvas2d;
+    assert(encode_device_image_identity_payload(identity, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    DeviceImageIdentityPayload decoded_identity;
+    assert(decode_device_image_identity_payload(encoded.data(), encoded_size, decoded_identity) ==
+           DeviceProtocolStatus::Ok);
+    assert(decoded_identity.image_id_view() == identity.image_id_view());
+    assert(decoded_identity.profile_id_view() == identity.profile_id_view());
+    assert(decoded_identity.image_version_view() == identity.image_version_view());
+    assert(decoded_identity.render_core_version_view() == identity.render_core_version_view());
+    assert(decoded_identity.source_revision_view() == identity.source_revision_view());
+    assert(decoded_identity.render_core_abi == identity.render_core_abi);
+    assert(decoded_identity.feature_family_bits == identity.feature_family_bits);
+
+    DeviceAppLogsPayload logs;
+    logs.dropped_records = 3;
+    logs.entry_count = 2;
+    copy_string_literal(logs.entries[0].app_id, "org.example.alpha");
+    copy_string_literal(logs.entries[0].message, "runtime started");
+    logs.entries[0].generation = 18;
+    logs.entries[0].timestamp_ms = 123456789ull;
+    logs.entries[0].level = DeviceAppLogLevel::Info;
+    copy_string_literal(logs.entries[1].app_id, "org.example.beta");
+    copy_string_literal(logs.entries[1].message, "budget exceeded");
+    logs.entries[1].generation = 19;
+    logs.entries[1].timestamp_ms = 123456999ull;
+    logs.entries[1].level = DeviceAppLogLevel::Error;
+    assert(encode_device_app_logs_payload(logs, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    DeviceAppLogsPayload decoded_logs;
+    assert(decode_device_app_logs_payload(encoded.data(), encoded_size, decoded_logs) ==
+           DeviceProtocolStatus::Ok);
+    assert(decoded_logs.dropped_records == logs.dropped_records);
+    assert(decoded_logs.entry_count == logs.entry_count);
+    assert(decoded_logs.entries[0].app_id_view() == logs.entries[0].app_id_view());
+    assert(decoded_logs.entries[0].message_view() == logs.entries[0].message_view());
+    assert(decoded_logs.entries[0].generation == logs.entries[0].generation);
+    assert(decoded_logs.entries[0].timestamp_ms == logs.entries[0].timestamp_ms);
+    assert(decoded_logs.entries[1].level == DeviceAppLogLevel::Error);
+    assert(std::strcmp(device_app_log_level_name(DeviceAppLogLevel::Warning), "warn") == 0);
+    assert(is_device_message_type(static_cast<std::uint8_t>(DeviceMessageType::Identity)));
+    assert(std::strcmp(device_message_type_name(DeviceMessageType::Identity), "identity") == 0);
+}
+
 void typed_install_payloads_preserve_bounded_values() {
     DeviceInstallBeginPayload begin;
     begin.transaction_id = 71;
@@ -283,7 +341,7 @@ void typed_lifecycle_and_result_payloads_preserve_values() {
     assert(decoded_app.app_id_view() == app.app_id_view());
 
     DeviceLogsRequestPayload logs;
-    logs.limit = 64;
+    logs.limit = kDeviceAppLogMaxEntries;
     assert(encode_device_logs_request_payload(logs, encoded.data(), encoded.size(), encoded_size) ==
            DeviceProtocolStatus::Ok);
     DeviceLogsRequestPayload decoded_logs;
@@ -291,6 +349,9 @@ void typed_lifecycle_and_result_payloads_preserve_values() {
            DeviceProtocolStatus::Ok);
     assert(decoded_logs.app_id_view().empty());
     assert(decoded_logs.limit == logs.limit);
+    logs.limit = kDeviceAppLogMaxEntries + 1;
+    assert(encode_device_logs_request_payload(logs, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::InvalidArgument);
 
     DeviceOperationResultPayload result;
     result.result_code = DeviceRequestResultCode::Accepted;
@@ -498,6 +559,41 @@ void typed_payloads_reject_malformed_or_ambiguous_input() {
     encoded[12] = 1;
     assert(decode_device_recovery_detail_payload(encoded.data(), encoded_size, decoded_recovery) ==
            DeviceProtocolStatus::InvalidArgument);
+
+    DeviceImageIdentityPayload identity;
+    copy_string_literal(identity.image_id, "org.example.image");
+    copy_string_literal(identity.profile_id, "rect-172x320");
+    copy_string_literal(identity.image_version, "0.1.0-dev");
+    copy_string_literal(identity.render_core_version, "0.6.1");
+    copy_string_literal(identity.source_revision, "0123456789abcdef0123456789abcdef01234567");
+    identity.render_core_abi = 1;
+    identity.feature_family_bits = DeviceRenderCoreFeatureDocument | DeviceRenderCoreFeaturePaint;
+    assert(encode_device_image_identity_payload(identity, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    DeviceImageIdentityPayload decoded_identity;
+    encoded[12] = 0x80;
+    assert(decode_device_image_identity_payload(encoded.data(), encoded_size, decoded_identity) ==
+           DeviceProtocolStatus::InvalidArgument);
+    encoded[12] = 0x03;
+    encoded[16 + identity.image_id_view().size() + identity.profile_id_view().size() +
+            identity.image_version_view().size() + identity.render_core_version_view().size()] = 'G';
+    assert(decode_device_image_identity_payload(encoded.data(), encoded_size, decoded_identity) ==
+           DeviceProtocolStatus::InvalidArgument);
+
+    DeviceAppLogsPayload logs;
+    logs.entry_count = 1;
+    copy_string_literal(logs.entries[0].app_id, "org.example.logs");
+    copy_string_literal(logs.entries[0].message, "hello");
+    assert(encode_device_app_logs_payload(logs, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    DeviceAppLogsPayload decoded_logs;
+    encoded[8 + 2] = 0xff;
+    assert(decode_device_app_logs_payload(encoded.data(), encoded_size, decoded_logs) ==
+           DeviceProtocolStatus::InvalidArgument);
+    encoded[8 + 2] = static_cast<std::uint8_t>(DeviceAppLogLevel::Info);
+    encoded[8 + 3] = 1;
+    assert(decode_device_app_logs_payload(encoded.data(), encoded_size, decoded_logs) ==
+           DeviceProtocolStatus::InvalidArgument);
 }
 
 } // namespace
@@ -509,6 +605,7 @@ int main() {
     capabilities_round_trip_without_dynamic_storage();
     capabilities_reject_unterminated_or_truncated_values();
     discovery_request_response_loopback_preserves_session_and_capabilities();
+    image_identity_and_app_logs_payloads_preserve_bounded_values();
     typed_install_payloads_preserve_bounded_values();
     typed_lifecycle_and_result_payloads_preserve_values();
     app_list_and_recovery_payloads_preserve_bounded_values();

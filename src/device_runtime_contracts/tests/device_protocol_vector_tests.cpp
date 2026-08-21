@@ -91,7 +91,8 @@ void assert_frame_vector(const std::vector<WireVector>& vectors,
     assert_encoded_equals(encoded, encoded_size, vector_bytes(vectors, name));
 }
 
-void copy_string(std::array<char, kDeviceMaxAppIdBytes + 1>& destination, const char* value) {
+template <std::size_t Capacity>
+void copy_string(std::array<char, Capacity>& destination, const char* value) {
     const std::size_t length = std::strlen(value);
     assert(length < destination.size());
     std::memcpy(destination.data(), value, length + 1);
@@ -124,6 +125,28 @@ void canonical_wire_vectors_match_reference_contract() {
     frame.session_id = 0x01020304u;
     frame.request_id = 0x10203040u;
     assert_frame_vector(vectors, "frame-capabilities-response", frame, encoded.data(), encoded_size);
+
+    DeviceImageIdentityPayload identity;
+    copy_string(identity.image_id, "org.jellyframe.ws147.developer");
+    copy_string(identity.profile_id, "rect-172x320");
+    copy_string(identity.image_version, "0.1.0-dev");
+    copy_string(identity.render_core_version, "0.6.1");
+    copy_string(identity.source_revision, "0123456789abcdef0123456789abcdef01234567");
+    identity.render_core_abi = 1;
+    identity.feature_family_bits = DeviceRenderCoreFeatureDocument |
+                                   DeviceRenderCoreFeaturePaint |
+                                   DeviceRenderCoreFeatureAdvancedForms |
+                                   DeviceRenderCoreFeatureCanvas2d;
+    assert(encode_device_image_identity_payload(identity, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    assert_encoded_equals(encoded, encoded_size, vector_bytes(vectors, "image-identity"));
+
+    frame = {};
+    frame.type = DeviceMessageType::Identity;
+    frame.flags = kDeviceFrameFlagResponse;
+    frame.session_id = 0x01020304u;
+    frame.request_id = 0x10203040u;
+    assert_frame_vector(vectors, "frame-identity-response", frame, encoded.data(), encoded_size);
 
     DeviceInstallBeginPayload begin;
     begin.transaction_id = 0x11223344u;
@@ -171,10 +194,27 @@ void canonical_wire_vectors_match_reference_contract() {
 
     DeviceLogsRequestPayload logs;
     copy_string(logs.app_id, "org.jellyframe.demo");
-    logs.limit = 16;
+    logs.limit = 11;
     assert(encode_device_logs_request_payload(logs, encoded.data(), encoded.size(), encoded_size) ==
            DeviceProtocolStatus::Ok);
     assert_encoded_equals(encoded, encoded_size, vector_bytes(vectors, "logs"));
+
+    DeviceAppLogsPayload app_logs;
+    app_logs.dropped_records = 3;
+    app_logs.entry_count = 2;
+    copy_string(app_logs.entries[0].app_id, "org.example.alpha");
+    copy_string(app_logs.entries[0].message, "runtime started");
+    app_logs.entries[0].generation = 18;
+    app_logs.entries[0].timestamp_ms = 123456789ull;
+    app_logs.entries[0].level = DeviceAppLogLevel::Info;
+    copy_string(app_logs.entries[1].app_id, "org.example.beta");
+    copy_string(app_logs.entries[1].message, "budget exceeded");
+    app_logs.entries[1].generation = 19;
+    app_logs.entries[1].timestamp_ms = 123456999ull;
+    app_logs.entries[1].level = DeviceAppLogLevel::Error;
+    assert(encode_device_app_logs_payload(app_logs, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    assert_encoded_equals(encoded, encoded_size, vector_bytes(vectors, "app-logs"));
 
     DeviceOperationResultPayload result;
     result.result_code = DeviceRequestResultCode::Accepted;

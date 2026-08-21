@@ -3091,8 +3091,8 @@ def cmd_device(args: argparse.Namespace) -> int:
             if args.allow_downgrade:
                 provider_arguments.append("--allow-downgrade")
         elif args.device_command == "logs":
-            if not 1 <= args.limit <= 256:
-                raise OSError("log limit must be between 1 and 256")
+            if not 1 <= args.limit <= 11:
+                raise OSError("provider log limit must be between 1 and 11")
             provider_arguments.extend(["--id", args.app_id, "--limit", str(args.limit)])
         elif args.device_command == "cancel":
             provider_arguments.extend(["--transaction-id", str(args.transaction_id)])
@@ -3987,7 +3987,7 @@ def main() -> int:
         "logs", help="Read bounded app-scoped provider logs through JSONL.")
     device_logs.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
     device_logs.add_argument("--id", dest="app_id", required=True, help="Installed app ID.")
-    device_logs.add_argument("--limit", type=int, default=128, help="Maximum provider log records (1..256).")
+    device_logs.add_argument("--limit", type=int, default=11, help="Maximum provider log records (1..11).")
     device_logs.set_defaults(func=cmd_device)
     for name, description in (
         ("launch", "Launch one installed app through the configured provider."),

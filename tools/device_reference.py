@@ -27,6 +27,27 @@ JFDP_FRAME_FLAG_RESPONSE = 1
 JFDP_HEADER_BYTES = 24
 JFDP_PAYLOAD_VERSION = 1
 JFDP_MAX_APP_ID_BYTES = 95
+JFDP_MAX_APP_LOG_ENTRIES = 11
+JFDP_MAX_APP_LOG_MESSAGE_BYTES = 255
+JFDP_IDENTITY_MAX_IMAGE_ID_BYTES = 95
+JFDP_IDENTITY_MAX_PROFILE_ID_BYTES = 63
+JFDP_IDENTITY_MAX_IMAGE_VERSION_BYTES = 63
+JFDP_IDENTITY_MAX_RENDER_CORE_VERSION_BYTES = 31
+JFDP_IDENTITY_SOURCE_REVISION_BYTES = 40
+JFDP_RENDER_CORE_FEATURE_DOCUMENT = 1 << 0
+JFDP_RENDER_CORE_FEATURE_PAINT = 1 << 1
+JFDP_RENDER_CORE_FEATURE_FLEX_GRID = 1 << 2
+JFDP_RENDER_CORE_FEATURE_MODERN_PAINT = 1 << 3
+JFDP_RENDER_CORE_FEATURE_ADVANCED_FORMS = 1 << 4
+JFDP_RENDER_CORE_FEATURE_CANVAS2D = 1 << 5
+JFDP_RENDER_CORE_FEATURE_KNOWN_MASK = (
+    JFDP_RENDER_CORE_FEATURE_DOCUMENT |
+    JFDP_RENDER_CORE_FEATURE_PAINT |
+    JFDP_RENDER_CORE_FEATURE_FLEX_GRID |
+    JFDP_RENDER_CORE_FEATURE_MODERN_PAINT |
+    JFDP_RENDER_CORE_FEATURE_ADVANCED_FORMS |
+    JFDP_RENDER_CORE_FEATURE_CANVAS2D
+)
 
 JFDP_MESSAGE_TYPES = {
     "discovery": 1,
@@ -41,6 +62,7 @@ JFDP_MESSAGE_TYPES = {
     "recovery": 10,
     "remove": 11,
     "rollback": 12,
+    "identity": 13,
 }
 JFDP_MESSAGE_NAMES = {value: key for key, value in JFDP_MESSAGE_TYPES.items()}
 JFDP_RESULT_CODES = {
@@ -676,7 +698,7 @@ def decode_jfdp_app_id_payload(payload: bytes) -> str:
 
 def encode_jfdp_logs_request_payload(app_id: str, limit: int) -> bytes:
     app_id_bytes = _jfdp_app_id_bytes(app_id, allow_empty=True)
-    if not (0 < limit <= 0xffff):
+    if not (0 < limit <= JFDP_MAX_APP_LOG_ENTRIES):
         raise ReferenceDeviceError("invalid-request", "invalid log request limit")
     return struct.pack("<BBH", JFDP_PAYLOAD_VERSION, len(app_id_bytes), limit) + app_id_bytes
 
@@ -685,7 +707,8 @@ def decode_jfdp_logs_request_payload(payload: bytes) -> dict:
     if len(payload) < 4:
         raise ReferenceDeviceError("invalid-request", "truncated logs request payload")
     version, app_id_size, limit = struct.unpack("<BBH", payload[:4])
-    if version != JFDP_PAYLOAD_VERSION or app_id_size > JFDP_MAX_APP_ID_BYTES or not limit or len(payload) != 4 + app_id_size:
+    if (version != JFDP_PAYLOAD_VERSION or app_id_size > JFDP_MAX_APP_ID_BYTES or
+            not (0 < limit <= JFDP_MAX_APP_LOG_ENTRIES) or len(payload) != 4 + app_id_size):
         raise ReferenceDeviceError("invalid-request", "invalid logs request payload")
     try:
         app_id = payload[4:].decode("ascii")
@@ -694,6 +717,64 @@ def decode_jfdp_logs_request_payload(payload: bytes) -> dict:
     if "\0" in app_id:
         raise ReferenceDeviceError("invalid-request", "logs app id must not contain NUL")
     return {"appId": app_id, "limit": limit}
+
+
+def _jfdp_bounded_text_bytes(value: str, field: str, maximum: int) -> bytes:
+    if not isinstance(value, str):
+        raise ReferenceDeviceError("invalid-request", f"{field} must be text")
+    encoded = value.encode("utf-8")
+    if not encoded or len(encoded) > maximum or b"\0" in encoded:
+        raise ReferenceDeviceError("invalid-request", f"invalid {field}")
+    return encoded
+
+
+def encode_jfdp_image_identity_payload(*, image_id: str, profile_id: str,
+                                       image_version: str, render_core_version: str,
+                                       source_revision: str, render_core_abi: int,
+                                       feature_family_bits: int) -> bytes:
+    """Encode the value-only JFDP Identity response payload."""
+    values = (
+        _jfdp_bounded_text_bytes(image_id, "image id", JFDP_IDENTITY_MAX_IMAGE_ID_BYTES),
+        _jfdp_bounded_text_bytes(profile_id, "profile id", JFDP_IDENTITY_MAX_PROFILE_ID_BYTES),
+        _jfdp_bounded_text_bytes(image_version, "image version", JFDP_IDENTITY_MAX_IMAGE_VERSION_BYTES),
+        _jfdp_bounded_text_bytes(render_core_version, "Render Core version", JFDP_IDENTITY_MAX_RENDER_CORE_VERSION_BYTES),
+    )
+    if (not isinstance(source_revision, str) or len(source_revision) != JFDP_IDENTITY_SOURCE_REVISION_BYTES or
+            any(character not in "0123456789abcdef" for character in source_revision)):
+        raise ReferenceDeviceError("invalid-request", "invalid source revision")
+    if (not isinstance(render_core_abi, int) or not (0 < render_core_abi <= 0xffffffff) or
+            not isinstance(feature_family_bits, int) or
+            feature_family_bits & ~JFDP_RENDER_CORE_FEATURE_KNOWN_MASK or
+            (feature_family_bits & (JFDP_RENDER_CORE_FEATURE_DOCUMENT | JFDP_RENDER_CORE_FEATURE_PAINT)) !=
+            (JFDP_RENDER_CORE_FEATURE_DOCUMENT | JFDP_RENDER_CORE_FEATURE_PAINT)):
+        raise ReferenceDeviceError("invalid-request", "invalid Render Core identity")
+    revision = source_revision.encode("ascii")
+    return (struct.pack("<BBBBBBBBII", JFDP_PAYLOAD_VERSION, *(len(value) for value in values), len(revision),
+                        0, 0, render_core_abi, feature_family_bits) + b"".join((*values, revision)))
+
+
+def encode_jfdp_app_logs_payload(entries: list[dict], dropped_records: int = 0) -> bytes:
+    """Encode a bounded JFDP Logs response without sharing host-object state."""
+    if (not isinstance(entries, list) or len(entries) > JFDP_MAX_APP_LOG_ENTRIES or
+            not isinstance(dropped_records, int) or not (0 <= dropped_records <= 0xffffffff)):
+        raise ReferenceDeviceError("invalid-request", "invalid app logs response")
+    encoded_entries: list[bytes] = []
+    levels = {"debug": 0, "info": 1, "warn": 2, "error": 3}
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {"appId", "message", "generation", "timestampMs", "level"}:
+            raise ReferenceDeviceError("invalid-request", "invalid app log record")
+        app_id = _jfdp_app_id_bytes(entry["appId"], allow_empty=False)
+        message = _jfdp_bounded_text_bytes(entry["message"], "log message", JFDP_MAX_APP_LOG_MESSAGE_BYTES)
+        generation = entry["generation"]
+        timestamp_ms = entry["timestampMs"]
+        level = entry["level"]
+        if (not isinstance(generation, int) or not (0 <= generation <= 0xffffffff) or
+                not isinstance(timestamp_ms, int) or not (0 <= timestamp_ms <= 0xffffffffffffffff) or
+                level not in levels):
+            raise ReferenceDeviceError("invalid-request", "invalid app log values")
+        encoded_entries.append(struct.pack("<BBBBIQ", len(app_id), len(message), levels[level], 0,
+                                           generation, timestamp_ms) + app_id + message)
+    return struct.pack("<BBBBI", JFDP_PAYLOAD_VERSION, len(encoded_entries), 0, 0, dropped_records) + b"".join(encoded_entries)
 
 
 def encode_jfdp_operation_result(result_code: str, *, flags: int = 0, transaction_id: int = 0,

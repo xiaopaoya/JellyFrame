@@ -1,6 +1,6 @@
 # Device Provider 移植验收
 
-> 最后更新：2026-08-19；适用版本：0.6.0-dev；协议：JFDP/1
+> 最后更新：2026-08-21；适用版本：0.6.0-dev；协议：JFDP/1
 
 这是物理 Device OS provider 的 A2 交接单。它验证 `jellyframe_cli.py device` 使用的
 host-process 边界，不替代 JFDP wire、Developer Image lifecycle、panel 或 touch 验收。
@@ -20,7 +20,7 @@ jellyframe-device --output json --request-id <id> discover
 jellyframe-device --output json --request-id <id> --selector <endpoint> info
 jellyframe-device --output jsonl --request-id <id> --selector <endpoint> install --bundle <absolute.jfapp>
 jellyframe-device --output json --request-id <id> --selector <endpoint> cancel --transaction-id <id>
-jellyframe-device --output jsonl --request-id <id> --selector <endpoint> logs --id <app-id> --limit <1..256>
+jellyframe-device --output jsonl --request-id <id> --selector <endpoint> logs --id <app-id> --limit <1..11>
 ```
 
 provider 必须精确实现 [device_tool_provider_contract_zh.md](device_tool_provider_contract_zh.md) 的
@@ -40,7 +40,7 @@ result/JSONL schema。protocol 与 operation diagnostics 只能写入 stderr；s
 | interrupted transfer | JSONL 返回稳定 failure/cancellation，staging 不发布 |
 | confirmed cancellation | 只有 JFDP transaction 已取消后，`cancel` 才返回 `cancellation.confirmed=true` |
 | unconfirmed cancellation | `cancel` 返回 `confirmed=false` 或 failure；host 必须失败 |
-| log bounds | `logs` 不超过 requested limit，且绝不超过 256 条 |
+| log bounds | `logs` 不超过 requested limit，且绝不超过 11 条 typed record；每条 message 至多 255 bytes |
 
 所有 fixture 必须在每条 response 保留输入的 request ID 与 operation。不得把 desktop reference registry
 伪装为物理设备。
@@ -51,7 +51,8 @@ result/JSONL schema。protocol 与 operation diagnostics 只能写入 stderr；s
 provenance、manifest SHA-256、board、USB endpoint identity、firmware hash 与 build configuration。
 
 1. `discover` 精确返回已发布 board/profile/image/runtime、display、feature families、bundle limit 与当前 storage。
-2. 对返回的 opaque selector 执行 `info`，identity 必须一致。
+2. 对返回的 opaque selector 执行 `info`，同时返回 `device` 和匹配的 typed JFDP `identity`，证明 identity 一致，
+   并包含 Render Core version、source revision、ABI 与完整 feature-family set。
 3. `list` 返回带 registry generation 的 typed AppList，`recovery` 返回 typed recovery record，不得解析 serial text。
 4. 安装一份已检查 `.jfapp`，归档 JSONL progress/terminal，再验证 App 可 launch。
 5. 开始第二次 install，经 provider `cancel`，并在 reconnect 或 reboot 后证明旧 committed App 仍可 launch。
@@ -63,8 +64,10 @@ raw serial console、private key 或 JFDP handle。
 
 ## 证据与出口
 
-归档版本化目录，至少包含 `report.md`、`summary.json`、每个 case 的原始 provider stdout/stderr、CLI command、
-provider fixture source、manifest、build/flash log 与精确 `.jfapp` hash。`summary.json` 必须分别记录 discovery、
+归档版本化目录，至少包含 `report.md`、`summary.json`、每个 case 的 direct provider stdout（命名为
+`provider.stdout.raw.jsonl` 或 `.json`）、provider stderr（`provider.stderr.raw.log`）、单独保存的 CLI stdout
+（`cli.stdout.json`）、CLI stderr、CLI command、provider fixture source、manifest、build/flash log 与精确 `.jfapp`
+hash。CLI pretty-printed output 不是 provider raw stdout。`summary.json` 必须分别记录 discovery、
 identity matching、install、cancellation、logs、reconnect/reboot、watchdog/reset 与 transport/panel error count。
 
 所有 fixture 与 WS147 run 都以同一已发布 image identity 通过时，本 A2 provider handoff 才通过。之后主线将

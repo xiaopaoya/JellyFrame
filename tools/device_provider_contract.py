@@ -17,14 +17,19 @@ FORMAT_VERSION = 0
 MAX_DOCUMENT_BYTES = 64 * 1024
 MAX_JSONL_BYTES = 256 * 1024
 MAX_JSONL_EVENTS = 1024
-MAX_LOG_RECORDS = 256
+MAX_LOG_MESSAGE_BYTES = 255
 MAX_APP_LIST_ENTRIES = 24
 MAX_REQUEST_ID_BYTES = 64
 MAX_FEATURE_FAMILIES = 64
 OPERATIONS = frozenset({"discover", "info", "list", "install", "cancel", "launch", "stop", "remove", "rollback", "logs", "recovery"})
 RESULT_CODES = frozenset({"ok", "accepted", "queued", "invalid-request", "busy", "unsupported", "denied", "not-found", "stale-session", "stale-request", "payload-too-large", "integrity-failed", "storage-full", "cancelled", "failed", "transport-unavailable", "protocol-mismatch", "provider-failed"})
 FEATURE_FAMILY_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{0,95}$")
+SOURCE_REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
 LOG_LEVELS = frozenset({"debug", "info", "warn", "error"})
+RENDER_CORE_FEATURE_FAMILIES = frozenset({
+    "core.document", "core.paint", "css.flex-grid", "css.modern-paint",
+    "forms.advanced", "graphics.canvas2d",
+})
 APP_LIBRARY_STATES = frozenset({"installed", "disabled", "failed"})
 RECOVERY_REASONS = frozenset({"none", "registry-invalid", "staging-discarded", "app-load-failure", "app-runtime-failure", "app-budget-exceeded", "launcher-fallback"})
 
@@ -69,6 +74,15 @@ def _uint32(value: Any, name: str) -> int:
 def _optional_string(value: Any, name: str, maximum: int = 256) -> str:
     if not isinstance(value, str) or len(value.encode("utf-8")) > maximum:
         raise ProviderContractError(f"{name} must be a UTF-8 string no longer than {maximum} bytes")
+    return value
+
+
+def _uint64_decimal_string(value: Any, name: str) -> str:
+    if (not isinstance(value, str) or not value.isascii() or not value.isdecimal() or
+            len(value) > 20 or (len(value) > 1 and value[0] == "0")):
+        raise ProviderContractError(f"{name} must be an unsigned decimal string")
+    if int(value) > 0xFFFFFFFFFFFFFFFF:
+        raise ProviderContractError(f"{name} exceeds uint64")
     return value
 
 
@@ -143,20 +157,39 @@ def _validate_app_library_entry(value: Any, name: str) -> None:
         raise ProviderContractError(f"{name} has invalid state or rollback availability")
 
 
-def _validate_logs(value: Any, name: str) -> None:
-    if not isinstance(value, list) or len(value) > MAX_LOG_RECORDS:
-        raise ProviderContractError(f"{name} is invalid")
-    for index, record in enumerate(value):
-        _validate_stream_log({
-            "format": FORMAT,
-            "formatVersion": FORMAT_VERSION,
-            "kind": "log",
-            "operation": "logs",
-            "requestId": "provider-result",
-            "sequence": index + 1,
-            "provider": {"id": "provider-result", "version": "0"},
-            "log": record,
-        })
+def _validate_identity(value: Any, name: str) -> dict[str, Any]:
+    identity = _object(value, name)
+    required = {"imageId", "profileId", "imageVersion", "renderCoreVersion", "sourceRevision",
+                "renderCoreAbi", "featureFamilies"}
+    if set(identity) != required:
+        raise ProviderContractError(f"{name} has unknown or missing fields")
+    _string(identity["imageId"], f"{name}.imageId", 96)
+    _string(identity["profileId"], f"{name}.profileId", 64)
+    _string(identity["imageVersion"], f"{name}.imageVersion", 64)
+    _string(identity["renderCoreVersion"], f"{name}.renderCoreVersion", 32)
+    if not isinstance(identity["sourceRevision"], str) or SOURCE_REVISION_RE.fullmatch(identity["sourceRevision"]) is None:
+        raise ProviderContractError(f"{name}.sourceRevision must be 40 lowercase hexadecimal characters")
+    _positive_uint32(identity["renderCoreAbi"], f"{name}.renderCoreAbi")
+    families = identity["featureFamilies"]
+    if (not isinstance(families, list) or len(families) < 2 or
+            len(families) > len(RENDER_CORE_FEATURE_FAMILIES) or
+            len(set(families)) != len(families) or
+            set(families) - RENDER_CORE_FEATURE_FAMILIES or
+            not {"core.document", "core.paint"}.issubset(families)):
+        raise ProviderContractError(f"{name}.featureFamilies is invalid")
+    return identity
+
+
+def _validate_log_record(value: Any, name: str) -> None:
+    log = _object(value, name)
+    if set(log) != {"level", "appId", "generation", "timestampMs", "message"}:
+        raise ProviderContractError(f"{name} has unknown or missing fields")
+    if log["level"] not in LOG_LEVELS:
+        raise ProviderContractError(f"{name}.level is invalid")
+    _string(log["appId"], f"{name}.appId", 96)
+    _uint32(log["generation"], f"{name}.generation")
+    _uint64_decimal_string(log["timestampMs"], f"{name}.timestampMs")
+    _string(log["message"], f"{name}.message", MAX_LOG_MESSAGE_BYTES)
 
 
 def _validate_transaction(value: Any) -> None:
@@ -196,7 +229,7 @@ def _validate_recovery(value: Any) -> None:
 
 def _validate_result(value: Any, require_sequence: bool = False) -> dict[str, Any]:
     result = _envelope(value, "result", "result", require_sequence)
-    allowed = {"format", "formatVersion", "kind", "operation", "requestId", "resultCode", "provider", "devices", "device", "apps", "registryGeneration", "message", "transaction", "progress", "logs", "recovery", "cancellation"}
+    allowed = {"format", "formatVersion", "kind", "operation", "requestId", "resultCode", "provider", "devices", "device", "identity", "apps", "registryGeneration", "message", "transaction", "progress", "logSummary", "recovery", "cancellation"}
     if require_sequence:
         allowed.add("sequence")
     required = {"format", "formatVersion", "kind", "operation", "requestId", "resultCode", "provider"}
@@ -213,6 +246,13 @@ def _validate_result(value: Any, require_sequence: bool = False) -> dict[str, An
             _validate_device(device, f"devices[{index}]")
     if "device" in result:
         _validate_device(result["device"], "device")
+    if "identity" in result:
+        identity = _validate_identity(result["identity"], "identity")
+        if result["operation"] != "info" or "device" not in result:
+            raise ProviderContractError("identity is only valid on a selected info result")
+        if (identity["profileId"] != result["device"]["profileId"] or
+                identity["imageVersion"] != result["device"]["imageVersion"]):
+            raise ProviderContractError("identity does not match the selected device")
     if "apps" in result:
         if not isinstance(result["apps"], list) or len(result["apps"]) > MAX_APP_LIST_ENTRIES:
             raise ProviderContractError("apps is invalid")
@@ -233,8 +273,12 @@ def _validate_result(value: Any, require_sequence: bool = False) -> dict[str, An
         _validate_transaction(result["transaction"])
     if "progress" in result:
         _validate_progress(result["progress"])
-    if "logs" in result:
-        _validate_logs(result["logs"], "logs")
+    if "logSummary" in result:
+        summary = _object(result["logSummary"], "logSummary")
+        if set(summary) != {"returnedRecords", "droppedRecords"}:
+            raise ProviderContractError("logSummary has unknown or missing fields")
+        _uint32(summary["returnedRecords"], "logSummary.returnedRecords")
+        _uint32(summary["droppedRecords"], "logSummary.droppedRecords")
     if "recovery" in result:
         _validate_recovery(result["recovery"])
         if (not result["recovery"]["appId"] and
@@ -249,6 +293,10 @@ def _validate_result(value: Any, require_sequence: bool = False) -> dict[str, An
             raise ProviderContractError("successful list result is missing apps")
         if result["operation"] == "recovery" and "recovery" not in result:
             raise ProviderContractError("successful recovery result is missing recovery")
+        if result["operation"] == "info" and ("device" not in result or "identity" not in result):
+            raise ProviderContractError("successful info result is missing device identity")
+        if result["operation"] == "logs" and "logSummary" not in result:
+            raise ProviderContractError("successful logs result is missing logSummary")
     return result
 
 
@@ -268,7 +316,7 @@ def parse_provider_result(data: bytes | str) -> dict[str, Any]:
 
 def _validate_stream_progress(value: Any) -> dict[str, Any]:
     event = _envelope(value, "progress event", "progress", True)
-    if set(event) != {"format", "formatVersion", "kind", "operation", "requestId", "sequence", "provider", "progress"}:
+    if event["operation"] != "install" or set(event) != {"format", "formatVersion", "kind", "operation", "requestId", "sequence", "provider", "progress"}:
         raise ProviderContractError("progress event has unknown or missing fields")
     progress = _object(event["progress"], "progress")
     if set(progress) != {"completedBytes", "totalBytes"}:
@@ -283,13 +331,9 @@ def _validate_stream_progress(value: Any) -> dict[str, Any]:
 
 def _validate_stream_log(value: Any) -> dict[str, Any]:
     event = _envelope(value, "log event", "log", True)
-    if set(event) != {"format", "formatVersion", "kind", "operation", "requestId", "sequence", "provider", "log"}:
+    if event["operation"] != "logs" or set(event) != {"format", "formatVersion", "kind", "operation", "requestId", "sequence", "provider", "log"}:
         raise ProviderContractError("log event has unknown or missing fields")
-    log = _object(event["log"], "log")
-    if set(log) != {"level", "appId", "message"} or log["level"] not in LOG_LEVELS:
-        raise ProviderContractError("log has unknown or missing fields")
-    _string(log["appId"], "log.appId", 96)
-    _string(log["message"], "log.message", 1024)
+    _validate_log_record(event["log"], "log")
     return event
 
 
@@ -330,4 +374,9 @@ def parse_provider_jsonl(data: bytes | str) -> list[dict[str, Any]]:
         events.append(event)
     if events[-1]["kind"] != "result":
         raise ProviderContractError("provider JSONL is missing a terminal result")
+    terminal = events[-1]
+    log_count = sum(event["kind"] == "log" for event in events[:-1])
+    if terminal["operation"] == "logs" and terminal["resultCode"] in {"ok", "accepted"}:
+        if terminal["logSummary"]["returnedRecords"] != log_count:
+            raise ProviderContractError("provider JSONL logSummary does not match log events")
     return events

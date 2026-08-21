@@ -38,6 +38,13 @@ def recovery() -> dict:
             "rollbackAvailable": True}
 
 
+def identity() -> dict:
+    return {"imageId": "org.jellyframe.ws147.developer", "profileId": "rect-172x320",
+            "imageVersion": "0.1.0-dev", "renderCoreVersion": "0.6.1",
+            "sourceRevision": "0123456789abcdef0123456789abcdef01234567", "renderCoreAbi": 1,
+            "featureFamilies": ["core.document", "core.paint", "forms.advanced"]}
+
+
 class DeviceProviderContractTests(unittest.TestCase):
     def test_accepts_bounded_discovery(self):
         parsed = contract.parse_provider_result(json.dumps(result(devices=[device()])))
@@ -49,13 +56,16 @@ class DeviceProviderContractTests(unittest.TestCase):
         with self.assertRaises(contract.ProviderContractError):
             contract.parse_provider_result('{"format":"a","format":"b"}')
 
-    def test_rejects_untrusted_identity_and_oversized_logs(self):
+    def test_rejects_untrusted_identity_and_invalid_log_summaries(self):
         invalid = device()
         invalid["protocol"] = "JFDP/2"
         with self.assertRaises(contract.ProviderContractError):
             contract.parse_provider_result(json.dumps(result(devices=[invalid])))
         with self.assertRaises(contract.ProviderContractError):
-            contract.parse_provider_result(json.dumps(result(logs=[{}] * 257)))
+            contract.parse_provider_result(json.dumps(result(operation="logs")))
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(
+                result(operation="logs", logSummary={"returnedRecords": 1, "droppedRecords": -1})))
 
     def test_rejects_ambiguous_feature_families(self):
         invalid = device()
@@ -76,6 +86,21 @@ class DeviceProviderContractTests(unittest.TestCase):
         recovery_result = result(operation="recovery", recovery=recovery())
         self.assertEqual(contract.parse_provider_result(json.dumps(recovery_result))["recovery"]["reason"],
                          "app-runtime-failure")
+
+    def test_accepts_only_attested_selected_device_identity(self):
+        info = result(operation="info", device=device(), identity=identity())
+        self.assertEqual(contract.parse_provider_result(json.dumps(info))["identity"]["renderCoreAbi"], 1)
+        incomplete = result(operation="info", device=device())
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(incomplete))
+        mismatched = identity()
+        mismatched["profileId"] = "round-300"
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(result(operation="info", device=device(), identity=mismatched)))
+        malformed = identity()
+        malformed["sourceRevision"] = "A" * 40
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_result(json.dumps(result(operation="info", device=device(), identity=malformed)))
 
     def test_rejects_untyped_or_incomplete_app_list_and_recovery_results(self):
         with self.assertRaises(contract.ProviderContractError):
@@ -101,14 +126,69 @@ class DeviceProviderContractTests(unittest.TestCase):
         with self.assertRaises(contract.ProviderContractError):
             contract.parse_provider_result(json.dumps(result(operation="recovery", recovery=device_recovery)))
 
-    def test_accepts_ordered_jsonl_progress_log_and_result(self):
+    def test_accepts_ordered_install_progress_and_result(self):
         stream = "\n".join((
             json.dumps(event("progress", 1, progress={"completedBytes": 0, "totalBytes": 1500})),
-            json.dumps(event("log", 2, log={"level": "info", "appId": "org.example.app", "message": "installing"})),
-            json.dumps(event("result", 3, resultCode="ok", device=device())),
+            json.dumps(event("result", 2, resultCode="ok", device=device())),
         ))
         parsed = contract.parse_provider_jsonl(stream)
-        self.assertEqual([item["kind"] for item in parsed], ["progress", "log", "result"])
+        self.assertEqual([item["kind"] for item in parsed], ["progress", "result"])
+
+    def test_accepts_ordered_typed_log_events_and_summary(self):
+        stream = "\n".join((
+            json.dumps(event("log", 1, operation="logs", log={
+                "level": "info", "appId": "org.example.app", "generation": 42,
+                "timestampMs": "18446744073709551615", "message": "started"})),
+            json.dumps(event("result", 2, operation="logs", resultCode="ok",
+                             logSummary={"returnedRecords": 1, "droppedRecords": 3})),
+        ))
+        parsed = contract.parse_provider_jsonl(stream)
+        self.assertEqual(parsed[0]["log"]["timestampMs"], "18446744073709551615")
+        self.assertEqual(parsed[-1]["logSummary"]["droppedRecords"], 3)
+
+    def test_rejects_malformed_or_mismatched_typed_log_events(self):
+        malformed = event("log", 1, operation="logs", log={
+            "level": "info", "appId": "org.example.app", "message": "started"})
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_jsonl("\n".join((
+                json.dumps(malformed),
+                json.dumps(event("result", 2, operation="logs", resultCode="ok",
+                                 logSummary={"returnedRecords": 1, "droppedRecords": 0})),
+            )))
+        invalid_timestamp = event("log", 1, operation="logs", log={
+            "level": "info", "appId": "org.example.app", "generation": 1,
+            "timestampMs": 123, "message": "started"})
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_jsonl("\n".join((
+                json.dumps(invalid_timestamp),
+                json.dumps(event("result", 2, operation="logs", resultCode="ok",
+                                 logSummary={"returnedRecords": 1, "droppedRecords": 0})),
+            )))
+        oversized = event("log", 1, operation="logs", log={
+            "level": "info", "appId": "org.example.app", "generation": 1,
+            "timestampMs": "1", "message": "x" * 256})
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_jsonl("\n".join((
+                json.dumps(oversized),
+                json.dumps(event("result", 2, operation="logs", resultCode="ok",
+                                 logSummary={"returnedRecords": 1, "droppedRecords": 0})),
+            )))
+        mismatched_count = "\n".join((
+            json.dumps(event("log", 1, operation="logs", log={
+                "level": "info", "appId": "org.example.app", "generation": 1,
+                "timestampMs": "1", "message": "started"})),
+            json.dumps(event("result", 2, operation="logs", resultCode="ok",
+                             logSummary={"returnedRecords": 0, "droppedRecords": 0})),
+        ))
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_jsonl(mismatched_count)
+        with self.assertRaises(contract.ProviderContractError):
+            contract.parse_provider_jsonl("\n".join((
+                json.dumps(event("log", 1, log={
+                    "level": "info", "appId": "org.example.app", "generation": 1,
+                    "timestampMs": "1", "message": "wrong operation"})),
+                json.dumps(event("result", 2, resultCode="ok")),
+            )))
 
     def test_rejects_jsonl_without_terminal_or_with_identity_drift(self):
         with self.assertRaises(contract.ProviderContractError):
@@ -124,7 +204,9 @@ class DeviceProviderContractTests(unittest.TestCase):
 
     def test_rejects_jsonl_out_of_order_or_early_terminal(self):
         terminal = event("result", 2, resultCode="ok")
-        late = event("log", 3, log={"level": "info", "appId": "org.example.app", "message": "late"})
+        late = event("log", 3, operation="logs", log={
+            "level": "info", "appId": "org.example.app", "generation": 1,
+            "timestampMs": "1", "message": "late"})
         with self.assertRaises(contract.ProviderContractError):
             contract.parse_provider_jsonl("\n".join((json.dumps(terminal), json.dumps(late))))
         with self.assertRaises(contract.ProviderContractError):

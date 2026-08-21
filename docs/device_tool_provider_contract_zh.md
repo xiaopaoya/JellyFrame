@@ -1,6 +1,6 @@
 # Device OS 工具 Provider 契约
 
-> 最后更新：2026-08-19；适用版本：0.6.0-dev；状态：草案；physical provider 尚未实现
+> 最后更新：2026-08-21；适用版本：0.6.0-dev；状态：草案；physical provider 交付等待 A2 关闭
 
 本 host-process contract 用于隔离 Runtime 作者工具与物理板卡依赖。它不是 `JFDP/1`，不改变
 wire bytes，也不把桌面 reference endpoint 变成 device transport。
@@ -69,9 +69,15 @@ jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> 
 
 `discover` 返回有界 `devices` array。可用 record 包含稳定 opaque `endpointId`、board/profile/image/runtime
 identity、`JFDP/1`、connection state、display shape/size、enabled feature family、maximum bundle bytes 和
-available storage。feature-family ID 必须唯一、使用小写 ASCII `[a-z0-9][a-z0-9.-]{0,95}`，且最多 64 项。其他操作返回一个 selected device 和可选 typed transaction、progress、logs、recovery data。
-result 最大 64 KiB，log result 最多 256 records。禁止传出 raw bundle bytes、flash address、filesystem path、
-private key 或 native handle。
+available storage。feature-family ID 必须唯一、使用小写 ASCII `[a-z0-9][a-z0-9.-]{0,95}`，且最多 64 项。其他操作返回一个 selected device 和可选 typed transaction、progress、log summary、recovery data。
+result 最大 64 KiB。禁止传出 raw bundle bytes、flash address、filesystem path、private key 或 native handle。
+
+`info` 以 typed `JFDP/1 Identity` response 为依据。除 discovery 使用的 device record 外，它还必须证明
+`imageId`、`profileId`、`imageVersion`、`renderCoreVersion`、40 字符小写 source revision、非零 Render Core ABI
+和完整 feature-family set。稳定 wire bit 分别映射 `core.document`、`core.paint`、`css.flex-grid`、
+`css.modern-paint`、`forms.advanced`、`graphics.canvas2d`；document 与 paint 必须存在。provider 必须报告设备
+实际返回的值，不能猜测 host configuration。成功的 `info` result 必须同时包含 `device` 和只含这 7 个
+camel-case field 的 `identity` object；其中 `profileId`、`imageVersion` 必须与 `device` 相同。
 
 `list` 映射 JFDP AppList payload，返回 `apps` 与 `registryGeneration`，二者必须同时出现。最多 24 条 entry；
 每条 entry 必须且只能包含 `appId`、`versionName`、`versionCode`、`bundleBytes`、`state`（`installed`、`disabled`
@@ -84,18 +90,21 @@ private key 或 native handle。
 
 可选 `transaction` 必须且只能是 `id`、`receivedBytes`、`expectedBytes`、`complete`、`active`；byte count
 均为 uint32，且 received 不得大于 expected。可选 `progress` 必须且只能是 `completedBytes` 与 `totalBytes`，
-并遵守同一范围。terminal `logs` 最多 256 条，每条必须且只能包含 `level`、`appId` 与 `message`，level
-vocabulary 与 JSONL log event 相同。这些字段刻意与 typed JFDP payload 对齐；provider 不得改为序列化
-registry 或 task-private structure。
+并遵守同一范围。成功的 terminal `logs` 只包含 `logSummary`，且必须且只能是 `returnedRecords` 与
+`droppedRecords`；具体记录在 JSONL event 中，禁止在终态重复列表。这与 typed JFDP Logs response 对齐：
+每个 response 至多 11 条，每条包含 `level`、`appId`、uint32 `generation`、十进制字符串 uint64
+`timestampMs` 与最多 255 UTF-8 bytes 的 `message`。十进制字符串避免 JavaScript client 丢失时间戳精度。
+provider 不得改为序列化 registry 或 task-private structure。
 
 ## JSONL 与接入
 
 `--output jsonl` stream 最多 256 KiB、1024 条非空行。每行都带有 `format`、`formatVersion`、`operation`、
-`requestId`、`sequence` 和 `provider`；`sequence` 是正的严格递增 uint32。`progress` event 只能额外携带
-`progress.completedBytes` 与 `progress.totalBytes`；`log` event 只能额外携带 `log.level`、`log.appId` 和
-`log.message`，其中 `level` 只能是 `debug`、`info`、`warn` 或 `error`。唯一最终 `result` 使用普通 result
-envelope 加 `sequence`，且必须是最后一行。终态缺失、重复或乱序，或 stream 内任何 identity 改变均为 provider
-failure，不能显示 install 成功。`cancel` 必须返回 boolean `cancellation.confirmed`；Runtime 只将 `true` 视为
+`requestId`、`sequence` 和 `provider`；`sequence` 是正的严格递增 uint32。只有 `install` 可以输出
+`progress` event，且只能额外携带 `progress.completedBytes` 与 `progress.totalBytes`；只有 `logs` 可以输出
+`log` event，record 必须且只能是 `level`、`appId`、`generation`、`timestampMs`、`message`，其中 `level`
+只能是 `debug`、`info`、`warn` 或 `error`。唯一最终 `result` 使用普通 result envelope 加 `sequence`，且必须
+是最后一行。成功 `logs` stream 的 `logSummary.returnedRecords` 必须精确等于已输出 log event 数量。终态缺失、
+重复或乱序，或 stream 内任何 identity 改变均为 provider failure，不能显示 install 成功。`cancel` 必须返回 boolean `cancellation.confirmed`；Runtime 只将 `true` 视为
 取消成功。仅 kill host process 不代表 staging 已清理。
 
 在向作者交付 physical provider 或把它接入 VS Code 部署 UI 前，Device OS 必须交付同 image/profile 的 JFDP

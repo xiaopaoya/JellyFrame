@@ -46,7 +46,7 @@ class DeviceProviderClientTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             provider = Path(directory) / "provider.exe"
             provider.write_bytes(b"")
-            mismatched = subprocess.CompletedProcess([], 0, result("info", "jf-test"), b"")
+            mismatched = subprocess.CompletedProcess([], 0, result("launch", "jf-test"), b"")
             with patch("device_provider_client.subprocess.run", return_value=mismatched):
                 with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "does not match"):
                     device_provider_client.invoke_provider(provider, "discover", request_id="jf-test")
@@ -77,8 +77,11 @@ class DeviceProviderClientTests(unittest.TestCase):
                 b'{"format":"jellyframe.device-provider","formatVersion":0,"kind":"log",'
                 b'"operation":"logs","requestId":"jf-test","sequence":1,'
                 b'"provider":{"id":"test","version":"0.1"},'
-                b'"log":{"level":"info","appId":"org.example.app","message":"started"}}\n'
-                + result("logs", "jf-test").replace(b'"kind":"result",', b'"kind":"result","sequence":2,')
+                b'"log":{"level":"info","appId":"org.example.app","generation":7,'
+                b'"timestampMs":"123456789","message":"started"}}\n'
+                + result("logs", "jf-test").replace(
+                    b'"kind":"result",',
+                    b'"kind":"result","sequence":2,"logSummary":{"returnedRecords":1,"droppedRecords":0},')
             )
             completed = subprocess.CompletedProcess([], 0, stream, b"")
             with patch("device_provider_client.subprocess.run", return_value=completed):

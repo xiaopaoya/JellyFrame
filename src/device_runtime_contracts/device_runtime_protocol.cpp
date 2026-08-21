@@ -1,18 +1,22 @@
 #include "device_runtime_contracts/device_runtime_protocol.h"
 
 #include <cstring>
+#include <utility>
 
 namespace jellyframe {
 namespace {
 
 constexpr std::uint8_t kMagic[] = {'J', 'F', 'D', 'P'};
 constexpr std::size_t kCapabilityFixedBytes = 20;
+constexpr std::size_t kImageIdentityFixedBytes = 16;
 constexpr std::uint8_t kDevicePayloadVersion = 1;
 constexpr std::size_t kInstallBeginFixedBytes = 16;
 constexpr std::size_t kInstallChunkFixedBytes = 12;
 constexpr std::size_t kTransactionFixedBytes = 8;
 constexpr std::size_t kAppIdFixedBytes = 4;
 constexpr std::size_t kLogsRequestFixedBytes = 4;
+constexpr std::size_t kAppLogsFixedBytes = 8;
+constexpr std::size_t kAppLogEntryFixedBytes = 16;
 constexpr std::size_t kAppListFixedBytes = 8;
 constexpr std::size_t kAppListEntryFixedBytes = 12;
 constexpr std::size_t kRecoveryDetailFixedBytes = 16;
@@ -31,6 +35,11 @@ std::uint32_t read_u32(const std::uint8_t* p) {
            (static_cast<std::uint32_t>(p[3]) << 24);
 }
 
+std::uint64_t read_u64(const std::uint8_t* p) {
+    return static_cast<std::uint64_t>(read_u32(p)) |
+           (static_cast<std::uint64_t>(read_u32(p + 4)) << 32);
+}
+
 void write_u16(std::uint8_t* p, std::uint16_t value) {
     p[0] = static_cast<std::uint8_t>(value);
     p[1] = static_cast<std::uint8_t>(value >> 8);
@@ -41,6 +50,11 @@ void write_u32(std::uint8_t* p, std::uint32_t value) {
     p[1] = static_cast<std::uint8_t>(value >> 8);
     p[2] = static_cast<std::uint8_t>(value >> 16);
     p[3] = static_cast<std::uint8_t>(value >> 24);
+}
+
+void write_u64(std::uint8_t* p, std::uint64_t value) {
+    write_u32(p, static_cast<std::uint32_t>(value));
+    write_u32(p + 4, static_cast<std::uint32_t>(value >> 32));
 }
 
 std::size_t bounded_c_string_length(const char* value, std::size_t capacity) {
@@ -67,6 +81,31 @@ bool is_device_app_library_state(std::uint8_t value) {
 
 bool is_device_recovery_reason(std::uint8_t value) {
     return value <= static_cast<std::uint8_t>(DeviceRecoveryReason::LauncherFallback);
+}
+
+bool is_device_app_log_level(std::uint8_t value) {
+    return value <= static_cast<std::uint8_t>(DeviceAppLogLevel::Error);
+}
+
+bool has_valid_lower_hex_revision(const char* value, std::size_t& length) {
+    length = bounded_c_string_length(value, kDeviceIdentitySourceRevisionBytes + 1);
+    if (length != kDeviceIdentitySourceRevisionBytes) {
+        return false;
+    }
+    for (std::size_t index = 0; index < length; ++index) {
+        const char character = value[index];
+        if (!((character >= '0' && character <= '9') ||
+              (character >= 'a' && character <= 'f'))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool has_valid_render_core_feature_families(std::uint32_t bits) {
+    return bits != 0 && (bits & ~kDeviceRenderCoreFeatureFamilyKnownMask) == 0 &&
+           (bits & (DeviceRenderCoreFeatureDocument | DeviceRenderCoreFeaturePaint)) ==
+               (DeviceRenderCoreFeatureDocument | DeviceRenderCoreFeaturePaint);
 }
 
 DeviceProtocolStatus decode_app_id(const std::uint8_t* input,
@@ -118,7 +157,7 @@ std::uint32_t crc32(const std::uint8_t* bytes, std::size_t size) {
 
 bool is_device_message_type(std::uint8_t value) {
     return value >= static_cast<std::uint8_t>(DeviceMessageType::Discovery) &&
-           value <= static_cast<std::uint8_t>(DeviceMessageType::Rollback);
+           value <= static_cast<std::uint8_t>(DeviceMessageType::Identity);
 }
 
 bool is_device_request_result_code(std::uint8_t value) {
@@ -222,6 +261,7 @@ const char* device_message_type_name(DeviceMessageType type) {
     case DeviceMessageType::Recovery: return "recovery";
     case DeviceMessageType::Remove: return "remove";
     case DeviceMessageType::Rollback: return "rollback";
+    case DeviceMessageType::Identity: return "identity";
     }
     return "unknown";
 }
@@ -332,6 +372,118 @@ DeviceProtocolStatus decode_device_capabilities(const std::uint8_t* input,
                 runtime_length);
     capabilities.board_id[board_length] = '\0';
     capabilities.runtime_version[runtime_length] = '\0';
+    return DeviceProtocolStatus::Ok;
+}
+
+DeviceProtocolStatus encode_device_image_identity_payload(const DeviceImageIdentityPayload& payload,
+                                                          std::uint8_t* output,
+                                                          std::size_t output_capacity,
+                                                          std::size_t& output_size) {
+    output_size = 0;
+    std::size_t image_id_length = 0;
+    std::size_t profile_id_length = 0;
+    std::size_t image_version_length = 0;
+    std::size_t render_core_version_length = 0;
+    std::size_t source_revision_length = 0;
+    if (output == nullptr ||
+        !has_valid_bounded_string(payload.image_id.data(), payload.image_id.size(), image_id_length) ||
+        !has_valid_bounded_string(payload.profile_id.data(), payload.profile_id.size(), profile_id_length) ||
+        !has_valid_bounded_string(payload.image_version.data(), payload.image_version.size(), image_version_length) ||
+        !has_valid_bounded_string(payload.render_core_version.data(), payload.render_core_version.size(), render_core_version_length) ||
+        !has_valid_lower_hex_revision(payload.source_revision.data(), source_revision_length) ||
+        payload.render_core_abi == 0 || !has_valid_render_core_feature_families(payload.feature_family_bits)) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    const std::size_t payload_size = kImageIdentityFixedBytes + image_id_length + profile_id_length +
+                                     image_version_length + render_core_version_length + source_revision_length;
+    if (payload_size > kDeviceProtocolMaxPayloadBytes) {
+        return DeviceProtocolStatus::PayloadTooLarge;
+    }
+    if (output_capacity < payload_size) {
+        return DeviceProtocolStatus::BufferTooSmall;
+    }
+    output[0] = kDevicePayloadVersion;
+    output[1] = static_cast<std::uint8_t>(image_id_length);
+    output[2] = static_cast<std::uint8_t>(profile_id_length);
+    output[3] = static_cast<std::uint8_t>(image_version_length);
+    output[4] = static_cast<std::uint8_t>(render_core_version_length);
+    output[5] = static_cast<std::uint8_t>(source_revision_length);
+    output[6] = 0;
+    output[7] = 0;
+    write_u32(output + 8, payload.render_core_abi);
+    write_u32(output + 12, payload.feature_family_bits);
+    std::size_t cursor = kImageIdentityFixedBytes;
+    for (const auto& value : {std::pair<const char*, std::size_t>{payload.image_id.data(), image_id_length},
+                              {payload.profile_id.data(), profile_id_length},
+                              {payload.image_version.data(), image_version_length},
+                              {payload.render_core_version.data(), render_core_version_length},
+                              {payload.source_revision.data(), source_revision_length}}) {
+        std::memcpy(output + cursor, value.first, value.second);
+        cursor += value.second;
+    }
+    output_size = cursor;
+    return DeviceProtocolStatus::Ok;
+}
+
+DeviceProtocolStatus decode_device_image_identity_payload(const std::uint8_t* input,
+                                                          std::size_t input_size,
+                                                          DeviceImageIdentityPayload& payload) {
+    payload = {};
+    if (input == nullptr) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    if (input_size < kImageIdentityFixedBytes) {
+        return DeviceProtocolStatus::Truncated;
+    }
+    if (input[0] != kDevicePayloadVersion || input[6] != 0 || input[7] != 0) {
+        return DeviceProtocolStatus::UnsupportedVersion;
+    }
+    const std::size_t image_id_length = input[1];
+    const std::size_t profile_id_length = input[2];
+    const std::size_t image_version_length = input[3];
+    const std::size_t render_core_version_length = input[4];
+    const std::size_t source_revision_length = input[5];
+    const std::size_t string_bytes = image_id_length + profile_id_length + image_version_length +
+                                     render_core_version_length + source_revision_length;
+    if (image_id_length == 0 || image_id_length > kDeviceIdentityMaxImageIdBytes ||
+        profile_id_length == 0 || profile_id_length > kDeviceIdentityMaxProfileIdBytes ||
+        image_version_length == 0 || image_version_length > kDeviceIdentityMaxImageVersionBytes ||
+        render_core_version_length == 0 || render_core_version_length > kDeviceIdentityMaxRenderCoreVersionBytes ||
+        source_revision_length != kDeviceIdentitySourceRevisionBytes ||
+        input_size != kImageIdentityFixedBytes + string_bytes) {
+        return input_size < kImageIdentityFixedBytes + string_bytes
+                   ? DeviceProtocolStatus::Truncated
+                   : DeviceProtocolStatus::InvalidArgument;
+    }
+    const std::uint32_t render_core_abi = read_u32(input + 8);
+    const std::uint32_t feature_family_bits = read_u32(input + 12);
+    if (render_core_abi == 0 || !has_valid_render_core_feature_families(feature_family_bits)) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    std::size_t cursor = kImageIdentityFixedBytes;
+    const auto copy_string = [&](auto& destination, std::size_t length) {
+        if (std::memchr(input + cursor, '\0', length) != nullptr) {
+            return false;
+        }
+        std::memcpy(destination.data(), input + cursor, length);
+        cursor += length;
+        return true;
+    };
+    if (!copy_string(payload.image_id, image_id_length) ||
+        !copy_string(payload.profile_id, profile_id_length) ||
+        !copy_string(payload.image_version, image_version_length) ||
+        !copy_string(payload.render_core_version, render_core_version_length) ||
+        !copy_string(payload.source_revision, source_revision_length)) {
+        payload = {};
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    std::size_t checked_revision_length = 0;
+    if (!has_valid_lower_hex_revision(payload.source_revision.data(), checked_revision_length)) {
+        payload = {};
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    payload.render_core_abi = render_core_abi;
+    payload.feature_family_bits = feature_family_bits;
     return DeviceProtocolStatus::Ok;
 }
 
@@ -537,7 +689,8 @@ DeviceProtocolStatus encode_device_logs_request_payload(const DeviceLogsRequestP
     output_size = 0;
     const std::size_t app_id_length = bounded_c_string_length(
         payload.app_id.data(), kDeviceMaxAppIdBytes + 1);
-    if (output == nullptr || app_id_length > kDeviceMaxAppIdBytes || payload.limit == 0) {
+    if (output == nullptr || app_id_length > kDeviceMaxAppIdBytes || payload.limit == 0 ||
+        payload.limit > kDeviceAppLogMaxEntries) {
         return DeviceProtocolStatus::InvalidArgument;
     }
     const std::size_t payload_size = kLogsRequestFixedBytes + app_id_length;
@@ -577,12 +730,124 @@ DeviceProtocolStatus decode_device_logs_request_payload(const std::uint8_t* inpu
         return DeviceProtocolStatus::InvalidArgument;
     }
     const std::uint16_t limit = read_u16(input + 2);
-    if (limit == 0) {
+    if (limit == 0 || limit > kDeviceAppLogMaxEntries) {
         return DeviceProtocolStatus::InvalidArgument;
     }
     payload.limit = limit;
     if (app_id_length != 0) {
         std::memcpy(payload.app_id.data(), input + kLogsRequestFixedBytes, app_id_length);
+    }
+    return DeviceProtocolStatus::Ok;
+}
+
+DeviceProtocolStatus encode_device_app_logs_payload(const DeviceAppLogsPayload& payload,
+                                                    std::uint8_t* output,
+                                                    std::size_t output_capacity,
+                                                    std::size_t& output_size) {
+    output_size = 0;
+    if (output == nullptr || payload.entry_count > kDeviceAppLogMaxEntries || payload.entry_count > 0xffu) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    std::array<std::size_t, kDeviceAppLogMaxEntries> app_id_lengths{};
+    std::array<std::size_t, kDeviceAppLogMaxEntries> message_lengths{};
+    std::size_t payload_size = kAppLogsFixedBytes;
+    for (std::size_t index = 0; index < payload.entry_count; ++index) {
+        const DeviceAppLogEntry& entry = payload.entries[index];
+        if (!has_valid_app_id(entry.app_id.data(), app_id_lengths[index]) ||
+            !has_valid_bounded_string(entry.message.data(), entry.message.size(), message_lengths[index]) ||
+            !is_device_app_log_level(static_cast<std::uint8_t>(entry.level))) {
+            return DeviceProtocolStatus::InvalidArgument;
+        }
+        payload_size += kAppLogEntryFixedBytes + app_id_lengths[index] + message_lengths[index];
+        if (payload_size > kDeviceProtocolMaxPayloadBytes) {
+            return DeviceProtocolStatus::PayloadTooLarge;
+        }
+    }
+    if (output_capacity < payload_size) {
+        return DeviceProtocolStatus::BufferTooSmall;
+    }
+    output[0] = kDevicePayloadVersion;
+    output[1] = static_cast<std::uint8_t>(payload.entry_count);
+    output[2] = 0;
+    output[3] = 0;
+    write_u32(output + 4, payload.dropped_records);
+    std::size_t cursor = kAppLogsFixedBytes;
+    for (std::size_t index = 0; index < payload.entry_count; ++index) {
+        const DeviceAppLogEntry& entry = payload.entries[index];
+        output[cursor] = static_cast<std::uint8_t>(app_id_lengths[index]);
+        output[cursor + 1] = static_cast<std::uint8_t>(message_lengths[index]);
+        output[cursor + 2] = static_cast<std::uint8_t>(entry.level);
+        output[cursor + 3] = 0;
+        write_u32(output + cursor + 4, entry.generation);
+        write_u64(output + cursor + 8, entry.timestamp_ms);
+        cursor += kAppLogEntryFixedBytes;
+        std::memcpy(output + cursor, entry.app_id.data(), app_id_lengths[index]);
+        cursor += app_id_lengths[index];
+        std::memcpy(output + cursor, entry.message.data(), message_lengths[index]);
+        cursor += message_lengths[index];
+    }
+    output_size = cursor;
+    return DeviceProtocolStatus::Ok;
+}
+
+DeviceProtocolStatus decode_device_app_logs_payload(const std::uint8_t* input,
+                                                    std::size_t input_size,
+                                                    DeviceAppLogsPayload& payload) {
+    payload = {};
+    if (input == nullptr) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    if (input_size < kAppLogsFixedBytes) {
+        return DeviceProtocolStatus::Truncated;
+    }
+    if (input[0] != kDevicePayloadVersion) {
+        return DeviceProtocolStatus::UnsupportedVersion;
+    }
+    if (input[2] != 0 || input[3] != 0 || input[1] > kDeviceAppLogMaxEntries) {
+        return DeviceProtocolStatus::InvalidArgument;
+    }
+    payload.dropped_records = read_u32(input + 4);
+    payload.entry_count = input[1];
+    std::size_t cursor = kAppLogsFixedBytes;
+    for (std::size_t index = 0; index < payload.entry_count; ++index) {
+        if (input_size - cursor < kAppLogEntryFixedBytes) {
+            payload = {};
+            return DeviceProtocolStatus::Truncated;
+        }
+        const std::size_t app_id_length = input[cursor];
+        const std::size_t message_length = input[cursor + 1];
+        const std::uint8_t level = input[cursor + 2];
+        if (app_id_length == 0 || app_id_length > kDeviceMaxAppIdBytes ||
+            message_length == 0 || message_length > kDeviceAppLogMaxMessageBytes ||
+            !is_device_app_log_level(level) || input[cursor + 3] != 0) {
+            payload = {};
+            return DeviceProtocolStatus::InvalidArgument;
+        }
+        const std::uint32_t generation = read_u32(input + cursor + 4);
+        const std::uint64_t timestamp_ms = read_u64(input + cursor + 8);
+        cursor += kAppLogEntryFixedBytes;
+        const std::size_t string_bytes = app_id_length + message_length;
+        if (input_size - cursor < string_bytes) {
+            payload = {};
+            return DeviceProtocolStatus::Truncated;
+        }
+        if (std::memchr(input + cursor, '\0', app_id_length) != nullptr ||
+            std::memchr(input + cursor + app_id_length, '\0', message_length) != nullptr) {
+            payload = {};
+            return DeviceProtocolStatus::InvalidArgument;
+        }
+        DeviceAppLogEntry& entry = payload.entries[index];
+        std::memcpy(entry.app_id.data(), input + cursor, app_id_length);
+        cursor += app_id_length;
+        std::memcpy(entry.message.data(), input + cursor, message_length);
+        cursor += message_length;
+        entry.generation = generation;
+        entry.timestamp_ms = timestamp_ms;
+        entry.level = static_cast<DeviceAppLogLevel>(level);
+    }
+    if (cursor != input_size) {
+        payload = {};
+        return DeviceProtocolStatus::InvalidArgument;
     }
     return DeviceProtocolStatus::Ok;
 }
@@ -828,6 +1093,16 @@ const char* device_app_library_state_name(DeviceAppLibraryState state) {
     case DeviceAppLibraryState::Failed: return "failed";
     }
     return "installed";
+}
+
+const char* device_app_log_level_name(DeviceAppLogLevel level) {
+    switch (level) {
+    case DeviceAppLogLevel::Debug: return "debug";
+    case DeviceAppLogLevel::Info: return "info";
+    case DeviceAppLogLevel::Warning: return "warn";
+    case DeviceAppLogLevel::Error: return "error";
+    }
+    return "info";
 }
 
 const char* device_recovery_reason_name(DeviceRecoveryReason reason) {
