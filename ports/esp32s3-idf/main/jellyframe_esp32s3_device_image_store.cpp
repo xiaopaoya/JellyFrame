@@ -181,7 +181,8 @@ bool DeviceImageStore::begin_staging(const DeviceInstallRequest& request) {
     // this package are never readable by a committed lease.  Erasing only
     // the incoming package's sector range keeps InstallBegin bounded on the
     // USB endpoint without weakening staging isolation.
-    if (!erase_slot_range(staging_slot_, request.bundle_bytes)) {
+    if (!slot_range_is_erased(staging_slot_, request.bundle_bytes) &&
+        !erase_slot_range(staging_slot_, request.bundle_bytes)) {
         return false;
     }
     staging_active_ = true;
@@ -449,6 +450,24 @@ bool DeviceImageStore::erase_slot_range(std::uint8_t slot, std::uint32_t bytes) 
     }
     const std::uint32_t erased_bytes = (bytes + kFlashSectorBytes - 1u) & ~(kFlashSectorBytes - 1u);
     return esp_partition_erase_range(partition_, kStorageHeaderBytes + slot * slot_bytes, erased_bytes) == ESP_OK;
+}
+
+bool DeviceImageStore::slot_range_is_erased(std::uint8_t slot, std::uint32_t bytes) const {
+    const std::uint32_t slot_bytes = bundle_slot_bytes(partition_);
+    if (partition_ == nullptr || slot >= kBundleSlots || bytes == 0 || bytes > slot_bytes) {
+        return false;
+    }
+    std::array<std::uint8_t, 256> probe{};
+    for (std::uint32_t offset = 0; offset < bytes;) {
+        const std::size_t read_bytes = std::min<std::size_t>(probe.size(), bytes - offset);
+        if (!read_slot(slot, offset, probe.data(), read_bytes) ||
+            std::any_of(probe.begin(), probe.begin() + read_bytes,
+                        [](std::uint8_t value) { return value != 0xffu; })) {
+            return false;
+        }
+        offset += static_cast<std::uint32_t>(read_bytes);
+    }
+    return true;
 }
 
 bool DeviceImageStore::read_slot(std::uint8_t slot, std::uint32_t offset, void* output, std::size_t size) const {
