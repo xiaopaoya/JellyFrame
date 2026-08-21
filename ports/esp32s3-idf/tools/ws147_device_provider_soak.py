@@ -67,8 +67,11 @@ class ProviderHarness:
                    "--manifest", str(self.manifest), operation, "--selector", self.selector, *arguments]
         completed = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
         prefix = f"{self.sequence:04d}-{operation}"
-        (self.output / f"{prefix}.stdout.jsonl").write_text(completed.stdout, encoding="utf-8")
-        (self.output / f"{prefix}.stderr.log").write_text(completed.stderr, encoding="utf-8")
+        case_output = self.output / prefix
+        case_output.mkdir(exist_ok=True)
+        (case_output / "cli.command.txt").write_text(" ".join(command) + "\n", encoding="utf-8")
+        (case_output / "cli.stdout.json").write_text(completed.stdout, encoding="utf-8")
+        (case_output / "cli.stderr.log").write_text(completed.stderr, encoding="utf-8")
         result = parse_result(completed.stdout, operation)
         expected = allowed or {"ok"}
         if result.get("resultCode") not in expected:
