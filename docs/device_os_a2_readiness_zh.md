@@ -11,10 +11,16 @@ JSON/JSONL parser、显式 provider host client、CLI 的 `discover/info/install
 VS Code 的 discovery session 状态。这些只证明 host 不会猜测端口、不会伪造取消，也不会静默接受不匹配
 的 provider 输出；它们不等于存在可用的 Device OS provider、安装后 App 渲染、输入、日志或恢复闭环。
 
-WS147 已有 A1 storage/recovery 与 factory image 证据。2026-08-21 provider run 已证明 30 个已安装 entry HTML
-lifecycle cycle，但 A2 仍为 **partial**：provider 尚未完成 wire-attested Identity/完整 feature family、typed Logs、
-有界 linked-resource loading 与已确认的 live cancellation/session 证据。这些都不能替代 A2 的 author-tool 到实际
-已安装 App 的端到端证据。
+WS147 已有 A1 storage/recovery 与 factory image 证据。基于 `b372cc4` 的 2026-08-21 workspace remeasure 还证明，
+真实 22,924-byte resource bundle 可以完整传输、commit、launch、stop：有效包在 2,049 ms 内返回 `accepted`；完整
+传输的损坏包在 2,969 ms 内返回 typed `integrity-failed`，且没有 registry publication。storage owner 将 4 KiB
+inspection workspace、4 KiB sector cache 和 1 KiB transport scratch 放在 device task stack 之外；24,576-byte 配置栈的
+minimum free stack 为 14,468 bytes。
+
+A2 仍为 **partial**，但此前的 commit 阻塞/resource bridge blocker 已在这一 profile/fixture 范围关闭。剩余发布
+阻塞项是同一份 image report 中的 wire-attested identity 证据、已确认的 live cancellation/session 语义、完整
+update/rollback/remove 与 reconnect/reboot 证据，以及要求的 30-cycle mixed provider run。这份定向报告不能替代
+A2 author-tool 到实际已安装 App 的端到端证据。
 
 ## 所有权与完成度
 
@@ -23,7 +29,7 @@ lifecycle cycle，但 A2 仍为 **partial**：provider 尚未完成 wire-atteste
 | Render Core | 独立 Core package、profile/ABI、平台无关渲染与输入契约 | 无 A2 阻塞项；不得在 provider 中复制渲染逻辑 |
 | JellyFrame Runtime/Tools | `.jfapp`、bundle 检查、manifest/provider contract、CLI host client | VS Code 部署/日志会话、用户可读错误映射与端到端 tool regression |
 | Device OS | A1 的 launcher/registry/staging/recovery 基础 | 真正的 `jellyframe-device` provider、已安装 bundle 到 AppHost/renderer/input/log 的绑定 |
-| WS147 port | JFDP wire、持久 lifecycle、factory recovery | provider 的 USB endpoint、任务/内存边界、panel/input/log/reboot 证据 |
+| WS147 port | JFDP wire、持久 lifecycle、factory recovery、已测 profile 的真实 resource commit | 同一镜像的 provider identity 证据、confirmed cancellation/session、mixed lifecycle 与 panel/input/reboot 证据 |
 
 ## Device OS 必需实现
 

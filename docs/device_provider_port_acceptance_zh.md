@@ -64,6 +64,10 @@ raw serial console、private key 或 JFDP handle。
 
 ## 证据与出口
 
+2026-08-21 的 `workspace-measurement-07614e4` 报告可作为有界真实 resource commit path 的定向证据：覆盖
+22,924-byte bundle、成功 launch/stop、完整传输损坏包的 typed rejection，以及 workspace/cache/stack 归因。
+它不能关闭本 handoff，因为它不是下方要求的 mixed lifecycle、confirmed cancellation 和 reconnect/reboot 报告。
+
 归档版本化目录，至少包含 `report.md`、`summary.json`、每个 case 的 direct provider stdout（命名为
 `provider.stdout.raw.jsonl` 或 `.json`）、provider stderr（`provider.stderr.raw.log`）、单独保存的 CLI stdout
 （`cli.stdout.json`）、CLI stderr、CLI command、provider fixture source、manifest、build/flash log 与精确 `.jfapp`

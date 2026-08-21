@@ -77,6 +77,13 @@ console data, private keys or JFDP handles in JSON.
 
 ## Evidence And Exit
 
+The 2026-08-21 `workspace-measurement-07614e4` report is accepted as targeted
+evidence for the bounded real-resource commit path: it covers a 22,924-byte
+bundle, successful launch/stop, typed rejection of a fully transmitted corrupt
+bundle, and explicit workspace/cache/stack attribution. It does not close this
+handoff because it is not the mixed lifecycle, confirmed-cancellation and
+reconnect/reboot report required below.
+
 Archive a versioned directory containing `report.md`, `summary.json`, direct
 provider stdout as `provider.stdout.raw.jsonl` (or `.json`), provider stderr as
 `provider.stderr.raw.log`, separately captured CLI stdout as `cli.stdout.json`,

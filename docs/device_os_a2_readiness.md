@@ -16,12 +16,22 @@ does not guess ports, fabricate cancellation, or silently accept mismatched
 provider output. It does not prove that a usable Device OS provider exists, or
 that an installed App can render, receive input, emit logs, or recover.
 
-WS147 has A1 storage/recovery and factory-image evidence. The 2026-08-21
-provider run also demonstrates 30 lifecycle cycles through installed entry
-HTML, but A2 remains **partial**: its provider has not yet wire-attested
-Identity/complete feature families, typed Logs, bounded linked-resource loading
-or confirmed live cancellation/session evidence. None of this is a substitute
-for end-to-end A2 author-tool to installed-App evidence.
+WS147 has A1 storage/recovery and factory-image evidence. The targeted
+2026-08-21 workspace remeasure, based on `b372cc4`, also proves a real
+22,924-byte resource bundle can be fully transmitted, committed, launched and
+stopped: valid commit returned `accepted` in 2,049 ms, a fully transmitted
+corrupt bundle returned typed `integrity-failed` in 2,969 ms, and no registry
+publication occurred for the corrupt case. The storage owner kept the 4 KiB
+inspection workspace, 4 KiB sector cache and 1 KiB transport scratch outside
+the device task stack; the minimum free stack was 14,468 bytes from a 24,576
+byte configured stack.
+
+A2 remains **partial**, but the previous commit-time/resource-bridge blocker is
+closed for this tested profile and fixture. Remaining release blockers are
+wire-attested identity evidence in the same report, confirmed live
+cancellation/session semantics, complete update/rollback/remove and
+reconnect/reboot evidence, and the required 30-cycle mixed provider run. This
+targeted report is not a substitute for end-to-end A2 author-tool evidence.
 
 ## Ownership And Completion
 
@@ -30,7 +40,7 @@ for end-to-end A2 author-tool to installed-App evidence.
 | Render Core | Independent Core package, profiles/ABI, hardware-neutral render and input contracts | No A2 blocker; a provider must not duplicate renderer logic |
 | JellyFrame Runtime/Tools | `.jfapp`, bundle checks, manifest/provider contracts, CLI host client | VS Code deployment/log session, readable error mapping and end-to-end tool regressions |
 | Device OS | A1 launcher/registry/staging/recovery foundation | A real `jellyframe-device` provider and binding of installed bundles to AppHost, renderer, input and logs |
-| WS147 port | JFDP wire, persistent lifecycle, factory recovery | Provider USB endpoint, task/memory boundaries, panel/input/log/reboot evidence |
+| WS147 port | JFDP wire, persistent lifecycle, factory recovery, bounded real-resource commit for the measured profile | Provider identity evidence in the same image report, confirmed cancellation/session, mixed lifecycle and panel/input/reboot evidence |
 
 ## Required Device OS Implementation
 
