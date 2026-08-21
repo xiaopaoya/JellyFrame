@@ -4,7 +4,8 @@
 
 ## 当前结论
 
-**尚不能交付 A2 验收，更不能开始外部开发者试用。**
+**WS147 provider handoff 已对已发布镜像关闭；更宽范围的 A2 仍不能交付验收，
+也不能开始外部开发者试用。**
 
 当前主线已完成平台无关控制面：JFDP/1、typed Identity/Logs payload、安装契约、Developer Image manifest、严格 provider
 JSON/JSONL parser、显式 provider host client、CLI 的 `discover/info/install/cancel/logs` 入口，以及
@@ -17,19 +18,19 @@ WS147 已有 A1 storage/recovery 与 factory image 证据。基于 `b372cc4` 的
 inspection workspace、4 KiB sector cache 和 1 KiB transport scratch 放在 device task stack 之外；24,576-byte 配置栈的
 minimum free stack 为 14,468 bytes。
 
-A2 仍为 **partial**，但此前的 commit 阻塞/resource bridge blocker 已在这一 profile/fixture 范围关闭。剩余发布
-阻塞项是同一份 image report 中的 wire-attested identity 证据、已确认的 live cancellation/session 语义、完整
-update/rollback/remove 与 reconnect/reboot 证据，以及要求的 30-cycle mixed provider run。这份定向报告不能替代
-A2 author-tool 到实际已安装 App 的端到端证据。
+A2 provider handoff 对 firmware `afdcf75` 与已发布 WS147 manifest 为 **PASS**：identity cross-match、in-flight
+cancellation、durable lifecycle 和 30 次 mixed cycle 均通过。更宽范围的 A2 仍为 **partial**，因为该证据尚未关闭
+干净机器上的 VS Code 产品流程，以及真实已安装 App 的 panel/input 验收。这份 provider handoff 报告不是外部试用
+发布签字。
 
 ## 所有权与完成度
 
 | 层 | 已完成 | 必须完成后才能进入 A2 验收 |
 | --- | --- | --- |
 | Render Core | 独立 Core package、profile/ABI、平台无关渲染与输入契约 | 无 A2 阻塞项；不得在 provider 中复制渲染逻辑 |
-| JellyFrame Runtime/Tools | `.jfapp`、bundle 检查、manifest/provider contract、CLI host client | VS Code 部署/日志会话、用户可读错误映射与端到端 tool regression |
+| JellyFrame Runtime/Tools | `.jfapp`、bundle 检查、manifest/provider contract、CLI host client、provider handoff contract | 干净机器 VS Code 部署/日志会话、用户可读错误映射与端到端 tool regression |
 | Device OS | A1 的 launcher/registry/staging/recovery 基础 | 真正的 `jellyframe-device` provider、已安装 bundle 到 AppHost/renderer/input/log 的绑定 |
-| WS147 port | JFDP wire、持久 lifecycle、factory recovery、已测 profile 的真实 resource commit | 同一镜像的 provider identity 证据、confirmed cancellation/session、mixed lifecycle 与 panel/input/reboot 证据 |
+| WS147 port | JFDP wire、持久 lifecycle、factory recovery、真实 resource commit、已测 profile 的 provider handoff | 真实已安装 App 的 panel/input 证据；该镜像不再有 provider lifecycle blocker |
 
 ## Device OS 必需实现
 
@@ -99,8 +100,9 @@ fixtures 必须可在无板卡 host 上运行；它们测试 provider contract�
 5. 读取 app-scoped logs，确认诊断不污染 provider stdout，且不存在 watchdog、reset loop、DMA/SPI/panel 错误。
 6. 完成至少 30 次混合生命周期循环，再以版本化 report/summary/raw log/flash log 归档。
 
-每一步只能在前一步通过后执行。没有真实安装 App 的 panel/input/log 证据时，报告必须标为
-`not-tested`，不得用 A1 或 desktop reference 填补。
+步骤 1-4 已由 `provider-handoff-afdcf75-20260821` 报告覆盖，但该报告不宣称 panel/input 行为。没有真实安装 App
+的 panel/input 证据和干净机器 VS Code 流程时，更宽范围 A2 仍必须标为 `partial`，不得用 A1 或 desktop reference
+填补。
 
 ## A2 出口
 

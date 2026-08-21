@@ -1,6 +1,6 @@
 # Device OS Tool Provider Contract
 
-> Last updated: 2026-08-21; Applies to: 0.6.0-dev; Status: draft; physical provider delivery pending A2 closure
+> Last updated: 2026-08-21; Applies to: 0.6.0-dev; Status: WS147 provider handoff passed; wider A2 pending
 
 This host-process contract separates Runtime author tools from physical board
 dependencies. It is not `JFDP/1`, does not change its wire bytes and does not

@@ -77,12 +77,11 @@ console data, private keys or JFDP handles in JSON.
 
 ## Evidence And Exit
 
-The 2026-08-21 `workspace-measurement-07614e4` report is accepted as targeted
-evidence for the bounded real-resource commit path: it covers a 22,924-byte
-bundle, successful launch/stop, typed rejection of a fully transmitted corrupt
-bundle, and explicit workspace/cache/stack attribution. It does not close this
-handoff because it is not the mixed lifecycle, confirmed-cancellation and
-reconnect/reboot report required below.
+The 2026-08-21 `provider-handoff-afdcf75-20260821` report closes this provider
+handoff for the published WS147 image. It includes the preceding targeted
+workspace evidence plus same-image Identity matching, real in-flight abort,
+durable update/rollback/remove, reconnect/reboot checks and 30 mixed cycles.
+It does not close the wider Device OS A2 gate or authorize an external trial.
 
 Archive a versioned directory containing `report.md`, `summary.json`, direct
 provider stdout as `provider.stdout.raw.jsonl` (or `.json`), provider stderr as
@@ -93,7 +92,9 @@ stdout. `summary.json` must
 separately state discovery, identity matching, install, cancellation, logs,
 reconnect/reboot, watchdog/reset and transport/panel error counts.
 
-This A2 provider handoff passes only when all fixture cases and the WS147 run
-pass with the same published image identity. The next mainline step is then to
-bind the provider session into the VS Code device view for deploy progress and
-logs. It does not by itself open an external developer trial.
+This A2 provider handoff passes for the published WS147 image when all fixture
+cases and the WS147 run pass with the same image identity. The
+`provider-handoff-afdcf75-20260821` report satisfies this gate. The next
+mainline step is to finish the clean-machine VS Code device view and real
+installed-App panel/input acceptance. It does not by itself open an external
+developer trial.

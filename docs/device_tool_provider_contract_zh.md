@@ -1,6 +1,6 @@
 # Device OS 工具 Provider 契约
 
-> 最后更新：2026-08-21；适用版本：0.6.0-dev；状态：草案；physical provider 交付等待 A2 关闭
+> 最后更新：2026-08-21；适用版本：0.6.0-dev；状态：WS147 provider handoff 已通过；更宽范围 A2 待完成
 
 本 host-process contract 用于隔离 Runtime 作者工具与物理板卡依赖。它不是 `JFDP/1`，不改变
 wire bytes，也不把桌面 reference endpoint 变成 device transport。

@@ -64,9 +64,9 @@ raw serial console、private key 或 JFDP handle。
 
 ## 证据与出口
 
-2026-08-21 的 `workspace-measurement-07614e4` 报告可作为有界真实 resource commit path 的定向证据：覆盖
-22,924-byte bundle、成功 launch/stop、完整传输损坏包的 typed rejection，以及 workspace/cache/stack 归因。
-它不能关闭本 handoff，因为它不是下方要求的 mixed lifecycle、confirmed cancellation 和 reconnect/reboot 报告。
+2026-08-21 的 `provider-handoff-afdcf75-20260821` 报告已关闭已发布 WS147 镜像的 provider handoff。它包含此前
+workspace 定向证据，并补齐同镜像 Identity matching、真实 in-flight abort、durable update/rollback/remove、
+reconnect/reboot 与 30 次 mixed cycle。它不关闭更宽范围的 Device OS A2 gate，也不授权外部试用。
 
 归档版本化目录，至少包含 `report.md`、`summary.json`、每个 case 的 direct provider stdout（命名为
 `provider.stdout.raw.jsonl` 或 `.json`）、provider stderr（`provider.stderr.raw.log`）、单独保存的 CLI stdout
@@ -74,5 +74,6 @@ raw serial console、private key 或 JFDP handle。
 hash。CLI pretty-printed output 不是 provider raw stdout。`summary.json` 必须分别记录 discovery、
 identity matching、install、cancellation、logs、reconnect/reboot、watchdog/reset 与 transport/panel error count。
 
-所有 fixture 与 WS147 run 都以同一已发布 image identity 通过时，本 A2 provider handoff 才通过。之后主线将
-provider session 绑定到 VS Code device view，用于 deploy progress 与 logs；它本身不放行外部开发者试用。
+所有 fixture 与 WS147 run 都以同一已发布 image identity 通过时，本 A2 provider handoff 才通过；
+`provider-handoff-afdcf75-20260821` 已满足该 gate。主线下一步是完成干净机器的 VS Code device view，以及真实已安装
+App 的 panel/input 验收；它本身不放行外部开发者试用。

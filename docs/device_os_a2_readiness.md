@@ -4,7 +4,8 @@
 
 ## Current Conclusion
 
-**A2 is not ready for delivery acceptance and must not open an external developer
+**The WS147 provider handoff is closed for the published image. Wider A2 is
+not yet ready for delivery acceptance and must not open an external developer
 trial.**
 
 The mainline now supplies the hardware-neutral control plane: JFDP/1, typed
@@ -26,21 +27,21 @@ inspection workspace, 4 KiB sector cache and 1 KiB transport scratch outside
 the device task stack; the minimum free stack was 14,468 bytes from a 24,576
 byte configured stack.
 
-A2 remains **partial**, but the previous commit-time/resource-bridge blocker is
-closed for this tested profile and fixture. Remaining release blockers are
-wire-attested identity evidence in the same report, confirmed live
-cancellation/session semantics, complete update/rollback/remove and
-reconnect/reboot evidence, and the required 30-cycle mixed provider run. This
-targeted report is not a substitute for end-to-end A2 author-tool evidence.
+A2 provider handoff is **PASS** for firmware `afdcf75` and the published WS147
+manifest: identity cross-match, in-flight cancellation, durable lifecycle and
+30 mixed cycles all passed. Wider A2 remains **partial** because the evidence
+does not close the clean-machine VS Code product workflow or real installed-App
+panel/input acceptance. The provider handoff report is not an external-trial
+release signoff.
 
 ## Ownership And Completion
 
 | Layer | Completed | Required before A2 acceptance |
 | --- | --- | --- |
 | Render Core | Independent Core package, profiles/ABI, hardware-neutral render and input contracts | No A2 blocker; a provider must not duplicate renderer logic |
-| JellyFrame Runtime/Tools | `.jfapp`, bundle checks, manifest/provider contracts, CLI host client | VS Code deployment/log session, readable error mapping and end-to-end tool regressions |
+| JellyFrame Runtime/Tools | `.jfapp`, bundle checks, manifest/provider contracts, CLI host client, provider handoff contract | Clean-machine VS Code deployment/log session, readable error mapping and end-to-end tool regressions |
 | Device OS | A1 launcher/registry/staging/recovery foundation | A real `jellyframe-device` provider and binding of installed bundles to AppHost, renderer, input and logs |
-| WS147 port | JFDP wire, persistent lifecycle, factory recovery, bounded real-resource commit for the measured profile | Provider identity evidence in the same image report, confirmed cancellation/session, mixed lifecycle and panel/input/reboot evidence |
+| WS147 port | JFDP wire, persistent lifecycle, factory recovery, bounded real-resource commit and provider handoff for the measured profile | Real installed-App panel/input evidence; no provider lifecycle blocker remains for this image |
 
 ## Required Device OS Implementation
 
@@ -139,9 +140,11 @@ not claim physical evidence.
 6. Complete at least 30 mixed lifecycle cycles and archive a versioned
    report/summary/raw-log/flash-log package.
 
-Each step starts only after the previous one passes. Without panel/input/log
-evidence from a real installed App, the report remains `not-tested`; A1 or a
-desktop reference cannot fill the gap.
+Steps 1-4 are covered for the WS147 provider handoff by the
+`provider-handoff-afdcf75-20260821` report, except that this report does not
+claim panel/input behavior. Without panel/input evidence from a real installed
+App and a clean-machine VS Code run, wider A2 remains `partial`; A1 or a
+desktop reference cannot fill that gap.
 
 ## A2 Exit
 
