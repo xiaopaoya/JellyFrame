@@ -7,6 +7,7 @@
 #include "render_core/html_parser.h"
 
 #include "driver/usb_serial_jtag.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_partition.h"
 #include "esp_timer.h"
@@ -15,8 +16,10 @@
 
 #include <array>
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <memory>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -182,7 +185,10 @@ public:
         case DeviceMessageType::Rollback: handle_rollback(payload, request.payload_length, result); break;
         default: break;
         }
-        send_result(request, result);
+        const ResponseWrite response = send_result(request, result);
+        if (request.type == DeviceMessageType::InstallCommit) {
+            record_commit_telemetry(response);
+        }
     }
 
     void on_jfdp_transport_reset() override { abort_active_transaction(); }
@@ -190,6 +196,19 @@ public:
 
 private:
     static constexpr std::size_t kAppLogCapacity = 32;
+    static constexpr std::uint32_t kDeviceImageTaskStackBytes = 24576;
+
+    struct ResponseWrite {
+        std::uint32_t elapsed_us = 0;
+        bool ok = false;
+    };
+
+    struct CommitTelemetry {
+        bool pending = false;
+        std::array<char, kDeviceMaxAppIdBytes + 1> app_id{};
+        DeviceRequestResultCode result_code = DeviceRequestResultCode::Failed;
+        DeviceImageStore::VerifyTelemetry verify{};
+    };
 
     void record_app_log(DeviceAppLogLevel level, std::string_view app_id, std::uint32_t generation,
                         std::string_view message) {
@@ -279,8 +298,20 @@ private:
             result.result_code = DeviceRequestResultCode::InvalidRequest;
             return;
         }
+        std::array<char, kDeviceMaxAppIdBytes + 1> app_id{};
+        const std::string_view active_app_id = transaction_.request().app_id_view();
+        if (!active_app_id.empty()) {
+            std::memcpy(app_id.data(), active_app_id.data(), active_app_id.size());
+        }
         const DeviceInstallResult install = transaction_.commit(commit.transaction_id, store_);
         fill_install_result(install, result, install.accepted());
+        if (!active_app_id.empty()) {
+            commit_telemetry_ = {};
+            commit_telemetry_.app_id = app_id;
+            commit_telemetry_.pending = true;
+            commit_telemetry_.result_code = result.result_code;
+            commit_telemetry_.verify = store_.copy_verify_telemetry();
+        }
     }
 
     void handle_abort(const std::uint8_t* bytes, std::size_t size, DeviceOperationResultPayload& result) {
@@ -510,28 +541,57 @@ private:
         }
     }
 
-    void send_result(const DeviceFrameHeader& request, const DeviceOperationResultPayload& result) {
+    ResponseWrite send_result(const DeviceFrameHeader& request, const DeviceOperationResultPayload& result) {
         std::array<std::uint8_t, 32> payload{};
         std::size_t size = 0;
         if (encode_device_operation_result_payload(result, payload.data(), payload.size(), size) == DeviceProtocolStatus::Ok) {
-            send_payload(request, payload.data(), size);
+            return send_payload(request, payload.data(), size);
         }
+        ++counters_.response_write_failures;
+        return {};
     }
 
-    void send_payload(const DeviceFrameHeader& request, const std::uint8_t* payload, std::size_t payload_size) {
-        std::array<std::uint8_t, kDeviceProtocolHeaderBytes + kDeviceProtocolMaxPayloadBytes> frame{};
+    ResponseWrite send_payload(const DeviceFrameHeader& request, const std::uint8_t* payload, std::size_t payload_size) {
         DeviceFrameHeader response{};
         response.type = request.type;
         response.flags = kDeviceFrameFlagResponse;
         response.session_id = request.session_id;
         response.request_id = request.request_id;
         std::size_t frame_size = 0;
-        if (encode_device_frame(response, payload, payload_size, frame.data(), frame.size(), frame_size) != DeviceProtocolStatus::Ok ||
-            usb_serial_jtag_write_bytes(frame.data(), frame_size, kUsbIoTimeout) != static_cast<int>(frame_size)) {
+        if (encode_device_frame(response, payload, payload_size, response_frame_.data(), response_frame_.size(), frame_size) !=
+            DeviceProtocolStatus::Ok) {
             ++counters_.response_write_failures;
-            return;
+            return {};
+        }
+        const std::int64_t write_started_us = esp_timer_get_time();
+        const bool written = usb_serial_jtag_write_bytes(response_frame_.data(), frame_size, kUsbIoTimeout) ==
+                             static_cast<int>(frame_size);
+        const ResponseWrite write{static_cast<std::uint32_t>(esp_timer_get_time() - write_started_us), written};
+        if (!written) {
+            ++counters_.response_write_failures;
+            return write;
         }
         ++counters_.responses;
+        return write;
+    }
+
+    void record_commit_telemetry(const ResponseWrite& response) {
+        if (!commit_telemetry_.pending) return;
+        const DeviceImageStore::VerifyTelemetry& verify = commit_telemetry_.verify;
+        char message[kDeviceAppLogMaxMessageBytes + 1]{};
+        std::snprintf(message, sizeof(message),
+                      "install rc=%u crc=%u inspect=%u publish=%u rsp=%u rsp_ok=%u stack=%u stack_free=%u "
+                      "reads=%u bytes=%u heap=%u ws=store cache=4096",
+                      static_cast<unsigned>(commit_telemetry_.result_code),
+                      static_cast<unsigned>(verify.transport_crc_us), static_cast<unsigned>(verify.inspect_bundle_us),
+                      static_cast<unsigned>(verify.registry_publish_us), static_cast<unsigned>(response.elapsed_us),
+                      response.ok ? 1u : 0u, static_cast<unsigned>(kDeviceImageTaskStackBytes),
+                      static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)),
+                      static_cast<unsigned>(verify.reader_calls), static_cast<unsigned>(verify.reader_bytes),
+                      static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL)));
+        record_app_log(DeviceAppLogLevel::Info, std::string_view(commit_telemetry_.app_id.data()),
+                       store_.registry_generation(), message);
+        commit_telemetry_.pending = false;
     }
 
     JfdpTransportCounters counters_{};
@@ -542,8 +602,20 @@ private:
     AppInstalledBundleBinding binding_;
     InstalledBundleUiSession* ui_session_ = nullptr;
     std::array<DeviceAppLogEntry, kAppLogCapacity> app_logs_{};
+    std::array<std::uint8_t, kDeviceProtocolHeaderBytes + kDeviceProtocolMaxPayloadBytes> response_frame_{};
     std::size_t app_log_count_ = 0;
     std::uint32_t app_log_overwrites_ = 0;
+    CommitTelemetry commit_telemetry_{};
+};
+
+struct DeviceImageLifecycleRuntime {
+    explicit DeviceImageLifecycleRuntime(const esp_partition_t* partition)
+        : store(partition), endpoint(store), adapter(endpoint) {}
+
+    DeviceImageStore store;
+    DeviceImageEndpoint endpoint;
+    JfdpStreamAdapter adapter;
+    std::array<std::uint8_t, kUsbReadBytes> received{};
 };
 
 void device_image_lifecycle_task(void*) {
@@ -556,30 +628,30 @@ void device_image_lifecycle_task(void*) {
     }
     const esp_partition_t* partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
                                                                  ESP_PARTITION_SUBTYPE_ANY, "storage");
-    DeviceImageStore store(partition);
-    if (!store.initialize()) {
+    // Keep the store-owned inspection workspace, sector cache and transport
+    // frames out of this task's call stack. The endpoint serializes access.
+    static DeviceImageLifecycleRuntime* runtime = nullptr;
+    runtime = new (std::nothrow) DeviceImageLifecycleRuntime(partition);
+    if (runtime == nullptr || !runtime->store.initialize()) {
         vTaskDelete(nullptr);
         return;
     }
-    DeviceImageEndpoint endpoint(store);
-    JfdpStreamAdapter adapter(endpoint);
-    std::array<std::uint8_t, kUsbReadBytes> received{};
     std::int64_t last_byte_us = 0;
     bool was_connected = usb_serial_jtag_is_connected();
     for (;;) {
         const bool connected = usb_serial_jtag_is_connected();
         if (was_connected && !connected) {
-            adapter.reset(endpoint.counters(), true);
+            runtime->adapter.reset(runtime->endpoint.counters(), true);
             last_byte_us = 0;
         }
         was_connected = connected;
-        const int count = usb_serial_jtag_read_bytes(received.data(), received.size(), kUsbIoTimeout);
+        const int count = usb_serial_jtag_read_bytes(runtime->received.data(), runtime->received.size(), kUsbIoTimeout);
         const std::int64_t now = esp_timer_get_time();
         if (count > 0) {
             last_byte_us = now;
-            adapter.feed(received.data(), static_cast<std::size_t>(count), endpoint.counters());
-        } else if (adapter.has_partial_frame() && last_byte_us != 0 && now - last_byte_us >= kPartialFrameTimeoutUs) {
-            adapter.reset(endpoint.counters(), true);
+            runtime->adapter.feed(runtime->received.data(), static_cast<std::size_t>(count), runtime->endpoint.counters());
+        } else if (runtime->adapter.has_partial_frame() && last_byte_us != 0 && now - last_byte_us >= kPartialFrameTimeoutUs) {
+            runtime->adapter.reset(runtime->endpoint.counters(), true);
             last_byte_us = 0;
         }
     }
@@ -588,9 +660,7 @@ void device_image_lifecycle_task(void*) {
 } // namespace
 
 bool start_device_image_lifecycle_task() {
-    // Reassembly plus JFAPPV0 inspection owns bounded 4 KiB buffers while a
-    // response frame is encoded. Keep this acceptance endpoint separate from
-    // UI/script stacks and leave measured headroom for nested bundle checks.
+    // The lifecycle runtime owns its bounded buffers outside the task stack.
     return xTaskCreate(device_image_lifecycle_task, "device_image", 24576, nullptr, 5, nullptr) == pdPASS;
 }
 

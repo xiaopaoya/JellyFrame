@@ -2,6 +2,7 @@
 
 #include "esp_rom_crc.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 
 #include <algorithm>
 #include <cstring>
@@ -106,33 +107,12 @@ public:
     PartitionReader(const DeviceImageStore& store, std::uint8_t slot) : store_(store), slot_(slot) {}
 
     bool read_at(std::uint32_t offset, std::uint8_t* output, std::size_t size) const override {
-        if (output == nullptr || size == 0) {
-            return false;
-        }
-        // Bundle validation reads the header, summary and resource CRCs in
-        // small windows. Keep one flash-sector cache in this port reader so
-        // those bounded logical reads do not become hundreds of raw-partition
-        // operations during an install commit.
-        const std::uint32_t sector_offset = offset & ~(kFlashSectorBytes - 1u);
-        const std::size_t in_sector = offset - sector_offset;
-        if (size <= cache_.size() - in_sector) {
-            if (cache_offset_ != sector_offset) {
-                if (!store_.read_slot(slot_, sector_offset, cache_.data(), cache_.size())) {
-                    return false;
-                }
-                cache_offset_ = sector_offset;
-            }
-            std::memcpy(output, cache_.data() + in_sector, size);
-            return true;
-        }
-        return store_.read_slot(slot_, offset, output, size);
+        return store_.read_slot_cached(slot_, offset, output, size);
     }
 
 private:
     const DeviceImageStore& store_;
     std::uint8_t slot_ = kNoSlot;
-    mutable std::array<std::uint8_t, kFlashSectorBytes> cache_{};
-    mutable std::uint32_t cache_offset_ = 0xffffffffu;
 };
 
 class DeviceImageStore::Lease final : public AppInstalledBundleLease {
@@ -242,18 +222,25 @@ bool DeviceImageStore::verify_staging(const DeviceInstallRequest& request) {
     policy.max_resource_entries = 128;
     policy.max_summary_bytes = kDeviceBundleMaxSummaryBytes;
     DeviceBundleDescriptor descriptor;
-    std::array<std::uint8_t, 1024> scratch{};
     std::uint32_t transport_crc = 0;
+    verify_telemetry_ = {};
+    reader_cache_slot_ = kNoSlot;
+    reader_cache_offset_ = 0xffffffffu;
+    const std::int64_t crc_started_us = esp_timer_get_time();
     for (std::uint32_t offset = 0; offset < request.bundle_bytes;) {
-        const std::size_t bytes = std::min<std::size_t>(scratch.size(), request.bundle_bytes - offset);
-        if (!reader.read_at(offset, scratch.data(), bytes)) {
+        const std::size_t bytes = std::min<std::size_t>(verify_scratch_.size(), request.bundle_bytes - offset);
+        if (!reader.read_at(offset, verify_scratch_.data(), bytes)) {
             return false;
         }
-        transport_crc = esp_rom_crc32_le(transport_crc, scratch.data(), bytes);
+        transport_crc = esp_rom_crc32_le(transport_crc, verify_scratch_.data(), bytes);
         offset += static_cast<std::uint32_t>(bytes);
     }
-    if (transport_crc != request.bundle_crc32 ||
-        inspect_device_bundle(reader, request.bundle_bytes, policy, descriptor) != DeviceBundleStatus::Ok ||
+    verify_telemetry_.transport_crc_us = static_cast<std::uint32_t>(esp_timer_get_time() - crc_started_us);
+    const std::int64_t inspect_started_us = esp_timer_get_time();
+    const DeviceBundleStatus inspect = inspect_device_bundle(reader, request.bundle_bytes, policy,
+                                                              inspection_workspace_, descriptor);
+    verify_telemetry_.inspect_bundle_us = static_cast<std::uint32_t>(esp_timer_get_time() - inspect_started_us);
+    if (transport_crc != request.bundle_crc32 || inspect != DeviceBundleStatus::Ok ||
         descriptor.summary.app_id_view() != request.app_id_view()) {
         return false;
     }
@@ -291,10 +278,13 @@ bool DeviceImageStore::commit_staging(const DeviceInstallRequest& request) {
         return false;
     }
     *registry_ = next_registry;
+    const std::int64_t publish_started_us = esp_timer_get_time();
     if (!publish_registry()) {
+        verify_telemetry_.registry_publish_us = static_cast<std::uint32_t>(esp_timer_get_time() - publish_started_us);
         *registry_ = previous;
         return false;
     }
+    verify_telemetry_.registry_publish_us = static_cast<std::uint32_t>(esp_timer_get_time() - publish_started_us);
     staging_active_ = false;
     staging_verified_ = false;
     staging_transaction_id_ = 0;
@@ -497,6 +487,26 @@ bool DeviceImageStore::read_slot(std::uint8_t slot, std::uint32_t offset, void* 
            esp_partition_read(partition_, kStorageHeaderBytes + slot * bytes + offset, output, size) == ESP_OK;
 }
 
+bool DeviceImageStore::read_slot_cached(std::uint8_t slot, std::uint32_t offset, void* output, std::size_t size) const {
+    ++verify_telemetry_.reader_calls;
+    verify_telemetry_.reader_bytes += static_cast<std::uint32_t>(size);
+    if (output == nullptr || size == 0) return false;
+    const std::uint32_t sector_offset = offset & ~(kFlashSectorBytes - 1u);
+    const std::size_t in_sector = offset - sector_offset;
+    if (size > reader_cache_.size() - in_sector) return read_slot(slot, offset, output, size);
+    if (reader_cache_slot_ != slot || reader_cache_offset_ != sector_offset) {
+        if (!read_slot(slot, sector_offset, reader_cache_.data(), reader_cache_.size())) return false;
+        reader_cache_slot_ = slot;
+        reader_cache_offset_ = sector_offset;
+    }
+    std::memcpy(output, reader_cache_.data() + in_sector, size);
+    return true;
+}
+
+DeviceImageStore::VerifyTelemetry DeviceImageStore::copy_verify_telemetry() const {
+    return verify_telemetry_;
+}
+
 bool DeviceImageStore::write_slot(std::uint8_t slot, std::uint32_t offset, const void* bytes, std::size_t size) {
     const std::uint32_t slot_bytes = bundle_slot_bytes(partition_);
     return partition_ != nullptr && bytes != nullptr && slot < kBundleSlots && offset <= slot_bytes && size <= slot_bytes - offset &&
@@ -513,7 +523,7 @@ bool DeviceImageStore::validate_record(const BundleRecord& record, DeviceBundleD
     policy.max_resource_entries = 128;
     policy.max_summary_bytes = kDeviceBundleMaxSummaryBytes;
     DeviceBundleDescriptor inspected;
-    if (inspect_device_bundle(reader, record.bundle_bytes, policy, inspected) != DeviceBundleStatus::Ok ||
+    if (inspect_device_bundle(reader, record.bundle_bytes, policy, inspection_workspace_, inspected) != DeviceBundleStatus::Ok ||
         inspected.bundle_crc32 != record.bundle_crc32 || inspected.summary.app_id_view() != string_view(record.app_id)) {
         return false;
     }

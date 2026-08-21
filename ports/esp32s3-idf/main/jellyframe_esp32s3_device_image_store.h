@@ -44,6 +44,16 @@ public:
     std::uint32_t available_storage_bytes() const;
     std::uint32_t registry_generation() const;
 
+    struct VerifyTelemetry {
+        std::uint32_t transport_crc_us = 0;
+        std::uint32_t inspect_bundle_us = 0;
+        std::uint32_t registry_publish_us = 0;
+        std::uint32_t reader_calls = 0;
+        std::uint32_t reader_bytes = 0;
+    };
+
+    VerifyTelemetry copy_verify_telemetry() const;
+
     // Acceptance-only fault injection. It uses the same registry reader that
     // production boot uses; no host-side registry mutation is involved.
     bool inject_registry_corruption_for_test();
@@ -60,6 +70,7 @@ private:
     bool erase_slot_range(std::uint8_t slot, std::uint32_t bytes);
     bool slot_range_is_erased(std::uint8_t slot, std::uint32_t bytes) const;
     bool read_slot(std::uint8_t slot, std::uint32_t offset, void* output, std::size_t size) const;
+    bool read_slot_cached(std::uint8_t slot, std::uint32_t offset, void* output, std::size_t size) const;
     bool write_slot(std::uint8_t slot, std::uint32_t offset, const void* bytes, std::size_t size);
     bool validate_record(const BundleRecord& record, jellyframe::DeviceBundleDescriptor* descriptor) const;
     void set_recovery(jellyframe::DeviceRecoveryReason reason, std::string_view app_id, std::uint16_t flags);
@@ -74,6 +85,14 @@ private:
     std::uint32_t staging_bundle_bytes_ = 0;
     jellyframe::DeviceBundleDescriptor staging_descriptor_{};
     jellyframe::DeviceRecoveryDetailPayload recovery_{};
+    // The endpoint serializes store access. Keep validation workspace and the
+    // sector cache here rather than transiently stacking them in verify/read.
+    mutable jellyframe::DeviceBundleInspectionWorkspace inspection_workspace_{};
+    std::array<std::uint8_t, 1024> verify_scratch_{};
+    mutable std::array<std::uint8_t, 4096> reader_cache_{};
+    mutable std::uint32_t reader_cache_slot_ = 0xffu;
+    mutable std::uint32_t reader_cache_offset_ = 0xffffffffu;
+    mutable VerifyTelemetry verify_telemetry_{};
 };
 
 } // namespace jellyframe_esp32s3
