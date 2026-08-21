@@ -106,12 +106,33 @@ public:
     PartitionReader(const DeviceImageStore& store, std::uint8_t slot) : store_(store), slot_(slot) {}
 
     bool read_at(std::uint32_t offset, std::uint8_t* output, std::size_t size) const override {
+        if (output == nullptr || size == 0) {
+            return false;
+        }
+        // Bundle validation reads the header, summary and resource CRCs in
+        // small windows. Keep one flash-sector cache in this port reader so
+        // those bounded logical reads do not become hundreds of raw-partition
+        // operations during an install commit.
+        const std::uint32_t sector_offset = offset & ~(kFlashSectorBytes - 1u);
+        const std::size_t in_sector = offset - sector_offset;
+        if (size <= cache_.size() - in_sector) {
+            if (cache_offset_ != sector_offset) {
+                if (!store_.read_slot(slot_, sector_offset, cache_.data(), cache_.size())) {
+                    return false;
+                }
+                cache_offset_ = sector_offset;
+            }
+            std::memcpy(output, cache_.data() + in_sector, size);
+            return true;
+        }
         return store_.read_slot(slot_, offset, output, size);
     }
 
 private:
     const DeviceImageStore& store_;
     std::uint8_t slot_ = kNoSlot;
+    mutable std::array<std::uint8_t, kFlashSectorBytes> cache_{};
+    mutable std::uint32_t cache_offset_ = 0xffffffffu;
 };
 
 class DeviceImageStore::Lease final : public AppInstalledBundleLease {
