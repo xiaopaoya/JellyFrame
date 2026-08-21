@@ -112,8 +112,9 @@ DeviceBundleValidationPolicy policy() {
 void validates_bundle_and_reads_resource() {
     const std::vector<std::uint8_t> bytes = make_bundle(valid_summary());
     DeviceBundleMemoryReader reader(bytes.data(), bytes.size());
+    DeviceBundleInspectionWorkspace workspace;
     DeviceBundleDescriptor descriptor;
-    assert(inspect_device_bundle(reader, static_cast<std::uint32_t>(bytes.size()), policy(), descriptor) ==
+    assert(inspect_device_bundle(reader, static_cast<std::uint32_t>(bytes.size()), policy(), workspace, descriptor) ==
            DeviceBundleStatus::Ok);
     assert(descriptor.summary.app_id_view() == "org.example.device");
     assert(descriptor.summary.version_name_view() == "1.2.3");

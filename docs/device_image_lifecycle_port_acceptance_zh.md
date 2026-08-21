@@ -1,6 +1,6 @@
 # Developer Image 生命周期验收
 
-> 最后更新：2026-08-19；适用版本：0.6.0-dev；协议：JFDP/1
+> 最后更新：2026-08-21；适用版本：0.6.0-dev；协议：JFDP/1
 
 这是首个官方 Developer Image 的 A1-2 验收 gate。它必须在 [JFDP/1 物理传输验收](jfdp_v1_port_acceptance_zh.md) 之后执行，但不取代后者；它证明一个具体板卡镜像的持久 staged install、registry 发布和 launcher 恢复。它不是通用文件系统测试、固件升级协议、市场、远程下载服务或性能 benchmark。
 
@@ -30,6 +30,10 @@ port 必须复用 device_runtime_contracts/device_install_transaction.h 的 Devi
 发布前必须持久化或重新验证已接受的 descriptor。AppList 与 Recovery response 使用 typed
 `DeviceAppListPayload`、`DeviceRecoveryDetailPayload` codec。installed app 启动与 failure fallback 使用
 `AppInstalledBundleBinding`，不得使用固定 fixture loader 或 port-private registry-to-HTML shortcut。
+
+面向 device 的 `inspect_device_bundle(...)` overload 接收 `DeviceBundleInspectionWorkspace`。port 必须把这块
+最大 4 KiB summary workspace 放在 storage owner 或其他显式预算的长期对象中，绝不能放在 JFDP、UI 或 script task
+call stack；sector cache 同样遵守此规则。desktop convenience overload 不能作为 board profile 的验收证据。
 
 第三方 bundle 必须置于不可变 firmware、launcher 和 fallback assets 之外。JFDP 只能提供文档化的有界操作；不得成为 raw flash、任意文件或 native command 通道。
 
@@ -80,6 +84,11 @@ port 必须提供可重复的 interruption hook：test-only controlled reset、s
 版本化报告目录必须包含 Runtime/Device OS commit；image/profile 与 storage 配置；JFDP fixture SHA-256；未提交 port change（如有）；image 和 fixture hash；build/flash log；raw host capture；machine-readable summary；每个 interruption point 与 reboot 后 observation。
 
 还必须包含 staging begin/write/verify/commit/abort、registry publication、recovery/fallback、rejected request、reconnect、reset、watchdog 计数。可用时报告 memory/queue watermark，否则说明限制与结构上限。本 gate 可以通过 typed binding 与 resource-read 结果证明 launch/fallback；已安装 App 的 DOM/panel 渲染、可视对比与输入属于 A2 的端到端证据，不能用它们替代或冒充本 storage lifecycle gate 的结论。
+
+真实 resource verification 出现 timeout 或 latency regression 时，必须归档 phase telemetry：transport CRC、JFAPP
+header/bundle CRC、summary parse、resource validation、registry publish、response write；还要归档执行 task 的
+configured stack、minimum stack watermark、workspace/cache placement 以及 reader call/byte count。provider timeout
+不能作为最终结果：port 必须定位到一个有界 phase，并在文档化 provider timeout 内返回 typed failure 或成功 commit。
 
 报告必须分开给出 wire acceptance、storage lifecycle、launcher recovery 与 tooling verdict。reference dispatcher 或仅断线测试不能证明 persistent interruption safety。
 

@@ -616,6 +616,7 @@ std::string_view DeviceBundleSummary::entry_path_view() const {
 DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,
                                          std::uint32_t bundle_bytes,
                                          const DeviceBundleValidationPolicy& policy,
+                                         DeviceBundleInspectionWorkspace& workspace,
                                          DeviceBundleDescriptor& descriptor) {
     descriptor = {};
     if (policy.max_bundle_bytes == 0 || policy.max_resource_entries == 0 || bundle_bytes < kDeviceBundleHeaderBytes ||
@@ -672,11 +673,10 @@ DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,
         return DeviceBundleStatus::BadChecksum;
     }
 
-    std::array<std::uint8_t, kDeviceBundleMaxSummaryBytes> summary_bytes{};
-    if (!reader.read_at(descriptor.summary_offset, summary_bytes.data(), descriptor.summary_bytes)) {
+    if (!reader.read_at(descriptor.summary_offset, workspace.summary_bytes.data(), descriptor.summary_bytes)) {
         return DeviceBundleStatus::ReadFailed;
     }
-    if (!SummaryParser(std::string_view(reinterpret_cast<const char*>(summary_bytes.data()), descriptor.summary_bytes),
+    if (!SummaryParser(std::string_view(reinterpret_cast<const char*>(workspace.summary_bytes.data()), descriptor.summary_bytes),
                        descriptor.summary).parse()) {
         return DeviceBundleStatus::InvalidSummary;
     }
@@ -694,6 +694,14 @@ DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,
         }
     }
     return DeviceBundleStatus::Ok;
+}
+
+DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,
+                                         std::uint32_t bundle_bytes,
+                                         const DeviceBundleValidationPolicy& policy,
+                                         DeviceBundleDescriptor& descriptor) {
+    DeviceBundleInspectionWorkspace workspace;
+    return inspect_device_bundle(reader, bundle_bytes, policy, workspace, descriptor);
 }
 
 DeviceBundleStatus find_device_bundle_resource(const DeviceBundleReader& reader,

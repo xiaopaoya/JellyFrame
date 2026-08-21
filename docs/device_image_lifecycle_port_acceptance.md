@@ -1,6 +1,6 @@
 # Developer Image Lifecycle Acceptance
 
-> Last updated: 2026-08-19; Applies to: 0.6.0-dev; Protocol: JFDP/1
+> Last updated: 2026-08-21; Applies to: 0.6.0-dev; Protocol: JFDP/1
 
 This is the A1-2 acceptance gate for the first official Developer Image. It follows, but does not replace, [JFDP/1 Physical Transport Acceptance](jfdp_v1_port_acceptance.md). It proves persistent staged installation, registry publication and launcher recovery on one concrete board image. It is not a general filesystem test, firmware-update protocol, marketplace, remote-download service or performance benchmark.
 
@@ -35,6 +35,13 @@ accepted descriptor before publication. AppList and Recovery responses use the
 typed `DeviceAppListPayload` and `DeviceRecoveryDetailPayload` codecs. Installed
 app start and failure fallback use `AppInstalledBundleBinding`, not a
 fixed-fixture loader or a port-private registry-to-HTML shortcut.
+
+The device overload of `inspect_device_bundle(...)` takes a
+`DeviceBundleInspectionWorkspace`. A port must keep that 4 KiB maximum-summary
+workspace in the storage owner or another explicitly budgeted long-lived
+object, never on the JFDP, UI, or script-task call stack. Sector caches are
+subject to the same rule. The desktop convenience overload is not acceptable
+evidence for a board profile.
 
 Third-party bundles must live outside immutable firmware, launcher and fallback assets. JFDP accepts only documented bounded operations; it must not become raw flash, arbitrary file or native-command access.
 
@@ -85,6 +92,14 @@ Unsupported lifecycle operations may be rejected, but never silently reported as
 A versioned report directory must include Runtime and Device OS commit; image/profile and storage configuration; JFDP fixture SHA-256; exact uncommitted port changes if any; image and fixture hashes; build/flash logs; raw host capture; machine-readable summary; each interruption point and post-boot observation.
 
 Include counters for staging begin/write/verify/commit/abort, registry publication, recovery/fallback entries, rejected requests, reconnects, resets and watchdogs. Report memory/queue watermarks where available, otherwise state the limitation and structural bounds. This gate may establish launch/fallback through typed binding and resource-read results; actual installed-App DOM/panel rendering, visual comparison and input are A2 end-to-end evidence, not a substitute claim for this storage lifecycle gate.
+
+For every real-resource verification timeout or latency regression, archive
+phase telemetry for: transport CRC, JFAPP header/bundle CRC, summary parse,
+resource validation, registry publish and response write. Also archive the
+executing task's configured stack, minimum stack watermark, workspace/cache
+placement and reader call/byte counts. A provider timeout is not an acceptable
+final result: the port must identify a bounded phase and return a typed failure
+or successful commit within its documented provider timeout.
 
 Separate verdicts for wire acceptance, storage lifecycle, launcher recovery and tooling. Passing a reference dispatcher or a disconnect-only test is not evidence for persistent interruption safety.
 

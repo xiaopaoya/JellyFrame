@@ -71,6 +71,14 @@ struct DeviceBundleValidationPolicy {
     std::string_view required_min_render_core;
 };
 
+// Storage adapters should own this workspace outside a transport or UI task
+// stack. It keeps the largest bounded validation buffer explicit in a board
+// profile's memory budget rather than hiding a 4 KiB allocation in a deep
+// bundle-validation call.
+struct DeviceBundleInspectionWorkspace {
+    std::array<std::uint8_t, kDeviceBundleMaxSummaryBytes> summary_bytes{};
+};
+
 enum class DeviceBundleAppRole : std::uint8_t {
     App,
     Launcher,
@@ -121,6 +129,14 @@ struct DeviceBundleResource {
     std::uint32_t payload_crc32 = 0;
 };
 
+DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,
+                                         std::uint32_t bundle_bytes,
+                                         const DeviceBundleValidationPolicy& policy,
+                                         DeviceBundleInspectionWorkspace& workspace,
+                                         DeviceBundleDescriptor& descriptor);
+
+// Desktop convenience only. Device OS storage adapters must use the overload
+// that accepts a long-lived workspace so validation memory is budgeted.
 DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,
                                          std::uint32_t bundle_bytes,
                                          const DeviceBundleValidationPolicy& policy,
