@@ -1,0 +1,34 @@
+# JellyFrame 活动待办
+
+> 更新时间：2026-08-21；对应版本：`0.6.0-dev`
+>
+> 本清单是 [路线图](roadmap_zh.md) 的近期执行队列，不记录已经关闭的验收、性能微实验或历史移植任务。
+
+## 现在：更宽范围 A2 产品出口与 B1 边界维护
+
+- [ ] 在已发布 WS147 镜像上完成干净机器 VS Code 设备流程：发现/选择、部署、启动、实时日志、更新、rollback、停止和删除。桌面与设备 session 必须保持独立，最终报告必须保留可定位的失败归属。
+- [ ] 通过 provider 流程完成真实已安装 App 的 panel/input 验收。记录 App launch marker、触控/输入响应、panel/present 错误与恢复行为；provider lifecycle PASS 不等于视觉或输入证据。
+- [ ] 将 B1 作为持续 release gate 维护。首个带签名 Core `v0.6.0` 是历史基线，Runtime 当前锁定 `v0.6.1`；以后每次 Core bump 必须下载或以其他方式认证已审阅的 release artifact、校验 archive SHA-256、更新精确 version/ABI/source lock，并通过 standalone、package-consumer 与 source-override tests。
+- [ ] 执行 [0.6 工程维护审查计划](engineering_review_plan_20260819_zh.md)：先做 R0 package/profile/provenance，再做 R1 document/style、layout/dirty 与 renderer/text。只修复有明确语义或安全缺陷的接口，不做机械式改名。
+
+## Core 发布后的候选能力
+
+新的 Render Core 能力仅在独立治理的 Core release line，或已批准的同一拆仓 release window 内开始。每个候选都需要可复现的作者需求、RFC、正/负行为测试、三 target desktop capture、能力矩阵/诊断/recipe 更新和热路径 benchmark。
+
+- [ ] 在独立 Core line 完成 `text-wrap: balance` 的 candidate evidence。完成前不得写入 Runtime 作者能力矩阵；之后还需由 Runtime 明确选择 package/default-provider integration。
+- [ ] 只有在可复现作者需求与 RFC 明确 feature、profile impact 和 hardware budget 后，才能选择下一个 Core candidate；不得默认重新开启广泛 CSS 兼容性工作。
+
+核心侧只在需要新增平台无关 contract 时介入；不得以 reference endpoint 伪造实机完成。
+
+## 明确不进入当前队列
+
+- [ ] 不继续 full-frame rounded/gradient 的 copy、span、DMA 等微优化；只有真实 developer-image workload 的 telemetry 能重新开启性能项。
+- [ ] 不启用 retained replay、framebuffer reuse 或 tile/scanline renderer，除非先满足路线图中的独立证据门槛。
+- [ ] 不将 Canvas、完整 SVG/video、Shadow DOM、Worker、iframe、`:has()` 或容器查询作为 `0.6` 默认范围。
+- [ ] 不开始外部硬件开发者试用，直至更宽范围 A2 的干净机器与 panel/input 出口通过。
+
+## 每项最低检查
+
+- [ ] `git diff --check` 和相应 Debug/Release CTest。
+- [ ] scripting、工具、package 或 profile 改动的定向回归。
+- [ ] 热路径改动的 focused benchmark；硬件结论的版本化 port 报告。
