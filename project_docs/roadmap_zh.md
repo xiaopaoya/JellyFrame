@@ -15,7 +15,7 @@
 - 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库现在拥有物理 Core 分支。首个带签名的 `v0.6.0` release 是历史基线；Runtime `0.6.0-dev` 当前精确锁定 Core `v0.6.1`、ABI `1` 与 source identity `105d0166...b797c52b`。CI 会下载该 release artifact、校验 archive SHA-256 `f9d24aca...e18c7`、安装后运行 Runtime package-consumer tests。in-tree provider 只保留给同步本地开发。Core ABI `1` 明确以安装后的 `render_core/` headers 作为 C++ consumer surface；当前没有隐藏 header tier 或 C ABI。2026-08-19 已补齐 Core-only 与 Device contracts 的 CMake 边界回归：Core-only 不能创建 contracts target/test，contracts-only 仍可独立构建，source archive/install/package/source-override 闭环也已复核。
 - App Runtime 已具备 `.jfapp` 生命周期、registry 参考语义、JerryScript 可选桥接，以及 script worker 的 session/generation/epoch、value-only frame/input/service/fatal 协议。P3 的 WS147 worker、service、恢复与 mixed soak 验收已关闭。
 - WS147 的 value-frame v2 dirty/recovery fixture 已通过；全屏 rounded/gradient workload 的优化归因已完成，但仍不能达到 30 FPS。Canvas 还没有真实 host binding，保持 `not-tested`。
-- `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与已发布镜像的 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle。已发布 `jellyframe-device@0.1.0-dev` 只用于 `discover/info/list` read-only smoke；未发布 `0.1.1-dev` 源线补齐 selected-device attestation，须重新打包并完成 host fixture 后才可进入 mutation/lifecycle UI。已发布 Developer Image 具有严格 manifest 与 hash 验证的 factory recovery image；这仍不等于干净机器 VS Code 产品流程或已安装 App 的 panel/input 行为已完成。
+- `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。Developer Image 已具有严格 manifest 与 hash 验证的 factory recovery image；这仍不等于干净机器 VS Code 产品流程或已安装 App 的 panel/input 行为已完成。
 - 当前开发线是 Runtime `0.6.0-dev` / Core `0.6.0-dev`。1.0 前不维护历史 package 兼容线。
 
 ## 已关闭的性能阶段
@@ -48,11 +48,13 @@ storage/recovery 与 image-identity slice 已关闭：受保护 launcher/fallbac
 2. VS Code 增加设备视图和连接、部署、更新、启动、停止、删除、日志及错误入口；桌面壳调试与设备调试保持不同会话与报告。
 3. 设备 telemetry 是唯一的设备性能来源；Win32 预览只用于视觉和流程预检。
 
-WS147 provider handoff 子 gate 已由 `provider-handoff-afdcf75-20260821` 关闭：同镜像 identity、in-flight cancellation、durable lifecycle 与 30 次 mixed cycle 均通过。先使用已发布 provider 完成发现/身份/App list 的 read-only smoke；随后重新打包 `0.1.1-dev` provider，并以它完成 mutation/lifecycle UI。更宽范围作者工具出口仍要求干净机器从 VS Code 完成 `new -> check -> device install -> live log -> update -> rollback`，并取得真实已安装 App 的 panel/input 证据；错误信息能定位到 package、transport、registry、Runtime 或 port。
+WS147 provider handoff 子 gate 已由 `provider-handoff-afdcf75-20260821` 关闭：同镜像 identity、in-flight cancellation、durable lifecycle 与 30 次 mixed cycle 均通过。版本化 `0.1.1-dev` provider、capability-gated lifecycle UI 与本机候选 smoke 已完成。更宽范围作者工具出口只剩两项正式证据：干净机器从 VS Code 完成 `new -> check -> device install -> live log -> update -> rollback -> stop -> remove`，以及真实已安装 App 的 panel/input 证据；错误信息必须能定位到 package、transport、registry、Runtime 或 port。
 
 ### A3：受控外部开发者试用
 
 仅在 A1/A2 完成后开始。试用者不得需要 ESP-IDF。首轮反馈以可复现 App package、设备日志和版本化 developer image 为准；能够阻塞安装、运行、恢复或文档化能力的反馈才升级为主线 P0。
+
+筹备状态：**进行中**。宣传、招募对接、试用说明和反馈收集渠道可并行准备，但不得在 A2 的干净机器与 panel/input 出口通过前分发试用访问、要求参与者刷写非发布镜像或收集产品可用性结论。
 
 出口：独立用户完成完整生命周期；没有 unexplained reset、App 库损坏或开发流程阻塞。
 
@@ -114,7 +116,7 @@ matrix 前，必须完成上述 candidate evidence，作出明确的 Runtime dep
 ## 版本出口
 
 - `0.6`：完成 A0 的 contracts 收束、已关闭的 Core/Runtime B1 边界、C1 中已证实的能力包；不以 Canvas 或全屏 30 FPS 作为发布条件。
-- `0.7`：首个官方 developer image 的 A1/A2 交付，以及 Core 独立仓库的 B1 首次发布。
+- `0.7`：首个官方 developer image 的 A1/A2 作者工具交付，以及受控外部试用的实际启动；Core/Runtime B1 已在 `0.6` 完成，不再作为该版本出口。
 - `1.0`：至少一个稳定官方板卡、可复现 Device OS 生命周期、冻结的 Japp/manifest/diagnostic/feature-profile 契约、支持 port 矩阵与已发布的依赖/安全更新政策。完整浏览器兼容不是 1.0 条件。
 
 ## 全局变更门槛
