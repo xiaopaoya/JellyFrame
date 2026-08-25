@@ -4,7 +4,14 @@ const childProcess = require("child_process");
 const vscode = require("vscode");
 const { selectBuildDirectory } = require("./build_profiles");
 const { appendBoundedOutput, commandFailure } = require("./command_diagnostics");
-const { deviceChoice, deviceSummary, discoverySummary, identitySummary } = require("./device_presentation");
+const {
+  deviceChoice,
+  deviceSummary,
+  discoverySummary,
+  identitySummary,
+  advertisedDeviceOperations,
+  deviceSupportsOperation
+} = require("./device_presentation");
 const { desktopBuildPresentation } = require("./status_presentation");
 
 let outputChannel;
@@ -20,6 +27,7 @@ let lastDeviceApps;
 let lastDeviceEndpoint;
 let activeDeviceOperation;
 let lastDeviceFailure;
+let lastDeviceLifecycle;
 let statusProvider;
 let embeddedDebugSession;
 
@@ -210,6 +218,36 @@ function clearDeviceFailure() {
   lastDeviceFailure = undefined;
 }
 
+function selectedDeviceRecord() {
+  return Array.isArray(lastDeviceDiscovery)
+    ? lastDeviceDiscovery.find((device) => device?.endpointId === lastDeviceEndpoint)
+    : undefined;
+}
+
+function parseDeviceCommandOutput(stdout, operation) {
+  const parsed = JSON.parse(stdout);
+  const events = Array.isArray(parsed) ? parsed : [parsed];
+  const terminal = events[events.length - 1];
+  if (!terminal || typeof terminal !== "object" || terminal.operation !== operation ||
+      typeof terminal.resultCode !== "string") {
+    throw new Error("device operation returned an invalid terminal result");
+  }
+  return { events, terminal };
+}
+
+function recordDeviceLifecycle(operation, terminal) {
+  lastDeviceLifecycle = {
+    operation,
+    resultCode: terminal.resultCode,
+    message: terminal.message || "",
+    transaction: terminal.transaction,
+    progress: terminal.progress,
+    recovery: terminal.recovery,
+    logSummary: terminal.logSummary
+  };
+  statusProvider?.refresh();
+}
+
 function recordDeviceFailure(operation, failure) {
   lastDeviceFailure = {
     operation,
@@ -267,6 +305,7 @@ async function discoverDevice(context) {
       lastDeviceInfo = undefined;
       lastDeviceApps = undefined;
       lastDeviceEndpoint = undefined;
+      lastDeviceLifecycle = undefined;
       clearDeviceFailure();
       statusProvider?.refresh();
     },
@@ -275,6 +314,7 @@ async function discoverDevice(context) {
       lastDeviceInfo = undefined;
       lastDeviceApps = undefined;
       lastDeviceEndpoint = undefined;
+      lastDeviceLifecycle = undefined;
       statusProvider?.refresh();
     }
   });
@@ -297,6 +337,7 @@ function setSelectedDevice(selected) {
   lastDeviceEndpoint = selected.endpointId;
   lastDeviceInfo = undefined;
   lastDeviceApps = undefined;
+  lastDeviceLifecycle = undefined;
   statusProvider?.refresh();
 }
 
@@ -367,7 +408,7 @@ async function inspectDevice(context) {
   }
 }
 
-async function listDeviceApps(context) {
+async function listDeviceApps(context, options = {}) {
   const provider = configuredDeviceProvider(context);
   if (!provider) {
     return;
@@ -400,12 +441,178 @@ async function listDeviceApps(context) {
       statusProvider?.refresh();
     }
   });
-  if (outcome?.code === 0 && lastDeviceApps) {
+  if (outcome?.code === 0 && lastDeviceApps && !options.silent) {
     const text = isChinese()
       ? `${selected.endpointId}：${lastDeviceApps.apps.length} 个已安装 App，registry generation ${lastDeviceApps.registryGeneration}。`
       : `${selected.endpointId}: ${lastDeviceApps.apps.length} installed App(s), registry generation ${lastDeviceApps.registryGeneration}.`;
     vscode.window.showInformationMessage(text);
   }
+}
+
+async function ensureDeviceApps(context) {
+  if (lastDeviceApps?.endpointId === lastDeviceEndpoint) {
+    return lastDeviceApps.apps;
+  }
+  await listDeviceApps(context, { silent: true });
+  return lastDeviceApps?.endpointId === lastDeviceEndpoint ? lastDeviceApps.apps : undefined;
+}
+
+async function chooseInstalledDeviceApp(context, operation, options = {}) {
+  const apps = await ensureDeviceApps(context);
+  if (!Array.isArray(apps) || apps.length === 0) {
+    vscode.window.showWarningMessage(isChinese()
+      ? "当前设备没有可用于此操作的已安装 App。"
+      : "The selected device has no installed App for this operation.");
+    return undefined;
+  }
+  const candidates = apps.filter((app) => !options.requireRollback || app.rollbackAvailable);
+  if (candidates.length === 0) {
+    vscode.window.showWarningMessage(isChinese()
+      ? "当前设备没有可回滚的 App。"
+      : "The selected device has no App with a rollback version.");
+    return undefined;
+  }
+  const selected = await vscode.window.showQuickPick(candidates.map((app) => ({
+    label: app.appId,
+    description: `${app.versionName || "?"} · ${app.state || "?"}`,
+    detail: app.rollbackAvailable
+      ? (isChinese() ? "保留回滚版本" : "Rollback version available")
+      : (isChinese() ? "无回滚版本" : "No rollback version"),
+    app
+  })), {
+    placeHolder: isChinese()
+      ? `选择要${operation}的 App`
+      : `Select the App to ${operation}`
+  });
+  return selected?.app;
+}
+
+async function runDeviceLifecycleCommand(context, operation, providerArguments, options = {}) {
+  const provider = configuredDeviceProvider(context);
+  if (!provider) {
+    return undefined;
+  }
+  const selected = await selectDiscoveredDevice();
+  if (!selected) {
+    return undefined;
+  }
+  if (!deviceSupportsOperation(selected.device, operation)) {
+    vscode.window.showWarningMessage(isChinese()
+      ? `当前 Provider 未声明支持“${operation}”，因此不会执行此设备操作。`
+      : `The configured Provider did not declare support for '${operation}', so no device operation was started.`);
+    return undefined;
+  }
+  const args = deviceCliArguments(context, provider);
+  args.push(operation, "--selector", selected.endpointId, ...providerArguments);
+  const outcome = await runDeviceCommand(context, options.label || operation, args, {
+    endpointId: selected.endpointId,
+    onStdout: (stdout) => {
+      const { events, terminal } = parseDeviceCommandOutput(stdout, operation);
+      if (terminal.device?.endpointId !== selected.endpointId) {
+        throw new Error("device lifecycle result did not attest the selected endpoint");
+      }
+      recordDeviceLifecycle(operation, terminal);
+      if (operation === "logs") {
+        for (const event of events.filter((event) => event?.kind === "log" && event.log)) {
+          const log = event.log;
+          ensureOutputChannel().appendLine(`[device ${log.level}] ${log.appId} #${log.generation}: ${log.message}`);
+        }
+      }
+      clearDeviceFailure();
+    },
+    onFailure: () => {
+      lastDeviceLifecycle = undefined;
+      statusProvider?.refresh();
+    }
+  });
+  if (outcome?.code === 0 && options.refreshApps) {
+    await listDeviceApps(context, { silent: true });
+  }
+  return outcome;
+}
+
+async function deployDeviceApp(context, resourceUri) {
+  const selected = await selectDiscoveredDevice();
+  if (!selected || !deviceSupportsOperation(selected.device, "install")) {
+    return;
+  }
+  const root = await packageRoot(resourceUri);
+  if (!root) {
+    return;
+  }
+  const manifestPath = packageManifestPath(root);
+  let appId;
+  try {
+    appId = JSON.parse(fs.readFileSync(manifestPath, "utf8")).id;
+  } catch (_) {
+    appId = path.basename(root);
+  }
+  const action = isChinese() ? "打包并部署" : "Package and Deploy";
+  const confirmed = await vscode.window.showWarningMessage(
+    isChinese()
+      ? `将打包 ${appId} 并部署到 ${selected.endpointId}。已有相同 App 会作为更新处理。`
+      : `Package ${appId} and deploy it to ${selected.endpointId}. An existing App with the same identity will be updated.`,
+    { modal: true }, action);
+  if (confirmed !== action) {
+    return;
+  }
+  ensureBuildDir(context);
+  const base = outputBase(root);
+  const bundleDirectory = path.join(buildDir(context), "device-bundles");
+  fs.mkdirSync(bundleDirectory, { recursive: true });
+  const bundle = path.join(bundleDirectory, `${base}.jfapp`);
+  const report = path.join(buildDir(context), `vscode-${base}-device-package-report.json`);
+  const packageOutcome = await runCliWithOptions(context, [
+    "package", "--root", root, "--report", report, "--output-bundle", bundle
+  ], { commandName: isChinese() ? "打包设备 App" : "Package device App", reportPath: report });
+  if (packageOutcome?.code !== 0 || !fs.existsSync(bundle)) {
+    return;
+  }
+  await runDeviceLifecycleCommand(context, "install", ["--bundle", bundle], {
+    label: isChinese() ? "部署 App" : "Deploy App",
+    refreshApps: true
+  });
+}
+
+async function runSelectedAppLifecycle(context, operation, options = {}) {
+  const selected = await selectDiscoveredDevice();
+  if (!selected) {
+    return;
+  }
+  if (!deviceSupportsOperation(selected.device, operation)) {
+    vscode.window.showWarningMessage(isChinese()
+      ? `当前 Provider 未声明支持“${operation}”，因此不会执行此设备操作。`
+      : `The configured Provider did not declare support for '${operation}', so no device operation was started.`);
+    return;
+  }
+  const app = await chooseInstalledDeviceApp(context, options.chineseVerb || operation, options);
+  if (!app) {
+    return;
+  }
+  if (operation === "remove") {
+    const remove = isChinese() ? "删除 App" : "Remove App";
+    const keepData = isChinese() ? "删除并保留数据" : "Remove and keep data";
+    const choice = await vscode.window.showWarningMessage(
+      isChinese() ? `从设备删除 ${app.appId}？` : `Remove ${app.appId} from the device?`,
+      { modal: true }, remove, keepData);
+    if (!choice) {
+      return;
+    }
+    await runDeviceLifecycleCommand(context, operation,
+      ["--id", app.appId, ...(choice === keepData ? ["--keep-data"] : [])],
+      { label: remove, refreshApps: true });
+    return;
+  }
+  await runDeviceLifecycleCommand(context, operation, ["--id", app.appId], {
+    label: isChinese() ? `${options.chineseVerb || operation} App` : `${operation} App`,
+    refreshApps: operation !== "logs"
+  });
+}
+
+async function inspectDeviceRecovery(context) {
+  await runDeviceLifecycleCommand(context, "recovery", [], {
+    label: isChinese() ? "读取恢复状态" : "Read recovery status"
+  });
 }
 
 function runCli(context, args) {
@@ -1853,6 +2060,8 @@ class JellyFrameStatusProvider {
       || Boolean(lastReport?.runtimeMetrics)
       || Boolean(lastReport?.portTelemetry);
     const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
+    const selectedDevice = selectedDeviceRecord();
+    const supportedDeviceOperations = advertisedDeviceOperations(selectedDevice);
     const labels = chinese ? {
       currentApp: "当前 App",
       workflow: "工作流",
@@ -1867,11 +2076,21 @@ class JellyFrameStatusProvider {
       scriptSupport: "脚本支持",
       device: "设备",
       deviceActions: "设备操作",
+      deviceLifecycle: "App 生命周期与调试",
       deviceStatus: "设备状态",
       discoverDevice: "发现设备",
       selectDevice: "选择当前设备",
       inspectDevice: "读取设备身份",
       listDeviceApps: "列出已安装 App",
+      deployDeviceApp: "打包并部署当前 App",
+      launchDeviceApp: "启动已安装 App",
+      stopDeviceApp: "停止已安装 App",
+      removeDeviceApp: "删除已安装 App",
+      rollbackDeviceApp: "回滚已安装 App",
+      readDeviceLogs: "读取 App 日志",
+      readDeviceRecovery: "读取恢复状态",
+      lifecycleResult: "最近生命周期操作",
+      noLifecycleResult: "尚未执行",
       noDeviceSession: "尚未发现设备",
       connectedDevices: "已连接",
       selectedDevice: "当前设备",
@@ -1919,7 +2138,14 @@ class JellyFrameStatusProvider {
         discoverDevice: "通过已配置的 Provider 列出可连接设备。",
         selectDevice: "在已发现设备中切换本次操作的目标。",
         inspectDevice: "读取并校验当前设备的 Developer Image 与 Render Core 身份。",
-        listDeviceApps: "读取当前设备已安装 App 与 registry generation。"
+        listDeviceApps: "读取当前设备已安装 App 与 registry generation。",
+        deployDeviceApp: "打包当前 App 为 .jfapp，并在确认后部署到选中设备。",
+        launchDeviceApp: "从选中设备的安装列表选择并启动 App。",
+        stopDeviceApp: "从选中设备的安装列表选择并停止 App。",
+        removeDeviceApp: "从选中设备删除 App；会要求明确确认。",
+        rollbackDeviceApp: "恢复某个 App 保留的上一个版本。",
+        readDeviceLogs: "读取选中 App 的有界设备日志快照到 JellyFrame 运行日志。",
+        readDeviceRecovery: "读取 protected launcher 与最近恢复状态。"
       }
     } : {
       currentApp: "Current App",
@@ -1935,11 +2161,21 @@ class JellyFrameStatusProvider {
       scriptSupport: "Script support",
       device: "Device",
       deviceActions: "Device actions",
+      deviceLifecycle: "App Lifecycle & Debug",
       deviceStatus: "Device status",
       discoverDevice: "Discover device",
       selectDevice: "Select device",
       inspectDevice: "Device info",
       listDeviceApps: "List installed Apps",
+      deployDeviceApp: "Package and deploy current App",
+      launchDeviceApp: "Launch installed App",
+      stopDeviceApp: "Stop installed App",
+      removeDeviceApp: "Remove installed App",
+      rollbackDeviceApp: "Roll back installed App",
+      readDeviceLogs: "Read App logs",
+      readDeviceRecovery: "Read recovery status",
+      lifecycleResult: "Latest lifecycle operation",
+      noLifecycleResult: "Not run",
       noDeviceSession: "No device discovered",
       connectedDevices: "Connected",
       selectedDevice: "Selected device",
@@ -1987,7 +2223,14 @@ class JellyFrameStatusProvider {
         discoverDevice: "List connectable devices through the configured Provider.",
         selectDevice: "Change the target for subsequent device operations.",
         inspectDevice: "Read and validate the selected Developer Image and Render Core identity.",
-        listDeviceApps: "Read installed Apps and registry generation from the selected device."
+        listDeviceApps: "Read installed Apps and registry generation from the selected device.",
+        deployDeviceApp: "Package the current App as a .jfapp and deploy it to the selected device after confirmation.",
+        launchDeviceApp: "Choose and launch an App from the selected device installation list.",
+        stopDeviceApp: "Choose and stop an App from the selected device installation list.",
+        removeDeviceApp: "Remove an App from the selected device after explicit confirmation.",
+        rollbackDeviceApp: "Restore an App's retained previous version.",
+        readDeviceLogs: "Read a bounded App log snapshot into the JellyFrame run log.",
+        readDeviceRecovery: "Read protected-launcher and latest recovery status."
       }
     };
     return [
@@ -2046,6 +2289,31 @@ class JellyFrameStatusProvider {
             ]
             : []),
         ]),
+        ...(selectedDevice && supportedDeviceOperations.size > 0 ? [
+          this.group(labels.deviceLifecycle, undefined, [
+            ...(hasPackage && supportedDeviceOperations.has("install")
+              ? [this.commandItem(labels.deployDeviceApp, labels.actionHints.deployDeviceApp, "jellyframe.deviceDeploy", "cloud-upload", root)]
+              : []),
+            ...(supportedDeviceOperations.has("launch")
+              ? [this.commandItem(labels.launchDeviceApp, labels.actionHints.launchDeviceApp, "jellyframe.deviceLaunch", "play")]
+              : []),
+            ...(supportedDeviceOperations.has("stop")
+              ? [this.commandItem(labels.stopDeviceApp, labels.actionHints.stopDeviceApp, "jellyframe.deviceStop", "debug-stop")]
+              : []),
+            ...(supportedDeviceOperations.has("rollback")
+              ? [this.commandItem(labels.rollbackDeviceApp, labels.actionHints.rollbackDeviceApp, "jellyframe.deviceRollback", "discard")]
+              : []),
+            ...(supportedDeviceOperations.has("remove")
+              ? [this.commandItem(labels.removeDeviceApp, labels.actionHints.removeDeviceApp, "jellyframe.deviceRemove", "trash")]
+              : []),
+            ...(supportedDeviceOperations.has("logs")
+              ? [this.commandItem(labels.readDeviceLogs, labels.actionHints.readDeviceLogs, "jellyframe.deviceLogs", "output")]
+              : []),
+            ...(supportedDeviceOperations.has("recovery")
+              ? [this.commandItem(labels.readDeviceRecovery, labels.actionHints.readDeviceRecovery, "jellyframe.deviceRecovery", "heart")]
+              : []),
+          ])
+        ] : []),
         this.group(labels.deviceStatus, "pulse", [
           this.statusItem(labels.connectedDevices,
           Array.isArray(lastDeviceDiscovery)
@@ -2077,6 +2345,12 @@ class JellyFrameStatusProvider {
               : labels.deviceReady),
           lastDeviceFailure?.message || labels.deviceReady,
           activeDeviceOperation ? "sync~spin" : (lastDeviceFailure ? "warning" : "pass")),
+          this.statusItem(labels.lifecycleResult,
+          lastDeviceLifecycle
+            ? `${lastDeviceLifecycle.operation} · ${lastDeviceLifecycle.resultCode}`
+            : labels.noLifecycleResult,
+          lastDeviceLifecycle?.message || labels.noLifecycleResult,
+          lastDeviceLifecycle?.resultCode === "ok" || lastDeviceLifecycle?.resultCode === "accepted" ? "pass" : "history"),
           ...(lastDeviceApps?.apps || []).map((app) => this.statusItem(
           app.appId || "unknown app",
           `${app.versionName || "?"} · ${app.state || "?"}${app.rollbackAvailable ? " · rollback" : ""}`,
@@ -2433,7 +2707,25 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.deviceDiscover", () => discoverDevice(context)),
     vscode.commands.registerCommand("jellyframe.deviceSelect", () => chooseDevice()),
     vscode.commands.registerCommand("jellyframe.deviceInfo", () => inspectDevice(context)),
-    vscode.commands.registerCommand("jellyframe.deviceList", () => listDeviceApps(context))
+    vscode.commands.registerCommand("jellyframe.deviceList", () => listDeviceApps(context)),
+    vscode.commands.registerCommand("jellyframe.deviceDeploy", (resourceUri) => deployDeviceApp(context, resourceUri)),
+    vscode.commands.registerCommand("jellyframe.deviceLaunch", () => runSelectedAppLifecycle(context, "launch", {
+      chineseVerb: "启动"
+    })),
+    vscode.commands.registerCommand("jellyframe.deviceStop", () => runSelectedAppLifecycle(context, "stop", {
+      chineseVerb: "停止"
+    })),
+    vscode.commands.registerCommand("jellyframe.deviceRemove", () => runSelectedAppLifecycle(context, "remove", {
+      chineseVerb: "删除"
+    })),
+    vscode.commands.registerCommand("jellyframe.deviceRollback", () => runSelectedAppLifecycle(context, "rollback", {
+      chineseVerb: "回滚",
+      requireRollback: true
+    })),
+    vscode.commands.registerCommand("jellyframe.deviceLogs", () => runSelectedAppLifecycle(context, "logs", {
+      chineseVerb: "读取日志"
+    })),
+    vscode.commands.registerCommand("jellyframe.deviceRecovery", () => inspectDeviceRecovery(context))
   );
 }
 
@@ -2454,6 +2746,7 @@ function deactivate() {
   lastDeviceInfo = undefined;
   lastDeviceApps = undefined;
   lastDeviceEndpoint = undefined;
+  lastDeviceLifecycle = undefined;
 }
 
 module.exports = {

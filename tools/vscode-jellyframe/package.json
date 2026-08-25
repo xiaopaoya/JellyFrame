@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.12",
+  "version": "0.4.13",
   "publisher": "jellyframe",
   "repository": {
     "type": "git",
@@ -31,7 +31,14 @@
     "onCommand:jellyframe.deviceDiscover",
     "onCommand:jellyframe.deviceSelect",
     "onCommand:jellyframe.deviceInfo",
-    "onCommand:jellyframe.deviceList"
+    "onCommand:jellyframe.deviceList",
+    "onCommand:jellyframe.deviceDeploy",
+    "onCommand:jellyframe.deviceLaunch",
+    "onCommand:jellyframe.deviceStop",
+    "onCommand:jellyframe.deviceRemove",
+    "onCommand:jellyframe.deviceRollback",
+    "onCommand:jellyframe.deviceLogs",
+    "onCommand:jellyframe.deviceRecovery"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -115,6 +122,41 @@
         "command": "jellyframe.deviceList",
         "title": "%command.deviceList%",
         "icon": "$(list-tree)"
+      },
+      {
+        "command": "jellyframe.deviceDeploy",
+        "title": "%command.deviceDeploy%",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "jellyframe.deviceLaunch",
+        "title": "%command.deviceLaunch%",
+        "icon": "$(play)"
+      },
+      {
+        "command": "jellyframe.deviceStop",
+        "title": "%command.deviceStop%",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "jellyframe.deviceRemove",
+        "title": "%command.deviceRemove%",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "jellyframe.deviceRollback",
+        "title": "%command.deviceRollback%",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "jellyframe.deviceLogs",
+        "title": "%command.deviceLogs%",
+        "icon": "$(output)"
+      },
+      {
+        "command": "jellyframe.deviceRecovery",
+        "title": "%command.deviceRecovery%",
+        "icon": "$(heart)"
       }
     ],
     "submenus": [

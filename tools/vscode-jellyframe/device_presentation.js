@@ -37,9 +37,27 @@ function discoverySummary(devices, chinese) {
     : `Discovered ${total} device(s), ${connected} connected.`;
 }
 
+const DEVICE_LIFECYCLE_OPERATIONS = new Set([
+  "install", "cancel", "launch", "stop", "remove", "rollback", "logs", "recovery"
+]);
+
+function advertisedDeviceOperations(device) {
+  const operations = device?.capabilities?.supportedOperations;
+  if (!Array.isArray(operations)) {
+    return new Set();
+  }
+  return new Set(operations.filter((operation) => DEVICE_LIFECYCLE_OPERATIONS.has(operation)));
+}
+
+function deviceSupportsOperation(device, operation) {
+  return advertisedDeviceOperations(device).has(operation);
+}
+
 module.exports = {
   deviceChoice,
   deviceSummary,
   discoverySummary,
-  identitySummary
+  identitySummary,
+  advertisedDeviceOperations,
+  deviceSupportsOperation
 };

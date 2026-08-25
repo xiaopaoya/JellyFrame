@@ -18,6 +18,13 @@ function main() {
   assert.equal(result.resultCode, "transport-unavailable");
   assert.equal(result.message, "COM19 is busy");
 
+  const streamed = parseStructuredResult(JSON.stringify([
+    { kind: "progress", operation: "install", resultCode: "accepted" },
+    { kind: "result", operation: "install", resultCode: "integrity-failed", message: "bundle CRC mismatch" }
+  ]));
+  assert.equal(streamed.resultCode, "integrity-failed");
+  assert.equal(streamed.message, "bundle CRC mismatch");
+
   const providerFailure = commandFailure({
     operation: "发现设备",
     chinese: true,

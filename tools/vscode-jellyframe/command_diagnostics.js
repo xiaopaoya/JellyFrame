@@ -25,7 +25,11 @@ function parseStructuredResult(stdout) {
   }
   try {
     const result = JSON.parse(text);
-    return result && typeof result === "object" && !Array.isArray(result) ? result : undefined;
+    if (Array.isArray(result)) {
+      const terminal = result[result.length - 1];
+      return terminal && typeof terminal === "object" && !Array.isArray(terminal) ? terminal : undefined;
+    }
+    return result && typeof result === "object" ? result : undefined;
   } catch (_) {
     for (const line of text.split(/\r?\n/).reverse()) {
       try {

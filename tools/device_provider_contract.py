@@ -22,6 +22,7 @@ MAX_APP_LIST_ENTRIES = 24
 MAX_REQUEST_ID_BYTES = 64
 MAX_FEATURE_FAMILIES = 64
 OPERATIONS = frozenset({"discover", "info", "list", "install", "cancel", "launch", "stop", "remove", "rollback", "logs", "recovery"})
+DEVICE_OPERATIONS = frozenset(OPERATIONS - {"discover"})
 RESULT_CODES = frozenset({"ok", "accepted", "queued", "invalid-request", "busy", "unsupported", "denied", "not-found", "stale-session", "stale-request", "payload-too-large", "integrity-failed", "storage-full", "cancelled", "failed", "transport-unavailable", "protocol-mismatch", "provider-failed"})
 FEATURE_FAMILY_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{0,95}$")
 SOURCE_REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -125,8 +126,9 @@ def _validate_device(value: Any, name: str) -> None:
     if device["protocol"] != "JFDP/1" or not isinstance(device["connected"], bool):
         raise ProviderContractError(f"{name} has invalid protocol or connection state")
     capabilities = _object(device["capabilities"], f"{name}.capabilities")
-    expected = {"display", "featureFamilies", "maxBundleBytes", "availableStorageBytes"}
-    if set(capabilities) != expected:
+    required = {"display", "featureFamilies", "maxBundleBytes", "availableStorageBytes"}
+    allowed = required | {"supportedOperations"}
+    if not required.issubset(capabilities) or not set(capabilities).issubset(allowed):
         raise ProviderContractError(f"{name}.capabilities has unknown or missing fields")
     display = _object(capabilities["display"], f"{name}.capabilities.display")
     if set(display) != {"width", "height", "shape"} or not all(isinstance(display[key], int) and display[key] > 0 for key in ("width", "height")):
@@ -142,6 +144,13 @@ def _validate_device(value: Any, name: str) -> None:
             raise ProviderContractError(f"{name}.capabilities.featureFamilies[{index}] is invalid")
     for field in ("maxBundleBytes", "availableStorageBytes"):
         _uint32(capabilities[field], f"{name}.capabilities.{field}")
+    if "supportedOperations" in capabilities:
+        operations = capabilities["supportedOperations"]
+        if not isinstance(operations, list) or len(operations) > len(DEVICE_OPERATIONS):
+            raise ProviderContractError(f"{name}.capabilities.supportedOperations is invalid")
+        if (any(not isinstance(operation, str) for operation in operations) or
+                len(set(operations)) != len(operations) or set(operations) - DEVICE_OPERATIONS):
+            raise ProviderContractError(f"{name}.capabilities.supportedOperations is invalid")
 
 
 def _validate_app_library_entry(value: Any, name: str) -> None:

@@ -75,6 +75,18 @@ available storage。feature-family ID 必须唯一、使用小写 ASCII `[a-z0-9
 `transport-unavailable` 等可诊断状态。result 最大 64 KiB。禁止传出 raw bundle bytes、flash address、filesystem
 path、private key 或 native handle。
 
+### 由能力声明的生命周期控件
+
+discovery device record 可选携带 `capabilities.supportedOperations` array。为兼容已发布的
+`jellyframe-device@0.1.0-dev` 包，该字段可以缺失；一旦出现，它就是作者侧生命周期控件唯一可信的 opt-in
+列表。每项必须唯一，且只能是 `install`、`cancel`、`launch`、`stop`、`remove`、`rollback`、`logs`、
+`recovery` 之一；`discover` 有意不在其中，因为它是 host 建立 session 的动作，而非 selected device capability。
+
+VS Code 扩展只会在当前选中设备声明相应值时显示部署、变更和 App 调试入口。字段缺失或为空时，仅显示只读的
+发现、身份和 App 列表流程。即使已声明，provider 仍可返回 typed result code 拒绝请求；能力声明不能替代
+selected-device attestation、破坏性操作确认、有界 JSONL 校验或 integration acceptance。尤其是仅声明 `cancel`
+并不能证明 in-flight cancel 安全，仍必须由 provider delivery 与实机验收分别证明。
+
 `info` 以 typed `JFDP/1 Identity` response 为依据。除 discovery 使用的 device record 外，它还必须证明
 `imageId`、`profileId`、`imageVersion`、`renderCoreVersion`、40 字符小写 source revision、非零 Render Core ABI
 和完整 feature-family set。稳定 wire bit 分别映射 `core.document`、`core.paint`、`css.flex-grid`、

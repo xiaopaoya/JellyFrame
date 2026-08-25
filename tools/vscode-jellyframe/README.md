@@ -28,6 +28,8 @@ Palette as entry points.
 - A dedicated `JellyFrame` Activity Bar view with app, build, report and
   diagnostic actions, plus focused context-menu actions for
   `jellyframe.app.json` and HTML/CSS files.
+- Capability-gated Device OS lifecycle actions that remain hidden until a
+  selected provider explicitly declares support for them.
 
 ## Using The Extension
 
@@ -143,3 +145,11 @@ validate the selected endpoint against the configured Developer Image manifest.
 List Installed Apps shows the same endpoint's registry generation, version,
 state and rollback availability. These three commands are read-only: they do
 not install, launch, remove or flash a device.
+
+The published WS147 provider does not yet advertise lifecycle operations, so
+the Activity Bar intentionally hides deployment, launch, stop, rollback, App
+logs and recovery actions. A future provider must declare each supported
+operation in `capabilities.supportedOperations`; this is an explicit safety
+gate, not a promise that every declared action is already accepted on every
+device. Deployment and removal always require confirmation, and the extension
+records the typed terminal result in the Device status section.

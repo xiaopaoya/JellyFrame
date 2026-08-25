@@ -25,11 +25,13 @@ VS Code session or that an installed App can render, receive input, emit logs,
 or recover.
 
 The current published package is explicitly limited to the read-only
-`discover/info/list` smoke. To align with selected-device attestation, the
+`discover/info/list` smoke. The Runtime extension has a capability-gated
+lifecycle group, but intentionally keeps deploy, mutation and App-debug
+controls hidden until the selected provider advertises each operation. To align with selected-device attestation, the
 unpublished `jellyframe-device@0.1.1-dev` provider source adds device records
 to live cancellation and `logs` terminals. Repackaging it, passing host
-fixtures and recording the archive hash are prerequisites for mutation and
-lifecycle UI; the current `0.1.0-dev` package cannot substitute for them.
+fixtures and recording the archive hash are prerequisites for usable mutation
+and lifecycle UI; the current `0.1.0-dev` package cannot substitute for them.
 
 WS147 has A1 storage/recovery and factory-image evidence. The targeted
 2026-08-21 workspace remeasure, based on `b372cc4`, also proves a real

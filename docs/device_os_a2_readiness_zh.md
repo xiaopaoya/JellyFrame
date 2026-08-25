@@ -16,9 +16,10 @@ VS Code 的 discovery、identity 与只读 installed-App list session 状态。�
 13 个载荷哈希。这关闭了 provider 打包前置，但不等于已完成真实干净机器 VS Code 会话，也不等于安装后 App 已形成
 渲染、输入、日志或恢复闭环。
 
-当前发布包的明确边界是 `discover/info/list` 只读 smoke。为对齐新的 selected-device attestation，未发布的
+当前发布包的明确边界是 `discover/info/list` 只读 smoke。Runtime 扩展现已具备 capability-gated 生命周期分组，
+但会在 selected provider 声明各 operation 前隐藏部署、变更与 App 调试入口。为对齐新的 selected-device attestation，未发布的
 `jellyframe-device@0.1.1-dev` provider source 已补齐 live cancel 与 `logs` terminal；其重新打包、host fixture
-与 archive hash 记录是后续 mutation/lifecycle UI 的前置，不能以现有 `0.1.0-dev` 包替代。
+与 archive hash 记录是后续可用 mutation/lifecycle UI 的前置，不能以现有 `0.1.0-dev` 包替代。
 
 WS147 已有 A1 storage/recovery 与 factory image 证据。基于 `b372cc4` 的 2026-08-21 workspace remeasure 还证明，
 真实 22,924-byte resource bundle 可以完整传输、commit、launch、stop：有效包在 2,049 ms 内返回 `accepted`；完整

@@ -21,6 +21,7 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 - 可配置仓库根目录、Python 可执行文件、默认 target 和字体预算。
 - 在 VS Code 左侧提供始终可见的 `JellyFrame` 活动栏视图，集中显示 App、构建、报告、
   诊断和性能操作；对 `jellyframe.app.json` 以及 HTML/CSS 文件提供针对性的右键菜单。
+- Device OS 生命周期操作按 capability 显式门控；未获当前选中 provider 声明支持时不会显示。
 
 ## 使用扩展
 
@@ -106,3 +107,8 @@ provider；WS147 请安装版本化交付包
 缺失或无效，命令会直接给出配置提示。先执行“发现设备”，再使用“读取设备身份”按配置的
 Developer Image manifest 校验所选端点；“列出已安装 App”会显示同一端点的 registry generation、版本、
 状态和回滚可用性。这三项均为只读操作，不会安装、启动、删除或刷写设备。
+
+已发布的 WS147 provider 还没有声明 lifecycle operation，因此活动栏会有意隐藏部署、启动、停止、回滚、
+App 日志和恢复状态入口。后续 provider 必须在 `capabilities.supportedOperations` 中逐项声明支持能力；这是一道
+显式安全门，而不是声称所有声明操作已在每台设备上被接受。部署与删除始终要求确认，扩展会将 typed terminal
+result 记录到“设备状态”区。

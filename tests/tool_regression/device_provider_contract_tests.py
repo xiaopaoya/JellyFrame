@@ -50,6 +50,19 @@ class DeviceProviderContractTests(unittest.TestCase):
         parsed = contract.parse_provider_result(json.dumps(result(devices=[device()])))
         self.assertEqual(parsed["devices"][0]["profileId"], "rect-172x320")
 
+    def test_supported_operations_is_optional_and_strict_when_present(self):
+        self.assertEqual(contract.parse_provider_result(json.dumps(result(devices=[device()])))["devices"][0]["endpointId"],
+                         "usb-ws147-001")
+        capable = device()
+        capable["capabilities"]["supportedOperations"] = ["install", "launch", "logs"]
+        parsed = contract.parse_provider_result(json.dumps(result(devices=[capable])))
+        self.assertEqual(parsed["devices"][0]["capabilities"]["supportedOperations"], ["install", "launch", "logs"])
+        for operations in (["discover"], ["install", "install"], ["unknown"], "install", [[]]):
+            invalid = device()
+            invalid["capabilities"]["supportedOperations"] = operations
+            with self.assertRaises(contract.ProviderContractError):
+                contract.parse_provider_result(json.dumps(result(devices=[invalid])))
+
     def test_rejects_unknown_fields_and_duplicate_members(self):
         with self.assertRaises(contract.ProviderContractError):
             contract.parse_provider_result(json.dumps(result(extra=True)))

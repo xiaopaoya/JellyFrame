@@ -90,6 +90,26 @@ rejects missing or mismatched attestation. Failed results may omit it so
 result is at most 64 KiB. It must not expose raw bundle bytes, flash addresses,
 filesystem paths, private keys or native handles.
 
+### Capability-Declared Lifecycle Controls
+
+`capabilities.supportedOperations` is an optional array on a discovery device
+record. It is absent from the published `jellyframe-device@0.1.0-dev` package
+for backward compatibility. When present, it is the authoritative opt-in list
+for author-facing lifecycle controls. Its values are unique members of
+`install`, `cancel`, `launch`, `stop`, `remove`, `rollback`, `logs`, and
+`recovery`; `discover` is deliberately excluded because it is the host's
+session-establishment action rather than a selected-device capability.
+
+The VS Code extension shows deployment, mutation and app-debug actions only
+when the selected device advertises the corresponding value. An absent or empty
+list shows the read-only discovery, identity and App-list workflow only. A
+provider may still reject an advertised request with a typed result code; the
+declaration does not replace selected-device attestation, confirmation for
+destructive actions, bounded JSONL validation, or integration acceptance.
+In particular, advertising `cancel` alone does not prove safe in-flight
+cancellation. The provider delivery and real-device acceptance must establish
+that separately.
+
 `info` is backed by the typed `JFDP/1 Identity` response. In addition to the
 device record used for discovery, it must attest `imageId`, `profileId`,
 `imageVersion`, `renderCoreVersion`, a lowercase 40-character source revision,

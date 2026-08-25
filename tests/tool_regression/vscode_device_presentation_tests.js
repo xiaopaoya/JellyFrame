@@ -3,7 +3,9 @@ const {
   deviceChoice,
   deviceSummary,
   discoverySummary,
-  identitySummary
+  identitySummary,
+  advertisedDeviceOperations,
+  deviceSupportsOperation
 } = require("../../tools/vscode-jellyframe/device_presentation");
 
 function device(endpointId, connected = true) {
@@ -27,6 +29,11 @@ function main() {
   assert.match(deviceSummary(device("desk-a"), true), /desk-a · ws147 · rect-172x320 · 0\.6\.0-a2 · 已连接/);
   assert.equal(discoverySummary([device("desk-a"), device("desk-b", false)], false), "Discovered 2 device(s), 1 connected.");
   assert.match(identitySummary(device("desk-a"), { renderCoreVersion: "0.6.1", renderCoreAbi: 1 }, true), /Render Core 0\.6\.1 \/ ABI 1/);
+  const lifecycleDevice = device("desk-lifecycle");
+  lifecycleDevice.capabilities = { supportedOperations: ["install", "launch", "logs"] };
+  assert.deepEqual([...advertisedDeviceOperations(lifecycleDevice)].sort(), ["install", "launch", "logs"]);
+  assert.equal(deviceSupportsOperation(lifecycleDevice, "install"), true);
+  assert.equal(deviceSupportsOperation(device("read-only"), "install"), false);
 }
 
 main();
