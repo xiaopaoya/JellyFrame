@@ -1,5 +1,7 @@
 # App Template Conventions
 
+> Last updated: 2026-08-26; Applies to: 0.6.0-dev; Render Core baseline: 0.6.1
+
 Templates are intentionally small authoring starting points, not capability
 fixtures. Keep their structure consistent so a new package is immediately
 recognizable:

@@ -1,6 +1,6 @@
 # Modern Cases
 
-> Last updated: 2026-08-26; Applies to: Render Core 0.6.1
+> Last updated: 2026-08-26; Applies to: 0.6.0-dev; Render Core baseline: 0.6.1
 
 Modern HTML/CSS compatibility samples. These are Core-maintainer visual inputs,
 not app-author examples: they intentionally use features that may support,

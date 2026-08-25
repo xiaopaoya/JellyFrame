@@ -1,5 +1,7 @@
 # README Gallery Evidence
 
+> Last updated: 2026-08-26; Applies to: 0.6.0-dev; Render Core baseline: 0.6.1
+
 The four PNG files beside this note are produced by the current
 `jellyframe_desktop_shell`, not by a browser or design mockup. Their precise
 provenance is recorded in `gallery-provenance.json` and is regenerated with:
