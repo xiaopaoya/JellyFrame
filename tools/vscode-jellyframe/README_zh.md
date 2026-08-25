@@ -50,7 +50,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 ```
 
 脚本优先使用 Node.js 的 `vsce`、`npx`（或可用的 `pnpm`）打包；这些工具均不可用时，会自动使用内置 VSIX 打包器。
-安装或更新仍需要 VS Code 的 `code` 命令在 PATH 中；也可以通过 `-CodeCommand` 传入完整路径。若 PowerShell 阻止本地脚本，可在当前窗口执行
+安装或更新仍需要 VS Code 的 `code` 命令在 PATH 中；也可以通过 `-CodeCommand` 传入完整 CLI 路径（通常是
+`...\Microsoft VS Code\bin\code.cmd`）。若传入 `Code.exe` 且相邻 CLI 存在，脚本会自动改用该 CLI。若 PowerShell 阻止本地脚本，可在当前窗口执行
 `Set-ExecutionPolicy -Scope Process Bypass`。手动安装时，也可以在 VS Code 的扩展视图中选择“从 VSIX 安装”。
 安装到仓库之外时，扩展会优先从当前工作区向上寻找仓库；仍可在设置中填写 `jellyframe.repoRoot`；`jellyframe.buildDir`
 可选，用于指定桌面运行目录。扩展优先使用 `build/desktop-release/Release`，其次使用

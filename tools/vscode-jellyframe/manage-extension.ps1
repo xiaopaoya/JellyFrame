@@ -219,15 +219,25 @@ function Package-Extension {
 function Install-Extension {
     param([switch]$Force)
 
-    if (-not (Get-Command $CodeCommand -ErrorAction SilentlyContinue)) {
+    $resolvedCode = Get-Command $CodeCommand -ErrorAction SilentlyContinue
+    if (-not $resolvedCode) {
         throw "VS Code command '$CodeCommand' was not found. Install the 'code' command in PATH or pass -CodeCommand with its full path."
+    }
+    $codeCli = $resolvedCode.Source
+    if ([IO.Path]::GetFileName($codeCli).Equals("Code.exe", [StringComparison]::OrdinalIgnoreCase)) {
+        $adjacentCli = Join-Path (Split-Path -Parent $codeCli) "bin\code.cmd"
+        if (-not (Test-Path -LiteralPath $adjacentCli -PathType Leaf)) {
+            throw "'$codeCli' is the VS Code GUI executable, not its command-line client. Use '$adjacentCli' or install the 'code' command in PATH."
+        }
+        Write-Host "Using the VS Code command-line client: $adjacentCli"
+        $codeCli = $adjacentCli
     }
     $arguments = @("--install-extension", $vsixPath)
     if ($Force) {
         $arguments += "--force"
     }
     Write-Host "Installing $vsixPath ..."
-    Invoke-Tool -File $CodeCommand -Arguments $arguments
+    Invoke-Tool -File $codeCli -Arguments $arguments
     Write-Host "JellyFrame extension is installed. Reload VS Code windows to use the updated extension."
 }
 

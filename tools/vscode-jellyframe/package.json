@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.13",
+  "version": "0.4.14",
   "publisher": "jellyframe",
   "repository": {
     "type": "git",

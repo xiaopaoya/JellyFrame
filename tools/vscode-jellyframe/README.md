@@ -62,7 +62,8 @@ extension. The individual actions are also available:
 
 The script prefers Node.js `vsce`, `npx` (or an available `pnpm` fallback) for packaging; when none is available,
 it uses its built-in VSIX packager. Installation and updates still need the VS Code `code` command on `PATH`; pass
-`-CodeCommand` to provide an explicit executable path. If PowerShell blocks local scripts, run
+`-CodeCommand` to provide an explicit CLI path (normally `...\Microsoft VS Code\bin\code.cmd`). Passing `Code.exe`
+is accepted only when the adjacent CLI is installed, in which case the script redirects to it. If PowerShell blocks local scripts, run
 `Set-ExecutionPolicy -Scope Process Bypass` in the current window. You can still
 use the Extensions view's `Install from VSIX...` action and select the generated
 `.vsix`. When the extension is installed outside the
