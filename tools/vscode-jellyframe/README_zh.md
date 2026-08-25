@@ -1,6 +1,6 @@
 # JellyFrame VS Code 工具
 
-> 最后更新：2026-08-16；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-25；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里检查、预览、调试和
 打包 JellyFrame App。安装后可以从左侧 JellyFrame 活动栏、资源管理器/编辑器右键菜单
@@ -103,4 +103,5 @@ provider；WS147 请安装版本化交付包
 `jellyframe-ws147-developer-0.6.0-a2-provider-0.1.0-dev.zip`。
 首次使用前，请安装独立 provider 并在 JellyFrame 设置中填写其可执行文件绝对路径；如果路径
 缺失或无效，命令会直接给出配置提示。先执行“发现设备”，再使用“读取设备身份”按配置的
-Developer Image manifest 校验所选端点。
+Developer Image manifest 校验所选端点；“列出已安装 App”会显示同一端点的 registry generation、版本、
+状态和回滚可用性。这三项均为只读操作，不会安装、启动、删除或刷写设备。

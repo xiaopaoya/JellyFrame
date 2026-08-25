@@ -1,6 +1,6 @@
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-08-16; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-25; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -139,3 +139,6 @@ It does not infer serial or USB endpoints. Configure the absolute path to the
 separately installed provider in JellyFrame settings; missing or invalid paths
 are reported directly. Run Discover Device first, then use Device Info to
 validate the selected endpoint against the configured Developer Image manifest.
+List Installed Apps shows the same endpoint's registry generation, version,
+state and rollback availability. These three commands are read-only: they do
+not install, launch, remove or flash a device.

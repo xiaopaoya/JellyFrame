@@ -3111,6 +3111,12 @@ def cmd_device(args: argparse.Namespace) -> int:
         terminal = result[-1] if stream else result
         if args.device_command == "cancel" and not terminal.get("cancellation", {}).get("confirmed", False):
             raise device_provider_client.DeviceProviderClientError("provider did not confirm cancellation")
+        selector = getattr(args, "selector", None)
+        selected_device = terminal.get("device")
+        if selector and selected_device is not None and selected_device.get("endpointId") != selector:
+            raise device_provider_client.DeviceProviderClientError(
+                "provider selected device does not match the requested endpoint"
+            )
         manifest_path = args.manifest
         if manifest_path is not None:
             manifest = device_image_manifest.parse_device_image_manifest(manifest_path.read_bytes())

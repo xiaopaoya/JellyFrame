@@ -13,6 +13,8 @@ let lastPackageRoot;
 let lastCapturePath;
 let lastDeviceDiscovery;
 let lastDeviceInfo;
+let lastDeviceApps;
+let lastDeviceEndpoint;
 let statusProvider;
 let embeddedDebugSession;
 
@@ -180,27 +182,30 @@ function discoverDevice(context) {
       try {
         const result = JSON.parse(stdout);
         lastDeviceDiscovery = Array.isArray(result.devices) ? result.devices : [];
+        lastDeviceInfo = undefined;
+        lastDeviceApps = undefined;
+        lastDeviceEndpoint = undefined;
         statusProvider?.refresh();
       } catch (_) {
         lastDeviceDiscovery = undefined;
+        lastDeviceInfo = undefined;
+        lastDeviceApps = undefined;
+        lastDeviceEndpoint = undefined;
+        statusProvider?.refresh();
       }
     }
   });
 }
 
-async function inspectDevice(context) {
-  const provider = configuredDeviceProvider(context);
-  if (!provider) {
-    return;
-  }
+async function selectDiscoveredDevice() {
   const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
   const devices = Array.isArray(lastDeviceDiscovery)
     ? lastDeviceDiscovery.filter((device) => device && typeof device.endpointId === "string")
     : [];
   if (devices.length === 0) {
     vscode.window.showWarningMessage(chinese
-      ? "请先成功发现 Device OS 设备，再读取设备身份。"
-      : "Discover a configured Device OS endpoint before requesting its identity.");
+      ? "请先成功发现 Device OS 设备，再使用设备功能。"
+      : "Discover a configured Device OS endpoint before using device commands.");
     return;
   }
   const choices = devices.map((device) => ({
@@ -215,6 +220,24 @@ async function inspectDevice(context) {
   if (!selected) {
     return;
   }
+  if (lastDeviceEndpoint !== selected.endpointId) {
+    lastDeviceEndpoint = selected.endpointId;
+    lastDeviceInfo = undefined;
+    lastDeviceApps = undefined;
+    statusProvider?.refresh();
+  }
+  return selected;
+}
+
+async function inspectDevice(context) {
+  const provider = configuredDeviceProvider(context);
+  if (!provider) {
+    return;
+  }
+  const selected = await selectDiscoveredDevice();
+  if (!selected) {
+    return;
+  }
   const args = deviceCliArguments(context, provider);
   args.push("info", "--selector", selected.endpointId);
   runCliWithOptions(context, args, {
@@ -225,6 +248,41 @@ async function inspectDevice(context) {
         statusProvider?.refresh();
       } catch (_) {
         lastDeviceInfo = undefined;
+      }
+    }
+  });
+}
+
+async function listDeviceApps(context) {
+  const provider = configuredDeviceProvider(context);
+  if (!provider) {
+    return;
+  }
+  const selected = await selectDiscoveredDevice();
+  if (!selected) {
+    return;
+  }
+  const args = deviceCliArguments(context, provider);
+  args.push("list", "--selector", selected.endpointId);
+  runCliWithOptions(context, args, {
+    onStdout: (stdout) => {
+      try {
+        const result = JSON.parse(stdout);
+        if (result?.device?.endpointId !== selected.endpointId ||
+            !Array.isArray(result.apps) ||
+            !Number.isInteger(result.registryGeneration)) {
+          throw new Error("missing selected-device app list");
+        }
+        lastDeviceApps = {
+          endpointId: selected.endpointId,
+          apps: result.apps,
+          registryGeneration: result.registryGeneration
+        };
+        statusProvider?.refresh();
+      } catch (error) {
+        lastDeviceApps = undefined;
+        ensureOutputChannel().appendLine(`failed to read device app list: ${error.message}`);
+        statusProvider?.refresh();
       }
     }
   });
@@ -1592,10 +1650,13 @@ class JellyFrameStatusProvider {
       device: "设备",
       discoverDevice: "发现设备",
       inspectDevice: "读取设备身份",
+      listDeviceApps: "列出已安装 App",
       noDeviceSession: "尚未发现设备",
       connectedDevices: "已连接",
       deviceIdentity: "设备身份",
       noDeviceIdentity: "尚未读取",
+      installedApps: "已安装 App",
+      noInstalledApps: "尚未读取",
       package: "App 包",
       noPackage: "未识别 App",
       build: "桌面构建",
@@ -1627,10 +1688,13 @@ class JellyFrameStatusProvider {
       device: "Device",
       discoverDevice: "Discover device",
       inspectDevice: "Device info",
+      listDeviceApps: "List installed Apps",
       noDeviceSession: "No device discovered",
       connectedDevices: "Connected",
       deviceIdentity: "Device identity",
       noDeviceIdentity: "Not read",
+      installedApps: "Installed Apps",
+      noInstalledApps: "Not read",
       package: "App package",
       noPackage: "No App detected",
       build: "Desktop build",
@@ -1690,6 +1754,7 @@ class JellyFrameStatusProvider {
       this.group(labels.device, "plug", [
         this.item(labels.discoverDevice, "", undefined, "jellyframe.deviceDiscover", "plug"),
         this.item(labels.inspectDevice, "", undefined, "jellyframe.deviceInfo", "info"),
+        this.item(labels.listDeviceApps, "", undefined, "jellyframe.deviceList", "list-tree"),
         this.item(labels.connectedDevices,
           Array.isArray(lastDeviceDiscovery)
             ? `${lastDeviceDiscovery.filter((device) => device.connected).length}/${lastDeviceDiscovery.length}`
@@ -1700,6 +1765,16 @@ class JellyFrameStatusProvider {
             ? `${lastDeviceInfo.identity.renderCoreVersion || "?"} / ABI ${lastDeviceInfo.identity.renderCoreAbi ?? "?"}`
             : labels.noDeviceIdentity,
           undefined, undefined, "verified"),
+        this.item(labels.installedApps,
+          lastDeviceApps
+            ? `${lastDeviceApps.apps.length} · gen ${lastDeviceApps.registryGeneration}`
+            : labels.noInstalledApps,
+          undefined, undefined, "library"),
+        ...(lastDeviceApps?.apps || []).map((app) => this.item(
+          app.appId || "unknown app",
+          `${app.versionName || "?"} · ${app.state || "?"}${app.rollbackAvailable ? " · rollback" : ""}`,
+          undefined, undefined, "package"
+        )),
       ]),
     ];
   }
@@ -2045,7 +2120,8 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),
     vscode.commands.registerCommand("jellyframe.showOutput", () => showOutputChannel()),
     vscode.commands.registerCommand("jellyframe.deviceDiscover", () => discoverDevice(context)),
-    vscode.commands.registerCommand("jellyframe.deviceInfo", () => inspectDevice(context))
+    vscode.commands.registerCommand("jellyframe.deviceInfo", () => inspectDevice(context)),
+    vscode.commands.registerCommand("jellyframe.deviceList", () => listDeviceApps(context))
   );
 }
 
@@ -2064,6 +2140,8 @@ function deactivate() {
   }
   lastDeviceDiscovery = undefined;
   lastDeviceInfo = undefined;
+  lastDeviceApps = undefined;
+  lastDeviceEndpoint = undefined;
 }
 
 module.exports = {

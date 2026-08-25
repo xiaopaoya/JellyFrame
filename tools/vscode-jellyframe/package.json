@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "publisher": "jellyframe",
   "repository": {
     "type": "git",
@@ -30,6 +30,7 @@
     "onCommand:jellyframe.showOutput"
     ,"onCommand:jellyframe.deviceDiscover"
     ,"onCommand:jellyframe.deviceInfo"
+    ,"onCommand:jellyframe.deviceList"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -103,6 +104,11 @@
         "command": "jellyframe.deviceInfo",
         "title": "%command.deviceInfo%",
         "icon": "$(info)"
+      },
+      {
+        "command": "jellyframe.deviceList",
+        "title": "%command.deviceList%",
+        "icon": "$(list-tree)"
       }
     ],
     "submenus": [
@@ -196,6 +202,10 @@
         {
           "command": "jellyframe.deviceInfo",
           "group": "device@2"
+        },
+        {
+          "command": "jellyframe.deviceList",
+          "group": "device@3"
         }
       ],
       "explorer/context": [

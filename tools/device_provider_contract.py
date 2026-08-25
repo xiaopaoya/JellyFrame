@@ -289,6 +289,8 @@ def _validate_result(value: Any, require_sequence: bool = False) -> dict[str, An
         if set(cancellation) != {"confirmed"} or not isinstance(cancellation["confirmed"], bool):
             raise ProviderContractError("cancellation is invalid")
     if result["resultCode"] in {"ok", "accepted"}:
+        if result["operation"] != "discover" and "device" not in result:
+            raise ProviderContractError("successful selected operation is missing device")
         if result["operation"] == "list" and "apps" not in result:
             raise ProviderContractError("successful list result is missing apps")
         if result["operation"] == "recovery" and "recovery" not in result:

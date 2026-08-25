@@ -1,6 +1,6 @@
 # Device Provider 移植验收
 
-> 最后更新：2026-08-21；适用版本：0.6.0-dev；协议：JFDP/1
+> 最后更新：2026-08-25；适用版本：0.6.0-dev；协议：JFDP/1
 
 这是物理 Device OS provider 的 A2 交接单。它验证 `jellyframe_cli.py device` 使用的
 host-process 边界，不替代 JFDP wire、Developer Image lifecycle、panel 或 touch 验收。
@@ -25,7 +25,8 @@ jellyframe-device --output jsonl --request-id <id> --selector <endpoint> logs --
 
 provider 必须精确实现 [device_tool_provider_contract_zh.md](device_tool_provider_contract_zh.md) 的
 result/JSONL schema。protocol 与 operation diagnostics 只能写入 stderr；stdout 只能是一份 JSON result
-或一条有界 JSONL stream，不得混入 banner 或 serial output。
+或一条有界 JSONL stream，不得混入 banner 或 serial output。除 `discover` 外，每个成功 selected operation
+都必须回显与 selector 精确一致的 typed `device`；包括 `logs` terminal 与不打开第二个 USB 句柄的 live cancel。
 
 ## 必需 Fixtures
 
@@ -38,7 +39,7 @@ result/JSONL schema。protocol 与 operation diagnostics 只能写入 stderr；s
 | transport unavailable | exit `3`，terminal 为 `transport-unavailable` |
 | install storage full | JSONL terminal 为 `storage-full`，不发布新 App |
 | interrupted transfer | JSONL 返回稳定 failure/cancellation，staging 不发布 |
-| confirmed cancellation | 只有 JFDP transaction 已取消后，`cancel` 才返回 `cancellation.confirmed=true` |
+| confirmed cancellation | 只有 JFDP transaction 已取消后，`cancel` 才返回 `cancellation.confirmed=true` 与 selected `device` |
 | unconfirmed cancellation | `cancel` 返回 `confirmed=false` 或 failure；host 必须失败 |
 | log bounds | `logs` 不超过 requested limit，且绝不超过 11 条 typed record；每条 message 至多 255 bytes |
 
@@ -77,3 +78,7 @@ identity matching、install、cancellation、logs、reconnect/reboot、watchdog/
 所有 fixture 与 WS147 run 都以同一已发布 image identity 通过时，本 A2 provider handoff 才通过；
 `provider-handoff-afdcf75-20260821` 已满足该 gate。主线下一步是完成干净机器的 VS Code device view，以及真实已安装
 App 的 panel/input 验收；它本身不放行外部开发者试用。
+
+已发布的 `jellyframe-device@0.1.0-dev` 交付包继续只用于 `discover/info/list` 的只读 smoke。provider 源线
+`0.1.1-dev` 已补齐 live cancel 和 `logs` terminal 的 selected-device attestation；必须先重新打包、完成 host
+fixture 回归并记录新包 SHA-256，才能作为后续 mutation/lifecycle 验收的 provider 版本。

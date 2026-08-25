@@ -16,10 +16,20 @@ import device_provider_client
 
 
 def result(operation: str, request_id: str, result_code: str = "ok") -> bytes:
+    device = ""
+    if operation != "discover" and result_code in {"ok", "accepted"}:
+        device = (
+            ',"device":{"endpointId":"fixture-endpoint","boardId":"ws147",'
+            '"profileId":"rect-172x320","imageVersion":"0.1.0-dev",'
+            '"runtimeVersion":"0.6.0-dev","protocol":"JFDP/1","connected":true,'
+            '"capabilities":{"display":{"width":172,"height":320,"shape":"rect"},'
+            '"featureFamilies":["core.document"],"maxBundleBytes":1048576,'
+            '"availableStorageBytes":524288}}'
+        )
     return (
         '{"format":"jellyframe.device-provider","formatVersion":0,'
         f'"kind":"result","operation":"{operation}","requestId":"{request_id}",'
-        f'"resultCode":"{result_code}","provider":{{"id":"test","version":"0.1"}}}}'
+        f'"resultCode":"{result_code}","provider":{{"id":"test","version":"0.1"}}{device}}}'
     ).encode("utf-8")
 
 

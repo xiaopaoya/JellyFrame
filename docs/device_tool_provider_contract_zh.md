@@ -1,6 +1,6 @@
 # Device OS 工具 Provider 契约
 
-> 最后更新：2026-08-21；适用版本：0.6.0-dev；状态：WS147 provider handoff 已通过；更宽范围 A2 待完成
+> 最后更新：2026-08-25；适用版本：0.6.0-dev；状态：WS147 provider handoff 已通过；更宽范围 A2 待完成
 
 本 host-process contract 用于隔离 Runtime 作者工具与物理板卡依赖。它不是 `JFDP/1`，不改变
 wire bytes，也不把桌面 reference endpoint 变成 device transport。
@@ -69,8 +69,11 @@ jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> 
 
 `discover` 返回有界 `devices` array。可用 record 包含稳定 opaque `endpointId`、board/profile/image/runtime
 identity、`JFDP/1`、connection state、display shape/size、enabled feature family、maximum bundle bytes 和
-available storage。feature-family ID 必须唯一、使用小写 ASCII `[a-z0-9][a-z0-9.-]{0,95}`，且最多 64 项。其他操作返回一个 selected device 和可选 typed transaction、progress、log summary、recovery data。
-result 最大 64 KiB。禁止传出 raw bundle bytes、flash address、filesystem path、private key 或 native handle。
+available storage。feature-family ID 必须唯一、使用小写 ASCII `[a-z0-9][a-z0-9.-]{0,95}`，且最多 64 项。
+除 `discover` 外，每个 `ok`/`accepted` selected operation 都必须返回一个 typed `device`，其 `endpointId`
+必须精确等于调用方传入的 selector；host 必须拒绝缺失或不匹配的 attestation。失败结果可省略该字段，以保留
+`transport-unavailable` 等可诊断状态。result 最大 64 KiB。禁止传出 raw bundle bytes、flash address、filesystem
+path、private key 或 native handle。
 
 `info` 以 typed `JFDP/1 Identity` response 为依据。除 discovery 使用的 device record 外，它还必须证明
 `imageId`、`profileId`、`imageVersion`、`renderCoreVersion`、40 字符小写 source revision、非零 Render Core ABI
@@ -103,7 +106,8 @@ provider 不得改为序列化 registry 或 task-private structure。
 `progress` event，且只能额外携带 `progress.completedBytes` 与 `progress.totalBytes`；只有 `logs` 可以输出
 `log` event，record 必须且只能是 `level`、`appId`、`generation`、`timestampMs`、`message`，其中 `level`
 只能是 `debug`、`info`、`warn` 或 `error`。唯一最终 `result` 使用普通 result envelope 加 `sequence`，且必须
-是最后一行。成功 `logs` stream 的 `logSummary.returnedRecords` 必须精确等于已输出 log event 数量。终态缺失、
+是最后一行；成功 selected stream 的终态同样必须携带与 selector 一致的 typed `device`。成功 `logs` stream 的
+`logSummary.returnedRecords` 必须精确等于已输出 log event 数量。终态缺失、
 重复或乱序，或 stream 内任何 identity 改变均为 provider failure，不能显示 install 成功。`cancel` 必须返回 boolean `cancellation.confirmed`；Runtime 只将 `true` 视为
 取消成功。仅 kill host process 不代表 staging 已清理。
 

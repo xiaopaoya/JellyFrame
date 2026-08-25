@@ -1,6 +1,6 @@
 # Device OS Tool Provider Contract
 
-> Last updated: 2026-08-21; Applies to: 0.6.0-dev; Status: WS147 provider handoff passed; wider A2 pending
+> Last updated: 2026-08-25; Applies to: 0.6.0-dev; Status: WS147 provider handoff passed; wider A2 pending
 
 This host-process contract separates Runtime author tools from physical board
 dependencies. It is not `JFDP/1`, does not change its wire bytes and does not
@@ -82,9 +82,12 @@ with a 64-byte maximum.
 opaque `endpointId`, board/profile/image/runtime identities, `JFDP/1`,
 connection state, display shape/size, enabled feature families, maximum bundle
 bytes and available storage. Feature-family IDs are unique lowercase ASCII
-`[a-z0-9][a-z0-9.-]{0,95}` values, with at most 64 entries. Other operations return one selected device plus
-optional typed transaction, progress, log summary or recovery data. A result is
-at most 64 KiB. It must not expose raw bundle bytes, flash addresses,
+`[a-z0-9][a-z0-9.-]{0,95}` values, with at most 64 entries. Every successful
+(`ok` or `accepted`) selected operation other than `discover` returns one typed
+`device` whose `endpointId` exactly matches the supplied selector; the host
+rejects missing or mismatched attestation. Failed results may omit it so
+`transport-unavailable` and similar diagnosable states remain representable. A
+result is at most 64 KiB. It must not expose raw bundle bytes, flash addresses,
 filesystem paths, private keys or native handles.
 
 `info` is backed by the typed `JFDP/1 Identity` response. In addition to the
@@ -133,7 +136,8 @@ uint32. Only `install` may emit `progress`, adding only
 `log` event. Its record contains exactly `level`, `appId`, `generation`,
 `timestampMs`, and `message`; `level` is `debug`, `info`, `warn` or `error`.
 The one final `result` uses the ordinary result envelope plus `sequence` and
-must be the last line. For a successful `logs` stream,
+must be the last line; a successful selected stream terminal also carries the
+typed `device` matching the supplied selector. For a successful `logs` stream,
 `logSummary.returnedRecords` must exactly equal the number of emitted log
 events. Missing, duplicate or out-of-order terminal events, or any identity
 change inside a stream, are provider failures, never successful installs.

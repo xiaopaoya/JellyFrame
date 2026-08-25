@@ -28,6 +28,7 @@ def provider_result(operation: str) -> dict[str, object]:
         "requestId": "jf-test",
         "resultCode": "ok",
         "provider": {"id": "fixture", "version": "0.1"},
+        "device": {"endpointId": "fixture-endpoint"},
     }
 
 
@@ -76,6 +77,15 @@ class DeviceCliTests(unittest.TestCase):
                 self.assertEqual(jellyframe_cli.cmd_device(self.command_args("recovery")), 0)
         self.assertEqual(invoke.call_args.kwargs["arguments"], [])
         self.assertEqual(invoke.call_args.kwargs["selector"], "fixture-endpoint")
+
+    def test_rejects_a_provider_response_for_a_different_endpoint(self) -> None:
+        response = provider_result("launch")
+        response["device"] = {"endpointId": "unexpected-endpoint"}
+        stderr = io.StringIO()
+        with patch("jellyframe_cli.device_provider_client.invoke_provider", return_value=response):
+            with contextlib.redirect_stderr(stderr):
+                self.assertEqual(jellyframe_cli.cmd_device(self.command_args("launch")), 4)
+        self.assertIn("does not match the requested endpoint", stderr.getvalue())
 
     def test_help_exposes_the_full_lifecycle_without_a_provider(self) -> None:
         command = [sys.executable, str(ROOT / "tools" / "jellyframe_cli.py"), "device", "--help"]

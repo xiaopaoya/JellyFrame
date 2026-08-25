@@ -74,16 +74,17 @@ class DeviceProviderContractTests(unittest.TestCase):
             contract.parse_provider_result(json.dumps(result(devices=[invalid])))
 
     def test_accepts_only_explicit_cancellation_confirmation(self):
-        accepted = result(operation="cancel", cancellation={"confirmed": True})
+        accepted = result(operation="cancel", device=device(), cancellation={"confirmed": True})
         self.assertTrue(contract.parse_provider_result(json.dumps(accepted))["cancellation"]["confirmed"])
         with self.assertRaises(contract.ProviderContractError):
-            contract.parse_provider_result(json.dumps(result(operation="cancel", cancellation={"confirmed": "yes"})))
+            contract.parse_provider_result(json.dumps(
+                result(operation="cancel", device=device(), cancellation={"confirmed": "yes"})))
 
     def test_accepts_typed_app_list_and_recovery_results(self):
-        app_list = result(operation="list", apps=[app_entry()], registryGeneration=42)
+        app_list = result(operation="list", device=device(), apps=[app_entry()], registryGeneration=42)
         parsed_list = contract.parse_provider_result(json.dumps(app_list))
         self.assertEqual(parsed_list["apps"][0]["versionCode"], 7)
-        recovery_result = result(operation="recovery", recovery=recovery())
+        recovery_result = result(operation="recovery", device=device(), recovery=recovery())
         self.assertEqual(contract.parse_provider_result(json.dumps(recovery_result))["recovery"]["reason"],
                          "app-runtime-failure")
 
@@ -126,6 +127,15 @@ class DeviceProviderContractTests(unittest.TestCase):
         with self.assertRaises(contract.ProviderContractError):
             contract.parse_provider_result(json.dumps(result(operation="recovery", recovery=device_recovery)))
 
+    def test_requires_an_attested_device_for_successful_selected_operations(self):
+        with self.assertRaisesRegex(contract.ProviderContractError, "missing device"):
+            contract.parse_provider_result(json.dumps(result(operation="launch")))
+        self.assertEqual(
+            contract.parse_provider_result(json.dumps(
+                result(operation="launch", resultCode="transport-unavailable")))["resultCode"],
+            "transport-unavailable",
+        )
+
     def test_accepts_ordered_install_progress_and_result(self):
         stream = "\n".join((
             json.dumps(event("progress", 1, progress={"completedBytes": 0, "totalBytes": 1500})),
@@ -140,7 +150,7 @@ class DeviceProviderContractTests(unittest.TestCase):
                 "level": "info", "appId": "org.example.app", "generation": 42,
                 "timestampMs": "18446744073709551615", "message": "started"})),
             json.dumps(event("result", 2, operation="logs", resultCode="ok",
-                             logSummary={"returnedRecords": 1, "droppedRecords": 3})),
+                             device=device(), logSummary={"returnedRecords": 1, "droppedRecords": 3})),
         ))
         parsed = contract.parse_provider_jsonl(stream)
         self.assertEqual(parsed[0]["log"]["timestampMs"], "18446744073709551615")
@@ -153,7 +163,7 @@ class DeviceProviderContractTests(unittest.TestCase):
             contract.parse_provider_jsonl("\n".join((
                 json.dumps(malformed),
                 json.dumps(event("result", 2, operation="logs", resultCode="ok",
-                                 logSummary={"returnedRecords": 1, "droppedRecords": 0})),
+                                 device=device(), logSummary={"returnedRecords": 1, "droppedRecords": 0})),
             )))
         invalid_timestamp = event("log", 1, operation="logs", log={
             "level": "info", "appId": "org.example.app", "generation": 1,
@@ -162,7 +172,7 @@ class DeviceProviderContractTests(unittest.TestCase):
             contract.parse_provider_jsonl("\n".join((
                 json.dumps(invalid_timestamp),
                 json.dumps(event("result", 2, operation="logs", resultCode="ok",
-                                 logSummary={"returnedRecords": 1, "droppedRecords": 0})),
+                                 device=device(), logSummary={"returnedRecords": 1, "droppedRecords": 0})),
             )))
         oversized = event("log", 1, operation="logs", log={
             "level": "info", "appId": "org.example.app", "generation": 1,
@@ -171,14 +181,14 @@ class DeviceProviderContractTests(unittest.TestCase):
             contract.parse_provider_jsonl("\n".join((
                 json.dumps(oversized),
                 json.dumps(event("result", 2, operation="logs", resultCode="ok",
-                                 logSummary={"returnedRecords": 1, "droppedRecords": 0})),
+                                 device=device(), logSummary={"returnedRecords": 1, "droppedRecords": 0})),
             )))
         mismatched_count = "\n".join((
             json.dumps(event("log", 1, operation="logs", log={
                 "level": "info", "appId": "org.example.app", "generation": 1,
                 "timestampMs": "1", "message": "started"})),
             json.dumps(event("result", 2, operation="logs", resultCode="ok",
-                             logSummary={"returnedRecords": 0, "droppedRecords": 0})),
+                             device=device(), logSummary={"returnedRecords": 0, "droppedRecords": 0})),
         ))
         with self.assertRaises(contract.ProviderContractError):
             contract.parse_provider_jsonl(mismatched_count)

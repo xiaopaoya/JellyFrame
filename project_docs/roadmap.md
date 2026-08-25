@@ -1,6 +1,6 @@
 # JellyFrame Active Roadmap
 
-> Updated: 2026-08-21; Applies to: `0.6.0-dev`; this is the single active plan.
+> Updated: 2026-08-25; Applies to: `0.6.0-dev`; this is the single active plan.
 
 ## Governing Decision
 
@@ -15,7 +15,7 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 - The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository owns the physical Core branch. The first signed `v0.6.0` release is historical; Runtime `0.6.0-dev` now locks Core `v0.6.1`, ABI `1` and source identity `105d0166...b797c52b`. CI downloads that release artifact, verifies archive SHA-256 `f9d24aca...e18c7`, installs it and runs the Runtime package-consumer tests. The in-tree provider remains only for synchronized local development. For Core ABI `1`, installed `render_core/` headers are the C++ consumer surface; there is no hidden header tier or C ABI. On 2026-08-19, Core-only/Device-contract CMake boundary coverage was added: Core-only cannot create contracts targets/tests, contracts-only remains independently buildable, and the archive/install/package/source-override loop was rechecked.
 - App Runtime has `.jfapp` lifecycle, registry reference semantics, optional JerryScript and the script-worker session/generation/epoch, value-only frame/input/service/fatal protocol. WS147 P3 worker, service, recovery and mixed-soak evidence is closed.
 - WS147 value-frame-v2 dirty/recovery passes. The full-screen rounded-gradient workload is not 30 FPS. Canvas has no real host binding and remains `not-tested`.
-- JFDP/1 framing, capability, typed status/progress payloads and staged-install contracts have the isolated `device_runtime_contracts` source owner. WS147 native USB Serial/JTAG wire, A1-2 persistent lifecycle acceptance and the provider handoff are closed for the published image. The `provider-handoff-afdcf75-20260821` report passes same-image Identity matching, real in-flight cancellation, durable update/rollback/remove and 30 mixed cycles. The published Developer Image baseline has a strict manifest and hash-verified factory recovery image; this still does not prove the clean-machine VS Code product workflow or installed-App panel/input behavior.
+- JFDP/1 framing, capability, typed status/progress payloads and staged-install contracts have the isolated `device_runtime_contracts` source owner. WS147 native USB Serial/JTAG wire, A1-2 persistent lifecycle acceptance and the provider handoff are closed for the published image. The `provider-handoff-afdcf75-20260821` report passes same-image Identity matching, real in-flight cancellation, durable update/rollback/remove and 30 mixed cycles. The published `jellyframe-device@0.1.0-dev` is limited to the read-only `discover/info/list` smoke; the unreleased `0.1.1-dev` source line adds selected-device attestation and must be repackaged and pass host fixtures before mutation/lifecycle UI. The published Developer Image baseline has a strict manifest and hash-verified factory recovery image; this still does not prove the clean-machine VS Code product workflow or installed-App panel/input behavior.
 
 ## Closed Performance Stage
 
@@ -40,9 +40,10 @@ Exit: a clean machine can flash once using documented tooling and then repeatedl
 CLI and VS Code select a real device and expose profile, storage, capabilities, lifecycle, install/update/launch/stop/remove and app-scoped logs. Desktop and device debug sessions remain separate. Device telemetry is the only source of device performance data.
 
 The WS147 provider handoff sub-gate is closed by `provider-handoff-afdcf75-20260821`: identity, in-flight cancellation,
-durable lifecycle and 30 mixed cycles pass on one published image. The wider author-tool gate remains open until a clean
-machine completes `new -> check -> device install -> live log -> update -> rollback` from VS Code and a real installed App
-provides panel/input evidence with actionable ownership of failures.
+durable lifecycle and 30 mixed cycles pass on one published image. First use the published provider for the read-only
+discovery/identity/App-list smoke; then repackage `0.1.1-dev` and use it for mutation/lifecycle UI. The wider author-tool
+gate remains open until a clean machine completes `new -> check -> device install -> live log -> update -> rollback` from
+VS Code and a real installed App provides panel/input evidence with actionable ownership of failures.
 
 ### A3: Controlled External Trial
 

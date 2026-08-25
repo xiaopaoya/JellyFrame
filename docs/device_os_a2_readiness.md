@@ -1,6 +1,6 @@
 # Device OS A2 Readiness And Implementation Requirements
 
-> Last updated: 2026-08-21; Applies to: 0.6.0-dev; Status: implementation prerequisite stage
+> Last updated: 2026-08-25; Applies to: 0.6.0-dev; Status: implementation prerequisite stage
 
 ## Current Conclusion
 
@@ -11,8 +11,9 @@ trial.**
 The mainline now supplies the hardware-neutral control plane: JFDP/1, typed
 Identity and Logs payloads, and the
 install contracts, Developer Image manifests, a strict provider JSON/JSONL
-parser, an explicit provider host client, CLI `discover/info/install/cancel/logs`
-entry points, and VS Code discovery-session state. This proves that the host
+parser, an explicit provider host client, CLI `discover/info/list/install/cancel/logs`
+entry points, and VS Code discovery, identity and read-only installed-App list
+session state. This proves that the host
 does not guess ports, fabricate cancellation, or silently accept mismatched
 provider output. The WS147 `jellyframe-device@0.1.0-dev` delivery archive,
 `jellyframe-ws147-developer-0.6.0-a2-provider-0.1.0-dev.zip`, now provides the
@@ -22,6 +23,13 @@ SHA-256 list. Its 13 payload hashes were reverified on 2026-08-25. This closes
 the provider-package prerequisite, but it does not prove the actual clean-machine
 VS Code session or that an installed App can render, receive input, emit logs,
 or recover.
+
+The current published package is explicitly limited to the read-only
+`discover/info/list` smoke. To align with selected-device attestation, the
+unpublished `jellyframe-device@0.1.1-dev` provider source adds device records
+to live cancellation and `logs` terminals. Repackaging it, passing host
+fixtures and recording the archive hash are prerequisites for mutation and
+lifecycle UI; the current `0.1.0-dev` package cannot substitute for them.
 
 WS147 has A1 storage/recovery and factory-image evidence. The targeted
 2026-08-21 workspace remeasure, based on `b372cc4`, also proves a real

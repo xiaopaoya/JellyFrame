@@ -1,6 +1,6 @@
 # Device Provider Port Acceptance
 
-> Last updated: 2026-08-21; Applies to: 0.6.0-dev; Protocol: JFDP/1
+> Last updated: 2026-08-25; Applies to: 0.6.0-dev; Protocol: JFDP/1
 
 This is the A2 handoff for a physical Device OS provider. It verifies the
 host-process boundary used by `jellyframe_cli.py device`; it does not replace
@@ -29,6 +29,9 @@ The provider must implement the exact result/JSONL schema in
 [device_tool_provider_contract.md](device_tool_provider_contract.md). It must
 write protocol and operational diagnostics to stderr only. `stdout` is exactly
 one JSON result or one bounded JSONL stream, with no banners or serial output.
+Every successful selected operation other than `discover` echoes the typed
+`device` exactly matching its selector, including the `logs` terminal and a
+live cancellation that must not open a second USB handle.
 
 ## Required Fixtures
 
@@ -42,7 +45,7 @@ for these cases:
 | transport unavailable | exit `3`, terminal `transport-unavailable` |
 | install storage full | JSONL terminal `storage-full`; no new app is listed |
 | interrupted transfer | JSONL reports a stable failure/cancellation; staging is not published |
-| confirmed cancellation | `cancel` returns `cancellation.confirmed=true` only after the JFDP transaction is cancelled |
+| confirmed cancellation | `cancel` returns `cancellation.confirmed=true` and the selected `device` only after the JFDP transaction is cancelled |
 | unconfirmed cancellation | `cancel` returns `confirmed=false` or failure; host must treat it as failure |
 | log bounds | `logs` emits at most the requested limit, never more than 11 typed records; every message is at most 255 bytes |
 
@@ -98,3 +101,9 @@ cases and the WS147 run pass with the same image identity. The
 mainline step is to finish the clean-machine VS Code device view and real
 installed-App panel/input acceptance. It does not by itself open an external
 developer trial.
+
+The published `jellyframe-device@0.1.0-dev` delivery remains limited to the
+read-only `discover/info/list` smoke. The provider source line `0.1.1-dev`
+adds selected-device attestation to live cancellation and `logs` terminals; it
+must be repackaged, pass host fixtures and record a new archive SHA-256 before
+it becomes the provider version for mutation/lifecycle acceptance.

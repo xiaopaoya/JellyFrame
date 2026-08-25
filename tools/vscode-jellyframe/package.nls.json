@@ -15,6 +15,7 @@
   "command.showOutput": "JellyFrame: View Run Log",
   "command.deviceDiscover": "JellyFrame: Discover Device",
   "command.deviceInfo": "JellyFrame: Device Info",
+  "command.deviceList": "JellyFrame: List Installed Apps",
   "menu.label": "JellyFrame",
   "menu.packageLabel": "JellyFrame Package",
   "menu.editorLabel": "JellyFrame App",
