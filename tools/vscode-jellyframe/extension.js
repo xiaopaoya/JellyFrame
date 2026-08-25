@@ -2272,7 +2272,7 @@ class JellyFrameStatusProvider {
           hasRenderData && performance?.rating ? `${labels.performance}: ${performance.rating}` : labels.notMeasured, "dashboard"),
       ]),
       this.group(labels.environment, "settings-gear", [
-        this.group(labels.desktopRuntime, "server-environment", [
+        this.group(labels.desktopRuntime, undefined, [
           this.statusItem(labels.build, labels.buildValue, buildPresentation.summary, "server-environment"),
           this.statusItem(labels.buildProfile, buildPresentation.profile, buildPresentation.profile, "settings-gear"),
           this.statusItem(labels.buildOutput, buildPresentation.output, buildPresentation.output, "folder"),
@@ -2283,7 +2283,7 @@ class JellyFrameStatusProvider {
         ]),
       ]),
       this.group(labels.device, "plug", [
-        this.group(labels.deviceActions, "plug", [
+        this.group(labels.deviceActions, undefined, [
           this.commandItem(labels.discoverDevice, labels.actionHints.discoverDevice, "jellyframe.deviceDiscover", "plug"),
           ...(Array.isArray(lastDeviceDiscovery) && lastDeviceDiscovery.length > 1
             ? [this.commandItem(labels.selectDevice, labels.actionHints.selectDevice, "jellyframe.deviceSelect", "symbol-array")]
@@ -2320,7 +2320,7 @@ class JellyFrameStatusProvider {
               : []),
           ])
         ] : []),
-        this.group(labels.deviceStatus, "pulse", [
+        this.group(labels.deviceStatus, undefined, [
           this.statusItem(labels.connectedDevices,
           Array.isArray(lastDeviceDiscovery)
             ? `${lastDeviceDiscovery.filter((device) => device.connected).length}/${lastDeviceDiscovery.length}`
