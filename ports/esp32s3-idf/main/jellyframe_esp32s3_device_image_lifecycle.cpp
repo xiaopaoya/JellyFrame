@@ -31,6 +31,7 @@ using namespace jellyframe;
 constexpr std::size_t kUsbReadBytes = 256;
 constexpr std::uint32_t kUsbBufferBytes = 1024;
 constexpr TickType_t kUsbIoTimeout = pdMS_TO_TICKS(50);
+constexpr std::int64_t kUsbWriteDeadlineUs = 500000;
 constexpr std::int64_t kPartialFrameTimeoutUs = 500000;
 constexpr std::size_t kInstalledAppEntryMaxBytes = 16u * 1024u;
 constexpr std::size_t kInstalledResourceMaxBytes = 48u * 1024u;
@@ -564,8 +565,17 @@ private:
             return {};
         }
         const std::int64_t write_started_us = esp_timer_get_time();
-        const bool written = usb_serial_jtag_write_bytes(response_frame_.data(), frame_size, kUsbIoTimeout) ==
-                             static_cast<int>(frame_size);
+        std::size_t written_bytes = 0;
+        // USB Serial/JTAG may accept only its current TX-buffer capacity. A
+        // partial write is not a failed JFDP response while the deadline holds.
+        while (written_bytes < frame_size && esp_timer_get_time() - write_started_us < kUsbWriteDeadlineUs) {
+            const int count = usb_serial_jtag_write_bytes(response_frame_.data() + written_bytes,
+                                                           frame_size - written_bytes, kUsbIoTimeout);
+            if (count > 0) {
+                written_bytes += static_cast<std::size_t>(count);
+            }
+        }
+        const bool written = written_bytes == frame_size;
         const ResponseWrite write{static_cast<std::uint32_t>(esp_timer_get_time() - write_started_us), written};
         if (!written) {
             ++counters_.response_write_failures;
