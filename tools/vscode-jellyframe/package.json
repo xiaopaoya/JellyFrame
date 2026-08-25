@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.16",
+  "version": "0.4.17",
   "publisher": "jellyframe",
   "repository": {
     "type": "git",
@@ -344,22 +344,22 @@
       ],
       "view/title": [
         {
-          "submenu": "jellyframe.actions",
+          "command": "jellyframe.newFromTemplate",
           "when": "view == jellyframe.status",
           "group": "navigation@0"
         },
         {
-          "command": "jellyframe.debug",
+          "command": "jellyframe.check",
           "when": "view == jellyframe.status",
           "group": "navigation@1"
         },
         {
-          "command": "jellyframe.showReport",
+          "command": "jellyframe.debug",
           "when": "view == jellyframe.status",
           "group": "navigation@2"
         },
         {
-          "command": "jellyframe.listBuilds",
+          "command": "jellyframe.deviceDiscover",
           "when": "view == jellyframe.status",
           "group": "navigation@3"
         },
