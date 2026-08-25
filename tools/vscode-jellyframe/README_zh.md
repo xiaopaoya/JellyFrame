@@ -103,13 +103,13 @@ JSON 报告并自动打开截图。验证、检查和预览分别保留自己的
 
 “发现设备”只连接已配置的 Device OS provider，不会猜测串口或 USB 端点。扩展不捆绑板卡专属
 provider；WS147 请安装版本化交付包
-`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.0-dev.zip`。
+`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.1-dev.zip`。
 首次使用前，请安装独立 provider 并在 JellyFrame 设置中填写其可执行文件绝对路径；如果路径
 缺失或无效，命令会直接给出配置提示。先执行“发现设备”，再使用“读取设备身份”按配置的
 Developer Image manifest 校验所选端点；“列出已安装 App”会显示同一端点的 registry generation、版本、
 状态和回滚可用性。这三项均为只读操作，不会安装、启动、删除或刷写设备。
 
-已发布的 WS147 provider 还没有声明 lifecycle operation，因此活动栏会有意隐藏部署、启动、停止、回滚、
-App 日志和恢复状态入口。后续 provider 必须在 `capabilities.supportedOperations` 中逐项声明支持能力；这是一道
-显式安全门，而不是声称所有声明操作已在每台设备上被接受。部署与删除始终要求确认，扩展会将 typed terminal
-result 记录到“设备状态”区。
+最初的 WS147 `0.1.0-dev` provider 继续保持只读，因此活动栏会隐藏 lifecycle operation。已交付的
+`0.1.1-dev` provider 通过 `capabilities.supportedOperations` 声明已验证的 lifecycle operation；发现后活动栏只会
+显示相符的部署、启动、停止、回滚、删除、App 日志和恢复状态入口。这是一道显式安全门，而不是声称所有声明操作已在
+每台设备上被接受。部署与删除始终要求确认，扩展会将 typed terminal result 记录到“设备状态”区。

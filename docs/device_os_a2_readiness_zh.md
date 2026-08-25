@@ -7,19 +7,20 @@
 **WS147 provider handoff 已对已发布镜像关闭；更宽范围的 A2 仍不能交付验收，
 也不能开始外部开发者试用。**
 
-当前主线已完成平台无关控制面：JFDP/1、typed Identity/Logs payload、安装契约、Developer Image manifest、严格 provider
-JSON/JSONL parser、显式 provider host client、CLI 的 `discover/info/list/install/cancel/logs` 入口，以及
-VS Code 的 discovery、identity 与只读 installed-App list session 状态。这些只证明 host 不会猜测端口、不会伪造取消，也不会静默接受不匹配
-的 provider 输出。WS147 `jellyframe-device@0.1.0-dev` 交付包
-`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.0-dev.zip` 已提供可独立安装的 wrapper、provider、依赖锁定、
-配置模板、Developer Image manifest、firmware、factory image 和逐文件 SHA-256 清单，并已于 2026-08-25 复核其
-13 个载荷哈希。这关闭了 provider 打包前置，但不等于已完成真实干净机器 VS Code 会话，也不等于安装后 App 已形成
-渲染、输入、日志或恢复闭环。
+当前主线已完成平台无关控制面：JFDP/1、typed Identity/Logs payload、安装契约、Developer Image manifest、严格
+provider JSON/JSONL parser、显式 provider host client、对应 CLI operation 与 VS Code device session 状态。最初的
+WS147 `jellyframe-device@0.1.0-dev` 交付包继续作为只读 `discover/info/list` 基线。
 
-当前发布包的明确边界是 `discover/info/list` 只读 smoke。Runtime 扩展现已具备 capability-gated 生命周期分组，
-但会在 selected provider 声明各 operation 前隐藏部署、变更与 App 调试入口。为对齐新的 selected-device attestation，未发布的
-`jellyframe-device@0.1.1-dev` provider source 已补齐 live cancel 与 `logs` terminal；其重新打包、host fixture
-与 archive hash 记录是后续可用 mutation/lifecycle UI 的前置，不能以现有 `0.1.0-dev` 包替代。
+`jellyframe-device@0.1.1-dev` 已交付为
+`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.1-dev.zip`，archive SHA-256 为
+`86d3d18742c5f95f671726da8173ad07ab4e901f8e1aa1ba5b419c7eeec8053c`。
+`ws147-provider-lifecycle-ui-20260825` 证据记录 37 项 provider/CLI contract regression 与 final-firmware
+实机通过：30 轮 mixed lifecycle、332 次 operation、一次带 attestation 的真实 in-flight cancel，以及 5 次
+有界 logs 重复；未出现 transport、watchdog、reset、DMA、SPI 或 panel error。discovery 已声明 `install`、`cancel`、
+`launch`、`stop`、`remove`、`rollback`、`logs`、`recovery`，因此 VS Code 可安全地只显示这些 capability-gated 控件。
+
+这关闭了版本化 provider 交付和 physical lifecycle 前置，但不等于已完成干净机器 VS Code 会话，也不等于已安装
+App 已形成渲染、输入、日志和恢复闭环。
 
 WS147 已有 A1 storage/recovery 与 factory image 证据。基于 `b372cc4` 的 2026-08-21 workspace remeasure 还证明，
 真实 22,924-byte resource bundle 可以完整传输、commit、launch、stop：有效包在 2,049 ms 内返回 `accepted`；完整
@@ -27,8 +28,8 @@ WS147 已有 A1 storage/recovery 与 factory image 证据。基于 `b372cc4` 的
 inspection workspace、4 KiB sector cache 和 1 KiB transport scratch 放在 device task stack 之外；24,576-byte 配置栈的
 minimum free stack 为 14,468 bytes。
 
-A2 provider handoff 对 firmware `afdcf75` 与已发布 WS147 manifest 为 **PASS**：identity cross-match、in-flight
-cancellation、durable lifecycle 和 30 次 mixed cycle 均通过。更宽范围的 A2 仍为 **partial**，因为该证据尚未关闭
+A2 provider handoff 对 `jellyframe-device@0.1.1-dev`、firmware `ee5604a` 与已发布 WS147 manifest 为 **PASS**：
+identity cross-match、in-flight cancellation、durable lifecycle 和 30 次 mixed cycle 均通过。更宽范围的 A2 仍为 **partial**，因为该证据尚未关闭
 干净机器上的 VS Code 产品流程，以及真实已安装 App 的 panel/input 验收。这份 provider handoff 报告不是外部试用
 发布签字。
 

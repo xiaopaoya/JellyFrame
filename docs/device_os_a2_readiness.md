@@ -9,29 +9,26 @@ not yet ready for delivery acceptance and must not open an external developer
 trial.**
 
 The mainline now supplies the hardware-neutral control plane: JFDP/1, typed
-Identity and Logs payloads, and the
-install contracts, Developer Image manifests, a strict provider JSON/JSONL
-parser, an explicit provider host client, CLI `discover/info/list/install/cancel/logs`
-entry points, and VS Code discovery, identity and read-only installed-App list
-session state. This proves that the host
-does not guess ports, fabricate cancellation, or silently accept mismatched
-provider output. The WS147 `jellyframe-device@0.1.0-dev` delivery archive,
-`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.0-dev.zip`, now provides the
-separately installable wrapper, provider, dependency lock, configuration
-template, Developer Image manifest, firmware, factory image and per-file
-SHA-256 list. Its 13 payload hashes were reverified on 2026-08-25. This closes
-the provider-package prerequisite, but it does not prove the actual clean-machine
-VS Code session or that an installed App can render, receive input, emit logs,
-or recover.
+Identity and Logs payloads, install contracts, Developer Image manifests, a
+strict provider JSON/JSONL parser, an explicit provider host client, matching
+CLI operations, and VS Code device session state. The original WS147
+`jellyframe-device@0.1.0-dev` delivery remains the read-only
+`discover/info/list` baseline.
 
-The current published package is explicitly limited to the read-only
-`discover/info/list` smoke. The Runtime extension has a capability-gated
-lifecycle group, but intentionally keeps deploy, mutation and App-debug
-controls hidden until the selected provider advertises each operation. To align with selected-device attestation, the
-unpublished `jellyframe-device@0.1.1-dev` provider source adds device records
-to live cancellation and `logs` terminals. Repackaging it, passing host
-fixtures and recording the archive hash are prerequisites for usable mutation
-and lifecycle UI; the current `0.1.0-dev` package cannot substitute for them.
+`jellyframe-device@0.1.1-dev` is now delivered as
+`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.1-dev.zip`. Its archive SHA-256
+is `86d3d18742c5f95f671726da8173ad07ab4e901f8e1aa1ba5b419c7eeec8053c`.
+The `ws147-provider-lifecycle-ui-20260825` evidence records 37 provider/CLI
+contract regressions and a final-firmware physical pass: 30 mixed lifecycle
+cycles, 332 operations, an attested real in-flight cancellation, and five
+bounded-log repetitions without transport, watchdog, reset, DMA, SPI or panel
+errors. Discovery declares `install`, `cancel`, `launch`, `stop`, `remove`,
+`rollback`, `logs`, and `recovery`, so VS Code can safely reveal only those
+capability-gated controls.
+
+This closes the versioned provider delivery and physical-lifecycle prerequisite.
+It does not prove a clean-machine VS Code session or that an installed App can
+render, receive input, emit logs, or recover.
 
 WS147 has A1 storage/recovery and factory-image evidence. The targeted
 2026-08-21 workspace remeasure, based on `b372cc4`, also proves a real
@@ -43,9 +40,9 @@ inspection workspace, 4 KiB sector cache and 1 KiB transport scratch outside
 the device task stack; the minimum free stack was 14,468 bytes from a 24,576
 byte configured stack.
 
-A2 provider handoff is **PASS** for firmware `afdcf75` and the published WS147
-manifest: identity cross-match, in-flight cancellation, durable lifecycle and
-30 mixed cycles all passed. Wider A2 remains **partial** because the evidence
+A2 provider handoff is **PASS** for `jellyframe-device@0.1.1-dev`, firmware
+`ee5604a`, and its published WS147 manifest: identity cross-match, in-flight
+cancellation, durable lifecycle and 30 mixed cycles all passed. Wider A2 remains **partial** because the evidence
 does not close the clean-machine VS Code product workflow or real installed-App
 panel/input acceptance. The provider handoff report is not an external-trial
 release signoff.

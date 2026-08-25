@@ -80,11 +80,12 @@ console data, private keys or JFDP handles in JSON.
 
 ## Evidence And Exit
 
-The 2026-08-21 `provider-handoff-afdcf75-20260821` report closes this provider
-handoff for the published WS147 image. It includes the preceding targeted
-workspace evidence plus same-image Identity matching, real in-flight abort,
-durable update/rollback/remove, reconnect/reboot checks and 30 mixed cycles.
-It does not close the wider Device OS A2 gate or authorize an external trial.
+The `ws147-provider-lifecycle-ui-20260825` report closes this provider handoff
+for `jellyframe-device@0.1.1-dev`, final firmware `ee5604a`, and the published
+WS147 image. It records 37 host-provider regressions, same-image Identity
+matching, a real in-flight abort, durable update/rollback/remove,
+reconnect/reboot checks, 30 mixed cycles and bounded logs. It does not close
+the wider Device OS A2 gate or authorize an external trial.
 
 Archive a versioned directory containing `report.md`, `summary.json`, direct
 provider stdout as `provider.stdout.raw.jsonl` (or `.json`), provider stderr as
@@ -97,13 +98,12 @@ reconnect/reboot, watchdog/reset and transport/panel error counts.
 
 This A2 provider handoff passes for the published WS147 image when all fixture
 cases and the WS147 run pass with the same image identity. The
-`provider-handoff-afdcf75-20260821` report satisfies this gate. The next
-mainline step is to finish the clean-machine VS Code device view and real
-installed-App panel/input acceptance. It does not by itself open an external
-developer trial.
+`ws147-provider-lifecycle-ui-20260825` report satisfies this gate for the
+versioned `0.1.1-dev` provider archive. The next mainline step is to finish the
+clean-machine VS Code device view and real installed-App panel/input
+acceptance. It does not by itself open an external developer trial.
 
-The published `jellyframe-device@0.1.0-dev` delivery remains limited to the
-read-only `discover/info/list` smoke. The provider source line `0.1.1-dev`
-adds selected-device attestation to live cancellation and `logs` terminals; it
-must be repackaged, pass host fixtures and record a new archive SHA-256 before
-it becomes the provider version for mutation/lifecycle acceptance.
+The original `jellyframe-device@0.1.0-dev` delivery remains limited to the
+read-only `discover/info/list` smoke. The delivered `0.1.1-dev` archive adds
+selected-device attestation to live cancellation and `logs` terminals, and
+declares its real lifecycle operations through `supportedOperations`.

@@ -138,7 +138,7 @@ separate so one command does not overwrite another command's result.
 `JellyFrame: Discover Device` uses only an explicitly configured Device OS
 provider executable. The extension does not bundle the board-specific provider.
 For WS147, install the versioned
-`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.0-dev.zip` delivery package.
+`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.1-dev.zip` delivery package.
 It does not infer serial or USB endpoints. Configure the absolute path to the
 separately installed provider in JellyFrame settings; missing or invalid paths
 are reported directly. Run Discover Device first, then use Device Info to
@@ -147,10 +147,11 @@ List Installed Apps shows the same endpoint's registry generation, version,
 state and rollback availability. These three commands are read-only: they do
 not install, launch, remove or flash a device.
 
-The published WS147 provider does not yet advertise lifecycle operations, so
-the Activity Bar intentionally hides deployment, launch, stop, rollback, App
-logs and recovery actions. A future provider must declare each supported
-operation in `capabilities.supportedOperations`; this is an explicit safety
-gate, not a promise that every declared action is already accepted on every
-device. Deployment and removal always require confirmation, and the extension
-records the typed terminal result in the Device status section.
+The original `0.1.0-dev` WS147 provider remains read-only and therefore leaves
+lifecycle actions hidden. The delivered `0.1.1-dev` provider declares its
+verified lifecycle operations through `capabilities.supportedOperations`, so
+the Activity Bar reveals only the matching deploy, launch, stop, rollback,
+remove, App-log and recovery actions after discovery. This is an explicit
+safety gate, not a promise that every declared action is already accepted on
+every device. Deployment and removal always require confirmation, and the
+extension records the typed terminal result in the Device status section.
