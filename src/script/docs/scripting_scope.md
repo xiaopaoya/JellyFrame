@@ -112,7 +112,8 @@ frames, and the supervisor owns session, service, lease and fatal recovery.
   the existing C++ event flow.
 - JavaScript changes to form state mark the DOM dirty so the host can rerender
   lightweight native-style controls.
-- The Win32 shell can run small app-style examples from `samples/apps/loose`.
+- The Win32 shell runs complete script packages from `samples/apps/packages`;
+  use their deterministic frame scripts for repeatable visual checks.
 
 ## Timers
 

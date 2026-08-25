@@ -67,10 +67,9 @@ layout motion。它们可以出现在设计稿中，但实现必须提供 JellyF
 
 - `samples/apps/packages/jelly_controls`：完整可安装 source package，展示胶体按钮、输入框、
   switch、进度条和小型 keyframe pulse。
-- `samples/apps/packages/jelly_wearable_launcher`：图标优先的 round-300 可穿戴启动器 package，
-  只使用有界 CSS 图标原语，不依赖 runtime service。
-- `samples/apps/loose/jelly_motion.html`：聚焦动效 fixture，只使用 transition 和 from/to keyframes。
-- `samples/apps/loose/jelly_launcher_mock.html`：小型启动器风格 app grid。
+- `samples/apps/packages/jelly_motion_lab`：带 manifest 的确定性动效展示，使用
+  paint-safe transform、opacity 和脚本化回放。
+- `samples/apps/packages/jelly_wearable_launcher`：图标网格绘制回归输入，不是 app 作者 starter。
 - `samples/apps/system/sample_launcher`：真实 sample launcher 已按同一胶体 panel/button 方向调整。
 
 ## 设计内核

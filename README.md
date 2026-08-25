@@ -56,12 +56,15 @@ If you are writing an app rather than porting the engine, start with
 
 ## App Gallery
 
-These 300x300 screenshots are rendered through the Win32 capture shell from
-Jelly-style wearable UI examples in `tools/templates/apps`. They show
+These 300x300 screenshots are rendered through the current Win32 capture shell
+from Jelly-style wearable templates in `tools/templates/apps`. They show
 JellyFrame's own light, lively visual language.
 
-**Render pipeline:** JellyFrame Render Core `0.6.0-dev`; Win32 capture shell;
-viewport `300x300`; generated `2026-08-09`; source revision `9ca8b61`.
+**Render pipeline:** locked JellyFrame Render Core `0.6.1`; current
+JerryScript-enabled Win32 capture shell; viewport `300x300`; generated
+`2026-08-26`; source revision `0ffdbf0`. The exact generation record and
+command are beside the images in
+[docs/assets/screenshots](docs/assets/screenshots/README.md).
 
 | Weather | Clock |
 | --- | --- |

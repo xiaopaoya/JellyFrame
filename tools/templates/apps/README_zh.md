@@ -27,4 +27,5 @@
 
 这些目录是 app 作者的起点。它们会保持正常 source-package 结构，但不承载每个边缘测试；
 用于验收和展示的完整示例放在 `../../../samples/apps/packages`，更小的针对性 fixture 放在
-`../../../samples/apps/loose`、`../../../src/render_core/samples/pages/modern` 和 `../../../src/script/samples/classic`。
+`../../../src/render_core/samples/pages/modern` 和 `../../../src/script/samples/classic`。模板源码约定见
+[CONVENTIONS_zh.md](CONVENTIONS_zh.md)。

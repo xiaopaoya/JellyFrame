@@ -29,5 +29,7 @@ fixtures or proof of target-panel performance.
 
 These directories are app-author starting points. They intentionally mirror the
 source-package structure but should not accumulate every edge case; targeted
-fixtures belong under `../../../samples/apps/loose`, `../../../src/render_core/samples/pages/modern`
-and `../../../src/script/samples/classic`.
+fixtures belong under `../../../samples/apps/packages`,
+`../../../src/render_core/samples/pages/modern` and
+`../../../src/script/samples/classic`. Template source conventions are in
+[CONVENTIONS.md](CONVENTIONS.md).

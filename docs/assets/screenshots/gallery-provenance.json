@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "renderCoreVersion": "0.6.1",
+  "sourceRevision": "0ffdbf0",
+  "desktopShell": "build\\script-engine-desktop\\Debug\\jellyframe_desktop_shell.exe",
+  "desktopShellSha256": "60ef46a4750188bb515fa6388f3245da17fab1661ba1a9c553785aa4fe59a3f9",
+  "viewport": {
+    "width": 300,
+    "height": 300
+  },
+  "generated": "2026-08-26",
+  "images": [
+    {
+      "template": "weather",
+      "image": "weather.png"
+    },
+    {
+      "template": "clock",
+      "image": "clock.png"
+    },
+    {
+      "template": "timer",
+      "image": "timer.png"
+    },
+    {
+      "template": "calculator",
+      "image": "calculator.png"
+    }
+  ]
+}

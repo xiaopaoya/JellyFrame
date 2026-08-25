@@ -93,7 +93,8 @@ supervisor 持有 session、service、lease 和 fatal recovery。
 - Range 控件会用 `min`、`max` 和 `step` 处理指针/按键移动。
 - 原生输入派发会通过现有 C++ 事件流触发 JavaScript 可观察的 `input` 和 `change` 事件。
 - JavaScript 修改表单状态后会标记 DOM dirty，宿主可以据此重绘轻量原生风格控件。
-- Win32 壳可以运行 `samples/apps/loose` 中的小型应用式示例。
+- Win32 壳运行 `samples/apps/packages` 中的完整 script package；需要可重复的视觉
+  检查时，使用其确定性 frame script。
 
 ## Timers
 

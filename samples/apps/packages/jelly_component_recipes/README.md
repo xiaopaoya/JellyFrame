@@ -1,8 +1,10 @@
 # Component Recipes
 
-> Last updated: 2026-07-10; Applies to: 0.5.0
+> Last updated: 2026-08-26; Applies to: 0.6.0-dev; Render Core baseline: 0.6.1
 
-Small app-author recipes for common wearable UI structure.
+Deterministic scroll and dirty-region acceptance input for common wearable UI
+structure. The copyable author recipes are maintained in
+`docs/app_author_recipes.md`; this package stays focused on replay coverage.
 
 - Top bar, round-first status card, card stack, compact buttons, control rows
   and fixed bottom navigation.
