@@ -200,6 +200,10 @@ public:
 
 private:
     static constexpr std::size_t kAppLogCapacity = 32;
+    // The protocol permits up to eleven records, but USB Serial/JTAG has a
+    // small TX FIFO. Keep one response comfortably below that FIFO's burst
+    // pressure and report omitted matching records through dropped_records.
+    static constexpr std::size_t kAppLogResponseMaxEntries = 2;
     static constexpr std::uint32_t kDeviceImageTaskStackBytes = 24576;
 
     struct ResponseWrite {
@@ -525,7 +529,9 @@ private:
         for (std::size_t index = 0; index < app_log_count_; ++index) {
             if (app_logs_[index].app_id_view() == logs_request.app_id_view()) ++matches;
         }
-        const std::size_t returned = std::min<std::size_t>(matches, logs_request.limit);
+        const std::size_t returned = std::min<std::size_t>(matches,
+                                                           std::min<std::size_t>(logs_request.limit,
+                                                                                 kAppLogResponseMaxEntries));
         logs.dropped_records = static_cast<std::uint32_t>(matches - returned + app_log_overwrites_);
         const std::size_t first = matches - returned;
         std::size_t seen = 0;
