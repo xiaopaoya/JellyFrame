@@ -2089,6 +2089,9 @@ class JellyFrameStatusProvider {
       rollbackDeviceApp: "回滚已安装 App",
       readDeviceLogs: "读取 App 日志",
       readDeviceRecovery: "读取恢复状态",
+      lifecycleAvailability: "生命周期能力",
+      lifecycleReadOnly: "当前 Provider 未声明生命周期操作",
+      lifecycleAvailable: (count) => `已声明 ${count} 项操作`,
       lifecycleResult: "最近生命周期操作",
       noLifecycleResult: "尚未执行",
       noDeviceSession: "尚未发现设备",
@@ -2174,6 +2177,9 @@ class JellyFrameStatusProvider {
       rollbackDeviceApp: "Roll back installed App",
       readDeviceLogs: "Read App logs",
       readDeviceRecovery: "Read recovery status",
+      lifecycleAvailability: "Lifecycle capability",
+      lifecycleReadOnly: "The current Provider declares no lifecycle operations",
+      lifecycleAvailable: (count) => `${count} operation(s) declared`,
       lifecycleResult: "Latest lifecycle operation",
       noLifecycleResult: "Not run",
       noDeviceSession: "No device discovered",
@@ -2345,6 +2351,20 @@ class JellyFrameStatusProvider {
               : labels.deviceReady),
           lastDeviceFailure?.message || labels.deviceReady,
           activeDeviceOperation ? "sync~spin" : (lastDeviceFailure ? "warning" : "pass")),
+          ...(selectedDevice ? [this.statusItem(
+          labels.lifecycleAvailability,
+          supportedDeviceOperations.size > 0
+            ? labels.lifecycleAvailable(supportedDeviceOperations.size)
+            : labels.lifecycleReadOnly,
+          supportedDeviceOperations.size > 0
+            ? (isChinese()
+              ? "Provider 已声明的操作显示在“App 生命周期与调试”中。"
+              : "Provider-declared actions are shown in App Lifecycle & Debug.")
+            : (isChinese()
+              ? "更新 Provider 并在发现结果中声明 supportedOperations 后，才会显示部署、启动、日志和恢复等操作。"
+              : "Deploy, launch, logs and recovery appear only after an updated Provider declares supportedOperations."),
+          supportedDeviceOperations.size > 0 ? "pass" : "info")]
+            : []),
           this.statusItem(labels.lifecycleResult,
           lastDeviceLifecycle
             ? `${lastDeviceLifecycle.operation} · ${lastDeviceLifecycle.resultCode}`
