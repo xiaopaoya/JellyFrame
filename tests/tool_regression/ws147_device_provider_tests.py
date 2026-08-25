@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import subprocess
@@ -113,7 +114,8 @@ class Ws147DeviceProviderTests(unittest.TestCase):
         sys.modules[spec.name] = provider
         spec.loader.exec_module(provider)
         endpoint = "fixture-live-cancel"
-        session = provider.LiveInstallSession(endpoint, 77)
+        device = provider.fixture_device()
+        session = provider.LiveInstallSession(endpoint, 77, device)
         try:
             result: dict[str, object] = {}
 
@@ -126,10 +128,21 @@ class Ws147DeviceProviderTests(unittest.TestCase):
             self.assertTrue(session.cancel_requested.wait(1))
             session.finish(True, "cancelled")
             thread.join(2)
-            self.assertEqual(result, {"confirmed": True, "resultCode": "cancelled"})
+            self.assertEqual(result, {"confirmed": True, "resultCode": "cancelled", "device": device})
         finally:
             session.close()
         self.assertIsNone(provider.request_live_cancel(endpoint, 77))
+
+    def test_live_cancel_rejects_an_unselected_endpoint_before_opening_transport(self) -> None:
+        spec = importlib.util.spec_from_file_location("ws147_device_provider_selector", PROVIDER)
+        assert spec is not None and spec.loader is not None
+        provider = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = provider
+        spec.loader.exec_module(provider)
+        args = argparse.Namespace(operation="cancel", selector="other-endpoint", transaction_id=1)
+        config = provider.ProviderConfig("fixture-live-cancel", "COM19", 115200, Path("manifest.json"), {})
+        with self.assertRaisesRegex(provider.ProviderError, "selector does not identify"):
+            provider.run_physical(args, config)
 
     def test_identity_and_typed_logs_decoders_reject_unbounded_shapes(self) -> None:
         spec = importlib.util.spec_from_file_location("ws147_device_provider_typed", PROVIDER)

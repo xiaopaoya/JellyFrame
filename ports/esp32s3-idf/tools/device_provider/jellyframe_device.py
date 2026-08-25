@@ -108,7 +108,7 @@ def live_session_path(endpoint_id: str) -> Path:
 class LiveInstallSession:
     """A local control channel whose owner is the only process holding USB."""
 
-    def __init__(self, endpoint_id: str, transaction_id: int) -> None:
+    def __init__(self, endpoint_id: str, transaction_id: int, device: dict[str, Any]) -> None:
         self.path = live_session_path(endpoint_id)
         self.transaction_id = transaction_id
         self.token = secrets.token_hex(24)
@@ -122,7 +122,7 @@ class LiveInstallSession:
         self._socket.settimeout(0.2)
         port = int(self._socket.getsockname()[1])
         self.path.write_text(json.dumps({"version": 1, "transactionId": transaction_id,
-                                         "port": port, "token": self.token}, separators=(",", ":")),
+                                         "port": port, "token": self.token, "device": device}, separators=(",", ":")),
                              encoding="ascii")
         self._thread = threading.Thread(target=self._serve, name="jfdp-install-control", daemon=True)
         self._thread.start()
@@ -179,7 +179,8 @@ def request_live_cancel(endpoint_id: str, transaction_id: int) -> dict[str, Any]
     try:
         state = json.loads(path.read_text(encoding="ascii"))
         if (not isinstance(state, dict) or state.get("version") != 1 or state.get("transactionId") != transaction_id or
-                not isinstance(state.get("port"), int) or not isinstance(state.get("token"), str)):
+                not isinstance(state.get("port"), int) or not isinstance(state.get("token"), str) or
+                not isinstance(state.get("device"), dict)):
             return None
         with socket.create_connection(("127.0.0.1", state["port"]), timeout=3) as connection:
             connection.settimeout(INSTALL_CONTROL_WAIT_SECONDS)
@@ -189,7 +190,7 @@ def request_live_cancel(endpoint_id: str, transaction_id: int) -> dict[str, Any]
         if not isinstance(response, dict) or not isinstance(response.get("confirmed"), bool) or \
                 not isinstance(response.get("resultCode"), str):
             return None
-        return response
+        return {**response, "device": state["device"]}
     except (OSError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
         return None
 
@@ -565,7 +566,8 @@ def run_fixture(args: argparse.Namespace) -> tuple[int, list[dict[str, Any]]]:
         return 1, [stream_event("result", operation, args.request_id, 1, resultCode="cancelled",
                                  transaction={"id": 1, "receivedBytes": 64, "expectedBytes": 128, "complete": False, "active": False})]
     if name == "confirmed-cancel":
-        return 0, [envelope(operation, args.request_id, "ok", cancellation={"confirmed": True})]
+        return 0, [envelope(operation, args.request_id, "ok", device=fixture_device(),
+                            cancellation={"confirmed": True})]
     if name == "unconfirmed-cancel":
         return 1, [envelope(operation, args.request_id, "failed", cancellation={"confirmed": False})]
     if name == "bounded-logs":
@@ -574,6 +576,7 @@ def run_fixture(args: argparse.Namespace) -> tuple[int, list[dict[str, Any]]]:
                                     "timestampMs": str(index + 1), "message": f"log-{index}"})
                   for index in range(min(args.limit, 3))]
         events.append(stream_event("result", operation, args.request_id, len(events) + 1, resultCode="ok",
+                                   device=fixture_device(),
                                    logSummary={"returnedRecords": len(events), "droppedRecords": 0}))
         return 0, events
     raise ProviderError("invalid-request", "unknown provider fixture")
@@ -625,11 +628,14 @@ def reject_duplicate_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int, list[dict[str, Any]]]:
     if args.operation == "cancel":
+        if args.selector != config.endpoint_id:
+            raise ProviderError("invalid-request", "selector does not identify this configured endpoint")
         live = request_live_cancel(config.endpoint_id, args.transaction_id)
         if live is not None:
             confirmed = live["confirmed"] and live["resultCode"] == "cancelled"
             result_code = "ok" if confirmed else live["resultCode"]
             return exit_code_for(result_code), [envelope("cancel", args.request_id, result_code,
+                                                         device=live["device"],
                                                          cancellation={"confirmed": confirmed})]
     wire = Wire(config)
     try:
@@ -678,7 +684,7 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
                                                INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS))
             if begin["resultCode"] != "accepted":
                 return exit_code_for(begin["resultCode"]), [stream_event("result", "install", args.request_id, sequence, resultCode=begin["resultCode"], device=device, transaction=begin["transaction"])]
-            live_session = LiveInstallSession(config.endpoint_id, transaction)
+            live_session = LiveInstallSession(config.endpoint_id, transaction, device)
             try:
                 for offset in range(0, len(bundle), 1024):
                     if live_session.cancel_requested.is_set():

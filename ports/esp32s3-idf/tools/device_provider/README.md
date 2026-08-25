@@ -44,7 +44,11 @@ receive a COM port and does not infer one.
 
 The provider requires Python 3.10+ and `pyserial==3.5` from `requirements.txt`.
 It owns the serial handle for one invocation, emits only provider JSON/JSONL to
-stdout, and writes transport diagnostics only to stderr.
+stdout, and writes transport diagnostics only to stderr. Every successful selected
+operation echoes the typed device record for the requested opaque endpoint. This
+also applies to a confirmed in-flight cancellation: the install owner passes the
+attested device record through its local control session without opening a second
+serial handle.
 
 For VS Code, set `jellyframe.deviceProvider` to the absolute path of this
 `jellyframe-device.cmd` and `jellyframe.deviceManifest` to the matching
