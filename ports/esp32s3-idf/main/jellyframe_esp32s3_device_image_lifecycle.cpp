@@ -31,7 +31,10 @@ using namespace jellyframe;
 constexpr std::size_t kUsbReadBytes = 256;
 constexpr std::uint32_t kUsbBufferBytes = 1024;
 constexpr TickType_t kUsbIoTimeout = pdMS_TO_TICKS(50);
-constexpr std::int64_t kUsbWriteDeadlineUs = 500000;
+// JFDP control requests have a three-second host deadline. USB CDC can
+// briefly backpressure a near-4 KiB logs frame, so leave a bounded margin for
+// receiving and correlation while still completing a whole device response.
+constexpr std::int64_t kUsbWriteDeadlineUs = 2500000;
 constexpr std::int64_t kPartialFrameTimeoutUs = 500000;
 constexpr std::size_t kInstalledAppEntryMaxBytes = 16u * 1024u;
 constexpr std::size_t kInstalledResourceMaxBytes = 48u * 1024u;
