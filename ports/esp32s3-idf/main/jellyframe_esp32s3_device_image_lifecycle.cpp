@@ -497,6 +497,26 @@ private:
             send_result(request, result);
             return;
         }
+        DeviceAppListPayload installed{};
+        if (!store_.list(installed)) {
+            DeviceOperationResultPayload result{};
+            result.result_code = DeviceRequestResultCode::Failed;
+            send_result(request, result);
+            return;
+        }
+        bool app_exists = false;
+        for (std::size_t index = 0; index < installed.entry_count; ++index) {
+            if (installed.entries[index].app_id_view() == logs_request.app_id_view()) {
+                app_exists = true;
+                break;
+            }
+        }
+        if (!app_exists) {
+            DeviceOperationResultPayload result{};
+            result.result_code = DeviceRequestResultCode::NotFound;
+            send_result(request, result);
+            return;
+        }
         DeviceAppLogsPayload logs{};
         std::size_t matches = 0;
         for (std::size_t index = 0; index < app_log_count_; ++index) {

@@ -713,7 +713,20 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
             provider_code = "ok" if confirmed else result["resultCode"]
             return exit_code_for(provider_code), [envelope("cancel", args.request_id, provider_code, device=device, cancellation={"confirmed": confirmed}, **result)]
         if args.operation == "logs":
-            dropped, records = decode_logs(wire.request(LOGS, logs_payload(args.app_id, args.limit)))
+            payload = wire.request(LOGS, logs_payload(args.app_id, args.limit))
+            try:
+                dropped, records = decode_logs(payload)
+            except ProviderError as logs_error:
+                # Logs shares its JFDP message type with typed failures. The
+                # payload shape decides whether this is a bounded log stream
+                # or an operation result such as not-found.
+                try:
+                    result = decode_result(payload)
+                except ProviderError:
+                    raise logs_error
+                return exit_code_for(result["resultCode"]), [stream_event(
+                    "result", "logs", args.request_id, 1, resultCode=result["resultCode"], device=device,
+                    **operation_result_fields(result))]
             events = [stream_event("log", "logs", args.request_id, index + 1, log=record)
                       for index, record in enumerate(records)]
             events.append(stream_event("result", "logs", args.request_id, len(events) + 1, resultCode="ok",
