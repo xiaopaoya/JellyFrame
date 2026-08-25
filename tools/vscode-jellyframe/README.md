@@ -58,13 +58,15 @@ extension. The individual actions are also available:
 .\manage-extension.ps1 -Action Update
 ```
 
-The script requires Node.js `npx` (or an available `pnpm` fallback) and the VS
-Code `code` command on `PATH`; pass `-NpxCommand` or `-CodeCommand` to provide
-an explicit executable path. If PowerShell blocks local scripts, run
+The script requires Node.js `node`, `npx` (or an available `pnpm` fallback) and
+the VS Code `code` command on `PATH`; pass `-NodeCommand`, `-NpxCommand` or
+`-CodeCommand` to provide an explicit executable path. If PowerShell blocks local scripts, run
 `Set-ExecutionPolicy -Scope Process Bypass` in the current window. You can still
 use the Extensions view's `Install from VSIX...` action and select the generated
 `.vsix`. When the extension is installed outside the
-repository, set `jellyframe.repoRoot`; `jellyframe.buildDir` is optional. The
+repository, the extension first searches upward from the current workspace for
+the repository; `jellyframe.repoRoot` remains available as an explicit setting.
+`jellyframe.buildDir` is optional. The
 extension prefers `build/desktop-release/Release`, then
 `build/desktop-debug/Debug`.
 For an app whose manifest declares `runtime.script`, the extension uses only
@@ -128,3 +130,12 @@ Capture` opens the last or a selected BMP/PPM capture. `JellyFrame: Preview
 Package` runs package preflight, writes a separate JSON report and automatically
 opens the generated capture. Validation, checking and preview reports are kept
 separate so one command does not overwrite another command's result.
+
+`JellyFrame: Discover Device` uses only an explicitly configured Device OS
+provider executable. The extension does not bundle the board-specific provider.
+For WS147, install the versioned
+`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.0-dev.zip` delivery package.
+It does not infer serial or USB endpoints. Configure the absolute path to the
+separately installed provider in JellyFrame settings; missing or invalid paths
+are reported directly. Run Discover Device first, then use Device Info to
+validate the selected endpoint against the configured Developer Image manifest.

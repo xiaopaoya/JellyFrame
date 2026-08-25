@@ -129,7 +129,7 @@ def write_jfapp(
             "versionCode": version_code,
             "entry": entry,
             "minJellyFrame": "0.6.0",
-            "minRenderCore": "0.6.0",
+            "minRenderCore": "0.6.1",
             "script": "classic",
             "viewport": {"designWidth": 172, "designHeight": 320},
             "budgets": {"maxResourceBytes": 65536},
@@ -284,7 +284,7 @@ def main() -> int:
                 "versionCode": 1,
                 "entry": "/index.html",
                 "runtime": {
-                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.0", "script": "none"
+                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"
                 },
                 "viewport": {"designWidth": 160, "designHeight": 60},
             }),
@@ -365,7 +365,7 @@ def main() -> int:
                 "versionCode": 1,
                 "entry": "/index.html",
                 "runtime": {
-                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.0", "script": "none"
+                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"
                 },
                 "viewport": {"designWidth": 160, "designHeight": 100},
             }),
@@ -438,7 +438,7 @@ def main() -> int:
                     "versionCode": 1,
                     "entry": "/index.html",
                     "runtime": {
-                        "minJellyFrame": "0.6.0", "minRenderCore": "0.6.0", "script": "none"
+                        "minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"
                     },
                     "viewport": {"designWidth": 172, "designHeight": 320},
                 }

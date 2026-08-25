@@ -14,8 +14,14 @@ install contracts, Developer Image manifests, a strict provider JSON/JSONL
 parser, an explicit provider host client, CLI `discover/info/install/cancel/logs`
 entry points, and VS Code discovery-session state. This proves that the host
 does not guess ports, fabricate cancellation, or silently accept mismatched
-provider output. It does not prove that a usable Device OS provider exists, or
-that an installed App can render, receive input, emit logs, or recover.
+provider output. The WS147 `jellyframe-device@0.1.0-dev` delivery archive,
+`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.0-dev.zip`, now provides the
+separately installable wrapper, provider, dependency lock, configuration
+template, Developer Image manifest, firmware, factory image and per-file
+SHA-256 list. Its 13 payload hashes were reverified on 2026-08-25. This closes
+the provider-package prerequisite, but it does not prove the actual clean-machine
+VS Code session or that an installed App can render, receive input, emit logs,
+or recover.
 
 WS147 has A1 storage/recovery and factory-image evidence. The targeted
 2026-08-21 workspace remeasure, based on `b372cc4`, also proves a real
@@ -40,7 +46,7 @@ release signoff.
 | --- | --- | --- |
 | Render Core | Independent Core package, profiles/ABI, hardware-neutral render and input contracts | No A2 blocker; a provider must not duplicate renderer logic |
 | JellyFrame Runtime/Tools | `.jfapp`, bundle checks, manifest/provider contracts, CLI host client, provider handoff contract | Clean-machine VS Code deployment/log session, readable error mapping and end-to-end tool regressions |
-| Device OS | A1 launcher/registry/staging/recovery foundation | A real `jellyframe-device` provider and binding of installed bundles to AppHost, renderer, input and logs |
+| Device OS | A1 launcher/registry/staging/recovery foundation; WS147 provider handoff and versioned provider delivery | Install/configure the real `jellyframe-device` provider and bind installed bundles to AppHost, renderer, input and logs |
 | WS147 port | JFDP wire, persistent lifecycle, factory recovery, bounded real-resource commit and provider handoff for the measured profile | Real installed-App panel/input evidence; no provider lifecycle blocker remains for this image |
 
 ## Required Device OS Implementation

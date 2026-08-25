@@ -4,7 +4,8 @@ param(
     [string]$Action = "Update",
     [string]$CodeCommand = "code",
     [string]$NpxCommand = "npx",
-    [string]$PnpmCommand = "pnpm"
+    [string]$PnpmCommand = "pnpm",
+    [string]$NodeCommand = "node"
 )
 
 $ErrorActionPreference = "Stop"
@@ -35,6 +36,44 @@ function Invoke-Tool {
     & $File @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Command failed with exit code $LASTEXITCODE`: $File $($Arguments -join ' ')"
+    }
+}
+
+function Resolve-Node {
+    if (Test-Path -LiteralPath $NodeCommand -PathType Leaf) {
+        return (Resolve-Path -LiteralPath $NodeCommand).Path
+    }
+    $resolved = Get-Command $NodeCommand -ErrorAction SilentlyContinue
+    if ($resolved) {
+        return $resolved.Source
+    }
+    throw "Node.js was not found. Install Node.js or pass -NodeCommand with the full path to node.exe. A package manager alone is not sufficient to build the extension."
+}
+
+function Assert-VsixContents {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $required = @(
+        "extension/extension.js",
+        "extension/build_profiles.js",
+        "extension/package.json",
+        "extension/package.nls.json",
+        "extension/package.nls.zh-cn.json",
+        "extension/media/jellyframe.svg"
+    )
+    $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $Path))
+    try {
+        $entries = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        foreach ($entry in $archive.Entries) {
+            [void]$entries.Add($entry.FullName)
+        }
+        $missing = @($required | Where-Object { -not $entries.Contains($_) })
+        if ($missing.Count -gt 0) {
+            throw "VSIX is missing required files: $($missing -join ', ')"
+        }
+    } finally {
+        $archive.Dispose()
     }
 }
 
@@ -71,6 +110,7 @@ function Package-Extension {
         if (-not (Test-Path -LiteralPath $vsixPath -PathType Leaf)) {
             throw "vsce completed but did not create: $vsixPath"
         }
+        Assert-VsixContents -Path $vsixPath
     } finally {
         Pop-Location
     }
@@ -92,9 +132,19 @@ function Install-Extension {
     Write-Host "JellyFrame extension is installed. Reload VS Code windows to use the updated extension."
 }
 
+$nodePath = Resolve-Node
+$nodeDirectory = Split-Path -Parent $nodePath
+$previousPath = $env:Path
+if (($env:Path -split [IO.Path]::PathSeparator) -notcontains $nodeDirectory) {
+    $env:Path = "$nodeDirectory$([IO.Path]::PathSeparator)$env:Path"
+}
+try {
 Package-Extension
 switch ($Action) {
     "Package" { return }
     "Install" { Install-Extension; return }
     "Update" { Install-Extension -Force; return }
+}
+} finally {
+    $env:Path = $previousPath
 }

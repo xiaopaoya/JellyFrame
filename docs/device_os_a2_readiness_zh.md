@@ -10,7 +10,11 @@
 当前主线已完成平台无关控制面：JFDP/1、typed Identity/Logs payload、安装契约、Developer Image manifest、严格 provider
 JSON/JSONL parser、显式 provider host client、CLI 的 `discover/info/install/cancel/logs` 入口，以及
 VS Code 的 discovery session 状态。这些只证明 host 不会猜测端口、不会伪造取消，也不会静默接受不匹配
-的 provider 输出；它们不等于存在可用的 Device OS provider、安装后 App 渲染、输入、日志或恢复闭环。
+的 provider 输出。WS147 `jellyframe-device@0.1.0-dev` 交付包
+`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.0-dev.zip` 已提供可独立安装的 wrapper、provider、依赖锁定、
+配置模板、Developer Image manifest、firmware、factory image 和逐文件 SHA-256 清单，并已于 2026-08-25 复核其
+13 个载荷哈希。这关闭了 provider 打包前置，但不等于已完成真实干净机器 VS Code 会话，也不等于安装后 App 已形成
+渲染、输入、日志或恢复闭环。
 
 WS147 已有 A1 storage/recovery 与 factory image 证据。基于 `b372cc4` 的 2026-08-21 workspace remeasure 还证明，
 真实 22,924-byte resource bundle 可以完整传输、commit、launch、stop：有效包在 2,049 ms 内返回 `accepted`；完整
@@ -29,7 +33,7 @@ cancellation、durable lifecycle 和 30 次 mixed cycle 均通过。更宽范围
 | --- | --- | --- |
 | Render Core | 独立 Core package、profile/ABI、平台无关渲染与输入契约 | 无 A2 阻塞项；不得在 provider 中复制渲染逻辑 |
 | JellyFrame Runtime/Tools | `.jfapp`、bundle 检查、manifest/provider contract、CLI host client、provider handoff contract | 干净机器 VS Code 部署/日志会话、用户可读错误映射与端到端 tool regression |
-| Device OS | A1 的 launcher/registry/staging/recovery 基础 | 真正的 `jellyframe-device` provider、已安装 bundle 到 AppHost/renderer/input/log 的绑定 |
+| Device OS | A1 的 launcher/registry/staging/recovery 基础；WS147 provider handoff 与版本化 provider 交付 | 安装/配置真正的 `jellyframe-device` provider，并完成已安装 bundle 到 AppHost/renderer/input/log 的绑定 |
 | WS147 port | JFDP wire、持久 lifecycle、factory recovery、真实 resource commit、已测 profile 的 provider handoff | 真实已安装 App 的 panel/input 证据；该镜像不再有 provider lifecycle blocker |
 
 ## Device OS 必需实现

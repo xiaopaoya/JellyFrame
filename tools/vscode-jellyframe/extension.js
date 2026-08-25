@@ -12,6 +12,7 @@ let lastReportCommand;
 let lastPackageRoot;
 let lastCapturePath;
 let lastDeviceDiscovery;
+let lastDeviceInfo;
 let statusProvider;
 let embeddedDebugSession;
 
@@ -21,7 +22,15 @@ function config() {
 
 function repoRoot(context) {
   const configured = config().get("repoRoot", "").trim();
-  return configured ? configured : path.resolve(context.extensionPath, "..", "..");
+  if (configured) {
+    return configured;
+  }
+  const workspace = findRepoRootFrom(workspaceFolderPath());
+  if (workspace) {
+    return workspace;
+  }
+  return findRepoRootFrom(path.resolve(context.extensionPath, "..", ".."))
+    || path.resolve(context.extensionPath, "..", "..");
 }
 
 function cliPath(context) {
@@ -115,17 +124,56 @@ function showOutputChannel() {
   ensureOutputChannel(true);
 }
 
-function discoverDevice(context) {
+function configuredDeviceProvider(context) {
   const provider = config().get("deviceProvider", "").trim();
+  const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
+  const openSettings = chinese ? "打开设置" : "Open Settings";
   if (!provider || !path.isAbsolute(provider)) {
-    vscode.window.showWarningMessage("Configure JellyFrame: Device Provider with an absolute provider path first.");
-    return;
+    const message = chinese
+      ? "请先配置 JellyFrame: Device Provider，并填写 provider 可执行文件的绝对路径。"
+      : "Configure JellyFrame: Device Provider with an absolute provider path first.";
+    vscode.window.showWarningMessage(message, openSettings).then((choice) => {
+      if (choice) {
+        vscode.commands.executeCommand("workbench.action.openSettings", "@ext:jellyframe.jellyframe-tools jellyframe.deviceProvider");
+      }
+    });
+    return undefined;
   }
+  let providerIsFile = false;
+  try {
+    providerIsFile = fs.statSync(provider).isFile();
+  } catch (_) {
+    providerIsFile = false;
+  }
+  if (!providerIsFile) {
+    const message = chinese
+      ? `Device Provider 不存在或不是文件：${provider}`
+      : `Device Provider does not exist or is not a file: ${provider}`;
+    vscode.window.showErrorMessage(message, openSettings).then((choice) => {
+      if (choice) {
+        vscode.commands.executeCommand("workbench.action.openSettings", "@ext:jellyframe.jellyframe-tools jellyframe.deviceProvider");
+      }
+    });
+    return undefined;
+  }
+  return provider;
+}
+
+function deviceCliArguments(context, provider) {
   const args = ["device", "--provider", provider];
   const manifest = config().get("deviceManifest", "").trim();
   if (manifest) {
     args.push("--manifest", path.isAbsolute(manifest) ? manifest : path.resolve(repoRoot(context), manifest));
   }
+  return args;
+}
+
+function discoverDevice(context) {
+  const provider = configuredDeviceProvider(context);
+  if (!provider) {
+    return;
+  }
+  const args = deviceCliArguments(context, provider);
   args.push("discover");
   runCliWithOptions(context, args, {
     onStdout: (stdout) => {
@@ -135,6 +183,48 @@ function discoverDevice(context) {
         statusProvider?.refresh();
       } catch (_) {
         lastDeviceDiscovery = undefined;
+      }
+    }
+  });
+}
+
+async function inspectDevice(context) {
+  const provider = configuredDeviceProvider(context);
+  if (!provider) {
+    return;
+  }
+  const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
+  const devices = Array.isArray(lastDeviceDiscovery)
+    ? lastDeviceDiscovery.filter((device) => device && typeof device.endpointId === "string")
+    : [];
+  if (devices.length === 0) {
+    vscode.window.showWarningMessage(chinese
+      ? "请先成功发现 Device OS 设备，再读取设备身份。"
+      : "Discover a configured Device OS endpoint before requesting its identity.");
+    return;
+  }
+  const choices = devices.map((device) => ({
+    label: device.endpointId,
+    description: `${device.boardId || "unknown"} ${device.profileId || ""}`.trim(),
+    detail: `${device.imageVersion || "unknown image"} ${device.connected ? (chinese ? "已连接" : "connected") : (chinese ? "未连接" : "disconnected")}`,
+    endpointId: device.endpointId
+  }));
+  const selected = choices.length === 1 ? choices[0] : await vscode.window.showQuickPick(choices, {
+    placeHolder: chinese ? "选择已发现的 JellyFrame Device OS 端点" : "Select a discovered JellyFrame Device OS endpoint"
+  });
+  if (!selected) {
+    return;
+  }
+  const args = deviceCliArguments(context, provider);
+  args.push("info", "--selector", selected.endpointId);
+  runCliWithOptions(context, args, {
+    onStdout: (stdout) => {
+      try {
+        const result = JSON.parse(stdout);
+        lastDeviceInfo = result?.device && result?.identity ? result : undefined;
+        statusProvider?.refresh();
+      } catch (_) {
+        lastDeviceInfo = undefined;
       }
     }
   });
@@ -266,6 +356,30 @@ function workspaceFolderPath() {
     return undefined;
   }
   return folders[0].uri.fsPath;
+}
+
+function findRepoRootFrom(startPath) {
+  if (!startPath || !fs.existsSync(startPath)) {
+    return undefined;
+  }
+  let current = startPath;
+  try {
+    if (!fs.statSync(current).isDirectory()) {
+      current = path.dirname(current);
+    }
+  } catch (_) {
+    return undefined;
+  }
+  while (true) {
+    if (fs.existsSync(path.join(current, "tools", "jellyframe_cli.py"))) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return undefined;
+    }
+    current = parent;
+  }
 }
 
 function findPackageRootFrom(startPath) {
@@ -1477,8 +1591,11 @@ class JellyFrameStatusProvider {
       environment: "环境",
       device: "设备",
       discoverDevice: "发现设备",
+      inspectDevice: "读取设备身份",
       noDeviceSession: "尚未发现设备",
       connectedDevices: "已连接",
+      deviceIdentity: "设备身份",
+      noDeviceIdentity: "尚未读取",
       package: "App 包",
       noPackage: "未识别 App",
       build: "桌面构建",
@@ -1509,8 +1626,11 @@ class JellyFrameStatusProvider {
       environment: "Environment",
       device: "Device",
       discoverDevice: "Discover device",
+      inspectDevice: "Device info",
       noDeviceSession: "No device discovered",
       connectedDevices: "Connected",
+      deviceIdentity: "Device identity",
+      noDeviceIdentity: "Not read",
       package: "App package",
       noPackage: "No App detected",
       build: "Desktop build",
@@ -1569,11 +1689,17 @@ class JellyFrameStatusProvider {
       ]),
       this.group(labels.device, "plug", [
         this.item(labels.discoverDevice, "", undefined, "jellyframe.deviceDiscover", "plug"),
+        this.item(labels.inspectDevice, "", undefined, "jellyframe.deviceInfo", "info"),
         this.item(labels.connectedDevices,
           Array.isArray(lastDeviceDiscovery)
             ? `${lastDeviceDiscovery.filter((device) => device.connected).length}/${lastDeviceDiscovery.length}`
             : labels.noDeviceSession,
           undefined, undefined, "device-mobile"),
+        this.item(labels.deviceIdentity,
+          lastDeviceInfo?.identity
+            ? `${lastDeviceInfo.identity.renderCoreVersion || "?"} / ABI ${lastDeviceInfo.identity.renderCoreAbi ?? "?"}`
+            : labels.noDeviceIdentity,
+          undefined, undefined, "verified"),
       ]),
     ];
   }
@@ -1918,7 +2044,8 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),
     vscode.commands.registerCommand("jellyframe.showOutput", () => showOutputChannel()),
-    vscode.commands.registerCommand("jellyframe.deviceDiscover", () => discoverDevice(context))
+    vscode.commands.registerCommand("jellyframe.deviceDiscover", () => discoverDevice(context)),
+    vscode.commands.registerCommand("jellyframe.deviceInfo", () => inspectDevice(context))
   );
 }
 
@@ -1935,6 +2062,8 @@ function deactivate() {
     statusProvider.changed.dispose();
     statusProvider = undefined;
   }
+  lastDeviceDiscovery = undefined;
+  lastDeviceInfo = undefined;
 }
 
 module.exports = {

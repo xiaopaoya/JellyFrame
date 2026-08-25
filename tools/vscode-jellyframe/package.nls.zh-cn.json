@@ -14,6 +14,7 @@
   "command.showReport": "JellyFrame：显示最近报告",
   "command.showOutput": "JellyFrame：查看运行日志",
   "command.deviceDiscover": "JellyFrame：发现设备",
+  "command.deviceInfo": "JellyFrame：读取设备身份",
   "menu.label": "JellyFrame",
   "menu.packageLabel": "JellyFrame 包操作",
   "menu.editorLabel": "JellyFrame App",

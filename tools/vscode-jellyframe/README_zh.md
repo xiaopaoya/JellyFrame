@@ -48,10 +48,10 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 .\manage-extension.ps1 -Action Update
 ```
 
-脚本需要 Node.js 的 `npx`（或可用的 `pnpm`）和 VS Code 的 `code` 命令在 PATH 中；也可以通过
-`-NpxCommand` 或 `-CodeCommand` 传入完整路径。若 PowerShell 阻止本地脚本，可在当前窗口执行
+脚本需要 Node.js 的 `node`、`npx`（或可用的 `pnpm`）和 VS Code 的 `code` 命令在 PATH 中；也可以通过
+`-NodeCommand`、`-NpxCommand` 或 `-CodeCommand` 传入完整路径。若 PowerShell 阻止本地脚本，可在当前窗口执行
 `Set-ExecutionPolicy -Scope Process Bypass`。手动安装时，也可以在 VS Code 的扩展视图中选择“从 VSIX 安装”。
-安装到仓库之外时，在设置中填写 `jellyframe.repoRoot`；`jellyframe.buildDir`
+安装到仓库之外时，扩展会优先从当前工作区向上寻找仓库；仍可在设置中填写 `jellyframe.repoRoot`；`jellyframe.buildDir`
 可选，用于指定桌面运行目录。扩展优先使用 `build/desktop-release/Release`，其次使用
 `build/desktop-debug/Debug`。
 如果 App manifest 声明了 `runtime.script`，未显式设置 `jellyframe.buildDir` 时扩展只会使用
@@ -97,3 +97,10 @@ event 7 set-value brightness 72
 使用“运行帧脚本”进行确定性回放，使用“打开截图”打开最近或指定的 BMP/PPM 截图。
 `JellyFrame：预览 App 包` 会执行 package 预检、生成独立
 JSON 报告并自动打开截图。验证、检查和预览分别保留自己的报告，不会互相覆盖。
+
+“发现设备”只连接已配置的 Device OS provider，不会猜测串口或 USB 端点。扩展不捆绑板卡专属
+provider；WS147 请安装版本化交付包
+`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.0-dev.zip`。
+首次使用前，请安装独立 provider 并在 JellyFrame 设置中填写其可执行文件绝对路径；如果路径
+缺失或无效，命令会直接给出配置提示。先执行“发现设备”，再使用“读取设备身份”按配置的
+Developer Image manifest 校验所选端点。
