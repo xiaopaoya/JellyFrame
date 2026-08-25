@@ -61,6 +61,17 @@ class DeviceProviderClientTests(unittest.TestCase):
                 with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "does not match"):
                     device_provider_client.invoke_provider(provider, "discover", request_id="jf-test")
 
+    def test_rejects_selected_operation_without_the_requested_device_attestation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            provider = Path(directory) / "provider.exe"
+            provider.write_bytes(b"")
+            completed = subprocess.CompletedProcess([], 0, result("launch", "jf-test"), b"")
+            with patch("device_provider_client.subprocess.run", return_value=completed):
+                with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "does not match"):
+                    device_provider_client.invoke_provider(
+                        provider, "launch", selector="other-endpoint", request_id="jf-test"
+                    )
+
     def test_stream_returns_ordered_progress_and_terminal_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             provider = Path(directory) / "provider.exe"

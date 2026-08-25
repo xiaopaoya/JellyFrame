@@ -35,6 +35,30 @@ def cli(*arguments: str, fixture: str) -> subprocess.CompletedProcess[bytes]:
 
 
 class Ws147DeviceProviderTests(unittest.TestCase):
+    def test_lifecycle_capability_fixture_declares_and_executes_each_operation(self) -> None:
+        discovery = invoke("--output", "json", "--request-id", "host-capabilities", "--fixture", "lifecycle-ok",
+                           "discover")
+        self.assertEqual(discovery.returncode, 0, discovery.stderr.decode())
+        operations = parse_provider_result(discovery.stdout)["devices"][0]["capabilities"]["supportedOperations"]
+        self.assertEqual(operations, ["install", "cancel", "launch", "stop", "remove", "rollback", "logs", "recovery"])
+        for operation in operations:
+            with self.subTest(operation=operation):
+                arguments = ["--output", "jsonl" if operation in {"install", "logs"} else "json",
+                             "--request-id", f"host-{operation}", "--fixture", "lifecycle-ok",
+                             "--selector", "fixture-ws147", operation]
+                if operation == "install":
+                    arguments.extend(["--bundle", "C:/fixture.jfapp"])
+                elif operation == "cancel":
+                    arguments.extend(["--transaction-id", "1"])
+                elif operation in {"launch", "stop", "remove", "rollback", "logs"}:
+                    arguments.extend(["--id", "org.jellyframe.fixture"])
+                completed = invoke(*arguments)
+                self.assertEqual(completed.returncode, 0, completed.stderr.decode())
+                terminal = (parse_provider_jsonl(completed.stdout)[-1]
+                            if operation in {"install", "logs"} else parse_provider_result(completed.stdout))
+                self.assertEqual(terminal["operation"], operation)
+                self.assertEqual(terminal["device"]["endpointId"], "fixture-ws147")
+
     def test_no_device_and_transport_unavailable_have_contract_exit_codes(self) -> None:
         no_device = invoke("--output", "json", "--request-id", "host-1", "--fixture", "no-device", "discover")
         self.assertEqual(no_device.returncode, 0, no_device.stderr.decode())

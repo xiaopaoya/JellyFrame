@@ -80,6 +80,10 @@ def invoke_provider(
     terminal = result[-1] if stream else result
     if terminal["operation"] != operation or terminal["requestId"] != request:
         raise DeviceProviderClientError("provider response does not match the requested operation")
+    if selector and terminal["resultCode"] in {"ok", "accepted"}:
+        device = terminal.get("device")
+        if not isinstance(device, dict) or device.get("endpointId") != selector:
+            raise DeviceProviderClientError("provider selected device does not match the requested endpoint")
     expected_returncode = _expected_exit_status(terminal["resultCode"])
     if completed.returncode != expected_returncode:
         raise DeviceProviderClientError(

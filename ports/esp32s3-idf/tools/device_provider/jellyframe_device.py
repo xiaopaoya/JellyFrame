@@ -66,6 +66,9 @@ FEATURE_FAMILIES = {
     1 << 5: "graphics.canvas2d",
 }
 LOG_LEVELS = {0: "debug", 1: "info", 2: "warn", 3: "error"}
+SUPPORTED_OPERATIONS = (
+    "install", "cancel", "launch", "stop", "remove", "rollback", "logs", "recovery",
+)
 
 
 class ProviderError(RuntimeError):
@@ -513,8 +516,21 @@ def device_from_capabilities(config: ProviderConfig, capabilities: dict[str, Any
             "featureFamilies": identity["featureFamilies"],
             "maxBundleBytes": capabilities["maxBundleBytes"],
             "availableStorageBytes": capabilities["availableStorageBytes"],
+            "supportedOperations": supported_operations(config.manifest),
         },
     }
+
+
+def supported_operations(manifest: dict[str, Any]) -> list[str]:
+    """Advertise only the WS147 image/profile whose JFDP handlers we own."""
+    profile = manifest.get("profile")
+    transport = manifest.get("transport")
+    if (manifest.get("board", {}).get("id") != "ws147" or
+            not isinstance(profile, dict) or profile.get("id") != "rect-172x320" or
+            not isinstance(transport, dict) or transport.get("protocol") != "JFDP/1" or
+            transport.get("kind") != "usb-serial-jtag"):
+        return []
+    return list(SUPPORTED_OPERATIONS)
 
 
 def envelope(operation: str, request_id: str, result_code: str, **extra: Any) -> dict[str, Any]:
@@ -540,7 +556,8 @@ def fixture_device() -> dict[str, Any]:
             "imageVersion": "0.1.0-dev", "runtimeVersion": "0.6.0-dev", "protocol": "JFDP/1", "connected": True,
             "capabilities": {"display": {"width": 172, "height": 320, "shape": "rect"},
                              "featureFamilies": ["core.document", "core.paint"], "maxBundleBytes": 327680,
-                             "availableStorageBytes": 163840}}
+                             "availableStorageBytes": 163840,
+                             "supportedOperations": list(SUPPORTED_OPERATIONS)}}
 
 
 def fixture_identity() -> dict[str, Any]:
@@ -552,6 +569,35 @@ def fixture_identity() -> dict[str, Any]:
 def run_fixture(args: argparse.Namespace) -> tuple[int, list[dict[str, Any]]]:
     name = args.fixture
     operation = args.operation
+    if name == "lifecycle-ok":
+        device = fixture_device()
+        if operation == "discover":
+            return 0, [envelope(operation, args.request_id, "ok", devices=[device])]
+        if operation == "info":
+            return 0, [envelope(operation, args.request_id, "ok", device=device, identity=fixture_identity())]
+        if operation == "list":
+            return 0, [envelope(operation, args.request_id, "ok", device=device, apps=[], registryGeneration=1)]
+        if operation == "recovery":
+            recovery = {"appId": "", "registryGeneration": 1, "recoverySequence": 1,
+                        "reason": "none", "launcherActive": True, "appDisabled": False,
+                        "rollbackAvailable": False}
+            return 0, [envelope(operation, args.request_id, "ok", device=device, recovery=recovery)]
+        if operation == "cancel":
+            return 0, [envelope(operation, args.request_id, "ok", device=device,
+                                cancellation={"confirmed": True})]
+        if operation == "logs":
+            return 0, [stream_event("result", operation, args.request_id, 1, resultCode="ok", device=device,
+                                    logSummary={"returnedRecords": 0, "droppedRecords": 0})]
+        if operation == "install":
+            return 0, [stream_event("result", operation, args.request_id, 1, resultCode="ok", device=device,
+                                    transaction={"id": 1, "receivedBytes": 1, "expectedBytes": 1,
+                                                 "complete": True, "active": False})]
+        if operation in {"launch", "stop", "remove", "rollback"}:
+            return 0, [envelope(operation, args.request_id, "ok", device=device)]
+    if name == "lifecycle-failed":
+        if args.output == "jsonl":
+            return 1, [stream_event("result", operation, args.request_id, 1, resultCode="failed")]
+        return 1, [envelope(operation, args.request_id, "failed")]
     if name == "no-device":
         return 0, [envelope(operation, args.request_id, "ok", devices=[])]
     if name == "image-mismatch":
@@ -732,7 +778,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--request-id", required=True)
     parser.add_argument("--selector")
     parser.add_argument("--config")
-    parser.add_argument("--fixture", choices=("no-device", "image-mismatch", "transport-unavailable", "storage-full", "interrupted-install", "confirmed-cancel", "unconfirmed-cancel", "bounded-logs"))
+    parser.add_argument("--fixture", choices=("no-device", "image-mismatch", "transport-unavailable", "storage-full", "interrupted-install", "confirmed-cancel", "unconfirmed-cancel", "bounded-logs", "lifecycle-ok", "lifecycle-failed"))
     subparsers = parser.add_subparsers(dest="operation", required=True)
     for name in ("discover", "info", "list", "recovery"):
         subparsers.add_parser(name)
@@ -789,7 +835,8 @@ def main() -> int:
             if os.environ.get("JELLYFRAME_DEVICE_TEST_MODE") != "1":
                 raise ProviderError("invalid-request", "provider fixtures require JELLYFRAME_DEVICE_TEST_MODE=1")
             if args.fixture not in {"no-device", "image-mismatch", "transport-unavailable", "storage-full",
-                                    "interrupted-install", "confirmed-cancel", "unconfirmed-cancel", "bounded-logs"}:
+                                    "interrupted-install", "confirmed-cancel", "unconfirmed-cancel", "bounded-logs",
+                                    "lifecycle-ok", "lifecycle-failed"}:
                 raise ProviderError("invalid-request", "unknown provider fixture")
             status, events = run_fixture(args)
         else:

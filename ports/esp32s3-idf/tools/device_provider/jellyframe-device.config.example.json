@@ -2,5 +2,5 @@
   "endpointId": "ws147-developer-local",
   "port": "COM19",
   "baud": 115200,
-  "manifest": "C:/absolute/path/to/ws147-developer-image-0.1.0-dev.json"
+  "manifest": "../developer-image/ws147-developer-image.manifest.json"
 }

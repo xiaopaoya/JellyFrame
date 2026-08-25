@@ -67,7 +67,7 @@ top-level fields so the host cannot silently ignore a contract change.
   "operation": "discover",
   "requestId": "host-000042",
   "resultCode": "ok",
-  "provider": { "id": "jellyframe-device", "version": "0.1.0-dev" },
+  "provider": { "id": "jellyframe-device", "version": "0.1.1-dev" },
   "devices": []
 }
 ```
@@ -97,7 +97,7 @@ record. It is absent from the published `jellyframe-device@0.1.0-dev` package
 for backward compatibility. When present, it is the authoritative opt-in list
 for author-facing lifecycle controls. Its values are unique members of
 `install`, `cancel`, `launch`, `stop`, `remove`, `rollback`, `logs`, and
-`recovery`; `discover` is deliberately excluded because it is the host's
+`recovery`, in that stable order; `discover` is deliberately excluded because it is the host's
 session-establishment action rather than a selected-device capability.
 
 The VS Code extension shows deployment, mutation and app-debug actions only

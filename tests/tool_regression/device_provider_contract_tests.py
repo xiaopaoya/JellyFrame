@@ -57,7 +57,8 @@ class DeviceProviderContractTests(unittest.TestCase):
         capable["capabilities"]["supportedOperations"] = ["install", "launch", "logs"]
         parsed = contract.parse_provider_result(json.dumps(result(devices=[capable])))
         self.assertEqual(parsed["devices"][0]["capabilities"]["supportedOperations"], ["install", "launch", "logs"])
-        for operations in (["discover"], ["install", "install"], ["unknown"], "install", [[]]):
+        for operations in (["discover"], ["install", "install"], ["unknown"], "install", [[]],
+                           ["launch", "install"]):
             invalid = device()
             invalid["capabilities"]["supportedOperations"] = operations
             with self.assertRaises(contract.ProviderContractError):
@@ -148,6 +149,14 @@ class DeviceProviderContractTests(unittest.TestCase):
                 result(operation="launch", resultCode="transport-unavailable")))["resultCode"],
             "transport-unavailable",
         )
+
+    def test_rejects_missing_device_on_declared_operation_terminal(self):
+        capable = device()
+        capable["capabilities"]["supportedOperations"] = ["install"]
+        discovery = contract.parse_provider_result(json.dumps(result(devices=[capable])))
+        self.assertEqual(discovery["devices"][0]["capabilities"]["supportedOperations"], ["install"])
+        with self.assertRaisesRegex(contract.ProviderContractError, "missing device"):
+            contract.parse_provider_result(json.dumps(result(operation="install")))
 
     def test_accepts_ordered_install_progress_and_result(self):
         stream = "\n".join((

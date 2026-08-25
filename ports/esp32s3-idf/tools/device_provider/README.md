@@ -13,7 +13,7 @@ procedure and `SHA256SUMS.txt`.
 
 The archive is intentionally board-specific. It contains no serial-port scan,
 serial-console parser or fallback provider. Its provider release record is
-currently `jellyframe-device@0.1.0-dev`.
+currently `jellyframe-device@0.1.1-dev`.
 
 ```powershell
 python ports\esp32s3-idf\tools\device_provider\package_ws147_device_provider.py `
@@ -61,5 +61,7 @@ provider nor infers a serial endpoint.
 `jellyframe_device.py --fixture <name>` is test-only and requires no board.
 It provides deterministic contract fixtures for `no-device`, `image-mismatch`,
 `transport-unavailable`, `storage-full`, `interrupted-install`,
-`confirmed-cancel`, `unconfirmed-cancel`, and `bounded-logs`. Fixtures do not
-claim a physical endpoint or installed-app execution.
+`confirmed-cancel`, `unconfirmed-cancel`, `bounded-logs`, `lifecycle-ok`, and
+`lifecycle-failed`. `lifecycle-ok` declares the exact capability order used by
+the WS147 provider and is only a contract fixture; it does not claim a
+physical endpoint or installed-app execution.
