@@ -45,6 +45,10 @@ RESPONSE_FLAG = 1
 CONTROL_REQUEST_TIMEOUT_SECONDS = 3.0
 INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS = 30.0
 INSTALL_CONTROL_WAIT_SECONDS = INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS + 3.0
+# Logs can carry one complete bounded JFDP payload. Leave room beyond the
+# board's bounded USB write-all deadline without treating the 90s process
+# guard as a protocol response timeout.
+LOGS_REQUEST_TIMEOUT_SECONDS = 5.0
 DISCOVERY, APP_LIST, INSTALL_BEGIN, INSTALL_CHUNK, INSTALL_COMMIT, INSTALL_ABORT, LAUNCH, STOP, LOGS, RECOVERY, REMOVE, ROLLBACK, IDENTITY = range(1, 14)
 RESULT_CODES = {
     0: "ok", 1: "accepted", 2: "queued", 3: "invalid-request", 4: "busy",
@@ -713,7 +717,7 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
             provider_code = "ok" if confirmed else result["resultCode"]
             return exit_code_for(provider_code), [envelope("cancel", args.request_id, provider_code, device=device, cancellation={"confirmed": confirmed}, **result)]
         if args.operation == "logs":
-            payload = wire.request(LOGS, logs_payload(args.app_id, args.limit))
+            payload = wire.request(LOGS, logs_payload(args.app_id, args.limit), LOGS_REQUEST_TIMEOUT_SECONDS)
             try:
                 dropped, records = decode_logs(payload)
             except ProviderError as logs_error:
