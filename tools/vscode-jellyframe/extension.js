@@ -31,6 +31,10 @@ let lastDeviceLifecycle;
 let statusProvider;
 let embeddedDebugSession;
 
+const APP_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/;
+const DIRECTORY_NAME_PATTERN = /^[^<>:"/\\|?*\x00-\x1f.][^<>:"/\\|?*\x00-\x1f]*$/;
+const FONT_BUDGET_PATTERN = /^[1-9][0-9]*x[1-9][0-9]*$/;
+
 function config() {
   return vscode.workspace.getConfiguration("jellyframe");
 }
@@ -951,11 +955,98 @@ function outputBase(root) {
   return path.basename(root).replace(/[^a-zA-Z0-9_.-]/g, "_") || "app";
 }
 
-async function target() {
-  return vscode.window.showInputBox({
-    prompt: "JellyFrame target preset",
-    value: config().get("defaultTarget", "round-300")
-  });
+function readJsonObject(filePath) {
+  try {
+    const value = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return value && typeof value === "object" && !Array.isArray(value) ? value : undefined;
+  } catch (_) {
+    return undefined;
+  }
+}
+
+function viewportSummary(viewport, chinese) {
+  const width = Number(viewport?.width || viewport?.designWidth || 0);
+  const height = Number(viewport?.height || viewport?.designHeight || 0);
+  const shape = viewport?.shape === "round"
+    ? (chinese ? "圆形" : "round")
+    : (viewport?.shape === "rect" ? (chinese ? "矩形" : "rectangular") : "");
+  const dimensions = width > 0 && height > 0 ? `${width} x ${height}` : (chinese ? "自定义尺寸" : "custom size");
+  return shape ? `${dimensions} · ${shape}` : dimensions;
+}
+
+function availableTargets(context, root, options = {}) {
+  const chinese = isChinese();
+  const targets = new Map();
+  const presetDirectory = path.join(repoRoot(context), "tools", "presets", "targets");
+  try {
+    for (const name of fs.readdirSync(presetDirectory).filter((entry) => entry.endsWith(".json")).sort()) {
+      const preset = readJsonObject(path.join(presetDirectory, name));
+      if (typeof preset?.id === "string" && preset.id) {
+        targets.set(preset.id, {
+          id: preset.id,
+          viewport: preset.viewport,
+          detail: preset.description || (chinese ? "仓库 target preset" : "Repository target preset"),
+          source: "preset"
+        });
+      }
+    }
+  } catch (_) {
+    // The CLI remains the source of truth; present manifest targets if the preset directory is unavailable.
+  }
+  if (!options.presetOnly && root) {
+    const manifest = readJsonObject(packageManifestPath(root));
+    if (manifest?.targets && typeof manifest.targets === "object" && !Array.isArray(manifest.targets)) {
+      for (const [id, target] of Object.entries(manifest.targets)) {
+        if (!id || !target || typeof target !== "object") {
+          continue;
+        }
+        const existing = targets.get(id);
+        targets.set(id, {
+          id,
+          viewport: target.viewport || existing?.viewport,
+          detail: existing
+            ? (chinese ? "仓库 preset；当前 App 已声明" : "Repository preset; declared by this App")
+            : (chinese ? "当前 App manifest 已声明" : "Declared by this App manifest"),
+          source: existing ? "both" : "manifest"
+        });
+      }
+    }
+  }
+  return [...targets.values()].map((target) => ({
+    label: target.id,
+    description: viewportSummary(target.viewport, chinese),
+    detail: target.detail,
+    target: target.id
+  }));
+}
+
+async function selectTarget(context, root, options = {}) {
+  const chinese = isChinese();
+  const choices = availableTargets(context, root, options);
+  if (choices.length === 0) {
+    vscode.window.showErrorMessage(chinese
+      ? "未找到 JellyFrame target preset。请检查 tools/presets/targets 或 App manifest。"
+      : "No JellyFrame target preset was found. Check tools/presets/targets or the App manifest.");
+    return undefined;
+  }
+  const configured = String(config().get("defaultTarget", "round-300") || "").trim();
+  return vscode.window.showQuickPick(choices, {
+    placeHolder: options.purpose || (chinese ? "选择目标显示形态" : "Select a target display profile"),
+    activeItem: choices.find((choice) => choice.target === configured),
+    ignoreFocusOut: true
+  }).then((choice) => choice?.target);
+}
+
+function selectedFontBudget() {
+  const value = String(config().get("fontBudget", "16x16") || "").trim();
+  if (FONT_BUDGET_PATTERN.test(value)) {
+    return value;
+  }
+  const chinese = isChinese();
+  vscode.window.showErrorMessage(chinese
+    ? "JellyFrame: Font Budget 必须为 WIDTHxHEIGHT 的正整数，例如 16x16。"
+    : "JellyFrame: Font Budget must use positive WIDTHxHEIGHT integers, for example 16x16.");
+  return undefined;
 }
 
 async function selectFrameScript(root, purpose) {
@@ -994,7 +1085,9 @@ async function runPackageCommand(context, commandName, resourceUri) {
   if (!root) {
     return;
   }
-  const selectedTarget = commandName === "validate" ? undefined : await target();
+  const selectedTarget = commandName === "validate" ? undefined : await selectTarget(context, root, {
+    purpose: isChinese() ? "选择本次检查使用的目标显示形态" : "Select the target display profile for this check"
+  });
   if (commandName !== "validate" && !selectedTarget) {
     return;
   }
@@ -1011,7 +1104,11 @@ async function runPackageCommand(context, commandName, resourceUri) {
     reportPath: report
   };
   if (commandName === "check") {
-    args.push("--font-budget", config().get("fontBudget", "16x16"));
+    const fontBudget = selectedFontBudget();
+    if (!fontBudget) {
+      return;
+    }
+    args.push("--font-budget", fontBudget);
     const frameScript = await selectFrameScript(root, /^zh(?:-|$)/i.test(vscode.env.language || "")
       ? "选择渲染验证方式"
       : "Choose render verification mode");
@@ -1047,7 +1144,9 @@ async function previewPackage(context, resourceUri) {
   if (!root) {
     return;
   }
-  const selectedTarget = await target();
+  const selectedTarget = await selectTarget(context, root, {
+    purpose: isChinese() ? "选择预览使用的目标显示形态" : "Select the target display profile for preview"
+  });
   if (!selectedTarget) {
     return;
   }
@@ -1082,8 +1181,14 @@ async function debugExternalApp(context, resourceUri) {
   if (!root) {
     return;
   }
-  const selectedTarget = await target();
+  const selectedTarget = await selectTarget(context, root, {
+    purpose: isChinese() ? "选择外部调试使用的目标显示形态" : "Select the target display profile for external debugging"
+  });
   if (!selectedTarget) {
+    return;
+  }
+  const fontBudget = selectedFontBudget();
+  if (!fontBudget) {
     return;
   }
   const launcher = debugLauncherPath(context);
@@ -1117,7 +1222,7 @@ async function debugExternalApp(context, resourceUri) {
         "--build-dir", nativeBuildDirectory,
         "--report", report,
         "--runtime-log", runtimeLog,
-        "--font-budget", config().get("fontBudget", "16x16")
+        "--font-budget", fontBudget
       ], {
         commandName: "debug",
         packageRoot: root,
@@ -1912,8 +2017,14 @@ async function runFrameScript(context, resourceUri) {
   if (!selected || !selected[0]) {
     return;
   }
-  const selectedTarget = await target();
+  const selectedTarget = await selectTarget(context, root, {
+    purpose: isChinese() ? "选择程控回放使用的目标显示形态" : "Select the target display profile for frame-script playback"
+  });
   if (!selectedTarget) {
+    return;
+  }
+  const fontBudget = selectedFontBudget();
+  if (!fontBudget) {
     return;
   }
   ensureBuildDir(context);
@@ -1934,7 +2045,7 @@ async function runFrameScript(context, resourceUri) {
     "--report", report,
     "--frame-script", selected[0].fsPath,
     "--frame-output-dir", output,
-    "--font-budget", config().get("fontBudget", "16x16")
+    "--font-budget", fontBudget
   ], {
     commandName: "frame-script",
     packageRoot: root,
@@ -2654,49 +2765,165 @@ function templateNames(context) {
   return fs.readdirSync(root).filter((name) => fs.statSync(path.join(root, name)).isDirectory()).sort();
 }
 
+function templateChoices(context) {
+  const chinese = isChinese();
+  const descriptions = chinese
+    ? {
+      blank: "最小 Hello world 包，适合从零开始。",
+      calculator: "紧凑键盘与事件委托。",
+      clock: "时间和状态仪表板。",
+      timer: "本地状态与按钮交互。",
+      weather: "数据卡片与包内图片。"
+    }
+    : {
+      blank: "Minimal Hello world package for a clean start.",
+      calculator: "Compact keypad and event delegation.",
+      clock: "Time and status dashboard.",
+      timer: "Local state and button interaction.",
+      weather: "Data cards and package-local images."
+    };
+  return templateNames(context).map((name) => ({
+    label: name,
+    description: descriptions[name] || (chinese ? "官方 App 起始模板。" : "Official App starter template."),
+    template: name
+  }));
+}
+
+function suggestedAppId(directoryName) {
+  const suffix = directoryName.toLowerCase()
+    .replace(/[^a-z0-9_.-]+/g, "-")
+    .replace(/^[_.-]+|[_.-]+$/g, "") || "app";
+  return `org.example.${suffix}`;
+}
+
+function suggestedAppName(directoryName) {
+  return directoryName
+    .trim()
+    .split(/[_.-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "App";
+}
+
+function directoryNameError(value, chinese) {
+  const name = String(value || "").trim();
+  if (!name) {
+    return chinese ? "请输入新 App 的目录名称。" : "Enter a directory name for the new App.";
+  }
+  if (!DIRECTORY_NAME_PATTERN.test(name) || /[. ]$/.test(name)) {
+    return chinese
+      ? "目录名称不能包含路径分隔符、Windows 保留字符，且不能以句点或空格结束。"
+      : "The directory name cannot contain path separators or Windows-reserved characters, or end with a dot or space.";
+  }
+  return undefined;
+}
+
+function appIdError(value, chinese) {
+  if (APP_ID_PATTERN.test(String(value || "").trim())) {
+    return undefined;
+  }
+  return chinese
+    ? "App ID 必须以字母或数字开始，且仅可包含字母、数字、点、连字符或下划线。"
+    : "App ID must start with a letter or digit and contain only letters, digits, dots, hyphens or underscores.";
+}
+
 async function newFromTemplate(context) {
-  const picked = await vscode.window.showQuickPick(templateNames(context), {
-    placeHolder: "Select JellyFrame app template"
+  const chinese = isChinese();
+  const picked = await vscode.window.showQuickPick(templateChoices(context), {
+    placeHolder: chinese ? "选择 JellyFrame App 起始模板" : "Select a JellyFrame App starter template",
+    ignoreFocusOut: true
   });
   if (!picked) {
     return;
   }
   const workspace = workspaceFolderPath() || repoRoot(context);
-  const output = await vscode.window.showInputBox({
-    prompt: "Output directory",
-    value: path.join(workspace, picked)
+  const selectedParent = await vscode.window.showOpenDialog({
+    defaultUri: vscode.Uri.file(workspace),
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: chinese ? "选择新 App 的存放位置" : "Select a location for the new App"
   });
-  if (!output) {
+  if (!selectedParent || !selectedParent[0]) {
     return;
   }
-  const appId = await vscode.window.showInputBox({
-    prompt: "Manifest app id",
-    value: `org.example.${picked}`
+  const directoryName = await vscode.window.showInputBox({
+    prompt: chinese ? "新 App 目录名称" : "New App directory name",
+    value: `${picked.template}-app`,
+    placeHolder: chinese ? "仅输入目录名称，不输入路径" : "Directory name only, not a path",
+    validateInput: (value) => directoryNameError(value, chinese),
+    ignoreFocusOut: true
   });
-  if (!appId) {
+  if (!directoryName) {
+    return;
+  }
+  const normalizedDirectoryName = directoryName.trim();
+  const output = path.join(selectedParent[0].fsPath, normalizedDirectoryName);
+  if (fs.existsSync(output)) {
+    vscode.window.showErrorMessage(chinese
+      ? `目标目录已存在：${output}。请选择新的目录名称或位置。`
+      : `The destination directory already exists: ${output}. Choose a new name or location.`);
     return;
   }
   const name = await vscode.window.showInputBox({
-    prompt: "Manifest app name",
-    value: picked.charAt(0).toUpperCase() + picked.slice(1)
+    prompt: chinese ? "App 显示名称" : "App display name",
+    value: suggestedAppName(normalizedDirectoryName),
+    validateInput: (value) => String(value || "").trim()
+      ? undefined
+      : (chinese ? "App 显示名称不能为空。" : "App display name cannot be empty."),
+    ignoreFocusOut: true
   });
   if (!name) {
     return;
   }
-  const selectedTarget = await target();
+  const defaultAppId = suggestedAppId(normalizedDirectoryName);
+  const appIdMode = await vscode.window.showQuickPick([
+    {
+      label: chinese ? "使用建议的 App ID" : "Use suggested App ID",
+      description: defaultAppId,
+      value: defaultAppId
+    },
+    {
+      label: chinese ? "指定 App ID" : "Specify App ID",
+      description: chinese ? "适用于已有组织命名空间。" : "Use an existing organization namespace.",
+      value: "custom"
+    }
+  ], {
+    placeHolder: chinese ? "选择 App ID" : "Select an App ID",
+    ignoreFocusOut: true
+  });
+  if (!appIdMode) {
+    return;
+  }
+  const appId = appIdMode.value === "custom"
+    ? await vscode.window.showInputBox({
+      prompt: chinese ? "App ID" : "App ID",
+      value: defaultAppId,
+      placeHolder: "org.example.my-app",
+      validateInput: (value) => appIdError(value, chinese),
+      ignoreFocusOut: true
+    })
+    : appIdMode.value;
+  if (!appId) {
+    return;
+  }
+  const selectedTarget = await selectTarget(context, undefined, {
+    presetOnly: true,
+    purpose: chinese ? "选择新 App 的目标显示形态" : "Select a target display profile for the new App"
+  });
   if (!selectedTarget) {
     return;
   }
   runCli(context, [
     "new",
     "--template",
-    picked,
+    picked.template,
     "--output",
     output,
     "--id",
-    appId,
+    appId.trim(),
     "--name",
-    name,
+    name.trim(),
     "--target",
     selectedTarget
   ]);

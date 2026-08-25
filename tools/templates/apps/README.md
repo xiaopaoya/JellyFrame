@@ -1,6 +1,6 @@
 # App Templates
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-25; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Reference app templates for common wearable workflows. These are intentionally
 small, modern and brand-neutral watch-style apps that stay inside the documented
@@ -8,6 +8,7 @@ JellyFrame HTML, CSS and scripting subset instead of depending on full browser
 layout behavior or copying commercial watch interfaces.
 
 - `calculator/`: compact quick-math keypad, event delegation, `dataset` and local state.
+- `blank/`: the smallest `Hello world` package with empty CSS and JavaScript entry points.
 - `clock/`: timer-driven dayline display updates and compact health metrics.
 - `timer/`: control buttons, state changes and time formatting.
 - `weather/`: data-shaped UI intended for future host network APIs.
@@ -16,6 +17,7 @@ layout behavior or copying commercial watch interfaces.
 
 | Template | Best first use | Main ideas |
 | --- | --- | --- |
+| `blank/` | A clean start | Minimal manifest, `Hello world`, empty CSS/JS entry points |
 | `weather/` | Data cards and status panels | Local images and state-shaped content |
 | `clock/` | Time/status dashboard | Compact typography and host-time updates |
 | `timer/` | Interactive control loop | Buttons, local state and deterministic time |

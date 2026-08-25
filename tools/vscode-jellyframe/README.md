@@ -12,7 +12,7 @@ Palette as entry points.
 - JSON schema association for `jellyframe.app.json`.
 - Command palette actions for package-structure validation, render preflight, preview, embedded VS Code debugging,
   external-window debugging, frame-script playback, capture opening and package generation.
-- App creation from the built-in weather, clock, timer and calculator templates.
+- App creation from the built-in blank, weather, clock, timer and calculator templates.
 - CLI output in a dedicated `JellyFrame` output channel.
 - A `JellyFrame Report` webview that puts CLI `developerAdvice[]` first, then
   summarizes resources, references, warnings and pipeline diagnostics.
@@ -86,7 +86,8 @@ manifest, entry point, local resources, references and declared budgets without
 starting Render Core or asking for a viewport, measuring layout, frame time or
 device performance. Its report is intentionally limited to package structure.
 `JellyFrame: Check App Rendering` runs the package gate first, asks for a target
-viewport, then adds Render Core preflight, responsive layout and font checks. It
+profile from repository presets and targets declared by the current App manifest,
+then adds Render Core preflight, responsive layout and font checks. It
 also offers optional `.jfcapture` programmed playback, merging the static
 pipeline diagnostics with a multi-page interaction path. Use Preview or desktop
 debugging for the actual image and interactive behavior.
@@ -100,6 +101,13 @@ The Explorer context menu is available for `jellyframe.app.json`; the editor
 context menu is available while editing an app HTML, CSS or manifest file.
 These entries use the same commands as the Command Palette, so either entry
 point produces the same report and output-channel behavior.
+
+`New App From Template` uses directory pickers for the destination and offers a
+suggested `org.example.*` identifier from the App folder name. Choose `Specify
+App ID` only when an organization namespace is needed; custom IDs must start
+with a letter or digit and may contain only letters, digits, dots, hyphens and
+underscores. The target picker uses only recognized repository presets while
+creating a new App, so generated manifests are immediately packageable.
 
 `JellyFrame: Debug App In VS Code` opens an editor tab backed by an isolated,
 hidden desktop-shell session. It delivers complete viewport snapshots with

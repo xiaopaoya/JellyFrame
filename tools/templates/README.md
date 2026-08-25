@@ -1,8 +1,11 @@
 # Templates
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-25; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Starter app templates for JellyFrame packages.
+
+`apps/blank` is the smallest package for a clean start: `Hello world`, one CSS
+entry point and one classic JavaScript entry point.
 
 Templates are used by tools and by developers learning the supported subset.
 They should demonstrate normal app structure without depending on desktop-only

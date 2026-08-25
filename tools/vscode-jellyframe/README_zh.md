@@ -10,7 +10,7 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 
 - 为 `jellyframe.app.json` 关联 JSON schema。
 - 命令面板提供“验证 App 包结构”“检查 App 包渲染”“预览”、VS Code 内嵌调试、外部窗口调试、frame script 回放、打开截图和生成 package。
-- 可从内置 weather、clock、timer 和 calculator 模板创建 app。
+- 可从内置 blank、weather、clock、timer 和 calculator 模板创建 app。
 - 在专用 `JellyFrame` output channel 中显示 CLI 输出。
 - `JellyFrame Report` webview 会优先展示 CLI 的 `developerAdvice[]`，再汇总
   resources、references、warnings 和管线 diagnostics。
@@ -65,7 +65,7 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 
 “验证 App 包”是快速的纯包门禁：检查 manifest、入口、资源、引用和声明预算，适合频繁运行，
 不会启动 Render Core，也不会询问分辨率、测量布局、帧时间或真实设备性能。
-“检查 App 渲染”会先做同样的结构验证，再选择目标 viewport，运行 Render Core 预检、响应式布局和字体检查；
+“检查 App 渲染”会先做同样的结构验证，再从仓库 preset 和当前 App manifest 已声明 target 中选择目标 profile，运行 Render Core 预检、响应式布局和字体检查；
 该入口还可以附加 `.jfcapture` 程控回放，把静态管线诊断和多页面交互路径合并到一份报告。
 需要查看实际画面或手动交互时，请使用“预览”或桌面调试。
 
@@ -75,6 +75,11 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 （开发人员：重新加载窗口）。资源管理器中
 右键 `jellyframe.app.json`，或在 App 的 HTML/CSS/manifest 文件编辑器中右键，可以
 直接使用常用操作。这些入口与命令面板调用同一组命令，输出和诊断行为一致。
+
+“从模板新建 App”使用目录选择器确定存放位置，并根据 App 目录名建议一个 `org.example.*`
+标识。只有需要已有组织命名空间时才选择“指定 App ID”；自定义 ID 必须以字母或数字开头，且只能包含
+字母、数字、点、连字符和下划线。创建 App 时的 target 选择器仅列出已识别的仓库 preset，因此生成的
+manifest 可以直接打包。
 
 使用“在 VS Code 中调试 App”会打开一个编辑器标签页：它启动独立的隐藏桌面壳会话，将完整的、单序号
 viewport 帧快照送入标签页，并把点击、拖动、滚轮和常用按键转回该会话。标签页的 Stop 按钮或关闭标签页

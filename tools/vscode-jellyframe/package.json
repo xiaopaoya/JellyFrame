@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.17",
+  "version": "0.4.18",
   "publisher": "jellyframe",
   "repository": {
     "type": "git",
@@ -396,11 +396,24 @@
         "jellyframe.defaultTarget": {
           "type": "string",
           "default": "round-300",
+          "enum": [
+            "round-300",
+            "rect-320x240",
+            "rect-172x320",
+            "esp32s3-round-300"
+          ],
+          "enumDescriptions": [
+            "%configuration.defaultTarget.round300%",
+            "%configuration.defaultTarget.rect320x240%",
+            "%configuration.defaultTarget.rect172x320%",
+            "%configuration.defaultTarget.esp32s3%"
+          ],
           "description": "%configuration.defaultTarget%"
         },
         "jellyframe.fontBudget": {
           "type": "string",
           "default": "16x16",
+          "pattern": "^[1-9][0-9]*x[1-9][0-9]*$",
           "description": "%configuration.fontBudget%"
         },
         "jellyframe.deviceProvider": {
