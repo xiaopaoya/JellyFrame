@@ -1,6 +1,6 @@
 # JellyFrame Active TODO
 
-> Updated: 2026-08-25; Applies to: `0.6.0-dev`
+> Last updated: 2026-08-25; Applies to: 0.6.0-dev
 >
 > This is the near-term execution queue for the [active roadmap](roadmap.md). It does not repeat closed acceptance, performance micro-experiments or historical port work.
 

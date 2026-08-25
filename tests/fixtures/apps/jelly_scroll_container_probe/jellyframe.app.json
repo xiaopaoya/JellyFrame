@@ -11,7 +11,7 @@
   "entry": "/index.html",
   "runtime": {
     "minJellyFrame": "0.6.0",
-    "minRenderCore": "0.6.0",
+    "minRenderCore": "0.6.1",
     "script": "none"
   },
   "viewport": {

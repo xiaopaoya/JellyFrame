@@ -4,8 +4,7 @@ param(
     [string]$Action = "Update",
     [string]$CodeCommand = "code",
     [string]$NpxCommand = "npx",
-    [string]$PnpmCommand = "pnpm",
-    [string]$NodeCommand = "node"
+    [string]$PnpmCommand = "pnpm"
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,23 +38,15 @@ function Invoke-Tool {
     }
 }
 
-function Resolve-Node {
-    if (Test-Path -LiteralPath $NodeCommand -PathType Leaf) {
-        return (Resolve-Path -LiteralPath $NodeCommand).Path
-    }
-    $resolved = Get-Command $NodeCommand -ErrorAction SilentlyContinue
-    if ($resolved) {
-        return $resolved.Source
-    }
-    throw "Node.js was not found. Install Node.js or pass -NodeCommand with the full path to node.exe. A package manager alone is not sufficient to build the extension."
-}
-
 function Assert-VsixContents {
     param([Parameter(Mandatory = $true)][string]$Path)
 
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $required = @(
         "extension/extension.js",
+        "extension/command_diagnostics.js",
+        "extension/device_presentation.js",
+        "extension/status_presentation.js",
         "extension/build_profiles.js",
         "extension/package.json",
         "extension/package.nls.json",
@@ -66,7 +57,7 @@ function Assert-VsixContents {
     try {
         $entries = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
         foreach ($entry in $archive.Entries) {
-            [void]$entries.Add($entry.FullName)
+            [void]$entries.Add($entry.FullName.Replace('\', '/'))
         }
         $missing = @($required | Where-Object { -not $entries.Contains($_) })
         if ($missing.Count -gt 0) {
@@ -78,6 +69,11 @@ function Assert-VsixContents {
 }
 
 function Resolve-Vsce {
+    # The wrappers below all invoke node. Do not select one merely because a
+    # package-manager shim happens to be present on PATH.
+    if (-not (Get-Command "node" -ErrorAction SilentlyContinue)) {
+        return $null
+    }
     $localVsce = Join-Path $extensionRoot "node_modules\.bin\vsce.cmd"
     if (Test-Path -LiteralPath $localVsce -PathType Leaf) {
         return [pscustomobject]@{
@@ -93,7 +89,7 @@ function Resolve-Vsce {
                 Arguments = @("dlx", "--package", "@vscode/vsce", "vsce", "package", "--no-dependencies", "--out", $vsixPath)
             }
         }
-        throw "Neither a local vsce, '$NpxCommand' or '$PnpmCommand' was found. Install Node.js/npm or run: npm install --save-dev @vscode/vsce"
+        return $null
     }
     return [pscustomobject]@{
         File = $NpxCommand
@@ -101,18 +97,121 @@ function Resolve-Vsce {
     }
 }
 
+function ConvertTo-XmlText {
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    return [Security.SecurityElement]::Escape($Value)
+}
+
+function Write-Utf8NoBom {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Content
+    )
+
+    [IO.File]::WriteAllText($Path, $Content, [Text.UTF8Encoding]::new($false))
+}
+
+function New-BuiltinVsix {
+    $staging = Join-Path ([IO.Path]::GetTempPath()) ("jellyframe-vsix-" + [Guid]::NewGuid().ToString("N"))
+    $extensionStaging = Join-Path $staging "extension"
+    New-Item -ItemType Directory -Path $extensionStaging -Force | Out-Null
+    try {
+        $files = @(
+            "extension.js",
+            "command_diagnostics.js",
+            "device_presentation.js",
+            "status_presentation.js",
+            "build_profiles.js",
+            "package.json",
+            "package.nls.json",
+            "package.nls.zh-cn.json",
+            "manage-extension.ps1",
+            "README.md",
+            "README_zh.md"
+        )
+        foreach ($file in $files) {
+            Copy-Item -LiteralPath (Join-Path $extensionRoot $file) -Destination (Join-Path $extensionStaging $file)
+        }
+        Copy-Item -LiteralPath (Join-Path $extensionRoot "LICENSE") -Destination (Join-Path $extensionStaging "LICENSE.txt")
+        Copy-Item -LiteralPath (Join-Path $extensionRoot "media") -Destination (Join-Path $extensionStaging "media") -Recurse
+
+        $id = ConvertTo-XmlText $packageName
+        $version = ConvertTo-XmlText $packageVersion
+        $displayName = ConvertTo-XmlText ([string]$manifest.displayName)
+        $description = ConvertTo-XmlText ([string]$manifest.description)
+        $repository = ConvertTo-XmlText ([string]$manifest.repository.url)
+        $engine = ConvertTo-XmlText ([string]$manifest.engines.vscode)
+        $publisher = ConvertTo-XmlText ([string]$manifest.publisher)
+        @"
+<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
+  <Metadata>
+    <Identity Language="en-US" Id="$id" Version="$version" Publisher="$publisher" />
+    <DisplayName>$displayName</DisplayName>
+    <Description xml:space="preserve">$description</Description>
+    <Categories>Other</Categories>
+    <Properties>
+      <Property Id="Microsoft.VisualStudio.Code.Engine" Value="$engine" />
+      <Property Id="Microsoft.VisualStudio.Code.ExtensionKind" Value="workspace" />
+      <Property Id="Microsoft.VisualStudio.Code.ExecutesCode" Value="true" />
+      <Property Id="Microsoft.VisualStudio.Services.Links.Source" Value="$repository" />
+    </Properties>
+    <License>extension/LICENSE.txt</License>
+  </Metadata>
+  <Installation><InstallationTarget Id="Microsoft.VisualStudio.Code" /></Installation>
+  <Dependencies />
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true" />
+    <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="extension/README.md" Addressable="true" />
+    <Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE.txt" Addressable="true" />
+  </Assets>
+</PackageManifest>
+"@ | ForEach-Object { Write-Utf8NoBom -Path (Join-Path $staging "extension.vsixmanifest") -Content $_ }
+        @"
+<?xml version="1.0" encoding="utf-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="xml" ContentType="application/xml" />
+  <Default Extension="json" ContentType="application/json" />
+  <Default Extension="js" ContentType="application/javascript" />
+  <Default Extension="md" ContentType="text/markdown" />
+  <Default Extension="ps1" ContentType="text/plain" />
+  <Default Extension="svg" ContentType="image/svg+xml" />
+</Types>
+"@ | ForEach-Object { Write-Utf8NoBom -Path (Join-Path $staging "[Content_Types].xml") -Content $_ }
+        if (Test-Path -LiteralPath $vsixPath) {
+            Remove-Item -LiteralPath $vsixPath -Force
+        }
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [IO.Compression.ZipFile]::CreateFromDirectory($staging, $vsixPath, [IO.Compression.CompressionLevel]::Optimal, $false)
+    } finally {
+        if (Test-Path -LiteralPath $staging) {
+            Remove-Item -LiteralPath $staging -Recurse -Force
+        }
+    }
+}
+
 function Package-Extension {
     $resolved = Resolve-Vsce
-    Push-Location -LiteralPath $extensionRoot
+    Write-Host "Packaging $packageName@$packageVersion ..."
+    if ($resolved) {
+        Push-Location -LiteralPath $extensionRoot
+        try {
+            Invoke-Tool -File $resolved.File -Arguments $resolved.Arguments
+        } finally {
+            Pop-Location
+        }
+    } else {
+        Write-Host "No vsce, npx or pnpm was found; using the built-in VSIX packager."
+        New-BuiltinVsix
+    }
     try {
-        Write-Host "Packaging $packageName@$packageVersion ..."
-        Invoke-Tool -File $resolved.File -Arguments $resolved.Arguments
         if (-not (Test-Path -LiteralPath $vsixPath -PathType Leaf)) {
-            throw "vsce completed but did not create: $vsixPath"
+            throw "Packaging did not create: $vsixPath"
         }
         Assert-VsixContents -Path $vsixPath
-    } finally {
-        Pop-Location
+    } catch {
+        throw
     }
     Write-Host "Created $vsixPath"
 }
@@ -132,19 +231,9 @@ function Install-Extension {
     Write-Host "JellyFrame extension is installed. Reload VS Code windows to use the updated extension."
 }
 
-$nodePath = Resolve-Node
-$nodeDirectory = Split-Path -Parent $nodePath
-$previousPath = $env:Path
-if (($env:Path -split [IO.Path]::PathSeparator) -notcontains $nodeDirectory) {
-    $env:Path = "$nodeDirectory$([IO.Path]::PathSeparator)$env:Path"
-}
-try {
 Package-Extension
 switch ($Action) {
     "Package" { return }
     "Install" { Install-Extension; return }
     "Update" { Install-Extension -Force; return }
-}
-} finally {
-    $env:Path = $previousPath
 }

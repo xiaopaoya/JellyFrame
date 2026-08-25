@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.8",
+  "version": "0.4.12",
   "publisher": "jellyframe",
   "repository": {
     "type": "git",
@@ -27,10 +27,11 @@
     "onCommand:jellyframe.package",
     "onCommand:jellyframe.newFromTemplate",
     "onCommand:jellyframe.showReport",
-    "onCommand:jellyframe.showOutput"
-    ,"onCommand:jellyframe.deviceDiscover"
-    ,"onCommand:jellyframe.deviceInfo"
-    ,"onCommand:jellyframe.deviceList"
+    "onCommand:jellyframe.showOutput",
+    "onCommand:jellyframe.deviceDiscover",
+    "onCommand:jellyframe.deviceSelect",
+    "onCommand:jellyframe.deviceInfo",
+    "onCommand:jellyframe.deviceList"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -99,6 +100,11 @@
         "command": "jellyframe.deviceDiscover",
         "title": "%command.deviceDiscover%",
         "icon": "$(plug)"
+      },
+      {
+        "command": "jellyframe.deviceSelect",
+        "title": "%command.deviceSelect%",
+        "icon": "$(symbol-array)"
       },
       {
         "command": "jellyframe.deviceInfo",
@@ -200,12 +206,16 @@
           "group": "device@1"
         },
         {
-          "command": "jellyframe.deviceInfo",
+          "command": "jellyframe.deviceSelect",
           "group": "device@2"
         },
         {
-          "command": "jellyframe.deviceList",
+          "command": "jellyframe.deviceInfo",
           "group": "device@3"
+        },
+        {
+          "command": "jellyframe.deviceList",
+          "group": "device@4"
         }
       ],
       "explorer/context": [

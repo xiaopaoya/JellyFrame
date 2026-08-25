@@ -48,8 +48,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 .\manage-extension.ps1 -Action Update
 ```
 
-脚本需要 Node.js 的 `node`、`npx`（或可用的 `pnpm`）和 VS Code 的 `code` 命令在 PATH 中；也可以通过
-`-NodeCommand`、`-NpxCommand` 或 `-CodeCommand` 传入完整路径。若 PowerShell 阻止本地脚本，可在当前窗口执行
+脚本优先使用 Node.js 的 `vsce`、`npx`（或可用的 `pnpm`）打包；这些工具均不可用时，会自动使用内置 VSIX 打包器。
+安装或更新仍需要 VS Code 的 `code` 命令在 PATH 中；也可以通过 `-CodeCommand` 传入完整路径。若 PowerShell 阻止本地脚本，可在当前窗口执行
 `Set-ExecutionPolicy -Scope Process Bypass`。手动安装时，也可以在 VS Code 的扩展视图中选择“从 VSIX 安装”。
 安装到仓库之外时，扩展会优先从当前工作区向上寻找仓库；仍可在设置中填写 `jellyframe.repoRoot`；`jellyframe.buildDir`
 可选，用于指定桌面运行目录。扩展优先使用 `build/desktop-release/Release`，其次使用
@@ -67,7 +67,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 该入口还可以附加 `.jfcapture` 程控回放，把静态管线诊断和多页面交互路径合并到一份报告。
 需要查看实际画面或手动交互时，请使用“预览”或桌面调试。
 
-`JellyFrame` 活动栏视图按“包检查、调试、报告”提供完整工作流，不依赖当前是否打开编辑器
+`JellyFrame` 活动栏视图将“检查与预览”“交互式调试”“创建与自动化”分组；命令以图标和功能提示表示，
+构建、设备与报告结果则为只读状态，避免混淆。它不依赖当前是否打开编辑器
 或工作区文件。安装新版 VSIX 后，如果旧扩展实例仍在运行，请执行一次“Developer: Reload Window”
 （开发人员：重新加载窗口）。资源管理器中
 右键 `jellyframe.app.json`，或在 App 的 HTML/CSS/manifest 文件编辑器中右键，可以

@@ -14,6 +14,7 @@
   "command.showReport": "JellyFrame：显示最近报告",
   "command.showOutput": "JellyFrame：查看运行日志",
   "command.deviceDiscover": "JellyFrame：发现设备",
+  "command.deviceSelect": "JellyFrame：选择当前设备",
   "command.deviceInfo": "JellyFrame：读取设备身份",
   "command.deviceList": "JellyFrame：列出已安装 App",
   "menu.label": "JellyFrame",
@@ -27,7 +28,7 @@
   "configuration.openCaptureAfterRun": "预览或运行帧脚本生成截图后，自动打开截图。",
   "configuration.pythonPath": "运行 tools/jellyframe_cli.py 使用的 Python 可执行文件。",
   "configuration.defaultTarget": "传递给 JellyFrame CLI 命令的默认 target preset。",
-  "configuration.fontBudget": "字体资源检查使用的默认字形预算。"
-  ,"configuration.deviceProvider": "Device OS provider 可执行文件的绝对路径；安装受支持的 developer image provider 前请留空。"
-  ,"configuration.deviceManifest": "可选的 Developer Image manifest，用于验证发现的设备身份。"
+  "configuration.fontBudget": "字体资源检查使用的默认字形预算。",
+  "configuration.deviceProvider": "Device OS provider 可执行文件的绝对路径；安装受支持的 developer image provider 前请留空。",
+  "configuration.deviceManifest": "可选的 Developer Image manifest，用于验证发现的设备身份。"
 }

@@ -1,6 +1,6 @@
 # JellyFrame Active Roadmap
 
-> Updated: 2026-08-25; Applies to: `0.6.0-dev`; this is the single active plan.
+> Last updated: 2026-08-25; Applies to: 0.6.0-dev; this is the single active plan.
 
 ## Governing Decision
 

@@ -476,7 +476,7 @@ def main() -> int:
         historical_core_result = run_case(exe, ["--app", str(app)])
         require(historical_core_result.returncode != 0,
                 "native app loading must reject a historical Render Core contract")
-        require("minRenderCore must target the configured pre-1.0 Render Core line 0.6.0"
+        require("minRenderCore must target the configured pre-1.0 Render Core line 0.6.1"
                 in historical_core_result.stdout,
                 "native app loading must report the configured Render Core requirement")
 

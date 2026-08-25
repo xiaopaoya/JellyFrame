@@ -1,6 +1,6 @@
 # WS147 Provider 与 VS Code 冒烟验收
 
-> 日期：2026-08-25；适用：`jellyframe-device@0.1.0-dev`、JellyFrame VS Code Tools `0.4.8`；范围：只读发现、身份与 App 列表校验
+> 最后更新：2026-08-25；适用版本：0.6.0-dev；Provider：`jellyframe-device@0.1.0-dev`；VS Code Tools：`0.4.8` 或更新版本；范围：只读发现、身份与 App 列表校验
 
 ## 目的
 

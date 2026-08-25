@@ -58,8 +58,8 @@ extension. The individual actions are also available:
 .\manage-extension.ps1 -Action Update
 ```
 
-The script requires Node.js `node`, `npx` (or an available `pnpm` fallback) and
-the VS Code `code` command on `PATH`; pass `-NodeCommand`, `-NpxCommand` or
+The script prefers Node.js `vsce`, `npx` (or an available `pnpm` fallback) for packaging; when none is available,
+it uses its built-in VSIX packager. Installation and updates still need the VS Code `code` command on `PATH`; pass
 `-CodeCommand` to provide an explicit executable path. If PowerShell blocks local scripts, run
 `Set-ExecutionPolicy -Scope Process Bypass` in the current window. You can still
 use the Extensions view's `Install from VSIX...` action and select the generated
@@ -88,7 +88,8 @@ also offers optional `.jfcapture` programmed playback, merging the static
 pipeline diagnostics with a multi-page interaction path. Use Preview or desktop
 debugging for the actual image and interactive behavior.
 
-The `JellyFrame` Activity Bar view groups package, debugging and report actions.
+The `JellyFrame` Activity Bar view groups check/preview, interactive debugging, and authoring/automation actions.
+Commands have icons and functional tooltips; build, device and report results remain read-only status entries.
 It is always contributed, including when no workspace file is open. After
 installing an updated VSIX, run `Developer: Reload Window` once if the old
 extension instance is still loaded.

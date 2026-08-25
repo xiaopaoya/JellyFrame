@@ -14,6 +14,7 @@
   "command.showReport": "JellyFrame: Show Last Report",
   "command.showOutput": "JellyFrame: View Run Log",
   "command.deviceDiscover": "JellyFrame: Discover Device",
+  "command.deviceSelect": "JellyFrame: Select Device",
   "command.deviceInfo": "JellyFrame: Device Info",
   "command.deviceList": "JellyFrame: List Installed Apps",
   "menu.label": "JellyFrame",
@@ -27,7 +28,7 @@
   "configuration.openCaptureAfterRun": "Open a generated capture after preview or frame-script execution.",
   "configuration.pythonPath": "Python executable used to run tools/jellyframe_cli.py.",
   "configuration.defaultTarget": "Default target preset passed to JellyFrame CLI commands.",
-  "configuration.fontBudget": "Default glyph budget passed to font resource checks."
-  ,"configuration.deviceProvider": "Absolute path to the Device OS provider executable. Leave empty until a supported developer image provider is installed."
-  ,"configuration.deviceManifest": "Optional Developer Image manifest used to verify discovered device identity."
+  "configuration.fontBudget": "Default glyph budget passed to font resource checks.",
+  "configuration.deviceProvider": "Absolute path to the Device OS provider executable. Leave empty until a supported developer image provider is installed.",
+  "configuration.deviceManifest": "Optional Developer Image manifest used to verify discovered device identity."
 }

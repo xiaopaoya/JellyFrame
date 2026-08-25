@@ -3,6 +3,9 @@ const path = require("path");
 const childProcess = require("child_process");
 const vscode = require("vscode");
 const { selectBuildDirectory } = require("./build_profiles");
+const { appendBoundedOutput, commandFailure } = require("./command_diagnostics");
+const { deviceChoice, deviceSummary, discoverySummary, identitySummary } = require("./device_presentation");
+const { desktopBuildPresentation } = require("./status_presentation");
 
 let outputChannel;
 let reportPanel;
@@ -15,6 +18,8 @@ let lastDeviceDiscovery;
 let lastDeviceInfo;
 let lastDeviceApps;
 let lastDeviceEndpoint;
+let activeDeviceOperation;
+let lastDeviceFailure;
 let statusProvider;
 let embeddedDebugSession;
 
@@ -170,34 +175,132 @@ function deviceCliArguments(context, provider) {
   return args;
 }
 
-function discoverDevice(context) {
+function isChinese() {
+  return /^zh(?:-|$)/i.test(vscode.env.language || "");
+}
+
+function commandLabel(options) {
+  return options.failureLabel || options.commandName || (isChinese() ? "JellyFrame 命令" : "JellyFrame command");
+}
+
+function showCommandFailure(failure) {
+  const channel = ensureOutputChannel();
+  channel.appendLine(`[error] ${failure.message}`);
+  const action = isChinese() ? "查看运行日志" : "View run log";
+  vscode.window.showErrorMessage(failure.message, action).then((choice) => {
+    if (choice === action) {
+      showOutputChannel();
+    }
+  });
+}
+
+function invokeCallback(callback, ...argumentsList) {
+  if (!callback) {
+    return undefined;
+  }
+  try {
+    return callback(...argumentsList);
+  } catch (error) {
+    ensureOutputChannel().appendLine(`[error] JellyFrame extension callback failed: ${error.message}`);
+    return error;
+  }
+}
+
+function clearDeviceFailure() {
+  lastDeviceFailure = undefined;
+}
+
+function recordDeviceFailure(operation, failure) {
+  lastDeviceFailure = {
+    operation,
+    resultCode: failure.resultCode,
+    message: failure.message
+  };
+  statusProvider?.refresh();
+}
+
+async function runDeviceCommand(context, operation, args, options = {}) {
+  if (activeDeviceOperation) {
+    const message = isChinese()
+      ? `设备操作正在进行：${activeDeviceOperation}。请等待它完成后再试。`
+      : `A device operation is already running: ${activeDeviceOperation}. Wait for it to finish before retrying.`;
+    ensureOutputChannel().appendLine(`[warning] ${message}`);
+    vscode.window.showWarningMessage(message);
+    return { skipped: true };
+  }
+  activeDeviceOperation = operation;
+  statusProvider?.refresh();
+  try {
+    const endpoint = options.endpointId ? ` · ${options.endpointId}` : "";
+    return await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: `JellyFrame: ${operation}${endpoint}`,
+      cancellable: false
+    }, () => runCliWithOptions(context, args, {
+        ...options,
+        failureLabel: options.failureLabel || operation,
+        onFailure: (failure, outcome) => {
+          recordDeviceFailure(operation, failure);
+          invokeCallback(options.onFailure, failure, outcome);
+        }
+      }));
+  } finally {
+    activeDeviceOperation = undefined;
+    statusProvider?.refresh();
+  }
+}
+
+async function discoverDevice(context) {
   const provider = configuredDeviceProvider(context);
   if (!provider) {
     return;
   }
   const args = deviceCliArguments(context, provider);
   args.push("discover");
-  runCliWithOptions(context, args, {
+  const outcome = await runDeviceCommand(context, isChinese() ? "发现设备" : "Discover device", args, {
     onStdout: (stdout) => {
-      try {
-        const result = JSON.parse(stdout);
-        lastDeviceDiscovery = Array.isArray(result.devices) ? result.devices : [];
-        lastDeviceInfo = undefined;
-        lastDeviceApps = undefined;
-        lastDeviceEndpoint = undefined;
-        statusProvider?.refresh();
-      } catch (_) {
-        lastDeviceDiscovery = undefined;
-        lastDeviceInfo = undefined;
-        lastDeviceApps = undefined;
-        lastDeviceEndpoint = undefined;
-        statusProvider?.refresh();
+      const result = JSON.parse(stdout);
+      if (result?.resultCode !== "ok" || !Array.isArray(result.devices)) {
+        throw new Error("device discovery returned no device list");
       }
+      lastDeviceDiscovery = result.devices;
+      lastDeviceInfo = undefined;
+      lastDeviceApps = undefined;
+      lastDeviceEndpoint = undefined;
+      clearDeviceFailure();
+      statusProvider?.refresh();
+    },
+    onFailure: () => {
+      lastDeviceDiscovery = undefined;
+      lastDeviceInfo = undefined;
+      lastDeviceApps = undefined;
+      lastDeviceEndpoint = undefined;
+      statusProvider?.refresh();
     }
   });
+  if (outcome?.code !== 0 || !Array.isArray(lastDeviceDiscovery)) {
+    return;
+  }
+  const selected = await selectDiscoveredDevice({ forceSelection: lastDeviceDiscovery.length > 1 });
+  const summary = discoverySummary(lastDeviceDiscovery, isChinese());
+  if (selected) {
+    vscode.window.showInformationMessage(`${summary} ${isChinese() ? "当前设备：" : "Selected device: "}${deviceSummary(selected.device, isChinese())}`);
+  } else {
+    vscode.window.showInformationMessage(summary);
+  }
 }
 
-async function selectDiscoveredDevice() {
+function setSelectedDevice(selected) {
+  if (lastDeviceEndpoint === selected.endpointId) {
+    return;
+  }
+  lastDeviceEndpoint = selected.endpointId;
+  lastDeviceInfo = undefined;
+  lastDeviceApps = undefined;
+  statusProvider?.refresh();
+}
+
+async function selectDiscoveredDevice(options = {}) {
   const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
   const devices = Array.isArray(lastDeviceDiscovery)
     ? lastDeviceDiscovery.filter((device) => device && typeof device.endpointId === "string")
@@ -208,25 +311,28 @@ async function selectDiscoveredDevice() {
       : "Discover a configured Device OS endpoint before using device commands.");
     return;
   }
-  const choices = devices.map((device) => ({
-    label: device.endpointId,
-    description: `${device.boardId || "unknown"} ${device.profileId || ""}`.trim(),
-    detail: `${device.imageVersion || "unknown image"} ${device.connected ? (chinese ? "已连接" : "connected") : (chinese ? "未连接" : "disconnected")}`,
-    endpointId: device.endpointId
-  }));
-  const selected = choices.length === 1 ? choices[0] : await vscode.window.showQuickPick(choices, {
-    placeHolder: chinese ? "选择已发现的 JellyFrame Device OS 端点" : "Select a discovered JellyFrame Device OS endpoint"
-  });
+  const choices = devices.map((device) => ({ ...deviceChoice(device, chinese), device }));
+  const existing = choices.find((choice) => choice.endpointId === lastDeviceEndpoint);
+  const selected = existing && !options.forceSelection
+    ? existing
+    : (choices.length === 1 && !options.forceSelection
+    ? choices[0]
+    : await vscode.window.showQuickPick(choices, {
+      placeHolder: chinese ? "选择本次操作的 JellyFrame Device OS 设备" : "Select the JellyFrame Device OS device for this operation",
+      activeItem: existing
+    }));
   if (!selected) {
     return;
   }
-  if (lastDeviceEndpoint !== selected.endpointId) {
-    lastDeviceEndpoint = selected.endpointId;
-    lastDeviceInfo = undefined;
-    lastDeviceApps = undefined;
-    statusProvider?.refresh();
-  }
+  setSelectedDevice(selected);
   return selected;
+}
+
+async function chooseDevice() {
+  const selected = await selectDiscoveredDevice({ forceSelection: true });
+  if (selected) {
+    vscode.window.showInformationMessage((isChinese() ? "当前设备：" : "Selected device: ") + deviceSummary(selected.device, isChinese()));
+  }
 }
 
 async function inspectDevice(context) {
@@ -240,17 +346,25 @@ async function inspectDevice(context) {
   }
   const args = deviceCliArguments(context, provider);
   args.push("info", "--selector", selected.endpointId);
-  runCliWithOptions(context, args, {
+  const outcome = await runDeviceCommand(context, isChinese() ? "读取设备身份" : "Read device identity", args, {
+    endpointId: selected.endpointId,
     onStdout: (stdout) => {
-      try {
-        const result = JSON.parse(stdout);
-        lastDeviceInfo = result?.device && result?.identity ? result : undefined;
-        statusProvider?.refresh();
-      } catch (_) {
-        lastDeviceInfo = undefined;
+      const result = JSON.parse(stdout);
+      if (result?.device?.endpointId !== selected.endpointId || !result.identity) {
+        throw new Error("device identity did not match the selected endpoint");
       }
+      lastDeviceInfo = result;
+      clearDeviceFailure();
+      statusProvider?.refresh();
+    },
+    onFailure: () => {
+      lastDeviceInfo = undefined;
+      statusProvider?.refresh();
     }
   });
+  if (outcome?.code === 0 && lastDeviceInfo?.identity) {
+    vscode.window.showInformationMessage(identitySummary(lastDeviceInfo.device, lastDeviceInfo.identity, isChinese()));
+  }
 }
 
 async function listDeviceApps(context) {
@@ -264,35 +378,41 @@ async function listDeviceApps(context) {
   }
   const args = deviceCliArguments(context, provider);
   args.push("list", "--selector", selected.endpointId);
-  runCliWithOptions(context, args, {
+  const outcome = await runDeviceCommand(context, isChinese() ? "列出已安装 App" : "List installed Apps", args, {
+    endpointId: selected.endpointId,
     onStdout: (stdout) => {
-      try {
-        const result = JSON.parse(stdout);
-        if (result?.device?.endpointId !== selected.endpointId ||
-            !Array.isArray(result.apps) ||
-            !Number.isInteger(result.registryGeneration)) {
-          throw new Error("missing selected-device app list");
-        }
-        lastDeviceApps = {
-          endpointId: selected.endpointId,
-          apps: result.apps,
-          registryGeneration: result.registryGeneration
-        };
-        statusProvider?.refresh();
-      } catch (error) {
-        lastDeviceApps = undefined;
-        ensureOutputChannel().appendLine(`failed to read device app list: ${error.message}`);
-        statusProvider?.refresh();
+      const result = JSON.parse(stdout);
+      if (result?.device?.endpointId !== selected.endpointId ||
+          !Array.isArray(result.apps) ||
+          !Number.isInteger(result.registryGeneration)) {
+        throw new Error("missing selected-device app list");
       }
+      lastDeviceApps = {
+        endpointId: selected.endpointId,
+        apps: result.apps,
+        registryGeneration: result.registryGeneration
+      };
+      clearDeviceFailure();
+      statusProvider?.refresh();
+    },
+    onFailure: () => {
+      lastDeviceApps = undefined;
+      statusProvider?.refresh();
     }
   });
+  if (outcome?.code === 0 && lastDeviceApps) {
+    const text = isChinese()
+      ? `${selected.endpointId}：${lastDeviceApps.apps.length} 个已安装 App，registry generation ${lastDeviceApps.registryGeneration}。`
+      : `${selected.endpointId}: ${lastDeviceApps.apps.length} installed App(s), registry generation ${lastDeviceApps.registryGeneration}.`;
+    vscode.window.showInformationMessage(text);
+  }
 }
 
 function runCli(context, args) {
   return runCliWithOptions(context, args, {});
 }
 
-function runCliWithOptions(context, args, options) {
+function runCliWithOptions(context, args, options = {}) {
   const python = config().get("pythonPath", "python");
   const cli = cliPath(context);
   const channel = ensureOutputChannel();
@@ -301,50 +421,103 @@ function runCliWithOptions(context, args, options) {
     fs.rmSync(options.reportPath, { force: true });
   }
   channel.appendLine(`+ ${[python, ...commandArgs].join(" ")}`);
-  const child = childProcess.spawn(python, commandArgs, {
-    cwd: repoRoot(context),
-    shell: false
-  });
-  let failedToStart = false;
-  let stdout = "";
-  child.stdout.on("data", (chunk) => {
-    const text = chunk.toString();
-    stdout += text;
-    channel.append(text);
-  });
-  child.stderr.on("data", (chunk) => {
-    const text = chunk.toString();
-    channel.append(text);
-  });
-  child.on("error", (error) => {
-    failedToStart = true;
-    channel.appendLine(`JellyFrame command failed to start: ${error.message}`);
-    vscode.window.showErrorMessage(`JellyFrame command failed to start: ${error.message}`);
-  });
-  child.on("close", (code) => {
-    channel.appendLine(`JellyFrame command exited with code ${code}`);
-    if (failedToStart) {
+  return new Promise((resolve) => {
+    let child;
+    let completed = false;
+    let stdout = "";
+    let stderr = "";
+    let stdoutTruncated = false;
+    let stderrTruncated = false;
+
+    const finish = (outcome) => {
+      if (!completed) {
+        completed = true;
+        resolve(outcome);
+      }
+    };
+    const append = (stream, chunk) => {
+      const text = chunk.toString();
+      const captured = appendBoundedOutput(stream === "stdout" ? stdout : stderr, text);
+      if (stream === "stdout") {
+        stdout = captured.text;
+        if (captured.truncated && !stdoutTruncated) {
+          stdoutTruncated = true;
+          channel.appendLine("\n[warning] JellyFrame stdout was truncated after 1 MiB.");
+        }
+      } else {
+        stderr = captured.text;
+        if (captured.truncated && !stderrTruncated) {
+          stderrTruncated = true;
+          channel.appendLine("\n[warning] JellyFrame stderr was truncated after 1 MiB.");
+        }
+      }
+      if (captured.appended) {
+        channel.append(captured.appended);
+      }
+    };
+    const fail = (failure, outcome) => {
+      showCommandFailure(failure);
+      invokeCallback(options.onFailure, failure, outcome);
+      invokeCallback(options.onClose, outcome.code, outcome);
+      finish(outcome);
+    };
+
+    try {
+      child = childProcess.spawn(python, commandArgs, {
+        cwd: repoRoot(context),
+        shell: false
+      });
+    } catch (error) {
+      const failure = commandFailure({ operation: commandLabel(options), chinese: isChinese(), internalError: error.message });
+      fail(failure, { code: undefined, stdout, stderr, failure });
       return;
     }
-    if (options.reportPath && fs.existsSync(options.reportPath)) {
-      loadReport(options.reportPath, options.commandName);
-    }
-    if (options.packageRoot && options.reportPath && fs.existsSync(options.reportPath)) {
-      updateReportDiagnostics(options.packageRoot);
-      showReportPanel(context);
-    }
-    if (code === 0 && options.capture && config().get("openCaptureAfterRun", true)) {
-      openCaptureFile(options.capture);
-    }
-    if (code !== 0) {
-      vscode.window.showErrorMessage(`JellyFrame command failed with code ${code}`);
-    }
-    if (options.onClose) {
-      options.onClose(code);
-    }
-    if (code === 0 && options.onStdout) {
-      options.onStdout(stdout);
-    }
+    child.stdout?.on("data", (chunk) => append("stdout", chunk));
+    child.stderr?.on("data", (chunk) => append("stderr", chunk));
+    child.on("error", (error) => {
+      const failure = commandFailure({ operation: commandLabel(options), stdout, stderr, chinese: isChinese(), internalError: error.message });
+      fail(failure, { code: undefined, stdout, stderr, failure });
+    });
+    child.on("close", (code, signal) => {
+      if (completed) {
+        return;
+      }
+      const outcome = { code, signal, stdout, stderr, stdoutTruncated, stderrTruncated };
+      channel.appendLine(`JellyFrame command exited with code ${code ?? "unknown"}`);
+      if (options.reportPath && fs.existsSync(options.reportPath)) {
+        loadReport(options.reportPath, options.commandName);
+      }
+      if (options.packageRoot && options.reportPath && fs.existsSync(options.reportPath)) {
+        updateReportDiagnostics(options.packageRoot);
+        showReportPanel(context);
+      }
+      if (code !== 0) {
+        const failure = commandFailure({ operation: commandLabel(options), stdout, stderr, chinese: isChinese() });
+        outcome.failure = failure;
+        fail(failure, outcome);
+        return;
+      }
+      if (options.onStdout) {
+        const callbackError = invokeCallback(options.onStdout, stdout);
+        if (callbackError) {
+          const failure = commandFailure({
+            operation: commandLabel(options),
+            stdout,
+            stderr,
+            chinese: isChinese(),
+            internalError: callbackError.message
+          });
+          outcome.failure = failure;
+          fail(failure, outcome);
+          return;
+        }
+      }
+      if (options.capture && config().get("openCaptureAfterRun", true)) {
+        openCaptureFile(options.capture);
+      }
+      invokeCallback(options.onClose, code, outcome);
+      finish(outcome);
+    });
   });
 }
 
@@ -368,35 +541,71 @@ function runDetachedPython(context, script, args, options = {}) {
   const channel = ensureOutputChannel();
   const commandArgs = [script, ...args];
   channel.appendLine(`+ ${[python, ...commandArgs].join(" ")}`);
-  const child = childProcess.spawn(python, commandArgs, {
-    cwd: repoRoot(context),
-    detached: !options.wait,
-    stdio: options.wait ? "pipe" : "ignore",
-    windowsHide: false
-  });
+  let child;
+  let completed = false;
+  let stdout = "";
+  let stderr = "";
+  const finish = (outcome) => {
+    if (!completed) {
+      completed = true;
+      invokeCallback(options.onClose, outcome.code, outcome);
+    }
+  };
+  const append = (stream, chunk) => {
+    const text = chunk.toString();
+    const captured = appendBoundedOutput(stream === "stdout" ? stdout : stderr, text);
+    if (stream === "stdout") {
+      stdout = captured.text;
+    } else {
+      stderr = captured.text;
+    }
+    if (captured.appended) {
+      channel.append(captured.appended);
+    }
+  };
+  try {
+    child = childProcess.spawn(python, commandArgs, {
+      cwd: repoRoot(context),
+      detached: !options.wait,
+      stdio: options.wait ? "pipe" : "ignore",
+      windowsHide: false
+    });
+  } catch (error) {
+    const failure = commandFailure({ operation: options.failureLabel || "JellyFrame debug command", chinese: isChinese(), internalError: error.message });
+    showCommandFailure(failure);
+    finish({ code: undefined, stdout, stderr, failure });
+    return undefined;
+  }
   if (options.wait) {
-    child.stdout.on("data", (chunk) => channel.append(chunk.toString()));
-    child.stderr.on("data", (chunk) => channel.append(chunk.toString()));
+    child.stdout?.on("data", (chunk) => append("stdout", chunk));
+    child.stderr?.on("data", (chunk) => append("stderr", chunk));
   }
   child.on("error", (error) => {
-    channel.appendLine(`JellyFrame debug command failed to start: ${error.message}`);
-    vscode.window.showErrorMessage(`JellyFrame debug command failed to start: ${error.message}`);
+    const failure = commandFailure({ operation: options.failureLabel || "JellyFrame debug command", stdout, stderr, chinese: isChinese(), internalError: error.message });
+    showCommandFailure(failure);
+    finish({ code: undefined, stdout, stderr, failure });
   });
-  child.on("close", (code) => {
-    channel.appendLine(`JellyFrame debug command exited with code ${code}`);
-    if (code !== 0) {
-      vscode.window.showErrorMessage(`JellyFrame debug command failed with code ${code}`);
+  child.on("close", (code, signal) => {
+    if (completed) {
+      return;
     }
-    if (options.capture && code === 0 && config().get("openCaptureAfterRun", true)) {
+    const outcome = { code, signal, stdout, stderr };
+    channel.appendLine(`JellyFrame debug command exited with code ${code ?? "unknown"}`);
+    if (code !== 0) {
+      outcome.failure = commandFailure({ operation: options.failureLabel || "JellyFrame debug command", stdout, stderr, chinese: isChinese() });
+      showCommandFailure(outcome.failure);
+      finish(outcome);
+      return;
+    }
+    if (options.capture && config().get("openCaptureAfterRun", true)) {
       openCaptureFile(options.capture);
     }
-    if (options.onClose) {
-      options.onClose(code);
-    }
+    finish(outcome);
   });
   if (!options.wait) {
     child.unref();
   }
+  return child;
 }
 
 function openCaptureFile(filePath) {
@@ -1634,7 +1843,9 @@ class JellyFrameStatusProvider {
     const hasPackage = Boolean(root);
     const app = hasPackage ? path.basename(root) : "No package selected";
     const selection = nativeBuildDir(this.context, appRequiresScripting(root));
-    const build = selection.buildDirectory || buildDirectoryError(this.context, selection);
+    const buildDirectory = selection.buildDirectory;
+    const build = buildDirectory || buildDirectoryError(this.context, selection);
+    const buildPresentation = desktopBuildPresentation(buildDirectory, /^zh(?:-|$)/i.test(vscode.env.language || ""));
     const pipeline = lastReport?.pipelineDiagnostics?.summary;
     const performance = lastReport?.performanceSummary;
     const hasRenderData = Boolean(lastReport?.pipelineDiagnostics?.format)
@@ -1645,18 +1856,34 @@ class JellyFrameStatusProvider {
     const labels = chinese ? {
       currentApp: "当前 App",
       workflow: "工作流",
+      packageChecks: "检查与预览",
+      interactiveDebugging: "交互式调试",
+      authoring: "创建与自动化",
       reports: "报告与日志",
       environment: "环境",
+      desktopRuntime: "桌面运行时",
+      buildProfile: "构建配置",
+      buildOutput: "输出目录",
+      scriptSupport: "脚本支持",
       device: "设备",
+      deviceActions: "设备操作",
+      deviceStatus: "设备状态",
       discoverDevice: "发现设备",
+      selectDevice: "选择当前设备",
       inspectDevice: "读取设备身份",
       listDeviceApps: "列出已安装 App",
       noDeviceSession: "尚未发现设备",
       connectedDevices: "已连接",
+      selectedDevice: "当前设备",
+      noSelectedDevice: "尚未选择",
       deviceIdentity: "设备身份",
       noDeviceIdentity: "尚未读取",
       installedApps: "已安装 App",
       noInstalledApps: "尚未读取",
+      deviceOperation: "设备操作",
+      deviceReady: "可用",
+      deviceFailure: "失败",
+      deviceBusy: "进行中",
       package: "App 包",
       noPackage: "未识别 App",
       build: "桌面构建",
@@ -1679,22 +1906,52 @@ class JellyFrameStatusProvider {
       performance: "性能摘要",
       measured: "已测量",
       notMeasured: "尚未测量",
-      buildValue: path.basename(build)
+      buildValue: buildPresentation.summary,
+      actionHints: {
+        validate: "快速检查 manifest、入口和本地资源；不启动渲染管线。",
+        check: "运行渲染预检、响应式与字体检查；可选程控回放。",
+        preview: "生成当前页面的静态渲染截图和报告。",
+        debug: "在 VS Code 标签页中运行可交互的桌面壳。",
+        debugExternal: "在独立原生窗口中运行可交互的桌面壳。",
+        playback: "按 .jfcapture 脚本回放交互并生成帧证据。",
+        create: "从官方模板创建一个新的 App 包。",
+        packageResources: "生成供固件或 App Runtime 使用的资源包。",
+        discoverDevice: "通过已配置的 Provider 列出可连接设备。",
+        selectDevice: "在已发现设备中切换本次操作的目标。",
+        inspectDevice: "读取并校验当前设备的 Developer Image 与 Render Core 身份。",
+        listDeviceApps: "读取当前设备已安装 App 与 registry generation。"
+      }
     } : {
       currentApp: "Current App",
       workflow: "Workflow",
+      packageChecks: "Check & Preview",
+      interactiveDebugging: "Interactive Debugging",
+      authoring: "Create & Automate",
       reports: "Reports & Logs",
       environment: "Environment",
+      desktopRuntime: "Desktop Runtime",
+      buildProfile: "Build profile",
+      buildOutput: "Output directory",
+      scriptSupport: "Script support",
       device: "Device",
+      deviceActions: "Device actions",
+      deviceStatus: "Device status",
       discoverDevice: "Discover device",
+      selectDevice: "Select device",
       inspectDevice: "Device info",
       listDeviceApps: "List installed Apps",
       noDeviceSession: "No device discovered",
       connectedDevices: "Connected",
+      selectedDevice: "Selected device",
+      noSelectedDevice: "Not selected",
       deviceIdentity: "Device identity",
       noDeviceIdentity: "Not read",
       installedApps: "Installed Apps",
       noInstalledApps: "Not read",
+      deviceOperation: "Device operation",
+      deviceReady: "Ready",
+      deviceFailure: "Failed",
+      deviceBusy: "In progress",
       package: "App package",
       noPackage: "No App detected",
       build: "Desktop build",
@@ -1717,91 +1974,145 @@ class JellyFrameStatusProvider {
       performance: "Performance summary",
       measured: "Measured",
       notMeasured: "Not measured",
-      buildValue: path.basename(build)
+      buildValue: buildPresentation.summary,
+      actionHints: {
+        validate: "Quickly check the manifest, entry point and local resources without starting Render Core.",
+        check: "Run render preflight, responsive and font checks; optionally replay a capture.",
+        preview: "Render a static capture and report for the current page.",
+        debug: "Run an interactive desktop shell in a VS Code editor tab.",
+        debugExternal: "Run an interactive desktop shell in a separate native window.",
+        playback: "Replay a .jfcapture interaction script and produce frame evidence.",
+        create: "Create a new App package from an official template.",
+        packageResources: "Generate a resource package for firmware or App Runtime use.",
+        discoverDevice: "List connectable devices through the configured Provider.",
+        selectDevice: "Change the target for subsequent device operations.",
+        inspectDevice: "Read and validate the selected Developer Image and Render Core identity.",
+        listDeviceApps: "Read installed Apps and registry generation from the selected device."
+      }
     };
     return [
       this.group(labels.currentApp, "package", [
-        this.item(hasPackage ? app : labels.noPackage,
-          hasPackage ? labels.package : labels.noPackage, root, "jellyframe.debug", "folder-opened"),
+        this.statusItem(hasPackage ? app : labels.noPackage,
+          hasPackage ? labels.package : labels.noPackage,
+          hasPackage ? root : labels.noPackage, "folder-opened"),
       ]),
       this.group(labels.workflow, "rocket", [
-        this.item(labels.validate, "", root, "jellyframe.validate", "check"),
-        this.item(labels.check, "", root, "jellyframe.check", "check-all"),
-        this.item(labels.preview, "", root, "jellyframe.preview", "preview"),
-        this.item(labels.debug, "", root, "jellyframe.debug", "debug-alt"),
-        this.item(labels.debugExternal, "", root, "jellyframe.debugExternal", "external-link"),
-        this.item(labels.playback, "", root, "jellyframe.runFrameScript", "debug-alt"),
-        this.item(labels.create, "", undefined, "jellyframe.newFromTemplate", "new-file"),
-        this.item(labels.packageResources, "", root, "jellyframe.package", "package"),
+        ...(hasPackage ? [
+          this.group(labels.packageChecks, undefined, [
+            this.commandItem(labels.validate, labels.actionHints.validate, "jellyframe.validate", "check", root),
+            this.commandItem(labels.check, labels.actionHints.check, "jellyframe.check", "check-all", root),
+            this.commandItem(labels.preview, labels.actionHints.preview, "jellyframe.preview", "preview", root),
+          ]),
+          this.group(labels.interactiveDebugging, undefined, [
+            this.commandItem(labels.debug, labels.actionHints.debug, "jellyframe.debug", "debug-alt", root),
+            this.commandItem(labels.debugExternal, labels.actionHints.debugExternal, "jellyframe.debugExternal", "external-link", root),
+            this.commandItem(labels.playback, labels.actionHints.playback, "jellyframe.runFrameScript", "play-circle", root),
+          ]),
+        ] : []),
+        this.group(labels.authoring, undefined, [
+          this.commandItem(labels.create, labels.actionHints.create, "jellyframe.newFromTemplate", "new-file"),
+          ...(hasPackage ? [this.commandItem(labels.packageResources, labels.actionHints.packageResources, "jellyframe.package", "package", root)] : []),
+        ]),
       ]),
       this.group(labels.reports, "report", [
-        this.item(labels.openReport, lastReport ? labels.reportReady : labels.noReport,
-          undefined, "jellyframe.showReport", "output"),
-        this.item(labels.openCapture,
-          lastCapturePath ? path.basename(lastCapturePath) : labels.noReport,
-          lastCapturePath, "jellyframe.openCapture", "open-preview"),
-        this.item(labels.showOutput, "", undefined, "jellyframe.showOutput", "output"),
-        this.item(chinese ? "管线诊断" : "Pipeline diagnostics", labels.diagnostics),
-        this.item(labels.performance, hasRenderData && performance?.rating ? `${labels.measured}: ${performance.rating}` : labels.notMeasured,
-          undefined, undefined, "dashboard"),
+        ...(lastReport ? [this.commandItem(labels.openReport, labels.reportReady, "jellyframe.showReport", "output")] : []),
+        ...(lastCapturePath ? [this.commandItem(labels.openCapture, path.basename(lastCapturePath), "jellyframe.openCapture", "open-preview")] : []),
+        this.commandItem(labels.showOutput, chinese ? "打开 JellyFrame 命令与运行日志。" : "Open JellyFrame command and runtime logs.", "jellyframe.showOutput", "output"),
+        this.statusItem(chinese ? "管线诊断" : "Pipeline diagnostics", labels.diagnostics, labels.diagnostics, "pulse"),
+        this.statusItem(labels.performance, hasRenderData && performance?.rating ? `${labels.measured}: ${performance.rating}` : labels.notMeasured,
+          hasRenderData && performance?.rating ? `${labels.performance}: ${performance.rating}` : labels.notMeasured, "dashboard"),
       ]),
       this.group(labels.environment, "settings-gear", [
-        this.item(labels.build, labels.buildValue, build, "jellyframe.listBuilds", "server-environment"),
-        this.item(chinese ? "脚本运行时" : "Script runtime",
-          appRequiresScripting(root || "") ? (chinese ? "已启用" : "Enabled") : (chinese ? "未启用" : "Not enabled"),
-          undefined, undefined, "symbol-event"),
+        this.group(labels.desktopRuntime, "server-environment", [
+          this.statusItem(labels.build, labels.buildValue, buildPresentation.summary, "server-environment"),
+          this.statusItem(labels.buildProfile, buildPresentation.profile, buildPresentation.profile, "settings-gear"),
+          this.statusItem(labels.buildOutput, buildPresentation.output, buildPresentation.output, "folder"),
+          this.statusItem(labels.scriptSupport, buildPresentation.scripting, buildPresentation.scripting, "symbol-event"),
+          this.commandItem(chinese ? "选择或查看构建" : "Choose or inspect builds",
+            chinese ? "显示可用桌面构建，并帮助确认当前选择。" : "Show available desktop builds and confirm the current selection.",
+            "jellyframe.listBuilds", "list-tree"),
+        ]),
       ]),
       this.group(labels.device, "plug", [
-        this.item(labels.discoverDevice, "", undefined, "jellyframe.deviceDiscover", "plug"),
-        this.item(labels.inspectDevice, "", undefined, "jellyframe.deviceInfo", "info"),
-        this.item(labels.listDeviceApps, "", undefined, "jellyframe.deviceList", "list-tree"),
-        this.item(labels.connectedDevices,
+        this.group(labels.deviceActions, "plug", [
+          this.commandItem(labels.discoverDevice, labels.actionHints.discoverDevice, "jellyframe.deviceDiscover", "plug"),
+          ...(Array.isArray(lastDeviceDiscovery) && lastDeviceDiscovery.length > 1
+            ? [this.commandItem(labels.selectDevice, labels.actionHints.selectDevice, "jellyframe.deviceSelect", "symbol-array")]
+            : []),
+          ...(lastDeviceEndpoint
+            ? [
+              this.commandItem(labels.inspectDevice, labels.actionHints.inspectDevice, "jellyframe.deviceInfo", "info"),
+              this.commandItem(labels.listDeviceApps, labels.actionHints.listDeviceApps, "jellyframe.deviceList", "list-tree")
+            ]
+            : []),
+        ]),
+        this.group(labels.deviceStatus, "pulse", [
+          this.statusItem(labels.connectedDevices,
           Array.isArray(lastDeviceDiscovery)
             ? `${lastDeviceDiscovery.filter((device) => device.connected).length}/${lastDeviceDiscovery.length}`
             : labels.noDeviceSession,
-          undefined, undefined, "device-mobile"),
-        this.item(labels.deviceIdentity,
+          Array.isArray(lastDeviceDiscovery) ? discoverySummary(lastDeviceDiscovery, chinese) : labels.noDeviceSession,
+          "device-mobile"),
+          this.statusItem(labels.selectedDevice,
+          lastDeviceEndpoint || labels.noSelectedDevice,
+          lastDeviceEndpoint ? (chinese ? "后续设备操作会使用此端点。" : "Subsequent device operations use this endpoint.") : labels.noSelectedDevice,
+          "target"),
+          this.statusItem(labels.deviceIdentity,
           lastDeviceInfo?.identity
             ? `${lastDeviceInfo.identity.renderCoreVersion || "?"} / ABI ${lastDeviceInfo.identity.renderCoreAbi ?? "?"}`
             : labels.noDeviceIdentity,
-          undefined, undefined, "verified"),
-        this.item(labels.installedApps,
+          lastDeviceInfo?.identity ? identitySummary(lastDeviceInfo.device, lastDeviceInfo.identity, chinese) : labels.noDeviceIdentity,
+          "verified"),
+          this.statusItem(labels.installedApps,
           lastDeviceApps
             ? `${lastDeviceApps.apps.length} · gen ${lastDeviceApps.registryGeneration}`
             : labels.noInstalledApps,
-          undefined, undefined, "library"),
-        ...(lastDeviceApps?.apps || []).map((app) => this.item(
+          lastDeviceApps ? (chinese ? "已读取当前设备的安装注册表。" : "The selected device installation registry was read.") : labels.noInstalledApps,
+          "library"),
+          this.statusItem(labels.deviceOperation,
+          activeDeviceOperation
+            ? `${labels.deviceBusy}: ${activeDeviceOperation}`
+            : (lastDeviceFailure
+              ? `${labels.deviceFailure}: ${lastDeviceFailure.operation} · ${lastDeviceFailure.resultCode}`
+              : labels.deviceReady),
+          lastDeviceFailure?.message || labels.deviceReady,
+          activeDeviceOperation ? "sync~spin" : (lastDeviceFailure ? "warning" : "pass")),
+          ...(lastDeviceApps?.apps || []).map((app) => this.statusItem(
           app.appId || "unknown app",
           `${app.versionName || "?"} · ${app.state || "?"}${app.rollbackAvailable ? " · rollback" : ""}`,
-          undefined, undefined, "package"
-        )),
+          app.appId || "unknown app", "package"
+          )),
+        ]),
       ]),
     ];
   }
 
   group(label, icon, children) {
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Expanded);
-    item.iconPath = new vscode.ThemeIcon(icon);
+    item.iconPath = icon ? new vscode.ThemeIcon(icon) : undefined;
     item.children = children;
     item.contextValue = "jellyframe.group";
     return item;
   }
 
-  item(label, description, resource, command, icon) {
+  commandItem(label, description, command, icon, resource) {
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
     item.description = description || undefined;
-    item.tooltip = resource || description || label;
+    item.tooltip = description || label;
     item.iconPath = icon ? new vscode.ThemeIcon(icon) : undefined;
-    if (resource && fs.existsSync(resource)) {
-      item.resourceUri = vscode.Uri.file(resource);
-    }
-    if (command) {
-      item.command = {
-        command,
-        title: label,
-        arguments: resource ? [vscode.Uri.file(resource)] : []
-      };
-    }
+    item.command = {
+      command,
+      title: label,
+      arguments: resource ? [vscode.Uri.file(resource)] : []
+    };
+    return item;
+  }
+
+  statusItem(label, description, tooltip, icon) {
+    const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+    item.description = description || undefined;
+    item.tooltip = tooltip || description || label;
+    item.iconPath = icon ? new vscode.ThemeIcon(icon) : undefined;
     return item;
   }
 }
@@ -2120,6 +2431,7 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),
     vscode.commands.registerCommand("jellyframe.showOutput", () => showOutputChannel()),
     vscode.commands.registerCommand("jellyframe.deviceDiscover", () => discoverDevice(context)),
+    vscode.commands.registerCommand("jellyframe.deviceSelect", () => chooseDevice()),
     vscode.commands.registerCommand("jellyframe.deviceInfo", () => inspectDevice(context)),
     vscode.commands.registerCommand("jellyframe.deviceList", () => listDeviceApps(context))
   );
