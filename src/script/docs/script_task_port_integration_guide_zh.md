@@ -58,7 +58,7 @@ bridge 会在调用 copy/release callback 前验证 result handle 仍存在、�
 若该 sealed lease 已失效，worker runtime 仍必须以空 payload 向已登记的 JS callback 交付一次
 `Failed` completion（`errorCode=LeaseRejected`），不能遗留一个永久等待的 callback。
 
-`JerryScriptRuntimeOptions::max_service_callbacks` 是 worker-local callback 的独立上限，默认 16。
+`ScriptRuntimeOptions::max_service_callbacks` 是 worker-local callback 的独立上限，默认 16。
 port 应将其设为不大于 `service_request_mailbox.max_packets` 与 bridge/service tombstone 容量中的最小值；
 超限请求在 worker 内被拒绝，不得产生 outbound request packet。运行时统计的
 `service_callback_count` 可用于确认 callback 在 completion、cancel 或 worker stop 后归零。
@@ -119,7 +119,7 @@ ID、`DisplayCommand*` 或 worker 侧 target 地址。
 实机报告已补齐 launch/fail/recover、touch-to-frame、completion cancel、late completion、wrapper
 teardown 和 mixed soak 证据，port 可以按本指南接入真实脚本 App。
 
-这些证据只关闭当前 P3 合同，不把同线程 `JerryScriptRuntime` 变成可跨 task 共享的对象，也不证明
+这些证据只关闭当前 P3 合同，不把同线程 `ScriptRuntime` 变成可跨 task 共享的对象，也不证明
 任意其他 SoC、panel、codec 或产品级脚本生态。新 port 仍必须复用 value-only packet、session generation、
 sealed lease 和 C-safe worker boundary；不得把 `Node*`、JerryScript value、layer/display 指针或 host
 handle 通过任务 mailbox 传递。

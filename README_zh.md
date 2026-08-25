@@ -162,7 +162,7 @@ python tools\jellyframe_cli.py device-reference --store build\device-reference l
 ## 可选脚本构建
 
 脚本能力是可选的。除非显式设置 `JELLYFRAME_BUILD_SCRIPTING=ON`，否则
-`jellyframe_render_core` 不依赖 JerryScript。
+`jellyframe_render_core` 不依赖脚本后端。当前后端在 configure 时选为 `jerryscript`。
 
 ```powershell
 git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
@@ -171,6 +171,7 @@ python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_H
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
 cmake -S . -B build/desktop-scripting-release `
   -DJELLYFRAME_BUILD_SCRIPTING=ON `
+  -DJELLYFRAME_SCRIPT_ENGINE=jerryscript `
   -DJERRYSCRIPT_ROOT="$jerryRoot"
 cmake --build build/desktop-scripting-release --config Release
 ```

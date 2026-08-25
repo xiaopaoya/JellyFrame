@@ -5,7 +5,7 @@
 #include "app_runtime/script_task_input_codec.h"
 #include "app_runtime/script_task_service_request_codec.h"
 #include "render_core/budget.h"
-#include "script/jerryscript_runtime.h"
+#include "script/script_runtime.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -47,7 +47,7 @@ struct ScriptTaskWorkerRuntimeFatalRecord {
 
 struct ScriptTaskWorkerRuntimeOptions {
     HostBudgets budgets;
-    JerryScriptRuntimeOptions script;
+    ScriptRuntimeOptions script;
     Rect viewport;
     ScriptTaskAppFrameCodecOptions frame_codec;
     ScriptTaskInputCodecOptions input_codec;
@@ -83,7 +83,7 @@ struct ScriptTaskWorkerRuntimeStepResult {
     ScriptTaskAppFramePublishResult frame;
 };
 
-// Worker-task-only runtime. The object owns all DOM, JerryScript and pipeline
+// Worker-task-only runtime. The object owns all DOM, selected script backend and pipeline
 // objects. Its public surface contains only value packets and scalar telemetry;
 // no Node, realm, layer or renderer address can escape to the port adapter.
 class ScriptTaskWorkerRuntime final {
@@ -182,7 +182,7 @@ private:
     bool initialized_ = false;
     bool stopped_ = false;
     DomOwner document_owner_;
-    std::unique_ptr<JerryScriptRuntime> runtime_;
+    std::unique_ptr<ScriptRuntime> runtime_;
     std::unique_ptr<StyleResolver> style_resolver_;
     RenderObjectPtr render_tree_;
     LayoutBoxPtr layout_tree_;

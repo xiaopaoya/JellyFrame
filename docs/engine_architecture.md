@@ -1,6 +1,6 @@
 # Engine Architecture
 
-> Last updated: 2026-08-19; Applies to: 0.6.0-dev
+> Last updated: 2026-08-25; Applies to: 0.6.0-dev
 
 
 JellyFrame is structured after the broad shape used by Blink, WebKit and Gecko, but
@@ -14,8 +14,32 @@ The source tree is split into three hardware-neutral subprojects:
 - `src/app_runtime` / `jellyframe_app_runtime`: installable-app lifecycle and
   optional host-service queues. It depends on `render_core` for shared host
   capability and budget types.
-- `src/script` / `jellyframe_script`: optional JerryScript bridge. It can be
+- `src/script` / `jellyframe_script`: optional script-runtime bridge. It can be
   left out of embedded builds.
+
+## Script Runtime Boundary
+
+`src/script/script_runtime.h` owns the framework-facing script contract:
+document binding, host services, timers, animation callbacks, bounded failures,
+statistics and worker-facing lifecycle operations. `ScriptTaskWorkerRuntime`,
+the desktop shell and other general consumers use only this contract and its
+factory. They neither include a third-party engine header nor exchange engine
+values.
+
+`JELLYFRAME_SCRIPT_ENGINE` selects one implementation at CMake configure time.
+The current tree supplies the `jerryscript` implementation in
+`jerryscript_runtime.*`; its discovery, headers and libraries are isolated in
+`cmake/jellyframe_script_backend_jerryscript.cmake` and remain private to the
+`jellyframe_script` target. The backend factory is fixed by the build. There is
+no runtime selection, package-declared engine, generic JS-value conversion or
+per-callback adapter dispatch.
+
+This boundary deliberately does not make a new backend a superficial wrapper.
+Any additional backend must own its realm, wrappers, callbacks and values
+natively, implement the same bounded `ScriptRuntime` contract and pass the
+behavior, watchdog, worker-ownership and recovery suites before it can enter a
+release profile. The abstraction is therefore outside JavaScript hot paths;
+host-to-runtime virtual calls occur only at lifecycle/frame boundaries.
 
 The first history-preserving Render Core repository now exists at
 [`xiaopaoya/JellyFrame-Render-Core`](https://github.com/xiaopaoya/JellyFrame-Render-Core).
@@ -114,9 +138,9 @@ ownership model:
 | Future repository | Owns | Release rhythm | Current state |
 | --- | --- | --- | --- |
 | `jellyframe-render-core` | HTML/CSS/DOM, layout, paint, input and opt-in feature families | Frequent optimization and compatibility releases | Physical repository created; first signed `v0.6.0`, currently locked `v0.6.1`, standalone CI, install/export and package-consumer boundaries are verified. |
-| `jellyframe` | App Runtime, Japp format, JerryScript binding, desktop shell and author tools | Slower releases with App compatibility discipline | Current Runtime source boundary; accepts a locked Core package or in-tree Core |
+| `jellyframe` | App Runtime, Japp format, script-runtime binding, desktop shell and author tools | Slower releases with App compatibility discipline | Current Runtime source boundary; accepts a locked Core package or in-tree Core |
 | `jellyframe-device-os` | Launcher, registry, Device Runtime, JFDP, board ports and official images | Experimental hardware-driven releases | Not physically extracted; D0 contracts remain in transitional locations |
-| JerryScript | Third-party scripting engine | Upstream commit/tag cadence | Optional dependency, locked by the Runtime build/port owner |
+| Current script backend | Third-party engine selected at build time | Upstream commit/tag cadence | Current implementation is JerryScript; it is an optional dependency locked by the Runtime/port build owner |
 
 `src/device_runtime_contracts/device_install_transaction.*` and
 `src/device_runtime_contracts/device_runtime_protocol.*` are a deliberate D0
@@ -283,7 +307,7 @@ source order, then runs selector matching and cascade comparison.
   Core fallback is tiny, while the Win32 browser uses GDI for both measurement
   and painting.
 - Event dispatch is platform-neutral. Core users can attach C++ callbacks;
-  optional JerryScript builds also bind the documented `addEventListener` and
+  optional script-runtime builds also bind the documented `addEventListener` and
   `on*` handler subset through the same event path.
 
 ## Deferred Engineering Areas

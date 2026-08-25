@@ -70,7 +70,7 @@ void ScriptTaskWorkerRuntime::stop() {
     initialized_ = false;
     service_gateway_available_ = false;
     active_supervisor_ = nullptr;
-    // JerryScript wrappers must die before their private document. Both are
+    // Script-backend wrappers must die before their private document. Both are
     // worker-owned, so this ordering never requires another task to help.
     runtime_.reset();
     input_controller_.reset();
@@ -149,7 +149,7 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::strin
     CssParser css_parser;
     Stylesheet stylesheet = css_parser.parse(std::string(css), css_parser_options_from_budgets(options_.budgets));
     document_owner_.set_root(std::move(parsed.document));
-    runtime_ = std::make_unique<JerryScriptRuntime>(options_.script);
+    runtime_ = create_script_runtime(options_.script);
     runtime_->bind_document(*document_owner_.root());
     runtime_->bind_script_service_gateway(submit_service_request, this, cancel_service_request);
     service_gateway_available_ = true;
@@ -173,7 +173,7 @@ ScriptEvaluationResult ScriptTaskWorkerRuntime::eval(std::string_view source, st
                       : ScriptTaskWorkerRuntimeFatalReason::ScriptException);
         (void) runtime_->take_script_callback_failure();
     } else if (consume_callback_failure()) {
-        // A callback failure is terminal even when JerryScript returned a
+        // A callback failure is terminal even when the selected backend returned a
         // successful value for the surrounding worker operation.
     } else if (has_dirty_document() && !rebuild_pipeline()) {
         set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);

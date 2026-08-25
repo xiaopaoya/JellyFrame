@@ -13,7 +13,7 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 ## Current Baseline
 
 - The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository owns the physical Core branch. The first signed `v0.6.0` release is historical; Runtime `0.6.0-dev` now locks Core `v0.6.1`, ABI `1` and source identity `105d0166...b797c52b`. CI downloads that release artifact, verifies archive SHA-256 `f9d24aca...e18c7`, installs it and runs the Runtime package-consumer tests. The in-tree provider remains only for synchronized local development. For Core ABI `1`, installed `render_core/` headers are the C++ consumer surface; there is no hidden header tier or C ABI. On 2026-08-19, Core-only/Device-contract CMake boundary coverage was added: Core-only cannot create contracts targets/tests, contracts-only remains independently buildable, and the archive/install/package/source-override loop was rechecked.
-- App Runtime has `.jfapp` lifecycle, registry reference semantics, optional JerryScript and the script-worker session/generation/epoch, value-only frame/input/service/fatal protocol. WS147 P3 worker, service, recovery and mixed-soak evidence is closed.
+- App Runtime has `.jfapp` lifecycle, registry reference semantics, an optional selected script backend and the script-worker session/generation/epoch, value-only frame/input/service/fatal protocol. WS147 P3 worker, service, recovery and mixed-soak evidence is closed.
 - WS147 value-frame-v2 dirty/recovery passes. The full-screen rounded-gradient workload is not 30 FPS. Canvas has no real host binding and remains `not-tested`.
 - JFDP/1 framing, capability, typed status/progress payloads and staged-install contracts have the isolated `device_runtime_contracts` source owner. WS147 native USB Serial/JTAG wire, A1-2 persistent lifecycle acceptance and the provider handoff are closed. The `provider-handoff-afdcf75-20260821` report passes same-image Identity matching, real in-flight cancellation, durable update/rollback/remove and 30 mixed cycles; the versioned `jellyframe-device@0.1.1-dev` provider is delivered and declares the lifecycle UI capabilities. `0.1.0-dev` remains only as the read-only `discover/info/list` baseline. The Developer Image baseline has a strict manifest and hash-verified factory recovery image; this still does not prove the clean-machine VS Code product workflow or installed-App panel/input behavior.
 
@@ -74,6 +74,23 @@ Exit: all consumers use Core only through public packages/headers; Runtime/port 
 A Core release contains sources, headers, CMake package, feature registry/profile schema and provenance. It is not one fixed full-feature firmware: Device OS selects a build-time profile, and app feature negotiation rejects unavailable features. `.jfapp` files never ship native modules.
 
 Physical Core repository migration is complete. The first independently released Core is signed, reproducible and consumed by a locked Runtime build; the Core/Runtime B1 exit is closed. The future Device OS must consume the same provenance contract before its own physical migration. Device OS, ports and launcher then migrate together, not piecemeal.
+
+### B2: Script Runtime Backend Boundary
+
+The Runtime owns the documented JavaScript/DOM/service semantics while a selected
+script backend owns its realm, wrappers, callbacks and native values.
+`ScriptRuntime` is the framework-facing contract; its factory is selected at
+configure time through `JELLYFRAME_SCRIPT_ENGINE`. The current implementation is
+JerryScript, but it is no longer a public dependency of worker or desktop-host
+code. Engine discovery and linkage remain backend-private.
+
+This is not a runtime plugin system. A build contains exactly one backend; apps
+cannot request or bundle an engine, and hot callback/value paths must not pass
+through a generic conversion layer. A later backend candidate needs an explicit
+compatibility/resource RFC, a native implementation of the complete contract,
+behavior/watchdog/ownership/recovery parity, desktop benchmark comparison and
+target-specific acceptance before any default changes. External developer
+material must not imply a preferred future backend before that evidence exists.
 
 ## Track C: Render Core Capability Evolution
 

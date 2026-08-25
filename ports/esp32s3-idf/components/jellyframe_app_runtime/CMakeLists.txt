@@ -1,6 +1,11 @@
 set(JELLYFRAME_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../..")
 set(JELLYFRAME_COMPONENT_REQUIRES jellyframe_render_core)
 set(JELLYFRAME_SCRIPT_INCLUDE_DIRS)
+set(JELLYFRAME_SCRIPT_BACKEND_SOURCES)
+
+if(NOT DEFINED JELLYFRAME_SCRIPT_ENGINE)
+    set(JELLYFRAME_SCRIPT_ENGINE "jerryscript")
+endif()
 
 if(DEFINED JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
     message(FATAL_ERROR
@@ -37,8 +42,17 @@ if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME)
             message(FATAL_ERROR
                 "real script-app acceptance requires JELLYFRAME_BUILD_SCRIPTING=ON")
         endif()
-        list(APPEND JELLYFRAME_SCRIPT_TASK_SOURCES
+        if(NOT JELLYFRAME_SCRIPT_ENGINE STREQUAL "jerryscript")
+            message(FATAL_ERROR
+                "ESP32-S3 currently provides only the jerryscript script backend; "
+                "got JELLYFRAME_SCRIPT_ENGINE='${JELLYFRAME_SCRIPT_ENGINE}'")
+        endif()
+        # The engine-specific source and IDF component are selected once at
+        # configure time. Worker and frame protocols remain engine-neutral.
+        list(APPEND JELLYFRAME_SCRIPT_BACKEND_SOURCES
             "${JELLYFRAME_ROOT}/src/script/jerryscript_runtime.cpp"
+        )
+        list(APPEND JELLYFRAME_SCRIPT_TASK_SOURCES
             "${JELLYFRAME_ROOT}/src/script/script_task_worker_runtime.cpp"
         )
         list(APPEND JELLYFRAME_COMPONENT_REQUIRES jellyframe_jerryscript)
@@ -70,6 +84,7 @@ idf_component_register(
         "${JELLYFRAME_ROOT}/src/app_runtime/system_events.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/xml_http_request.cpp"
         ${JELLYFRAME_SCRIPT_TASK_SOURCES}
+        ${JELLYFRAME_SCRIPT_BACKEND_SOURCES}
     INCLUDE_DIRS
         "${JELLYFRAME_ROOT}/src"
         ${JELLYFRAME_SCRIPT_INCLUDE_DIRS}

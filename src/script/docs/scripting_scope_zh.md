@@ -1,11 +1,11 @@
 # 脚本能力范围
 
-> 最后更新：2026-08-04；适用版本：0.5.0
+> 最后更新：2026-08-25；适用版本：0.6.0-dev
 
 JellyFrame 的脚本能力保持小型、可选、有界。目标是让嵌入式 app UI 真正可用，而不是一次性继承完整浏览器
 API 表面。
 
-本文件描述同线程宿主和 Win32 验收的 `JerryScriptRuntime` 行为。它直接绑定 `Node`，因此不能
+本文件描述同线程宿主和 Win32 验收的行为。选定的 `ScriptRuntime` 直接绑定 `Node`，因此不能
 被 port 拆到独立 RTOS task 后继续传递 DOM、wrapper 或渲染对象。真实脚本 App 的多任务运行必须
 遵守 `cross_task_ownership_contract_zh.md`：worker 私有 DOM/realm，UI task 只消费密封值帧，
 supervisor 持有 session、service、lease 和 fatal recovery。
@@ -13,16 +13,18 @@ supervisor 持有 session、service、lease 和 fatal recovery。
 ## Runtime Shell
 
 - 由 `JELLYFRAME_BUILD_SCRIPTING=ON` 控制的可选 `jellyframe_script` target。
+- `JELLYFRAME_SCRIPT_ENGINE` 在 CMake configure 时选择唯一后端。当前源码树只提供
+  `jerryscript`；App 不会也不能选择引擎。
 - 由 `JELLYFRAME_BUILD_SCRIPTING=ON` 和
   `JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON` 共同控制的可选
   `jellyframe_script_task_runtime` target。
 - `JERRYSCRIPT_ROOT` 可以指向官方 JerryScript checkout，例如 `third_party/jerryscript`。
-- `JerryScriptRuntime` 管理 JerryScript 生命周期。
+- `ScriptRuntime` 是宿主契约；当前 JerryScript 后端私有地管理其原生生命周期和值。
 - `eval(source, source_name)` 执行 classic JavaScript 源码。
 - 返回字符串化后的成功结果，或字符串化后的异常结果。
 - 同一进程内可重复初始化/清理；当前实现同一时间只允许一个 runtime 存活。
 - `jellyframe_desktop_shell --script file.js` 用于桌面验收。
-- 可选执行 watchdog：当 `JerryScriptRuntimeOptions` 或 `HostBudgets` 将
+- 可选执行 watchdog：当 `ScriptRuntimeOptions` 或 `HostBudgets` 将
   `max_execution_check_count` 设为大于 0，且链接的 JerryScript 使用
   `JERRY_VM_HALT=ON` 构建时，失控的 eval 和 JS callback 会被中断，并抛出稳定的
   `script execution budget exceeded` 异常。若 JerryScript 未启用该特性，runtime 会报告
@@ -98,7 +100,7 @@ supervisor 持有 session、service、lease 和 fatal recovery。
 - `setTimeout(callback, ms)` 和 `clearTimeout(id)`。
 - `setInterval(callback, ms)` 和 `clearInterval(id)`。
 - Timer callback 必须是函数。字符串 eval timer 和额外 callback 参数被刻意排除。
-- Timer 通过 `JerryScriptRuntime::pump_timers(now_ms, max_callbacks)` 由宿主泵动，
+- Timer 通过 `ScriptRuntime::pump_timers(now_ms, max_callbacks)` 由宿主泵动，
   因此嵌入式移植层可以提供自己的时钟源和单帧预算。
 - Timer callback 使用与直接 eval 相同的可选执行 watchdog。
 - Win32 browser shell 通过桌面 `WM_TIMER` 泵动 timer，并在 callback 弄脏 DOM 后重绘。
@@ -108,7 +110,7 @@ supervisor 持有 session、service、lease 和 fatal recovery。
 - JerryScript 构建中暴露 `requestAnimationFrame(callback)` 和
   `cancelAnimationFrame(id)`。
 - Callback 是 one-shot，通过
-  `JerryScriptRuntime::pump_animation_frame(now_ms, max_callbacks)` 由宿主泵动。
+  `ScriptRuntime::pump_animation_frame(now_ms, max_callbacks)` 由宿主泵动。
 - Callback 会收到宿主毫秒时间戳。它应修改 DOM/style，并让 dirty flags 驱动 repaint。
 - 当 app 处于后台、suspended、息屏或低功耗状态时，宿主可以把 animation callback/FPS 预算设为 0。
 - Render core 已支持 CSS `transition` 子集：`opacity`、`transform:

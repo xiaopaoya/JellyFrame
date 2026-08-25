@@ -1,13 +1,14 @@
 # Scripting Scope
 
-> Last updated: 2026-08-04; Applies to: 0.5.0
+> Last updated: 2026-08-25; Applies to: 0.6.0-dev
 
 JellyFrame scripting is intentionally small and optional. The engine should
 become useful for embedded app UI without inheriting the full browser API
 surface.
 
-This document describes same-thread hosts and Win32 validation. `JerryScriptRuntime` directly binds
-`Node` objects, so a port must not place it in a separate RTOS task and pass DOM, wrappers or renderer
+This document describes same-thread hosts and Win32 validation. The selected
+`ScriptRuntime` directly binds `Node` objects, so a port must not place it in a
+separate RTOS task and pass DOM, wrappers or renderer
 objects across the boundary. A real multi-task script App instead follows
 `cross_task_ownership_contract.md`: the worker owns its DOM/realm, the UI task consumes sealed value
 frames, and the supervisor owns session, service, lease and fatal recovery.
@@ -15,16 +16,19 @@ frames, and the supervisor owns session, service, lease and fatal recovery.
 ## Runtime Shell
 
 - Optional `jellyframe_script` target behind `JELLYFRAME_BUILD_SCRIPTING=ON`.
+- `JELLYFRAME_SCRIPT_ENGINE` selects one backend when CMake configures. The
+  current source tree provides `jerryscript`; apps do not choose an engine.
 - Optional `jellyframe_script_task_runtime` target behind both
   `JELLYFRAME_BUILD_SCRIPTING=ON` and `JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON`.
 - `JERRYSCRIPT_ROOT` can point at an official JerryScript checkout, for example
   `third_party/jerryscript`.
-- JerryScript lifecycle owned by `JerryScriptRuntime`.
+- `ScriptRuntime` is the host contract; the current JerryScript backend owns
+  its native lifecycle and values privately.
 - `eval(source, source_name)` for classic JavaScript source text.
 - Stringified success result and stringified exception result.
 - Repeated initialize/shutdown in one process, one active runtime at a time.
 - `jellyframe_desktop_shell --script file.js` for desktop acceptance.
-- Optional execution watchdog: when `JerryScriptRuntimeOptions` or
+- Optional execution watchdog: when `ScriptRuntimeOptions` or
   `HostBudgets` set `max_execution_check_count` above zero and the linked
   JerryScript library was built with `JERRY_VM_HALT=ON`, runaway evals and JS
   callbacks are interrupted with a stable `script execution budget exceeded`
@@ -116,7 +120,7 @@ frames, and the supervisor owns session, service, lease and fatal recovery.
 - `setInterval(callback, ms)` and `clearInterval(id)`.
 - Timer callbacks must be functions. String-eval timers and extra callback
   arguments are intentionally not supported.
-- Timers are host-pumped through `JerryScriptRuntime::pump_timers(now_ms,
+- Timers are host-pumped through `ScriptRuntime::pump_timers(now_ms,
   max_callbacks)`, so embedded ports provide their own clock source and frame
   budget.
 - Timer callbacks use the same optional execution watchdog as direct eval.
@@ -128,7 +132,7 @@ frames, and the supervisor owns session, service, lease and fatal recovery.
 - `requestAnimationFrame(callback)` and `cancelAnimationFrame(id)` are exposed
   in JerryScript builds.
 - Callbacks are one-shot and host-pumped through
-  `JerryScriptRuntime::pump_animation_frame(now_ms, max_callbacks)`.
+  `ScriptRuntime::pump_animation_frame(now_ms, max_callbacks)`.
 - The callback receives the host timestamp in milliseconds. It should update
   DOM/style and let dirty flags drive repaint.
 - Hosts can set animation callback/FPS budgets to zero while the app is

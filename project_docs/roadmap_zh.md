@@ -13,7 +13,7 @@
 ## 当前基线
 
 - 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库现在拥有物理 Core 分支。首个带签名的 `v0.6.0` release 是历史基线；Runtime `0.6.0-dev` 当前精确锁定 Core `v0.6.1`、ABI `1` 与 source identity `105d0166...b797c52b`。CI 会下载该 release artifact、校验 archive SHA-256 `f9d24aca...e18c7`、安装后运行 Runtime package-consumer tests。in-tree provider 只保留给同步本地开发。Core ABI `1` 明确以安装后的 `render_core/` headers 作为 C++ consumer surface；当前没有隐藏 header tier 或 C ABI。2026-08-19 已补齐 Core-only 与 Device contracts 的 CMake 边界回归：Core-only 不能创建 contracts target/test，contracts-only 仍可独立构建，source archive/install/package/source-override 闭环也已复核。
-- App Runtime 已具备 `.jfapp` 生命周期、registry 参考语义、JerryScript 可选桥接，以及 script worker 的 session/generation/epoch、value-only frame/input/service/fatal 协议。P3 的 WS147 worker、service、恢复与 mixed soak 验收已关闭。
+- App Runtime 已具备 `.jfapp` 生命周期、registry 参考语义、可选的选定脚本后端，以及 script worker 的 session/generation/epoch、value-only frame/input/service/fatal 协议。P3 的 WS147 worker、service、恢复与 mixed soak 验收已关闭。
 - WS147 的 value-frame v2 dirty/recovery fixture 已通过；全屏 rounded/gradient workload 的优化归因已完成，但仍不能达到 30 FPS。Canvas 还没有真实 host binding，保持 `not-tested`。
 - `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。Developer Image 已具有严格 manifest 与 hash 验证的 factory recovery image；这仍不等于干净机器 VS Code 产品流程或已安装 App 的 panel/input 行为已完成。
 - 当前开发线是 Runtime `0.6.0-dev` / Core `0.6.0-dev`。1.0 前不维护历史 package 兼容线。
@@ -75,13 +75,25 @@ WS147 provider handoff 子 gate 已由 `provider-handoff-afdcf75-20260821` 关�
 | 工程 | 初始独立线 | 更新规则 | 依赖规则 |
 | --- | --- | --- | --- |
 | `jellyframe-render-core` | `0.6.1` / Core ABI `1` | feature/性能/兼容性可独立发布 | Runtime lock 精确 pin Core version、ABI、source identity；release metadata 记录已签名 archive SHA-256 |
-| `jellyframe` | `0.6.0` | App 格式、Runtime、JerryScript、桌面工具缓慢发布 | 只在明确的 dependency bump 中升级 Core |
+| `jellyframe` | `0.6.0` | App 格式、Runtime、脚本运行时绑定、桌面工具缓慢发布 | 只在明确的 dependency bump 中升级 Core |
 | `jellyframe-device-os` | `0.1.0-dev` | 板卡与产品镜像快速迭代 | pin JellyFrame release 与 board feature profile |
 | JFDP | `JFDP/1` | 协议独立版本 | 破坏性 wire change 只能升 major |
 
 Core release 提供源、头文件、CMake package、feature registry/profile schema 和 provenance manifest；它不是固定的一份“全功能固件”。每个 Device OS image 在构建期选定 profile，裁掉未选 feature，并让 manifest negotiation 拒绝需要未编译能力的 App。普通 `.jfapp` 永远不能携带 native feature module。
 
 物理 Core 仓库迁移已经完成。首个独立 Core release 已带签名、可重建，并已由锁定 Runtime 构建消费；Core/Runtime 的 B1 出口已关闭。未来 Device OS 在物理迁出前也必须消费同一 provenance 契约；此后才将 Device OS/ports/launcher 作为一个产品边界整体迁出。
+
+### B2：脚本运行时后端边界
+
+Runtime 拥有已文档化的 JavaScript/DOM/service 语义；选定脚本后端拥有自己的 realm、
+wrapper、callback 和原生 value。`ScriptRuntime` 是框架面向宿主的契约，其 factory 通过
+`JELLYFRAME_SCRIPT_ENGINE` 在 configure 时确定。当前实现仍为 JerryScript，但 worker 和
+desktop host 不再把它作为公开依赖；引擎发现和链接保持在后端私有范围。
+
+这不是运行时插件系统。一次构建只包含一个后端；App 不能请求或打包脚本引擎，hot callback/value
+路径不得经过通用转换层。后续后端候选必须先有明确的 compatibility/resource RFC、完整契约的原生
+实现、behavior/watchdog/ownership/recovery 对等测试、desktop benchmark 比较和目标端验收，才可改变
+任何默认选择。在证据具备前，对外开发者材料不得暗示偏好的未来后端。
 
 ## 轨道 C：Render Core 能力演进
 

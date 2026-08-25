@@ -37,7 +37,10 @@ option(JELLYFRAME_BUILD_RENDER_CORE_TESTS
        "Build Render Core source regression tests from this checkout"
        ${_JELLYFRAME_DEFAULT_BUILD_RENDER_CORE_TESTS})
 unset(_JELLYFRAME_DEFAULT_BUILD_RENDER_CORE_TESTS)
-option(JELLYFRAME_BUILD_SCRIPTING "Build optional JerryScript scripting bridge" OFF)
+option(JELLYFRAME_BUILD_SCRIPTING "Build an optional selected script-runtime backend" OFF)
+set(JELLYFRAME_SCRIPT_ENGINE "jerryscript" CACHE STRING
+    "Script engine backend selected at configure time")
+set_property(CACHE JELLYFRAME_SCRIPT_ENGINE PROPERTY STRINGS jerryscript)
 option(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME
        "Compile optional cross-task script App runtime contracts" OFF)
 if(DEFINED JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME)
@@ -121,53 +124,6 @@ function(jellyframe_stage_sanitizer_runtime target)
     endif()
 endfunction()
 
-set(JERRYSCRIPT_ROOT "" CACHE PATH "JerryScript source or install root")
-set(JERRYSCRIPT_INCLUDE_DIR "" CACHE PATH "JerryScript include directory")
-set(JERRYSCRIPT_LIBRARIES "" CACHE STRING "JerryScript libraries")
-
-if(JERRYSCRIPT_ROOT)
-    set(_JELLYFRAME_DETECTED_JERRYSCRIPT_INCLUDE_DIR "")
-    if(EXISTS "${JERRYSCRIPT_ROOT}/jerry-core/include/jerryscript.h")
-        set(_JELLYFRAME_DETECTED_JERRYSCRIPT_INCLUDE_DIR "${JERRYSCRIPT_ROOT}/jerry-core/include")
-    elseif(EXISTS "${JERRYSCRIPT_ROOT}/include/jerryscript.h")
-        set(_JELLYFRAME_DETECTED_JERRYSCRIPT_INCLUDE_DIR "${JERRYSCRIPT_ROOT}/include")
-    endif()
-
-    if(_JELLYFRAME_DETECTED_JERRYSCRIPT_INCLUDE_DIR AND
-            (NOT JERRYSCRIPT_INCLUDE_DIR OR
-             NOT EXISTS "${JERRYSCRIPT_INCLUDE_DIR}/jerryscript.h"))
-        set(JERRYSCRIPT_INCLUDE_DIR "${_JELLYFRAME_DETECTED_JERRYSCRIPT_INCLUDE_DIR}" CACHE PATH
-            "JerryScript include directory" FORCE)
-    endif()
-
-    if(NOT JERRYSCRIPT_LIBRARIES)
-        set(_JELLYFRAME_JERRYSCRIPT_LIBRARY_DIRS
-            "${JERRYSCRIPT_ROOT}/build/lib/Release"
-            "${JERRYSCRIPT_ROOT}/build/lib/MinSizeRel"
-            "${JERRYSCRIPT_ROOT}/build/lib/RelWithDebInfo"
-            "${JERRYSCRIPT_ROOT}/build/lib/Debug")
-        set(_JELLYFRAME_DETECTED_JERRYSCRIPT_LIBRARIES "")
-        foreach(_JELLYFRAME_JERRYSCRIPT_LIBRARY_NAME IN ITEMS jerry-core jerry-ext jerry-port)
-            unset(_JELLYFRAME_JERRYSCRIPT_LIBRARY CACHE)
-            unset(_JELLYFRAME_JERRYSCRIPT_LIBRARY)
-            find_library(_JELLYFRAME_JERRYSCRIPT_LIBRARY
-                NAMES ${_JELLYFRAME_JERRYSCRIPT_LIBRARY_NAME}
-                PATHS ${_JELLYFRAME_JERRYSCRIPT_LIBRARY_DIRS}
-                NO_DEFAULT_PATH)
-            if(NOT _JELLYFRAME_JERRYSCRIPT_LIBRARY)
-                set(_JELLYFRAME_DETECTED_JERRYSCRIPT_LIBRARIES "")
-                break()
-            endif()
-            list(APPEND _JELLYFRAME_DETECTED_JERRYSCRIPT_LIBRARIES
-                 "${_JELLYFRAME_JERRYSCRIPT_LIBRARY}")
-        endforeach()
-        if(_JELLYFRAME_DETECTED_JERRYSCRIPT_LIBRARIES)
-            set(JERRYSCRIPT_LIBRARIES "${_JELLYFRAME_DETECTED_JERRYSCRIPT_LIBRARIES}" CACHE STRING
-                "JerryScript libraries" FORCE)
-        endif()
-    endif()
-endif()
-
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_runtime_version.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_render_core_provider.cmake")
 
@@ -235,22 +191,12 @@ endif()
 endif()
 
 if(JELLYFRAME_BUILD_SCRIPTING)
-    if(NOT JERRYSCRIPT_INCLUDE_DIR OR NOT JERRYSCRIPT_LIBRARIES)
+    if(NOT JELLYFRAME_SCRIPT_ENGINE STREQUAL "jerryscript")
         message(FATAL_ERROR
-            "JELLYFRAME_BUILD_SCRIPTING requires JERRYSCRIPT_INCLUDE_DIR and JERRYSCRIPT_LIBRARIES")
+            "Unsupported JELLYFRAME_SCRIPT_ENGINE='${JELLYFRAME_SCRIPT_ENGINE}'. "
+            "This source tree provides the jerryscript backend only.")
     endif()
-    if(NOT EXISTS "${JERRYSCRIPT_INCLUDE_DIR}/jerryscript.h")
-        message(FATAL_ERROR
-            "JERRYSCRIPT_INCLUDE_DIR does not contain jerryscript.h: ${JERRYSCRIPT_INCLUDE_DIR}\n"
-            "If configuring from PowerShell, use $PWD instead of cmd.exe-only %CD%.")
-    endif()
-    foreach(_JELLYFRAME_JERRYSCRIPT_LIBRARY IN LISTS JERRYSCRIPT_LIBRARIES)
-        if(NOT EXISTS "${_JELLYFRAME_JERRYSCRIPT_LIBRARY}")
-            message(FATAL_ERROR
-                "JerryScript library does not exist: ${_JELLYFRAME_JERRYSCRIPT_LIBRARY}\n"
-                "If configuring from PowerShell, use $PWD instead of cmd.exe-only %CD%.")
-        endif()
-    endforeach()
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_script_backend_jerryscript.cmake")
 
     if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         add_library(jellyframe_script_task_runtime
@@ -277,26 +223,29 @@ if(JELLYFRAME_BUILD_SCRIPTING)
         endif()
     endif()
 
-    set(JELLYFRAME_SCRIPT_SOURCES
-        src/script/jerryscript_runtime.cpp
-    )
+    set(JELLYFRAME_SCRIPT_SOURCES ${JELLYFRAME_SCRIPT_BACKEND_SOURCES})
     if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         list(APPEND JELLYFRAME_SCRIPT_SOURCES
             src/script/script_task_worker_runtime.cpp
         )
     endif()
     add_library(jellyframe_script ${JELLYFRAME_SCRIPT_SOURCES})
-    target_link_libraries(jellyframe_script PUBLIC jellyframe_app_runtime ${JERRYSCRIPT_LIBRARIES})
+    target_link_libraries(jellyframe_script
+        PUBLIC jellyframe_app_runtime
+        PRIVATE ${JELLYFRAME_SCRIPT_BACKEND_LIBRARIES})
     if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         target_link_libraries(jellyframe_script PUBLIC jellyframe_script_task_runtime)
     endif()
     target_include_directories(jellyframe_script
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/src
-            ${JERRYSCRIPT_INCLUDE_DIR}
+        PRIVATE
+            ${JELLYFRAME_SCRIPT_BACKEND_INCLUDE_DIRS}
     )
     target_compile_features(jellyframe_script PUBLIC cxx_std_17)
-    target_compile_definitions(jellyframe_script PUBLIC JELLYFRAME_ENABLE_SCRIPTING=1)
+    target_compile_definitions(jellyframe_script
+        PUBLIC JELLYFRAME_ENABLE_SCRIPTING=1
+        PRIVATE JELLYFRAME_SCRIPT_ENGINE_JERRYSCRIPT=1)
 
     if(MSVC)
         target_compile_options(jellyframe_script PRIVATE /W4)
@@ -462,6 +411,15 @@ if(JELLYFRAME_BUILD_TESTS)
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_preflight_tests.py
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         endif()
+
+        add_test(
+            NAME jellyframe_script_runtime_boundary_tests
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/script_runtime_boundary_tests.py
+                    --cmake ${CMAKE_COMMAND}
+                    --source-root ${CMAKE_CURRENT_SOURCE_DIR}
+                    --generator ${CMAKE_GENERATOR}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         if(JELLYFRAME_BUILD_RENDER_CORE_TESTS)
             add_test(

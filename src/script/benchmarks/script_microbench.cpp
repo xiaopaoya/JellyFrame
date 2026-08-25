@@ -1,4 +1,4 @@
-#include "script/jerryscript_runtime.h"
+#include "script/script_runtime.h"
 
 #include "render_core/html_parser.h"
 #include "render_core/layout.h"
@@ -67,9 +67,9 @@ int main() {
         root.children.push_back(std::move(box));
     }
 
-    JerryScriptRuntime runtime;
-    runtime.bind_document(*document);
-    const ScriptEvaluationResult setup = runtime.eval(
+    std::unique_ptr<ScriptRuntime> runtime = create_script_runtime();
+    runtime->bind_document(*document);
+    const ScriptEvaluationResult setup = runtime->eval(
         "var cards = [];"
         "for (var index = 0; index < 32; ++index) {"
         "  var card = document.getElementById('card' + index);"
@@ -78,13 +78,13 @@ int main() {
     if (!setup.ok) {
         throw std::runtime_error("script microbench setup failed: " + setup.error);
     }
-    runtime.capture_layout_snapshot(root);
+    runtime->capture_layout_snapshot(root);
 
     const double capture_us = average_microseconds(kIterations, [&]() {
-        runtime.capture_layout_snapshot(root);
+        runtime->capture_layout_snapshot(root);
     });
     const double read_us = average_microseconds(kIterations, [&]() {
-        const ScriptEvaluationResult result = runtime.eval("cards[0].getBoundingClientRect().width;");
+        const ScriptEvaluationResult result = runtime->eval("cards[0].getBoundingClientRect().width;");
         if (!result.ok) {
             throw std::runtime_error("script microbench read failed: " + result.error);
         }

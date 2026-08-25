@@ -2,9 +2,9 @@
 
 > 最后更新：2026-08-15；适用版本：0.6.0-dev；状态：0.6 基础设施已落地
 
-本契约定义 RTOS/多任务宿主如何运行一个真实 JerryScript App，而不把 DOM、JerryScript
-资源或渲染对象跨任务传递。它是 P3 后续实现的前置条件；当前桌面同线程
-`JerryScriptRuntime::bind_document(Node&)` 路径不自动满足本契约。
+本契约定义 RTOS/多任务宿主如何运行一个真实脚本 App，而不把 DOM、后端原生资源或渲染对象
+跨任务传递。它是 P3 后续实现的前置条件；当前桌面同线程
+`ScriptRuntime::bind_document(Node&)` 路径不自动满足本契约。
 
 ## 所有权模型
 
@@ -31,7 +31,7 @@ app supervisor
 禁止跨任何任务、queue、timer、callback、handle payload 或 fatal record 传递：
 
 - `Node*`、`LayoutBox*`、`RenderObject*`、`LayerNode*`、`DisplayCommand*`；
-- `jerry_value_t`、realm/context、wrapper、listener、timer callback、native pointer；
+- 后端原生 JS value、realm/context、wrapper、listener、timer callback、native pointer；
 - `FrameBuffer*`、panel callback、DMA/GRAM 指针、GPIO/NVS/filesystem 句柄；
 - 指向 task-local vector/string/arena 的地址。
 
@@ -160,7 +160,7 @@ bridge 是 script session 期间唯一的 `AppRuntimeHost` completion consumer�
 遗漏 late completion 的 handle release。
 
 `src/script/script_task_worker_runtime.*` 已提供第一片 worker 侧 DOM/display-list producer：它在一个
-worker-owned 对象内持有解析后的 document、同线程 JerryScript binding、render/layout/layer tree 和
+worker-owned 对象内持有解析后的 document、同线程选定后端 binding、render/layout/layer tree 和
 `InputController`，并在 value input 或 worker 内 timer/animation callback 修改 DOM 后只发布 sealed value
 frame。Node 销毁观察器现在可组合注册，重建 layer tree 时会重新绑定交互状态；事件 dispatch 会报告目标已
 销毁，使 pointer-up 不再继续执行依赖旧 Node 的默认动作。真实 RTOS task adapter 和
@@ -172,7 +172,7 @@ mailbox 后移除 worker-local callback；supervisor bridge 再区分 queued/in-
 tombstone 消费并回收。provider policy、真实 RTOS task adapter 和 fatal boundary 仍是后续工作。port
 不得用裸指针填补这些协议空缺。
 
-`JerryScriptRuntime` 现在会把预算执行 callback 首个异常或 execution-budget failure 记录为纯值
+选定的 `ScriptRuntime` 会把预算执行 callback 首个异常或 execution-budget failure 记录为纯值
 `ScriptCallbackFailure`。`ScriptTaskWorkerRuntime` 在 input、timer/animation 或 service completion
 dispatch 后消费它，生成有界 fatal record 并停止发布新 frame。这只是 worker-local fatal detection 第一片；
 RTOS task 退出、supervisor recovery 与 launcher handoff 仍属于移植侧验收工作。

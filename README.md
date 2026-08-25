@@ -185,8 +185,9 @@ python tools\jellyframe_cli.py device-reference --store build\device-reference l
 
 ## Optional Scripting Build
 
-Scripting is optional. `jellyframe_render_core` builds without JerryScript
-unless `JELLYFRAME_BUILD_SCRIPTING=ON` is requested.
+Scripting is optional. `jellyframe_render_core` builds without a script backend
+unless `JELLYFRAME_BUILD_SCRIPTING=ON` is requested. The current backend is
+selected at configure time as `jerryscript`.
 
 ```powershell
 git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
@@ -195,6 +196,7 @@ python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_H
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
 cmake -S . -B build/desktop-scripting-release `
   -DJELLYFRAME_BUILD_SCRIPTING=ON `
+  -DJELLYFRAME_SCRIPT_ENGINE=jerryscript `
   -DJERRYSCRIPT_ROOT="$jerryRoot"
 cmake --build build/desktop-scripting-release --config Release
 ```

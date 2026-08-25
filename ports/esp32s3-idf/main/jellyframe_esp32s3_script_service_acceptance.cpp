@@ -334,7 +334,7 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options() {
     const auto budgets = service_budgets();
     jellyframe::ScriptTaskWorkerRuntimeOptions options;
     options.budgets = budgets;
-    options.script = jellyframe::jerryscript_runtime_options_from_host_budgets(budgets);
+    options.script = jellyframe::script_runtime_options_from_host_budgets(budgets);
     options.viewport = {0, 0, kWidth, kHeight};
     options.frame_codec = {128, 32 * 1024, 16, 64 * 1024};
     options.input_codec = {16, 128};
