@@ -45,7 +45,7 @@ function main() {
   assert.equal(matchingDeviceTarget({ targets: {
     "vendor-wearable": { viewport: { width: 172, height: 320 } },
     "other": { viewport: { width: 172, height: 320 } }
-  } }, targetDevice), "vendor-wearable");
+  } }, targetDevice), undefined);
   assert.equal(matchingDeviceTarget({ targets: {
     "a": { viewport: { width: 172, height: 320 } },
     "b": { viewport: { width: 172, height: 320 } }

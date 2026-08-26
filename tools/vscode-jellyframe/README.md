@@ -153,10 +153,10 @@ It does not infer serial or USB endpoints. Configure the absolute path to the
 separately installed provider in JellyFrame settings; missing or invalid paths
 are reported directly. Run Discover Device first, then use Device Info to
 validate the selected endpoint against the configured Developer Image manifest.
-Deployment selects the App target whose name and dimensions match the attested
-device profile; when profile names differ, exactly one same-size manifest target
-is accepted. An App without that unambiguous declaration is not packaged or
-installed for the device.
+Deployment selects the one App target whose viewport matches the attested device
+display. Target names may differ from the device profile, but every same-size
+target must still be unique. An App without that unambiguous declaration is not
+packaged or installed for the device.
 List Installed Apps shows the same endpoint's registry generation, version,
 state and rollback availability. These three commands are read-only: they do
 not install, launch, remove or flash a device.
