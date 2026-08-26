@@ -47,6 +47,7 @@ constexpr std::size_t kMaxFrameBytes = 64u * 1024u;
 constexpr std::size_t kMaxScriptBytes = 48u * 1024u;
 constexpr std::uint32_t kWorkerPollMs = 4;
 constexpr std::uint32_t kSupervisorPollMs = 8;
+constexpr std::size_t kSupervisorStackBytes = 12u * 1024u;
 
 jellyframe::HostBudgets installed_script_budgets(int width, int height) {
     jellyframe::HostBudgets budgets;
@@ -374,13 +375,9 @@ void supervisor_entry(void* raw) {
     while (!state->worker_done.load() || !state->ui_done.load()) {
         vTaskDelay(pdMS_TO_TICKS(kSupervisorPollMs));
     }
-    // The script supervisor is the only task that touches AppRuntimeHost
-    // while a worker is active. After both consumers have stopped, retire the
-    // host instance before completing service teardown; Device Runtime later
-    // releases the installed-bundle lease through its binding.
-    (void)state->host->terminate_current(
-        state->fatal_seen.load() ? jellyframe::AppTeardownReason::RuntimeError
-                                 : jellyframe::AppTeardownReason::NormalExit);
+    // AppInstalledBundleBinding owns the Runtime host and bundle lease. This
+    // task may retire worker-local protocol state, but lifecycle performs the
+    // host teardown only after stop_installed_bundle_script_task() returns.
     (void)bridge.complete_teardown(state->script_session);
     (void)protocol.complete_teardown(state->script_session);
     completion_scratch.release();
@@ -451,8 +448,9 @@ bool start_installed_bundle_script_task(std::string app_id,
     next->author_css = std::move(author_css);
     next->scripts = std::move(scripts);
     next->host = &host;
-    const BaseType_t created = xTaskCreate(supervisor_entry, "jf_app_supervisor", 12288 / sizeof(StackType_t),
-                                           next, 7, &next->supervisor_task);
+    const BaseType_t created = xTaskCreateWithCaps(
+        supervisor_entry, "jf_app_supervisor", kSupervisorStackBytes, next, 7,
+        &next->supervisor_task, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (created != pdPASS) {
         vSemaphoreDelete(next->stopped);
         delete next;
