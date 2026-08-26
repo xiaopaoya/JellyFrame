@@ -100,6 +100,7 @@ struct InstalledBundleScriptSession {
     std::atomic<bool> stop{false};
     std::atomic<bool> worker_done{false};
     std::atomic<bool> ui_done{false};
+    std::atomic<bool> initialized{false};
     std::atomic<bool> fatal_seen{false};
     std::atomic<std::uint32_t> input_packet_seq{0};
     std::atomic<std::uint32_t> js_mutation_seq{0};
@@ -135,6 +136,19 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options(const InstalledBundleS
     return options;
 }
 
+InstalledBundleScriptTaskTelemetry telemetry_snapshot(const InstalledBundleScriptSession& state) {
+    InstalledBundleScriptTaskTelemetry telemetry;
+    telemetry.initialized = state.initialized.load();
+    telemetry.fatal = state.fatal_seen.load();
+    telemetry.scripts = static_cast<std::uint32_t>(state.scripts.size());
+    telemetry.input_seq = state.input_packet_seq.load();
+    telemetry.mutation_seq = state.js_mutation_seq.load();
+    telemetry.published_seq = state.published_frame_seq.load();
+    telemetry.accepted_seq = state.accepted_frame_seq.load();
+    telemetry.presents_failed = state.present_failures.load();
+    return telemetry;
+}
+
 void worker_entry(void* raw) {
     auto* state = static_cast<InstalledBundleScriptSession*>(raw);
     if (state == nullptr || state->protocol == nullptr) {
@@ -143,6 +157,7 @@ void worker_entry(void* raw) {
     }
     jellyframe::ScriptTaskWorkerRuntime runtime(state->script_session, worker_options(*state));
     const auto initialized = runtime.initialize(state->entry_document, state->author_css);
+    state->initialized.store(initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted);
     if (initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted) {
         for (const jellyframe::DocumentScript& script : state->scripts) {
             if (state->stop.load()) break;
@@ -423,11 +438,14 @@ bool start_installed_bundle_script_task(std::string app_id,
     return true;
 }
 
-bool stop_installed_bundle_script_task(InstalledBundleScriptSession*& session, std::uint32_t timeout_ms) {
+bool stop_installed_bundle_script_task(InstalledBundleScriptSession*& session,
+                                       std::uint32_t timeout_ms,
+                                       InstalledBundleScriptTaskTelemetry* telemetry) {
     if (session == nullptr) return true;
     if (session->stopped == nullptr) return false;
     session->stop.store(true);
     if (xSemaphoreTake(session->stopped, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) return false;
+    if (telemetry != nullptr) *telemetry = telemetry_snapshot(*session);
     vSemaphoreDelete(session->stopped);
     delete session;
     session = nullptr;
@@ -438,6 +456,10 @@ bool installed_bundle_script_task_has_fatal(const InstalledBundleScriptSession* 
     return session != nullptr && session->fatal_seen.load();
 }
 
+InstalledBundleScriptTaskTelemetry installed_bundle_script_task_telemetry(const InstalledBundleScriptSession* session) {
+    return session == nullptr ? InstalledBundleScriptTaskTelemetry{} : telemetry_snapshot(*session);
+}
+
 } // namespace jellyframe_esp32s3
 
 #else
@@ -446,8 +468,10 @@ namespace jellyframe_esp32s3 {
 bool start_installed_bundle_script_task(std::string, std::uint32_t, std::uint32_t, std::string, std::string,
                                         InstalledResourceSnapshot, jellyframe::AppRuntimeHost&,
                                         InstalledBundleScriptSession*&) { return false; }
-bool stop_installed_bundle_script_task(InstalledBundleScriptSession*&, std::uint32_t) { return false; }
+bool stop_installed_bundle_script_task(InstalledBundleScriptSession*&, std::uint32_t,
+                                       InstalledBundleScriptTaskTelemetry*) { return false; }
 bool installed_bundle_script_task_has_fatal(const InstalledBundleScriptSession*) { return false; }
+InstalledBundleScriptTaskTelemetry installed_bundle_script_task_telemetry(const InstalledBundleScriptSession*) { return {}; }
 } // namespace jellyframe_esp32s3
 
 #endif

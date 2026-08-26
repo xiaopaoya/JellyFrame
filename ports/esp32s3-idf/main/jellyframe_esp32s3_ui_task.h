@@ -25,6 +25,16 @@ bool start_jfdp_transport_acceptance_task();
 bool start_device_image_lifecycle_task();
 struct InstalledBundleUiSession;
 struct InstalledBundleScriptSession;
+struct InstalledBundleScriptTaskTelemetry {
+    bool initialized = false;
+    bool fatal = false;
+    std::uint32_t scripts = 0;
+    std::uint32_t input_seq = 0;
+    std::uint32_t mutation_seq = 0;
+    std::uint32_t published_seq = 0;
+    std::uint32_t accepted_seq = 0;
+    std::uint32_t presents_failed = 0;
+};
 
 // The Device Runtime passes a copied entry document to this task. No registry,
 // bundle lease, transport buffer, or renderer object crosses the task boundary.
@@ -48,8 +58,10 @@ bool start_installed_bundle_script_task(std::string app_id,
                                         jellyframe::AppRuntimeHost& host,
                                         InstalledBundleScriptSession*& session);
 bool stop_installed_bundle_script_task(InstalledBundleScriptSession*& session,
-                                       std::uint32_t timeout_ms = 3000);
+                                       std::uint32_t timeout_ms = 3000,
+                                       InstalledBundleScriptTaskTelemetry* telemetry = nullptr);
 bool installed_bundle_script_task_has_fatal(const InstalledBundleScriptSession* session);
+InstalledBundleScriptTaskTelemetry installed_bundle_script_task_telemetry(const InstalledBundleScriptSession* session);
 bool start_app_runtime_recovery_acceptance_task();
 bool start_script_task_value_protocol_acceptance_task();
 bool start_script_app_acceptance_task();

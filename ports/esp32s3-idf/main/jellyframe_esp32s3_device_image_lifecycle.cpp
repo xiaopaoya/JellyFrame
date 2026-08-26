@@ -241,12 +241,28 @@ private:
         entry.level = level;
     }
 
-    bool stop_active_ui() {
+    void record_script_telemetry(std::string_view app_id,
+                                 std::uint32_t generation,
+                                 std::string_view event,
+                                 const InstalledBundleScriptTaskTelemetry& telemetry) {
+        char message[kDeviceAppLogMaxMessageBytes + 1]{};
+        std::snprintf(message, sizeof(message),
+                      "script %.*s initialized=%u scripts=%u input_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u fatal=%u",
+                      static_cast<int>(event.size()), event.data(), telemetry.initialized ? 1u : 0u,
+                      static_cast<unsigned>(telemetry.scripts),
+                      static_cast<unsigned>(telemetry.input_seq), static_cast<unsigned>(telemetry.mutation_seq),
+                      static_cast<unsigned>(telemetry.published_seq), static_cast<unsigned>(telemetry.accepted_seq),
+                      static_cast<unsigned>(telemetry.presents_failed), telemetry.fatal ? 1u : 0u);
+        record_app_log(telemetry.fatal ? DeviceAppLogLevel::Error : DeviceAppLogLevel::Info,
+                       app_id, generation, message);
+    }
+
+    bool stop_active_ui(InstalledBundleScriptTaskTelemetry* script_telemetry = nullptr) {
         if (!stop_installed_bundle_ui_task(ui_session_)) {
             ESP_LOGE("JellyFrameDevice", "installed app UI did not stop before lifecycle transition");
             return false;
         }
-        if (!stop_installed_bundle_script_task(script_session_)) {
+        if (!stop_installed_bundle_script_task(script_session_, 3000, script_telemetry)) {
             ESP_LOGE("JellyFrameDevice", "installed script app did not stop before lifecycle transition");
             return false;
         }
@@ -254,6 +270,14 @@ private:
     }
 
     void poll_active_session() {
+        if (script_session_ != nullptr && !script_worker_initialized_logged_) {
+            const InstalledBundleScriptTaskTelemetry telemetry =
+                installed_bundle_script_task_telemetry(script_session_);
+            if (telemetry.initialized) {
+                record_script_telemetry(active_app_id_, store_.registry_generation(), "worker", telemetry);
+                script_worker_initialized_logged_ = true;
+            }
+        }
         if (!installed_bundle_script_task_has_fatal(script_session_)) {
             return;
         }
@@ -263,7 +287,7 @@ private:
         }
         ESP_LOGE("JellyFrameDevice", "installed script app fatal app=%s generation=%u", app_id.c_str(),
                  static_cast<unsigned>(store_.registry_generation()));
-        record_app_log(DeviceAppLogLevel::Error, app_id, store_.registry_generation(), "script worker fatal");
+        record_app_log(DeviceAppLogLevel::Error, app_id, store_.registry_generation(), "app-runtime-failure");
         (void)recover_to_launcher(DeviceRecoveryReason::AppRuntimeFailure, app_id);
     }
 
@@ -422,6 +446,11 @@ private:
             return;
         }
         active_app_id_.assign(app_id.app_id_view());
+        script_worker_initialized_logged_ = false;
+        if (script_app) {
+            record_script_telemetry(app_id.app_id_view(), store_.registry_generation(), "launch-prepared",
+                                    installed_bundle_script_task_telemetry(script_session_));
+        }
         ESP_LOGI("JellyFrameDevice", "installed_app launch app=%s generation=%u entry_bytes=%u script=%d",
                  std::string(app_id.app_id_view()).c_str(),
                  static_cast<unsigned>(store_.registry_generation()),
@@ -441,9 +470,14 @@ private:
             result.result_code = DeviceRequestResultCode::NotFound;
             return;
         }
-        if (!stop_active_ui()) {
+        const bool had_script = script_session_ != nullptr;
+        InstalledBundleScriptTaskTelemetry script_telemetry;
+        if (!stop_active_ui(had_script ? &script_telemetry : nullptr)) {
             result.result_code = DeviceRequestResultCode::Failed;
             return;
+        }
+        if (had_script) {
+            record_script_telemetry(app_id.app_id_view(), store_.registry_generation(), "stopped", script_telemetry);
         }
         (void)binding_.terminate_current(host_, AppTeardownReason::NormalExit);
         active_app_id_.clear();
@@ -681,6 +715,7 @@ private:
     AppInstalledBundleBinding binding_;
     InstalledBundleUiSession* ui_session_ = nullptr;
     InstalledBundleScriptSession* script_session_ = nullptr;
+    bool script_worker_initialized_logged_ = false;
     std::string active_app_id_;
     std::array<DeviceAppLogEntry, kAppLogCapacity> app_logs_{};
     std::array<std::uint8_t, kDeviceProtocolHeaderBytes + kDeviceProtocolMaxPayloadBytes> response_frame_{};
