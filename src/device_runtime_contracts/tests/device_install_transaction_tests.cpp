@@ -170,6 +170,37 @@ void rejects_embedded_nul_in_app_id() {
     assert(store.begins == 0);
 }
 
+void rejected_requests_report_the_active_transaction_snapshot() {
+    TestStore store;
+    DeviceInstallTransaction transaction = make_transaction();
+    const std::uint8_t byte = 1;
+
+    const DeviceInstallResult invalid = transaction.begin(19, "", 5, 0, false, store);
+    assert(invalid.status == DeviceInstallStatus::InvalidRequest);
+    assert(invalid.transaction_id == 0);
+    assert(invalid.received_bytes == 0);
+    assert(invalid.expected_bytes == 0);
+
+    assert(transaction.begin(20, "org.example.active", 5, 0, false, store).accepted());
+    const DeviceInstallResult busy = transaction.begin(21, "org.example.busy", 7, 0, false, store);
+    assert(busy.status == DeviceInstallStatus::Busy);
+    assert(busy.transaction_id == 20);
+    assert(busy.received_bytes == 0);
+    assert(busy.expected_bytes == 5);
+
+    const DeviceInstallResult mismatched = transaction.append(21, 0, &byte, 1, store);
+    assert(mismatched.status == DeviceInstallStatus::OffsetMismatch);
+    assert(mismatched.transaction_id == 20);
+    assert(mismatched.expected_bytes == 5);
+
+    assert(transaction.abort(20, store).status == DeviceInstallStatus::Aborted);
+    const DeviceInstallResult no_active = transaction.commit(20, store);
+    assert(no_active.status == DeviceInstallStatus::NoActiveTransaction);
+    assert(no_active.transaction_id == 0);
+    assert(no_active.received_bytes == 0);
+    assert(no_active.expected_bytes == 0);
+}
+
 } // namespace
 
 int main() {
@@ -180,5 +211,6 @@ int main() {
     store_write_failure_discards_partial_staging();
     store_begin_failure_discards_partial_staging();
     rejects_embedded_nul_in_app_id();
+    rejected_requests_report_the_active_transaction_snapshot();
     return 0;
 }
