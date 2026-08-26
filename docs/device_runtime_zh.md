@@ -102,6 +102,8 @@ sequence、稳定 reason 与 launcher/disable/rollback flag。Logs response 最�
 app id、generation、timestamp、level 和最多 255-byte message，并带 dropped-record count。它们不能被塞入 JSON
 或 port-private struct。
 operation-result 的 flag 仅允许 `complete`、`active` 和 `launcher-active`；encoder 与 decoder 都会拒绝保留位。
+安装操作中的 transaction id 与 byte counter 表示活动事务快照，而不是对畸形或被拒绝请求字段的回显；controller
+处于 idle 时返回零。请求/响应关联始终使用 frame 的 session/request id。
 
 `src/device_runtime_contracts/device_install_transaction.*` 提供有界、有序、可取消的 staging 状态机。它只依赖
 `DeviceInstallStore` 注入的存储适配器，因此不会把 flash、文件系统、签名或 registry 实现带入

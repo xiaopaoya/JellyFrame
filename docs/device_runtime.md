@@ -134,6 +134,10 @@ timestamp, level and 255-byte maximum message, plus a dropped-record count.
 These records are never smuggled through JSON or port-private structs.
 Operation-result flags are limited to `complete`, `active` and
 `launcher-active`; reserved bits are rejected by both encoder and decoder.
+For install operations, the transaction id and byte counters are a snapshot of
+the active transaction, not an echo of malformed or rejected request fields;
+an idle controller reports zero. The frame session/request ids remain the
+request-response correlation key.
 
 `src/device_runtime_contracts/device_install_transaction.*` implements a bounded, ordered and
 cancellable staging state machine through the injected `DeviceInstallStore`.
