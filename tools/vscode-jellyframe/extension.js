@@ -10,7 +10,8 @@ const {
   discoverySummary,
   identitySummary,
   advertisedDeviceOperations,
-  deviceSupportsOperation
+  deviceSupportsOperation,
+  matchingDeviceTarget
 } = require("./device_presentation");
 const { desktopBuildPresentation } = require("./status_presentation");
 
@@ -545,11 +546,17 @@ async function deployDeviceApp(context, resourceUri) {
     return;
   }
   const manifestPath = packageManifestPath(root);
-  let appId;
-  try {
-    appId = JSON.parse(fs.readFileSync(manifestPath, "utf8")).id;
-  } catch (_) {
-    appId = path.basename(root);
+  const manifest = readJsonObject(manifestPath);
+  const appId = typeof manifest?.id === "string" && manifest.id ? manifest.id : path.basename(root);
+  const deviceTarget = matchingDeviceTarget(manifest, selected.device);
+  if (!deviceTarget) {
+    const display = selected.device?.capabilities?.display;
+    const size = Number.isInteger(display?.width) && Number.isInteger(display?.height)
+      ? `${display.width} x ${display.height}` : "the selected display";
+    vscode.window.showErrorMessage(isChinese()
+      ? `App 没有声明与 ${size} 匹配的唯一 target，未开始部署。请在 jellyframe.app.json 的 targets 中声明设备 profile。`
+      : `The App does not declare one target matching ${size}; deployment was not started. Declare the device profile in jellyframe.app.json targets.`);
+    return;
   }
   const action = isChinese() ? "打包并部署" : "Package and Deploy";
   const confirmed = await vscode.window.showWarningMessage(
@@ -567,7 +574,7 @@ async function deployDeviceApp(context, resourceUri) {
   const bundle = path.join(bundleDirectory, `${base}.jfapp`);
   const report = path.join(buildDir(context), `vscode-${base}-device-package-report.json`);
   const packageOutcome = await runCliWithOptions(context, [
-    "package", "--root", root, "--report", report, "--output-bundle", bundle
+    "package", "--root", root, "--target", deviceTarget, "--report", report, "--output-bundle", bundle
   ], { commandName: isChinese() ? "打包设备 App" : "Package device App", reportPath: report });
   if (packageOutcome?.code !== 0 || !fs.existsSync(bundle)) {
     return;

@@ -5,7 +5,8 @@ const {
   discoverySummary,
   identitySummary,
   advertisedDeviceOperations,
-  deviceSupportsOperation
+  deviceSupportsOperation,
+  matchingDeviceTarget
 } = require("../../tools/vscode-jellyframe/device_presentation");
 
 function device(endpointId, connected = true) {
@@ -34,6 +35,21 @@ function main() {
   assert.deepEqual([...advertisedDeviceOperations(lifecycleDevice)].sort(), ["install", "launch", "logs"]);
   assert.equal(deviceSupportsOperation(lifecycleDevice, "install"), true);
   assert.equal(deviceSupportsOperation(device("read-only"), "install"), false);
+  const targetDevice = device("desk-target");
+  targetDevice.capabilities = { display: { width: 172, height: 320, shape: "rect" } };
+  assert.equal(matchingDeviceTarget({ targets: {
+    "rect-172x320": { viewport: { width: 172, height: 320 } },
+    "round-300": { viewport: { width: 300, height: 300 } }
+  } }, targetDevice), "rect-172x320");
+  targetDevice.profileId = "vendor-wearable";
+  assert.equal(matchingDeviceTarget({ targets: {
+    "vendor-wearable": { viewport: { width: 172, height: 320 } },
+    "other": { viewport: { width: 172, height: 320 } }
+  } }, targetDevice), "vendor-wearable");
+  assert.equal(matchingDeviceTarget({ targets: {
+    "a": { viewport: { width: 172, height: 320 } },
+    "b": { viewport: { width: 172, height: 320 } }
+  } }, targetDevice), undefined);
 }
 
 main();

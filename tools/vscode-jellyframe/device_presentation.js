@@ -53,11 +53,40 @@ function deviceSupportsOperation(device, operation) {
   return advertisedDeviceOperations(device).has(operation);
 }
 
+function positiveInteger(value) {
+  return Number.isInteger(value) && value > 0;
+}
+
+// Deployment must be bound to the attested display profile. A target with the
+// device profile name takes precedence; a sole same-size manifest target is a
+// supported compatibility fallback for product-specific target names.
+function matchingDeviceTarget(manifest, device) {
+  const targets = manifest?.targets;
+  const display = device?.capabilities?.display;
+  if (!targets || typeof targets !== "object" || Array.isArray(targets)
+      || !positiveInteger(display?.width) || !positiveInteger(display?.height)) {
+    return undefined;
+  }
+  const matchesDisplay = (target) => target && typeof target === "object"
+    && !Array.isArray(target) && target.viewport && typeof target.viewport === "object"
+    && Number(target.viewport.width) === display.width
+    && Number(target.viewport.height) === display.height;
+  const profileId = typeof device?.profileId === "string" ? device.profileId : "";
+  if (profileId && matchesDisplay(targets[profileId])) {
+    return profileId;
+  }
+  const matches = Object.entries(targets)
+    .filter(([, target]) => matchesDisplay(target))
+    .map(([id]) => id);
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 module.exports = {
   deviceChoice,
   deviceSummary,
   discoverySummary,
   identitySummary,
   advertisedDeviceOperations,
-  deviceSupportsOperation
+  deviceSupportsOperation,
+  matchingDeviceTarget
 };

@@ -76,6 +76,14 @@ int main() {
     assert(html_parser_options_from_budgets(caps.budgets).max_nodes == 768);
     assert(css_parser_options_from_budgets(caps.budgets).max_rules == 99);
     assert(css_parser_options_from_budgets(caps.budgets).max_declarations_per_rule == 7);
+    const CssParserOptions viewport_css_options = css_parser_options_from_budgets(caps.budgets, 172, 320);
+    assert(viewport_css_options.max_rules == 99);
+    assert(viewport_css_options.max_declarations_per_rule == 7);
+    assert(viewport_css_options.media_viewport_width == 172);
+    assert(viewport_css_options.media_viewport_height == 320);
+    const CssParserOptions fallback_css_options = css_parser_options_from_budgets(caps.budgets, 0, -1);
+    assert(fallback_css_options.media_viewport_width == 360);
+    assert(fallback_css_options.media_viewport_height == 240);
     assert(render_tree_options_from_budgets(caps.budgets).max_render_objects == 66);
     assert(layout_engine_options_from_budgets(caps.budgets).max_layout_boxes == 55);
     assert(layout_engine_options_from_budgets(caps.budgets).max_layout_depth == 11);

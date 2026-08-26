@@ -812,7 +812,7 @@ bool load_timer_document(TimerUiTaskContext& context) {
                                                            jellyframe::document_style_collection_options_from_budgets(context.budgets));
     jellyframe::CssParser css_parser;
     jellyframe::Stylesheet stylesheet = css_parser.parse(
-        css, jellyframe::css_parser_options_from_budgets(context.budgets));
+        css, jellyframe::css_parser_options_from_budgets(context.budgets, context.width, context.height));
 #if CONFIG_JELLYFRAME_ESP32S3_PERSISTENT_STYLE_RESOLVER
     jellyframe::StyleResolverOptions style_options;
     style_options.max_candidate_cache_entries =
