@@ -195,6 +195,10 @@ public:
         }
     }
 
+    void poll_lifecycle() {
+        poll_active_session();
+    }
+
     void on_jfdp_transport_reset() override { abort_active_transaction(); }
     JfdpTransportCounters& counters() { return counters_; }
 
@@ -242,7 +246,25 @@ private:
             ESP_LOGE("JellyFrameDevice", "installed app UI did not stop before lifecycle transition");
             return false;
         }
+        if (!stop_installed_bundle_script_task(script_session_)) {
+            ESP_LOGE("JellyFrameDevice", "installed script app did not stop before lifecycle transition");
+            return false;
+        }
         return true;
+    }
+
+    void poll_active_session() {
+        if (!installed_bundle_script_task_has_fatal(script_session_)) {
+            return;
+        }
+        const std::string app_id = active_app_id_;
+        if (app_id.empty()) {
+            return;
+        }
+        ESP_LOGE("JellyFrameDevice", "installed script app fatal app=%s generation=%u", app_id.c_str(),
+                 static_cast<unsigned>(store_.registry_generation()));
+        record_app_log(DeviceAppLogLevel::Error, app_id, store_.registry_generation(), "script worker fatal");
+        (void)recover_to_launcher(DeviceRecoveryReason::AppRuntimeFailure, app_id);
     }
 
     bool recover_to_launcher(DeviceRecoveryReason reason, std::string_view app_id) {
@@ -251,7 +273,10 @@ private:
         }
         store_.record_recovery(reason, app_id,
                                DeviceRecoveryLauncherActive | DeviceRecoveryAppDisabled);
-        return binding_.recover_to_protected_launcher(host_, AppTeardownReason::LoadFailure).launcher_started;
+        const bool launcher_started =
+            binding_.recover_to_protected_launcher(host_, AppTeardownReason::LoadFailure).launcher_started;
+        active_app_id_.clear();
+        return launcher_started;
     }
 
     void abort_active_transaction() {
@@ -376,21 +401,33 @@ private:
         }
         std::string entry_document(reinterpret_cast<const char*>(entry_bytes.data()), read_bytes);
         InstalledResourceSnapshot resources;
-        if (!snapshot_active_resources(binding_, descriptor, entry_document, resources) ||
-            !start_installed_bundle_ui_task(std::string(app_id.app_id_view()), store_.registry_generation(),
-                                            std::string(descriptor.summary.entry_path_view()), std::move(entry_document),
-                                            std::move(resources), ui_session_)) {
+        if (!snapshot_active_resources(binding_, descriptor, entry_document, resources)) {
             (void)recover_to_launcher(DeviceRecoveryReason::AppLoadFailure, app_id.app_id_view());
             result.result_code = DeviceRequestResultCode::Failed;
             result.flags = DeviceOperationResultLauncherActive;
             return;
         }
-        ESP_LOGI("JellyFrameDevice", "installed_app launch app=%s generation=%u entry_bytes=%u",
+        const bool script_app = descriptor.summary.script_mode == DeviceBundleScriptMode::Classic;
+        const bool task_started = script_app
+            ? start_installed_bundle_script_task(std::string(app_id.app_id_view()), store_.registry_generation(),
+                                                 launch.instance.id, std::string(descriptor.summary.entry_path_view()),
+                                                 std::move(entry_document), std::move(resources), host_, script_session_)
+            : start_installed_bundle_ui_task(std::string(app_id.app_id_view()), store_.registry_generation(),
+                                             std::string(descriptor.summary.entry_path_view()), std::move(entry_document),
+                                             std::move(resources), ui_session_);
+        if (!task_started) {
+            (void)recover_to_launcher(DeviceRecoveryReason::AppLoadFailure, app_id.app_id_view());
+            result.result_code = DeviceRequestResultCode::Failed;
+            result.flags = DeviceOperationResultLauncherActive;
+            return;
+        }
+        active_app_id_.assign(app_id.app_id_view());
+        ESP_LOGI("JellyFrameDevice", "installed_app launch app=%s generation=%u entry_bytes=%u script=%d",
                  std::string(app_id.app_id_view()).c_str(),
                  static_cast<unsigned>(store_.registry_generation()),
-                 static_cast<unsigned>(read_bytes));
+                 static_cast<unsigned>(read_bytes), script_app ? 1 : 0);
         record_app_log(DeviceAppLogLevel::Info, app_id.app_id_view(), store_.registry_generation(),
-                       "installed bundle launched");
+                       script_app ? "installed script bundle launched" : "installed bundle launched");
         result.result_code = DeviceRequestResultCode::Ok;
         result.flags = DeviceOperationResultComplete | DeviceOperationResultActive;
     }
@@ -400,7 +437,7 @@ private:
         if (!decode_app_id(bytes, size, app_id, result)) {
             return;
         }
-        if (!binding_.has_active_bundle() || host_.current().app_id != app_id.app_id_view()) {
+        if (!binding_.has_active_bundle() || active_app_id_ != app_id.app_id_view()) {
             result.result_code = DeviceRequestResultCode::NotFound;
             return;
         }
@@ -409,6 +446,7 @@ private:
             return;
         }
         (void)binding_.terminate_current(host_, AppTeardownReason::NormalExit);
+        active_app_id_.clear();
         record_app_log(DeviceAppLogLevel::Info, app_id.app_id_view(), store_.registry_generation(),
                        "installed bundle stopped");
         result.result_code = DeviceRequestResultCode::Ok;
@@ -420,12 +458,13 @@ private:
         if (!decode_app_id(bytes, size, app_id, result)) {
             return;
         }
-        if (binding_.has_active_bundle()) {
+        if (binding_.has_active_bundle() && active_app_id_ == app_id.app_id_view()) {
             if (!stop_active_ui()) {
                 result.result_code = DeviceRequestResultCode::Failed;
                 return;
             }
             (void)binding_.terminate_current(host_, AppTeardownReason::SystemPolicy);
+            active_app_id_.clear();
         }
         result.result_code = store_.remove(app_id.app_id_view()) ? DeviceRequestResultCode::Ok : DeviceRequestResultCode::NotFound;
         result.flags = result.result_code == DeviceRequestResultCode::Ok ? DeviceOperationResultComplete : 0;
@@ -436,12 +475,13 @@ private:
         if (!decode_app_id(bytes, size, app_id, result)) {
             return;
         }
-        if (binding_.has_active_bundle()) {
+        if (binding_.has_active_bundle() && active_app_id_ == app_id.app_id_view()) {
             if (!stop_active_ui()) {
                 result.result_code = DeviceRequestResultCode::Failed;
                 return;
             }
             (void)binding_.terminate_current(host_, AppTeardownReason::AppSwitch);
+            active_app_id_.clear();
         }
         result.result_code = store_.rollback(app_id.app_id_view()) ? DeviceRequestResultCode::Ok : DeviceRequestResultCode::NotFound;
         result.flags = result.result_code == DeviceRequestResultCode::Ok ? DeviceOperationResultComplete : 0;
@@ -640,6 +680,8 @@ private:
     ProtectedLauncher launcher_;
     AppInstalledBundleBinding binding_;
     InstalledBundleUiSession* ui_session_ = nullptr;
+    InstalledBundleScriptSession* script_session_ = nullptr;
+    std::string active_app_id_;
     std::array<DeviceAppLogEntry, kAppLogCapacity> app_logs_{};
     std::array<std::uint8_t, kDeviceProtocolHeaderBytes + kDeviceProtocolMaxPayloadBytes> response_frame_{};
     std::size_t app_log_count_ = 0;
@@ -678,6 +720,7 @@ void device_image_lifecycle_task(void*) {
     std::int64_t last_byte_us = 0;
     bool was_connected = usb_serial_jtag_is_connected();
     for (;;) {
+        runtime->endpoint.poll_lifecycle();
         const bool connected = usb_serial_jtag_is_connected();
         if (was_connected && !connected) {
             runtime->adapter.reset(runtime->endpoint.counters(), true);

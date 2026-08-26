@@ -29,23 +29,18 @@ if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME)
         "${JELLYFRAME_ROOT}/src/app_runtime/script_task_fatal_codec.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/script_task_worker_inbox.cpp"
     )
-    if(CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE OR
-       CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_FRAME_V2_ACCEPTANCE OR
-       CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE OR
-       CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_FAULT_RECOVERY_ACCEPTANCE)
-        if(NOT JELLYFRAME_BUILD_SCRIPTING)
-            message(FATAL_ERROR
-                "real script-app acceptance requires JELLYFRAME_BUILD_SCRIPTING=ON")
-        endif()
-        list(APPEND JELLYFRAME_SCRIPT_TASK_SOURCES
-            "${JELLYFRAME_ROOT}/src/script/jerryscript_runtime.cpp"
-            "${JELLYFRAME_ROOT}/src/script/script_task_worker_runtime.cpp"
-        )
-        list(APPEND JELLYFRAME_COMPONENT_REQUIRES jellyframe_jerryscript)
-        list(APPEND JELLYFRAME_SCRIPT_INCLUDE_DIRS
-            "${JELLYFRAME_ROOT}/third_party/jerryscript/jerry-core/include"
-        )
+    if(NOT JELLYFRAME_BUILD_SCRIPTING)
+        message(FATAL_ERROR
+            "script-task port runtime requires JELLYFRAME_BUILD_SCRIPTING=ON")
     endif()
+    list(APPEND JELLYFRAME_SCRIPT_TASK_SOURCES
+        "${JELLYFRAME_ROOT}/src/script/jerryscript_runtime.cpp"
+        "${JELLYFRAME_ROOT}/src/script/script_task_worker_runtime.cpp"
+    )
+    list(APPEND JELLYFRAME_COMPONENT_REQUIRES jellyframe_jerryscript)
+    list(APPEND JELLYFRAME_SCRIPT_INCLUDE_DIRS
+        "${JELLYFRAME_ROOT}/third_party/jerryscript/jerry-core/include"
+    )
 endif()
 
 idf_component_register(

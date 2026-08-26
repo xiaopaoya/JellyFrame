@@ -99,14 +99,21 @@ never cross tasks or processes.
 
 ### 3. Installed-App Execution Closure
 
-This is the largest A2 gap. Bind `AppInstalledBundleBinding` to the actual
-runtime:
+This is the largest A2 gap. The first implementation now routes a copied
+`runtime.script: "classic"` bundle into an isolated worker-local
+`ScriptTaskWorkerRuntime`; static bundles continue through the native UI path.
+It is implementation-complete enough for physical validation, not accepted
+until the WS147 evidence below exists. Bind `AppInstalledBundleBinding` to the
+actual runtime:
 
 1. The launcher selects a published-registry bundle and loads resources through
    the bundle reader.
 2. It creates an App Runtime, including a script worker where required, and a
-   Render Core document. Resource, frame, input, and service handoff remain on
-   existing value-only protocols.
+   Render Core document. The installed-script route copies HTML, CSS and each
+   package-local classic script before the worker starts. The worker alone owns
+   JerryScript, DOM, layout and layer data; UI receives only sealed value
+   frames. Resource, frame, input, and service handoff remain on existing
+   value-only protocols.
 3. The UI task decodes and presents frames, and converts input to value-only
    packets. App fatal or load failure returns to the protected launcher.
 4. Runtime/launcher emit bounded app-scoped logs carrying app ID, generation,
@@ -158,9 +165,10 @@ not claim physical evidence.
 
 Steps 1-4 are covered for the WS147 provider handoff by the
 `provider-handoff-afdcf75-20260821` report, except that this report does not
-claim panel/input behavior. Without panel/input evidence from a real installed
-App and a clean-machine VS Code run, wider A2 remains `partial`; A1 or a
-desktop reference cannot fill that gap.
+claim panel/input behavior. The installed-script execution route also has no
+physical evidence yet. Without panel/input evidence from a real installed
+classic-script App, fatal recovery, and a clean-machine VS Code run, wider A2
+remains `partial`; A1 or a desktop reference cannot fill that gap.
 
 ## A2 Exit
 

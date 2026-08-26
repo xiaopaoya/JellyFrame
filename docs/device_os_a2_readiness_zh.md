@@ -70,11 +70,16 @@ LayerNode、arena 地址均不得跨任务/跨进程传递。
 
 ### 3. 已安装 App 执行闭环
 
-这是 A2 当前最大的缺口。完成 `AppInstalledBundleBinding` 到实际运行时的绑定：
+这是 A2 当前最大的缺口。首个实现现已将复制后的
+`runtime.script: "classic"` bundle 路由至 worker-local
+`ScriptTaskWorkerRuntime`；静态 bundle 继续走 native UI 路径。它已具备实机
+验证条件，但在获得以下 WS147 证据前不得标为验收通过。完成
+`AppInstalledBundleBinding` 到实际运行时的绑定：
 
 1. launcher 从已发布 registry 选择 bundle，并用 bundle reader 加载资源。
-2. 创建 App Runtime（需要时 script worker）与 Render Core document；资源、frame、input 和 service 仍只通过
-   已有 value-only 协议交接。
+2. 创建 App Runtime（需要时 script worker）与 Render Core document；installed-script 路径会在 worker 启动前复制
+   HTML、CSS 与每个 package-local classic script。JerryScript、DOM、layout/layer data 只由 worker 持有，UI 只接收
+   sealed value frame；资源、frame、input 和 service 仍只通过已有 value-only 协议交接。
 3. UI task 解码/呈现 frame，并把输入转为 value-only packet；App fatal/load failure 返回 protected launcher。
 4. App-scoped log 由 Runtime/launcher 带 app ID、generation、timestamp、level 输出；provider 只转发 typed copy，
    每个 response 至多 11 条，每条 message 至多 255 bytes。
@@ -109,9 +114,12 @@ fixtures 必须可在无板卡 host 上运行；它们测试 provider contract�
 5. 读取 app-scoped logs，确认诊断不污染 provider stdout，且不存在 watchdog、reset loop、DMA/SPI/panel 错误。
 6. 完成至少 30 次混合生命周期循环，再以版本化 report/summary/raw log/flash log 归档。
 
-步骤 1-4 已由 `provider-handoff-afdcf75-20260821` 报告覆盖，但该报告不宣称 panel/input 行为。没有真实安装 App
-的 panel/input 证据和干净机器 VS Code 流程时，更宽范围 A2 仍必须标为 `partial`，不得用 A1 或 desktop reference
-填补。
+步骤 1-4 已由 `provider-handoff-afdcf75-20260821` 报告覆盖，但该报告不宣称 panel/input 行为。installed-script
+执行路径也尚无实机证据。没有真实安装 classic-script App 的 panel/input、fatal recovery 证据以及干净机器 VS Code
+流程时，更宽范围 A2 仍必须标为 `partial`，不得用 A1 或 desktop reference 填补。
+
+已安装 classic-script 路径的独立实机步骤、fixture 与证据要求见
+[ws147_installed_script_task_acceptance_20260826_zh.md](ws147_installed_script_task_acceptance_20260826_zh.md)。
 
 ## A2 出口
 

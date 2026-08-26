@@ -1,0 +1,6 @@
+body { margin: 0; padding: 18px; background: #101827; color: #f8fafc; }
+main { padding: 14px; background: #1f2a44; border-radius: 12px; }
+h1 { font-size: 20px; color: #7dd3fc; }
+p { font-size: 16px; }
+button { padding: 12px; border-radius: 8px; color: #052e16; background: #34d399; }
+button.changed { background: #fbbf24; color: #422006; }
