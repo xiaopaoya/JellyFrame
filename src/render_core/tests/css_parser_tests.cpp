@@ -409,6 +409,9 @@ void style_resolution_context_tracks_its_inputs() {
     auto replacement_document = html_parser.parse("<body><button>Again</button></body>");
     Node* replacement_button = find_first_by_tag(*replacement_document, "button");
     check(replacement_button != nullptr, "replacement context fixture button exists");
+    (void)replacement_resolver.resolve(*replacement_document, context);
+    check(context.document_root == replacement_document.get(),
+          "resolving a replacement document root refreshes the context boundary");
     const Style replacement_document_style = replacement_resolver.resolve(*replacement_button, context);
     check(replacement_document_style.color.r == 0x44 && replacement_document_style.color.g == 0x55 &&
               replacement_document_style.color.b == 0x66,
