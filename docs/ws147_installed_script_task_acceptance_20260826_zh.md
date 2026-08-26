@@ -1,5 +1,7 @@
 # WS147 已安装 Script App 验收
 
+> 最后更新：2026-08-27；适用版本：0.6.0-dev
+>
 > 适用范围：Device OS A2；协议：JFDP/1；状态：待执行。
 
 本单验证已安装 `runtime.script: "classic"` App 的真实执行闭环。它不以资源可读取、页面可静态绘制或 desktop shell 成功替代脚本执行证据。

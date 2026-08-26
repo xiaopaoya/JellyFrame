@@ -1,5 +1,7 @@
 # WS147 ScriptTask Value Frame v4 移植验收要求
 
+> 最后更新：2026-08-27；适用版本：0.6.0-dev
+
 ## 目的
 
 验证 Developer Image 的 script worker 到 UI task 值帧通路已使用 frame codec v4，并确认变换、祖先 clip、变换层自身的 `overflow` clip、圆角边缘和 stop/relaunch 不会造成静止、漏绘、残影或错误恢复。

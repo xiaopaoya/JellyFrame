@@ -1,6 +1,6 @@
 # JellyFrame 活动待办
 
-> 最后更新：2026-08-25；适用版本：0.6.0-dev
+> 最后更新：2026-08-27；适用版本：0.6.0-dev
 >
 > 本清单是 [路线图](roadmap_zh.md) 的近期执行队列，不记录已经关闭的验收、性能微实验或历史移植任务。
 
@@ -8,7 +8,7 @@
 
 - [ ] 在已发布 WS147 镜像上完成干净机器 VS Code 的只读 smoke：发现、身份读取和已安装 App 列表必须与 manifest/registry 一致。要求见 `../docs/ws147_provider_vscode_smoke_20260825_zh.md`；该项不执行安装或刷写。
 - [ ] 在已发布 WS147 镜像上完成干净机器 VS Code 设备流程：打包、部署、启动、实时日志、更新、rollback、停止和删除。桌面与设备 session 必须保持独立，最终报告必须保留可定位的失败归属。
-- [ ] 通过 provider 流程完成真实已安装 App 的 panel/input 验收。记录 App launch marker、触控/输入响应、panel/present 错误与恢复行为；provider lifecycle PASS 不等于视觉或输入证据。
+- [ ] 通过 provider 流程完成真实已安装 App 的**触控 input-to-present/recovery** 验收。`ws147-script-task-value-frame-v4-20260827-final` 已关闭 timer-driven panel output、变换 clip、畸形 frame 拒绝与 stop/relaunch；它不证明物理触控 packet 能改变并重绘已安装 App。记录 App launch marker、触控/输入响应、panel/present 错误与恢复行为。
 - [ ] 将 B1 作为持续 release gate 维护。首个带签名 Core `v0.6.0` 是历史基线，Runtime 当前锁定 `v0.6.1`；以后每次 Core bump 必须下载或以其他方式认证已审阅的 release artifact、校验 archive SHA-256、更新精确 version/ABI/source lock，并通过 standalone、package-consumer 与 source-override tests。
 - [ ] 执行 [0.6 工程维护审查计划](engineering_review_plan_20260819_zh.md)：先做 R0 package/profile/provenance，再做 R1 document/style、layout/dirty 与 renderer/text。只修复有明确语义或安全缺陷的接口，不做机械式改名。
 

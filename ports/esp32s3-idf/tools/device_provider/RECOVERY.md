@@ -1,5 +1,7 @@
 # WS147 Factory Recovery
 
+> Last updated: 2026-08-27; Applies to: 0.6.0-dev
+
 This procedure applies only to the exact Developer Image manifest included in
 the same release archive. Verify `SHA256SUMS.txt` before using it.
 

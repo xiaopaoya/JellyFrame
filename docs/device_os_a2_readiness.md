@@ -1,12 +1,12 @@
 # Device OS A2 Readiness And Implementation Requirements
 
-> Last updated: 2026-08-25; Applies to: 0.6.0-dev; Status: implementation prerequisite stage
+> Last updated: 2026-08-27; Applies to: 0.6.0-dev; Status: partial physical acceptance
 
 ## Current Conclusion
 
-**The WS147 provider handoff is closed for the published image. Wider A2 is
-not yet ready for delivery acceptance and must not open an external developer
-trial.**
+**The WS147 provider handoff and installed-script render-output path are
+accepted for their measured Developer Image. Wider A2 remains partial and must
+not open an external developer trial.**
 
 The mainline now supplies the hardware-neutral control plane: JFDP/1, typed
 Identity and Logs payloads, and the
@@ -24,14 +24,11 @@ the provider-package prerequisite, but it does not prove the actual clean-machin
 VS Code session or that an installed App can render, receive input, emit logs,
 or recover.
 
-The current published package is explicitly limited to the read-only
-`discover/info/list` smoke. The Runtime extension has a capability-gated
-lifecycle group, but intentionally keeps deploy, mutation and App-debug
-controls hidden until the selected provider advertises each operation. To align with selected-device attestation, the
-unpublished `jellyframe-device@0.1.1-dev` provider source adds device records
-to live cancellation and `logs` terminals. Repackaging it, passing host
-fixtures and recording the archive hash are prerequisites for usable mutation
-and lifecycle UI; the current `0.1.0-dev` package cannot substitute for them.
+The `0.1.0-dev` package remains explicitly limited to the read-only
+`discover/info/list` smoke. `jellyframe-device@0.1.1-dev` now provides the
+selected-device attestation and lifecycle operations required by the
+capability-gated Runtime UI. It is the required provider line for mutation and
+lifecycle work; `0.1.0-dev` cannot substitute for it.
 
 WS147 has A1 storage/recovery and factory-image evidence. The targeted
 2026-08-21 workspace remeasure, based on `b372cc4`, also proves a real
@@ -43,11 +40,15 @@ inspection workspace, 4 KiB sector cache and 1 KiB transport scratch outside
 the device task stack; the minimum free stack was 14,468 bytes from a 24,576
 byte configured stack.
 
-A2 provider handoff is **PASS** for firmware `afdcf75` and the published WS147
+A2 provider handoff is **PASS** for firmware `afdcf75` and its published WS147
 manifest: identity cross-match, in-flight cancellation, durable lifecycle and
-30 mixed cycles all passed. Wider A2 remains **partial** because the evidence
-does not close the clean-machine VS Code product workflow or real installed-App
-panel/input acceptance. The provider handoff report is not an external-trial
+30 mixed cycles all passed. Separately, the measured v4 Developer Image at
+`9e32fac` passed the real installed classic-script worker-to-panel route: the
+watch face and transformed/rounded-clip fixture ran, stopped and relaunched
+without failed presents, and a malformed v3/v4 boundary frame was rejected
+without stopping later v4 frames. Wider A2 remains **partial** because neither
+report closes clean-machine VS Code product workflow or real touch
+input-to-present/recovery acceptance. Neither report is an external-trial
 release signoff.
 
 ## Ownership And Completion
@@ -55,9 +56,9 @@ release signoff.
 | Layer | Completed | Required before A2 acceptance |
 | --- | --- | --- |
 | Render Core | Independent Core package, profiles/ABI, hardware-neutral render and input contracts | No A2 blocker; a provider must not duplicate renderer logic |
-| JellyFrame Runtime/Tools | `.jfapp`, bundle checks, manifest/provider contracts, CLI host client, provider handoff contract | Clean-machine VS Code deployment/log session, readable error mapping and end-to-end tool regressions |
-| Device OS | A1 launcher/registry/staging/recovery foundation; WS147 provider handoff and versioned provider delivery | Install/configure the real `jellyframe-device` provider and bind installed bundles to AppHost, renderer, input and logs |
-| WS147 port | JFDP wire, persistent lifecycle, factory recovery, bounded real-resource commit and provider handoff for the measured profile | Real installed-App panel/input evidence; no provider lifecycle blocker remains for this image |
+| JellyFrame Runtime/Tools | `.jfapp`, bundle checks, manifest/provider contracts, CLI host client and provider handoff contract | Clean-machine VS Code deployment/log session, readable error mapping and end-to-end tool regressions |
+| Device OS | A1 launcher/registry/staging/recovery foundation, versioned WS147 provider delivery and installed classic-script worker-to-panel v4 route | Clean-machine provider setup plus verified touch packet to worker mutation, frame publication and panel presentation |
+| WS147 port | JFDP wire, persistent lifecycle, factory recovery, bounded real-resource commit, provider handoff and installed-script panel output for the measured profile | Real installed-App touch input, input-triggered render/present and recovery evidence; no provider lifecycle or v4 render-output blocker remains for this image |
 
 ## Required Device OS Implementation
 
@@ -99,12 +100,13 @@ never cross tasks or processes.
 
 ### 3. Installed-App Execution Closure
 
-This is the largest A2 gap. The first implementation now routes a copied
+The first implementation routes a copied
 `runtime.script: "classic"` bundle into an isolated worker-local
 `ScriptTaskWorkerRuntime`; static bundles continue through the native UI path.
-It is implementation-complete enough for physical validation, not accepted
-until the WS147 evidence below exists. Bind `AppInstalledBundleBinding` to the
-actual runtime:
+Its worker-to-panel v4 route is physically accepted for script-driven mutation,
+transforms and clips, but touch input-to-present and fatal recovery still need
+their own physical evidence. `AppInstalledBundleBinding` binds the actual
+runtime:
 
 1. The launcher selects a published-registry bundle and loads resources through
    the bundle reader.
@@ -163,12 +165,15 @@ not claim physical evidence.
 6. Complete at least 30 mixed lifecycle cycles and archive a versioned
    report/summary/raw-log/flash-log package.
 
-Steps 1-4 are covered for the WS147 provider handoff by the
-`provider-handoff-afdcf75-20260821` report, except that this report does not
-claim panel/input behavior. The installed-script execution route also has no
-physical evidence yet. Without panel/input evidence from a real installed
-classic-script App, fatal recovery, and a clean-machine VS Code run, wider A2
-remains `partial`; A1 or a desktop reference cannot fill that gap.
+The provider handoff report `provider-handoff-afdcf75-20260821` covers the
+lifecycle portions of steps 1-4, but does not claim panel/input behavior. The
+separate `ws147-script-task-value-frame-v4-20260827-final` report closes
+installed classic-script panel output for timer-driven mutations, transformed
+clips, malformed-frame rejection and stop/relaunch. It does not exercise
+physical touch input or a fatal-recovery route. Without touch input-to-present
+and recovery evidence from a real installed classic-script App, plus a
+clean-machine VS Code run, wider A2 remains `partial`; A1 or a desktop
+reference cannot fill those gaps.
 
 ## A2 Exit
 

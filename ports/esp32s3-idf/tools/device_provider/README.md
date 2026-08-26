@@ -1,5 +1,7 @@
 # WS147 Device Provider
 
+> Last updated: 2026-08-27; Applies to: 0.6.0-dev
+
 `jellyframe-device.cmd` is the explicitly configured WS147 Device OS provider.
 It is a host-side adapter for JFDP/1 over the board's native USB Serial/JTAG
 endpoint; it does not scan ports or parse the ESP-IDF console.
