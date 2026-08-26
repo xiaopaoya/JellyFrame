@@ -79,6 +79,68 @@ void renderer_consumes_codec_round_tripped_v2_frame() {
     assert(output.pixel(20, 20).b > 200);
 }
 
+void renderer_applies_value_frame_rotation_with_a_rounded_clip() {
+    ScriptTaskAppFrame frame;
+    frame.viewport = {0, 0, 32, 32};
+    frame.clips = {{{4, 4, 24, 24}, 8, kScriptTaskNoParentClip}};
+    DisplayCommand hand;
+    hand.type = DisplayCommandType::FillRect;
+    hand.rect = {15, 5, 2, 12};
+    hand.color = {240, 80, 90, 255};
+    hand.border_radius = 1;
+    hand.transform.enabled = true;
+    hand.transform.xx_1024 = 0;
+    hand.transform.xy_1024 = -1024;
+    hand.transform.yx_1024 = 1024;
+    hand.transform.yy_1024 = 0;
+    hand.transform.tx_1024 = 32 * 1024;
+    hand.transform.ty_1024 = 0;
+    frame.display_list.push_back(hand);
+    frame.display_clip_indices.push_back(0);
+
+    ScriptTaskFrameRenderer renderer;
+    const FrameBuffer output = renderer.render(frame, {255, 255, 255, 255});
+    assert(output.pixel(22, 16).r > 220 && output.pixel(22, 16).g < 100);
+    assert(output.pixel(15, 8).r == 255 && output.pixel(15, 8).g == 255);
+    assert(output.pixel(5, 5).r == 255 && output.pixel(5, 5).g == 255);
+}
+
+void renderer_matches_layer_compositor_for_right_angle_value_rotation() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = {0, 0, 32, 32};
+    LayerNodePtr clipped(new LayerNode(), LayerNodeDeleter{});
+    clipped->type = LayerType::Clip;
+    clipped->has_clip = true;
+    clipped->clip_rect = {4, 4, 24, 24};
+    clipped->clip_border_radius = 8;
+    LayerNodePtr hand(new LayerNode(), LayerNodeDeleter{});
+    hand->type = LayerType::Composited;
+    hand->bounds = {15, 5, 2, 12};
+    hand->transform.rotate_degrees = 90.0F;
+    hand->transform_origin_x_percent = 50;
+    hand->transform_origin_y_percent = 100;
+    DisplayCommand fill;
+    fill.type = DisplayCommandType::FillRect;
+    fill.rect = hand->bounds;
+    fill.color = {240, 80, 90, 255};
+    fill.border_radius = 1;
+    hand->display_list.push_back(fill);
+    clipped->children.push_back(std::move(hand));
+    root.children.push_back(std::move(clipped));
+
+    const FrameBuffer expected = SoftwareCompositor().render(root, 32, 32, {255, 255, 255, 255});
+    const ScriptTaskAppFrame frame = make_script_task_app_frame(root, {0, 0, 32, 32}, {}, true);
+    const FrameBuffer actual = ScriptTaskFrameRenderer().render(frame, {255, 255, 255, 255});
+    assert(actual.pixels.size() == expected.pixels.size());
+    for (std::size_t index = 0; index < actual.pixels.size(); ++index) {
+        assert(std::abs(static_cast<int>(actual.pixels[index].r) - static_cast<int>(expected.pixels[index].r)) <= 1);
+        assert(std::abs(static_cast<int>(actual.pixels[index].g) - static_cast<int>(expected.pixels[index].g)) <= 1);
+        assert(std::abs(static_cast<int>(actual.pixels[index].b) - static_cast<int>(expected.pixels[index].b)) <= 1);
+        assert(actual.pixels[index].a == expected.pixels[index].a);
+    }
+}
+
 void renderer_matches_layer_compositor_for_translucent_clip_run() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -939,6 +1001,8 @@ void retained_replay_preserves_last_presented_state_across_rejections() {
 int script_task_frame_renderer_tests_main() {
     renderer_applies_nested_value_clips();
     renderer_consumes_codec_round_tripped_v2_frame();
+    renderer_applies_value_frame_rotation_with_a_rounded_clip();
+    renderer_matches_layer_compositor_for_right_angle_value_rotation();
     renderer_matches_layer_compositor_for_translucent_clip_run();
     renderer_keeps_non_dirty_pixels_and_rejects_bad_chain();
     renderer_exposes_rounded_dirty_fast_path_statistics();

@@ -3,7 +3,9 @@
 #include "render_core/raster_primitives.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
+#include <new>
 #include <utility>
 #include <vector>
 
@@ -78,6 +80,71 @@ bool equal_color(Color left, Color right) {
     return left.r == right.r && left.g == right.g && left.b == right.b && left.a == right.a;
 }
 
+bool equal_transform(const DisplayCommandTransform& left, const DisplayCommandTransform& right) {
+    return left.enabled == right.enabled && left.xx_1024 == right.xx_1024 &&
+        left.xy_1024 == right.xy_1024 && left.yx_1024 == right.yx_1024 &&
+        left.yy_1024 == right.yy_1024 && left.tx_1024 == right.tx_1024 &&
+        left.ty_1024 == right.ty_1024;
+}
+
+bool transform_bounds(const DisplayCommand& command, Rect& output) {
+    if (command.rect.width <= 0 || command.rect.height <= 0) {
+        output = {};
+        return false;
+    }
+    if (!command.transform.enabled) {
+        output = command.rect;
+        return true;
+    }
+    constexpr double kScale = 1024.0;
+    const double xx = static_cast<double>(command.transform.xx_1024) / kScale;
+    const double xy = static_cast<double>(command.transform.xy_1024) / kScale;
+    const double yx = static_cast<double>(command.transform.yx_1024) / kScale;
+    const double yy = static_cast<double>(command.transform.yy_1024) / kScale;
+    const double tx = static_cast<double>(command.transform.tx_1024) / kScale;
+    const double ty = static_cast<double>(command.transform.ty_1024) / kScale;
+    const double corners[4][2] = {
+        {static_cast<double>(command.rect.x), static_cast<double>(command.rect.y)},
+        {static_cast<double>(safe_edge(command.rect.x, command.rect.width)), static_cast<double>(command.rect.y)},
+        {static_cast<double>(command.rect.x), static_cast<double>(safe_edge(command.rect.y, command.rect.height))},
+        {static_cast<double>(safe_edge(command.rect.x, command.rect.width)),
+         static_cast<double>(safe_edge(command.rect.y, command.rect.height))},
+    };
+    double min_x = 0.0, min_y = 0.0, max_x = 0.0, max_y = 0.0;
+    for (int index = 0; index < 4; ++index) {
+        const double x = xx * corners[index][0] + xy * corners[index][1] + tx;
+        const double y = yx * corners[index][0] + yy * corners[index][1] + ty;
+        if (!std::isfinite(x) || !std::isfinite(y)) {
+            output = {};
+            return false;
+        }
+        if (index == 0) {
+            min_x = max_x = x;
+            min_y = max_y = y;
+        } else {
+            min_x = std::min(min_x, x); max_x = std::max(max_x, x);
+            min_y = std::min(min_y, y); max_y = std::max(max_y, y);
+        }
+    }
+    const std::int64_t left = static_cast<std::int64_t>(std::floor(min_x));
+    const std::int64_t top = static_cast<std::int64_t>(std::floor(min_y));
+    const std::int64_t right = static_cast<std::int64_t>(std::ceil(max_x));
+    const std::int64_t bottom = static_cast<std::int64_t>(std::ceil(max_y));
+    output = {clamp_int64_to_int(left), clamp_int64_to_int(top),
+              safe_span(clamp_int64_to_int(left), clamp_int64_to_int(right)),
+              safe_span(clamp_int64_to_int(top), clamp_int64_to_int(bottom))};
+    return !empty_rect(output);
+}
+
+int clip_coverage(const RasterClip* clips, std::size_t clip_count, int x, int y) {
+    int coverage = 255;
+    for (std::size_t index = 0; index < clip_count; ++index) {
+        coverage = std::min(coverage, rounded_rect_coverage(clips[index].rect, clips[index].border_radius, x, y));
+        if (coverage == 0) break;
+    }
+    return coverage;
+}
+
 struct FrameBufferComparison {
     bool equal = false;
     std::uint64_t mismatch_pixels = 0;
@@ -115,7 +182,7 @@ bool equal_display_command(const DisplayCommand& left, const DisplayCommand& rig
         left.gradient_stop_percent == right.gradient_stop_percent && left.image_handle == right.image_handle &&
         left.object_fit == right.object_fit && left.object_position.x_percent == right.object_position.x_percent &&
         left.object_position.y_percent == right.object_position.y_percent &&
-        left.image_rendering == right.image_rendering;
+        left.image_rendering == right.image_rendering && equal_transform(left.transform, right.transform);
 }
 
 bool equal_clip(const ScriptTaskFrameClip& left, const ScriptTaskFrameClip& right) {
@@ -283,8 +350,7 @@ bool script_task_frame_command_visual_bounds(const DisplayCommand& command, Rect
     }
     // Every remaining current SoftwareRasterizer command is clipped to rect
     // before it can write. LayerTree expands BoxShadow rects before publication.
-    output = command.rect;
-    return true;
+    return transform_bounds(command, output);
 }
 
 ScriptTaskFrameDiff diff_script_task_app_frames(const ScriptTaskAppFrame& previous,
@@ -342,16 +408,20 @@ ScriptTaskFrameDiff diff_script_task_app_frames(const ScriptTaskAppFrame& previo
             continue;
         }
         if (has_previous) {
-            report.changed_command_bounds = report.has_changed_command_bounds
-                ? union_rect(report.changed_command_bounds, previous.display_list[index].rect)
-                : previous.display_list[index].rect;
-            report.has_changed_command_bounds = true;
+            Rect bounds;
+            if (transform_bounds(previous.display_list[index], bounds)) {
+                report.changed_command_bounds = report.has_changed_command_bounds
+                    ? union_rect(report.changed_command_bounds, bounds) : bounds;
+                report.has_changed_command_bounds = true;
+            }
         }
         if (has_current) {
-            report.changed_command_bounds = report.has_changed_command_bounds
-                ? union_rect(report.changed_command_bounds, current.display_list[index].rect)
-                : current.display_list[index].rect;
-            report.has_changed_command_bounds = true;
+            Rect bounds;
+            if (transform_bounds(current.display_list[index], bounds)) {
+                report.changed_command_bounds = report.has_changed_command_bounds
+                    ? union_rect(report.changed_command_bounds, bounds) : bounds;
+                report.has_changed_command_bounds = true;
+            }
         }
     }
     return report;
@@ -425,16 +495,14 @@ bool ScriptTaskFrameRenderer::command_visual_bounds(const DisplayCommand& comman
             output = {};
             return false;
         }
-        output = command.rect;
-        return true;
+        return transform_bounds(command, output);
     }
     if (command.type == DisplayCommandType::Image) {
         if (!image_painter_.writes_only_within_rect || command.rect.width <= 0 || command.rect.height <= 0) {
             output = {};
             return false;
         }
-        output = command.rect;
-        return true;
+        return transform_bounds(command, output);
     }
     return script_task_frame_command_visual_bounds(command, output);
 }
@@ -542,6 +610,105 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
         repaint = normalize_dirty_rects(dirty_rects, dirty_rect_count, target_rect);
     }
     std::vector<RasterClip> clip_chain;
+    SoftwareRasterizerScratch owned_scratch;
+    SoftwareRasterizerScratch* working_scratch = scratch != nullptr ? scratch : &owned_scratch;
+    const auto rasterize_transformed = [&](const DisplayCommand& command,
+                                           Rect dirty,
+                                           const RasterClip* clips,
+                                           std::size_t clip_count) {
+        Rect destination;
+        if (!transform_bounds(command, destination)) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Paint,
+                              DiagnosticSeverity::Warning,
+                              "script-frame-transform",
+                              "Value-frame command transform has invalid geometry",
+                              "destination bounds");
+            return false;
+        }
+        std::size_t source_pixels = 0;
+        if (!checked_multiply(static_cast<std::size_t>(command.rect.width),
+                              static_cast<std::size_t>(command.rect.height), source_pixels) ||
+            (options_.max_temporary_pixels != 0 && source_pixels > options_.max_temporary_pixels)) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Paint,
+                              DiagnosticSeverity::Warning,
+                              "script-frame-transform-budget",
+                              "Value-frame command transform exceeded its temporary pixel budget",
+                              std::to_string(command.rect.width) + "x" + std::to_string(command.rect.height));
+            return false;
+        }
+        FrameBuffer& source = working_scratch->transformed_surface;
+        try {
+            source.resize(command.rect.width, command.rect.height, {0, 0, 0, 0});
+        } catch (const std::bad_alloc&) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Paint,
+                              DiagnosticSeverity::Warning,
+                              "script-frame-transform-allocation",
+                              "Value-frame command transform could not allocate its temporary surface",
+                              "allocation failed");
+            return false;
+        }
+        DisplayCommand source_command = command;
+        source_command.transform = {};
+        rasterizer_.rasterize(source_command,
+                              source,
+                              {0, 0, source.width, source.height},
+                              safe_negate(command.rect.x),
+                              safe_negate(command.rect.y),
+                              working_scratch);
+
+        constexpr float kScale = 1024.0F;
+        const float xx = static_cast<float>(command.transform.xx_1024) / kScale;
+        const float xy = static_cast<float>(command.transform.xy_1024) / kScale;
+        const float yx = static_cast<float>(command.transform.yx_1024) / kScale;
+        const float yy = static_cast<float>(command.transform.yy_1024) / kScale;
+        const float tx = static_cast<float>(command.transform.tx_1024) / kScale;
+        const float ty = static_cast<float>(command.transform.ty_1024) / kScale;
+        const float determinant = xx * yy - xy * yx;
+        if (!std::isfinite(determinant) || std::abs(determinant) < 0.000001) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Paint,
+                              DiagnosticSeverity::Warning,
+                              "script-frame-transform-singular",
+                              "Value-frame command transform is singular",
+                              "matrix determinant");
+            return false;
+        }
+        const Rect visible = intersect_rect(intersect_rect(destination, dirty), target_rect);
+        const auto lerp_color = [](Color left, Color right, int t256) {
+            return Color{
+                raster_clamp_u8((static_cast<int>(left.r) * (256 - t256) + static_cast<int>(right.r) * t256 + 128) >> 8),
+                raster_clamp_u8((static_cast<int>(left.g) * (256 - t256) + static_cast<int>(right.g) * t256 + 128) >> 8),
+                raster_clamp_u8((static_cast<int>(left.b) * (256 - t256) + static_cast<int>(right.b) * t256 + 128) >> 8),
+                raster_clamp_u8((static_cast<int>(left.a) * (256 - t256) + static_cast<int>(right.a) * t256 + 128) >> 8),
+            };
+        };
+        for (int y = visible.y; y < safe_edge(visible.y, visible.height); ++y) {
+            for (int x = visible.x; x < safe_edge(visible.x, visible.width); ++x) {
+                const float device_x = static_cast<float>(x) + 0.5F;
+                const float device_y = static_cast<float>(y) + 0.5F;
+                const float source_x = (yy * (device_x - tx) - xy * (device_y - ty)) / determinant;
+                const float source_y = (-yx * (device_x - tx) + xx * (device_y - ty)) / determinant;
+                const float local_x = source_x - static_cast<float>(command.rect.x);
+                const float local_y = source_y - static_cast<float>(command.rect.y);
+                if (local_x < 0.0F || local_y < 0.0F || local_x >= source.width || local_y >= source.height) continue;
+                const int sample_x = std::max(0, std::min(source.width - 1, static_cast<int>(local_x)));
+                const int sample_y = std::max(0, std::min(source.height - 1, static_cast<int>(local_y)));
+                const int next_x = std::min(source.width - 1, sample_x + 1);
+                const int next_y = std::min(source.height - 1, sample_y + 1);
+                const int mix_x = std::max(0, std::min(255, static_cast<int>((local_x - sample_x) * 256.0F)));
+                const int mix_y = std::max(0, std::min(255, static_cast<int>((local_y - sample_y) * 256.0F)));
+                const Color top = lerp_color(source.pixel(sample_x, sample_y), source.pixel(next_x, sample_y), mix_x);
+                const Color bottom = lerp_color(source.pixel(sample_x, next_y), source.pixel(next_x, next_y), mix_x);
+                const int coverage = clip_coverage(clips, clip_count, x, y);
+                if (coverage == 0) continue;
+                blend_pixel(target, x, y, with_coverage(lerp_color(top, bottom, mix_y), coverage));
+            }
+        }
+        return true;
+    };
     for (const Rect dirty : repaint) {
         clear_rect(target, dirty, background);
         std::size_t command_begin = 0;
@@ -559,15 +726,33 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
                 if (status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidClipChain;
                 return false;
             }
-            rasterizer_.rasterize_clipped(frame.display_list.data() + command_begin,
-                                          command_end - command_begin,
-                                          target,
-                                          dirty,
-                                          0,
-                                          0,
-                                          clip_chain.empty() ? nullptr : clip_chain.data(),
-                                          clip_chain.size(),
-                                          scratch);
+            std::size_t command_index = command_begin;
+            while (command_index < command_end) {
+                if (frame.display_list[command_index].transform.enabled) {
+                    if (!rasterize_transformed(frame.display_list[command_index],
+                                               dirty,
+                                               clip_chain.empty() ? nullptr : clip_chain.data(),
+                                               clip_chain.size())) {
+                        if (status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+                        return false;
+                    }
+                    ++command_index;
+                    continue;
+                }
+                const std::size_t run_begin = command_index;
+                while (command_index < command_end && !frame.display_list[command_index].transform.enabled) {
+                    ++command_index;
+                }
+                rasterizer_.rasterize_clipped(frame.display_list.data() + run_begin,
+                                              command_index - run_begin,
+                                              target,
+                                              dirty,
+                                              0,
+                                              0,
+                                              clip_chain.empty() ? nullptr : clip_chain.data(),
+                                              clip_chain.size(),
+                                              working_scratch);
+            }
             command_begin = command_end;
         }
     }

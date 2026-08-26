@@ -136,7 +136,10 @@ native release intent mailbox，以及不创建 task/VM 的两阶段 `ScriptTask
 序列化为固定 24-byte packet。该可选 target 不依赖 JerryScript、RTOS、DOM 或 renderer，不会自行启动 worker
 或把 AppFrame 绘制到屏幕。`script_task_frame_codec.*` 现可把受限 `DisplayList`、viewport 与按绘制顺序
 排列的不透明 input target key 编码为版本化 value frame；session 和 sequence 保留在外层 frame lease packet 中。
-`make_script_task_app_frame()` 会先在 worker 内部 flatten 私有 `LayerNode`，再复制该 value frame。
+frame v3 额外为每条 command 携带有界的 1/1024 定点仿射矩阵，因此 worker 内的 `rotate()`、
+`scale()` 不会在 frame 交给 UI task 时消失。v1/v2 遇到带变换 command 会显式拒绝，不能再静默绘制
+未变换结果。`make_script_task_app_frame()` 会先在 worker 内部 flatten 私有 `LayerNode`，再复制该
+value frame。
 `script_task_input_codec.*` 为 worker inbox 提供版本化 pointer、wheel、key 和受限 text value。
 `script_task_input_dispatch.*` 只通过 worker 私有 `InputController` 消费这些 value。
 `script_task_service_request_codec.*` 将 typed request 编码为固定 20-byte value，并将取消身份编码为

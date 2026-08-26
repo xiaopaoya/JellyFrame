@@ -18,6 +18,12 @@ ScriptTaskAppFrameCodecOptions v2_limits() {
     return result;
 }
 
+ScriptTaskAppFrameCodecOptions v3_limits() {
+    ScriptTaskAppFrameCodecOptions result = v2_limits();
+    result.version = 3;
+    return result;
+}
+
 ScriptTaskAppFrame fixture() {
     ScriptTaskAppFrame frame;
     frame.viewport = {0, 0, 172, 320};
@@ -127,6 +133,34 @@ void v2_frame_rejects_invalid_clip_chain_and_v1_clip_downgrade() {
     assert(decode_script_task_app_frame(bytes, v2_limits(), frame) == ScriptTaskAppFrameCodecStatus::Malformed);
 }
 
+void v3_frame_round_trip_preserves_fixed_point_command_transform() {
+    ScriptTaskAppFrame frame = fixture();
+    DisplayCommandTransform& transform = frame.display_list.front().transform;
+    transform.enabled = true;
+    transform.xx_1024 = 0;
+    transform.xy_1024 = -1024;
+    transform.yx_1024 = 1024;
+    transform.yy_1024 = 0;
+    transform.tx_1024 = 32 * 1024;
+    transform.ty_1024 = 0;
+
+    std::vector<std::uint8_t> bytes;
+    assert(encode_script_task_app_frame(frame, v2_limits(), bytes) ==
+           ScriptTaskAppFrameCodecStatus::UnsupportedTransformFeature);
+    assert(encode_script_task_app_frame(frame, v3_limits(), bytes) ==
+           ScriptTaskAppFrameCodecStatus::Accepted);
+    ScriptTaskAppFrame decoded;
+    assert(decode_script_task_app_frame(bytes, v3_limits(), decoded) ==
+           ScriptTaskAppFrameCodecStatus::Accepted);
+    const DisplayCommandTransform& copied = decoded.display_list.front().transform;
+    assert(copied.enabled && copied.xy_1024 == -1024 && copied.yx_1024 == 1024 &&
+           copied.tx_1024 == 32 * 1024);
+
+    bytes[36 + 72] = 2;
+    assert(decode_script_task_app_frame(bytes, v3_limits(), decoded) ==
+           ScriptTaskAppFrameCodecStatus::Malformed);
+}
+
 void sealed_lease_carries_only_serialized_frame_bytes() {
     const ScriptTaskAppFrame frame = fixture();
     ScriptTaskSupervisor supervisor({{2, 24}, {1, 0}, {1, 512, 512}, 0, 0});
@@ -215,6 +249,30 @@ void worker_frame_producer_exports_clips_only_for_v2() {
     assert(v2.display_clip_indices.size() == 1 && v2.display_clip_indices[0] == 0);
 }
 
+void worker_frame_producer_preserves_layer_rotation_for_v3_consumers() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = {0, 0, 32, 32};
+    LayerNodePtr hand(new LayerNode(), LayerNodeDeleter{});
+    hand->type = LayerType::Composited;
+    hand->bounds = {15, 5, 2, 12};
+    hand->transform.rotate_degrees = 90.0F;
+    hand->transform_origin_x_percent = 50;
+    hand->transform_origin_y_percent = 100;
+    DisplayCommand fill;
+    fill.type = DisplayCommandType::FillRect;
+    fill.rect = hand->bounds;
+    fill.color = {240, 80, 90, 255};
+    hand->display_list.push_back(fill);
+    root.children.push_back(std::move(hand));
+
+    const ScriptTaskAppFrame frame = make_script_task_app_frame(root, {0, 0, 32, 32}, {}, true);
+    assert(frame.display_list.size() == 1 && frame.display_list.front().transform.enabled);
+    assert(frame.display_list.front().transform.xy_1024 != 0 || frame.display_list.front().transform.yx_1024 != 0);
+    std::vector<std::uint8_t> bytes;
+    assert(encode_script_task_app_frame(frame, v3_limits(), bytes) == ScriptTaskAppFrameCodecStatus::Accepted);
+}
+
 } // namespace
 
 int script_task_frame_codec_tests_main() {
@@ -222,10 +280,12 @@ int script_task_frame_codec_tests_main() {
     frame_codec_rejects_budget_and_wire_integrity_failures();
     v2_frame_round_trip_preserves_nested_clips_and_target_references();
     v2_frame_rejects_invalid_clip_chain_and_v1_clip_downgrade();
+    v3_frame_round_trip_preserves_fixed_point_command_transform();
     sealed_lease_carries_only_serialized_frame_bytes();
     malformed_frame_releases_its_lease_before_reporting_decode_failure();
     worker_frame_producer_flattens_private_layer_values_before_publish();
     worker_frame_producer_exports_clips_only_for_v2();
+    worker_frame_producer_preserves_layer_rotation_for_v3_consumers();
     std::cout << "script task frame codec tests passed\n";
     return 0;
 }
