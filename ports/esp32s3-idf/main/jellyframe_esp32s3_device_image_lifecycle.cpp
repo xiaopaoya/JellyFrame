@@ -247,8 +247,9 @@ private:
                                  const InstalledBundleScriptTaskTelemetry& telemetry) {
         char message[kDeviceAppLogMaxMessageBytes + 1]{};
         std::snprintf(message, sizeof(message),
-                      "script %.*s initialized=%u init_status=%u fatal_reason=%u scripts=%u input_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u fatal=%u",
-                      static_cast<int>(event.size()), event.data(), telemetry.initialized ? 1u : 0u,
+                      "script %.*s worker_started=%u ui_started=%u initialized=%u init_status=%u fatal_reason=%u scripts=%u input_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u fatal=%u",
+                      static_cast<int>(event.size()), event.data(), telemetry.worker_started ? 1u : 0u,
+                      telemetry.ui_started ? 1u : 0u, telemetry.initialized ? 1u : 0u,
                       static_cast<unsigned>(telemetry.init_status), static_cast<unsigned>(telemetry.fatal_reason),
                       static_cast<unsigned>(telemetry.scripts),
                       static_cast<unsigned>(telemetry.input_seq), static_cast<unsigned>(telemetry.mutation_seq),

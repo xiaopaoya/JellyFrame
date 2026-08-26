@@ -102,6 +102,8 @@ struct InstalledBundleScriptSession {
     std::atomic<bool> ui_done{false};
     std::atomic<bool> initialized{false};
     std::atomic<bool> fatal_seen{false};
+    std::atomic<bool> worker_started{false};
+    std::atomic<bool> ui_started{false};
     std::atomic<std::uint8_t> init_status{0xff};
     std::atomic<std::uint8_t> fatal_reason{0};
     std::atomic<std::uint32_t> input_packet_seq{0};
@@ -142,6 +144,8 @@ InstalledBundleScriptTaskTelemetry telemetry_snapshot(const InstalledBundleScrip
     InstalledBundleScriptTaskTelemetry telemetry;
     telemetry.initialized = state.initialized.load();
     telemetry.fatal = state.fatal_seen.load();
+    telemetry.worker_started = state.worker_started.load();
+    telemetry.ui_started = state.ui_started.load();
     telemetry.init_status = state.init_status.load();
     telemetry.fatal_reason = state.fatal_reason.load();
     telemetry.scripts = static_cast<std::uint32_t>(state.scripts.size());
@@ -159,6 +163,7 @@ void worker_entry(void* raw) {
         vTaskDelete(nullptr);
         return;
     }
+    state->worker_started.store(true);
     jellyframe::ScriptTaskWorkerRuntime runtime(state->script_session, worker_options(*state));
     const auto initialized = runtime.initialize(state->entry_document, state->author_css);
     state->init_status.store(static_cast<std::uint8_t>(initialized));
@@ -233,6 +238,7 @@ void ui_entry(void* raw) {
         vTaskDeleteWithCaps(nullptr);
         return;
     }
+    state->ui_started.store(true);
     boards::BoardRuntime board = boards::initialize_selected_board();
     const int width = board.profile.display.width;
     const int height = board.profile.display.height;
@@ -325,15 +331,19 @@ void supervisor_entry(void* raw) {
     BaseType_t worker_created = errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
     BaseType_t ui_created = errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
     if (!state->stop.load()) {
-        worker_created = xTaskCreate(worker_entry, "jf_app_script", CONFIG_JELLYFRAME_ESP32S3_SCRIPT_TASK_STACK_SIZE /
-                                      sizeof(StackType_t), state, 6, &worker);
+        worker_created = xTaskCreate(worker_entry, "jf_app_script", CONFIG_JELLYFRAME_ESP32S3_SCRIPT_TASK_STACK_SIZE,
+                                      state, 6, &worker);
         ui_created = xTaskCreateWithCaps(ui_entry, "jf_app_script_ui", CONFIG_JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE,
                                          state, CONFIG_JELLYFRAME_ESP32S3_UI_TASK_PRIORITY, &ui,
                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     }
-    if (worker_created != pdPASS) state->worker_done.store(true);
-    if (ui_created != pdPASS) state->ui_done.store(true);
-    if (worker_created != pdPASS || ui_created != pdPASS) state->stop.store(true);
+    if (worker_created != pdPASS || ui_created != pdPASS) {
+        state->fatal_seen.store(true);
+        if (worker_created != pdPASS) state->init_status.store(0xfe);
+        if (worker_created != pdPASS) state->worker_done.store(true);
+        if (ui_created != pdPASS) state->ui_done.store(true);
+        state->stop.store(true);
+    }
     ESP_LOGI(kTag, "session app=%s generation=%u worker=%d ui=%d viewport=%dx%d",
              state->app_id.c_str(), static_cast<unsigned>(state->generation),
              worker_created == pdPASS ? 1 : 0, ui_created == pdPASS ? 1 : 0, state->width, state->height);

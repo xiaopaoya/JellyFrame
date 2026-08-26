@@ -28,6 +28,8 @@ struct InstalledBundleScriptSession;
 struct InstalledBundleScriptTaskTelemetry {
     bool initialized = false;
     bool fatal = false;
+    bool worker_started = false;
+    bool ui_started = false;
     // These are numeric mirrors of the Render Core enums. They keep the
     // lifecycle/log boundary value-only while still identifying startup
     // failures when the USB console is deliberately disabled.
