@@ -116,8 +116,8 @@ provider；WS147 请安装版本化交付包
 缺失或无效，命令会直接给出配置提示。先执行“发现设备”，再使用“读取设备身份”按配置的
 Developer Image manifest 校验所选端点；“列出已安装 App”会显示同一端点的 registry generation、版本、
 状态和回滚可用性。这三项均为只读操作，不会安装、启动、删除或刷写设备。
-部署时会选择名称与尺寸均匹配已验证设备 profile 的 App target；profile 名称不同时，只接受唯一一个
-同尺寸 manifest target。没有这个无歧义声明的 App 不会针对该设备打包或安装。
+部署时会选择 viewport 与已验证设备 display 匹配的唯一 App target；target 名称可以不同于设备 profile，
+但所有同尺寸 target 仍必须唯一。没有这个无歧义声明的 App 不会针对该设备打包或安装。
 
 最初的 WS147 `0.1.0-dev` provider 继续保持只读，因此活动栏会隐藏 lifecycle operation。已交付的
 `0.1.1-dev` provider 通过 `capabilities.supportedOperations` 声明已验证的 lifecycle operation；发现后活动栏只会

@@ -57,9 +57,9 @@ function positiveInteger(value) {
   return Number.isInteger(value) && value > 0;
 }
 
-// Deployment must be bound to the attested display profile. A target with the
-// device profile name takes precedence; a sole same-size manifest target is a
-// supported compatibility fallback for product-specific target names.
+// Deployment must be bound to exactly one target matching the attested display.
+// Target ids may be product-specific, but a same-size ambiguity must be rejected
+// before packaging or opening a device install transaction.
 function matchingDeviceTarget(manifest, device) {
   const targets = manifest?.targets;
   const display = device?.capabilities?.display;
@@ -71,10 +71,6 @@ function matchingDeviceTarget(manifest, device) {
     && !Array.isArray(target) && target.viewport && typeof target.viewport === "object"
     && Number(target.viewport.width) === display.width
     && Number(target.viewport.height) === display.height;
-  const profileId = typeof device?.profileId === "string" ? device.profileId : "";
-  if (profileId && matchesDisplay(targets[profileId])) {
-    return profileId;
-  }
   const matches = Object.entries(targets)
     .filter(([, target]) => matchesDisplay(target))
     .map(([id]) => id);
