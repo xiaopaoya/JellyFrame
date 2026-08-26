@@ -798,6 +798,20 @@ void form_paint_only_state_changes_rebuild_visible_commands() {
     check(widest_blue_fill(after_range) > widest_blue_fill(before_range),
           "range paint-only rebuild changes the visible fill command");
 
+    check(set_form_control_value(*range, "999999999999999999999"),
+          "out-of-range range value becomes paint dirty");
+    auto malformed_range_tree = builder.build(*range_pipeline.layout_tree);
+    const DisplayList malformed_range = builder.flatten(*malformed_range_tree);
+    bool painted_range_fill = false;
+    for (const DisplayCommand& command : malformed_range) {
+        if (command.type == DisplayCommandType::FillRect && command.color.r == 37 &&
+            command.color.g == 99 && command.color.b == 235 && command.rect.height == 4) {
+            painted_range_fill = command.rect.width > 0;
+            break;
+        }
+    }
+    check(!painted_range_fill, "out-of-range range value paints as the minimum without narrowing");
+
     auto select_pipeline = build_pipeline(
         "<body><select id='choice'><option>Alpha</option><option>Beta</option></select></body>",
         "select { display: block; width: 120px; height: 24px; }");
