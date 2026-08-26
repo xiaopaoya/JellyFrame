@@ -20,16 +20,12 @@ bool contains(Rect rect, int x, int y) {
 Rect intersect_rect(Rect left, Rect right) {
     const int x1 = std::max(left.x, right.x);
     const int y1 = std::max(left.y, right.y);
-    const std::int64_t left_right = static_cast<std::int64_t>(left.x) + static_cast<std::int64_t>(left.width);
-    const std::int64_t right_right = static_cast<std::int64_t>(right.x) + static_cast<std::int64_t>(right.width);
-    const std::int64_t left_bottom = static_cast<std::int64_t>(left.y) + static_cast<std::int64_t>(left.height);
-    const std::int64_t right_bottom = static_cast<std::int64_t>(right.y) + static_cast<std::int64_t>(right.height);
-    const int x2 = static_cast<int>(std::min(left_right, right_right));
-    const int y2 = static_cast<int>(std::min(left_bottom, right_bottom));
+    const int x2 = std::min(safe_edge(left.x, left.width), safe_edge(right.x, right.width));
+    const int y2 = std::min(safe_edge(left.y, left.height), safe_edge(right.y, right.height));
     if (x2 <= x1 || y2 <= y1) {
         return Rect{x1, y1, 0, 0};
     }
-    return Rect{x1, y1, x2 - x1, y2 - y1};
+    return Rect{x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
 }
 
 bool empty_rect(Rect rect) {
@@ -55,8 +51,8 @@ HitTestResult make_result(const LayoutBox& box, int x, int y) {
     HitTestResult result;
     result.box = &box;
     result.node = event_target_for(box.node);
-    result.local_x = x - box.rect.x;
-    result.local_y = y - box.rect.y;
+    result.local_x = safe_add(x, safe_negate(box.rect.x));
+    result.local_y = safe_add(y, safe_negate(box.rect.y));
     return result;
 }
 

@@ -18,7 +18,7 @@ Rect intersect_rect(Rect left, Rect right) {
     if (x2 <= x1 || y2 <= y1) {
         return Rect{x1, y1, 0, 0};
     }
-    return Rect{x1, y1, x2 - x1, y2 - y1};
+    return Rect{x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
 }
 
 std::uint8_t opaque_channel(std::uint8_t channel, std::uint8_t alpha) {
