@@ -1478,6 +1478,7 @@ function embeddedDebugHtml(webview) {
   const viewportDefault = chinese ? 'App 默认' : 'App default';
   const viewportCustom = chinese ? '自定义' : 'Custom';
   const applyViewport = chinese ? '应用并重启' : 'Apply and restart';
+  const cancelViewport = chinese ? '取消' : 'Cancel';
   const resumeDebug = chinese ? '继续调试' : 'Resume';
   const restartDebug = chinese ? '重新启动' : 'Restart';
   return `<!doctype html>
@@ -1501,13 +1502,15 @@ function embeddedDebugHtml(webview) {
     #stage-bar { display: flex; align-items: center; gap: 8px; min-height: 34px; box-sizing: border-box; padding: 0 10px; border-bottom: 1px solid var(--vscode-panel-border); }
     .workspace-tab { min-height: 26px; padding: 0 9px; border-color: transparent; color: var(--vscode-descriptionForeground); background: transparent; font-size: 12px; }
     .workspace-tab.active { color: var(--vscode-foreground); border-bottom: 2px solid var(--vscode-focusBorder); }
-    #stage-controls { position: absolute; z-index: 1; top: 12px; right: 12px; display: flex; align-items: center; gap: 5px; padding: 6px; border: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24); }
+    #stage-controls { display: flex; align-items: center; gap: 5px; margin-left: auto; }
     #stage-controls button { min-width: 30px; padding: 0 8px; }
-    #viewport-controls { display: flex; align-items: center; gap: 4px; margin-right: 5px; }
+    #viewport-controls { position: absolute; z-index: 1; top: 12px; right: 12px; }
     #viewport-controls select, #viewport-controls input { min-height: 25px; box-sizing: border-box; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); }
     #viewport-controls select { max-width: 116px; }
     #viewport-controls input { width: 48px; padding: 0 4px; text-align: right; }
     #viewport-controls .times { color: var(--vscode-descriptionForeground); }
+    #viewport-custom { position: absolute; top: calc(100% + 6px); right: 0; display: flex; align-items: center; gap: 4px; padding: 7px; border: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24); white-space: nowrap; }
+    #viewport-custom[hidden] { display: none; }
     #viewport-apply { min-width: auto !important; font-size: 11px; }
     #record.recording { color: var(--vscode-button-foreground); background: var(--vscode-testing-iconFailed, #c74e39); }
     #stage-content { position: relative; flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center; padding: 18px; overflow: auto; }
@@ -1540,13 +1543,13 @@ function embeddedDebugHtml(webview) {
       body { --sidebar-width: 260px; --diagnostics-height: 250px; }
       #workspace { grid-template-columns: minmax(0, 1fr) 4px var(--sidebar-width); }
       #stage-content { padding: 10px; }
-      #stage-controls { top: 8px; right: 8px; }
+      #viewport-controls { top: 8px; right: 8px; }
     }
   </style>
 </head>
 <body>
   <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span></header>
-  <section id="workspace"><main id="stage"><div id="stage-bar"><button class="workspace-tab active" aria-selected="true">App viewport</button></div><div id="stage-content"><div id="stage-controls"><div id="viewport-controls" title="Change the desktop shell viewport and restart the session"><select id="viewport-preset"><option value="default">${viewportDefault}</option><option value="172x320">172 x 320</option><option value="240x320">240 x 320</option><option value="300x300">300 x 300</option><option value="320x240">320 x 240</option><option value="390x640">390 x 640</option><option value="custom">${viewportCustom}</option></select><input id="viewport-width" inputmode="numeric" pattern="[0-9]*" min="64" max="2048" aria-label="Viewport width" placeholder="W"><span class="times">x</span><input id="viewport-height" inputmode="numeric" pattern="[0-9]*" min="64" max="2048" aria-label="Viewport height" placeholder="H"><button id="viewport-apply" title="${applyViewport}">${applyViewport}</button></div><button id="record" title="Record semantic interactions">${recordIdle}</button><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></div></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="resume" title="${resumeDebug}" hidden>${resumeDebug}</button><button id="restart" title="${restartDebug}" hidden>${restartDebug}</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
+  <section id="workspace"><main id="stage"><div id="stage-bar"><button class="workspace-tab active" aria-selected="true">App viewport</button><div id="stage-controls"><button id="record" title="Record semantic interactions">${recordIdle}</button><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div></div><div id="stage-content"><div id="viewport-controls" title="Change the desktop shell viewport"><select id="viewport-preset"><option value="default">${viewportDefault}</option><option value="172x320">172 x 320</option><option value="240x320">240 x 320</option><option value="300x300">300 x 300</option><option value="320x240">320 x 240</option><option value="390x640">390 x 640</option><option value="custom">${viewportCustom}</option></select><div id="viewport-custom" hidden><input id="viewport-width" inputmode="numeric" pattern="[0-9]*" min="64" max="2048" aria-label="Viewport width" placeholder="W"><span class="times">x</span><input id="viewport-height" inputmode="numeric" pattern="[0-9]*" min="64" max="2048" aria-label="Viewport height" placeholder="H"><button id="viewport-apply" title="${applyViewport}">${applyViewport}</button><button id="viewport-cancel" title="${cancelViewport}">${cancelViewport}</button></div></div><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></div></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="resume" title="${resumeDebug}" hidden>${resumeDebug}</button><button id="restart" title="${restartDebug}" hidden>${restartDebug}</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
   <div id="bottom-resizer" class="resizer" role="separator" aria-label="Resize session diagnostics"></div>
   <section id="diagnostics"><div id="diagnostics-title">Session diagnostics</div><pre id="diagnostics-text">Waiting for session configuration...</pre></section>
   <script nonce="${nonce}">
@@ -1572,6 +1575,8 @@ function embeddedDebugHtml(webview) {
     const viewportWidth = document.getElementById('viewport-width');
     const viewportHeight = document.getElementById('viewport-height');
     const viewportApply = document.getElementById('viewport-apply');
+    const viewportCancel = document.getElementById('viewport-cancel');
+    const viewportCustom = document.getElementById('viewport-custom');
     const sideResizer = document.getElementById('side-resizer');
     const bottomResizer = document.getElementById('bottom-resizer');
     const viewState = vscode.getState ? (vscode.getState() || {}) : {};
@@ -1585,6 +1590,7 @@ function embeddedDebugHtml(webview) {
     let logFilter = 'all';
     let recording = false;
     let sessionActive = true;
+    let appliedViewport = { width: 0, height: 0 };
     let fitMode = viewState.fitMode !== false;
     let manualZoom = Math.max(0.25, Math.min(4, Number(viewState.manualZoom) || 1));
     function persistViewState() {
@@ -1630,7 +1636,9 @@ function embeddedDebugHtml(webview) {
       restart.hidden = !stopped;
       stop.disabled = state === 'stopping';
       record.disabled = !sessionActive;
+      viewportPreset.disabled = state === 'stopping';
       viewportApply.disabled = state === 'stopping';
+      viewportCancel.disabled = state === 'stopping';
     }
     function selectedViewport() {
       if (viewportPreset.value === 'default') return { width: 0, height: 0 };
@@ -1646,8 +1654,17 @@ function embeddedDebugHtml(webview) {
         viewportHeight.value = match[2];
       }
       const custom = viewportPreset.value === 'custom';
+      viewportCustom.hidden = !custom;
       viewportWidth.disabled = !custom;
       viewportHeight.disabled = !custom;
+    }
+    function setViewportConfig(width, height, remember) {
+      const value = width > 0 && height > 0 ? width + 'x' + height : 'default';
+      viewportPreset.value = Array.from(viewportPreset.options).some((item) => item.value === value) ? value : (width > 0 ? 'custom' : 'default');
+      viewportWidth.value = width > 0 ? String(width) : '';
+      viewportHeight.value = height > 0 ? String(height) : '';
+      if (remember) appliedViewport = { width, height };
+      syncViewportInputs();
     }
     function applyViewportRequest() {
       const requested = selectedViewport();
@@ -1747,8 +1764,12 @@ function embeddedDebugHtml(webview) {
     stop.addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
     resume.addEventListener('click', () => vscode.postMessage({ type: 'resume' }));
     restart.addEventListener('click', () => vscode.postMessage({ type: 'restart' }));
-    viewportPreset.addEventListener('change', syncViewportInputs);
+    viewportPreset.addEventListener('change', () => {
+      syncViewportInputs();
+      if (viewportPreset.value !== 'custom') applyViewportRequest();
+    });
     viewportApply.addEventListener('click', applyViewportRequest);
+    viewportCancel.addEventListener('click', () => setViewportConfig(appliedViewport.width, appliedViewport.height, false));
     zoomOut.addEventListener('click', () => setManualZoom(currentScale() / 1.2));
     zoomIn.addEventListener('click', () => setManualZoom(currentScale() * 1.2));
     zoomFit.addEventListener('click', () => { fitMode = true; updateFrameSize(); persistViewState(); });
@@ -1834,11 +1855,7 @@ function embeddedDebugHtml(webview) {
       } else if (message.type === 'viewport-config') {
         const width = Number(message.width) || 0;
         const height = Number(message.height) || 0;
-        const value = width > 0 && height > 0 ? width + 'x' + height : 'default';
-        viewportPreset.value = Array.from(viewportPreset.options).some((item) => item.value === value) ? value : (width > 0 ? 'custom' : 'default');
-        viewportWidth.value = width > 0 ? String(width) : '';
-        viewportHeight.value = height > 0 ? String(height) : '';
-        syncViewportInputs();
+        setViewportConfig(width, height, true);
       } else if (message.type === 'reset-frame') {
         latestSequence = 0;
         renderedSequence = 0;
@@ -2252,6 +2269,7 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
     if (session.runId !== runId) return;
     session.active = false;
     session.exited = true;
+    session.stopping = false;
     session.resolveExit?.();
     appendEmbeddedLog(session, 'error', `failed to start: ${error.message}`);
     postEmbeddedMessage(session, { type: 'status', text: `Failed to start: ${error.message}` });
@@ -2262,6 +2280,7 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
     if (session.runId !== runId) return;
     session.exited = true;
     session.active = false;
+    session.stopping = false;
     session.exitCode = code;
     if (session.forceStopTimer) clearTimeout(session.forceStopTimer);
     session.resolveExit?.();
