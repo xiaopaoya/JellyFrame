@@ -1,0 +1,120 @@
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: #071321;
+  color: #edf8ff;
+}
+
+.screen {
+  box-sizing: border-box;
+  width: 172px;
+  height: 320px;
+  padding: 14px;
+  background: linear-gradient(to bottom, #0f2b42, #071321);
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 22px;
+  color: #bceaff;
+  font-size: 12px;
+}
+
+header span {
+  color: #75d8ff;
+  font-size: 11px;
+}
+
+.ancestor {
+  position: relative;
+  width: 144px;
+  height: 82px;
+  margin-top: 14px;
+  overflow: hidden;
+  border: 2px solid #58c9ff;
+  border-radius: 12px;
+  background: #123b58;
+}
+
+.ancestor-mover {
+  position: absolute;
+  left: 100px;
+  top: 18px;
+  width: 66px;
+  height: 42px;
+  border-radius: 12px;
+  background: #ffbd59;
+  color: #18202a;
+  transform-origin: 50% 50%;
+}
+
+.ancestor-mover span {
+  position: absolute;
+  left: 14px;
+  top: 13px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.self-clip {
+  position: relative;
+  width: 112px;
+  height: 76px;
+  margin-top: 22px;
+  margin-left: 16px;
+  overflow: hidden;
+  border: 2px solid #c49aff;
+  border-radius: 18px;
+  background: #3d2866;
+  transform-origin: 50% 50%;
+}
+
+.self-content {
+  position: absolute;
+  left: -12px;
+  top: 18px;
+  width: 136px;
+  height: 44px;
+  background: #9f7aea;
+  color: #fffaff;
+}
+
+.self-content strong, .self-content span {
+  display: block;
+  margin-left: 20px;
+}
+
+.self-content strong { margin-top: 6px; font-size: 13px; }
+.self-content span { margin-top: 2px; font-size: 10px; }
+
+.scale-row {
+  display: flex;
+  align-items: center;
+  height: 42px;
+  margin-top: 20px;
+  color: #cfe4ef;
+  font-size: 11px;
+}
+
+.scale-target {
+  width: 48px;
+  height: 28px;
+  margin-right: 12px;
+  border-radius: 8px;
+  background: #6ee7b7;
+  color: #073226;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 28px;
+  transform-origin: 50% 50%;
+}
+
+footer {
+  margin-top: 18px;
+  color: #7196aa;
+  font-size: 10px;
+}

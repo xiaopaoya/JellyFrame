@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Transform Clip V4</title>
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+  <main class="screen">
+    <header><strong>V4 CLIP</strong><span id="state">Tick 0</span></header>
+    <section class="ancestor" aria-label="ancestor overflow clip">
+      <div id="ancestorMover" class="ancestor-mover"><span>EDGE</span></div>
+    </section>
+    <section id="selfClip" class="self-clip" aria-label="rounded source overflow clip">
+      <div class="self-content"><strong>ROUND</strong><span>source clip</span></div>
+    </section>
+    <section class="scale-row">
+      <div id="scaleTarget" class="scale-target">ZERO</div>
+      <span>scale(0) recovers</span>
+    </section>
+    <footer>static background remains visible</footer>
+  </main>
+  <script src="scripts/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.fixture.script-transform-clip-v4",
+  "name": "Script Transform Clip V4",
+  "version": {"name": "0.1.0", "code": 1},
+  "entry": "/index.html",
+  "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "classic"},
+  "viewport": {"designWidth": 300, "designHeight": 300, "shape": "rect"},
+  "budgets": {
+    "maxResourceBytes": 32768,
+    "maxDomNodes": 128,
+    "maxCssRules": 96,
+    "maxDisplayCommands": 256,
+    "maxTimers": 4,
+    "maxEventListeners": 4
+  },
+  "targets": {
+    "rect-172x320": {
+      "viewport": {"width": 172, "height": 320, "shape": "rect"},
+      "fontProfile": "tiny-plus-symbols",
+      "output": "jfapp",
+      "gate": {
+        "policy": "reject",
+        "minViewport": {"width": 172, "height": 300},
+        "allowScroll": false,
+        "allowHorizontalOverflow": false,
+        "maxWarnings": 0,
+        "maxErrors": 0
+      }
+    }
+  }
+}

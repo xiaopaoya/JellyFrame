@@ -231,6 +231,17 @@ config JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
         disabled for ordinary firmware so no script-task mailbox, lease
         registry, bridge, or JavaScript engine is linked.
 
+config JELLYFRAME_ESP32S3_INSTALLED_SCRIPT_FRAME_V4_MALFORMED_PROBE
+    bool "Inject one malformed v3/v4 installed ScriptTask frame"
+    depends on JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
+    default n
+    help
+        Acceptance-only port probe. After the worker has published a valid
+        initial v4 value frame, it posts one payload whose header claims v3
+        while retaining the v4 transform source-clip bytes. The UI must reject
+        it and later accept a normal v4 frame. This stays off for Developer
+        Images outside the dedicated acceptance profile.
+
 config JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     bool "Enable bounded BMP image adapter"
     default n

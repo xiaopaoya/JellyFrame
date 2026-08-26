@@ -247,14 +247,16 @@ private:
                                  const InstalledBundleScriptTaskTelemetry& telemetry) {
         char message[kDeviceAppLogMaxMessageBytes + 1]{};
         std::snprintf(message, sizeof(message),
-                      "script %.*s worker_started=%u ui_started=%u initialized=%u init_status=%u fatal_reason=%u scripts=%u input_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u fatal=%u",
+                      "script %.*s worker_started=%u ui_started=%u initialized=%u init_status=%u fatal_reason=%u scripts=%u input_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u v4p=%u v4r=%u v4a=%u fatal=%u",
                       static_cast<int>(event.size()), event.data(), telemetry.worker_started ? 1u : 0u,
                       telemetry.ui_started ? 1u : 0u, telemetry.initialized ? 1u : 0u,
                       static_cast<unsigned>(telemetry.init_status), static_cast<unsigned>(telemetry.fatal_reason),
                       static_cast<unsigned>(telemetry.scripts),
                       static_cast<unsigned>(telemetry.input_seq), static_cast<unsigned>(telemetry.mutation_seq),
                       static_cast<unsigned>(telemetry.published_seq), static_cast<unsigned>(telemetry.accepted_seq),
-                      static_cast<unsigned>(telemetry.presents_failed), telemetry.fatal ? 1u : 0u);
+                      static_cast<unsigned>(telemetry.presents_failed), telemetry.malformed_v4_probe_published ? 1u : 0u,
+                      telemetry.malformed_v4_probe_rejected ? 1u : 0u,
+                      static_cast<unsigned>(telemetry.accepted_after_malformed_v4_probe), telemetry.fatal ? 1u : 0u);
         record_app_log(telemetry.fatal ? DeviceAppLogLevel::Error : DeviceAppLogLevel::Info,
                        app_id, generation, message);
     }
@@ -285,6 +287,14 @@ private:
             if (telemetry.initialized) {
                 record_script_telemetry(active_app_id_, store_.registry_generation(), "worker", telemetry);
                 script_worker_initialized_logged_ = true;
+            }
+        }
+        if (script_session_ != nullptr && script_worker_initialized_logged_) {
+            const std::int64_t now_us = esp_timer_get_time();
+            if (last_script_telemetry_us_ == 0 || now_us - last_script_telemetry_us_ >= 5000000) {
+                record_script_telemetry(active_app_id_, store_.registry_generation(), "tick",
+                                        installed_bundle_script_task_telemetry(script_session_));
+                last_script_telemetry_us_ = now_us;
             }
         }
         if (!installed_bundle_script_task_has_fatal(script_session_)) {
@@ -458,6 +468,7 @@ private:
         }
         active_app_id_.assign(app_id.app_id_view());
         script_worker_initialized_logged_ = false;
+        last_script_telemetry_us_ = 0;
         if (script_app) {
             record_script_telemetry(app_id.app_id_view(), store_.registry_generation(), "launch-prepared",
                                     installed_bundle_script_task_telemetry(script_session_));
@@ -727,6 +738,7 @@ private:
     InstalledBundleUiSession* ui_session_ = nullptr;
     InstalledBundleScriptSession* script_session_ = nullptr;
     bool script_worker_initialized_logged_ = false;
+    std::int64_t last_script_telemetry_us_ = 0;
     std::string active_app_id_;
     std::array<DeviceAppLogEntry, kAppLogCapacity> app_logs_{};
     std::array<std::uint8_t, kDeviceProtocolHeaderBytes + kDeviceProtocolMaxPayloadBytes> response_frame_{};

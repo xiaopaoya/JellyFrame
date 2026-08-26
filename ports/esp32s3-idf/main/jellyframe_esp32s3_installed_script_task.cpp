@@ -115,6 +115,9 @@ struct InstalledBundleScriptSession {
     std::atomic<std::uint32_t> published_frame_seq{0};
     std::atomic<std::uint32_t> accepted_frame_seq{0};
     std::atomic<std::uint32_t> present_failures{0};
+    std::atomic<bool> malformed_v4_probe_published{false};
+    std::atomic<bool> malformed_v4_probe_rejected{false};
+    std::atomic<std::uint32_t> accepted_after_malformed_v4_probe{0};
     std::uint32_t app_instance_id = 0;
     std::uint32_t generation = 0;
     int width = 0;
@@ -158,8 +161,43 @@ InstalledBundleScriptTaskTelemetry telemetry_snapshot(const InstalledBundleScrip
     telemetry.published_seq = state.published_frame_seq.load();
     telemetry.accepted_seq = state.accepted_frame_seq.load();
     telemetry.presents_failed = state.present_failures.load();
+    telemetry.malformed_v4_probe_published = state.malformed_v4_probe_published.load();
+    telemetry.malformed_v4_probe_rejected = state.malformed_v4_probe_rejected.load();
+    telemetry.accepted_after_malformed_v4_probe = state.accepted_after_malformed_v4_probe.load();
     return telemetry;
 }
+
+#if defined(CONFIG_JELLYFRAME_ESP32S3_INSTALLED_SCRIPT_FRAME_V4_MALFORMED_PROBE) && \
+    CONFIG_JELLYFRAME_ESP32S3_INSTALLED_SCRIPT_FRAME_V4_MALFORMED_PROBE
+bool publish_malformed_v3_with_v4_source_clip(InstalledBundleScriptSession& state) {
+    if (state.protocol == nullptr) return false;
+    jellyframe::ScriptTaskAppFrame frame;
+    frame.viewport = {0, 0, state.width, state.height};
+    frame.clips.push_back({{8, 8, state.width - 16, state.height - 16}, 12, jellyframe::kScriptTaskNoParentClip});
+    jellyframe::DisplayCommand fill;
+    fill.type = jellyframe::DisplayCommandType::FillRect;
+    fill.rect = {12, 12, state.width - 24, state.height - 24};
+    fill.color = {24, 96, 176, 255};
+    fill.transform.enabled = true;
+    fill.transform.source_clip_index = 0;
+    frame.display_list.push_back(fill);
+    frame.display_clip_indices.push_back(0);
+    std::vector<std::uint8_t> encoded;
+    if (jellyframe::encode_script_task_app_frame(frame, frame_codec_options(), encoded) !=
+            jellyframe::ScriptTaskAppFrameCodecStatus::Accepted ||
+        encoded.size() < 36 + 28 + 104) {
+        return false;
+    }
+    // Keep the v4 command record intact while falsely claiming its v3 header.
+    // The normal UI decoder is configured for v4 and must reject this packet.
+    encoded[4] = 3;
+    const bool published = state.protocol->publish_frame(state.script_session, encoded).accepted();
+    state.malformed_v4_probe_published.store(published);
+    ESP_LOGI(kTag, "v4 malformed probe app=%s published=%u bytes=%u", state.app_id.c_str(), published ? 1u : 0u,
+             static_cast<unsigned>(encoded.size()));
+    return published;
+}
+#endif
 
 void worker_entry(void* raw) {
     auto* state = static_cast<InstalledBundleScriptSession*>(raw);
@@ -181,6 +219,10 @@ void worker_entry(void* raw) {
         }
         if (!state->stop.load() && !runtime.fatal()) {
             (void)runtime.publish_frame(*state->protocol);
+#if defined(CONFIG_JELLYFRAME_ESP32S3_INSTALLED_SCRIPT_FRAME_V4_MALFORMED_PROBE) && \
+    CONFIG_JELLYFRAME_ESP32S3_INSTALLED_SCRIPT_FRAME_V4_MALFORMED_PROBE
+            (void)publish_malformed_v3_with_v4_source_clip(*state);
+#endif
         }
     }
     if (initialized != jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted) {
@@ -305,12 +347,19 @@ void ui_entry(void* raw) {
             const bool presented = rendered && jellyframe::present_frame(framebuffer, sink, &full, 1);
             if (presented) {
                 state->accepted_frame_seq.store(packet_sequence);
+                if (state->malformed_v4_probe_rejected.load()) {
+                    state->accepted_after_malformed_v4_probe.fetch_add(1);
+                }
             } else {
                 state->present_failures.fetch_add(1);
                 ESP_LOGW(kTag, "ui present rejected app=%s take=%u render=%u",
                          state->app_id.c_str(), static_cast<unsigned>(take_status),
                          static_cast<unsigned>(render_status));
             }
+        } else if (take_status == jellyframe::ScriptTaskAppFrameTakeStatus::DecodeRejected &&
+                   state->malformed_v4_probe_published.load()) {
+            state->malformed_v4_probe_rejected.store(true);
+            ESP_LOGI(kTag, "v4 malformed probe rejected app=%s", state->app_id.c_str());
         }
         BoardInputEvent event;
         std::size_t event_count = 0;
