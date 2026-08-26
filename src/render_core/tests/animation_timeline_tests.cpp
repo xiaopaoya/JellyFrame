@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -402,6 +403,36 @@ void animation_invalidation_covers_transient_paint_effects() {
           "dirty rect covers old and new shadow and outline extents");
 }
 
+void animation_invalidation_expansion_saturates_before_viewport_clipping() {
+    HtmlParser html;
+    CssParser css;
+    auto document = html.parse("<body><div class='box'></div></body>");
+    Node* box_node = find_first_by_class(*document, "box");
+    check(box_node != nullptr, "extreme animation fixture node exists");
+    StyleResolver resolver(css.parse(
+        "body { margin: 0; }"
+        ".box { width: 20px; height: 20px; background: #ff0000; }"));
+    RenderTreeBuilder render_builder(resolver);
+    auto render_tree = render_builder.build(*document);
+    LayoutEngine layout(resolver);
+    auto layout_tree = layout.layout(*render_tree, 120);
+
+    StyleOverride override;
+    override.node = box_node;
+    override.has_background_color = true;
+    override.background_color = Color{0, 0, 255, 255};
+    const DirtyRegionResult region = compute_animation_dirty_region(
+        *layout_tree,
+        {},
+        std::vector<StyleOverride>{override},
+        AnimationInvalidationOptions{Rect{0, 0, 120, 80}, 8, std::numeric_limits<int>::max()});
+    check(region.mode == DirtyRegionMode::DirtyRects && region.rects.size() == 1,
+          "extreme animation expansion remains a bounded dirty region");
+    check(region.rects.front().x == 0 && region.rects.front().y == 0 &&
+              region.rects.front().width == 120 && region.rects.front().height == 80,
+          "extreme animation expansion clips safely to the viewport");
+}
+
 } // namespace
 
 int main() {
@@ -419,6 +450,7 @@ int main() {
         software_compositor_applies_rotate_transform_origin();
         animation_invalidation_covers_previous_and_current_transform_bounds();
         animation_invalidation_covers_transient_paint_effects();
+        animation_invalidation_expansion_saturates_before_viewport_clipping();
     } catch (const std::exception& error) {
         std::cerr << "animation timeline test failed: " << error.what() << '\n';
         return 1;
