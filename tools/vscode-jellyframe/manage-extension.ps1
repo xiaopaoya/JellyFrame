@@ -45,6 +45,7 @@ function Assert-VsixContents {
     $required = @(
         "extension/extension.js",
         "extension/command_diagnostics.js",
+        "extension/desktop_build_setup.js",
         "extension/device_presentation.js",
         "extension/status_presentation.js",
         "extension/build_profiles.js",
@@ -120,6 +121,7 @@ function New-BuiltinVsix {
         $files = @(
             "extension.js",
             "command_diagnostics.js",
+            "desktop_build_setup.js",
             "device_presentation.js",
             "status_presentation.js",
             "build_profiles.js",

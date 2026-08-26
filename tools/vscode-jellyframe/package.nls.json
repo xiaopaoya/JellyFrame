@@ -9,6 +9,7 @@
   "command.runFrameScript": "JellyFrame: Run Frame Script",
   "command.openCapture": "JellyFrame: Open Capture",
   "command.listBuilds": "JellyFrame: List Desktop Builds",
+  "command.setupDesktopBuild": "JellyFrame: Create Compatible Desktop Build",
   "command.package": "JellyFrame: Generate Resource Package",
   "command.newFromTemplate": "JellyFrame: New App From Template",
   "command.showReport": "JellyFrame: Show Last Report",

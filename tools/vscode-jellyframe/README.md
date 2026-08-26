@@ -78,6 +78,11 @@ unless `jellyframe.buildDir` is explicitly set. A selected build must have
 `JELLYFRAME_BUILD_SCRIPTING=ON`; builds that retain the pre-1.0
 `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME` cache option are rejected with a
 reconfigure instruction instead of being run accidentally.
+When a compatible desktop build is missing, the error action and the Environment
+section both offer **Create compatible desktop build**. After explicit author
+selection, it configures and builds the managed Release profile locally; a
+checked-out JerryScript source is built first only when its libraries are absent.
+The command never downloads third-party source or deletes a custom build path.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
 

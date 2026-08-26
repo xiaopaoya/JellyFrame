@@ -3,6 +3,12 @@ const path = require("path");
 const childProcess = require("child_process");
 const vscode = require("vscode");
 const { selectBuildDirectory } = require("./build_profiles");
+const {
+  desktopBuildPlan,
+  jerryscriptBuildArguments,
+  jerryscriptState,
+  managedProfileRoot
+} = require("./desktop_build_setup");
 const { appendBoundedOutput, commandFailure } = require("./command_diagnostics");
 const {
   deviceChoice,
@@ -31,6 +37,7 @@ let lastDeviceFailure;
 let lastDeviceLifecycle;
 let statusProvider;
 let embeddedDebugSession;
+let activeDesktopBuildSetup;
 
 const APP_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/;
 const DIRECTORY_NAME_PATTERN = /^[^<>:"/\\|?*\x00-\x1f.][^<>:"/\\|?*\x00-\x1f]*$/;
@@ -115,6 +122,16 @@ function buildDirectoryError(context, selection) {
     : "No current desktop build was found. Configure build/desktop-release or build/desktop-debug.";
 }
 
+function desktopBuildQuickFixLabel(selection, requiresScripting) {
+  const chinese = isChinese();
+  if (selection?.issue?.code === "legacy-script-task-option") {
+    return chinese ? "重建桌面构建" : "Recreate desktop build";
+  }
+  return requiresScripting || selection?.issue?.requiresScripting
+    ? (chinese ? "创建脚本桌面构建" : "Create scripting desktop build")
+    : (chinese ? "创建桌面构建" : "Create desktop build");
+}
+
 function requireNativeBuildDir(context, preferScripting = false) {
   const selection = nativeBuildDir(context, preferScripting);
   if (selection.buildDirectory) {
@@ -122,8 +139,213 @@ function requireNativeBuildDir(context, preferScripting = false) {
   }
   const message = buildDirectoryError(context, selection);
   ensureOutputChannel().appendLine(`JellyFrame build selection: ${message}`);
-  vscode.window.showErrorMessage(message);
+  const setup = desktopBuildQuickFixLabel(selection, preferScripting);
+  vscode.window.showErrorMessage(message, setup).then((choice) => {
+    if (choice === setup) {
+      configureDesktopBuild(context, preferScripting);
+    }
+  });
   return undefined;
+}
+
+function processFailureDetail(stdout, stderr) {
+  const lines = `${stderr || ""}\n${stdout || ""}`.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const detail = lines[lines.length - 1] || "";
+  return detail.length > 320 ? `${detail.slice(0, 319)}...` : detail;
+}
+
+function runLocalTool(context, executable, args, options = {}) {
+  const label = options.label || executable;
+  const channel = ensureOutputChannel();
+  channel.appendLine(`+ ${[executable, ...args].join(" ")}`);
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    let completed = false;
+    const finish = (outcome) => {
+      if (!completed) {
+        completed = true;
+        resolve(outcome);
+      }
+    };
+    const append = (stream, chunk) => {
+      const captured = appendBoundedOutput(stream === "stdout" ? stdout : stderr, chunk.toString());
+      if (stream === "stdout") {
+        stdout = captured.text;
+      } else {
+        stderr = captured.text;
+      }
+      if (captured.appended) {
+        channel.append(captured.appended);
+      }
+    };
+    let child;
+    try {
+      child = childProcess.spawn(executable, args, {
+        cwd: options.cwd || repoRoot(context),
+        shell: false,
+        windowsHide: true
+      });
+    } catch (error) {
+      const message = isChinese()
+        ? `${label}无法启动：${error.message}`
+        : `${label} could not start: ${error.message}`;
+      channel.appendLine(`[error] ${message}`);
+      vscode.window.showErrorMessage(message);
+      finish({ code: undefined, stdout, stderr, error });
+      return;
+    }
+    child.stdout?.on("data", (chunk) => append("stdout", chunk));
+    child.stderr?.on("data", (chunk) => append("stderr", chunk));
+    child.on("error", (error) => {
+      const message = isChinese()
+        ? `${label}无法启动：${error.message}`
+        : `${label} could not start: ${error.message}`;
+      channel.appendLine(`[error] ${message}`);
+      vscode.window.showErrorMessage(message);
+      finish({ code: undefined, stdout, stderr, error });
+    });
+    child.on("close", (code, signal) => {
+      if (completed) {
+        return;
+      }
+      const outcome = { code, signal, stdout, stderr };
+      channel.appendLine(`${label} exited with code ${code ?? "unknown"}`);
+      if (code !== 0) {
+        const detail = processFailureDetail(stdout, stderr);
+        const message = isChinese()
+          ? `${label}失败${detail ? `：${detail}` : "。请查看 JellyFrame 运行日志。"}`
+          : `${label} failed${detail ? `: ${detail}` : ". Open the JellyFrame run log."}`;
+        channel.appendLine(`[error] ${message}`);
+        vscode.window.showErrorMessage(message);
+        outcome.error = new Error(message);
+      }
+      finish(outcome);
+    });
+  });
+}
+
+function managedBuildRecreateReason(plan) {
+  const cache = path.join(plan.buildRoot, "CMakeCache.txt");
+  try {
+    const text = fs.readFileSync(cache, "utf8");
+    if (text.includes("JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME")) {
+      return "legacy-script-task-option";
+    }
+    if (process.platform === "win32" && !text.includes("CMAKE_GENERATOR:INTERNAL=Visual Studio 17 2022")) {
+      return "incompatible-generator";
+    }
+    return undefined;
+  } catch (_) {
+    return undefined;
+  }
+}
+
+async function configureDesktopBuild(context, scripting) {
+  if (activeDesktopBuildSetup) {
+    vscode.window.showInformationMessage(isChinese()
+      ? "JellyFrame 正在创建桌面构建。"
+      : "JellyFrame is already creating a desktop build.");
+    return activeDesktopBuildSetup;
+  }
+  if (process.platform !== "win32") {
+    vscode.window.showErrorMessage(isChinese()
+      ? "桌面壳快速构建目前仅支持 Windows。"
+      : "Desktop-shell quick setup is currently supported on Windows only.");
+    return undefined;
+  }
+
+  const root = repoRoot(context);
+  const jerry = jerryscriptState(root);
+  const plan = desktopBuildPlan(root, {
+    scripting,
+    jerryscriptRoot: scripting && jerry.sourceAvailable ? jerry.sourceDirectory : ""
+  });
+  const setup = async () => {
+    if (scripting && !jerry.sourceAvailable) {
+      const message = isChinese()
+        ? "未找到 third_party/jerryscript。请先按脚本构建文档获取 JerryScript 源码，再重试。"
+        : "third_party/jerryscript was not found. Obtain the JerryScript source as documented, then retry.";
+      ensureOutputChannel().appendLine(`[error] ${message}`);
+      vscode.window.showErrorMessage(message);
+      return undefined;
+    }
+    const recreateReason = managedBuildRecreateReason(plan);
+    if (recreateReason) {
+      const recreate = isChinese() ? "删除并重建" : "Delete and recreate";
+      const reason = recreateReason === "legacy-script-task-option"
+        ? (isChinese() ? "使用已废弃的 script-task cache 项" : "uses the deprecated script-task cache entry")
+        : (isChinese() ? "使用了不兼容的 CMake generator" : "uses an incompatible CMake generator");
+      const choice = await vscode.window.showWarningMessage(
+        isChinese()
+          ? `桌面构建 ${plan.buildRoot} ${reason}。仅该生成目录会被删除并重新创建。`
+          : `Desktop build ${plan.buildRoot} ${reason}. Only this generated directory will be deleted and recreated.`,
+        { modal: true }, recreate);
+      if (choice !== recreate) {
+        return undefined;
+      }
+      const managed = managedProfileRoot(root, plan.outputDirectory);
+      if (!managed) {
+        vscode.window.showErrorMessage(isChinese()
+          ? "拒绝删除非 JellyFrame 管理的构建目录。请在设置中选择其他目录。"
+          : "Refusing to delete a build directory not managed by JellyFrame. Choose another directory in Settings.");
+        return undefined;
+      }
+      fs.rmSync(managed, { recursive: true, force: true });
+    }
+    if (scripting && !jerry.librariesAvailable) {
+      const dependency = await runLocalTool(
+        context,
+        config().get("pythonPath", "python"),
+        jerryscriptBuildArguments(jerry.sourceDirectory),
+        { label: isChinese() ? "构建 JerryScript" : "Build JerryScript", cwd: jerry.sourceDirectory }
+      );
+      if (dependency.code !== 0) {
+        return undefined;
+      }
+    }
+    const configured = await runLocalTool(context, "cmake", plan.configureArguments, {
+      label: isChinese() ? "配置 JellyFrame 桌面构建" : "Configure JellyFrame desktop build",
+      cwd: root
+    });
+    if (configured.code !== 0) {
+      return undefined;
+    }
+    const built = await runLocalTool(context, "cmake", plan.buildArguments, {
+      label: isChinese() ? "构建 JellyFrame 桌面壳" : "Build JellyFrame desktop shell",
+      cwd: root
+    });
+    if (built.code !== 0 || !fs.existsSync(path.join(plan.outputDirectory, "jellyframe_desktop_shell.exe"))) {
+      if (built.code === 0) {
+        vscode.window.showErrorMessage(isChinese()
+          ? "构建完成但未生成 JellyFrame 桌面壳。请查看 JellyFrame 运行日志。"
+          : "The build completed but did not produce the JellyFrame desktop shell. Open the JellyFrame run log.");
+      }
+      return undefined;
+    }
+    const configuredBuild = String(config().get("buildDir", "") || "").trim();
+    if (configuredBuild) {
+      const target = vscode.workspace.workspaceFolders?.length
+        ? vscode.ConfigurationTarget.Workspace
+        : vscode.ConfigurationTarget.Global;
+      await config().update("buildDir", path.relative(root, plan.outputDirectory), target);
+    }
+    ensureOutputChannel().appendLine(`JellyFrame desktop build ready: ${plan.outputDirectory}`);
+    vscode.window.showInformationMessage(isChinese()
+      ? "JellyFrame 脚本桌面构建已就绪。现在可以重新执行调试或程控回放。"
+      : "The JellyFrame scripting desktop build is ready. You can retry debugging or programmed playback.");
+    statusProvider?.refresh();
+    return plan.outputDirectory;
+  };
+  activeDesktopBuildSetup = setup();
+  try {
+    return await activeDesktopBuildSetup;
+  } finally {
+    activeDesktopBuildSetup = undefined;
+    statusProvider?.refresh();
+  }
 }
 
 function debugLauncherPath(context) {
@@ -2192,6 +2414,7 @@ class JellyFrameStatusProvider {
       buildProfile: "构建配置",
       buildOutput: "输出目录",
       scriptSupport: "脚本支持",
+      createDesktopBuild: "创建兼容桌面构建",
       device: "设备",
       deviceActions: "设备操作",
       deviceLifecycle: "App 生命周期与调试",
@@ -2280,6 +2503,7 @@ class JellyFrameStatusProvider {
       buildProfile: "Build profile",
       buildOutput: "Output directory",
       scriptSupport: "Script support",
+      createDesktopBuild: "Create compatible desktop build",
       device: "Device",
       deviceActions: "Device actions",
       deviceLifecycle: "App Lifecycle & Debug",
@@ -2395,6 +2619,12 @@ class JellyFrameStatusProvider {
           this.statusItem(labels.buildProfile, buildPresentation.profile, buildPresentation.profile, "settings-gear"),
           this.statusItem(labels.buildOutput, buildPresentation.output, buildPresentation.output, "folder"),
           this.statusItem(labels.scriptSupport, buildPresentation.scripting, buildPresentation.scripting, "symbol-event"),
+          ...(!buildDirectory ? [this.commandItem(
+            labels.createDesktopBuild,
+            chinese
+              ? "创建当前 App 所需的桌面壳构建；仅在确认后运行本机 CMake。"
+              : "Create the desktop-shell build needed by the current App; CMake runs only after confirmation.",
+            "jellyframe.setupDesktopBuild", "tools")] : []),
           this.commandItem(chinese ? "选择或查看构建" : "Choose or inspect builds",
             chinese ? "显示可用桌面构建，并帮助确认当前选择。" : "Show available desktop builds and confirm the current selection.",
             "jellyframe.listBuilds", "list-tree"),
@@ -2954,6 +3184,11 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.runFrameScript", (resourceUri) => runFrameScript(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.openCapture", () => openCapture(context)),
     vscode.commands.registerCommand("jellyframe.listBuilds", () => listBuilds(context)),
+    vscode.commands.registerCommand("jellyframe.setupDesktopBuild", () => {
+      const root = currentPackageRoot();
+      const scripting = appRequiresScripting(root);
+      return configureDesktopBuild(context, scripting);
+    }),
     vscode.commands.registerCommand("jellyframe.package", (resourceUri) => runPackageCommand(context, "package", resourceUri)),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),

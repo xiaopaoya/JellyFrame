@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.18",
+  "version": "0.4.19",
   "publisher": "jellyframe",
   "repository": {
     "type": "git",
@@ -24,6 +24,7 @@
     "onCommand:jellyframe.runFrameScript",
     "onCommand:jellyframe.openCapture",
     "onCommand:jellyframe.listBuilds",
+    "onCommand:jellyframe.setupDesktopBuild",
     "onCommand:jellyframe.package",
     "onCommand:jellyframe.newFromTemplate",
     "onCommand:jellyframe.showReport",
@@ -82,6 +83,11 @@
         "command": "jellyframe.listBuilds",
         "title": "%command.listBuilds%",
         "icon": "$(list-tree)"
+      },
+      {
+        "command": "jellyframe.setupDesktopBuild",
+        "title": "%command.setupDesktopBuild%",
+        "icon": "$(tools)"
       },
       {
         "command": "jellyframe.package",

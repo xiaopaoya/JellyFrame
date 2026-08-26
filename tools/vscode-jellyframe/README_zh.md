@@ -60,6 +60,9 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 `build/desktop-scripting-release/Release` 或 `build/desktop-scripting-debug/Debug`。所选构建必须启用
 `JELLYFRAME_BUILD_SCRIPTING=ON`；仍保留 1.0 前
 `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME` cache 项的构建会被拒绝，并提示重新配置，而不会被意外运行。
+缺少兼容桌面构建时，错误提示操作和“环境”分组都会提供“创建兼容桌面构建”。在作者明确点击后，它会在本机配置并构建
+受管理的 Release profile；仓库中已有 JerryScript 源码但尚未生成库时，会先构建该依赖。该命令不会下载第三方源码，
+也不会删除自定义构建目录。
 
 使用 `JellyFrame: Show Last Report` 可以重新打开最近一次报告面板。
 
