@@ -502,12 +502,22 @@ struct InteractionInvalidationHints {
 
 using CustomPropertyMap = std::unordered_map<std::string, std::string>;
 
+class StyleResolver;
+
 struct StyleResolveContext {
+    // A context caches pointers into one resolver and one DOM tree for one
+    // interaction state. StyleResolver refreshes it automatically when any
+    // of those inputs changes.
+    const StyleResolver* resolver = nullptr;
+    const Node* document_root = nullptr;
+    std::uint64_t interaction_state_generation = 0;
     std::unordered_map<const Node*, const CustomPropertyMap*> custom_property_cache;
     std::vector<std::unique_ptr<CustomPropertyMap>> custom_property_scopes;
     std::unordered_map<const Node*, std::vector<const CssRule*>> matched_rule_cache;
     const Node* custom_property_scan_root = nullptr;
     bool has_inline_custom_properties = false;
+
+    void clear();
 };
 
 class StyleResolver {
@@ -536,6 +546,7 @@ private:
     mutable std::vector<const CssRule*> uncached_candidates_;
     mutable StyleResolverStatistics statistics_;
     InteractionInvalidationHints interaction_hints_;
+    std::uint64_t interaction_state_generation_ = 0;
     bool has_custom_property_declarations_ = false;
     // Lazily populated only by a supported CSS url(). The id is packed in the
     // existing optional background overlay word, so pages without url() do not
@@ -543,6 +554,7 @@ private:
     mutable std::vector<std::string> background_image_resources_;
 
     void build_rule_index();
+    void prepare_context(StyleResolveContext& context, const Node& node) const;
     const std::vector<const CssRule*>& candidate_rules_for(const Node& node) const;
     bool apply_custom_properties_for_node(CustomPropertyMap& inherited,
                                           const Node& node,

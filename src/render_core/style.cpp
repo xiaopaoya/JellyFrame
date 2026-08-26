@@ -5423,6 +5423,32 @@ Style StyleResolver::resolve(const Node& node) const {
     return resolve_with_custom_properties(node, custom_properties);
 }
 
+void StyleResolveContext::clear() {
+    custom_property_cache.clear();
+    custom_property_scopes.clear();
+    matched_rule_cache.clear();
+    resolver = nullptr;
+    document_root = nullptr;
+    interaction_state_generation = 0;
+    custom_property_scan_root = nullptr;
+    has_inline_custom_properties = false;
+}
+
+void StyleResolver::prepare_context(StyleResolveContext& context, const Node& node) const {
+    const Node* root = &node;
+    while (root->parent != nullptr) {
+        root = root->parent;
+    }
+    if (context.resolver != this ||
+        context.document_root != root ||
+        context.interaction_state_generation != interaction_state_generation_) {
+        context.clear();
+        context.resolver = this;
+        context.document_root = root;
+        context.interaction_state_generation = interaction_state_generation_;
+    }
+}
+
 const CustomPropertyMap& StyleResolver::custom_properties_for(const Node& node, StyleResolveContext& context) const {
     const auto existing = context.custom_property_cache.find(&node);
     if (existing != context.custom_property_cache.end()) {
@@ -5468,6 +5494,7 @@ const CustomPropertyMap& StyleResolver::custom_properties_for(const Node& node, 
 }
 
 Style StyleResolver::resolve(const Node& node, StyleResolveContext& context) const {
+    prepare_context(context, node);
     const CustomPropertyMap& custom_properties = custom_properties_for(node, context);
     const std::vector<const CssRule*>* matched_rules = has_custom_property_declarations_
         ? &matching_rules_for(node, context)
@@ -5564,6 +5591,11 @@ InteractionInvalidationHints StyleResolver::interaction_invalidation_hints() con
 void StyleResolver::set_interaction_state(const Node* hovered_node,
                                           const Node* active_node,
                                           const Node* focused_node) {
+    if (options_.hovered_node != hovered_node ||
+        options_.active_node != active_node ||
+        options_.focused_node != focused_node) {
+        ++interaction_state_generation_;
+    }
     options_.hovered_node = hovered_node;
     options_.active_node = active_node;
     options_.focused_node = focused_node;
