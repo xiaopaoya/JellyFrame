@@ -410,6 +410,15 @@ class DeviceReferenceCliTests(unittest.TestCase):
             self.assertEqual(response["sessionId"], 4)
             self.assertEqual(response["requestId"], 7)
 
+    def test_operation_result_rejects_reserved_flags(self):
+        with self.assertRaisesRegex(device_reference.ReferenceDeviceError, "invalid JFDP operation result"):
+            device_reference.encode_jfdp_operation_result("ok", flags=0x8000)
+
+        payload = bytearray(device_reference.encode_jfdp_operation_result("ok"))
+        payload[2] = 0x80
+        with self.assertRaisesRegex(device_reference.ReferenceDeviceError, "invalid JFDP operation result"):
+            device_reference.decode_jfdp_operation_result(bytes(payload))
+
     def test_typed_jfdp_rejects_a_bundle_whose_manifest_id_differs_from_begin(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-device-reference-jfdp-") as directory:
             root = Path(directory)

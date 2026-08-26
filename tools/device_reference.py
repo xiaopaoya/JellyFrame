@@ -86,6 +86,7 @@ JFDP_RESULT_NAMES = {value: key for key, value in JFDP_RESULT_CODES.items()}
 JFDP_RESULT_COMPLETE = 1 << 0
 JFDP_RESULT_ACTIVE = 1 << 1
 JFDP_RESULT_LAUNCHER_ACTIVE = 1 << 2
+JFDP_RESULT_FLAG_MASK = JFDP_RESULT_COMPLETE | JFDP_RESULT_ACTIVE | JFDP_RESULT_LAUNCHER_ACTIVE
 
 
 class ReferenceDeviceError(RuntimeError):
@@ -779,8 +780,10 @@ def encode_jfdp_app_logs_payload(entries: list[dict], dropped_records: int = 0) 
 
 def encode_jfdp_operation_result(result_code: str, *, flags: int = 0, transaction_id: int = 0,
                                  received_bytes: int = 0, expected_bytes: int = 0) -> bytes:
-    if result_code not in JFDP_RESULT_CODES or not all(0 <= value <= 0xffffffff
-                                                        for value in (transaction_id, received_bytes, expected_bytes)):
+    if (result_code not in JFDP_RESULT_CODES or not isinstance(flags, int) or
+            not 0 <= flags <= 0xffff or flags & ~JFDP_RESULT_FLAG_MASK or
+            not all(isinstance(value, int) and 0 <= value <= 0xffffffff
+                    for value in (transaction_id, received_bytes, expected_bytes))):
         raise ReferenceDeviceError("invalid-request", "invalid JFDP operation result")
     return struct.pack("<BBHIII", JFDP_PAYLOAD_VERSION, JFDP_RESULT_CODES[result_code], flags,
                        transaction_id, received_bytes, expected_bytes)
@@ -790,7 +793,8 @@ def decode_jfdp_operation_result(payload: bytes) -> dict:
     if len(payload) != 16:
         raise ReferenceDeviceError("invalid-request", "invalid JFDP operation result size")
     version, result_value, flags, transaction_id, received_bytes, expected_bytes = struct.unpack("<BBHIII", payload)
-    if version != JFDP_PAYLOAD_VERSION or result_value not in JFDP_RESULT_NAMES:
+    if (version != JFDP_PAYLOAD_VERSION or result_value not in JFDP_RESULT_NAMES or
+            flags & ~JFDP_RESULT_FLAG_MASK):
         raise ReferenceDeviceError("invalid-request", "invalid JFDP operation result")
     return {
         "resultCode": JFDP_RESULT_NAMES[result_value],
