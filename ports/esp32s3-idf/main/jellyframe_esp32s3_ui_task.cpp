@@ -2225,17 +2225,19 @@ void run_retained_ui_task(void* raw_context) {
 
 } // namespace
 
-bool start_ui_task(TimerUiTaskContext* context, const char* task_name, TaskHandle_t* handle = nullptr) {
+bool start_ui_task_with_caps(TimerUiTaskContext* context,
+                             const char* task_name,
+                             TaskHandle_t* handle,
+                             std::uint32_t memory_caps) {
     if (context == nullptr) {
         return false;
     }
     TaskHandle_t task = nullptr;
-    const BaseType_t ok = xTaskCreate(run_retained_ui_task,
-                                      task_name,
-                                      CONFIG_JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE,
-                                      context,
-                                      CONFIG_JELLYFRAME_ESP32S3_UI_TASK_PRIORITY,
-                                      &task);
+    const BaseType_t ok = memory_caps == 0
+        ? xTaskCreate(run_retained_ui_task, task_name, CONFIG_JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE,
+                      context, CONFIG_JELLYFRAME_ESP32S3_UI_TASK_PRIORITY, &task)
+        : xTaskCreateWithCaps(run_retained_ui_task, task_name, CONFIG_JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE,
+                              context, CONFIG_JELLYFRAME_ESP32S3_UI_TASK_PRIORITY, &task, memory_caps);
     if (ok != pdPASS) {
         delete context;
         ESP_LOGE(kTag, "UI task creation failed");
@@ -2245,6 +2247,10 @@ bool start_ui_task(TimerUiTaskContext* context, const char* task_name, TaskHandl
         *handle = task;
     }
     return true;
+}
+
+bool start_ui_task(TimerUiTaskContext* context, const char* task_name, TaskHandle_t* handle = nullptr) {
+    return start_ui_task_with_caps(context, task_name, handle, 0);
 }
 
 bool start_timer_ui_task() {
@@ -2414,7 +2420,8 @@ bool start_installed_bundle_ui_task(std::string app_id,
     context->installed_session = next_session;
     context->telemetry_case = "installed_bundle_ui_cumulative";
     context->telemetry_app_id = context->installed_app_id.c_str();
-    if (!start_ui_task(context, "jellyframe_app", &next_session->task)) {
+    if (!start_ui_task_with_caps(context, "jellyframe_app", &next_session->task,
+                                 MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)) {
         vSemaphoreDelete(next_session->stopped);
         delete next_session;
         return false;
