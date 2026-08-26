@@ -669,7 +669,13 @@ bool parse_float_attribute(const Node& node, const char* name, float& output) {
     char* end = nullptr;
     errno = 0;
     const float parsed = std::strtof(value.c_str(), &end);
-    if (end == value.c_str() || errno == ERANGE) {
+    if (end == value.c_str() || errno == ERANGE || !std::isfinite(parsed)) {
+        return false;
+    }
+    while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    if (end == nullptr || *end != '\0') {
         return false;
     }
     output = parsed;
