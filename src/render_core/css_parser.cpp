@@ -5,8 +5,10 @@
 #include <array>
 #include <cctype>
 #include <cerrno>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <string_view>
 #include <vector>
 
@@ -178,8 +180,13 @@ bool parse_media_length_px(std::string_view value, int& output) {
     if (end == nullptr || *end != '\0') {
         return false;
     }
-    output = static_cast<int>(parsed >= 0.0F ? parsed + 0.5F : parsed - 0.5F);
-    return output >= 0;
+    const double parsed_value = static_cast<double>(parsed);
+    constexpr double kMaxRoundedLength = static_cast<double>(std::numeric_limits<int>::max()) - 0.5;
+    if (!std::isfinite(parsed_value) || parsed_value < 0.0 || parsed_value > kMaxRoundedLength) {
+        return false;
+    }
+    output = static_cast<int>(parsed_value + 0.5);
+    return true;
 }
 
 bool evaluate_media_feature(std::string_view condition, const CssParserOptions& options) {
