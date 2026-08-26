@@ -132,6 +132,8 @@ generation, sequence, stable reason and launcher/disable/rollback flags. Logs re
 contain at most 11 typed records, each with a copied app id, generation,
 timestamp, level and 255-byte maximum message, plus a dropped-record count.
 These records are never smuggled through JSON or port-private structs.
+Operation-result flags are limited to `complete`, `active` and
+`launcher-active`; reserved bits are rejected by both encoder and decoder.
 
 `src/device_runtime_contracts/device_install_transaction.*` implements a bounded, ordered and
 cancellable staging state machine through the injected `DeviceInstallStore`.

@@ -101,6 +101,7 @@ code、flags、transaction id 与 received/expected byte count。安装 chunk �
 sequence、稳定 reason 与 launcher/disable/rollback flag。Logs response 最多 11 条 typed record，每条复制
 app id、generation、timestamp、level 和最多 255-byte message，并带 dropped-record count。它们不能被塞入 JSON
 或 port-private struct。
+operation-result 的 flag 仅允许 `complete`、`active` 和 `launcher-active`；encoder 与 decoder 都会拒绝保留位。
 
 `src/device_runtime_contracts/device_install_transaction.*` 提供有界、有序、可取消的 staging 状态机。它只依赖
 `DeviceInstallStore` 注入的存储适配器，因此不会把 flash、文件系统、签名或 registry 实现带入
