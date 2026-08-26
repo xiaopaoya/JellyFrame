@@ -263,7 +263,8 @@ async function configureDesktopBuild(context, scripting) {
     scripting,
     jerryscriptRoot: scripting && jerry.sourceAvailable ? jerry.sourceDirectory : ""
   });
-  const setup = async () => {
+  const setup = async (progress) => {
+    progress.report({ message: isChinese() ? "检查桌面构建配置..." : "Checking desktop build configuration..." });
     if (scripting && !jerry.sourceAvailable) {
       const message = isChinese()
         ? "未找到 third_party/jerryscript。请先按脚本构建文档获取 JerryScript 源码，再重试。"
@@ -296,6 +297,7 @@ async function configureDesktopBuild(context, scripting) {
       fs.rmSync(managed, { recursive: true, force: true });
     }
     if (scripting && !jerry.librariesAvailable) {
+      progress.report({ message: isChinese() ? "构建 JerryScript..." : "Building JerryScript..." });
       const dependency = await runLocalTool(
         context,
         config().get("pythonPath", "python"),
@@ -306,6 +308,7 @@ async function configureDesktopBuild(context, scripting) {
         return undefined;
       }
     }
+    progress.report({ message: isChinese() ? "配置桌面构建..." : "Configuring desktop build..." });
     const configured = await runLocalTool(context, "cmake", plan.configureArguments, {
       label: isChinese() ? "配置 JellyFrame 桌面构建" : "Configure JellyFrame desktop build",
       cwd: root
@@ -313,6 +316,7 @@ async function configureDesktopBuild(context, scripting) {
     if (configured.code !== 0) {
       return undefined;
     }
+    progress.report({ message: isChinese() ? "编译桌面壳..." : "Building desktop shell..." });
     const built = await runLocalTool(context, "cmake", plan.buildArguments, {
       label: isChinese() ? "构建 JellyFrame 桌面壳" : "Build JellyFrame desktop shell",
       cwd: root
@@ -339,7 +343,12 @@ async function configureDesktopBuild(context, scripting) {
     statusProvider?.refresh();
     return plan.outputDirectory;
   };
-  activeDesktopBuildSetup = setup();
+  activeDesktopBuildSetup = vscode.window.withProgress({
+    location: vscode.ProgressLocation.Notification,
+    title: isChinese() ? "JellyFrame 正在创建桌面构建" : "JellyFrame is creating a desktop build",
+    cancellable: false
+  }, setup);
+  statusProvider?.refresh();
   try {
     return await activeDesktopBuildSetup;
   } finally {
@@ -1466,6 +1475,11 @@ function embeddedDebugHtml(webview) {
   const chinese = /^zh(?:-|$)/i.test(vscode.env.language || '');
   const recordIdle = chinese ? '录制' : 'Record';
   const recordActive = chinese ? '停止录制' : 'Stop recording';
+  const viewportDefault = chinese ? 'App 默认' : 'App default';
+  const viewportCustom = chinese ? '自定义' : 'Custom';
+  const applyViewport = chinese ? '应用并重启' : 'Apply and restart';
+  const resumeDebug = chinese ? '继续调试' : 'Resume';
+  const restartDebug = chinese ? '重新启动' : 'Restart';
   return `<!doctype html>
 <html>
 <head>
@@ -1489,6 +1503,12 @@ function embeddedDebugHtml(webview) {
     .workspace-tab.active { color: var(--vscode-foreground); border-bottom: 2px solid var(--vscode-focusBorder); }
     #stage-controls { display: flex; align-items: center; gap: 5px; margin-left: auto; }
     #stage-controls button { min-width: 30px; padding: 0 8px; }
+    #viewport-controls { display: flex; align-items: center; gap: 4px; margin-right: 5px; }
+    #viewport-controls select, #viewport-controls input { min-height: 25px; box-sizing: border-box; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); }
+    #viewport-controls select { max-width: 116px; }
+    #viewport-controls input { width: 48px; padding: 0 4px; text-align: right; }
+    #viewport-controls .times { color: var(--vscode-descriptionForeground); }
+    #viewport-apply { min-width: auto !important; font-size: 11px; }
     #record.recording { color: var(--vscode-button-foreground); background: var(--vscode-testing-iconFailed, #c74e39); }
     #stage-content { flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center; padding: 18px; overflow: auto; }
     #frame { display: block; flex: none; user-select: none; outline: none; background: #111; image-rendering: auto; }
@@ -1525,7 +1545,7 @@ function embeddedDebugHtml(webview) {
 </head>
 <body>
   <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span></header>
-  <section id="workspace"><main id="stage"><div id="stage-bar"><button class="workspace-tab active" aria-selected="true">App viewport</button><div id="stage-controls"><button id="record" title="Record semantic interactions">${recordIdle}</button><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div></div><div id="stage-content"><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></div></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
+  <section id="workspace"><main id="stage"><div id="stage-bar"><button class="workspace-tab active" aria-selected="true">App viewport</button><div id="stage-controls"><div id="viewport-controls" title="Change the desktop shell viewport and restart the session"><select id="viewport-preset"><option value="default">${viewportDefault}</option><option value="172x320">172 x 320</option><option value="240x320">240 x 320</option><option value="300x300">300 x 300</option><option value="320x240">320 x 240</option><option value="390x640">390 x 640</option><option value="custom">${viewportCustom}</option></select><input id="viewport-width" inputmode="numeric" pattern="[0-9]*" min="64" max="2048" aria-label="Viewport width" placeholder="W"><span class="times">x</span><input id="viewport-height" inputmode="numeric" pattern="[0-9]*" min="64" max="2048" aria-label="Viewport height" placeholder="H"><button id="viewport-apply" title="${applyViewport}">${applyViewport}</button></div><button id="record" title="Record semantic interactions">${recordIdle}</button><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div></div><div id="stage-content"><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></div></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="resume" title="${resumeDebug}" hidden>${resumeDebug}</button><button id="restart" title="${restartDebug}" hidden>${restartDebug}</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
   <div id="bottom-resizer" class="resizer" role="separator" aria-label="Resize session diagnostics"></div>
   <section id="diagnostics"><div id="diagnostics-title">Session diagnostics</div><pre id="diagnostics-text">Waiting for session configuration...</pre></section>
   <script nonce="${nonce}">
@@ -1537,6 +1557,8 @@ function embeddedDebugHtml(webview) {
     const stage = document.getElementById('stage-content');
     const status = document.getElementById('status');
     const stop = document.getElementById('stop');
+    const resume = document.getElementById('resume');
+    const restart = document.getElementById('restart');
     const record = document.getElementById('record');
     const clearLog = document.getElementById('clear-log');
     const log = document.getElementById('log');
@@ -1545,6 +1567,10 @@ function embeddedDebugHtml(webview) {
     const zoomFit = document.getElementById('zoom-fit');
     const zoomIn = document.getElementById('zoom-in');
     const zoomLabel = document.getElementById('zoom-label');
+    const viewportPreset = document.getElementById('viewport-preset');
+    const viewportWidth = document.getElementById('viewport-width');
+    const viewportHeight = document.getElementById('viewport-height');
+    const viewportApply = document.getElementById('viewport-apply');
     const sideResizer = document.getElementById('side-resizer');
     const bottomResizer = document.getElementById('bottom-resizer');
     const viewState = vscode.getState ? (vscode.getState() || {}) : {};
@@ -1557,6 +1583,7 @@ function embeddedDebugHtml(webview) {
     let logLines = [];
     let logFilter = 'all';
     let recording = false;
+    let sessionActive = true;
     let fitMode = viewState.fitMode !== false;
     let manualZoom = Math.max(0.25, Math.min(4, Number(viewState.manualZoom) || 1));
     function persistViewState() {
@@ -1593,6 +1620,45 @@ function embeddedDebugHtml(webview) {
       manualZoom = Math.max(0.25, Math.min(4, nextZoom));
       updateFrameSize();
       persistViewState();
+    }
+    function setSessionState(state) {
+      sessionActive = state === 'running';
+      const stopped = state === 'stopped';
+      stop.hidden = stopped;
+      resume.hidden = !stopped;
+      restart.hidden = !stopped;
+      stop.disabled = state === 'stopping';
+      record.disabled = !sessionActive;
+      viewportApply.disabled = state === 'stopping';
+    }
+    function selectedViewport() {
+      if (viewportPreset.value === 'default') return { width: 0, height: 0 };
+      const match = viewportPreset.value.match(/^(\\d+)x(\\d+)$/);
+      const width = match ? Number(match[1]) : Number(viewportWidth.value);
+      const height = match ? Number(match[2]) : Number(viewportHeight.value);
+      return { width, height };
+    }
+    function syncViewportInputs() {
+      const match = viewportPreset.value.match(/^(\\d+)x(\\d+)$/);
+      if (match) {
+        viewportWidth.value = match[1];
+        viewportHeight.value = match[2];
+      }
+      const custom = viewportPreset.value === 'custom';
+      viewportWidth.disabled = !custom;
+      viewportHeight.disabled = !custom;
+    }
+    function applyViewportRequest() {
+      const requested = selectedViewport();
+      if (requested.width === 0 && requested.height === 0) {
+        vscode.postMessage({ type: 'viewport-request', width: 0, height: 0 });
+        return;
+      }
+      if (!Number.isInteger(requested.width) || !Number.isInteger(requested.height) || requested.width < 64 || requested.width > 2048 || requested.height < 64 || requested.height > 2048) {
+        status.textContent = 'Viewport must be whole numbers from 64 to 2048.';
+        return;
+      }
+      vscode.postMessage({ type: 'viewport-request', width: requested.width, height: requested.height });
     }
     function renderLog() {
       const keepPinned = log.scrollTop + log.clientHeight >= log.scrollHeight - 12;
@@ -1678,6 +1744,10 @@ function embeddedDebugHtml(webview) {
       vscode.postMessage({ type: recording ? 'record-start' : 'record-stop' });
     });
     stop.addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
+    resume.addEventListener('click', () => vscode.postMessage({ type: 'resume' }));
+    restart.addEventListener('click', () => vscode.postMessage({ type: 'restart' }));
+    viewportPreset.addEventListener('change', syncViewportInputs);
+    viewportApply.addEventListener('click', applyViewportRequest);
     zoomOut.addEventListener('click', () => setManualZoom(currentScale() / 1.2));
     zoomIn.addEventListener('click', () => setManualZoom(currentScale() * 1.2));
     zoomFit.addEventListener('click', () => { fitMode = true; updateFrameSize(); persistViewState(); });
@@ -1713,6 +1783,8 @@ function embeddedDebugHtml(webview) {
     installResizer(sideResizer, '--sidebar-width', 240, () => Math.max(260, window.innerWidth * 0.7));
     installResizer(bottomResizer, '--diagnostics-height', 190, () => Math.max(220, window.innerHeight - 160));
     new ResizeObserver(() => updateFrameSize()).observe(stage);
+    syncViewportInputs();
+    setSessionState('running');
     renderLog();
     vscode.postMessage({ type: 'ready' });
     window.addEventListener('message', (event) => {
@@ -1756,6 +1828,22 @@ function embeddedDebugHtml(webview) {
         recording = Boolean(message.recording);
         record.textContent = recording ? recordActive : recordIdle;
         record.classList.toggle('recording', recording);
+      } else if (message.type === 'session-state') {
+        setSessionState(message.state);
+      } else if (message.type === 'viewport-config') {
+        const width = Number(message.width) || 0;
+        const height = Number(message.height) || 0;
+        const value = width > 0 && height > 0 ? width + 'x' + height : 'default';
+        viewportPreset.value = Array.from(viewportPreset.options).some((item) => item.value === value) ? value : (width > 0 ? 'custom' : 'default');
+        viewportWidth.value = width > 0 ? String(width) : '';
+        viewportHeight.value = height > 0 ? String(height) : '';
+        syncViewportInputs();
+      } else if (message.type === 'reset-frame') {
+        latestSequence = 0;
+        renderedSequence = 0;
+        frame.hidden = true;
+        empty.hidden = false;
+        empty.textContent = 'Waiting for the first frame...';
       }
     });
   </script>
@@ -1764,7 +1852,7 @@ function embeddedDebugHtml(webview) {
 }
 
 function stopEmbeddedDebugSession(session, reason) {
-  if (!session || session.stopping) {
+  if (!session || session.stopping || session.exited || !session.active) {
     return session?.exitPromise || Promise.resolve();
   }
   session.exitPromise = new Promise((resolve) => { session.resolveExit = resolve; });
@@ -1777,16 +1865,18 @@ function stopEmbeddedDebugSession(session, reason) {
   } catch (_) {
     // The panel may already be disposing; the process still needs to be stopped.
   }
-  if (session.child.stdin?.writable) {
+  if (session.child?.stdin?.writable) {
     session.child.stdin.write('quit\n');
     session.child.stdin.end();
   }
   session.forceStopTimer = setTimeout(() => {
     if (!session.exited) {
       session.stopReason = `${session.stopReason || 'stop'} · force-terminated after timeout`;
-      appendEmbeddedLog(session, 'lifecycle', `shell did not exit in time; terminating process tree pid=${session.child.pid}`);
+      appendEmbeddedLog(session, 'lifecycle', `shell did not exit in time; terminating process tree pid=${session.child?.pid ?? 'unknown'}`);
       scheduleEmbeddedDiagnostics(session);
-      childProcess.spawn('taskkill', ['/pid', String(session.child.pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' });
+      if (session.child?.pid) {
+        childProcess.spawn('taskkill', ['/pid', String(session.child.pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' });
+      }
     }
   }, 2500);
   return session.exitPromise;
@@ -1819,12 +1909,12 @@ function embeddedDiagnosticsText(session) {
   return [
     `App: ${session.appRoot}`,
     `Runtime: ${session.scriptMode === 'classic' ? 'Classic scripting' : 'No script runtime'} · Build: ${session.buildProfile}`,
-    `Desktop shell: ${session.shellPath} (PID ${session.child.pid})`,
+    `Desktop shell: ${session.shellPath} (PID ${session.child?.pid ?? 'not running'})`,
     `Launcher: ${session.launcher}`,
     `Frame cache: ${session.frameDir}`,
     `Session: ${session.exited ? 'Stopped' : session.stopping ? 'Stopping' : 'Running'} · ${elapsed} ms · exit ${session.exitCode ?? 'pending'}`,
     `Frames: ${session.deliveredFrames} displayed / ${session.announcedFrames} announced · ${session.droppedFrames} superseded · ${session.decodeErrors} read failures`,
-    `Latest frame: ${session.lastDeliveredSequence} · ${session.viewport.width}x${session.viewport.height}`,
+    `Viewport: ${session.requestedViewport?.width > 0 ? `${session.requestedViewport.width}x${session.requestedViewport.height} requested` : 'App default'} · latest frame ${session.lastDeliveredSequence} · ${session.viewport.width}x${session.viewport.height}`,
     `Input: ${session.inputSent} sent · Shell output: ${session.stdoutLines} standard, ${session.stderrLines} error lines`,
     `Semantic capture: ${session.recording ? 'Recording' : 'Idle'} · ${session.recordingActions.length} actions`,
     `Stop reason: ${session.stopReason || 'None'}`
@@ -2026,15 +2116,15 @@ function appendEmbeddedLog(session, stream, text) {
   scheduleEmbeddedDiagnostics(session);
 }
 
-async function deliverEmbeddedFrame(session, frame) {
-  if (!session.active || frame.sequence < session.latestAnnouncedSequence) {
+async function deliverEmbeddedFrame(session, frame, runId = session.runId) {
+  if (session.runId !== runId || !session.active || frame.sequence < session.latestAnnouncedSequence) {
     session.droppedFrames += 1;
     scheduleEmbeddedDiagnostics(session);
     return;
   }
   try {
     const bytes = await fs.promises.readFile(frame.path);
-    if (!session.active || frame.sequence !== session.latestAnnouncedSequence || frame.sequence <= session.lastDeliveredSequence) {
+    if (session.runId !== runId || !session.active || frame.sequence !== session.latestAnnouncedSequence || frame.sequence <= session.lastDeliveredSequence) {
       return;
     }
     session.lastDeliveredSequence = frame.sequence;
@@ -2063,93 +2153,79 @@ async function deliverEmbeddedFrame(session, frame) {
   }
 }
 
-async function debugApp(context, resourceUri) {
-  if (process.platform !== 'win32') {
-    vscode.window.showErrorMessage('JellyFrame desktop shell is only available on Windows.');
+function validEmbeddedViewport(width, height) {
+  return Number.isInteger(width) && Number.isInteger(height) &&
+    width >= 64 && width <= 2048 && height >= 64 && height <= 2048;
+}
+
+function resetEmbeddedRunState(session) {
+  session.active = true;
+  session.stopping = false;
+  session.exited = false;
+  session.stopReason = undefined;
+  session.exitCode = undefined;
+  session.startedAt = Date.now();
+  session.viewport = { width: 1, height: 1 };
+  session.announcedFrames = 0;
+  session.deliveredFrames = 0;
+  session.droppedFrames = 0;
+  session.decodeErrors = 0;
+  session.inputSent = 0;
+  session.stdoutLines = 0;
+  session.stderrLines = 0;
+  session.latestAnnouncedSequence = 0;
+  session.lastDeliveredSequence = 0;
+  session.outputBuffer = '';
+  session.forceStopTimer = undefined;
+  session.exitPromise = undefined;
+  session.resolveExit = undefined;
+}
+
+function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
+  if (session.disposed || session.active || session.stopping) {
     return;
-  }
-  const root = await packageRoot(resourceUri);
-  if (!root) {
-    return;
-  }
-  const launcher = debugLauncherPath(context);
-  if (!fs.existsSync(launcher)) {
-    vscode.window.showErrorMessage(`Missing debug launcher: ${launcher}`);
-    return;
-  }
-  const nativeBuildDirectory = requireNativeBuildDir(context, appRequiresScripting(root));
-  if (!nativeBuildDirectory) {
-    return;
-  }
-  if (embeddedDebugSession) {
-    const previous = embeddedDebugSession;
-    await stopEmbeddedDebugSession(previous, 'Replacing the previous debug session...');
   }
   ensureBuildDir(context);
   const sessionRoot = path.join(buildDir(context), 'debug', 'vscode-sessions');
   fs.mkdirSync(sessionRoot, { recursive: true });
-  const frameDir = fs.mkdtempSync(path.join(sessionRoot, `${outputBase(root)}-`));
-  const panel = vscode.window.createWebviewPanel(
-    'jellyframeEmbeddedDebug',
-    `JellyFrame: ${path.basename(root)}`,
-    vscode.ViewColumn.Beside,
-    { enableScripts: true, retainContextWhenHidden: true }
-  );
-  panel.webview.html = embeddedDebugHtml(panel.webview);
-  const python = config().get('pythonPath', 'python');
-  const scriptMode = appRequiresScripting(root) ? 'classic' : 'none';
-  const shellPath = path.join(nativeBuildDirectory, process.platform === 'win32' ? 'jellyframe_desktop_shell.exe' : 'jellyframe_desktop_shell');
-  const args = [launcher, '--build-dir', nativeBuildDirectory, '--app', root, '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
+  const frameDir = fs.mkdtempSync(path.join(sessionRoot, `${outputBase(session.appRoot)}-`));
+  resetEmbeddedRunState(session);
+  session.frameDir = frameDir;
+  session.runId += 1;
+  const runId = session.runId;
+  const args = [session.launcher, '--build-dir', session.buildDir, '--app', session.appRoot,
+    '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
+  if (session.requestedViewport.width > 0) {
+    args.push('--viewport-width', String(session.requestedViewport.width),
+      '--viewport-height', String(session.requestedViewport.height));
+  }
   const channel = ensureOutputChannel();
-  channel.appendLine(`+ ${[python, ...args].join(' ')}`);
-  const child = childProcess.spawn(python, args, {
-    cwd: repoRoot(context),
-    shell: false,
-    windowsHide: true,
-    stdio: ['pipe', 'pipe', 'pipe']
-  });
-  const session = {
-    active: true,
-    stopping: false,
-    exited: false,
-    child,
-    panel,
-    appRoot: root,
-    scriptMode,
-    buildProfile: path.basename(path.dirname(nativeBuildDirectory)),
-    python,
-    launcher,
-    buildDir: nativeBuildDirectory,
-    shellPath,
-    frameDir,
-    startedAt: Date.now(),
-    viewport: { width: 1, height: 1 },
-    announcedFrames: 0,
-    deliveredFrames: 0,
-    droppedFrames: 0,
-    decodeErrors: 0,
-    inputSent: 0,
-    stdoutLines: 0,
-    stderrLines: 0,
-    logLines: [],
-    webviewReady: false,
-    diagnosticsScheduled: false,
-    stopReason: undefined,
-    exitCode: undefined,
-    latestAnnouncedSequence: 0,
-    lastDeliveredSequence: 0,
-    recording: false,
-    recordingStartSequence: 0,
-    recordingActions: [],
-    recordingPendingClick: undefined,
-    recordingSkipped: 0,
-    outputBuffer: '',
-    forceStopTimer: undefined
-  };
+  channel.appendLine(`+ ${[session.python, ...args].join(' ')}`);
+  let child;
+  try {
+    child = childProcess.spawn(session.python, args, {
+      cwd: repoRoot(context),
+      shell: false,
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+  } catch (error) {
+    session.active = false;
+    session.exited = true;
+    appendEmbeddedLog(session, 'error', `failed to start: ${error.message}`);
+    postEmbeddedMessage(session, { type: 'status', text: `Failed to start: ${error.message}` });
+    postEmbeddedMessage(session, { type: 'session-state', state: 'stopped' });
+    return;
+  }
+  session.child = child;
   embeddedDebugSession = session;
-  appendEmbeddedLog(session, 'lifecycle', `spawn pid=${child.pid} profile=${session.buildProfile} script=${session.scriptMode}`);
-  postEmbeddedMessage(session, { type: 'diagnostics', text: embeddedDiagnosticsText(session) });
+  postEmbeddedMessage(session, { type: 'reset-frame' });
+  postEmbeddedMessage(session, { type: 'session-state', state: 'running' });
+  postEmbeddedMessage(session, { type: 'viewport-config', ...session.requestedViewport });
+  appendEmbeddedLog(session, 'lifecycle', `${restartKind} spawn pid=${child.pid} profile=${session.buildProfile} script=${session.scriptMode}`);
+  scheduleEmbeddedDiagnostics(session);
   child.stdout.on('data', (chunk) => {
+    if (session.runId !== runId) return;
     session.outputBuffer += chunk.toString();
     let newline = 0;
     while ((newline = session.outputBuffer.indexOf('\n')) >= 0) {
@@ -2162,42 +2238,124 @@ async function debugApp(context, resourceUri) {
           session.droppedFrames += frame.sequence - session.latestAnnouncedSequence - 1;
         }
         session.latestAnnouncedSequence = Math.max(session.latestAnnouncedSequence, frame.sequence);
-        void deliverEmbeddedFrame(session, frame);
+        void deliverEmbeddedFrame(session, frame, runId);
       } else if (line) {
         appendEmbeddedLog(session, 'stdout', line);
       }
     }
   });
-  child.stderr.on('data', (chunk) => appendEmbeddedLog(session, 'stderr', chunk.toString()));
+  child.stderr.on('data', (chunk) => {
+    if (session.runId === runId) appendEmbeddedLog(session, 'stderr', chunk.toString());
+  });
   child.on('error', (error) => {
+    if (session.runId !== runId) return;
+    session.active = false;
+    session.exited = true;
+    session.resolveExit?.();
     appendEmbeddedLog(session, 'error', `failed to start: ${error.message}`);
     postEmbeddedMessage(session, { type: 'status', text: `Failed to start: ${error.message}` });
+    postEmbeddedMessage(session, { type: 'session-state', state: 'stopped' });
+    scheduleEmbeddedDiagnostics(session);
   });
   child.on('close', (code) => {
+    if (session.runId !== runId) return;
     session.exited = true;
     session.active = false;
     session.exitCode = code;
-    if (session.forceStopTimer) {
-      clearTimeout(session.forceStopTimer);
-    }
+    if (session.forceStopTimer) clearTimeout(session.forceStopTimer);
     session.resolveExit?.();
     appendEmbeddedLog(session, 'lifecycle', `shell exited with code ${code ?? 'unknown'}`);
     postEmbeddedMessage(session, { type: 'status', text: `Desktop shell stopped (exit ${code ?? 'unknown'}).` });
+    postEmbeddedMessage(session, { type: 'session-state', state: 'stopped' });
     scheduleEmbeddedDiagnostics(session);
-    if (embeddedDebugSession === session) {
-      embeddedDebugSession = undefined;
-    }
     setTimeout(() => fs.rm(frameDir, { recursive: true, force: true }, () => {}), 250);
   });
+}
+
+async function debugApp(context, resourceUri) {
+  if (process.platform !== 'win32') {
+    vscode.window.showErrorMessage('JellyFrame desktop shell is only available on Windows.');
+    return;
+  }
+  const root = await packageRoot(resourceUri);
+  if (!root) return;
+  const launcher = debugLauncherPath(context);
+  if (!fs.existsSync(launcher)) {
+    vscode.window.showErrorMessage(`Missing debug launcher: ${launcher}`);
+    return;
+  }
+  const nativeBuildDirectory = requireNativeBuildDir(context, appRequiresScripting(root));
+  if (!nativeBuildDirectory) return;
+  if (embeddedDebugSession && !embeddedDebugSession.disposed) {
+    const previous = embeddedDebugSession;
+    if (!previous.active && !previous.stopping && previous.appRoot === root) {
+      previous.panel.reveal(vscode.ViewColumn.Beside);
+      const resume = isChinese() ? '继续上次会话' : 'Resume previous session';
+      const restart = isChinese() ? '重新启动上次会话' : 'Restart previous session';
+      const choice = await vscode.window.showQuickPick([resume, restart], {
+        placeHolder: isChinese() ? '已有已停止的 JellyFrame 调试会话' : 'A stopped JellyFrame debug session is available'
+      });
+      if (choice === resume || choice === restart) {
+        if (choice === restart) {
+          previous.logLines = [];
+          postEmbeddedMessage(previous, { type: 'clear-log' });
+        }
+        startEmbeddedDebugProcess(context, previous, choice === restart ? 'restart' : 'resume');
+      }
+      return;
+    }
+    await stopEmbeddedDebugSession(previous, 'Replacing the previous debug session...');
+    previous.disposed = true;
+    previous.panel.dispose();
+  }
+  const panel = vscode.window.createWebviewPanel(
+    'jellyframeEmbeddedDebug', `JellyFrame: ${path.basename(root)}`, vscode.ViewColumn.Beside,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+  panel.webview.html = embeddedDebugHtml(panel.webview);
+  const session = {
+    active: false, stopping: false, exited: true, disposed: false, runId: 0, child: undefined, panel,
+    appRoot: root, scriptMode: appRequiresScripting(root) ? 'classic' : 'none',
+    buildProfile: path.basename(path.dirname(nativeBuildDirectory)), python: config().get('pythonPath', 'python'),
+    launcher, buildDir: nativeBuildDirectory,
+    shellPath: path.join(nativeBuildDirectory, process.platform === 'win32' ? 'jellyframe_desktop_shell.exe' : 'jellyframe_desktop_shell'),
+    frameDir: '', startedAt: Date.now(), viewport: { width: 1, height: 1 }, requestedViewport: { width: 0, height: 0 },
+    announcedFrames: 0, deliveredFrames: 0, droppedFrames: 0, decodeErrors: 0, inputSent: 0, stdoutLines: 0, stderrLines: 0,
+    logLines: [], webviewReady: false, diagnosticsScheduled: false, stopReason: undefined, exitCode: undefined,
+    latestAnnouncedSequence: 0, lastDeliveredSequence: 0, recording: false, recordingStartSequence: 0,
+    recordingActions: [], recordingPendingClick: undefined, recordingSkipped: 0, outputBuffer: '', forceStopTimer: undefined
+  };
+  embeddedDebugSession = session;
   panel.webview.onDidReceiveMessage((message) => {
     if (message?.type === 'ready') {
       session.webviewReady = true;
       postEmbeddedMessage(session, { type: 'diagnostics', text: embeddedDiagnosticsText(session) });
-      for (const entry of session.logLines) {
-        postEmbeddedMessage(session, { type: 'log', ...entry });
-      }
+      postEmbeddedMessage(session, { type: 'session-state', state: session.active ? 'running' : 'stopped' });
+      postEmbeddedMessage(session, { type: 'viewport-config', ...session.requestedViewport });
+      for (const entry of session.logLines) postEmbeddedMessage(session, { type: 'log', ...entry });
     } else if (message?.type === 'stop') {
-      stopEmbeddedDebugSession(session, 'Stopping desktop shell...');
+      postEmbeddedMessage(session, { type: 'session-state', state: 'stopping' });
+      void stopEmbeddedDebugSession(session, 'Stopping desktop shell...');
+    } else if (message?.type === 'resume' && !session.active && !session.stopping) {
+      startEmbeddedDebugProcess(context, session, 'resume');
+    } else if (message?.type === 'restart' && !session.active && !session.stopping) {
+      session.logLines = [];
+      postEmbeddedMessage(session, { type: 'clear-log' });
+      startEmbeddedDebugProcess(context, session, 'restart');
+    } else if (message?.type === 'viewport-request') {
+      const width = Number(message.width);
+      const height = Number(message.height);
+      if (!((width === 0 && height === 0) || validEmbeddedViewport(width, height))) {
+        postEmbeddedMessage(session, { type: 'status', text: 'Viewport must be whole numbers from 64 to 2048.' });
+        return;
+      }
+      session.requestedViewport = { width, height };
+      postEmbeddedMessage(session, { type: 'viewport-config', width, height });
+      if (session.active || session.stopping) {
+        void stopEmbeddedDebugSession(session, 'Restarting desktop shell with the requested viewport...').then(() => startEmbeddedDebugProcess(context, session, 'viewport change'));
+      } else {
+        startEmbeddedDebugProcess(context, session, 'viewport change');
+      }
     } else if (message?.type === 'clear-log') {
       session.logLines = [];
       postEmbeddedMessage(session, { type: 'clear-log' });
@@ -2216,14 +2374,19 @@ async function debugApp(context, resourceUri) {
       appendEmbeddedLog(session, 'lifecycle', 'semantic recording stopped');
       void saveEmbeddedRecording(context, session);
     } else if (message?.type === 'input' && typeof message.line === 'string' && /^[a-z]+(?: [a-z-]+)?(?: -?\d+){0,4}$/.test(message.line)) {
-      if (session.active && !session.stopping && child.stdin?.writable) {
-        child.stdin.write(`${message.line}\n`);
+      if (session.active && !session.stopping && session.child?.stdin?.writable) {
+        session.child.stdin.write(`${message.line}\n`);
         session.inputSent += 1;
         scheduleEmbeddedDiagnostics(session);
       }
     }
   }, undefined, context.subscriptions);
-  panel.onDidDispose(() => stopEmbeddedDebugSession(session, 'Debug tab closed.'), undefined, context.subscriptions);
+  panel.onDidDispose(() => {
+    session.disposed = true;
+    if (embeddedDebugSession === session) embeddedDebugSession = undefined;
+    void stopEmbeddedDebugSession(session, 'Debug tab closed.');
+  }, undefined, context.subscriptions);
+  startEmbeddedDebugProcess(context, session, 'initial');
 }
 
 async function runFrameScript(context, resourceUri) {
@@ -2391,6 +2554,7 @@ class JellyFrameStatusProvider {
     const app = hasPackage ? path.basename(root) : "No package selected";
     const selection = nativeBuildDir(this.context, appRequiresScripting(root));
     const buildDirectory = selection.buildDirectory;
+    const desktopBuildRunning = Boolean(activeDesktopBuildSetup);
     const build = buildDirectory || buildDirectoryError(this.context, selection);
     const buildPresentation = desktopBuildPresentation(buildDirectory, /^zh(?:-|$)/i.test(vscode.env.language || ""));
     const pipeline = lastReport?.pipelineDiagnostics?.summary;
@@ -2415,6 +2579,7 @@ class JellyFrameStatusProvider {
       buildOutput: "输出目录",
       scriptSupport: "脚本支持",
       createDesktopBuild: "创建兼容桌面构建",
+      desktopBuildInProgress: "正在创建桌面构建",
       device: "设备",
       deviceActions: "设备操作",
       deviceLifecycle: "App 生命周期与调试",
@@ -2504,6 +2669,7 @@ class JellyFrameStatusProvider {
       buildOutput: "Output directory",
       scriptSupport: "Script support",
       createDesktopBuild: "Create compatible desktop build",
+      desktopBuildInProgress: "Creating desktop build",
       device: "Device",
       deviceActions: "Device actions",
       deviceLifecycle: "App Lifecycle & Debug",
@@ -2619,7 +2785,12 @@ class JellyFrameStatusProvider {
           this.statusItem(labels.buildProfile, buildPresentation.profile, buildPresentation.profile, "settings-gear"),
           this.statusItem(labels.buildOutput, buildPresentation.output, buildPresentation.output, "folder"),
           this.statusItem(labels.scriptSupport, buildPresentation.scripting, buildPresentation.scripting, "symbol-event"),
-          ...(!buildDirectory ? [this.commandItem(
+          ...(desktopBuildRunning ? [this.statusItem(
+            labels.desktopBuildInProgress,
+            chinese ? "CMake 正在运行" : "CMake is running",
+            chinese ? "正在配置或编译 JellyFrame 桌面壳。可在通知或运行日志中查看当前阶段。" : "JellyFrame is configuring or building the desktop shell. The notification and run log show the current phase.",
+            "sync~spin")] : []),
+          ...(!buildDirectory && !desktopBuildRunning ? [this.commandItem(
             labels.createDesktopBuild,
             chinese
               ? "创建当前 App 所需的桌面壳构建；仅在确认后运行本机 CMake。"

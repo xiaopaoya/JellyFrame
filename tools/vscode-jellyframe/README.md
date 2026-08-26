@@ -1,6 +1,6 @@
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-08-25; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-26; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -117,8 +117,12 @@ creating a new App, so generated manifests are immediately packageable.
 `JellyFrame: Debug App In VS Code` opens an editor tab backed by an isolated,
 hidden desktop-shell session. It delivers complete viewport snapshots with
 strictly increasing sequence numbers and forwards pointer, drag, wheel and
-common-key input only to that session. Both Stop and closing the tab request a
-clean shell exit; the extension terminates the debug process tree after a short
+common-key input only to that session. The viewport bar offers App default and
+common device-size presets plus a custom `64..2048` width and height; applying a
+size restarts the shell so CSS media queries and layout use the requested size.
+The frame's reported size remains the authoritative result. Stop keeps the tab
+open and changes its controls to Resume and Restart; closing the tab requests a
+clean shell exit. The extension terminates the debug process tree after a short
 grace period if needed. It does not share a framebuffer, capture path or process
 with external-window debugging. Use `JellyFrame: Debug App In External Window`
 when native-window behavior itself is relevant.
