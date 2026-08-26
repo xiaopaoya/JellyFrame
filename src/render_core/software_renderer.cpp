@@ -62,10 +62,10 @@ bool rounded_clip_affects_row(const RasterRoundedRect& rounded, int y) {
         return false;
     }
     const CornerRadii& radii = rounded.radii;
-    return (radii.top_left > 0 && y >= rounded.top && y < rounded.top + radii.top_left) ||
-        (radii.top_right > 0 && y >= rounded.top && y < rounded.top + radii.top_right) ||
-        (radii.bottom_left > 0 && y >= rounded.bottom - radii.bottom_left && y < rounded.bottom) ||
-        (radii.bottom_right > 0 && y >= rounded.bottom - radii.bottom_right && y < rounded.bottom);
+    return (radii.top_left > 0 && y >= rounded.top && y < safe_add(rounded.top, radii.top_left)) ||
+        (radii.top_right > 0 && y >= rounded.top && y < safe_add(rounded.top, radii.top_right)) ||
+        (radii.bottom_left > 0 && y >= safe_add(rounded.bottom, safe_negate(radii.bottom_left)) && y < rounded.bottom) ||
+        (radii.bottom_right > 0 && y >= safe_add(rounded.bottom, safe_negate(radii.bottom_right)) && y < rounded.bottom);
 }
 
 // Returns the conservative horizontal span for which one rounded clip is
@@ -999,11 +999,11 @@ Rect transformed_destination_rect(Rect source_rect,
             max_y = std::max(max_y, y);
         }
     }
-    const int x = static_cast<int>(std::floor(min_x));
-    const int y = static_cast<int>(std::floor(min_y));
-    const int right = static_cast<int>(std::ceil(max_x));
-    const int bottom = static_cast<int>(std::ceil(max_y));
-    return Rect{x, y, std::max(1, right - x), std::max(1, bottom - y)};
+    const int x = floor_float_to_int(min_x);
+    const int y = floor_float_to_int(min_y);
+    const int right = ceil_float_to_int(max_x);
+    const int bottom = ceil_float_to_int(max_y);
+    return Rect{x, y, std::max(1, safe_span(x, right)), std::max(1, safe_span(y, bottom))};
 }
 
 void composite_transformed_buffer(FrameBuffer& target,
@@ -1046,7 +1046,8 @@ void composite_transformed_buffer(FrameBuffer& target,
                 (unrotated_y - origin_y) / std::max(0.01F, transform.scale_y);
             const float source_x = source_world_x - static_cast<float>(source_rect.x);
             const float source_y = source_world_y - static_cast<float>(source_rect.y);
-            if (source_x < 0.0F || source_y < 0.0F ||
+            if (!std::isfinite(source_x) || !std::isfinite(source_y) ||
+                source_x < 0.0F || source_y < 0.0F ||
                 source_x >= static_cast<float>(source.width) ||
                 source_y >= static_cast<float>(source.height)) {
                 continue;
@@ -1073,10 +1074,6 @@ void composite_transformed_buffer(FrameBuffer& target,
                         with_opacity(source_pixel, opacity));
         }
     }
-}
-
-int round_transform_offset(float value) {
-    return static_cast<int>(value >= 0.0F ? value + 0.5F : value - 0.5F);
 }
 
 bool offscreen_fits_budget(Rect bounds,
@@ -1123,8 +1120,8 @@ OpaqueFillPrefix opaque_fill_prefix(const DisplayList& display_list,
             break;
         }
         Rect rect = command.rect;
-        rect.x += offset_x;
-        rect.y += offset_y;
+        rect.x = safe_add(rect.x, offset_x);
+        rect.y = safe_add(rect.y, offset_y);
         if (contains_rect(rect, clip)) {
             prefix.first_command = index;
             prefix.covers_clip = true;
@@ -1193,8 +1190,10 @@ void prepare_composite_bounds(const LayerNode& root, SoftwareCompositor::Scratch
         entry.source_bounds = source_bounds;
 
         Rect transformed_source = source_bounds;
-        transformed_source.x += round_transform_offset(current.layer->transform.translate_x);
-        transformed_source.y += round_transform_offset(current.layer->transform.translate_y);
+        transformed_source.x = safe_add(transformed_source.x,
+                                        round_float_to_int(current.layer->transform.translate_x));
+        transformed_source.y = safe_add(transformed_source.y,
+                                        round_float_to_int(current.layer->transform.translate_y));
         const bool has_scale_or_rotate =
             std::abs(current.layer->transform.scale_x - 1.0F) >= 0.001F ||
             std::abs(current.layer->transform.scale_y - 1.0F) >= 0.001F ||
@@ -1203,8 +1202,10 @@ void prepare_composite_bounds(const LayerNode& root, SoftwareCompositor::Scratch
             entry.visual_bounds = transformed_source;
         } else {
             Rect transform_reference_bounds = current.layer->bounds;
-            transform_reference_bounds.x += round_transform_offset(current.layer->transform.translate_x);
-            transform_reference_bounds.y += round_transform_offset(current.layer->transform.translate_y);
+            transform_reference_bounds.x = safe_add(
+                transform_reference_bounds.x, round_float_to_int(current.layer->transform.translate_x));
+            transform_reference_bounds.y = safe_add(
+                transform_reference_bounds.y, round_float_to_int(current.layer->transform.translate_y));
             entry.visual_bounds = transformed_destination_rect(transformed_source,
                                                                 transform_reference_bounds,
                                                                 current.layer->transform,
@@ -1968,15 +1969,15 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                                          std::size_t active_offscreen_pixels,
                                          SoftwareRasterizerScratch* scratch,
                                          const Scratch* compositor_scratch) const {
-    const int transform_x = round_transform_offset(layer.transform.translate_x);
-    const int transform_y = round_transform_offset(layer.transform.translate_y);
-    const int layer_offset_x = offset_x + transform_x;
-    const int layer_offset_y = offset_y + transform_y;
+    const int transform_x = round_float_to_int(layer.transform.translate_x);
+    const int transform_y = round_float_to_int(layer.transform.translate_y);
+    const int layer_offset_x = safe_add(offset_x, transform_x);
+    const int layer_offset_y = safe_add(offset_y, transform_y);
     Rect layer_clip = clip;
     if (layer.has_clip) {
         Rect translated_clip = layer.clip_rect;
-        translated_clip.x += layer_offset_x;
-        translated_clip.y += layer_offset_y;
+        translated_clip.x = safe_add(translated_clip.x, layer_offset_x);
+        translated_clip.y = safe_add(translated_clip.y, layer_offset_y);
         layer_clip = intersect_rect(layer_clip, translated_clip);
         if (empty_rect(layer_clip)) {
             return;
@@ -1988,11 +1989,11 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
         layer.opacity < 0.999F || has_corner_radius(layer.clip_border_radius);
     if (needs_offscreen) {
         Rect source_bounds = bounds.source_bounds;
-        source_bounds.x += layer_offset_x;
-        source_bounds.y += layer_offset_y;
+        source_bounds.x = safe_add(source_bounds.x, layer_offset_x);
+        source_bounds.y = safe_add(source_bounds.y, layer_offset_y);
         Rect transform_reference_bounds = layer.bounds;
-        transform_reference_bounds.x += layer_offset_x;
-        transform_reference_bounds.y += layer_offset_y;
+        transform_reference_bounds.x = safe_add(transform_reference_bounds.x, layer_offset_x);
+        transform_reference_bounds.y = safe_add(transform_reference_bounds.y, layer_offset_y);
         const bool has_scale_or_rotate =
             std::abs(layer.transform.scale_x - 1.0F) >= 0.001F ||
             std::abs(layer.transform.scale_y - 1.0F) >= 0.001F ||
@@ -2066,15 +2067,15 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
             }
             return;
         }
-        const int child_offset_x = layer_offset_x - offscreen_bounds.x;
-        const int child_offset_y = layer_offset_y - offscreen_bounds.y;
+        const int child_offset_x = safe_add(layer_offset_x, safe_negate(offscreen_bounds.x));
+        const int child_offset_y = safe_add(layer_offset_y, safe_negate(offscreen_bounds.y));
         const Rect offscreen_clip{0, 0, offscreen_bounds.width, offscreen_bounds.height};
         Rect local_layer_clip = offscreen_clip;
         if (layer.has_clip) {
             local_layer_clip = intersect_rect(
                 local_layer_clip,
-                Rect{layer_clip.x - offscreen_bounds.x,
-                     layer_clip.y - offscreen_bounds.y,
+                Rect{safe_add(layer_clip.x, safe_negate(offscreen_bounds.x)),
+                     safe_add(layer_clip.y, safe_negate(offscreen_bounds.y)),
                      layer_clip.width,
                      layer_clip.height});
         }
@@ -2093,11 +2094,11 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
         }
         if (has_corner_radius(layer.clip_border_radius)) {
             Rect rounded_clip = layer.clip_rect;
-            rounded_clip.x += layer_offset_x;
-            rounded_clip.y += layer_offset_y;
+            rounded_clip.x = safe_add(rounded_clip.x, layer_offset_x);
+            rounded_clip.y = safe_add(rounded_clip.y, layer_offset_y);
             apply_rounded_clip(offscreen,
-                               Rect{rounded_clip.x - offscreen_bounds.x,
-                                    rounded_clip.y - offscreen_bounds.y,
+                               Rect{safe_add(rounded_clip.x, safe_negate(offscreen_bounds.x)),
+                                    safe_add(rounded_clip.y, safe_negate(offscreen_bounds.y)),
                                     rounded_clip.width,
                                     rounded_clip.height},
                                layer.clip_border_radius);

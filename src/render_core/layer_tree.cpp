@@ -639,10 +639,10 @@ void paint_generated_inline_content(const LayoutBox& box,
             : (box.style.before_color_specified ? box.style.before_color : box.style.color);
         Rect rect = content;
         if (!after && box.style.before_left_specified) {
-            rect.x += box.style.before_left;
+            rect.x = safe_add(rect.x, box.style.before_left);
             rect.width = std::max(0, rect.width - box.style.before_left);
         } else if (after && box.style.after_left_specified) {
-            rect.x += box.style.after_left;
+            rect.x = safe_add(rect.x, box.style.after_left);
             rect.width = std::max(0, rect.width - box.style.after_left);
         }
         push_text(display_list,
@@ -1140,8 +1140,8 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
         if (has_text_shadow(box.style)) {
             const TextShadowStyle& shadow = box.style.text_shadow;
             Rect shadow_rect = box.rect;
-            shadow_rect.x += shadow.offset_x;
-            shadow_rect.y += shadow.offset_y;
+            shadow_rect.x = safe_add(shadow_rect.x, shadow.offset_x);
+            shadow_rect.y = safe_add(shadow_rect.y, shadow.offset_y);
             push_text_with_layout(display_list,
                                   shadow_rect,
                                   shadow.uses_current_color ? box.style.color : shadow.color,
@@ -1384,12 +1384,10 @@ void flatten_layer(const LayerNode& layer,
         }
         const LayerNode& current_layer = *current.layer;
         const float layer_opacity = current.opacity * current_layer.opacity;
-        const int layer_translate_x = safe_add(current.translate_x, static_cast<int>(current_layer.transform.translate_x >= 0.0F
-            ? current_layer.transform.translate_x + 0.5F
-            : current_layer.transform.translate_x - 0.5F));
-        const int layer_translate_y = safe_add(current.translate_y, static_cast<int>(current_layer.transform.translate_y >= 0.0F
-            ? current_layer.transform.translate_y + 0.5F
-            : current_layer.transform.translate_y - 0.5F));
+        const int layer_translate_x = safe_add(current.translate_x,
+                                               round_float_to_int(current_layer.transform.translate_x));
+        const int layer_translate_y = safe_add(current.translate_y,
+                                               round_float_to_int(current_layer.transform.translate_y));
         const FlattenAffineTransform layer_transform = multiply_transform(
             current.transform, layer_affine_transform(current_layer, layer_translate_x, layer_translate_y));
         Rect current_clip = current.clip;

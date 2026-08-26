@@ -61,10 +61,6 @@ Rect expand_and_clip_rect(Rect rect, int amount, Rect viewport) {
                 clamp_int64_to_int(clipped_bottom - clipped_top)};
 }
 
-int round_transform_offset(float value) {
-    return static_cast<int>(value >= 0.0F ? value + 0.5F : value - 0.5F);
-}
-
 constexpr int kMaxAnimatedEffectExtent = 128;
 
 Rect rotated_scaled_bounds(Rect bounds, const Transform2D& transform, int origin_x_percent, int origin_y_percent) {
@@ -108,11 +104,11 @@ Rect rotated_scaled_bounds(Rect bounds, const Transform2D& transform, int origin
             max_y = std::max(max_y, y);
         }
     }
-    const int x = static_cast<int>(std::floor(min_x));
-    const int y = static_cast<int>(std::floor(min_y));
-    const int right = static_cast<int>(std::ceil(max_x));
-    const int bottom = static_cast<int>(std::ceil(max_y));
-    return Rect{x, y, std::max(1, right - x), std::max(1, bottom - y)};
+    const int x = floor_float_to_int(min_x);
+    const int y = floor_float_to_int(min_y);
+    const int right = ceil_float_to_int(max_x);
+    const int bottom = ceil_float_to_int(max_y);
+    return Rect{x, y, std::max(1, safe_span(x, right)), std::max(1, safe_span(y, bottom))};
 }
 
 Rect subtree_bounds(const LayoutBox& box, std::vector<const LayoutBox*>& pending) {
@@ -154,8 +150,8 @@ Transform2D resolved_transform(const Style& base_style, const StyleOverride* ove
 
 Rect transformed_bounds(Rect bounds, const Style& base_style, const StyleOverride* override) {
     const Transform2D transform = resolved_transform(base_style, override);
-    bounds.x += round_transform_offset(transform.translate_x);
-    bounds.y += round_transform_offset(transform.translate_y);
+    bounds.x = safe_add(bounds.x, round_float_to_int(transform.translate_x));
+    bounds.y = safe_add(bounds.y, round_float_to_int(transform.translate_y));
     if (std::abs(transform.scale_x - 1.0F) >= 0.001F ||
         std::abs(transform.scale_y - 1.0F) >= 0.001F ||
         std::abs(transform.rotate_degrees) >= 0.001F) {

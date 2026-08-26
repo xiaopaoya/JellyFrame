@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -50,6 +51,42 @@ inline int safe_span(int start, int end) {
     return clamp_int64_to_int(std::min<std::int64_t>(
         static_cast<std::int64_t>(std::numeric_limits<int>::max()),
         static_cast<std::int64_t>(end) - start));
+}
+
+// CSS values and public LayerNode inputs reach several integer-coordinate
+// paths. Keep their conversion defined even for malformed or extreme values.
+inline int clamp_float_to_int(float value) {
+    if (std::isnan(value)) {
+        return 0;
+    }
+    if (value >= static_cast<float>(std::numeric_limits<int>::max())) {
+        return std::numeric_limits<int>::max();
+    }
+    if (value <= static_cast<float>(std::numeric_limits<int>::min())) {
+        return std::numeric_limits<int>::min();
+    }
+    return static_cast<int>(value);
+}
+
+inline int floor_float_to_int(float value) {
+    return clamp_float_to_int(std::floor(value));
+}
+
+inline int ceil_float_to_int(float value) {
+    return clamp_float_to_int(std::ceil(value));
+}
+
+inline int round_float_to_int(float value) {
+    if (std::isnan(value)) {
+        return 0;
+    }
+    if (value >= static_cast<float>(std::numeric_limits<int>::max())) {
+        return std::numeric_limits<int>::max();
+    }
+    if (value <= static_cast<float>(std::numeric_limits<int>::min())) {
+        return std::numeric_limits<int>::min();
+    }
+    return static_cast<int>(value >= 0.0F ? value + 0.5F : value - 0.5F);
 }
 
 inline bool checked_multiply(std::size_t left, std::size_t right, std::size_t& result) {

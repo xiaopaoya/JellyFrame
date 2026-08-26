@@ -1177,6 +1177,31 @@ void compositor_offsets_rounded_overflow_clip_with_layer_transform() {
           "translated rounded overflow clip keeps its moved top edge");
 }
 
+void compositor_bounds_extreme_manual_transform_coordinates() {
+    check(round_float_to_int(std::numeric_limits<float>::infinity()) == std::numeric_limits<int>::max(),
+          "positive infinite transforms clamp to the positive coordinate limit");
+    check(round_float_to_int(-std::numeric_limits<float>::infinity()) == std::numeric_limits<int>::min(),
+          "negative infinite transforms clamp to the negative coordinate limit");
+    check(round_float_to_int(std::numeric_limits<float>::quiet_NaN()) == 0,
+          "NaN transforms resolve to a neutral coordinate");
+
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 4, 4};
+    auto child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    child->type = LayerType::Paint;
+    child->bounds = Rect{0, 0, 4, 4};
+    child->transform.translate_x = std::numeric_limits<float>::infinity();
+    DisplayCommand fill = black_fill(Rect{0, 0, 4, 4});
+    fill.color = Color{20, 120, 240, 255};
+    child->display_list.push_back(fill);
+    root.children.push_back(std::move(child));
+
+    const FrameBuffer output = SoftwareCompositor().render(root, 4, 4, Color{255, 255, 255, 255});
+    check(output.pixel(0, 0).r == 255 && output.pixel(0, 0).g == 255 && output.pixel(0, 0).b == 255,
+          "an extreme manual transform does not wrap paint into the target");
+}
+
 void dirty_render_skips_contained_dirty_rects() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -2018,6 +2043,7 @@ int main() {
         rasterizer_records_opt_in_rounded_clip_replay_timing();
         rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners();
         compositor_offsets_rounded_overflow_clip_with_layer_transform();
+        compositor_bounds_extreme_manual_transform_coordinates();
         dirty_render_skips_contained_dirty_rects();
         compositor_skips_covered_opaque_fill_prefix();
         compositor_keeps_non_fill_prefix_side_effects();
