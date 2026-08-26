@@ -510,6 +510,18 @@ void typed_payloads_reject_malformed_or_ambiguous_input() {
     assert(decode_device_operation_result_payload(encoded.data(), 16, decoded_result) ==
            DeviceProtocolStatus::InvalidArgument);
 
+    DeviceOperationResultPayload invalid_flags;
+    invalid_flags.flags = 0x8000u;
+    assert(encode_device_operation_result_payload(invalid_flags, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::InvalidArgument);
+    DeviceOperationResultPayload valid_result;
+    valid_result.flags = DeviceOperationResultComplete;
+    assert(encode_device_operation_result_payload(valid_result, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
+    encoded[2] = 0x80;
+    assert(decode_device_operation_result_payload(encoded.data(), encoded_size, decoded_result) ==
+           DeviceProtocolStatus::InvalidArgument);
+
     DeviceAppListPayload list;
     list.entry_count = 1;
     copy_string_literal(list.entries[0].app_id, "org.example.reject");
