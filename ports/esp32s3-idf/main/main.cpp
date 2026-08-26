@@ -260,7 +260,7 @@ void print_capabilities(const HostDeviceCapabilities& capabilities) {
              capabilities.network.supports_fetch ? 1 : 0);
 }
 
-bool run_p2_resource_smoke(const HostBudgets& budgets) {
+bool run_p2_resource_smoke(int viewport_width, int viewport_height, const HostBudgets& budgets) {
     jellyframe_esp32s3::ResourceLoadStats stats;
     jellyframe_esp32s3::ResourceBundleContext resource_context =
         jellyframe_esp32s3::make_resource_context(budgets, "/p2_smoke.html", &stats);
@@ -289,7 +289,8 @@ bool run_p2_resource_smoke(const HostBudgets& budgets) {
         jellyframe_esp32s3::load_linked_stylesheet,
         &resource_context,
         document_style_collection_options_from_budgets(budgets));
-    const Stylesheet stylesheet = css_parser.parse(css, css_parser_options_from_budgets(budgets));
+    const Stylesheet stylesheet = css_parser.parse(
+        css, css_parser_options_from_budgets(budgets, viewport_width, viewport_height));
     const std::vector<DocumentScript> scripts = collect_classic_scripts(
         *document,
         jellyframe_esp32s3::load_classic_script,
@@ -513,7 +514,8 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
         ESP_LOGE(tag, "p4_p5_p6_ui_smoke failed: document parse failed");
         return;
     }
-    const Stylesheet stylesheet = css_parser.parse(kSmokeCss, css_parser_options_from_budgets(budgets));
+    const Stylesheet stylesheet = css_parser.parse(
+        kSmokeCss, css_parser_options_from_budgets(budgets, width, height));
     StyleResolver resolver(stylesheet);
     RenderTreeBuilder render_tree_builder(resolver, render_tree_options_from_budgets(budgets));
     MonotonicArena render_arena;
@@ -648,7 +650,7 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
              viewport_height);
     print_capabilities(capabilities);
     print_budgets(budgets);
-    if (!run_p2_resource_smoke(budgets)) {
+    if (!run_p2_resource_smoke(viewport_width, viewport_height, budgets)) {
         ESP_LOGW(tag, "p2_resource_smoke reported incomplete resource loading");
     }
     print_heap("before");
