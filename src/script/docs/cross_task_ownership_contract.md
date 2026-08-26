@@ -1,6 +1,6 @@
 # Script-App Cross-Task Ownership Contract
 
-> Last updated: 2026-08-15; Applies to: 0.6.0-dev; Status: 0.6 foundation landed
+> Last updated: 2026-08-27; Applies to: 0.6.0-dev; Status: 0.6 foundation landed
 
 This contract defines how an RTOS host runs a real JerryScript App without moving DOM,
 JerryScript or renderer objects across tasks. The direct, same-thread desktop
@@ -21,7 +21,10 @@ value, so teardown cannot race a worker against mutable generation storage.
 Every worker-side `take_worker_packet(...)` operation must pass its own
 `ScriptAppSession`; there is deliberately no "take the current worker input"
 convenience API. This keeps a delayed worker from consuming a newer lifetime's
-packet.
+packet. UI-side sealed-frame consumption follows the same rule:
+`take_frame_packet(...)` and `take_script_task_app_frame(...)` require the
+consumer's session, so a delayed UI consumer cannot dequeue a newer session's
+frame lease.
 
 A worker publishes a sealed, immutable replacement `AppFrame`: version/session/sequence/viewport,
 POD paint commands, bounded text bytes, validated resource lease IDs and optional hit regions with numeric

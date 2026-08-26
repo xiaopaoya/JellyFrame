@@ -549,9 +549,12 @@ ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_service_completion(const 
     return worker_inbox_.post(packet);
 }
 
-bool ScriptTaskSupervisor::take_frame_packet(ScriptTaskPacket& output) {
+bool ScriptTaskSupervisor::take_frame_packet(const ScriptAppSession& session, ScriptTaskPacket& output) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    return frame_mailbox_.pop_for(sessions_.current_snapshot(), output);
+    if (!sessions_.accepts(session)) {
+        return false;
+    }
+    return frame_mailbox_.pop_for(session, output);
 }
 
 ScriptTaskMailboxPostStatus ScriptTaskSupervisor::post_fatal(const ScriptTaskPacket& packet) {

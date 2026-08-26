@@ -52,7 +52,7 @@ void service_request_post_uses_the_dedicated_supervisor_mailbox() {
     assert(output.kind == ScriptTaskPacketKind::ServiceRequest);
     assert(output.session == active);
     assert(output.sequence == 3);
-    assert(!supervisor.take_frame_packet(output));
+    assert(!supervisor.take_frame_packet(active, output));
 }
 
 void service_cancels_round_trip_as_value_only_packet() {

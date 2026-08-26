@@ -356,7 +356,9 @@ public:
     // Supervisor-only worker-inbox path. Service bridges may post a bounded
     // value packet alongside input, but cannot inject arbitrary packet kinds.
     ScriptTaskMailboxPostStatus post_service_completion(const ScriptTaskPacket& packet);
-    bool take_frame_packet(ScriptTaskPacket& output);
+    // UI consumers must name the session they own. A stale consumer must not
+    // dequeue a newer session's sealed frame lease.
+    bool take_frame_packet(const ScriptAppSession& session, ScriptTaskPacket& output);
     ScriptTaskMailboxPostStatus post_fatal(const ScriptTaskPacket& packet);
     bool take_fatal(ScriptTaskPacket& output);
     std::size_t worker_inbox_max_payload_bytes() const {
