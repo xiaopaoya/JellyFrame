@@ -161,10 +161,11 @@ InstalledBundleScriptTaskTelemetry telemetry_snapshot(const InstalledBundleScrip
 void worker_entry(void* raw) {
     auto* state = static_cast<InstalledBundleScriptSession*>(raw);
     if (state == nullptr || state->protocol == nullptr) {
-        vTaskDelete(nullptr);
+        vTaskDeleteWithCaps(nullptr);
         return;
     }
     state->worker_started.store(true);
+    {
     jellyframe::ScriptTaskWorkerRuntime runtime(state->script_session, worker_options(*state));
     const auto initialized = runtime.initialize(state->entry_document, state->author_css);
     state->init_status.store(static_cast<std::uint8_t>(initialized));
@@ -208,8 +209,11 @@ void worker_entry(void* raw) {
         (void)runtime.publish_fatal(*state->protocol);
     }
     runtime.stop();
+    }
     state->worker_done.store(true);
-    vTaskDelete(nullptr);
+    // The supervisor reclaims this WithCaps task after its JerryScript state
+    // has been destroyed. Self-deletion would need an extra cleanup task.
+    vTaskSuspend(nullptr);
 }
 
 bool post_board_input(InstalledBundleScriptSession& state,
@@ -240,6 +244,7 @@ void ui_entry(void* raw) {
         return;
     }
     state->ui_started.store(true);
+    {
     boards::BoardRuntime board = boards::initialize_selected_board();
     const int width = board.profile.display.width;
     const int height = board.profile.display.height;
@@ -250,7 +255,7 @@ void ui_entry(void* raw) {
         state->stop.store(true);
         boards::release_board_runtime(board);
         state->ui_done.store(true);
-        vTaskDeleteWithCaps(nullptr);
+        vTaskSuspend(nullptr);
         return;
     }
     boards::attach_input_queue(board, &state->input_queue);
@@ -262,7 +267,7 @@ void ui_entry(void* raw) {
         state->stop.store(true);
         boards::release_board_runtime(board);
         state->ui_done.store(true);
-        vTaskDeleteWithCaps(nullptr);
+        vTaskSuspend(nullptr);
         return;
     }
     Rgb565Panel panel;
@@ -313,16 +318,20 @@ void ui_entry(void* raw) {
     }
     scratch.release();
     boards::release_board_runtime(board);
+    }
     state->ui_done.store(true);
-    vTaskDeleteWithCaps(nullptr);
+    // The supervisor deletes this suspended WithCaps task after the packed
+    // surface, raster scratch and board runtime have all been released.
+    vTaskSuspend(nullptr);
 }
 
 void supervisor_entry(void* raw) {
     auto* state = static_cast<InstalledBundleScriptSession*>(raw);
     if (state == nullptr || state->host == nullptr || state->stopped == nullptr) {
-        vTaskDelete(nullptr);
+        vTaskDeleteWithCaps(nullptr);
         return;
     }
+    {
     jellyframe::ScriptTaskSupervisor protocol(supervisor_options());
     state->script_session = protocol.begin(state->app_instance_id);
     state->protocol = &protocol;
@@ -375,6 +384,8 @@ void supervisor_entry(void* raw) {
     while (!state->worker_done.load() || !state->ui_done.load()) {
         vTaskDelay(pdMS_TO_TICKS(kSupervisorPollMs));
     }
+    if (worker != nullptr) vTaskDeleteWithCaps(worker);
+    if (ui != nullptr) vTaskDeleteWithCaps(ui);
     // AppInstalledBundleBinding owns the Runtime host and bundle lease. This
     // task may retire worker-local protocol state, but lifecycle performs the
     // host teardown only after stop_installed_bundle_script_task() returns.
@@ -382,6 +393,7 @@ void supervisor_entry(void* raw) {
     (void)protocol.complete_teardown(state->script_session);
     completion_scratch.release();
     state->protocol = nullptr;
+    }
     ESP_LOGI(kTag,
              "session stopped app=%s fatal=%d input_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u",
              state->app_id.c_str(), state->fatal_seen.load() ? 1 : 0,
@@ -389,7 +401,9 @@ void supervisor_entry(void* raw) {
              static_cast<unsigned>(state->published_frame_seq.load()), static_cast<unsigned>(state->accepted_frame_seq.load()),
              static_cast<unsigned>(state->present_failures.load()));
     xSemaphoreGive(state->stopped);
-    vTaskDelete(nullptr);
+    // stop_installed_bundle_script_task() owns the final external deletion.
+    // No session state is accessed after this handoff.
+    vTaskSuspend(nullptr);
 }
 
 } // namespace
@@ -473,6 +487,10 @@ bool stop_installed_bundle_script_task(InstalledBundleScriptSession*& session,
     session->stop.store(true);
     if (xSemaphoreTake(session->stopped, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) return false;
     if (telemetry != nullptr) *telemetry = telemetry_snapshot(*session);
+    if (session->supervisor_task != nullptr) {
+        vTaskDeleteWithCaps(session->supervisor_task);
+        session->supervisor_task = nullptr;
+    }
     vSemaphoreDelete(session->stopped);
     delete session;
     session = nullptr;
