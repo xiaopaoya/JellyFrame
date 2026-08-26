@@ -102,6 +102,8 @@ struct InstalledBundleScriptSession {
     std::atomic<bool> ui_done{false};
     std::atomic<bool> initialized{false};
     std::atomic<bool> fatal_seen{false};
+    std::atomic<std::uint8_t> init_status{0xff};
+    std::atomic<std::uint8_t> fatal_reason{0};
     std::atomic<std::uint32_t> input_packet_seq{0};
     std::atomic<std::uint32_t> js_mutation_seq{0};
     std::atomic<std::uint32_t> published_frame_seq{0};
@@ -140,6 +142,8 @@ InstalledBundleScriptTaskTelemetry telemetry_snapshot(const InstalledBundleScrip
     InstalledBundleScriptTaskTelemetry telemetry;
     telemetry.initialized = state.initialized.load();
     telemetry.fatal = state.fatal_seen.load();
+    telemetry.init_status = state.init_status.load();
+    telemetry.fatal_reason = state.fatal_reason.load();
     telemetry.scripts = static_cast<std::uint32_t>(state.scripts.size());
     telemetry.input_seq = state.input_packet_seq.load();
     telemetry.mutation_seq = state.js_mutation_seq.load();
@@ -157,6 +161,7 @@ void worker_entry(void* raw) {
     }
     jellyframe::ScriptTaskWorkerRuntime runtime(state->script_session, worker_options(*state));
     const auto initialized = runtime.initialize(state->entry_document, state->author_css);
+    state->init_status.store(static_cast<std::uint8_t>(initialized));
     state->initialized.store(initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted);
     if (initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted) {
         for (const jellyframe::DocumentScript& script : state->scripts) {
@@ -168,8 +173,17 @@ void worker_entry(void* raw) {
             (void)runtime.publish_frame(*state->protocol);
         }
     }
-    ESP_LOGI(kTag, "worker app=%s initialized=%d scripts=%u",
+    if (initialized != jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted) {
+        const jellyframe::ScriptTaskWorkerRuntimeFatalRecord fatal = runtime.fatal_record();
+        state->fatal_reason.store(static_cast<std::uint8_t>(fatal.reason));
+        state->fatal_seen.store(true);
+        // A rejected worker has no valid DOM/VM to service. Terminate the
+        // session through the same protected lifecycle path as a runtime fatal.
+        (void)runtime.publish_fatal(*state->protocol);
+    }
+    ESP_LOGI(kTag, "worker app=%s initialized=%d init_status=%u fatal_reason=%u scripts=%u",
              state->app_id.c_str(), initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted ? 1 : 0,
+             static_cast<unsigned>(state->init_status.load()), static_cast<unsigned>(state->fatal_reason.load()),
              static_cast<unsigned>(state->scripts.size()));
     while (!state->stop.load() && !runtime.fatal()) {
         const auto input = runtime.process_one(*state->protocol);
@@ -184,6 +198,7 @@ void worker_entry(void* raw) {
     }
     if (runtime.fatal()) {
         state->fatal_seen.store(true);
+        state->fatal_reason.store(static_cast<std::uint8_t>(runtime.fatal_record().reason));
         (void)runtime.publish_fatal(*state->protocol);
     }
     runtime.stop();

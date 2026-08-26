@@ -28,6 +28,11 @@ struct InstalledBundleScriptSession;
 struct InstalledBundleScriptTaskTelemetry {
     bool initialized = false;
     bool fatal = false;
+    // These are numeric mirrors of the Render Core enums. They keep the
+    // lifecycle/log boundary value-only while still identifying startup
+    // failures when the USB console is deliberately disabled.
+    std::uint8_t init_status = 0xff;
+    std::uint8_t fatal_reason = 0;
     std::uint32_t scripts = 0;
     std::uint32_t input_seq = 0;
     std::uint32_t mutation_seq = 0;

@@ -247,8 +247,9 @@ private:
                                  const InstalledBundleScriptTaskTelemetry& telemetry) {
         char message[kDeviceAppLogMaxMessageBytes + 1]{};
         std::snprintf(message, sizeof(message),
-                      "script %.*s initialized=%u scripts=%u input_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u fatal=%u",
+                      "script %.*s initialized=%u init_status=%u fatal_reason=%u scripts=%u input_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u fatal=%u",
                       static_cast<int>(event.size()), event.data(), telemetry.initialized ? 1u : 0u,
+                      static_cast<unsigned>(telemetry.init_status), static_cast<unsigned>(telemetry.fatal_reason),
                       static_cast<unsigned>(telemetry.scripts),
                       static_cast<unsigned>(telemetry.input_seq), static_cast<unsigned>(telemetry.mutation_seq),
                       static_cast<unsigned>(telemetry.published_seq), static_cast<unsigned>(telemetry.accepted_seq),
@@ -287,6 +288,8 @@ private:
         }
         ESP_LOGE("JellyFrameDevice", "installed script app fatal app=%s generation=%u", app_id.c_str(),
                  static_cast<unsigned>(store_.registry_generation()));
+        record_script_telemetry(app_id, store_.registry_generation(), "failed",
+                                installed_bundle_script_task_telemetry(script_session_));
         record_app_log(DeviceAppLogLevel::Error, app_id, store_.registry_generation(), "app-runtime-failure");
         (void)recover_to_launcher(DeviceRecoveryReason::AppRuntimeFailure, app_id);
     }
