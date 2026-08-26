@@ -32,6 +32,22 @@ inline CssParserOptions css_parser_options_from_budgets(const HostBudgets& budge
     return options;
 }
 
+// Media queries are resolved while the stylesheet is parsed. Runtime hosts
+// must provide their actual display viewport instead of silently inheriting
+// the desktop-oriented CssParserOptions defaults.
+inline CssParserOptions css_parser_options_from_budgets(const HostBudgets& budgets,
+                                                        int viewport_width,
+                                                        int viewport_height) {
+    CssParserOptions options = css_parser_options_from_budgets(budgets);
+    if (viewport_width > 0) {
+        options.media_viewport_width = viewport_width;
+    }
+    if (viewport_height > 0) {
+        options.media_viewport_height = viewport_height;
+    }
+    return options;
+}
+
 inline DocumentStyleCollectionOptions document_style_collection_options_from_budgets(
     const HostBudgets& budgets,
     DiagnosticSink* diagnostics = nullptr) {

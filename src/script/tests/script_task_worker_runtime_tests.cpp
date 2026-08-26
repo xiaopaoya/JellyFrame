@@ -185,6 +185,31 @@ void worker_v2_publishes_clip_metadata_without_cross_task_objects() {
           "v2 clip references remain parallel to display commands");
 }
 
+void worker_resolves_media_queries_against_its_runtime_viewport() {
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(72);
+    ScriptTaskWorkerRuntime runtime(session, runtime_options());
+    check(runtime.initialize(
+              "<body><div id='panel'></div></body>",
+              "body { margin: 0; } #panel { display: block; width: 160px; height: 100px; background: #ff0000; } "
+              "@media (max-width: 200px) { #panel { background: #00ff00; } }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "media viewport fixture initializes");
+    check(runtime.publish_frame(supervisor).accepted(), "media viewport frame publishes");
+    ScriptTaskAppFrame frame;
+    check(take_script_task_app_frame(supervisor, session, runtime_options().frame_codec, frame) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "media viewport frame is received");
+    bool saw_media_color = false;
+    for (const DisplayCommand& command : frame.display_list) {
+        if (command.type == DisplayCommandType::FillRect && command.color.r == 0 && command.color.g == 255 &&
+            command.color.b == 0) {
+            saw_media_color = true;
+        }
+    }
+    check(saw_media_color, "worker CSS media queries use its configured viewport rather than parser defaults");
+}
+
 void worker_eval_failure_becomes_value_fatal() {
     const ScriptAppSession session{8, 1, 1};
     ScriptTaskWorkerRuntime runtime(session, runtime_options());
@@ -714,6 +739,7 @@ int script_task_worker_runtime_tests_main() {
         worker_input_publishes_value_frame();
         worker_retries_dirty_frame_after_ui_mailbox_backpressure();
         worker_v2_publishes_clip_metadata_without_cross_task_objects();
+        worker_resolves_media_queries_against_its_runtime_viewport();
         worker_eval_failure_becomes_value_fatal();
         worker_timer_publishes_value_frame();
         worker_service_completion_reaches_js_as_copied_value();

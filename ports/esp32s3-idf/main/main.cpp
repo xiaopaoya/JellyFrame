@@ -617,7 +617,8 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
         make_device_capabilities(viewport_width, viewport_height, card_count);
     const HostBudgets& budgets = capabilities.budgets;
     const HtmlParserOptions html_options = html_parser_options_from_budgets(budgets);
-    const CssParserOptions css_options = css_parser_options_from_budgets(budgets);
+    const CssParserOptions css_options =
+        css_parser_options_from_budgets(budgets, viewport_width, viewport_height);
     const RenderTreeOptions render_options = render_tree_options_from_budgets(budgets);
     const LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
     const LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);

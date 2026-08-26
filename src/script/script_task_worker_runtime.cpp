@@ -147,7 +147,9 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::strin
     }
 
     CssParser css_parser;
-    Stylesheet stylesheet = css_parser.parse(std::string(css), css_parser_options_from_budgets(options_.budgets));
+    Stylesheet stylesheet = css_parser.parse(
+        std::string(css),
+        css_parser_options_from_budgets(options_.budgets, options_.viewport.width, options_.viewport.height));
     document_owner_.set_root(std::move(parsed.document));
     runtime_ = std::make_unique<JerryScriptRuntime>(options_.script);
     runtime_->bind_document(*document_owner_.root());

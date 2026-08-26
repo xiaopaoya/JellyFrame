@@ -116,6 +116,8 @@ provider；WS147 请安装版本化交付包
 缺失或无效，命令会直接给出配置提示。先执行“发现设备”，再使用“读取设备身份”按配置的
 Developer Image manifest 校验所选端点；“列出已安装 App”会显示同一端点的 registry generation、版本、
 状态和回滚可用性。这三项均为只读操作，不会安装、启动、删除或刷写设备。
+部署时会选择名称与尺寸均匹配已验证设备 profile 的 App target；profile 名称不同时，只接受唯一一个
+同尺寸 manifest target。没有这个无歧义声明的 App 不会针对该设备打包或安装。
 
 WS147 provider `jellyframe-device@0.1.1-dev` 只会为已验证的 `rect-172x320` Developer Image 声明
 lifecycle operation。活动栏从 `capabilities.supportedOperations` 推导可见的部署、启动、停止、回滚、App 日志和
