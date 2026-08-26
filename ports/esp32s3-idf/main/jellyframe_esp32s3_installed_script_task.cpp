@@ -331,8 +331,12 @@ void supervisor_entry(void* raw) {
     BaseType_t worker_created = errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
     BaseType_t ui_created = errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
     if (!state->stop.load()) {
-        worker_created = xTaskCreate(worker_entry, "jf_app_script", CONFIG_JELLYFRAME_ESP32S3_SCRIPT_TASK_STACK_SIZE,
-                                      state, 6, &worker);
+        // This Runtime profile reserves internal RAM for the protocol and
+        // transport. The worker owns a comparatively deep JerryScript stack,
+        // so place it in the PSRAM-capable task allocator like the UI task.
+        worker_created = xTaskCreateWithCaps(
+            worker_entry, "jf_app_script", CONFIG_JELLYFRAME_ESP32S3_SCRIPT_TASK_STACK_SIZE,
+            state, 6, &worker, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         ui_created = xTaskCreateWithCaps(ui_entry, "jf_app_script_ui", CONFIG_JELLYFRAME_ESP32S3_UI_TASK_STACK_SIZE,
                                          state, CONFIG_JELLYFRAME_ESP32S3_UI_TASK_PRIORITY, &ui,
                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
