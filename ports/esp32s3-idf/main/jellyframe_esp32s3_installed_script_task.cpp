@@ -369,7 +369,7 @@ bool start_installed_bundle_script_task(std::string app_id,
     }
     const jellyframe::HostBudgets budgets = installed_script_budgets(profile.display.width, profile.display.height);
     ResourceLoadStats stats;
-    const ResourceBundleContext resource_context = make_resource_context(budgets, entry_path, resources.bundle, &stats);
+    ResourceBundleContext resource_context = make_resource_context(budgets, entry_path, resources.bundle, &stats);
     jellyframe::HtmlParser parser;
     const std::unique_ptr<jellyframe::Node> document = parser.parse(
         entry_document, jellyframe::html_parser_options_from_budgets(budgets));
