@@ -142,6 +142,10 @@ int fixed_scroll_offset(const Node& node, int max_scroll_y, void*) {
     return 0;
 }
 
+int maximum_scroll_offset(const Node&, int max_scroll_y, void*) {
+    return max_scroll_y;
+}
+
 void overflow_hidden_creates_clip_layer() {
     auto pipeline = build_pipeline("<body><section class='clip'><p>Visible</p></section></body>",
                                    ".clip { overflow: hidden; height: 20px; background: #ffffff; }");
@@ -160,6 +164,30 @@ void overflow_y_auto_creates_vertical_scroll_clip_layer() {
     check(layer != nullptr, "overflow-y auto layer exists");
     check(layer->type == LayerType::Clip, "overflow-y auto uses the vertical scroll clip layer");
     check(layer->has_clip, "overflow-y auto layer has clip");
+}
+
+void extreme_scroll_geometry_remains_scrollable_and_bounded() {
+    auto root_node = make_element("section");
+    LayoutBox root;
+    root.node = root_node.get();
+    root.rect = Rect{0, 0, 100, 100};
+    root.style.overflow = "scroll";
+    auto child = LayoutBoxPtr(new LayoutBox, LayoutBoxDeleter{false});
+    child->rect = Rect{0, std::numeric_limits<int>::max() - 4, 20, 8};
+    child->style.background_color = Color{1, 2, 3, 255};
+    root.children.push_back(std::move(child));
+
+    LayerTreeBuilderOptions options;
+    options.scroll_resolver = ScrollOffsetResolver{maximum_scroll_offset, nullptr};
+    options.paint_scroll_indicators = true;
+    const LayerNodePtr layer_tree = LayerTreeBuilder(options).build(root);
+
+    check(layer_tree->max_scroll_y > 0,
+          "saturated child bottom still produces a positive scroll range");
+    check(layer_tree->scroll_y == layer_tree->max_scroll_y,
+          "host scroll resolver remains clamped to the saturated range");
+    const DisplayList flattened = LayerTreeBuilder(options).flatten(*layer_tree);
+    check(!flattened.empty(), "extreme scroll geometry still flattens a bounded display list");
 }
 
 void rounded_overflow_clip_keeps_geometry_on_clip_layer() {
@@ -1569,6 +1597,7 @@ int main() {
     try {
         overflow_hidden_creates_clip_layer();
         overflow_y_auto_creates_vertical_scroll_clip_layer();
+        extreme_scroll_geometry_remains_scrollable_and_bounded();
         rounded_overflow_clip_keeps_geometry_on_clip_layer();
         flatten_clip_metadata_preserves_unclipped_commands();
         flatten_clip_metadata_exports_rounded_clip_geometry();

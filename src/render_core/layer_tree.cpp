@@ -933,13 +933,17 @@ bool resolve_image_handle(const LayoutBox& box,
 }
 
 Rect content_rect_for(const LayoutBox& box) {
+    const int horizontal_insets = safe_add(
+        safe_add(box.style.border_width.left, box.style.border_width.right),
+        safe_add(box.style.padding.left, box.style.padding.right));
+    const int vertical_insets = safe_add(
+        safe_add(box.style.border_width.top, box.style.border_width.bottom),
+        safe_add(box.style.padding.top, box.style.padding.bottom));
     return Rect{
-        box.rect.x + box.style.border_width.left + box.style.padding.left,
-        box.rect.y + box.style.border_width.top + box.style.padding.top,
-        std::max(0, box.rect.width - box.style.border_width.left - box.style.border_width.right -
-                    box.style.padding.left - box.style.padding.right),
-        std::max(0, box.rect.height - box.style.border_width.top - box.style.border_width.bottom -
-                    box.style.padding.top - box.style.padding.bottom),
+        safe_add(box.rect.x, safe_add(box.style.border_width.left, box.style.padding.left)),
+        safe_add(box.rect.y, safe_add(box.style.border_width.top, box.style.padding.top)),
+        std::max(0, safe_add(box.rect.width, safe_negate(horizontal_insets))),
+        std::max(0, safe_add(box.rect.height, safe_negate(vertical_insets))),
     };
 }
 
@@ -947,9 +951,10 @@ int scrollable_content_height(const LayoutBox& box) {
     const Rect content = content_rect_for(box);
     int bottom = content.y;
     for (const auto& child : box.children) {
-        bottom = std::max(bottom, child->rect.y + child->rect.height + child->style.margin.bottom);
+        bottom = std::max(bottom, safe_add(safe_edge(child->rect.y, child->rect.height),
+                                           child->style.margin.bottom));
     }
-    return std::max(0, bottom - content.y);
+    return safe_span(content.y, bottom);
 }
 
 int max_scroll_y_for(const LayoutBox& box) {
@@ -957,7 +962,7 @@ int max_scroll_y_for(const LayoutBox& box) {
         return 0;
     }
     const Rect content = content_rect_for(box);
-    return std::max(0, scrollable_content_height(box) - std::max(0, content.height));
+    return std::max(0, safe_add(scrollable_content_height(box), safe_negate(std::max(0, content.height))));
 }
 
 int resolved_scroll_y_for(const LayoutBox& box, const LayerTreeBuilderOptions& options) {
@@ -987,15 +992,20 @@ bool paint_scroll_indicator(const LayoutBox& box, int scroll_y, int max_scroll_y
     if (track_height < kMinThumbHeight) {
         return false;
     }
-    const int scrollable_height = content.height + max_scroll_y;
-    int thumb_height = std::max(kMinThumbHeight, (track_height * content.height) / std::max(1, scrollable_height));
+    const std::int64_t scrollable_height = std::max<std::int64_t>(
+        1, static_cast<std::int64_t>(content.height) + max_scroll_y);
+    const std::int64_t thumb_numerator = static_cast<std::int64_t>(track_height) * content.height;
+    int thumb_height = std::max(kMinThumbHeight, clamp_int64_to_int(
+        thumb_numerator / scrollable_height));
     thumb_height = std::min(track_height, thumb_height);
     const int travel = std::max(0, track_height - thumb_height);
     const int clamped_scroll = std::max(0, std::min(scroll_y, max_scroll_y));
-    const int thumb_y = content.y + kTrackInset +
-        (max_scroll_y > 0 ? (travel * clamped_scroll) / max_scroll_y : 0);
-    const int track_x = content.x + content.width - kTrackWidth - kTrackInset;
-    const Rect track{track_x, content.y + kTrackInset, kTrackWidth, track_height};
+    const int thumb_offset = max_scroll_y > 0
+        ? clamp_int64_to_int(static_cast<std::int64_t>(travel) * clamped_scroll / max_scroll_y)
+        : 0;
+    const int thumb_y = safe_add(safe_add(content.y, kTrackInset), thumb_offset);
+    const int track_x = safe_add(safe_edge(content.x, content.width), -(kTrackWidth + kTrackInset));
+    const Rect track{track_x, safe_add(content.y, kTrackInset), kTrackWidth, track_height};
     const Rect thumb{track_x, thumb_y, kTrackWidth, thumb_height};
     push_fill_rect(display_list, track, Color{255, 255, 255, 48}, 2);
     push_fill_rect(display_list, thumb, Color{255, 255, 255, 176}, 2);
@@ -1007,8 +1017,8 @@ void translate_display_commands(DisplayList& display_list, std::size_t begin, in
         return;
     }
     for (std::size_t index = begin; index < display_list.size(); ++index) {
-        display_list[index].rect.x += dx;
-        display_list[index].rect.y += dy;
+        display_list[index].rect.x = safe_add(display_list[index].rect.x, dx);
+        display_list[index].rect.y = safe_add(display_list[index].rect.y, dy);
     }
 }
 
@@ -1046,15 +1056,17 @@ bool paint_select_popup(const LayoutBox& box,
     }
 
     popup_bounds = geometry.rect;
-    popup_bounds.y -= scroll_y;
+    popup_bounds.y = safe_add(popup_bounds.y, safe_negate(scroll_y));
     push_fill_rect(display_list, popup_bounds, Color{248, 250, 252, 255}, 2);
     const EdgeSizes border{1, 1, 1, 1};
     push_border_rects(display_list, popup_bounds, border, box.style.border_color, 2);
     const FormControlState& state = ensure_form_control_state(*box.node);
     for (int visible_index = 0; visible_index < geometry.visible_option_count; ++visible_index) {
-        const int option_index = geometry.first_option_index + visible_index;
+        const int option_index = safe_add(geometry.first_option_index, visible_index);
+        const int row_offset = clamp_int64_to_int(
+            static_cast<std::int64_t>(visible_index) * geometry.row_height);
         const Rect row{popup_bounds.x,
-                       popup_bounds.y + visible_index * geometry.row_height,
+                       safe_add(popup_bounds.y, row_offset),
                        popup_bounds.width,
                        geometry.row_height};
         if (option_index == state.selected_index) {
@@ -1064,7 +1076,7 @@ bool paint_select_popup(const LayoutBox& box,
             ? Color{148, 163, 184, 255}
             : box.style.color;
         push_text_with_layout(display_list,
-                              Rect{row.x + 5, row.y, std::max(0, row.width - 10), row.height},
+                              Rect{safe_add(row.x, 5), row.y, std::max(0, safe_add(row.width, -10)), row.height},
                               text_color,
                               form_control_option_text(*box.node, option_index),
                               box.style,
@@ -1240,8 +1252,8 @@ void append_flattened_command(DisplayList& output,
         return;
     }
     DisplayCommand flattened = command;
-    flattened.rect.x += translate_x;
-    flattened.rect.y += translate_y;
+    flattened.rect.x = safe_add(flattened.rect.x, translate_x);
+    flattened.rect.y = safe_add(flattened.rect.y, translate_y);
     if (has_clip) {
         flattened.rect = intersect_rect(flattened.rect, clip);
         if (empty_rect(flattened.rect)) {
@@ -1654,7 +1666,9 @@ void LayerTreeBuilder::build_children(const LayoutBox& box,
                               remaining_commands,
                               display_budget_reported);
         }
-        const int child_scroll_y = target_layer == &current_layer ? current.scroll_y + own_scroll_y : own_scroll_y;
+        const int child_scroll_y = target_layer == &current_layer
+            ? safe_add(current.scroll_y, own_scroll_y)
+            : own_scroll_y;
         pending.push_back(PendingBox{current_box, target_layer, child_scroll_y, true});
         enqueue_children(*current_box, target_layer, child_scroll_y);
     }
