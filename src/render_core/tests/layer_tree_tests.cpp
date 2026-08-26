@@ -711,6 +711,22 @@ void progress_and_meter_emit_value_fill() {
     check(colored_bar_count == 2, "progress and meter emit filled bars");
 }
 
+void progress_and_meter_ignore_invalid_numeric_attributes() {
+    auto pipeline = build_pipeline(
+        "<body><progress value='nan' max='100'></progress>"
+        "<meter min='0' max='10' value='8junk'></meter></body>",
+        "");
+
+    LayerTreeBuilder layer_tree_builder;
+    const DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        check(command.type != DisplayCommandType::FillRect ||
+                  !((command.color.r == 37 && command.color.g == 99 && command.color.b == 235) ||
+                    (command.color.r == 22 && command.color.g == 163 && command.color.b == 74)),
+              "invalid progress and meter values do not produce a filled bar");
+    }
+}
+
 void inline_mark_background_shrinks_to_text() {
     auto pipeline = build_pipeline("<body><p>Use <mark>mark</mark> text</p></body>", "");
 
@@ -1602,6 +1618,7 @@ int main() {
         outline_offset_expands_focus_stroke_without_affecting_layout();
         z_index_orders_child_layers();
         progress_and_meter_emit_value_fill();
+        progress_and_meter_ignore_invalid_numeric_attributes();
         inline_mark_background_shrinks_to_text();
         inline_run_flows_horizontally();
         centered_inline_text_aligns_in_parent();
