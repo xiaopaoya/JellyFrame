@@ -63,8 +63,10 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--cycles", type=int, default=30)
     parser.add_argument("--tap-window-seconds", type=float, default=5.0)
+    parser.add_argument("--settle-seconds", type=float, default=0.2)
     args = parser.parse_args()
-    if not args.provider.is_file() or not 1 <= args.cycles <= 100 or not 2.0 <= args.tap_window_seconds <= 30.0:
+    if (not args.provider.is_file() or not 1 <= args.cycles <= 100 or
+            not 2.0 <= args.tap_window_seconds <= 30.0 or not 0.0 <= args.settle_seconds <= 5.0):
         raise SystemExit("invalid provider, cycle count, or tap window")
 
     output = args.output.resolve()
@@ -86,6 +88,8 @@ def main() -> int:
         snapshot = stop_snapshot(logs_text)
         cases.append({"cycle": number, "launch": launch_code, "stop": result_code(stop_text),
                       "logsExitCode": logs_rc, "snapshot": snapshot, "pass": passed(snapshot)})
+        if number != args.cycles:
+            time.sleep(args.settle_seconds)
 
     successful = sum(1 for case in cases if case["pass"])
     summary = {"format": "jellyframe.ws147.installed-script-cycles", "formatVersion": 0,

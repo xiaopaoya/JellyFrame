@@ -260,6 +260,7 @@ private:
     }
 
     bool stop_active_ui(InstalledBundleScriptTaskTelemetry* script_telemetry = nullptr) {
+        const bool had_session = ui_session_ != nullptr || script_session_ != nullptr;
         if (!stop_installed_bundle_ui_task(ui_session_)) {
             ESP_LOGE("JellyFrameDevice", "installed app UI did not stop before lifecycle transition");
             return false;
@@ -267,6 +268,12 @@ private:
         if (!stop_installed_bundle_script_task(script_session_, 3000, script_telemetry)) {
             ESP_LOGE("JellyFrameDevice", "installed script app did not stop before lifecycle transition");
             return false;
+        }
+        if (had_session) {
+            // FreeRTOS defers deletion of external task stacks to idle. A
+            // short yield prevents an immediate launch from falsely failing
+            // while the prior installed App's PSRAM stacks await reclaim.
+            vTaskDelay(pdMS_TO_TICKS(60));
         }
         return true;
     }
