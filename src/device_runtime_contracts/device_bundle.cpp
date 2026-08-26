@@ -654,7 +654,7 @@ DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,
     if (descriptor.resource_count > policy.max_resource_entries) {
         return DeviceBundleStatus::TooManyResources;
     }
-    if (descriptor.bundle_crc32 == 0 || descriptor.summary_bytes == 0 ||
+    if (descriptor.resource_count == 0 || descriptor.bundle_crc32 == 0 || descriptor.summary_bytes == 0 ||
         descriptor.summary_bytes > policy.max_summary_bytes || descriptor.summary_bytes > kDeviceBundleMaxSummaryBytes ||
         index_bytes > std::numeric_limits<std::uint32_t>::max() ||
         !section_is_valid(bundle_bytes, descriptor.summary_offset, descriptor.summary_bytes) ||
@@ -692,6 +692,15 @@ DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,
         if (resource_status != DeviceBundleStatus::Ok) {
             return resource_status;
         }
+    }
+
+    // A successfully installed bundle must be launchable without deferring a
+    // malformed manifest to the App Runtime. The entry is therefore part of
+    // container validity, not merely a later resource lookup convenience.
+    DeviceBundleResource entry_resource;
+    if (find_device_bundle_resource(reader, descriptor, descriptor.summary.entry_path_view(), entry_resource) !=
+        DeviceBundleStatus::Ok) {
+        return DeviceBundleStatus::InvalidSummary;
     }
     return DeviceBundleStatus::Ok;
 }

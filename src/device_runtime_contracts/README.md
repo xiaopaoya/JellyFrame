@@ -15,6 +15,8 @@ installation.
   an injected `DeviceInstallStore`. Its controller calls idempotent
   transaction-scoped cleanup after every failed begin/write/verify/commit path;
   only a successful store commit may atomically publish a registry entry.
+- `device_bundle.*` validates bounded JFAPPV0 storage snapshots, including the
+  declared launch entry, without depending on filesystem or App Runtime APIs.
 - `jellyframe_device_runtime_contracts` and
   `jellyframe_device_runtime_contracts_tests` link neither App Runtime nor
   Render Core.
