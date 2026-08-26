@@ -98,18 +98,14 @@ HitTestResult HitTester::hit_test_layer(const LayerNode& layer,
                                         bool has_clip,
                                         int offset_x,
                                         int offset_y) const {
-    const int transform_x = layer.transform.translate_x >= 0.0F
-        ? static_cast<int>(layer.transform.translate_x + 0.5F)
-        : static_cast<int>(layer.transform.translate_x - 0.5F);
-    const int transform_y = layer.transform.translate_y >= 0.0F
-        ? static_cast<int>(layer.transform.translate_y + 0.5F)
-        : static_cast<int>(layer.transform.translate_y - 0.5F);
-    const int layer_offset_x = offset_x + transform_x;
-    const int layer_offset_y = offset_y + transform_y;
+    const int transform_x = round_float_to_int(layer.transform.translate_x);
+    const int transform_y = round_float_to_int(layer.transform.translate_y);
+    const int layer_offset_x = safe_add(offset_x, transform_x);
+    const int layer_offset_y = safe_add(offset_y, transform_y);
     if (layer.has_clip) {
         Rect translated_clip = layer.clip_rect;
-        translated_clip.x += layer_offset_x;
-        translated_clip.y += layer_offset_y;
+        translated_clip.x = safe_add(translated_clip.x, layer_offset_x);
+        translated_clip.y = safe_add(translated_clip.y, layer_offset_y);
         if (has_corner_radius(layer.clip_border_radius) &&
             rounded_rect_coverage(translated_clip, layer.clip_border_radius, x, y) == 0) {
             return {};
@@ -139,8 +135,8 @@ HitTestResult HitTester::hit_test_layer(const LayerNode& layer,
             continue;
         }
         Rect translated_clip = child->clip_rect;
-        translated_clip.x += layer_offset_x;
-        translated_clip.y += layer_offset_y;
+        translated_clip.x = safe_add(translated_clip.x, layer_offset_x);
+        translated_clip.y = safe_add(translated_clip.y, layer_offset_y);
         if (contains(translated_clip, x, y) &&
             has_corner_radius(child->clip_border_radius) &&
             rounded_rect_coverage(translated_clip, child->clip_border_radius, x, y) == 0) {
@@ -149,19 +145,19 @@ HitTestResult HitTester::hit_test_layer(const LayerNode& layer,
         }
     }
     if (blocked_by_rounded_child && layer.box != nullptr && !layer.box->style.visibility_hidden) {
-        const int document_x = x - layer_offset_x;
-        const int document_y = y - layer_offset_y + layer.scroll_y;
-        return make_result(*layer.box, document_x, document_y - layer.scroll_y);
+        const int document_x = safe_add(x, safe_negate(layer_offset_x));
+        const int document_y = safe_add(safe_add(y, safe_negate(layer_offset_y)), layer.scroll_y);
+        return make_result(*layer.box, document_x, safe_add(document_y, safe_negate(layer.scroll_y)));
     }
 
     Rect visual_bounds = layer.bounds;
-    visual_bounds.x += layer_offset_x;
-    visual_bounds.y += layer_offset_y;
+    visual_bounds.x = safe_add(visual_bounds.x, layer_offset_x);
+    visual_bounds.y = safe_add(visual_bounds.y, layer_offset_y);
     if (layer.box == nullptr || !contains(visual_bounds, x, y) || layer.box->style.visibility_hidden) {
         return {};
     }
-    const int document_x = x - layer_offset_x;
-    const int document_y = y - layer_offset_y + layer.scroll_y;
+    const int document_x = safe_add(x, safe_negate(layer_offset_x));
+    const int document_y = safe_add(safe_add(y, safe_negate(layer_offset_y)), layer.scroll_y);
     if (layer.scroll_y > 0) {
         for (auto it = layer.box->children.rbegin(); it != layer.box->children.rend(); ++it) {
             HitTestResult child_result = hit_test_box(**it, document_x, document_y);
@@ -169,7 +165,7 @@ HitTestResult HitTester::hit_test_layer(const LayerNode& layer,
                 return child_result;
             }
         }
-        return make_result(*layer.box, document_x, document_y - layer.scroll_y);
+        return make_result(*layer.box, document_x, safe_add(document_y, safe_negate(layer.scroll_y)));
     }
     HitTestResult result = hit_test_box(*layer.box, document_x, document_y);
     if (result) {
