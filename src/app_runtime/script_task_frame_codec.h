@@ -63,8 +63,9 @@ enum class ScriptTaskAppFrameCodecStatus {
 };
 
 // Versioned, value-only wire format. v1 carries only the legacy display list;
-// v2 additionally carries bounded clip records and references; v3 also carries
-// fixed-point command transforms. Image handles and font-family hashes are
+// v2 additionally carries bounded clip records and references; v3 carries
+// fixed-point command transforms; v4 also identifies a transformed layer's
+// source-space clip. Image handles and font-family hashes are
 // opaque integers; no DisplayCommand storage or text pointer crosses tasks.
 ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(
     const ScriptTaskAppFrame& frame,

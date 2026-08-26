@@ -1279,6 +1279,7 @@ void append_flattened_command(DisplayList& output,
                               const DisplayCommand& command,
                               Rect clip,
                               bool has_clip,
+                              std::uint32_t transform_source_clip_index,
                               float opacity,
                               int translate_x,
                               int translate_y,
@@ -1292,7 +1293,12 @@ void append_flattened_command(DisplayList& output,
     DisplayCommand flattened = command;
     flattened.rect.x += translate_x;
     flattened.rect.y += translate_y;
-    if (has_clip) {
+    const bool has_affine_transform = !identity_transform(transform);
+    // A frame clip is applied in destination space by the value-frame
+    // Frame clips are consumed in destination space. A v4 source-clip index
+    // separately preserves the current transformed layer's pre-transform
+    // overflow clip without cropping away its transparent sampling fringe.
+    if (has_clip && !has_affine_transform) {
         flattened.rect = intersect_rect(flattened.rect, clip);
         if (empty_rect(flattened.rect)) {
             return;
@@ -1300,7 +1306,7 @@ void append_flattened_command(DisplayList& output,
     }
     flattened.color = with_opacity(flattened.color, opacity);
     flattened.color2 = with_opacity(flattened.color2, opacity);
-    if (!identity_transform(transform)) {
+    if (has_affine_transform) {
         flattened.transform.enabled = true;
         flattened.transform.xx_1024 = fixed_transform_value(transform.xx);
         flattened.transform.xy_1024 = fixed_transform_value(transform.xy);
@@ -1308,6 +1314,8 @@ void append_flattened_command(DisplayList& output,
         flattened.transform.yy_1024 = fixed_transform_value(transform.yy);
         flattened.transform.tx_1024 = fixed_transform_value(transform.tx);
         flattened.transform.ty_1024 = fixed_transform_value(transform.ty);
+        flattened.transform.source_clip_index = transform_source_clip_index > std::numeric_limits<std::uint16_t>::max()
+            ? 0xffffU : static_cast<std::uint16_t>(transform_source_clip_index);
     }
     if (flattened.color.a == 0 &&
         ((flattened.type != DisplayCommandType::LinearGradient &&
@@ -1375,19 +1383,24 @@ void flatten_layer(const LayerNode& layer,
         Rect current_clip = current.clip;
         bool current_has_clip = current.has_clip;
         std::uint32_t current_clip_index = current.clip_index;
+        std::uint32_t transform_source_clip_index = kNoFlattenedClip;
         if (current_layer.has_clip) {
-            current_clip = current_has_clip ? intersect_rect(current_clip, current_layer.clip_rect) : current_layer.clip_rect;
+            const Rect translated_layer_clip{
+                safe_add(current_layer.clip_rect.x, layer_translate_x),
+                safe_add(current_layer.clip_rect.y, layer_translate_y),
+                current_layer.clip_rect.width,
+                current_layer.clip_rect.height,
+            };
+            current_clip = current_has_clip ? intersect_rect(current_clip, translated_layer_clip) : translated_layer_clip;
             current_has_clip = true;
             if (empty_rect(current_clip)) {
                 continue;
             }
             if (metadata != nullptr) {
                 current_clip_index = static_cast<std::uint32_t>(metadata->clips.size());
+                transform_source_clip_index = current_clip_index;
                 metadata->clips.push_back(FlattenedClip{
-                    Rect{safe_add(current_layer.clip_rect.x, layer_translate_x),
-                         safe_add(current_layer.clip_rect.y, layer_translate_y),
-                         current_layer.clip_rect.width,
-                         current_layer.clip_rect.height},
+                    translated_layer_clip,
                     current_layer.clip_border_radius,
                     current.clip_index});
             }
@@ -1397,6 +1410,7 @@ void flatten_layer(const LayerNode& layer,
                                      command,
                                      current_clip,
                                      current_has_clip,
+                                     transform_source_clip_index,
                                      layer_opacity,
                                      layer_translate_x,
                                      layer_translate_y,

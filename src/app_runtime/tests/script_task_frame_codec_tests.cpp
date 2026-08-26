@@ -24,6 +24,12 @@ ScriptTaskAppFrameCodecOptions v3_limits() {
     return result;
 }
 
+ScriptTaskAppFrameCodecOptions v4_limits() {
+    ScriptTaskAppFrameCodecOptions result = v3_limits();
+    result.version = 4;
+    return result;
+}
+
 ScriptTaskAppFrame fixture() {
     ScriptTaskAppFrame frame;
     frame.viewport = {0, 0, 172, 320};
@@ -159,6 +165,46 @@ void v3_frame_round_trip_preserves_fixed_point_command_transform() {
     bytes[36 + 72] = 2;
     assert(decode_script_task_app_frame(bytes, v3_limits(), decoded) ==
            ScriptTaskAppFrameCodecStatus::Malformed);
+
+    frame.display_list.front().transform = {};
+    frame.display_list.front().transform.tx_1024 = 1;
+    assert(encode_script_task_app_frame(frame, v3_limits(), bytes) ==
+           ScriptTaskAppFrameCodecStatus::InvalidValue);
+
+    frame.display_list.front().transform = {};
+    assert(encode_script_task_app_frame(frame, v3_limits(), bytes) ==
+           ScriptTaskAppFrameCodecStatus::Accepted);
+    bytes[36 + 92] = 1;
+    assert(decode_script_task_app_frame(bytes, v3_limits(), decoded) ==
+           ScriptTaskAppFrameCodecStatus::Malformed);
+}
+
+void v4_frame_round_trip_preserves_transform_source_clip() {
+    ScriptTaskAppFrame frame = fixture();
+    frame.clips = {{{2, 2, 24, 24}, 6, kScriptTaskNoParentClip}};
+    frame.display_clip_indices.assign(frame.display_list.size(), 0);
+    DisplayCommandTransform& transform = frame.display_list.front().transform;
+    transform.enabled = true;
+    transform.xx_1024 = 0;
+    transform.xy_1024 = -1024;
+    transform.yx_1024 = 1024;
+    transform.yy_1024 = 0;
+    transform.tx_1024 = 32 * 1024;
+    transform.source_clip_index = 0;
+
+    std::vector<std::uint8_t> bytes;
+    assert(encode_script_task_app_frame(frame, v3_limits(), bytes) ==
+           ScriptTaskAppFrameCodecStatus::UnsupportedTransformFeature);
+    assert(encode_script_task_app_frame(frame, v4_limits(), bytes) ==
+           ScriptTaskAppFrameCodecStatus::Accepted);
+    ScriptTaskAppFrame decoded;
+    assert(decode_script_task_app_frame(bytes, v4_limits(), decoded) ==
+           ScriptTaskAppFrameCodecStatus::Accepted);
+    assert(decoded.display_list.front().transform.source_clip_index == 0);
+
+    bytes[36 + 102] = 1;
+    assert(decode_script_task_app_frame(bytes, v4_limits(), decoded) ==
+           ScriptTaskAppFrameCodecStatus::Malformed);
 }
 
 void sealed_lease_carries_only_serialized_frame_bytes() {
@@ -281,6 +327,7 @@ int script_task_frame_codec_tests_main() {
     v2_frame_round_trip_preserves_nested_clips_and_target_references();
     v2_frame_rejects_invalid_clip_chain_and_v1_clip_downgrade();
     v3_frame_round_trip_preserves_fixed_point_command_transform();
+    v4_frame_round_trip_preserves_transform_source_clip();
     sealed_lease_carries_only_serialized_frame_bytes();
     malformed_frame_releases_its_lease_before_reporting_decode_failure();
     worker_frame_producer_flattens_private_layer_values_before_publish();

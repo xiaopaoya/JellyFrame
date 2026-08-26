@@ -75,7 +75,7 @@ jellyframe::HostBudgets installed_script_budgets(int width, int height) {
 
 jellyframe::ScriptTaskAppFrameCodecOptions frame_codec_options() {
     jellyframe::ScriptTaskAppFrameCodecOptions options;
-    options.version = 3;
+    options.version = 4;
     options.max_commands = kMaxCommands;
     options.max_text_bytes = 12u * 1024u;
     options.max_input_targets = 48;

@@ -84,7 +84,12 @@ bool equal_transform(const DisplayCommandTransform& left, const DisplayCommandTr
     return left.enabled == right.enabled && left.xx_1024 == right.xx_1024 &&
         left.xy_1024 == right.xy_1024 && left.yx_1024 == right.yx_1024 &&
         left.yy_1024 == right.yy_1024 && left.tx_1024 == right.tx_1024 &&
-        left.ty_1024 == right.ty_1024;
+        left.ty_1024 == right.ty_1024 && left.source_clip_index == right.source_clip_index;
+}
+
+bool transform_is_singular(const DisplayCommandTransform& transform) {
+    return static_cast<std::int64_t>(transform.xx_1024) * transform.yy_1024 ==
+        static_cast<std::int64_t>(transform.xy_1024) * transform.yx_1024;
 }
 
 bool transform_bounds(const DisplayCommand& command, Rect& output) {
@@ -139,6 +144,11 @@ bool transform_bounds(const DisplayCommand& command, Rect& output) {
 int clip_coverage(const RasterClip* clips, std::size_t clip_count, int x, int y) {
     int coverage = 255;
     for (std::size_t index = 0; index < clip_count; ++index) {
+        const Rect rect = clips[index].rect;
+        if (x < rect.x || y < rect.y ||
+            x >= safe_edge(rect.x, rect.width) || y >= safe_edge(rect.y, rect.height)) {
+            return 0;
+        }
         coverage = std::min(coverage, rounded_rect_coverage(clips[index].rect, clips[index].border_radius, x, y));
         if (coverage == 0) break;
     }
@@ -616,6 +626,12 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
                                            Rect dirty,
                                            const RasterClip* clips,
                                            std::size_t clip_count) {
+        // CSS permits degenerate affine transforms such as scale(0). They
+        // have no inverse sampling map and therefore paint no destination
+        // pixels, but must not invalidate their otherwise valid frame.
+        if (transform_is_singular(command.transform)) {
+            return true;
+        }
         Rect destination;
         if (!transform_bounds(command, destination)) {
             report_diagnostic(options_.diagnostics,
@@ -652,12 +668,41 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
         }
         DisplayCommand source_command = command;
         source_command.transform = {};
-        rasterizer_.rasterize(source_command,
-                              source,
-                              {0, 0, source.width, source.height},
-                              safe_negate(command.rect.x),
-                              safe_negate(command.rect.y),
-                              working_scratch);
+        const Rect source_surface_rect{0, 0, source.width, source.height};
+        if (command.transform.source_clip_index == kScriptTaskNoClip) {
+            rasterizer_.rasterize(source_command,
+                                  source,
+                                  source_surface_rect,
+                                  safe_negate(command.rect.x),
+                                  safe_negate(command.rect.y),
+                                  working_scratch);
+        } else {
+            if (command.transform.source_clip_index >= frame.clips.size()) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Paint,
+                                  DiagnosticSeverity::Warning,
+                                  "script-frame-transform-source-clip",
+                                  "Value-frame transform source clip is invalid",
+                                  "clip index");
+                return false;
+            }
+            const ScriptTaskFrameClip& source_clip = frame.clips[command.transform.source_clip_index];
+            RasterClip local_source_clip{
+                {safe_add(source_clip.rect.x, safe_negate(command.rect.x)),
+                 safe_add(source_clip.rect.y, safe_negate(command.rect.y)),
+                 source_clip.rect.width,
+                 source_clip.rect.height},
+                source_clip.border_radius};
+            rasterizer_.rasterize_clipped(&source_command,
+                                          1,
+                                          source,
+                                          source_surface_rect,
+                                          safe_negate(command.rect.x),
+                                          safe_negate(command.rect.y),
+                                          &local_source_clip,
+                                          1,
+                                          working_scratch);
+        }
 
         constexpr float kScale = 1024.0F;
         const float xx = static_cast<float>(command.transform.xx_1024) / kScale;
@@ -667,15 +712,6 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
         const float tx = static_cast<float>(command.transform.tx_1024) / kScale;
         const float ty = static_cast<float>(command.transform.ty_1024) / kScale;
         const float determinant = xx * yy - xy * yx;
-        if (!std::isfinite(determinant) || std::abs(determinant) < 0.000001) {
-            report_diagnostic(options_.diagnostics,
-                              DiagnosticStage::Paint,
-                              DiagnosticSeverity::Warning,
-                              "script-frame-transform-singular",
-                              "Value-frame command transform is singular",
-                              "matrix determinant");
-            return false;
-        }
         const Rect visible = intersect_rect(intersect_rect(destination, dirty), target_rect);
         const auto lerp_color = [](Color left, Color right, int t256) {
             return Color{

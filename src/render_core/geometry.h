@@ -193,6 +193,9 @@ struct DisplayCommandTransform {
     std::int32_t yy_1024 = 1024;
     std::int32_t tx_1024 = 0;
     std::int32_t ty_1024 = 0;
+    // A transformed layer may clip its own source surface before affine
+    // compositing. This is separate from destination-space frame clips.
+    std::uint16_t source_clip_index = 0xffffU;
 };
 
 struct DisplayCommand {

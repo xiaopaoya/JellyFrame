@@ -62,9 +62,9 @@ parallel command clip indices. The session and frame sequence remain in the
 surrounding sealed-frame lease packet.
 
 `script_task_frame_renderer.*` is the host-side value-frame consumer. It maps
-decoded v1/v2 values to the platform-neutral `SoftwareRasterizer`, preserving
-rounded clip chains and dirty-region boundaries while rejecting malformed
-indices or parent cycles. It does not rebuild DOM or `LayerNode` state and can
+decoded v1-v4 values to the platform-neutral `SoftwareRasterizer`, preserving
+rounded destination clip chains and v4 transformed source clips while rejecting
+malformed indices or parent cycles. It does not rebuild DOM or `LayerNode` state and can
 therefore be reused by the desktop shell and a port adapter independently of
 the worker's private runtime.
 
