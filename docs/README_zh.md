@@ -1,6 +1,6 @@
 # JellyFrame 文档索引
 
-> 最后更新：2026-08-25；适用版本：0.6.0-dev
+> 最后更新：2026-08-27；适用版本：0.6.0-dev
 
 本目录保存技术文档：模块行为、支持子集、接口和宿主契约，应尽量贴近代码维护。
 
@@ -65,6 +65,8 @@
 - [device_image_manifest_zh.md](device_image_manifest_zh.md)：不可变 Developer Image 的 identity、provenance 与 provider-compatibility 契约。
 - [jfdp_v1_port_acceptance_zh.md](jfdp_v1_port_acceptance_zh.md)：第一条 physical developer transport 的字节流、malformed-frame 与证据 gate。
 - [device_image_lifecycle_port_acceptance_zh.md](device_image_lifecycle_port_acceptance_zh.md)：首个 Developer Image 的持久 staging、registry publication 与 launcher recovery gate。
+- [ws147_installed_script_touch_input_acceptance_20260827_zh.md](ws147_installed_script_touch_input_acceptance_20260827_zh.md)：
+  已安装 classic-script App 的物理触控到 worker、frame 与 panel 验收要求。
 - [ws147_provider_vscode_smoke_20260825_zh.md](ws147_provider_vscode_smoke_20260825_zh.md)：WS147
   provider 与 VS Code 的只读发现、身份读取冒烟验收；不包含安装、刷写或擦除操作。
 - [authorized_file_broker_zh.md](../src/app_runtime/docs/authorized_file_broker_zh.md)：面向文件管理器和系统组件的宿主持有授权文件访问边界。

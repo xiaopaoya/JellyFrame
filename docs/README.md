@@ -1,6 +1,6 @@
 # JellyFrame Documentation Index
 
-> Last updated: 2026-08-25; Applies to: 0.6.0-dev
+> Last updated: 2026-08-27; Applies to: 0.6.0-dev
 
 This directory contains technical documents: module behavior, supported subsets,
 interfaces and host contracts. These docs should stay close to the code.
@@ -87,6 +87,9 @@ for whether a document needs another pass after code changes.
 - [device_image_lifecycle_port_acceptance.md](device_image_lifecycle_port_acceptance.md):
   persistent staging, registry publication and launcher-recovery gate for a
   first Developer Image.
+- [ws147_installed_script_touch_input_acceptance_20260827.md](ws147_installed_script_touch_input_acceptance_20260827.md):
+  physical touch-to-worker, frame and panel acceptance for an installed
+  classic-script App.
 - [authorized_file_broker.md](../src/app_runtime/docs/authorized_file_broker.md): host-owned
   authorized file access boundary for file-manager and system-component flows.
 - [host_optional_services.md](../src/app_runtime/docs/host_optional_services.md): optional host-service

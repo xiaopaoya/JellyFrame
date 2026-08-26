@@ -207,9 +207,20 @@ bool post_board_input(ScriptAppState& state, const BoardInputEvent& event, std::
     input.delta_x = event.delta_x;
     input.delta_y = event.delta_y;
     switch (event.kind) {
-    case BoardInputKind::PointerDown: input.kind = jellyframe::ScriptTaskInputKind::PointerDown; break;
-    case BoardInputKind::PointerMove: input.kind = jellyframe::ScriptTaskInputKind::PointerMove; break;
-    case BoardInputKind::PointerUp: input.kind = jellyframe::ScriptTaskInputKind::PointerUp; break;
+    case BoardInputKind::PointerDown:
+        input.kind = jellyframe::ScriptTaskInputKind::PointerDown;
+        input.button = 0;
+        input.buttons = 1;
+        break;
+    case BoardInputKind::PointerMove:
+        input.kind = jellyframe::ScriptTaskInputKind::PointerMove;
+        input.button = 0;
+        input.buttons = 1;
+        break;
+    case BoardInputKind::PointerUp:
+        input.kind = jellyframe::ScriptTaskInputKind::PointerUp;
+        input.button = 0;
+        break;
     case BoardInputKind::Wheel: input.kind = jellyframe::ScriptTaskInputKind::Wheel; break;
     default: return false;
     }

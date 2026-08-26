@@ -36,6 +36,10 @@ struct InstalledBundleScriptTaskTelemetry {
     std::uint8_t init_status = 0xff;
     std::uint8_t fatal_reason = 0;
     std::uint32_t scripts = 0;
+    std::uint32_t input_posted = 0;
+    std::uint32_t input_rejected = 0;
+    std::uint32_t input_unsupported = 0;
+    std::uint32_t input_queue_dropped = 0;
     std::uint32_t input_seq = 0;
     std::uint32_t mutation_seq = 0;
     std::uint32_t published_seq = 0;

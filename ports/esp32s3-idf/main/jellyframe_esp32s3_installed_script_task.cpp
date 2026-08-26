@@ -110,6 +110,9 @@ struct InstalledBundleScriptSession {
     std::atomic<bool> ui_started{false};
     std::atomic<std::uint8_t> init_status{0xff};
     std::atomic<std::uint8_t> fatal_reason{0};
+    std::atomic<std::uint32_t> input_posted{0};
+    std::atomic<std::uint32_t> input_rejected{0};
+    std::atomic<std::uint32_t> input_unsupported{0};
     std::atomic<std::uint32_t> input_packet_seq{0};
     std::atomic<std::uint32_t> js_mutation_seq{0};
     std::atomic<std::uint32_t> published_frame_seq{0};
@@ -156,6 +159,10 @@ InstalledBundleScriptTaskTelemetry telemetry_snapshot(const InstalledBundleScrip
     telemetry.init_status = state.init_status.load();
     telemetry.fatal_reason = state.fatal_reason.load();
     telemetry.scripts = static_cast<std::uint32_t>(state.scripts.size());
+    telemetry.input_posted = state.input_posted.load();
+    telemetry.input_rejected = state.input_rejected.load();
+    telemetry.input_unsupported = state.input_unsupported.load();
+    telemetry.input_queue_dropped = state.input_queue.dropped_count();
     telemetry.input_seq = state.input_packet_seq.load();
     telemetry.mutation_seq = state.js_mutation_seq.load();
     telemetry.published_seq = state.published_frame_seq.load();
@@ -271,14 +278,32 @@ bool post_board_input(InstalledBundleScriptSession& state,
     input.delta_x = event.delta_x;
     input.delta_y = event.delta_y;
     switch (event.kind) {
-    case BoardInputKind::PointerDown: input.kind = jellyframe::ScriptTaskInputKind::PointerDown; break;
-    case BoardInputKind::PointerMove: input.kind = jellyframe::ScriptTaskInputKind::PointerMove; break;
-    case BoardInputKind::PointerUp: input.kind = jellyframe::ScriptTaskInputKind::PointerUp; break;
+    case BoardInputKind::PointerDown:
+        input.kind = jellyframe::ScriptTaskInputKind::PointerDown;
+        input.button = 0;
+        input.buttons = 1;
+        break;
+    case BoardInputKind::PointerMove:
+        input.kind = jellyframe::ScriptTaskInputKind::PointerMove;
+        input.button = 0;
+        input.buttons = 1;
+        break;
+    case BoardInputKind::PointerUp:
+        input.kind = jellyframe::ScriptTaskInputKind::PointerUp;
+        input.button = 0;
+        break;
     case BoardInputKind::Wheel: input.kind = jellyframe::ScriptTaskInputKind::Wheel; break;
-    default: return false;
+    default:
+        state.input_unsupported.fetch_add(1);
+        return false;
     }
     const auto posted = jellyframe::post_script_task_input(
         *state.protocol, state.script_session, next_sequence++, input, {32, 256});
+    if (posted.accepted()) {
+        state.input_posted.fetch_add(1);
+    } else {
+        state.input_rejected.fetch_add(1);
+    }
     return posted.accepted();
 }
 
@@ -447,8 +472,11 @@ void supervisor_entry(void* raw) {
     state->protocol = nullptr;
     }
     ESP_LOGI(kTag,
-             "session stopped app=%s fatal=%d input_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u",
+             "session stopped app=%s fatal=%d input_posted=%u input_rejected=%u input_unsupported=%u input_dropped=%u input_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u",
              state->app_id.c_str(), state->fatal_seen.load() ? 1 : 0,
+             static_cast<unsigned>(state->input_posted.load()), static_cast<unsigned>(state->input_rejected.load()),
+             static_cast<unsigned>(state->input_unsupported.load()),
+             static_cast<unsigned>(state->input_queue.dropped_count()),
              static_cast<unsigned>(state->input_packet_seq.load()), static_cast<unsigned>(state->js_mutation_seq.load()),
              static_cast<unsigned>(state->published_frame_seq.load()), static_cast<unsigned>(state->accepted_frame_seq.load()),
              static_cast<unsigned>(state->present_failures.load()));

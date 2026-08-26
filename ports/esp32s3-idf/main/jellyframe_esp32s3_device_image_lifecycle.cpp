@@ -259,6 +259,16 @@ private:
                       static_cast<unsigned>(telemetry.accepted_after_malformed_v4_probe), telemetry.fatal ? 1u : 0u);
         record_app_log(telemetry.fatal ? DeviceAppLogLevel::Error : DeviceAppLogLevel::Info,
                        app_id, generation, message);
+        std::snprintf(message, sizeof(message),
+                      "script-input %.*s posted=%u rejected=%u unsupported=%u queue_dropped=%u worker_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u",
+                      static_cast<int>(event.size()), event.data(),
+                      static_cast<unsigned>(telemetry.input_posted), static_cast<unsigned>(telemetry.input_rejected),
+                      static_cast<unsigned>(telemetry.input_unsupported), static_cast<unsigned>(telemetry.input_queue_dropped),
+                      static_cast<unsigned>(telemetry.input_seq), static_cast<unsigned>(telemetry.mutation_seq),
+                      static_cast<unsigned>(telemetry.published_seq), static_cast<unsigned>(telemetry.accepted_seq),
+                      static_cast<unsigned>(telemetry.presents_failed));
+        record_app_log(telemetry.fatal ? DeviceAppLogLevel::Error : DeviceAppLogLevel::Info,
+                       app_id, generation, message);
     }
 
     bool stop_active_ui(InstalledBundleScriptTaskTelemetry* script_telemetry = nullptr) {
