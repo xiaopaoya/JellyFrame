@@ -1,6 +1,6 @@
 # 脚本 App 跨任务所有权契约
 
-> 最后更新：2026-08-15；适用版本：0.6.0-dev；状态：0.6 基础设施已落地
+> 最后更新：2026-08-27；适用版本：0.6.0-dev；状态：0.6 基础设施已落地
 
 本契约定义 RTOS/多任务宿主如何运行一个真实脚本 App，而不把 DOM、后端原生资源或渲染对象
 跨任务传递。它是 P3 后续实现的前置条件；当前桌面同线程
@@ -42,6 +42,8 @@ supervisor 会把 session transition 与 mailbox admission 放在同一短临界
 teardown 不会与 worker 并发读写同一份 mutable generation 状态。
 worker 侧每一次 `take_worker_packet(...)` 接收都必须显式传入自身的 `ScriptAppSession`；不保留
 “读取当前 worker input”一类的便利 API，避免延迟退出的 worker 消费新生命周期的 packet。
+UI 侧的 sealed frame 接收也必须显式传入自身 session：`take_frame_packet(...)` 和
+`take_script_task_app_frame(...)` 不会让延迟退出的 UI consumer 取走新 session 的 frame lease。
 
 ## UI 帧交接
 

@@ -273,7 +273,7 @@ void bridge_releases_cancelled_late_completion_handles() {
     assert(pumped.released_completion_sources == 1);
     assert(!host.handles().contains(handle));
     ScriptTaskPacket ignored;
-    assert(!supervisor.take_frame_packet(ignored));
+    assert(!supervisor.take_frame_packet(session, ignored));
 }
 
 void bridge_does_not_copy_payload_for_cancelled_inflight_completion() {

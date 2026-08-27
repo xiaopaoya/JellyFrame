@@ -162,6 +162,25 @@ void malformed_frame_releases_its_lease_before_reporting_decode_failure() {
     assert(supervisor.publish_frame(session, malformed).accepted());
 }
 
+void stale_frame_consumer_cannot_take_new_session_frame() {
+    ScriptTaskSupervisor supervisor({{2, 24}, {1, 0}, {1, 512, 512}, 0, 0});
+    const ScriptAppSession retired = supervisor.begin(73);
+    assert(supervisor.begin_teardown(retired).session == retired);
+    assert(supervisor.complete_teardown(retired).session == retired);
+
+    const ScriptAppSession active = supervisor.begin(74);
+    std::vector<std::uint8_t> encoded;
+    assert(encode_script_task_app_frame(fixture(), limits(), encoded) ==
+           ScriptTaskAppFrameCodecStatus::Accepted);
+    assert(supervisor.publish_frame(active, encoded).accepted());
+
+    ScriptTaskAppFrame output;
+    assert(take_script_task_app_frame(supervisor, retired, limits(), output) ==
+           ScriptTaskAppFrameTakeStatus::NoFrame);
+    assert(take_script_task_app_frame(supervisor, active, limits(), output) ==
+           ScriptTaskAppFrameTakeStatus::Accepted);
+}
+
 void worker_frame_producer_flattens_private_layer_values_before_publish() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -224,6 +243,7 @@ int script_task_frame_codec_tests_main() {
     v2_frame_rejects_invalid_clip_chain_and_v1_clip_downgrade();
     sealed_lease_carries_only_serialized_frame_bytes();
     malformed_frame_releases_its_lease_before_reporting_decode_failure();
+    stale_frame_consumer_cannot_take_new_session_frame();
     worker_frame_producer_flattens_private_layer_values_before_publish();
     worker_frame_producer_exports_clips_only_for_v2();
     std::cout << "script task frame codec tests passed\n";
