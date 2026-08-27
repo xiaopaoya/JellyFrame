@@ -45,6 +45,7 @@ constexpr std::size_t kHeaderV2 = 36;
 constexpr std::size_t kClipBytes = 28;
 constexpr std::size_t kCommandV4 = 104;
 constexpr std::int64_t kAcceptanceDurationUs = 480000000LL;
+constexpr std::uint32_t kRequiredStaticFrames = 20;
 constexpr std::array<const char*, 7> kMalformedCaseNames = {
     "source-clip-index-out-of-range",
     "source-clip-parent-self",
@@ -58,7 +59,7 @@ constexpr std::array<const char*, 7> kMalformedCaseNames = {
 constexpr std::string_view kHtml =
     "<!doctype html><html><body><main id='viewport'><section id='rotator'><div id='clip'>"
     "<div id='fill'><h1>V4 TRANSFORM</h1><p id='label'>source clip</p>"
-    "<div id='nested'><span>nested content beyond clip</span></div></div></div></section></main></body></html>";
+    "<div id='nested'><span id='nested-label'>nested content beyond clip</span></div></div></div></section></main></body></html>";
 constexpr std::string_view kCss =
     "body{margin:0;background:#f8fafc;color:#0f172a;}#viewport{width:172px;height:320px;overflow:hidden;"
     "background:#f8fafc;}#rotator{margin:26px;width:120px;height:236px;overflow:hidden;border-radius:18px;"
@@ -66,11 +67,14 @@ constexpr std::string_view kCss =
     "border-radius:12px;background:#0ea5e9;}#fill{width:160px;height:270px;padding:12px;"
     "background:linear-gradient(180deg,#2563eb,#22d3ee);}#nested{margin-top:90px;width:78px;height:54px;"
     "overflow:hidden;border-radius:9px;background:#f59e0b;}h1{font-size:18px;color:#fff;margin:0;}"
-    "p{font-size:16px;color:#e0f2fe;margin:8px 0;}#nested span{font-size:16px;color:#172554;}";
+    "p{font-size:16px;color:#e0f2fe;margin:8px 0;}#nested span{display:block;width:126px;height:80px;"
+    "font-size:16px;color:#172554;background:#fde047;}";
 constexpr std::string_view kJs =
     "let n=0;const r=document.getElementById('rotator');const l=document.getElementById('label');"
-    "setInterval(function(){n=n+1;let a=(n%2)?17:-17;r.style.transform='rotate('+a+'deg)';"
-    "l.textContent='frame '+n;},33);";
+    "const c=document.getElementById('nested-label');"
+    "setInterval(function(){n=n+1;let a=(n%3===0)?90:((n%3===1)?17:-17);"
+    "r.style.transform='rotate('+a+'deg)';l.textContent='frame '+n;"
+    "c.textContent='nested '+n+' beyond clip';c.style.color=(n%2)?'#172554':'#7c2d12';},33);";
 
 struct State {
     std::atomic<bool> stop{false};
@@ -85,10 +89,18 @@ struct State {
     std::atomic<std::uint32_t> present_ok{0};
     std::atomic<std::uint32_t> present_failed{0};
     std::atomic<std::uint32_t> full_frames{0};
+    std::atomic<std::uint32_t> static_published{0};
+    std::atomic<std::uint32_t> static_presented{0};
+    std::atomic<bool> animation_started{false};
     std::atomic<std::uint32_t> ui_accepted_frame_seq{0};
     std::atomic<std::uint32_t> transform_commands{0};
+    std::atomic<std::uint32_t> rotate_90_frames{0};
+    std::atomic<std::uint32_t> rotate_oblique_frames{0};
+    std::atomic<std::uint32_t> destination_clip_commands{0};
     std::atomic<std::uint32_t> source_clip_commands{0};
+    std::atomic<std::uint32_t> max_destination_depth{0};
     std::atomic<std::uint32_t> max_source_depth{0};
+    std::atomic<std::uint32_t> max_clip_table_entries{0};
     std::atomic<std::uint32_t> max_commands{0};
     std::atomic<std::uint32_t> max_transformed_pixels{0};
     std::atomic<std::uint32_t> max_ordinary_temp_pixels{0};
@@ -97,6 +109,9 @@ struct State {
     std::atomic<std::uint32_t> e_rejected{0};
     std::atomic<std::uint32_t> e_recovery_frames{0};
     std::atomic<std::uint32_t> e_case_recovery_frames{0};
+    std::array<std::atomic<std::uint32_t>, 7> e_case_rejected{};
+    std::array<std::atomic<std::uint32_t>, 7> e_case_present{};
+    std::array<std::atomic<std::uint32_t>, 7> e_case_recovery{};
     std::atomic<std::uint32_t> unexpected_rejections{0};
     std::atomic<std::uint32_t> e_index{0};
     std::atomic<bool> malformed_pending{false};
@@ -128,6 +143,28 @@ private:
 const char* malformed_case_name(const State& state) {
     const unsigned index = state.e_index.load();
     return index < kMalformedCaseNames.size() ? kMalformedCaseNames[index] : "none";
+}
+
+void record_expected_reject(State& state) {
+    state.e_rejected.fetch_add(1);
+    const unsigned index = state.e_index.load();
+    if (index < kMalformedCaseNames.size()) state.e_case_rejected[index].fetch_add(1);
+    state.malformed_rejected.store(true);
+}
+
+void record_transform_phase(State& state, const jellyframe::DisplayCommand& command) {
+    if (!command.transform.enabled) return;
+    state.transform_commands.fetch_add(1);
+    if (command.transform.xx_1024 == 0 && command.transform.yy_1024 == 0 &&
+        (command.transform.xy_1024 == 1024 || command.transform.xy_1024 == -1024) &&
+        (command.transform.yx_1024 == 1024 || command.transform.yx_1024 == -1024)) {
+        state.rotate_90_frames.fetch_add(1);
+    } else {
+        state.rotate_oblique_frames.fetch_add(1);
+    }
+    if (command.transform.source_clip_index != jellyframe::kScriptTaskNoClip) {
+        state.source_clip_commands.fetch_add(1);
+    }
 }
 
 void update_min(std::atomic<std::uint32_t>& target, std::uint32_t value) {
@@ -169,6 +206,15 @@ std::uint32_t depth(const jellyframe::ScriptTaskAppFrame& frame, std::uint32_t i
         index = frame.clips[index].parent_clip;
     }
     return result;
+}
+
+void record_destination_clip_phase(State& state, const jellyframe::ScriptTaskAppFrame& frame) {
+    update_max(state.max_clip_table_entries, static_cast<std::uint32_t>(frame.clips.size()));
+    for (const std::uint16_t clip_index : frame.display_clip_indices) {
+        if (clip_index == jellyframe::kScriptTaskNoClip) continue;
+        state.destination_clip_commands.fetch_add(1);
+        update_max(state.max_destination_depth, depth(frame, clip_index));
+    }
 }
 
 jellyframe::HostBudgets budgets() {
@@ -223,11 +269,32 @@ void worker_entry(void* raw) {
              static_cast<unsigned>(kMaxClips), static_cast<unsigned>(kMaxClipDepth),
              static_cast<unsigned>(kMaxFrameLeases), static_cast<unsigned>(kMaxTemporaryPixels));
     if (initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted) {
-        const auto eval = runtime.eval_with_supervisor(*state->protocol, kJs, "value_frame_v4.js");
-        ESP_LOGI(kTag, "v4_worker eval_ok=%d", eval.ok ? 1 : 0);
-        const auto published = runtime.publish_frame(*state->protocol);
-        ESP_LOGI(kTag, "v4_publish initial=%d codec_status=%u", published.accepted() ? 1 : 0,
-                 static_cast<unsigned>(published.codec_status));
+        // Deliberately serialize the identical initial frames. This validates
+        // normal v4 decode/render/present before the timer can mutate the DOM.
+        for (std::uint32_t frame = 0; frame < kRequiredStaticFrames && !state->stop.load(); ++frame) {
+            bool accepted = false;
+            while (!state->stop.load() && !accepted) {
+                const auto published = runtime.publish_frame(*state->protocol);
+                accepted = published.accepted();
+                if (!accepted) vTaskDelay(pdMS_TO_TICKS(4));
+            }
+            if (!accepted) break;
+            state->static_published.fetch_add(1);
+            while (!state->stop.load() && state->static_presented.load() < frame + 1) {
+                memory(*state);
+                update_stack_min(state->worker_stack_free_words, uxTaskGetStackHighWaterMark(nullptr));
+                vTaskDelay(pdMS_TO_TICKS(4));
+            }
+        }
+        const bool static_ready = state->static_presented.load() == kRequiredStaticFrames;
+        ESP_LOGI(kTag, "v4_static_frames required=%u published=%u presented=%u ready=%d",
+                 static_cast<unsigned>(kRequiredStaticFrames), static_cast<unsigned>(state->static_published.load()),
+                 static_cast<unsigned>(state->static_presented.load()), static_ready ? 1 : 0);
+        if (static_ready && !state->stop.load()) {
+            const auto eval = runtime.eval_with_supervisor(*state->protocol, kJs, "value_frame_v4.js");
+            state->animation_started.store(eval.ok);
+            ESP_LOGI(kTag, "v4_worker animation_eval_ok=%d", eval.ok ? 1 : 0);
+        }
     }
     while (!state->stop.load() && !runtime.fatal()) {
         (void)runtime.process_one(*state->protocol);
@@ -326,8 +393,7 @@ void ui_entry(void* raw) {
             if (frame.viewport.width != width || frame.viewport.height != height) {
                 state->render_rejected.fetch_add(1);
                 if (state->malformed_pending.load()) {
-                    state->e_rejected.fetch_add(1);
-                    state->malformed_rejected.store(true);
+                    record_expected_reject(*state);
                 } else {
                     state->unexpected_rejections.fetch_add(1);
                 }
@@ -335,11 +401,11 @@ void ui_entry(void* raw) {
                          static_cast<unsigned>(state->e_index.load()), malformed_case_name(*state));
             } else {
                 update_max(state->max_commands, static_cast<std::uint32_t>(frame.display_list.size()));
+                record_destination_clip_phase(*state, frame);
                 for (const auto& command : frame.display_list) {
                     if (command.transform.enabled) {
-                        state->transform_commands.fetch_add(1);
+                        record_transform_phase(*state, command);
                         if (command.transform.source_clip_index != jellyframe::kScriptTaskNoClip) {
-                            state->source_clip_commands.fetch_add(1);
                             update_max(state->max_source_depth, depth(frame, command.transform.source_clip_index));
                         }
                     }
@@ -360,21 +426,24 @@ void ui_entry(void* raw) {
                     state->present_ok.fetch_add(1);
                     state->full_frames.fetch_add(1);
                     state->ui_accepted_frame_seq.store(packet);
+                    if (!state->animation_started.load() && state->static_presented.load() < kRequiredStaticFrames) {
+                        state->static_presented.fetch_add(1);
+                    }
                     if (state->malformed_pending.load() && state->malformed_rejected.load()) {
                         state->e_recovery_frames.fetch_add(1);
                         state->e_case_recovery_frames.fetch_add(1);
+                        const unsigned index = state->e_index.load();
+                        if (index < kMalformedCaseNames.size()) state->e_case_recovery[index].fetch_add(1);
                     }
                 } else if (!rendered) {
                     state->render_rejected.fetch_add(1);
                     if (state->malformed_pending.load()) {
-                        state->e_rejected.fetch_add(1);
-                        state->malformed_rejected.store(true);
+                        record_expected_reject(*state);
                     } else {
                         state->unexpected_rejections.fetch_add(1);
                     }
                     ESP_LOGI(kTag, "v4_reject reason=render present=0 case=%u name=%s",
                              static_cast<unsigned>(state->e_index.load()), malformed_case_name(*state));
-                    }
                 } else {
                     state->present_failed.fetch_add(1);
                 }
@@ -383,8 +452,7 @@ void ui_entry(void* raw) {
                    status == jellyframe::ScriptTaskAppFrameTakeStatus::LeaseRejected) {
             state->take_rejected.fetch_add(1); state->lease_releases.fetch_add(1);
             if (state->malformed_pending.load()) {
-                state->e_rejected.fetch_add(1);
-                state->malformed_rejected.store(true);
+                record_expected_reject(*state);
             } else {
                 state->unexpected_rejections.fetch_add(1);
             }
@@ -400,13 +468,18 @@ void ui_entry(void* raw) {
 }
 
 void log_telemetry(const State& state, const char* phase) {
-    ESP_LOGI(kTag, "port_telemetry case=script_task_value_frame_v4 phase=%s codec_version=4 profile=script-task-value-frame-v4-acceptance viewport=%dx%d max_commands=%u max_text_bytes=%u max_input_targets=%u max_payload_bytes=%u max_clips=%u max_clip_depth=%u frame_lease_slots=%u max_temporary_pixels=%u published=%u take_accepted=%u take_rejected=%u render_rejected=%u present_success=%u present_failed=%u ui_accepted_frame_seq=%u transform_commands=%u source_clip_commands=%u max_source_clip_depth=%u transformed_surface_pixels_max=%u ordinary_temporary_pixels_max=%u lease_release_count=%u e_rejected=%u e_recovery_frames=%u unexpected_rejections=%u render_ms_p50=%u render_ms_p95=%u present_ms_p50=%u present_ms_p95=%u total_ms_p50=%u total_ms_p95=%u internal_free_min=%u psram_free_min=%u worker_stack_free_words=%u ui_stack_free_words=%u supervisor_stack_free_words=%u diagnostics=%u full_frames=%u dirty_frames=not-tested",
+    ESP_LOGI(kTag, "port_telemetry case=script_task_value_frame_v4 phase=%s codec_version=4 profile=script-task-value-frame-v4-acceptance viewport=%dx%d max_commands=%u max_text_bytes=%u max_input_targets=%u max_payload_bytes=%u max_clips=%u max_clip_depth=%u frame_lease_slots=%u max_temporary_pixels=%u static_frames_required=%u static_frames_published=%u static_frames_presented=%u animation_started=%u published=%u take_accepted=%u take_rejected=%u render_rejected=%u present_success=%u present_failed=%u ui_accepted_frame_seq=%u transform_commands=%u rotate_90_commands=%u rotate_oblique_commands=%u destination_clip_commands=%u source_clip_commands=%u max_destination_clip_depth=%u max_source_clip_depth=%u max_clip_table_entries=%u transformed_surface_pixels_max=%u ordinary_temporary_pixels_max=%u lease_release_count=%u expected_rejections=%u e_recovery_frames=%u unexpected_rejections=%u render_ms_p50=%u render_ms_p95=%u present_ms_p50=%u present_ms_p95=%u total_ms_p50=%u total_ms_p95=%u internal_free_min=%u psram_free_min=%u worker_stack_free_words=%u ui_stack_free_words=%u supervisor_stack_free_words=%u diagnostics=%u full_frames=%u dirty_frames=not-tested",
              phase, kWidth, kHeight, static_cast<unsigned>(kMaxCommands), 8u * 1024u, 32u, static_cast<unsigned>(kMaxPayloadBytes),
              static_cast<unsigned>(kMaxClips), static_cast<unsigned>(kMaxClipDepth), static_cast<unsigned>(kMaxFrameLeases),
-             static_cast<unsigned>(kMaxTemporaryPixels), static_cast<unsigned>(state.published.load()), static_cast<unsigned>(state.taken.load()),
+             static_cast<unsigned>(kMaxTemporaryPixels), static_cast<unsigned>(kRequiredStaticFrames),
+             static_cast<unsigned>(state.static_published.load()), static_cast<unsigned>(state.static_presented.load()),
+             state.animation_started.load() ? 1U : 0U, static_cast<unsigned>(state.published.load()), static_cast<unsigned>(state.taken.load()),
              static_cast<unsigned>(state.take_rejected.load()), static_cast<unsigned>(state.render_rejected.load()), static_cast<unsigned>(state.present_ok.load()),
-             static_cast<unsigned>(state.present_failed.load()), static_cast<unsigned>(state.ui_accepted_frame_seq.load()), static_cast<unsigned>(state.transform_commands.load()), static_cast<unsigned>(state.source_clip_commands.load()),
-             static_cast<unsigned>(state.max_source_depth.load()), static_cast<unsigned>(state.max_transformed_pixels.load()),
+             static_cast<unsigned>(state.present_failed.load()), static_cast<unsigned>(state.ui_accepted_frame_seq.load()), static_cast<unsigned>(state.transform_commands.load()),
+             static_cast<unsigned>(state.rotate_90_frames.load()), static_cast<unsigned>(state.rotate_oblique_frames.load()),
+             static_cast<unsigned>(state.destination_clip_commands.load()), static_cast<unsigned>(state.source_clip_commands.load()),
+             static_cast<unsigned>(state.max_destination_depth.load()), static_cast<unsigned>(state.max_source_depth.load()),
+             static_cast<unsigned>(state.max_clip_table_entries.load()), static_cast<unsigned>(state.max_transformed_pixels.load()),
              static_cast<unsigned>(state.max_ordinary_temp_pixels.load()), static_cast<unsigned>(state.lease_releases.load()),
              static_cast<unsigned>(state.e_rejected.load()), static_cast<unsigned>(state.e_recovery_frames.load()), static_cast<unsigned>(state.unexpected_rejections.load()),
              static_cast<unsigned>(percentile(state.render_hist, 50)), static_cast<unsigned>(percentile(state.render_hist, 95)),
@@ -416,6 +489,16 @@ void log_telemetry(const State& state, const char* phase) {
              static_cast<unsigned>(state.worker_stack_free_words.load()),
              static_cast<unsigned>(state.ui_stack_free_words.load()), static_cast<unsigned>(state.supervisor_stack_free_words.load()),
              static_cast<unsigned>(state.diagnostics.load()), static_cast<unsigned>(state.full_frames.load()));
+}
+
+void log_malformed_case_results(const State& state) {
+    for (std::size_t index = 0; index < kMalformedCaseNames.size(); ++index) {
+        ESP_LOGI(kTag, "v4_malformed_result case=%u name=%s rejected=%u present=%u recovery_frames=%u",
+                 static_cast<unsigned>(index), kMalformedCaseNames[index],
+                 static_cast<unsigned>(state.e_case_rejected[index].load()),
+                 static_cast<unsigned>(state.e_case_present[index].load()),
+                 static_cast<unsigned>(state.e_case_recovery[index].load()));
+    }
 }
 
 void supervisor_entry(void* raw) {
@@ -432,7 +515,9 @@ void supervisor_entry(void* raw) {
     const std::int64_t start = esp_timer_get_time(); std::int64_t next_log = start;
     while (!state->stop.load() && esp_timer_get_time() - start < kAcceptanceDurationUs) {
         const unsigned current = state->e_index.load();
-        if (current < kMalformedCaseNames.size() && !state->malformed_pending.load() && state->taken.load() >= 6 &&
+        if (current < kMalformedCaseNames.size() && !state->malformed_pending.load() &&
+            state->static_presented.load() == kRequiredStaticFrames && state->animation_started.load() &&
+            state->present_ok.load() >= kRequiredStaticFrames + 20U &&
             (current == 0 || state->e_recovery_frames.load() >= (current * 5U))) {
             const auto bytes = malformed_packet(current);
             const bool published = !bytes.empty() && protocol.publish_frame(state->session, bytes).accepted();
@@ -457,14 +542,19 @@ void supervisor_entry(void* raw) {
     state->stop.store(true);
     for (int wait = 0; wait < 1500 && (!state->worker_done.load() || !state->ui_done.load()); ++wait) vTaskDelay(pdMS_TO_TICKS(4));
     (void)protocol.begin_teardown(state->session); (void)protocol.complete_teardown(state->session);
-    const bool pass = worker_created == pdPASS && ui_created == pdPASS && state->present_ok.load() >= 300 &&
+    const bool pass = worker_created == pdPASS && ui_created == pdPASS &&
+        state->static_published.load() == kRequiredStaticFrames && state->static_presented.load() == kRequiredStaticFrames &&
+        state->animation_started.load() && state->present_ok.load() >= 300 &&
         state->present_failed.load() == 0 && state->e_index.load() >= kMalformedCaseNames.size() &&
         state->e_recovery_frames.load() >= kMalformedCaseNames.size() * 5U &&
         state->unexpected_rejections.load() == 0 && state->e_rejected.load() == kMalformedCaseNames.size() &&
         state->transform_commands.load() > 0 &&
-        state->source_clip_commands.load() > 0 && state->max_source_depth.load() >= 2 && state->worker_done.load() && state->ui_done.load() &&
+        state->source_clip_commands.load() > 0 && state->max_source_depth.load() >= 2 &&
+        state->rotate_90_frames.load() > 0 && state->rotate_oblique_frames.load() > 0 &&
+        state->worker_done.load() && state->ui_done.load() &&
         state->supervisor_stack_free_words.load() > 0;
     log_telemetry(*state, pass ? "pass" : "incomplete");
+    log_malformed_case_results(*state);
     ESP_LOGI(kTag, "v4_result status=%s worker_done=%d ui_done=%d watchdog=0 panic=0 reset=0 brownout=0 dma=0 spi=0 panel=0 failed_flush=0 lease_leaks=0", pass ? "pass" : "incomplete", state->worker_done.load() ? 1 : 0, state->ui_done.load() ? 1 : 0);
     vSemaphoreDelete(state->ready); state->ready = nullptr; delete state; vTaskDelete(nullptr);
 }
