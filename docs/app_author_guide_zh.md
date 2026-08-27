@@ -1,6 +1,6 @@
 # App 作者手册
 
-> 最后更新：2026-08-15；适用版本：0.6.0-dev；当前开发线：0.6.0
+> 最后更新：2026-08-25；适用版本：0.6.0-dev；当前开发线：0.6.0
 
 这是一份给 JellyFrame app 作者的短契约。JellyFrame 不是迷你浏览器，而是一个 Web 形状的嵌入式
 UI runtime：HTML 负责结构，CSS 使用文档化的小屏样式子集，JavaScript 负责有界本地交互，manifest
@@ -12,6 +12,9 @@ UI runtime：HTML 负责结构，CSS 使用文档化的小屏样式子集，Java
 ## 从这里开始
 
 每个 app 都建议使用这个循环：
+
+如果希望从干净的 package 开始，而不是从功能参考开始，将下面的 `weather` 替换为 `blank`。
+blank 模板只包含 `Hello world`、CSS 入口和 classic script 入口。
 
 ```powershell
 python tools\jellyframe_cli.py new `

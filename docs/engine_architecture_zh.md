@@ -1,6 +1,6 @@
 # 引擎架构
 
-> 最后更新：2026-08-19；适用版本：0.6.0-dev
+> 最后更新：2026-08-25；适用版本：0.6.0-dev
 
 
 JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目标使用更小的数据结构，并明确裁剪功能边界。
@@ -11,7 +11,25 @@ JellyFrame 参考 Blink、WebKit 和 Gecko 的大体分层，但为可穿戴目�
   不依赖 JerryScript、app 安装、文件系统、网络或 OS API。
 - `src/app_runtime` / `jellyframe_app_runtime`：安装式 app 生命周期和可选 host-service
   队列；可依赖 `render_core` 的宿主能力与预算类型。
-- `src/script` / `jellyframe_script`：可选 JerryScript 桥接层；嵌入式构建可以完全关闭。
+- `src/script` / `jellyframe_script`：可选脚本运行时桥接层；嵌入式构建可以完全关闭。
+
+## 脚本运行时边界
+
+`src/script/script_runtime.h` 拥有框架面向宿主的脚本契约：document binding、host service、
+timer、animation callback、有界 failure、统计和 worker 生命周期操作。`ScriptTaskWorkerRuntime`、
+desktop shell 与其他通用调用者只使用此契约及其 factory；它们既不包含第三方引擎头文件，也不交换
+引擎 value。
+
+`JELLYFRAME_SCRIPT_ENGINE` 在 CMake configure 时选定一个实现。当前源码树提供
+`jerryscript` 实现，位于 `jerryscript_runtime.*`；其发现、headers 和 libraries 位于
+`cmake/jellyframe_script_backend_jerryscript.cmake`，并保持为 `jellyframe_script` target 的
+私有依赖。backend factory 在构建时固定；不存在运行时选择、package 声明的引擎、通用 JS-value
+转换或每次 callback 的 adapter dispatch。
+
+这条边界刻意不把新后端做成表面 wrapper。任何新增后端都必须原生拥有自己的 realm、wrapper、
+callback 和 value，实现完整且有界的 `ScriptRuntime` 契约，并通过 behavior、watchdog、worker
+ownership 与 recovery 测试后才能进入 release profile。因此抽象位于 JavaScript hot path 之外；
+host 到 runtime 的虚调用只发生在 lifecycle/frame boundary。
 
 首个保留历史的 Render Core 仓库现已建立于
 [`xiaopaoya/JellyFrame-Render-Core`](https://github.com/xiaopaoya/JellyFrame-Render-Core)。
@@ -89,9 +107,9 @@ provider 指向另一个 checkout 或已解压的 Render Core 源码树。这只
 | 未来仓库 | 负责内容 | 迭代规律 | 当前状态 |
 | --- | --- | --- | --- |
 | `jellyframe-render-core` | HTML/CSS/DOM、layout、paint、input 和可选 feature family | 高频优化与兼容性发布 | 物理仓库已建立；首个带签名的 `v0.6.0`、当前锁定的 `v0.6.1`、standalone CI、安装/导出与 package-consumer 边界均已验证。 |
-| `jellyframe` | App Runtime、Japp 格式、JerryScript binding、桌面壳和开发工具 | 慢速迭代，维护 App 兼容契约 | 当前 Runtime 源码边界；可消费锁定 Core package 或 in-tree Core |
+| `jellyframe` | App Runtime、Japp 格式、脚本运行时 binding、桌面壳和开发工具 | 慢速迭代，维护 App 兼容契约 | 当前 Runtime 源码边界；可消费锁定 Core package 或 in-tree Core |
 | `jellyframe-device-os` | launcher、registry、Device Runtime、JFDP、板卡 port 和官方镜像 | 强硬件依赖的实验性迭代 | 尚未物理迁出；D0 契约仍位于过渡位置 |
-| JerryScript | 第三方脚本引擎 | 跟随上游 commit/tag | 可选依赖，由 Runtime/port 构建锁定 |
+| 当前脚本后端 | 构建期选择的第三方引擎 | 跟随上游 commit/tag | 当前实现为 JerryScript；它是由 Runtime/port 构建锁定的可选依赖 |
 
 `src/device_runtime_contracts/device_install_transaction.*` 和
 `src/device_runtime_contracts/device_runtime_protocol.*` 是明确的 D0 边界。它们虽然是平台无关
@@ -221,7 +239,7 @@ Style resolution 时，resolver 只收集相关 buckets，按 source order 排�
   frame 比较 previous/current layout，并提供 affected layers / display commands 的
   display-invalidation 诊断。完整 retained display-list diffing 仍延后。
 - 文本 layout 接受 `TextMeasureProvider`；文本输出接受 `TextPainter`。core fallback 保持很小，Win32 browser 同时使用 GDI 测量和绘制。
-- Event dispatch 保持平台无关。核心用户可以挂 C++ callbacks；可选 JerryScript 构建也会把文档化的
+- Event dispatch 保持平台无关。核心用户可以挂 C++ callbacks；可选脚本运行时构建也会把文档化的
   `addEventListener` 和 `on*` handler 子集接到同一条事件路径。
 
 ## 延后工程领域

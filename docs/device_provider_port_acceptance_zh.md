@@ -65,9 +65,10 @@ raw serial console、private key 或 JFDP handle。
 
 ## 证据与出口
 
-2026-08-21 的 `provider-handoff-afdcf75-20260821` 报告已关闭已发布 WS147 镜像的 provider handoff。它包含此前
-workspace 定向证据，并补齐同镜像 Identity matching、真实 in-flight abort、durable update/rollback/remove、
-reconnect/reboot 与 30 次 mixed cycle。它不关闭更宽范围的 Device OS A2 gate，也不授权外部试用。
+`ws147-provider-lifecycle-ui-20260825` 报告已关闭 `jellyframe-device@0.1.1-dev`、final firmware `ee5604a`
+与已发布 WS147 image 的 provider handoff。它记录 37 项 host-provider regression、同镜像 Identity matching、
+真实 in-flight abort、durable update/rollback/remove、reconnect/reboot、30 次 mixed cycle 与有界 logs。它不关闭
+更宽范围的 Device OS A2 gate，也不授权外部试用。
 
 归档版本化目录，至少包含 `report.md`、`summary.json`、每个 case 的 direct provider stdout（命名为
 `provider.stdout.raw.jsonl` 或 `.json`）、provider stderr（`provider.stderr.raw.log`）、单独保存的 CLI stdout
@@ -76,9 +77,9 @@ hash。CLI pretty-printed output 不是 provider raw stdout。`summary.json` 必
 identity matching、install、cancellation、logs、reconnect/reboot、watchdog/reset 与 transport/panel error count。
 
 所有 fixture 与 WS147 run 都以同一已发布 image identity 通过时，本 A2 provider handoff 才通过；
-`provider-handoff-afdcf75-20260821` 已满足该 gate。主线下一步是完成干净机器的 VS Code device view，以及真实已安装
-App 的 panel/input 验收；它本身不放行外部开发者试用。
+`ws147-provider-lifecycle-ui-20260825` 已以版本化 `0.1.1-dev` provider archive 满足该 gate。主线下一步是完成
+干净机器的 VS Code device view，以及真实已安装 App 的 panel/input 验收；它本身不放行外部开发者试用。
 
-已发布的 `jellyframe-device@0.1.0-dev` 交付包继续只用于 `discover/info/list` 的只读 smoke。provider 源线
-`0.1.1-dev` 已补齐 live cancel 和 `logs` terminal 的 selected-device attestation；必须先重新打包、完成 host
-fixture 回归并记录新包 SHA-256，才能作为后续 mutation/lifecycle 验收的 provider 版本。
+最初发布的 `jellyframe-device@0.1.0-dev` 交付包继续只用于 `discover/info/list` 的只读 smoke。已交付的
+`0.1.1-dev` archive 为 live cancel 与 `logs` terminal 提供 selected-device attestation，并通过
+`supportedOperations` 声明真实 lifecycle operation。

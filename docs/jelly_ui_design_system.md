@@ -78,13 +78,10 @@ JellyFrame-safe fallback.
 
 - `samples/apps/packages/jelly_controls`: installable source package showing
   gel buttons, input, switch, progress and a small keyframe pulse.
-- `samples/apps/packages/jelly_wearable_launcher`: icon-first round-300
-  wearable launcher package using bounded CSS icon primitives and no runtime
-  services.
-- `samples/apps/loose/jelly_motion.html`: focused motion fixture using only
-  transition and from/to keyframes.
-- `samples/apps/loose/jelly_launcher_mock.html`: small launcher-style grid for
-  app icon cards.
+- `samples/apps/packages/jelly_motion_lab`: packaged, deterministic motion
+  showcase using paint-safe transforms, opacity and scripted replay.
+- `samples/apps/packages/jelly_wearable_launcher`: icon-grid paint regression
+  input, not an app-author starter.
 - `samples/apps/system/sample_launcher`: the actual sample launcher follows the
   same gel panel/button direction.
 

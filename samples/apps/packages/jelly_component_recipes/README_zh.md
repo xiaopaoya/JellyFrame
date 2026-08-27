@@ -1,8 +1,9 @@
 # Component Recipes
 
-> 最后更新：2026-07-10；适用版本：0.5.0
+> 最后更新：2026-08-26；适用版本：0.6.0-dev；Render Core 基线：0.6.1
 
-面向 app 作者的小屏组件 recipes 示例。
+常见可穿戴 UI 结构的确定性 scroll/dirty-region 验收输入。可复制的作者 recipe 正文维护在
+`docs/app_author_recipes_zh.md`；此 package 保持聚焦回放覆盖。
 
 - 顶栏、圆屏优先状态卡片、卡片栈、紧凑按钮、控制行和固定底部导航。
 - 一个明确的 `overflow: auto` 内容区域，导航放在滚动区域外。

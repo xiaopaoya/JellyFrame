@@ -506,8 +506,8 @@ class StyleResolver;
 
 struct StyleResolveContext {
     // A context caches pointers into one resolver and one DOM tree for one
-    // interaction state. StyleResolver refreshes it when the resolver or
-    // interaction state changes, and when a new document root is resolved.
+    // interaction state. StyleResolver refreshes it automatically when any
+    // of those inputs changes.
     const StyleResolver* resolver = nullptr;
     const Node* document_root = nullptr;
     std::uint64_t interaction_state_generation = 0;

@@ -5435,24 +5435,18 @@ void StyleResolveContext::clear() {
 }
 
 void StyleResolver::prepare_context(StyleResolveContext& context, const Node& node) const {
+    const Node* root = &node;
+    while (root->parent != nullptr) {
+        root = root->parent;
+    }
     if (context.resolver != this ||
+        context.document_root != root ||
         context.interaction_state_generation != interaction_state_generation_) {
         context.clear();
         context.resolver = this;
+        context.document_root = root;
         context.interaction_state_generation = interaction_state_generation_;
     }
-    // RenderTreeBuilder resolves the document root before its descendants.
-    // Limit the parent walk to that boundary so a contextual resolve remains
-    // O(1) per descendant instead of adding a depth walk to every node.
-    if (node.parent != nullptr) {
-        return;
-    }
-    if (context.document_root != nullptr && context.document_root != &node) {
-        context.clear();
-        context.resolver = this;
-        context.interaction_state_generation = interaction_state_generation_;
-    }
-    context.document_root = &node;
 }
 
 const CustomPropertyMap& StyleResolver::custom_properties_for(const Node& node, StyleResolveContext& context) const {

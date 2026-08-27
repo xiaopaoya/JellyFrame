@@ -11,6 +11,7 @@ import shutil
 import stat
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 
@@ -166,6 +167,28 @@ def filter_history(source_root: Path, output_dir: Path, filter_repo: list[str]) 
     run(command, cwd=output_dir)
 
 
+def commit_fingerprints(
+    root: Path,
+    paths: list[str] | None = None,
+) -> Counter[tuple[str, ...]]:
+    command = [
+        "git",
+        "log",
+        "-z",
+        "--format=%aI%x1f%an%x1f%ae%x1f%s",
+        "HEAD",
+    ]
+    if paths is not None:
+        command.extend(["--", *paths])
+    records = run(command, cwd=root).split("\x00")
+    if records and records[-1] == "":
+        records.pop()
+    fingerprints = [tuple(record.split("\x1f")) for record in records]
+    if any(len(fingerprint) != 4 for fingerprint in fingerprints):
+        raise RuntimeError("Git returned malformed commit fingerprint data")
+    return Counter(fingerprints)
+
+
 def verify_export(source_root: Path, output_dir: Path) -> dict[str, object]:
     for path in REQUIRED_EXPORT_FILES:
         if not (output_dir / path).is_file():
@@ -181,22 +204,24 @@ def verify_export(source_root: Path, output_dir: Path) -> dict[str, object]:
         )
 
     retained_paths = [*CORE_PATHS, *(source for source, _ in PATH_RENAMES)]
-    source_history = int(
-        run(["git", "rev-list", "--count", "HEAD", "--", *retained_paths], cwd=source_root)
-    )
-    exported_history = int(run(["git", "rev-list", "--count", "HEAD"], cwd=output_dir))
-    if source_history != exported_history:
+    # Filtering can retain or collapse topology-only merges, so a raw commit
+    # count is not stable. Every source commit that changes a retained path
+    # must instead survive with its author identity, author time, and subject.
+    source_core_commits = commit_fingerprints(source_root, retained_paths)
+    exported_commits = commit_fingerprints(output_dir)
+    missing_core_commits = source_core_commits - exported_commits
+    if missing_core_commits:
         raise RuntimeError(
             "retained Render Core history was not preserved: "
-            f"source={source_history}, export={exported_history}"
+            f"missing={sum(missing_core_commits.values())} source commit(s)"
         )
-    if exported_history < 2:
+    if len(exported_commits) < 2:
         raise RuntimeError("filtered export must retain more than one Render Core commit")
 
     return {
         "sourceRevision": run(["git", "rev-parse", "HEAD"], cwd=source_root),
         "exportRevision": run(["git", "rev-parse", "HEAD"], cwd=output_dir),
-        "renderCoreHistoryCount": exported_history,
+        "renderCoreHistoryCount": sum(exported_commits.values()),
         "trackedFileCount": len(exported_files),
     }
 

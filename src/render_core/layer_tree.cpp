@@ -1369,12 +1369,13 @@ void flatten_layer(const LayerNode& layer,
         int translate_x = 0;
         int translate_y = 0;
         FlattenAffineTransform transform;
+        std::uint32_t transform_source_clip_index = kNoFlattenedClip;
         std::uint32_t clip_index = kNoFlattenedClip;
     };
 
     std::vector<PendingLayer> pending;
     pending.push_back(PendingLayer{&layer, clip, has_clip, opacity, translate_x, translate_y, transform,
-                                   kNoFlattenedClip});
+                                   kNoFlattenedClip, kNoFlattenedClip});
     while (!pending.empty()) {
         const PendingLayer current = pending.back();
         pending.pop_back();
@@ -1400,8 +1401,8 @@ void flatten_layer(const LayerNode& layer,
             current.transform, layer_affine_transform(current_layer, layer_translate_x, layer_translate_y));
         Rect current_clip = current.clip;
         bool current_has_clip = current.has_clip;
+        std::uint32_t transform_source_clip_index = current.transform_source_clip_index;
         std::uint32_t current_clip_index = current.clip_index;
-        std::uint32_t transform_source_clip_index = kNoFlattenedClip;
         if (current_layer.has_clip) {
             const Rect translated_layer_clip{
                 safe_add(current_layer.clip_rect.x, layer_translate_x),
@@ -1415,12 +1416,25 @@ void flatten_layer(const LayerNode& layer,
                 continue;
             }
             if (metadata != nullptr) {
-                current_clip_index = static_cast<std::uint32_t>(metadata->clips.size());
-                transform_source_clip_index = current_clip_index;
-                metadata->clips.push_back(FlattenedClip{
-                    translated_layer_clip,
-                    current_layer.clip_border_radius,
-                    current.clip_index});
+                // The layer that introduces a transform is clipped again in
+                // destination space by SoftwareCompositor. Clips introduced
+                // below that transform have already been rasterized into its
+                // source surface and must not be reapplied after the affine
+                // mapping.
+                if (identity_transform(current.transform)) {
+                    current_clip_index = static_cast<std::uint32_t>(metadata->clips.size());
+                    metadata->clips.push_back(FlattenedClip{
+                        translated_layer_clip,
+                        current_layer.clip_border_radius,
+                        current.clip_index});
+                }
+                if (!identity_transform(layer_transform)) {
+                    transform_source_clip_index = static_cast<std::uint32_t>(metadata->clips.size());
+                    metadata->clips.push_back(FlattenedClip{
+                        translated_layer_clip,
+                        current_layer.clip_border_radius,
+                        current.transform_source_clip_index});
+                }
             }
         }
         for (const DisplayCommand& command : current_layer.display_list) {
@@ -1445,10 +1459,11 @@ void flatten_layer(const LayerNode& layer,
                                            current_clip,
                                            current_has_clip,
                                            layer_opacity,
-                                           layer_translate_x,
-                                           layer_translate_y,
-                                           layer_transform,
-                                           current_clip_index});
+                                            layer_translate_x,
+                                            layer_translate_y,
+                                            layer_transform,
+                                            transform_source_clip_index,
+                                            current_clip_index});
         }
     }
 }

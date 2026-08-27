@@ -169,7 +169,7 @@ ScriptTaskWorkerRuntimeOptions worker_options() {
     const auto budgets = fault_budgets();
     ScriptTaskWorkerRuntimeOptions options;
     options.budgets = budgets;
-    options.script = jerryscript_runtime_options_from_host_budgets(budgets);
+    options.script = script_runtime_options_from_host_budgets(budgets);
     options.viewport = {0, 0, kWidth, kHeight};
     // The recovery fixture only publishes a small replacement frame. Keep
     // its per-worker codec reservation bounded so repeated session teardown

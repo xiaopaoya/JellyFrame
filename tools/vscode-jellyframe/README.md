@@ -1,6 +1,6 @@
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-08-25; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-26; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -12,7 +12,7 @@ Palette as entry points.
 - JSON schema association for `jellyframe.app.json`.
 - Command palette actions for package-structure validation, render preflight, preview, embedded VS Code debugging,
   external-window debugging, frame-script playback, capture opening and package generation.
-- App creation from the built-in weather, clock, timer and calculator templates.
+- App creation from the built-in blank, weather, clock, timer and calculator templates.
 - CLI output in a dedicated `JellyFrame` output channel.
 - A `JellyFrame Report` webview that puts CLI `developerAdvice[]` first, then
   summarizes resources, references, warnings and pipeline diagnostics.
@@ -78,25 +78,21 @@ unless `jellyframe.buildDir` is explicitly set. A selected build must have
 `JELLYFRAME_BUILD_SCRIPTING=ON`; builds that retain the pre-1.0
 `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME` cache option are rejected with a
 reconfigure instruction instead of being run accidentally.
+When a compatible desktop build is missing, the error action and the Environment
+section both offer **Create compatible desktop build**. After explicit author
+selection, it configures and builds the managed Release profile locally; a
+checked-out JerryScript source is built first only when its libraries are absent.
+The command never downloads third-party source or deletes a custom build path.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
-
-## Device OS Provider
-
-Install a board-specific Developer Image provider separately. In Settings, set
-`jellyframe.deviceProvider` to the absolute path of its
-`jellyframe-device.cmd`, and set `jellyframe.deviceManifest` to the matching
-Developer Image manifest. Run `JellyFrame: Discover Device`, then
-`JellyFrame: Device Info` to verify the selected endpoint's wire identity.
-The extension only invokes the configured provider through the CLI: it does
-not package a provider, scan serial ports, or offer a serial fallback.
 
 `JellyFrame: Validate App Package` is the fast, package-only gate. It checks the
 manifest, entry point, local resources, references and declared budgets without
 starting Render Core or asking for a viewport, measuring layout, frame time or
 device performance. Its report is intentionally limited to package structure.
 `JellyFrame: Check App Rendering` runs the package gate first, asks for a target
-viewport, then adds Render Core preflight, responsive layout and font checks. It
+profile from repository presets and targets declared by the current App manifest,
+then adds Render Core preflight, responsive layout and font checks. It
 also offers optional `.jfcapture` programmed playback, merging the static
 pipeline diagnostics with a multi-page interaction path. Use Preview or desktop
 debugging for the actual image and interactive behavior.
@@ -111,11 +107,22 @@ context menu is available while editing an app HTML, CSS or manifest file.
 These entries use the same commands as the Command Palette, so either entry
 point produces the same report and output-channel behavior.
 
+`New App From Template` uses directory pickers for the destination and offers a
+suggested `org.example.*` identifier from the App folder name. Choose `Specify
+App ID` only when an organization namespace is needed; custom IDs must start
+with a letter or digit and may contain only letters, digits, dots, hyphens and
+underscores. The target picker uses only recognized repository presets while
+creating a new App, so generated manifests are immediately packageable.
+
 `JellyFrame: Debug App In VS Code` opens an editor tab backed by an isolated,
 hidden desktop-shell session. It delivers complete viewport snapshots with
 strictly increasing sequence numbers and forwards pointer, drag, wheel and
-common-key input only to that session. Both Stop and closing the tab request a
-clean shell exit; the extension terminates the debug process tree after a short
+common-key input only to that session. The viewport bar offers App default and
+common device-size presets plus a custom `64..2048` width and height; applying a
+size restarts the shell so CSS media queries and layout use the requested size.
+The frame's reported size remains the authoritative result. Stop keeps the tab
+open and changes its controls to Resume and Restart; closing the tab requests a
+clean shell exit. The extension terminates the debug process tree after a short
 grace period if needed. It does not share a framebuffer, capture path or process
 with external-window debugging. Use `JellyFrame: Debug App In External Window`
 when native-window behavior itself is relevant.
@@ -148,7 +155,7 @@ separate so one command does not overwrite another command's result.
 `JellyFrame: Discover Device` uses only an explicitly configured Device OS
 provider executable. The extension does not bundle the board-specific provider.
 For WS147, install the versioned
-`jellyframe-ws147-developer-<image-version>-provider-0.1.1-dev.zip` delivery package.
+`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.1-dev.zip` delivery package.
 It does not infer serial or USB endpoints. Configure the absolute path to the
 separately installed provider in JellyFrame settings; missing or invalid paths
 are reported directly. Run Discover Device first, then use Device Info to
@@ -161,9 +168,11 @@ List Installed Apps shows the same endpoint's registry generation, version,
 state and rollback availability. These three commands are read-only: they do
 not install, launch, remove or flash a device.
 
-WS147 provider `jellyframe-device@0.1.1-dev` declares lifecycle actions only
-for its verified `rect-172x320` Developer Image. The Activity Bar derives the
-available deployment, launch, stop, rollback, App-log and recovery actions
-from `capabilities.supportedOperations`; a missing or empty declaration keeps
-the UI read-only. Deployment and removal always require confirmation, and the
+The original `0.1.0-dev` WS147 provider remains read-only and therefore leaves
+lifecycle actions hidden. The delivered `0.1.1-dev` provider declares its
+verified lifecycle operations through `capabilities.supportedOperations`, so
+the Activity Bar reveals only the matching deploy, launch, stop, rollback,
+remove, App-log and recovery actions after discovery. This is an explicit
+safety gate, not a promise that every declared action is already accepted on
+every device. Deployment and removal always require confirmation, and the
 extension records the typed terminal result in the Device status section.

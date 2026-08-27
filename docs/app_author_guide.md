@@ -1,6 +1,6 @@
 # App Author Guide
 
-> Last updated: 2026-08-15; Applies to: 0.6.0-dev; active development line: 0.6.0
+> Last updated: 2026-08-25; Applies to: 0.6.0-dev; active development line: 0.6.0
 
 This is the short contract for people writing JellyFrame apps. JellyFrame is
 not a mini browser. It is a Web-shaped embedded UI runtime: HTML gives
@@ -15,6 +15,10 @@ help you ship predictable UI.
 ## Start Here
 
 Use this loop for every app:
+
+For a clean package instead of a feature reference, replace `weather` below
+with `blank`. The blank template contains only `Hello world` plus CSS and
+classic-script entry points.
 
 ```powershell
 python tools\jellyframe_cli.py new `

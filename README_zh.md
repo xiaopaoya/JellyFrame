@@ -44,11 +44,14 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 
 ## 应用截图
 
-下面这些 300x300 截图通过 Win32 capture shell 从 `tools/templates/apps`
-中的 Jelly 风可穿戴 UI 例程实际渲染生成，展示的是 JellyFrame 自己轻盈、明快的界面表达。
+下面这些 300x300 截图通过当前 Win32 capture shell 从
+`tools/templates/apps` 中的 Jelly 风可穿戴 UI 模板实际渲染生成，展示的是
+JellyFrame 自己轻盈、明快的界面表达。
 
-**渲染管线：** JellyFrame Render Core `0.6.0-dev`；Win32 capture shell；
-视口 `300x300`；生成日期 `2026-08-09`；源码修订 `9ca8b61`。
+**渲染管线：** 锁定的 JellyFrame Render Core `0.6.1`；启用 JerryScript 的当前
+Win32 capture shell；视口 `300x300`；生成日期 `2026-08-26`；源码修订
+`0ffdbf0`。精确的生成记录和命令位于图片旁的
+[docs/assets/screenshots](docs/assets/screenshots/README.md)。
 
 | Weather | Clock |
 | --- | --- |
@@ -162,7 +165,7 @@ python tools\jellyframe_cli.py device-reference --store build\device-reference l
 ## 可选脚本构建
 
 脚本能力是可选的。除非显式设置 `JELLYFRAME_BUILD_SCRIPTING=ON`，否则
-`jellyframe_render_core` 不依赖 JerryScript。
+`jellyframe_render_core` 不依赖脚本后端。当前后端在 configure 时选为 `jerryscript`。
 
 ```powershell
 git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
@@ -171,6 +174,7 @@ python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_H
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
 cmake -S . -B build/desktop-scripting-release `
   -DJELLYFRAME_BUILD_SCRIPTING=ON `
+  -DJELLYFRAME_SCRIPT_ENGINE=jerryscript `
   -DJERRYSCRIPT_ROOT="$jerryRoot"
 cmake --build build/desktop-scripting-release --config Release
 ```

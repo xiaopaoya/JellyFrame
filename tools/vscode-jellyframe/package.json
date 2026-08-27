@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.15",
+  "version": "0.4.23",
   "publisher": "jellyframe",
   "repository": {
     "type": "git",
@@ -24,6 +24,7 @@
     "onCommand:jellyframe.runFrameScript",
     "onCommand:jellyframe.openCapture",
     "onCommand:jellyframe.listBuilds",
+    "onCommand:jellyframe.setupDesktopBuild",
     "onCommand:jellyframe.package",
     "onCommand:jellyframe.newFromTemplate",
     "onCommand:jellyframe.showReport",
@@ -82,6 +83,11 @@
         "command": "jellyframe.listBuilds",
         "title": "%command.listBuilds%",
         "icon": "$(list-tree)"
+      },
+      {
+        "command": "jellyframe.setupDesktopBuild",
+        "title": "%command.setupDesktopBuild%",
+        "icon": "$(tools)"
       },
       {
         "command": "jellyframe.package",
@@ -344,22 +350,22 @@
       ],
       "view/title": [
         {
-          "submenu": "jellyframe.actions",
+          "command": "jellyframe.newFromTemplate",
           "when": "view == jellyframe.status",
           "group": "navigation@0"
         },
         {
-          "command": "jellyframe.debug",
+          "command": "jellyframe.check",
           "when": "view == jellyframe.status",
           "group": "navigation@1"
         },
         {
-          "command": "jellyframe.showReport",
+          "command": "jellyframe.debug",
           "when": "view == jellyframe.status",
           "group": "navigation@2"
         },
         {
-          "command": "jellyframe.listBuilds",
+          "command": "jellyframe.deviceDiscover",
           "when": "view == jellyframe.status",
           "group": "navigation@3"
         },
@@ -396,11 +402,24 @@
         "jellyframe.defaultTarget": {
           "type": "string",
           "default": "round-300",
+          "enum": [
+            "round-300",
+            "rect-320x240",
+            "rect-172x320",
+            "esp32s3-round-300"
+          ],
+          "enumDescriptions": [
+            "%configuration.defaultTarget.round300%",
+            "%configuration.defaultTarget.rect320x240%",
+            "%configuration.defaultTarget.rect172x320%",
+            "%configuration.defaultTarget.esp32s3%"
+          ],
           "description": "%configuration.defaultTarget%"
         },
         "jellyframe.fontBudget": {
           "type": "string",
           "default": "16x16",
+          "pattern": "^[1-9][0-9]*x[1-9][0-9]*$",
           "description": "%configuration.fontBudget%"
         },
         "jellyframe.deviceProvider": {

@@ -39,7 +39,7 @@
 #include "render_core/text_repaint.h"
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
-#include "script/jerryscript_runtime.h"
+#include "script/script_runtime.h"
 #endif
 
 #include "app_registry.h"
@@ -3784,7 +3784,7 @@ private:
     HostBudgets budgets_ = desktop_browser_budgets();
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
-    std::unique_ptr<JerryScriptRuntime> script_runtime_;
+    std::unique_ptr<ScriptRuntime> script_runtime_;
     std::uint32_t script_runtime_instance_id_ = 0;
     const Node* active_modal_node_ = nullptr;
     const Node* modal_focus_restore_node_ = nullptr;
@@ -5083,7 +5083,7 @@ private:
                           &script_context,
                           document_script_collection_options_from_budgets(budgets_, &diagnostics_));
             if (!document_scripts.empty() || !options_.script_path.empty()) {
-                script_runtime_ = std::make_unique<JerryScriptRuntime>(budgets_);
+                script_runtime_ = create_script_runtime(budgets_);
                 script_runtime_instance_id_ = app_runtime_.current_app_instance_id();
                 if (options_.require_script_watchdog && !script_runtime_->execution_watchdog_supported()) {
                     throw std::runtime_error("script watchdog required but linked JerryScript cannot halt execution");

@@ -73,6 +73,15 @@ void exception_returns_error_text() {
     check(!result.error.empty(), "exception has error text");
 }
 
+void selected_backend_factory_exposes_engine_neutral_contract() {
+    std::unique_ptr<ScriptRuntime> runtime = create_script_runtime();
+    check(std::string(selected_script_runtime_backend()) == "jerryscript",
+          "selected backend reports the configured implementation");
+    const ScriptEvaluationResult result = runtime->eval("6 * 7", "factory-contract.js");
+    check(result.ok && result.value == "42",
+          "engine-neutral factory evaluates through the selected backend");
+}
+
 void runtime_global_gate_is_serialized_across_threads() {
     std::atomic<bool> start{false};
     std::atomic<bool> release{false};
@@ -110,7 +119,7 @@ void runtime_global_gate_is_serialized_across_threads() {
 }
 
 void execution_watchdog_allows_normal_scripts() {
-    JerryScriptRuntimeOptions options;
+    ScriptRuntimeOptions options;
     options.max_execution_check_count = 64;
     options.execution_check_interval = 1;
     JerryScriptRuntime runtime(options);
@@ -121,7 +130,7 @@ void execution_watchdog_allows_normal_scripts() {
 }
 
 void execution_watchdog_interrupts_infinite_eval_when_supported() {
-    JerryScriptRuntimeOptions options;
+    ScriptRuntimeOptions options;
     options.max_execution_check_count = 4;
     options.execution_check_interval = 1;
     JerryScriptRuntime runtime(options);
@@ -143,7 +152,7 @@ void execution_watchdog_interrupts_infinite_eval_when_supported() {
 }
 
 void execution_watchdog_interrupts_timer_callback_when_supported() {
-    JerryScriptRuntimeOptions options;
+    ScriptRuntimeOptions options;
     options.max_execution_check_count = 64;
     options.execution_check_interval = 1;
     HtmlParser parser;
@@ -192,7 +201,7 @@ void host_budgets_map_to_script_runtime_options_without_field_drift() {
     budgets.max_script_execution_checks = 13;
     budgets.script_execution_check_interval = 17;
 
-    const JerryScriptRuntimeOptions options = jerryscript_runtime_options_from_host_budgets(budgets);
+    const ScriptRuntimeOptions options = script_runtime_options_from_host_budgets(budgets);
     check(options.max_timers == 3, "HostBudgets maps timer cap exactly");
     check(options.max_event_listeners == 5, "HostBudgets maps listener cap exactly");
     check(options.max_detached_nodes == 7, "HostBudgets maps detached-node cap exactly");
@@ -207,7 +216,7 @@ void host_budgets_map_to_script_runtime_options_without_field_drift() {
 
     budgets.max_script_execution_checks = 0;
     budgets.script_execution_check_interval = 0;
-    const JerryScriptRuntimeOptions zero_options = jerryscript_runtime_options_from_host_budgets(budgets);
+    const ScriptRuntimeOptions zero_options = script_runtime_options_from_host_budgets(budgets);
     check(zero_options.max_execution_check_count == 0 && zero_options.execution_check_interval == 0,
           "zero watchdog budgets remain disabled instead of shifting into another option");
 }
@@ -493,7 +502,7 @@ void javascript_detached_node_budget_is_bounded() {
     HtmlParser parser;
     auto document = parser.parse("<body><main id='app'></main></body>");
 
-    JerryScriptRuntime runtime(JerryScriptRuntimeOptions{64, 512, 1});
+    JerryScriptRuntime runtime(ScriptRuntimeOptions{64, 512, 1});
     runtime.bind_document(*document);
     const ScriptEvaluationResult create_result = runtime.eval(
         "var first = document.createElement('p');"
@@ -1023,7 +1032,7 @@ void javascript_bounding_client_rect_snapshot_budget_is_bounded() {
     root.children.push_back(std::move(one_box));
     root.children.push_back(std::move(two_box));
 
-    JerryScriptRuntimeOptions options;
+    ScriptRuntimeOptions options;
     options.max_layout_snapshot_nodes = 1;
     JerryScriptRuntime runtime(options);
     runtime.bind_document(*document);
@@ -1440,7 +1449,7 @@ void javascript_animation_frame_budget_is_bounded() {
     HtmlParser parser;
     auto document = parser.parse("<body></body>");
 
-    JerryScriptRuntime runtime(JerryScriptRuntimeOptions{64, 512, 256, 16, 2});
+    JerryScriptRuntime runtime(ScriptRuntimeOptions{64, 512, 256, 16, 2});
     runtime.bind_document(*document);
     const ScriptEvaluationResult result = runtime.eval(
         "var fired = 0;"
@@ -1545,7 +1554,7 @@ void javascript_xml_http_request_budget_is_bounded() {
     AppRuntimeHost host(AppRuntimeHostOptions{4, 4, 8, 4096, 1});
     host.launch("org.example.xhr-budget", AppRole::App);
     NetworkFetchMock network(NetworkFetchPolicy{true, 128, 256});
-    JerryScriptRuntime runtime(JerryScriptRuntimeOptions{64, 512, 256, 1});
+    JerryScriptRuntime runtime(ScriptRuntimeOptions{64, 512, 256, 1});
     runtime.bind_app_services(host, network);
     runtime.bind_document(*document);
     const ScriptEvaluationResult result = runtime.eval(
@@ -1855,7 +1864,7 @@ void javascript_runtime_respects_timer_and_listener_budgets() {
     Node* button = find_first_by_tag(*document, "button");
     check(button != nullptr, "button exists");
 
-    JerryScriptRuntime runtime(JerryScriptRuntimeOptions{1, 1});
+    JerryScriptRuntime runtime(ScriptRuntimeOptions{1, 1});
     runtime.bind_document(*document);
     const ScriptEvaluationResult result = runtime.eval(
         "var button = document.getElementById('button');"
@@ -1901,7 +1910,7 @@ void javascript_runtime_honors_zero_host_budgets_and_deduplicates_listeners() {
               "zero host budgets do not allocate script-owned records");
     }
 
-    JerryScriptRuntime runtime(JerryScriptRuntimeOptions{4, 4});
+    JerryScriptRuntime runtime(ScriptRuntimeOptions{4, 4});
     runtime.bind_document(*document);
     const ScriptEvaluationResult duplicate_result = runtime.eval(
         "var button = document.getElementById('button');"
@@ -2531,7 +2540,7 @@ void javascript_dom_budget_ledger_rejects_growth_atomically() {
     {
         auto document = parser.parse("<body><div id='target'></div></body>");
         const DomStatistics baseline = compute_dom_statistics(*document);
-        JerryScriptRuntimeOptions options;
+        ScriptRuntimeOptions options;
         options.max_detached_nodes = 4;
         options.max_dom_nodes = baseline.node_count + 1;
         options.max_dom_depth = baseline.max_depth + 1;
@@ -2565,7 +2574,7 @@ void javascript_dom_budget_ledger_rejects_growth_atomically() {
     {
         auto document = make_element("document");
         const DomStatistics baseline = compute_dom_statistics(*document);
-        JerryScriptRuntimeOptions options;
+        ScriptRuntimeOptions options;
         options.max_dom_nodes = baseline.node_count + 2;
         options.max_dom_depth = 1;
         JerryScriptRuntime runtime(options);
@@ -2581,7 +2590,7 @@ void javascript_dom_budget_ledger_rejects_growth_atomically() {
     {
         auto document = make_element("document");
         const DomStatistics baseline = compute_dom_statistics(*document);
-        JerryScriptRuntimeOptions options;
+        ScriptRuntimeOptions options;
         options.max_dom_nodes = baseline.node_count + 2;
         options.max_dom_depth = 3;
         options.max_dom_string_bytes = baseline.string_bytes + 6;
@@ -2603,6 +2612,7 @@ int main() {
     try {
         expression_returns_value();
         exception_returns_error_text();
+        selected_backend_factory_exposes_engine_neutral_contract();
         runtime_global_gate_is_serialized_across_threads();
         execution_watchdog_allows_normal_scripts();
         execution_watchdog_interrupts_infinite_eval_when_supported();

@@ -423,13 +423,34 @@ void style_resolution_context_tracks_its_inputs() {
     auto replacement_document = html_parser.parse("<body><button>Again</button></body>");
     Node* replacement_button = find_first_by_tag(*replacement_document, "button");
     check(replacement_button != nullptr, "replacement context fixture button exists");
-    (void)replacement_resolver.resolve(*replacement_document, context);
-    check(context.document_root == replacement_document.get(),
-          "resolving a replacement document root refreshes the context boundary");
     const Style replacement_document_style = replacement_resolver.resolve(*replacement_button, context);
     check(replacement_document_style.color.r == 0x44 && replacement_document_style.color.g == 0x55 &&
               replacement_document_style.color.b == 0x66,
           "context refreshes its DOM-scoped caches for a replacement document");
+
+    auto source_document = html_parser.parse("<body id='source'><button>Move</button></body>");
+    auto destination_document = html_parser.parse("<body id='destination'></body>");
+    Node* source_root = find_first_by_tag(*source_document, "body");
+    Node* destination_root = find_first_by_tag(*destination_document, "body");
+    Node* moved_button = find_first_by_tag(*source_document, "button");
+    check(source_root != nullptr && destination_root != nullptr && moved_button != nullptr,
+          "context migration fixture nodes exist");
+
+    StyleResolver migration_resolver(parse(
+        "#source { --tone: #112233; }"
+        "#destination { --tone: #445566; }"
+        "button { color: var(--tone); }"));
+    StyleResolveContext migration_context;
+    const Style source_style = migration_resolver.resolve(*moved_button, migration_context);
+    check(source_style.color.r == 0x11 && source_style.color.g == 0x22 && source_style.color.b == 0x33,
+          "context caches the source document cascade before migration");
+    auto moved_node = source_root->detach_child(*moved_button);
+    check(moved_node != nullptr, "migration fixture detaches the cached button");
+    destination_root->append_child(std::move(moved_node));
+    const Style destination_style = migration_resolver.resolve(*moved_button, migration_context);
+    check(destination_style.color.r == 0x44 && destination_style.color.g == 0x55 &&
+              destination_style.color.b == 0x66,
+          "context drops cached node state after its document boundary changes");
 }
 
 void linear_gradient_background_applies_without_breaking_fallbacks() {

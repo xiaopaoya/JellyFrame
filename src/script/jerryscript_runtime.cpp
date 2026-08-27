@@ -1,4 +1,4 @@
-﻿#include "script/jerryscript_runtime.h"
+#include "script/jerryscript_runtime.h"
 
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_host_data.h"
@@ -474,7 +474,7 @@ struct ScriptRuntimeAccess {
         runtime.forget_script_local_storage_binding(binding);
     }
 
-    static const JerryScriptRuntimeOptions& options(const JerryScriptRuntime& runtime) {
+    static const ScriptRuntimeOptions& options(const JerryScriptRuntime& runtime) {
         return runtime.options_;
     }
 
@@ -743,7 +743,7 @@ class ScriptExecutionBudgetScope {
 public:
     explicit ScriptExecutionBudgetScope(JerryScriptRuntime& runtime)
         : runtime_(runtime) {
-        const JerryScriptRuntimeOptions& options = ScriptRuntimeAccess::options(runtime_);
+        const ScriptRuntimeOptions& options = ScriptRuntimeAccess::options(runtime_);
         if (options.max_execution_check_count == 0 ||
             !jerry_feature_enabled(JERRY_FEATURE_VM_EXEC_STOP)) {
             return;
@@ -6420,7 +6420,7 @@ void JerryScriptRuntime::clear_script_local_storage_bindings() {
     local_storage_bindings_.clear();
 }
 
-JerryScriptRuntime::JerryScriptRuntime(JerryScriptRuntimeOptions options)
+JerryScriptRuntime::JerryScriptRuntime(ScriptRuntimeOptions options)
     : options_(options) {
     std::lock_guard<std::mutex> lock(g_runtime_mutex);
     if (g_runtime_active) {
@@ -6432,8 +6432,8 @@ JerryScriptRuntime::JerryScriptRuntime(JerryScriptRuntimeOptions options)
     g_runtime_active = true;
 }
 
-JerryScriptRuntimeOptions jerryscript_runtime_options_from_host_budgets(const HostBudgets& budgets) {
-    JerryScriptRuntimeOptions options;
+ScriptRuntimeOptions script_runtime_options_from_host_budgets(const HostBudgets& budgets) {
+    ScriptRuntimeOptions options;
     options.max_timers = budgets.max_timers;
     options.max_event_listeners = budgets.max_event_listeners;
     options.max_detached_nodes = budgets.max_detached_dom_nodes;
@@ -6449,8 +6449,20 @@ JerryScriptRuntimeOptions jerryscript_runtime_options_from_host_budgets(const Ho
     return options;
 }
 
+std::unique_ptr<ScriptRuntime> create_script_runtime(ScriptRuntimeOptions options) {
+    return std::make_unique<JerryScriptRuntime>(std::move(options));
+}
+
+std::unique_ptr<ScriptRuntime> create_script_runtime(const HostBudgets& budgets) {
+    return std::make_unique<JerryScriptRuntime>(budgets);
+}
+
+const char* selected_script_runtime_backend() noexcept {
+    return "jerryscript";
+}
+
 JerryScriptRuntime::JerryScriptRuntime(const HostBudgets& budgets)
-    : JerryScriptRuntime(jerryscript_runtime_options_from_host_budgets(budgets)) {}
+    : JerryScriptRuntime(script_runtime_options_from_host_budgets(budgets)) {}
 
 void JerryScriptRuntime::bind_script_service_gateway(ScriptServiceRequestSubmitCallback submit,
                                                       void* user,
@@ -7298,7 +7310,7 @@ std::size_t dom_node_depth(const Node& node) {
     return depth;
 }
 
-bool statistics_fit_dom_budget(const DomStatistics& statistics, const JerryScriptRuntimeOptions& options) {
+bool statistics_fit_dom_budget(const DomStatistics& statistics, const ScriptRuntimeOptions& options) {
     return statistics.node_count <= options.max_dom_nodes &&
            statistics.max_depth <= options.max_dom_depth &&
            statistics.max_attributes_per_element <= options.max_attributes_per_element &&

@@ -3,6 +3,12 @@ const path = require("path");
 const childProcess = require("child_process");
 const vscode = require("vscode");
 const { selectBuildDirectory } = require("./build_profiles");
+const {
+  desktopBuildPlan,
+  jerryscriptBuildArguments,
+  jerryscriptState,
+  managedProfileRoot
+} = require("./desktop_build_setup");
 const { appendBoundedOutput, commandFailure } = require("./command_diagnostics");
 const {
   deviceChoice,
@@ -31,6 +37,11 @@ let lastDeviceFailure;
 let lastDeviceLifecycle;
 let statusProvider;
 let embeddedDebugSession;
+let activeDesktopBuildSetup;
+
+const APP_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/;
+const DIRECTORY_NAME_PATTERN = /^[^<>:"/\\|?*\x00-\x1f.][^<>:"/\\|?*\x00-\x1f]*$/;
+const FONT_BUDGET_PATTERN = /^[1-9][0-9]*x[1-9][0-9]*$/;
 
 function config() {
   return vscode.workspace.getConfiguration("jellyframe");
@@ -111,6 +122,16 @@ function buildDirectoryError(context, selection) {
     : "No current desktop build was found. Configure build/desktop-release or build/desktop-debug.";
 }
 
+function desktopBuildQuickFixLabel(selection, requiresScripting) {
+  const chinese = isChinese();
+  if (selection?.issue?.code === "legacy-script-task-option") {
+    return chinese ? "重建桌面构建" : "Recreate desktop build";
+  }
+  return requiresScripting || selection?.issue?.requiresScripting
+    ? (chinese ? "创建脚本桌面构建" : "Create scripting desktop build")
+    : (chinese ? "创建桌面构建" : "Create desktop build");
+}
+
 function requireNativeBuildDir(context, preferScripting = false) {
   const selection = nativeBuildDir(context, preferScripting);
   if (selection.buildDirectory) {
@@ -118,8 +139,222 @@ function requireNativeBuildDir(context, preferScripting = false) {
   }
   const message = buildDirectoryError(context, selection);
   ensureOutputChannel().appendLine(`JellyFrame build selection: ${message}`);
-  vscode.window.showErrorMessage(message);
+  const setup = desktopBuildQuickFixLabel(selection, preferScripting);
+  vscode.window.showErrorMessage(message, setup).then((choice) => {
+    if (choice === setup) {
+      configureDesktopBuild(context, preferScripting);
+    }
+  });
   return undefined;
+}
+
+function processFailureDetail(stdout, stderr) {
+  const lines = `${stderr || ""}\n${stdout || ""}`.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const detail = lines[lines.length - 1] || "";
+  return detail.length > 320 ? `${detail.slice(0, 319)}...` : detail;
+}
+
+function runLocalTool(context, executable, args, options = {}) {
+  const label = options.label || executable;
+  const channel = ensureOutputChannel();
+  channel.appendLine(`+ ${[executable, ...args].join(" ")}`);
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    let completed = false;
+    const finish = (outcome) => {
+      if (!completed) {
+        completed = true;
+        resolve(outcome);
+      }
+    };
+    const append = (stream, chunk) => {
+      const captured = appendBoundedOutput(stream === "stdout" ? stdout : stderr, chunk.toString());
+      if (stream === "stdout") {
+        stdout = captured.text;
+      } else {
+        stderr = captured.text;
+      }
+      if (captured.appended) {
+        channel.append(captured.appended);
+      }
+    };
+    let child;
+    try {
+      child = childProcess.spawn(executable, args, {
+        cwd: options.cwd || repoRoot(context),
+        shell: false,
+        windowsHide: true
+      });
+    } catch (error) {
+      const message = isChinese()
+        ? `${label}无法启动：${error.message}`
+        : `${label} could not start: ${error.message}`;
+      channel.appendLine(`[error] ${message}`);
+      vscode.window.showErrorMessage(message);
+      finish({ code: undefined, stdout, stderr, error });
+      return;
+    }
+    child.stdout?.on("data", (chunk) => append("stdout", chunk));
+    child.stderr?.on("data", (chunk) => append("stderr", chunk));
+    child.on("error", (error) => {
+      const message = isChinese()
+        ? `${label}无法启动：${error.message}`
+        : `${label} could not start: ${error.message}`;
+      channel.appendLine(`[error] ${message}`);
+      vscode.window.showErrorMessage(message);
+      finish({ code: undefined, stdout, stderr, error });
+    });
+    child.on("close", (code, signal) => {
+      if (completed) {
+        return;
+      }
+      const outcome = { code, signal, stdout, stderr };
+      channel.appendLine(`${label} exited with code ${code ?? "unknown"}`);
+      if (code !== 0) {
+        const detail = processFailureDetail(stdout, stderr);
+        const message = isChinese()
+          ? `${label}失败${detail ? `：${detail}` : "。请查看 JellyFrame 运行日志。"}`
+          : `${label} failed${detail ? `: ${detail}` : ". Open the JellyFrame run log."}`;
+        channel.appendLine(`[error] ${message}`);
+        vscode.window.showErrorMessage(message);
+        outcome.error = new Error(message);
+      }
+      finish(outcome);
+    });
+  });
+}
+
+function managedBuildRecreateReason(plan) {
+  const cache = path.join(plan.buildRoot, "CMakeCache.txt");
+  try {
+    const text = fs.readFileSync(cache, "utf8");
+    if (text.includes("JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME")) {
+      return "legacy-script-task-option";
+    }
+    if (process.platform === "win32" && !text.includes("CMAKE_GENERATOR:INTERNAL=Visual Studio 17 2022")) {
+      return "incompatible-generator";
+    }
+    return undefined;
+  } catch (_) {
+    return undefined;
+  }
+}
+
+async function configureDesktopBuild(context, scripting) {
+  if (activeDesktopBuildSetup) {
+    vscode.window.showInformationMessage(isChinese()
+      ? "JellyFrame 正在创建桌面构建。"
+      : "JellyFrame is already creating a desktop build.");
+    return activeDesktopBuildSetup;
+  }
+  if (process.platform !== "win32") {
+    vscode.window.showErrorMessage(isChinese()
+      ? "桌面壳快速构建目前仅支持 Windows。"
+      : "Desktop-shell quick setup is currently supported on Windows only.");
+    return undefined;
+  }
+
+  const root = repoRoot(context);
+  const jerry = jerryscriptState(root);
+  const plan = desktopBuildPlan(root, {
+    scripting,
+    jerryscriptRoot: scripting && jerry.sourceAvailable ? jerry.sourceDirectory : ""
+  });
+  const setup = async (progress) => {
+    progress.report({ message: isChinese() ? "检查桌面构建配置..." : "Checking desktop build configuration..." });
+    if (scripting && !jerry.sourceAvailable) {
+      const message = isChinese()
+        ? "未找到 third_party/jerryscript。请先按脚本构建文档获取 JerryScript 源码，再重试。"
+        : "third_party/jerryscript was not found. Obtain the JerryScript source as documented, then retry.";
+      ensureOutputChannel().appendLine(`[error] ${message}`);
+      vscode.window.showErrorMessage(message);
+      return undefined;
+    }
+    const recreateReason = managedBuildRecreateReason(plan);
+    if (recreateReason) {
+      const recreate = isChinese() ? "删除并重建" : "Delete and recreate";
+      const reason = recreateReason === "legacy-script-task-option"
+        ? (isChinese() ? "使用已废弃的 script-task cache 项" : "uses the deprecated script-task cache entry")
+        : (isChinese() ? "使用了不兼容的 CMake generator" : "uses an incompatible CMake generator");
+      const choice = await vscode.window.showWarningMessage(
+        isChinese()
+          ? `桌面构建 ${plan.buildRoot} ${reason}。仅该生成目录会被删除并重新创建。`
+          : `Desktop build ${plan.buildRoot} ${reason}. Only this generated directory will be deleted and recreated.`,
+        { modal: true }, recreate);
+      if (choice !== recreate) {
+        return undefined;
+      }
+      const managed = managedProfileRoot(root, plan.outputDirectory);
+      if (!managed) {
+        vscode.window.showErrorMessage(isChinese()
+          ? "拒绝删除非 JellyFrame 管理的构建目录。请在设置中选择其他目录。"
+          : "Refusing to delete a build directory not managed by JellyFrame. Choose another directory in Settings.");
+        return undefined;
+      }
+      fs.rmSync(managed, { recursive: true, force: true });
+    }
+    if (scripting && !jerry.librariesAvailable) {
+      progress.report({ message: isChinese() ? "构建 JerryScript..." : "Building JerryScript..." });
+      const dependency = await runLocalTool(
+        context,
+        config().get("pythonPath", "python"),
+        jerryscriptBuildArguments(jerry.sourceDirectory),
+        { label: isChinese() ? "构建 JerryScript" : "Build JerryScript", cwd: jerry.sourceDirectory }
+      );
+      if (dependency.code !== 0) {
+        return undefined;
+      }
+    }
+    progress.report({ message: isChinese() ? "配置桌面构建..." : "Configuring desktop build..." });
+    const configured = await runLocalTool(context, "cmake", plan.configureArguments, {
+      label: isChinese() ? "配置 JellyFrame 桌面构建" : "Configure JellyFrame desktop build",
+      cwd: root
+    });
+    if (configured.code !== 0) {
+      return undefined;
+    }
+    progress.report({ message: isChinese() ? "编译桌面壳..." : "Building desktop shell..." });
+    const built = await runLocalTool(context, "cmake", plan.buildArguments, {
+      label: isChinese() ? "构建 JellyFrame 桌面壳" : "Build JellyFrame desktop shell",
+      cwd: root
+    });
+    if (built.code !== 0 || !fs.existsSync(path.join(plan.outputDirectory, "jellyframe_desktop_shell.exe"))) {
+      if (built.code === 0) {
+        vscode.window.showErrorMessage(isChinese()
+          ? "构建完成但未生成 JellyFrame 桌面壳。请查看 JellyFrame 运行日志。"
+          : "The build completed but did not produce the JellyFrame desktop shell. Open the JellyFrame run log.");
+      }
+      return undefined;
+    }
+    const configuredBuild = String(config().get("buildDir", "") || "").trim();
+    if (configuredBuild) {
+      const target = vscode.workspace.workspaceFolders?.length
+        ? vscode.ConfigurationTarget.Workspace
+        : vscode.ConfigurationTarget.Global;
+      await config().update("buildDir", path.relative(root, plan.outputDirectory), target);
+    }
+    ensureOutputChannel().appendLine(`JellyFrame desktop build ready: ${plan.outputDirectory}`);
+    vscode.window.showInformationMessage(isChinese()
+      ? "JellyFrame 脚本桌面构建已就绪。现在可以重新执行调试或程控回放。"
+      : "The JellyFrame scripting desktop build is ready. You can retry debugging or programmed playback.");
+    statusProvider?.refresh();
+    return plan.outputDirectory;
+  };
+  activeDesktopBuildSetup = vscode.window.withProgress({
+    location: vscode.ProgressLocation.Notification,
+    title: isChinese() ? "JellyFrame 正在创建桌面构建" : "JellyFrame is creating a desktop build",
+    cancellable: false
+  }, setup);
+  statusProvider?.refresh();
+  try {
+    return await activeDesktopBuildSetup;
+  } finally {
+    activeDesktopBuildSetup = undefined;
+    statusProvider?.refresh();
+  }
 }
 
 function debugLauncherPath(context) {
@@ -958,11 +1193,98 @@ function outputBase(root) {
   return path.basename(root).replace(/[^a-zA-Z0-9_.-]/g, "_") || "app";
 }
 
-async function target() {
-  return vscode.window.showInputBox({
-    prompt: "JellyFrame target preset",
-    value: config().get("defaultTarget", "round-300")
-  });
+function readJsonObject(filePath) {
+  try {
+    const value = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return value && typeof value === "object" && !Array.isArray(value) ? value : undefined;
+  } catch (_) {
+    return undefined;
+  }
+}
+
+function viewportSummary(viewport, chinese) {
+  const width = Number(viewport?.width || viewport?.designWidth || 0);
+  const height = Number(viewport?.height || viewport?.designHeight || 0);
+  const shape = viewport?.shape === "round"
+    ? (chinese ? "圆形" : "round")
+    : (viewport?.shape === "rect" ? (chinese ? "矩形" : "rectangular") : "");
+  const dimensions = width > 0 && height > 0 ? `${width} x ${height}` : (chinese ? "自定义尺寸" : "custom size");
+  return shape ? `${dimensions} · ${shape}` : dimensions;
+}
+
+function availableTargets(context, root, options = {}) {
+  const chinese = isChinese();
+  const targets = new Map();
+  const presetDirectory = path.join(repoRoot(context), "tools", "presets", "targets");
+  try {
+    for (const name of fs.readdirSync(presetDirectory).filter((entry) => entry.endsWith(".json")).sort()) {
+      const preset = readJsonObject(path.join(presetDirectory, name));
+      if (typeof preset?.id === "string" && preset.id) {
+        targets.set(preset.id, {
+          id: preset.id,
+          viewport: preset.viewport,
+          detail: preset.description || (chinese ? "仓库 target preset" : "Repository target preset"),
+          source: "preset"
+        });
+      }
+    }
+  } catch (_) {
+    // The CLI remains the source of truth; present manifest targets if the preset directory is unavailable.
+  }
+  if (!options.presetOnly && root) {
+    const manifest = readJsonObject(packageManifestPath(root));
+    if (manifest?.targets && typeof manifest.targets === "object" && !Array.isArray(manifest.targets)) {
+      for (const [id, target] of Object.entries(manifest.targets)) {
+        if (!id || !target || typeof target !== "object") {
+          continue;
+        }
+        const existing = targets.get(id);
+        targets.set(id, {
+          id,
+          viewport: target.viewport || existing?.viewport,
+          detail: existing
+            ? (chinese ? "仓库 preset；当前 App 已声明" : "Repository preset; declared by this App")
+            : (chinese ? "当前 App manifest 已声明" : "Declared by this App manifest"),
+          source: existing ? "both" : "manifest"
+        });
+      }
+    }
+  }
+  return [...targets.values()].map((target) => ({
+    label: target.id,
+    description: viewportSummary(target.viewport, chinese),
+    detail: target.detail,
+    target: target.id
+  }));
+}
+
+async function selectTarget(context, root, options = {}) {
+  const chinese = isChinese();
+  const choices = availableTargets(context, root, options);
+  if (choices.length === 0) {
+    vscode.window.showErrorMessage(chinese
+      ? "未找到 JellyFrame target preset。请检查 tools/presets/targets 或 App manifest。"
+      : "No JellyFrame target preset was found. Check tools/presets/targets or the App manifest.");
+    return undefined;
+  }
+  const configured = String(config().get("defaultTarget", "round-300") || "").trim();
+  return vscode.window.showQuickPick(choices, {
+    placeHolder: options.purpose || (chinese ? "选择目标显示形态" : "Select a target display profile"),
+    activeItem: choices.find((choice) => choice.target === configured),
+    ignoreFocusOut: true
+  }).then((choice) => choice?.target);
+}
+
+function selectedFontBudget() {
+  const value = String(config().get("fontBudget", "16x16") || "").trim();
+  if (FONT_BUDGET_PATTERN.test(value)) {
+    return value;
+  }
+  const chinese = isChinese();
+  vscode.window.showErrorMessage(chinese
+    ? "JellyFrame: Font Budget 必须为 WIDTHxHEIGHT 的正整数，例如 16x16。"
+    : "JellyFrame: Font Budget must use positive WIDTHxHEIGHT integers, for example 16x16.");
+  return undefined;
 }
 
 async function selectFrameScript(root, purpose) {
@@ -1001,7 +1323,9 @@ async function runPackageCommand(context, commandName, resourceUri) {
   if (!root) {
     return;
   }
-  const selectedTarget = commandName === "validate" ? undefined : await target();
+  const selectedTarget = commandName === "validate" ? undefined : await selectTarget(context, root, {
+    purpose: isChinese() ? "选择本次检查使用的目标显示形态" : "Select the target display profile for this check"
+  });
   if (commandName !== "validate" && !selectedTarget) {
     return;
   }
@@ -1018,7 +1342,11 @@ async function runPackageCommand(context, commandName, resourceUri) {
     reportPath: report
   };
   if (commandName === "check") {
-    args.push("--font-budget", config().get("fontBudget", "16x16"));
+    const fontBudget = selectedFontBudget();
+    if (!fontBudget) {
+      return;
+    }
+    args.push("--font-budget", fontBudget);
     const frameScript = await selectFrameScript(root, /^zh(?:-|$)/i.test(vscode.env.language || "")
       ? "选择渲染验证方式"
       : "Choose render verification mode");
@@ -1054,7 +1382,9 @@ async function previewPackage(context, resourceUri) {
   if (!root) {
     return;
   }
-  const selectedTarget = await target();
+  const selectedTarget = await selectTarget(context, root, {
+    purpose: isChinese() ? "选择预览使用的目标显示形态" : "Select the target display profile for preview"
+  });
   if (!selectedTarget) {
     return;
   }
@@ -1089,8 +1419,14 @@ async function debugExternalApp(context, resourceUri) {
   if (!root) {
     return;
   }
-  const selectedTarget = await target();
+  const selectedTarget = await selectTarget(context, root, {
+    purpose: isChinese() ? "选择外部调试使用的目标显示形态" : "Select the target display profile for external debugging"
+  });
   if (!selectedTarget) {
+    return;
+  }
+  const fontBudget = selectedFontBudget();
+  if (!fontBudget) {
     return;
   }
   const launcher = debugLauncherPath(context);
@@ -1124,7 +1460,7 @@ async function debugExternalApp(context, resourceUri) {
         "--build-dir", nativeBuildDirectory,
         "--report", report,
         "--runtime-log", runtimeLog,
-        "--font-budget", config().get("fontBudget", "16x16")
+        "--font-budget", fontBudget
       ], {
         commandName: "debug",
         packageRoot: root,
@@ -1139,6 +1475,12 @@ function embeddedDebugHtml(webview) {
   const chinese = /^zh(?:-|$)/i.test(vscode.env.language || '');
   const recordIdle = chinese ? '录制' : 'Record';
   const recordActive = chinese ? '停止录制' : 'Stop recording';
+  const viewportDefault = chinese ? 'App 默认' : 'App default';
+  const viewportCustom = chinese ? '自定义' : 'Custom';
+  const applyViewport = chinese ? '应用并重启' : 'Apply and restart';
+  const cancelViewport = chinese ? '取消' : 'Cancel';
+  const resumeDebug = chinese ? '继续调试' : 'Resume';
+  const restartDebug = chinese ? '重新启动' : 'Restart';
   return `<!doctype html>
 <html>
 <head>
@@ -1162,8 +1504,16 @@ function embeddedDebugHtml(webview) {
     .workspace-tab.active { color: var(--vscode-foreground); border-bottom: 2px solid var(--vscode-focusBorder); }
     #stage-controls { display: flex; align-items: center; gap: 5px; margin-left: auto; }
     #stage-controls button { min-width: 30px; padding: 0 8px; }
+    #viewport-controls { position: absolute; z-index: 1; top: 12px; right: 12px; }
+    #viewport-controls select, #viewport-controls input { min-height: 25px; box-sizing: border-box; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); }
+    #viewport-controls select { max-width: 116px; }
+    #viewport-controls input { width: 48px; padding: 0 4px; text-align: right; }
+    #viewport-controls .times { color: var(--vscode-descriptionForeground); }
+    #viewport-custom { position: absolute; top: calc(100% + 6px); right: 0; display: flex; align-items: center; gap: 4px; padding: 7px; border: 1px solid var(--vscode-panel-border); background: var(--vscode-editor-background); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24); white-space: nowrap; }
+    #viewport-custom[hidden] { display: none; }
+    #viewport-apply { min-width: auto !important; font-size: 11px; }
     #record.recording { color: var(--vscode-button-foreground); background: var(--vscode-testing-iconFailed, #c74e39); }
-    #stage-content { flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center; padding: 18px; overflow: auto; }
+    #stage-content { position: relative; flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center; padding: 18px; overflow: auto; }
     #frame { display: block; flex: none; user-select: none; outline: none; background: #111; image-rendering: auto; }
     #empty { color: var(--vscode-descriptionForeground); }
     .resizer { position: relative; z-index: 2; background: transparent; }
@@ -1193,12 +1543,13 @@ function embeddedDebugHtml(webview) {
       body { --sidebar-width: 260px; --diagnostics-height: 250px; }
       #workspace { grid-template-columns: minmax(0, 1fr) 4px var(--sidebar-width); }
       #stage-content { padding: 10px; }
+      #viewport-controls { top: 8px; right: 8px; }
     }
   </style>
 </head>
 <body>
   <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span></header>
-  <section id="workspace"><main id="stage"><div id="stage-bar"><button class="workspace-tab active" aria-selected="true">App viewport</button><div id="stage-controls"><button id="record" title="Record semantic interactions">${recordIdle}</button><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div></div><div id="stage-content"><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></div></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
+  <section id="workspace"><main id="stage"><div id="stage-bar"><button class="workspace-tab active" aria-selected="true">App viewport</button><div id="stage-controls"><button id="record" title="Record semantic interactions">${recordIdle}</button><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div></div><div id="stage-content"><div id="viewport-controls" title="Change the desktop shell viewport"><select id="viewport-preset"><option value="default">${viewportDefault}</option><option value="172x320">172 x 320</option><option value="240x320">240 x 320</option><option value="300x300">300 x 300</option><option value="320x240">320 x 240</option><option value="390x640">390 x 640</option><option value="custom">${viewportCustom}</option></select><div id="viewport-custom" hidden><input id="viewport-width" inputmode="numeric" pattern="[0-9]*" min="64" max="2048" aria-label="Viewport width" placeholder="W"><span class="times">x</span><input id="viewport-height" inputmode="numeric" pattern="[0-9]*" min="64" max="2048" aria-label="Viewport height" placeholder="H"><button id="viewport-apply" title="${applyViewport}">${applyViewport}</button><button id="viewport-cancel" title="${cancelViewport}">${cancelViewport}</button></div></div><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></div></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="resume" title="${resumeDebug}" hidden>${resumeDebug}</button><button id="restart" title="${restartDebug}" hidden>${restartDebug}</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
   <div id="bottom-resizer" class="resizer" role="separator" aria-label="Resize session diagnostics"></div>
   <section id="diagnostics"><div id="diagnostics-title">Session diagnostics</div><pre id="diagnostics-text">Waiting for session configuration...</pre></section>
   <script nonce="${nonce}">
@@ -1210,6 +1561,8 @@ function embeddedDebugHtml(webview) {
     const stage = document.getElementById('stage-content');
     const status = document.getElementById('status');
     const stop = document.getElementById('stop');
+    const resume = document.getElementById('resume');
+    const restart = document.getElementById('restart');
     const record = document.getElementById('record');
     const clearLog = document.getElementById('clear-log');
     const log = document.getElementById('log');
@@ -1218,6 +1571,12 @@ function embeddedDebugHtml(webview) {
     const zoomFit = document.getElementById('zoom-fit');
     const zoomIn = document.getElementById('zoom-in');
     const zoomLabel = document.getElementById('zoom-label');
+    const viewportPreset = document.getElementById('viewport-preset');
+    const viewportWidth = document.getElementById('viewport-width');
+    const viewportHeight = document.getElementById('viewport-height');
+    const viewportApply = document.getElementById('viewport-apply');
+    const viewportCancel = document.getElementById('viewport-cancel');
+    const viewportCustom = document.getElementById('viewport-custom');
     const sideResizer = document.getElementById('side-resizer');
     const bottomResizer = document.getElementById('bottom-resizer');
     const viewState = vscode.getState ? (vscode.getState() || {}) : {};
@@ -1230,6 +1589,8 @@ function embeddedDebugHtml(webview) {
     let logLines = [];
     let logFilter = 'all';
     let recording = false;
+    let sessionActive = true;
+    let appliedViewport = { width: 0, height: 0 };
     let fitMode = viewState.fitMode !== false;
     let manualZoom = Math.max(0.25, Math.min(4, Number(viewState.manualZoom) || 1));
     function persistViewState() {
@@ -1266,6 +1627,56 @@ function embeddedDebugHtml(webview) {
       manualZoom = Math.max(0.25, Math.min(4, nextZoom));
       updateFrameSize();
       persistViewState();
+    }
+    function setSessionState(state) {
+      sessionActive = state === 'running';
+      const stopped = state === 'stopped';
+      stop.hidden = stopped;
+      resume.hidden = !stopped;
+      restart.hidden = !stopped;
+      stop.disabled = state === 'stopping';
+      record.disabled = !sessionActive;
+      viewportPreset.disabled = state === 'stopping';
+      viewportApply.disabled = state === 'stopping';
+      viewportCancel.disabled = state === 'stopping';
+    }
+    function selectedViewport() {
+      if (viewportPreset.value === 'default') return { width: 0, height: 0 };
+      const match = viewportPreset.value.match(/^(\\d+)x(\\d+)$/);
+      const width = match ? Number(match[1]) : Number(viewportWidth.value);
+      const height = match ? Number(match[2]) : Number(viewportHeight.value);
+      return { width, height };
+    }
+    function syncViewportInputs() {
+      const match = viewportPreset.value.match(/^(\\d+)x(\\d+)$/);
+      if (match) {
+        viewportWidth.value = match[1];
+        viewportHeight.value = match[2];
+      }
+      const custom = viewportPreset.value === 'custom';
+      viewportCustom.hidden = !custom;
+      viewportWidth.disabled = !custom;
+      viewportHeight.disabled = !custom;
+    }
+    function setViewportConfig(width, height, remember) {
+      const value = width > 0 && height > 0 ? width + 'x' + height : 'default';
+      viewportPreset.value = Array.from(viewportPreset.options).some((item) => item.value === value) ? value : (width > 0 ? 'custom' : 'default');
+      viewportWidth.value = width > 0 ? String(width) : '';
+      viewportHeight.value = height > 0 ? String(height) : '';
+      if (remember) appliedViewport = { width, height };
+      syncViewportInputs();
+    }
+    function applyViewportRequest() {
+      const requested = selectedViewport();
+      if (requested.width === 0 && requested.height === 0) {
+        vscode.postMessage({ type: 'viewport-request', width: 0, height: 0 });
+        return;
+      }
+      if (!Number.isInteger(requested.width) || !Number.isInteger(requested.height) || requested.width < 64 || requested.width > 2048 || requested.height < 64 || requested.height > 2048) {
+        status.textContent = 'Viewport must be whole numbers from 64 to 2048.';
+        return;
+      }
+      vscode.postMessage({ type: 'viewport-request', width: requested.width, height: requested.height });
     }
     function renderLog() {
       const keepPinned = log.scrollTop + log.clientHeight >= log.scrollHeight - 12;
@@ -1351,6 +1762,14 @@ function embeddedDebugHtml(webview) {
       vscode.postMessage({ type: recording ? 'record-start' : 'record-stop' });
     });
     stop.addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
+    resume.addEventListener('click', () => vscode.postMessage({ type: 'resume' }));
+    restart.addEventListener('click', () => vscode.postMessage({ type: 'restart' }));
+    viewportPreset.addEventListener('change', () => {
+      syncViewportInputs();
+      if (viewportPreset.value !== 'custom') applyViewportRequest();
+    });
+    viewportApply.addEventListener('click', applyViewportRequest);
+    viewportCancel.addEventListener('click', () => setViewportConfig(appliedViewport.width, appliedViewport.height, false));
     zoomOut.addEventListener('click', () => setManualZoom(currentScale() / 1.2));
     zoomIn.addEventListener('click', () => setManualZoom(currentScale() * 1.2));
     zoomFit.addEventListener('click', () => { fitMode = true; updateFrameSize(); persistViewState(); });
@@ -1386,6 +1805,8 @@ function embeddedDebugHtml(webview) {
     installResizer(sideResizer, '--sidebar-width', 240, () => Math.max(260, window.innerWidth * 0.7));
     installResizer(bottomResizer, '--diagnostics-height', 190, () => Math.max(220, window.innerHeight - 160));
     new ResizeObserver(() => updateFrameSize()).observe(stage);
+    syncViewportInputs();
+    setSessionState('running');
     renderLog();
     vscode.postMessage({ type: 'ready' });
     window.addEventListener('message', (event) => {
@@ -1429,6 +1850,18 @@ function embeddedDebugHtml(webview) {
         recording = Boolean(message.recording);
         record.textContent = recording ? recordActive : recordIdle;
         record.classList.toggle('recording', recording);
+      } else if (message.type === 'session-state') {
+        setSessionState(message.state);
+      } else if (message.type === 'viewport-config') {
+        const width = Number(message.width) || 0;
+        const height = Number(message.height) || 0;
+        setViewportConfig(width, height, true);
+      } else if (message.type === 'reset-frame') {
+        latestSequence = 0;
+        renderedSequence = 0;
+        frame.hidden = true;
+        empty.hidden = false;
+        empty.textContent = 'Waiting for the first frame...';
       }
     });
   </script>
@@ -1437,7 +1870,7 @@ function embeddedDebugHtml(webview) {
 }
 
 function stopEmbeddedDebugSession(session, reason) {
-  if (!session || session.stopping) {
+  if (!session || session.stopping || session.exited || !session.active) {
     return session?.exitPromise || Promise.resolve();
   }
   session.exitPromise = new Promise((resolve) => { session.resolveExit = resolve; });
@@ -1450,16 +1883,18 @@ function stopEmbeddedDebugSession(session, reason) {
   } catch (_) {
     // The panel may already be disposing; the process still needs to be stopped.
   }
-  if (session.child.stdin?.writable) {
+  if (session.child?.stdin?.writable) {
     session.child.stdin.write('quit\n');
     session.child.stdin.end();
   }
   session.forceStopTimer = setTimeout(() => {
     if (!session.exited) {
       session.stopReason = `${session.stopReason || 'stop'} · force-terminated after timeout`;
-      appendEmbeddedLog(session, 'lifecycle', `shell did not exit in time; terminating process tree pid=${session.child.pid}`);
+      appendEmbeddedLog(session, 'lifecycle', `shell did not exit in time; terminating process tree pid=${session.child?.pid ?? 'unknown'}`);
       scheduleEmbeddedDiagnostics(session);
-      childProcess.spawn('taskkill', ['/pid', String(session.child.pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' });
+      if (session.child?.pid) {
+        childProcess.spawn('taskkill', ['/pid', String(session.child.pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' });
+      }
     }
   }, 2500);
   return session.exitPromise;
@@ -1492,12 +1927,12 @@ function embeddedDiagnosticsText(session) {
   return [
     `App: ${session.appRoot}`,
     `Runtime: ${session.scriptMode === 'classic' ? 'Classic scripting' : 'No script runtime'} · Build: ${session.buildProfile}`,
-    `Desktop shell: ${session.shellPath} (PID ${session.child.pid})`,
+    `Desktop shell: ${session.shellPath} (PID ${session.child?.pid ?? 'not running'})`,
     `Launcher: ${session.launcher}`,
     `Frame cache: ${session.frameDir}`,
     `Session: ${session.exited ? 'Stopped' : session.stopping ? 'Stopping' : 'Running'} · ${elapsed} ms · exit ${session.exitCode ?? 'pending'}`,
     `Frames: ${session.deliveredFrames} displayed / ${session.announcedFrames} announced · ${session.droppedFrames} superseded · ${session.decodeErrors} read failures`,
-    `Latest frame: ${session.lastDeliveredSequence} · ${session.viewport.width}x${session.viewport.height}`,
+    `Viewport: ${session.requestedViewport?.width > 0 ? `${session.requestedViewport.width}x${session.requestedViewport.height} requested` : 'App default'} · latest frame ${session.lastDeliveredSequence} · ${session.viewport.width}x${session.viewport.height}`,
     `Input: ${session.inputSent} sent · Shell output: ${session.stdoutLines} standard, ${session.stderrLines} error lines`,
     `Semantic capture: ${session.recording ? 'Recording' : 'Idle'} · ${session.recordingActions.length} actions`,
     `Stop reason: ${session.stopReason || 'None'}`
@@ -1699,15 +2134,15 @@ function appendEmbeddedLog(session, stream, text) {
   scheduleEmbeddedDiagnostics(session);
 }
 
-async function deliverEmbeddedFrame(session, frame) {
-  if (!session.active || frame.sequence < session.latestAnnouncedSequence) {
+async function deliverEmbeddedFrame(session, frame, runId = session.runId) {
+  if (session.runId !== runId || !session.active || frame.sequence < session.latestAnnouncedSequence) {
     session.droppedFrames += 1;
     scheduleEmbeddedDiagnostics(session);
     return;
   }
   try {
     const bytes = await fs.promises.readFile(frame.path);
-    if (!session.active || frame.sequence !== session.latestAnnouncedSequence || frame.sequence <= session.lastDeliveredSequence) {
+    if (session.runId !== runId || !session.active || frame.sequence !== session.latestAnnouncedSequence || frame.sequence <= session.lastDeliveredSequence) {
       return;
     }
     session.lastDeliveredSequence = frame.sequence;
@@ -1736,93 +2171,79 @@ async function deliverEmbeddedFrame(session, frame) {
   }
 }
 
-async function debugApp(context, resourceUri) {
-  if (process.platform !== 'win32') {
-    vscode.window.showErrorMessage('JellyFrame desktop shell is only available on Windows.');
+function validEmbeddedViewport(width, height) {
+  return Number.isInteger(width) && Number.isInteger(height) &&
+    width >= 64 && width <= 2048 && height >= 64 && height <= 2048;
+}
+
+function resetEmbeddedRunState(session) {
+  session.active = true;
+  session.stopping = false;
+  session.exited = false;
+  session.stopReason = undefined;
+  session.exitCode = undefined;
+  session.startedAt = Date.now();
+  session.viewport = { width: 1, height: 1 };
+  session.announcedFrames = 0;
+  session.deliveredFrames = 0;
+  session.droppedFrames = 0;
+  session.decodeErrors = 0;
+  session.inputSent = 0;
+  session.stdoutLines = 0;
+  session.stderrLines = 0;
+  session.latestAnnouncedSequence = 0;
+  session.lastDeliveredSequence = 0;
+  session.outputBuffer = '';
+  session.forceStopTimer = undefined;
+  session.exitPromise = undefined;
+  session.resolveExit = undefined;
+}
+
+function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
+  if (session.disposed || session.active || session.stopping) {
     return;
-  }
-  const root = await packageRoot(resourceUri);
-  if (!root) {
-    return;
-  }
-  const launcher = debugLauncherPath(context);
-  if (!fs.existsSync(launcher)) {
-    vscode.window.showErrorMessage(`Missing debug launcher: ${launcher}`);
-    return;
-  }
-  const nativeBuildDirectory = requireNativeBuildDir(context, appRequiresScripting(root));
-  if (!nativeBuildDirectory) {
-    return;
-  }
-  if (embeddedDebugSession) {
-    const previous = embeddedDebugSession;
-    await stopEmbeddedDebugSession(previous, 'Replacing the previous debug session...');
   }
   ensureBuildDir(context);
   const sessionRoot = path.join(buildDir(context), 'debug', 'vscode-sessions');
   fs.mkdirSync(sessionRoot, { recursive: true });
-  const frameDir = fs.mkdtempSync(path.join(sessionRoot, `${outputBase(root)}-`));
-  const panel = vscode.window.createWebviewPanel(
-    'jellyframeEmbeddedDebug',
-    `JellyFrame: ${path.basename(root)}`,
-    vscode.ViewColumn.Beside,
-    { enableScripts: true, retainContextWhenHidden: true }
-  );
-  panel.webview.html = embeddedDebugHtml(panel.webview);
-  const python = config().get('pythonPath', 'python');
-  const scriptMode = appRequiresScripting(root) ? 'classic' : 'none';
-  const shellPath = path.join(nativeBuildDirectory, process.platform === 'win32' ? 'jellyframe_desktop_shell.exe' : 'jellyframe_desktop_shell');
-  const args = [launcher, '--build-dir', nativeBuildDirectory, '--app', root, '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
+  const frameDir = fs.mkdtempSync(path.join(sessionRoot, `${outputBase(session.appRoot)}-`));
+  resetEmbeddedRunState(session);
+  session.frameDir = frameDir;
+  session.runId += 1;
+  const runId = session.runId;
+  const args = [session.launcher, '--build-dir', session.buildDir, '--app', session.appRoot,
+    '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
+  if (session.requestedViewport.width > 0) {
+    args.push('--viewport-width', String(session.requestedViewport.width),
+      '--viewport-height', String(session.requestedViewport.height));
+  }
   const channel = ensureOutputChannel();
-  channel.appendLine(`+ ${[python, ...args].join(' ')}`);
-  const child = childProcess.spawn(python, args, {
-    cwd: repoRoot(context),
-    shell: false,
-    windowsHide: true,
-    stdio: ['pipe', 'pipe', 'pipe']
-  });
-  const session = {
-    active: true,
-    stopping: false,
-    exited: false,
-    child,
-    panel,
-    appRoot: root,
-    scriptMode,
-    buildProfile: path.basename(path.dirname(nativeBuildDirectory)),
-    python,
-    launcher,
-    buildDir: nativeBuildDirectory,
-    shellPath,
-    frameDir,
-    startedAt: Date.now(),
-    viewport: { width: 1, height: 1 },
-    announcedFrames: 0,
-    deliveredFrames: 0,
-    droppedFrames: 0,
-    decodeErrors: 0,
-    inputSent: 0,
-    stdoutLines: 0,
-    stderrLines: 0,
-    logLines: [],
-    webviewReady: false,
-    diagnosticsScheduled: false,
-    stopReason: undefined,
-    exitCode: undefined,
-    latestAnnouncedSequence: 0,
-    lastDeliveredSequence: 0,
-    recording: false,
-    recordingStartSequence: 0,
-    recordingActions: [],
-    recordingPendingClick: undefined,
-    recordingSkipped: 0,
-    outputBuffer: '',
-    forceStopTimer: undefined
-  };
+  channel.appendLine(`+ ${[session.python, ...args].join(' ')}`);
+  let child;
+  try {
+    child = childProcess.spawn(session.python, args, {
+      cwd: repoRoot(context),
+      shell: false,
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+  } catch (error) {
+    session.active = false;
+    session.exited = true;
+    appendEmbeddedLog(session, 'error', `failed to start: ${error.message}`);
+    postEmbeddedMessage(session, { type: 'status', text: `Failed to start: ${error.message}` });
+    postEmbeddedMessage(session, { type: 'session-state', state: 'stopped' });
+    return;
+  }
+  session.child = child;
   embeddedDebugSession = session;
-  appendEmbeddedLog(session, 'lifecycle', `spawn pid=${child.pid} profile=${session.buildProfile} script=${session.scriptMode}`);
-  postEmbeddedMessage(session, { type: 'diagnostics', text: embeddedDiagnosticsText(session) });
+  postEmbeddedMessage(session, { type: 'reset-frame' });
+  postEmbeddedMessage(session, { type: 'session-state', state: 'running' });
+  postEmbeddedMessage(session, { type: 'viewport-config', ...session.requestedViewport });
+  appendEmbeddedLog(session, 'lifecycle', `${restartKind} spawn pid=${child.pid} profile=${session.buildProfile} script=${session.scriptMode}`);
+  scheduleEmbeddedDiagnostics(session);
   child.stdout.on('data', (chunk) => {
+    if (session.runId !== runId) return;
     session.outputBuffer += chunk.toString();
     let newline = 0;
     while ((newline = session.outputBuffer.indexOf('\n')) >= 0) {
@@ -1835,42 +2256,126 @@ async function debugApp(context, resourceUri) {
           session.droppedFrames += frame.sequence - session.latestAnnouncedSequence - 1;
         }
         session.latestAnnouncedSequence = Math.max(session.latestAnnouncedSequence, frame.sequence);
-        void deliverEmbeddedFrame(session, frame);
+        void deliverEmbeddedFrame(session, frame, runId);
       } else if (line) {
         appendEmbeddedLog(session, 'stdout', line);
       }
     }
   });
-  child.stderr.on('data', (chunk) => appendEmbeddedLog(session, 'stderr', chunk.toString()));
+  child.stderr.on('data', (chunk) => {
+    if (session.runId === runId) appendEmbeddedLog(session, 'stderr', chunk.toString());
+  });
   child.on('error', (error) => {
+    if (session.runId !== runId) return;
+    session.active = false;
+    session.exited = true;
+    session.stopping = false;
+    session.resolveExit?.();
     appendEmbeddedLog(session, 'error', `failed to start: ${error.message}`);
     postEmbeddedMessage(session, { type: 'status', text: `Failed to start: ${error.message}` });
+    postEmbeddedMessage(session, { type: 'session-state', state: 'stopped' });
+    scheduleEmbeddedDiagnostics(session);
   });
   child.on('close', (code) => {
+    if (session.runId !== runId) return;
     session.exited = true;
     session.active = false;
+    session.stopping = false;
     session.exitCode = code;
-    if (session.forceStopTimer) {
-      clearTimeout(session.forceStopTimer);
-    }
+    if (session.forceStopTimer) clearTimeout(session.forceStopTimer);
     session.resolveExit?.();
     appendEmbeddedLog(session, 'lifecycle', `shell exited with code ${code ?? 'unknown'}`);
     postEmbeddedMessage(session, { type: 'status', text: `Desktop shell stopped (exit ${code ?? 'unknown'}).` });
+    postEmbeddedMessage(session, { type: 'session-state', state: 'stopped' });
     scheduleEmbeddedDiagnostics(session);
-    if (embeddedDebugSession === session) {
-      embeddedDebugSession = undefined;
-    }
     setTimeout(() => fs.rm(frameDir, { recursive: true, force: true }, () => {}), 250);
   });
+}
+
+async function debugApp(context, resourceUri) {
+  if (process.platform !== 'win32') {
+    vscode.window.showErrorMessage('JellyFrame desktop shell is only available on Windows.');
+    return;
+  }
+  const root = await packageRoot(resourceUri);
+  if (!root) return;
+  const launcher = debugLauncherPath(context);
+  if (!fs.existsSync(launcher)) {
+    vscode.window.showErrorMessage(`Missing debug launcher: ${launcher}`);
+    return;
+  }
+  const nativeBuildDirectory = requireNativeBuildDir(context, appRequiresScripting(root));
+  if (!nativeBuildDirectory) return;
+  if (embeddedDebugSession && !embeddedDebugSession.disposed) {
+    const previous = embeddedDebugSession;
+    if (!previous.active && !previous.stopping && previous.appRoot === root) {
+      previous.panel.reveal(vscode.ViewColumn.Beside);
+      const resume = isChinese() ? '继续上次会话' : 'Resume previous session';
+      const restart = isChinese() ? '重新启动上次会话' : 'Restart previous session';
+      const choice = await vscode.window.showQuickPick([resume, restart], {
+        placeHolder: isChinese() ? '已有已停止的 JellyFrame 调试会话' : 'A stopped JellyFrame debug session is available'
+      });
+      if (choice === resume || choice === restart) {
+        if (choice === restart) {
+          previous.logLines = [];
+          postEmbeddedMessage(previous, { type: 'clear-log' });
+        }
+        startEmbeddedDebugProcess(context, previous, choice === restart ? 'restart' : 'resume');
+      }
+      return;
+    }
+    await stopEmbeddedDebugSession(previous, 'Replacing the previous debug session...');
+    previous.disposed = true;
+    previous.panel.dispose();
+  }
+  const panel = vscode.window.createWebviewPanel(
+    'jellyframeEmbeddedDebug', `JellyFrame: ${path.basename(root)}`, vscode.ViewColumn.Beside,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+  panel.webview.html = embeddedDebugHtml(panel.webview);
+  const session = {
+    active: false, stopping: false, exited: true, disposed: false, runId: 0, child: undefined, panel,
+    appRoot: root, scriptMode: appRequiresScripting(root) ? 'classic' : 'none',
+    buildProfile: path.basename(path.dirname(nativeBuildDirectory)), python: config().get('pythonPath', 'python'),
+    launcher, buildDir: nativeBuildDirectory,
+    shellPath: path.join(nativeBuildDirectory, process.platform === 'win32' ? 'jellyframe_desktop_shell.exe' : 'jellyframe_desktop_shell'),
+    frameDir: '', startedAt: Date.now(), viewport: { width: 1, height: 1 }, requestedViewport: { width: 0, height: 0 },
+    announcedFrames: 0, deliveredFrames: 0, droppedFrames: 0, decodeErrors: 0, inputSent: 0, stdoutLines: 0, stderrLines: 0,
+    logLines: [], webviewReady: false, diagnosticsScheduled: false, stopReason: undefined, exitCode: undefined,
+    latestAnnouncedSequence: 0, lastDeliveredSequence: 0, recording: false, recordingStartSequence: 0,
+    recordingActions: [], recordingPendingClick: undefined, recordingSkipped: 0, outputBuffer: '', forceStopTimer: undefined
+  };
+  embeddedDebugSession = session;
   panel.webview.onDidReceiveMessage((message) => {
     if (message?.type === 'ready') {
       session.webviewReady = true;
       postEmbeddedMessage(session, { type: 'diagnostics', text: embeddedDiagnosticsText(session) });
-      for (const entry of session.logLines) {
-        postEmbeddedMessage(session, { type: 'log', ...entry });
-      }
+      postEmbeddedMessage(session, { type: 'session-state', state: session.active ? 'running' : 'stopped' });
+      postEmbeddedMessage(session, { type: 'viewport-config', ...session.requestedViewport });
+      for (const entry of session.logLines) postEmbeddedMessage(session, { type: 'log', ...entry });
     } else if (message?.type === 'stop') {
-      stopEmbeddedDebugSession(session, 'Stopping desktop shell...');
+      postEmbeddedMessage(session, { type: 'session-state', state: 'stopping' });
+      void stopEmbeddedDebugSession(session, 'Stopping desktop shell...');
+    } else if (message?.type === 'resume' && !session.active && !session.stopping) {
+      startEmbeddedDebugProcess(context, session, 'resume');
+    } else if (message?.type === 'restart' && !session.active && !session.stopping) {
+      session.logLines = [];
+      postEmbeddedMessage(session, { type: 'clear-log' });
+      startEmbeddedDebugProcess(context, session, 'restart');
+    } else if (message?.type === 'viewport-request') {
+      const width = Number(message.width);
+      const height = Number(message.height);
+      if (!((width === 0 && height === 0) || validEmbeddedViewport(width, height))) {
+        postEmbeddedMessage(session, { type: 'status', text: 'Viewport must be whole numbers from 64 to 2048.' });
+        return;
+      }
+      session.requestedViewport = { width, height };
+      postEmbeddedMessage(session, { type: 'viewport-config', width, height });
+      if (session.active || session.stopping) {
+        void stopEmbeddedDebugSession(session, 'Restarting desktop shell with the requested viewport...').then(() => startEmbeddedDebugProcess(context, session, 'viewport change'));
+      } else {
+        startEmbeddedDebugProcess(context, session, 'viewport change');
+      }
     } else if (message?.type === 'clear-log') {
       session.logLines = [];
       postEmbeddedMessage(session, { type: 'clear-log' });
@@ -1889,14 +2394,19 @@ async function debugApp(context, resourceUri) {
       appendEmbeddedLog(session, 'lifecycle', 'semantic recording stopped');
       void saveEmbeddedRecording(context, session);
     } else if (message?.type === 'input' && typeof message.line === 'string' && /^[a-z]+(?: [a-z-]+)?(?: -?\d+){0,4}$/.test(message.line)) {
-      if (session.active && !session.stopping && child.stdin?.writable) {
-        child.stdin.write(`${message.line}\n`);
+      if (session.active && !session.stopping && session.child?.stdin?.writable) {
+        session.child.stdin.write(`${message.line}\n`);
         session.inputSent += 1;
         scheduleEmbeddedDiagnostics(session);
       }
     }
   }, undefined, context.subscriptions);
-  panel.onDidDispose(() => stopEmbeddedDebugSession(session, 'Debug tab closed.'), undefined, context.subscriptions);
+  panel.onDidDispose(() => {
+    session.disposed = true;
+    if (embeddedDebugSession === session) embeddedDebugSession = undefined;
+    void stopEmbeddedDebugSession(session, 'Debug tab closed.');
+  }, undefined, context.subscriptions);
+  startEmbeddedDebugProcess(context, session, 'initial');
 }
 
 async function runFrameScript(context, resourceUri) {
@@ -1919,8 +2429,14 @@ async function runFrameScript(context, resourceUri) {
   if (!selected || !selected[0]) {
     return;
   }
-  const selectedTarget = await target();
+  const selectedTarget = await selectTarget(context, root, {
+    purpose: isChinese() ? "选择程控回放使用的目标显示形态" : "Select the target display profile for frame-script playback"
+  });
   if (!selectedTarget) {
+    return;
+  }
+  const fontBudget = selectedFontBudget();
+  if (!fontBudget) {
     return;
   }
   ensureBuildDir(context);
@@ -1941,7 +2457,7 @@ async function runFrameScript(context, resourceUri) {
     "--report", report,
     "--frame-script", selected[0].fsPath,
     "--frame-output-dir", output,
-    "--font-budget", config().get("fontBudget", "16x16")
+    "--font-budget", fontBudget
   ], {
     commandName: "frame-script",
     packageRoot: root,
@@ -2058,6 +2574,7 @@ class JellyFrameStatusProvider {
     const app = hasPackage ? path.basename(root) : "No package selected";
     const selection = nativeBuildDir(this.context, appRequiresScripting(root));
     const buildDirectory = selection.buildDirectory;
+    const desktopBuildRunning = Boolean(activeDesktopBuildSetup);
     const build = buildDirectory || buildDirectoryError(this.context, selection);
     const buildPresentation = desktopBuildPresentation(buildDirectory, /^zh(?:-|$)/i.test(vscode.env.language || ""));
     const pipeline = lastReport?.pipelineDiagnostics?.summary;
@@ -2081,6 +2598,8 @@ class JellyFrameStatusProvider {
       buildProfile: "构建配置",
       buildOutput: "输出目录",
       scriptSupport: "脚本支持",
+      createDesktopBuild: "创建兼容桌面构建",
+      desktopBuildInProgress: "正在创建桌面构建",
       device: "设备",
       deviceActions: "设备操作",
       deviceLifecycle: "App 生命周期与调试",
@@ -2169,6 +2688,8 @@ class JellyFrameStatusProvider {
       buildProfile: "Build profile",
       buildOutput: "Output directory",
       scriptSupport: "Script support",
+      createDesktopBuild: "Create compatible desktop build",
+      desktopBuildInProgress: "Creating desktop build",
       device: "Device",
       deviceActions: "Device actions",
       deviceLifecycle: "App Lifecycle & Debug",
@@ -2279,18 +2800,29 @@ class JellyFrameStatusProvider {
           hasRenderData && performance?.rating ? `${labels.performance}: ${performance.rating}` : labels.notMeasured, "dashboard"),
       ]),
       this.group(labels.environment, "settings-gear", [
-        this.group(labels.desktopRuntime, "server-environment", [
+        this.group(labels.desktopRuntime, undefined, [
           this.statusItem(labels.build, labels.buildValue, buildPresentation.summary, "server-environment"),
           this.statusItem(labels.buildProfile, buildPresentation.profile, buildPresentation.profile, "settings-gear"),
           this.statusItem(labels.buildOutput, buildPresentation.output, buildPresentation.output, "folder"),
           this.statusItem(labels.scriptSupport, buildPresentation.scripting, buildPresentation.scripting, "symbol-event"),
+          ...(desktopBuildRunning ? [this.statusItem(
+            labels.desktopBuildInProgress,
+            chinese ? "CMake 正在运行" : "CMake is running",
+            chinese ? "正在配置或编译 JellyFrame 桌面壳。可在通知或运行日志中查看当前阶段。" : "JellyFrame is configuring or building the desktop shell. The notification and run log show the current phase.",
+            "sync~spin")] : []),
+          ...(!buildDirectory && !desktopBuildRunning ? [this.commandItem(
+            labels.createDesktopBuild,
+            chinese
+              ? "创建当前 App 所需的桌面壳构建；仅在确认后运行本机 CMake。"
+              : "Create the desktop-shell build needed by the current App; CMake runs only after confirmation.",
+            "jellyframe.setupDesktopBuild", "tools")] : []),
           this.commandItem(chinese ? "选择或查看构建" : "Choose or inspect builds",
             chinese ? "显示可用桌面构建，并帮助确认当前选择。" : "Show available desktop builds and confirm the current selection.",
             "jellyframe.listBuilds", "list-tree"),
         ]),
       ]),
       this.group(labels.device, "plug", [
-        this.group(labels.deviceActions, "plug", [
+        this.group(labels.deviceActions, undefined, [
           this.commandItem(labels.discoverDevice, labels.actionHints.discoverDevice, "jellyframe.deviceDiscover", "plug"),
           ...(Array.isArray(lastDeviceDiscovery) && lastDeviceDiscovery.length > 1
             ? [this.commandItem(labels.selectDevice, labels.actionHints.selectDevice, "jellyframe.deviceSelect", "symbol-array")]
@@ -2327,7 +2859,7 @@ class JellyFrameStatusProvider {
               : []),
           ])
         ] : []),
-        this.group(labels.deviceStatus, "pulse", [
+        this.group(labels.deviceStatus, undefined, [
           this.statusItem(labels.connectedDevices,
           Array.isArray(lastDeviceDiscovery)
             ? `${lastDeviceDiscovery.filter((device) => device.connected).length}/${lastDeviceDiscovery.length}`
@@ -2661,49 +3193,165 @@ function templateNames(context) {
   return fs.readdirSync(root).filter((name) => fs.statSync(path.join(root, name)).isDirectory()).sort();
 }
 
+function templateChoices(context) {
+  const chinese = isChinese();
+  const descriptions = chinese
+    ? {
+      blank: "最小 Hello world 包，适合从零开始。",
+      calculator: "紧凑键盘与事件委托。",
+      clock: "时间和状态仪表板。",
+      timer: "本地状态与按钮交互。",
+      weather: "数据卡片与包内图片。"
+    }
+    : {
+      blank: "Minimal Hello world package for a clean start.",
+      calculator: "Compact keypad and event delegation.",
+      clock: "Time and status dashboard.",
+      timer: "Local state and button interaction.",
+      weather: "Data cards and package-local images."
+    };
+  return templateNames(context).map((name) => ({
+    label: name,
+    description: descriptions[name] || (chinese ? "官方 App 起始模板。" : "Official App starter template."),
+    template: name
+  }));
+}
+
+function suggestedAppId(directoryName) {
+  const suffix = directoryName.toLowerCase()
+    .replace(/[^a-z0-9_.-]+/g, "-")
+    .replace(/^[_.-]+|[_.-]+$/g, "") || "app";
+  return `org.example.${suffix}`;
+}
+
+function suggestedAppName(directoryName) {
+  return directoryName
+    .trim()
+    .split(/[_.-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "App";
+}
+
+function directoryNameError(value, chinese) {
+  const name = String(value || "").trim();
+  if (!name) {
+    return chinese ? "请输入新 App 的目录名称。" : "Enter a directory name for the new App.";
+  }
+  if (!DIRECTORY_NAME_PATTERN.test(name) || /[. ]$/.test(name)) {
+    return chinese
+      ? "目录名称不能包含路径分隔符、Windows 保留字符，且不能以句点或空格结束。"
+      : "The directory name cannot contain path separators or Windows-reserved characters, or end with a dot or space.";
+  }
+  return undefined;
+}
+
+function appIdError(value, chinese) {
+  if (APP_ID_PATTERN.test(String(value || "").trim())) {
+    return undefined;
+  }
+  return chinese
+    ? "App ID 必须以字母或数字开始，且仅可包含字母、数字、点、连字符或下划线。"
+    : "App ID must start with a letter or digit and contain only letters, digits, dots, hyphens or underscores.";
+}
+
 async function newFromTemplate(context) {
-  const picked = await vscode.window.showQuickPick(templateNames(context), {
-    placeHolder: "Select JellyFrame app template"
+  const chinese = isChinese();
+  const picked = await vscode.window.showQuickPick(templateChoices(context), {
+    placeHolder: chinese ? "选择 JellyFrame App 起始模板" : "Select a JellyFrame App starter template",
+    ignoreFocusOut: true
   });
   if (!picked) {
     return;
   }
   const workspace = workspaceFolderPath() || repoRoot(context);
-  const output = await vscode.window.showInputBox({
-    prompt: "Output directory",
-    value: path.join(workspace, picked)
+  const selectedParent = await vscode.window.showOpenDialog({
+    defaultUri: vscode.Uri.file(workspace),
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: chinese ? "选择新 App 的存放位置" : "Select a location for the new App"
   });
-  if (!output) {
+  if (!selectedParent || !selectedParent[0]) {
     return;
   }
-  const appId = await vscode.window.showInputBox({
-    prompt: "Manifest app id",
-    value: `org.example.${picked}`
+  const directoryName = await vscode.window.showInputBox({
+    prompt: chinese ? "新 App 目录名称" : "New App directory name",
+    value: `${picked.template}-app`,
+    placeHolder: chinese ? "仅输入目录名称，不输入路径" : "Directory name only, not a path",
+    validateInput: (value) => directoryNameError(value, chinese),
+    ignoreFocusOut: true
   });
-  if (!appId) {
+  if (!directoryName) {
+    return;
+  }
+  const normalizedDirectoryName = directoryName.trim();
+  const output = path.join(selectedParent[0].fsPath, normalizedDirectoryName);
+  if (fs.existsSync(output)) {
+    vscode.window.showErrorMessage(chinese
+      ? `目标目录已存在：${output}。请选择新的目录名称或位置。`
+      : `The destination directory already exists: ${output}. Choose a new name or location.`);
     return;
   }
   const name = await vscode.window.showInputBox({
-    prompt: "Manifest app name",
-    value: picked.charAt(0).toUpperCase() + picked.slice(1)
+    prompt: chinese ? "App 显示名称" : "App display name",
+    value: suggestedAppName(normalizedDirectoryName),
+    validateInput: (value) => String(value || "").trim()
+      ? undefined
+      : (chinese ? "App 显示名称不能为空。" : "App display name cannot be empty."),
+    ignoreFocusOut: true
   });
   if (!name) {
     return;
   }
-  const selectedTarget = await target();
+  const defaultAppId = suggestedAppId(normalizedDirectoryName);
+  const appIdMode = await vscode.window.showQuickPick([
+    {
+      label: chinese ? "使用建议的 App ID" : "Use suggested App ID",
+      description: defaultAppId,
+      value: defaultAppId
+    },
+    {
+      label: chinese ? "指定 App ID" : "Specify App ID",
+      description: chinese ? "适用于已有组织命名空间。" : "Use an existing organization namespace.",
+      value: "custom"
+    }
+  ], {
+    placeHolder: chinese ? "选择 App ID" : "Select an App ID",
+    ignoreFocusOut: true
+  });
+  if (!appIdMode) {
+    return;
+  }
+  const appId = appIdMode.value === "custom"
+    ? await vscode.window.showInputBox({
+      prompt: chinese ? "App ID" : "App ID",
+      value: defaultAppId,
+      placeHolder: "org.example.my-app",
+      validateInput: (value) => appIdError(value, chinese),
+      ignoreFocusOut: true
+    })
+    : appIdMode.value;
+  if (!appId) {
+    return;
+  }
+  const selectedTarget = await selectTarget(context, undefined, {
+    presetOnly: true,
+    purpose: chinese ? "选择新 App 的目标显示形态" : "Select a target display profile for the new App"
+  });
   if (!selectedTarget) {
     return;
   }
   runCli(context, [
     "new",
     "--template",
-    picked,
+    picked.template,
     "--output",
     output,
     "--id",
-    appId,
+    appId.trim(),
     "--name",
-    name,
+    name.trim(),
     "--target",
     selectedTarget
   ]);
@@ -2727,6 +3375,11 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.runFrameScript", (resourceUri) => runFrameScript(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.openCapture", () => openCapture(context)),
     vscode.commands.registerCommand("jellyframe.listBuilds", () => listBuilds(context)),
+    vscode.commands.registerCommand("jellyframe.setupDesktopBuild", () => {
+      const root = currentPackageRoot();
+      const scripting = appRequiresScripting(root);
+      return configureDesktopBuild(context, scripting);
+    }),
     vscode.commands.registerCommand("jellyframe.package", (resourceUri) => runPackageCommand(context, "package", resourceUri)),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),

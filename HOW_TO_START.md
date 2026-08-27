@@ -97,8 +97,9 @@ For embedded porting:
 - `samples`: app packages and app lifecycle samples.
 - `src/render_core/samples/pages/modern`: modern HTML/CSS compatibility samples.
 - `src/script/samples/classic`: scripting acceptance probes.
-- `samples/apps/loose`: small loose-file app fixtures.
-- `samples/apps/packages`: complete app-package examples with `jellyframe.app.json`.
+- `samples/apps/packages`: complete app packages with `jellyframe.app.json`;
+  four public showcase packages and focused acceptance inputs are documented in
+  the directory README.
 - `samples/apps/system`: privileged app samples, such as the sample launcher
   used by the Win32 App Manager path.
 - `src/render_core/samples/fonts/bitmap`: font-pack sample input.
@@ -477,8 +478,10 @@ Notes:
   degradation.
 - `src/script/samples/classic`: minimal scripting probes for runtime, DOM mutation,
   events and script loading.
-- `samples/apps/loose/jelly_motion.*`: focused transition/keyframe motion fixture.
-- `samples/apps/loose/jelly_launcher_mock.*`: small launcher-style visual fixture.
+- `samples/apps/packages/jelly_motion_lab`: packaged deterministic CSS motion
+  showcase and regression input.
+- `samples/apps/packages/jelly_route_tabs`: packaged bounded route-state
+  showcase and regression input.
 - `tools/templates/apps/weather`, `clock`, `timer` and `calculator`: copyable
   starter app packages for common wearable workflows.
 

@@ -1,8 +1,6 @@
 ﻿#pragma once
 
-#include "render_core/dom.h"
-#include "render_core/dom_owner.h"
-#include "render_core/host.h"
+#include "script/script_runtime.h"
 
 #include <cstdint>
 #include <cstddef>
@@ -13,15 +11,6 @@
 
 namespace jellyframe {
 
-class AppRuntimeHost;
-struct AppHostDataSnapshot;
-struct AppHostDataAccessPolicy;
-class AppLocalStorageShadow;
-class AppLocationSnapshotMock;
-class Canvas2DRegistry;
-class NetworkFetchMock;
-struct AppSystemEvent;
-struct HostServiceCompletion;
 struct ScriptRuntimeAccess;
 struct ScriptAnimationFrameCallback;
 struct ScriptAudioElement;
@@ -34,157 +23,59 @@ struct ScriptLocalStorageBinding;
 struct ScriptServiceCallback;
 struct ScriptTimer;
 struct ScriptXmlHttpRequest;
-struct LayoutBox;
-
-enum class ScriptEvaluationStatus {
-    Ok,
-    Exception,
-    ExecutionBudgetExceeded,
-};
-
-struct ScriptEvaluationResult {
-    bool ok = false;
-    std::string value;
-    std::string error;
-    ScriptEvaluationStatus status = ScriptEvaluationStatus::Exception;
-};
-
-enum class ScriptCallbackFailureStatus : std::uint8_t {
-    None,
-    Exception,
-    ExecutionBudgetExceeded,
-};
-
-struct ScriptCallbackFailure {
-    ScriptCallbackFailureStatus status = ScriptCallbackFailureStatus::None;
-    std::string message;
-
-    bool failed() const { return status != ScriptCallbackFailureStatus::None; }
-};
-
-enum class ScriptAudioEventKind {
-    Ended,
-    Error,
-};
-
-using ScriptAudioPlayCallback = bool (*)(void* user,
-                                         std::uint32_t audio_id,
-                                         std::string_view src,
-                                         double volume,
-                                         std::string* error);
-
-// Worker-local service bridge. All arguments are bounded scalar values; the
-// callback runs synchronously on the same worker that owns this runtime.
-using ScriptServiceRequestSubmitCallback = bool (*)(void* user,
-                                                     std::uint8_t kind,
-                                                     std::uint32_t request_id,
-                                                     std::uint32_t client_token,
-                                                     std::uint32_t input_handle,
-                                                     std::uint8_t priority,
-                                                     std::uint32_t timeout_ms);
-
-using ScriptServiceRequestCancelCallback = bool (*)(void* user,
-                                                     std::uint32_t request_id,
-                                                     std::uint32_t client_token);
-
-struct ScriptAudioHost {
-    ScriptAudioPlayCallback play = nullptr;
-    void* user = nullptr;
-};
-
-struct JerryScriptRuntimeOptions {
-    std::size_t max_timers = 64;
-    std::size_t max_event_listeners = 512;
-    std::size_t max_detached_nodes = 256;
-    std::size_t max_xml_http_requests = 16;
-    std::size_t max_animation_frame_callbacks = 16;
-    std::size_t max_audio_elements = 8;
-    std::size_t max_geolocation_requests = 4;
-    std::size_t max_route_history_entries = 16;
-    std::uint32_t max_execution_check_count = 0;
-    std::uint32_t execution_check_interval = 16;
-    std::size_t max_layout_snapshot_nodes = 32;
-    std::size_t max_form_data_entries = 32;
-    std::size_t max_form_data_bytes = 4096;
-    // Kept at the end so existing aggregate initializers retain their field order.
-    std::size_t max_dom_nodes = 4096;
-    std::size_t max_dom_depth = 64;
-    std::size_t max_attributes_per_element = 64;
-    std::size_t max_dom_string_bytes = 512 * 1024;
-    std::size_t max_service_callbacks = 16;
-};
-
-JerryScriptRuntimeOptions jerryscript_runtime_options_from_host_budgets(const HostBudgets& budgets);
-
-struct ScriptRuntimeStatistics {
-    std::size_t timer_count = 0;
-    std::size_t animation_frame_callback_count = 0;
-    std::size_t event_listener_count = 0;
-    std::size_t xml_http_request_count = 0;
-    std::size_t audio_element_count = 0;
-    std::size_t geolocation_request_count = 0;
-    std::size_t service_callback_count = 0;
-    DetachedDomStatistics detached_nodes;
-};
-
-struct ScriptSystemState {
-    bool document_hidden = false;
-    bool navigator_online = false;
-};
-
-class JerryScriptRuntime {
+class JerryScriptRuntime final : public ScriptRuntime {
 public:
-    explicit JerryScriptRuntime(JerryScriptRuntimeOptions options = {});
+    explicit JerryScriptRuntime(ScriptRuntimeOptions options = {});
     explicit JerryScriptRuntime(const HostBudgets& budgets);
-    ~JerryScriptRuntime();
+    ~JerryScriptRuntime() override;
 
     JerryScriptRuntime(const JerryScriptRuntime&) = delete;
     JerryScriptRuntime& operator=(const JerryScriptRuntime&) = delete;
 
-    void bind_document(Node& document);
-    void bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network);
-    void bind_location_service(AppRuntimeHost& host, AppLocationSnapshotMock& location);
+    void bind_document(Node& document) override;
+    void bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network) override;
+    void bind_location_service(AppRuntimeHost& host, AppLocationSnapshotMock& location) override;
     void bind_host_data_snapshot(const AppHostDataSnapshot& snapshot,
-                                 const AppHostDataAccessPolicy& policy);
-    void bind_local_storage(AppLocalStorageShadow& storage);
-    void bind_audio_host(ScriptAudioHost host);
+                                 const AppHostDataAccessPolicy& policy) override;
+    void bind_local_storage(AppLocalStorageShadow& storage) override;
+    void bind_audio_host(ScriptAudioHost host) override;
     void bind_script_service_gateway(ScriptServiceRequestSubmitCallback submit,
                                      void* user,
-                                     ScriptServiceRequestCancelCallback cancel = nullptr);
-    void clear_script_service_gateway();
+                                     ScriptServiceRequestCancelCallback cancel = nullptr) override;
+    void clear_script_service_gateway() override;
     bool dispatch_script_service_completion(std::uint32_t request_id,
                                             std::uint32_t client_token,
                                             std::uint8_t status,
                                             std::uint32_t error_code,
-                                            const std::vector<std::uint8_t>& payload);
-    void bind_canvas_2d(Canvas2DRegistry& canvas);
-    void clear_app_services();
-    void clear_canvas_2d();
+                                            const std::vector<std::uint8_t>& payload) override;
+    void bind_canvas_2d(Canvas2DRegistry& canvas) override;
+    void clear_app_services() override;
+    void clear_canvas_2d() override;
     // Records numeric client rects only for elements that requested measurement.
-    void capture_layout_snapshot(const LayoutBox& root, int client_offset_x = 0, int client_offset_y = 0);
-    ScriptEvaluationResult eval(std::string_view source, std::string_view source_name = {});
-    ScriptCallbackFailure take_script_callback_failure();
-    bool script_callback_failed() const { return callback_failure_.failed(); }
-    bool execution_watchdog_supported() const;
-    bool take_execution_watchdog_interrupt();
-    void set_host_time_ms(std::uint64_t now_ms);
-    void set_system_state(ScriptSystemState state);
-    ScriptSystemState system_state() const;
-    bool dispatch_visibility_change();
+    void capture_layout_snapshot(const LayoutBox& root, int client_offset_x = 0, int client_offset_y = 0) override;
+    ScriptEvaluationResult eval(std::string_view source, std::string_view source_name = {}) override;
+    ScriptCallbackFailure take_script_callback_failure() override;
+    bool script_callback_failed() const override { return callback_failure_.failed(); }
+    bool execution_watchdog_supported() const override;
+    bool take_execution_watchdog_interrupt() override;
+    void set_host_time_ms(std::uint64_t now_ms) override;
+    void set_system_state(ScriptSystemState state) override;
+    ScriptSystemState system_state() const override;
+    bool dispatch_visibility_change() override;
     // Hosts use this to route Escape/back through the dialog cancel policy.
     // Returns true when an active modal consumed the request, even if cancel was prevented.
-    bool request_modal_cancel();
-    Node* active_modal_dialog() const;
-    bool dispatch_audio_event(std::uint32_t audio_id, ScriptAudioEventKind kind);
-    std::size_t pump_timers(std::uint64_t now_ms, std::size_t max_callbacks = 32);
-    std::size_t pump_animation_frame(std::uint64_t now_ms, std::size_t max_callbacks = 4);
-    bool handle_host_completion(const HostServiceCompletion& completion);
-    bool handle_system_event(const AppSystemEvent& event);
-    bool has_pending_timers() const;
-    bool has_pending_animation_frames() const;
-    std::uint64_t next_timer_due_ms() const;
-    std::size_t detached_node_count() const;
-    ScriptRuntimeStatistics statistics() const;
+    bool request_modal_cancel() override;
+    Node* active_modal_dialog() const override;
+    bool dispatch_audio_event(std::uint32_t audio_id, ScriptAudioEventKind kind) override;
+    std::size_t pump_timers(std::uint64_t now_ms, std::size_t max_callbacks = 32) override;
+    std::size_t pump_animation_frame(std::uint64_t now_ms, std::size_t max_callbacks = 4) override;
+    bool handle_host_completion(const HostServiceCompletion& completion) override;
+    bool handle_system_event(const AppSystemEvent& event) override;
+    bool has_pending_timers() const override;
+    bool has_pending_animation_frames() const override;
+    std::uint64_t next_timer_due_ms() const override;
+    std::size_t detached_node_count() const override;
+    ScriptRuntimeStatistics statistics() const override;
 
 private:
     friend struct ScriptRuntimeAccess;
@@ -207,7 +98,7 @@ private:
     std::vector<ScriptNodeBinding*> layout_snapshot_bindings_;
     std::vector<ScriptLocalStorageBinding*> local_storage_bindings_;
     std::vector<Node*> observed_nodes_;
-    JerryScriptRuntimeOptions options_;
+    ScriptRuntimeOptions options_;
     AppRuntimeHost* app_host_ = nullptr;
     NetworkFetchMock* network_fetch_ = nullptr;
     AppLocationSnapshotMock* location_snapshot_ = nullptr;

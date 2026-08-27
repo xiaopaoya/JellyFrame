@@ -239,7 +239,7 @@ jellyframe::ScriptTaskAppFrameCodecOptions frame_options() {
 jellyframe::ScriptTaskWorkerRuntimeOptions worker_options() {
     jellyframe::ScriptTaskWorkerRuntimeOptions result;
     result.budgets = budgets();
-    result.script = jellyframe::jerryscript_runtime_options_from_host_budgets(result.budgets);
+    result.script = jellyframe::script_runtime_options_from_host_budgets(result.budgets);
     result.viewport = {0, 0, kWidth, kHeight};
     result.frame_codec = frame_options();
     result.input_codec = {32, 256};

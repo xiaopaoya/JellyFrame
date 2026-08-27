@@ -89,8 +89,8 @@ manifest 能力声明使用。
 - `samples`：app package 和 app 生命周期样例。
 - `src/render_core/samples/pages/modern`：用于观察降级行为的现代 HTML/CSS 样例。
 - `src/script/samples/classic`：runtime、DOM mutation、事件和脚本加载探针。
-- `samples/apps/loose`：小型散文件 app fixture。
-- `samples/apps/packages`：带 `jellyframe.app.json` 的完整 app package 示例。
+- `samples/apps/packages`：带 `jellyframe.app.json` 的完整 app package；四个面向作者的
+  展示包和针对性验收输入见目录 README。
 - `samples/apps/system`：带系统权限的 app 样例，例如 Win32 App Manager 使用的 sample launcher。
 - `src/render_core/samples/fonts/bitmap`：字体包样例输入。
 - `tools/templates/apps`：供开发工具复制的 app package 起始模板。
@@ -434,8 +434,8 @@ Win32 shell 会自动收集 inline classic scripts 和宿主可加载的本地 c
   复制使用，不是穷尽兼容性测试 fixture。
 - `src/render_core/samples/pages/modern`：观察现代 HTML/CSS 合理降级的样例。
 - `src/script/samples/classic`：runtime、DOM mutation、事件和脚本加载探针。
-- `samples/apps/loose/jelly_motion.*`：聚焦 transition/keyframe 的动效 fixture。
-- `samples/apps/loose/jelly_launcher_mock.*`：小型启动器风格视觉 fixture。
+- `samples/apps/packages/jelly_motion_lab`：带 manifest 的确定性 CSS 动效展示与回归输入。
+- `samples/apps/packages/jelly_route_tabs`：带 manifest 的有界 route-state 展示与回归输入。
 - `tools/templates/apps/weather`、`clock`、`timer` 和 `calculator`：常见可穿戴工作流的可复制起始 app package。
 
 把示例 app 打包成生成式资源表、debug 目录或安装式 `.jfapp`：

@@ -2,9 +2,9 @@
 
 > Last updated: 2026-08-27; Applies to: 0.6.0-dev; Status: 0.6 foundation landed
 
-This contract defines how an RTOS host runs a real JerryScript App without moving DOM,
-JerryScript or renderer objects across tasks. The direct, same-thread desktop
-`JerryScriptRuntime::bind_document(Node&)` path does not satisfy it by itself.
+This contract defines how an RTOS host runs a real script App without moving DOM,
+backend-native or renderer objects across tasks. The direct, same-thread
+`ScriptRuntime::bind_document(Node&)` path does not satisfy it by itself.
 
 The system UI task owns launcher, sampled input, presentation rendering, framebuffer and panel
 output. The script worker owns exactly one realm, private app DOM, wrappers, listeners and timers.
@@ -13,7 +13,7 @@ native-lease registry and recovery. A session is the nonzero tuple
 `app_instance_id`, monotonic `generation` and `worker_epoch`; all packets validate the full tuple.
 
 No packet, queue, timer, callback, handle payload or fatal record may carry raw DOM/layout/layer/
-display pointers, JerryScript values or wrappers, framebuffer/panel/DMA/GPIO/NVS/file handles, or
+display pointers, backend-native values or wrappers, framebuffer/panel/DMA/GPIO/NVS/file handles, or
 task-local container/arena addresses. Cross-task data is a bounded value copy or a supervisor-owned
 opaque lease ID checked against the full session.
 The supervisor serializes session transitions with mailbox admission and returns session snapshots by
@@ -102,7 +102,7 @@ late-completion handle release without sending stale data to the worker.
 
 `src/script/script_task_worker_runtime.*` now provides the first worker-side
 DOM/display-list producer slice. It owns the parsed document, same-thread
-JerryScript binding, render/layout/layer trees and `InputController` inside one
+selected-backend binding, render/layout/layer trees and `InputController` inside one
 worker object, and publishes only sealed value frames after value input or a
 worker-local timer/animation callback. Node destruction observers are
 composable, interaction state is rebound to replacement layer trees, and event
@@ -121,7 +121,7 @@ in-flight tombstone for late cleanup. Provider policy, real RTOS task adapter
 and fatal worker boundary remain separate follow-up work. Ports must not fill
 those gaps with raw pointers.
 
-`JerryScriptRuntime` also records the first exception or execution-budget
+The selected `ScriptRuntime` also records the first exception or execution-budget
 failure raised by a budgeted callback as a value-only `ScriptCallbackFailure`.
 `ScriptTaskWorkerRuntime` consumes it after input, timer/animation, or service
 completion dispatch and emits a bounded fatal record instead of publishing a

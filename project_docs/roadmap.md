@@ -1,6 +1,6 @@
 # JellyFrame Active Roadmap
 
-> Last updated: 2026-08-27; Applies to: 0.6.0-dev; this is the single active plan.
+> Last updated: 2026-08-25; Applies to: 0.6.0-dev; this is the single active plan.
 
 ## Governing Decision
 
@@ -13,9 +13,9 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 ## Current Baseline
 
 - The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository owns the physical Core branch. The first signed `v0.6.0` release is historical; Runtime `0.6.0-dev` now locks Core `v0.6.1`, ABI `1` and source identity `105d0166...b797c52b`. CI downloads that release artifact, verifies archive SHA-256 `f9d24aca...e18c7`, installs it and runs the Runtime package-consumer tests. The in-tree provider remains only for synchronized local development. For Core ABI `1`, installed `render_core/` headers are the C++ consumer surface; there is no hidden header tier or C ABI. On 2026-08-19, Core-only/Device-contract CMake boundary coverage was added: Core-only cannot create contracts targets/tests, contracts-only remains independently buildable, and the archive/install/package/source-override loop was rechecked.
-- App Runtime has `.jfapp` lifecycle, registry reference semantics, optional JerryScript and the script-worker session/generation/epoch, value-only frame/input/service/fatal protocol. WS147 P3 worker, service, recovery and mixed-soak evidence is closed.
+- App Runtime has `.jfapp` lifecycle, registry reference semantics, an optional selected script backend and the script-worker session/generation/epoch, value-only frame/input/service/fatal protocol. WS147 P3 worker, service, recovery and mixed-soak evidence is closed.
 - WS147 value-frame-v2 dirty/recovery passes. The full-screen rounded-gradient workload is not 30 FPS. Canvas has no real host binding and remains `not-tested`.
-- JFDP/1 framing, capability, typed status/progress payloads and staged-install contracts have the isolated `device_runtime_contracts` source owner. WS147 native USB Serial/JTAG wire, A1-2 persistent lifecycle acceptance and provider handoff are closed for their measured images. `provider-handoff-afdcf75-20260821` passes same-image Identity matching, real in-flight cancellation, durable update/rollback/remove and 30 mixed cycles. `jellyframe-device@0.1.1-dev` supplies selected-device attestation and mutation/lifecycle UI operations; `0.1.0-dev` remains only the read-only `discover/info/list` baseline. The `ws147-script-task-value-frame-v4-20260827-final` report accepts real installed classic-script render output at source revision `9e32fac`: timer-driven mutations, transformed/rounded clips, malformed-frame rejection and stop/relaunch all pass on panel. The measured Developer Image has a strict manifest and hash-verified factory recovery image. This still does not prove the clean-machine VS Code product workflow, physical touch input-to-present/recovery, or a general Canvas host binding.
+- JFDP/1 framing, capability, typed status/progress payloads and staged-install contracts have the isolated `device_runtime_contracts` source owner. WS147 native USB Serial/JTAG wire, A1-2 persistent lifecycle acceptance and the provider handoff are closed. The `provider-handoff-afdcf75-20260821` report passes same-image Identity matching, real in-flight cancellation, durable update/rollback/remove and 30 mixed cycles; the versioned `jellyframe-device@0.1.1-dev` provider is delivered and declares the lifecycle UI capabilities. `0.1.0-dev` remains only as the read-only `discover/info/list` baseline. The Developer Image baseline has a strict manifest and hash-verified factory recovery image; this still does not prove the clean-machine VS Code product workflow or installed-App panel/input behavior.
 
 ## Closed Performance Stage
 
@@ -40,15 +40,19 @@ Exit: a clean machine can flash once using documented tooling and then repeatedl
 CLI and VS Code select a real device and expose profile, storage, capabilities, lifecycle, install/update/launch/stop/remove and app-scoped logs. Desktop and device debug sessions remain separate. Device telemetry is the only source of device performance data.
 
 The WS147 provider handoff sub-gate is closed by `provider-handoff-afdcf75-20260821`: identity, in-flight cancellation,
-durable lifecycle and 30 mixed cycles pass on one measured image. `jellyframe-device@0.1.1-dev` provides the mutation and
-lifecycle operations for the capability-gated UI. The `ws147-script-task-value-frame-v4-20260827-final` report separately
-accepts installed classic-script panel output, but not physical touch input or a fatal-recovery route. The wider author-tool
-gate remains open until a clean machine completes `new -> check -> device install -> live log -> update -> rollback` from
-VS Code and a real installed App provides touch input-to-present/recovery evidence with actionable ownership of failures.
+durable lifecycle and 30 mixed cycles pass on one published image. The versioned `0.1.1-dev` provider,
+capability-gated lifecycle UI and local candidate smoke are complete. The wider author-tool gate has two remaining
+formal evidence items: a clean machine must complete `new -> check -> device install -> live log -> update -> rollback
+-> stop -> remove` from VS Code, and a real installed App must provide panel/input evidence with actionable failure
+ownership across package, transport, registry, Runtime and port.
 
 ### A3: Controlled External Trial
 
 Begins only after A1/A2. Participants require no ESP-IDF. Reproducible package, image version and device log are required for feedback; only package, lifecycle, recovery or documented-capability blockers become P0.
+
+Preparation status: **in progress**. Outreach coordination, trial instructions and feedback collection may be prepared
+in parallel, but no trial access, non-release image flashing or product-usability conclusions are allowed before the A2
+clean-machine and panel/input exits pass.
 
 ## Track B: Independent Engine Projects
 
@@ -70,6 +74,23 @@ Exit: all consumers use Core only through public packages/headers; Runtime/port 
 A Core release contains sources, headers, CMake package, feature registry/profile schema and provenance. It is not one fixed full-feature firmware: Device OS selects a build-time profile, and app feature negotiation rejects unavailable features. `.jfapp` files never ship native modules.
 
 Physical Core repository migration is complete. The first independently released Core is signed, reproducible and consumed by a locked Runtime build; the Core/Runtime B1 exit is closed. The future Device OS must consume the same provenance contract before its own physical migration. Device OS, ports and launcher then migrate together, not piecemeal.
+
+### B2: Script Runtime Backend Boundary
+
+The Runtime owns the documented JavaScript/DOM/service semantics while a selected
+script backend owns its realm, wrappers, callbacks and native values.
+`ScriptRuntime` is the framework-facing contract; its factory is selected at
+configure time through `JELLYFRAME_SCRIPT_ENGINE`. The current implementation is
+JerryScript, but it is no longer a public dependency of worker or desktop-host
+code. Engine discovery and linkage remain backend-private.
+
+This is not a runtime plugin system. A build contains exactly one backend; apps
+cannot request or bundle an engine, and hot callback/value paths must not pass
+through a generic conversion layer. A later backend candidate needs an explicit
+compatibility/resource RFC, a native implementation of the complete contract,
+behavior/watchdog/ownership/recovery parity, desktop benchmark comparison and
+target-specific acceptance before any default changes. External developer
+material must not imply a preferred future backend before that evidence exists.
 
 ## Track C: Render Core Capability Evolution
 
@@ -109,7 +130,8 @@ Container queries, `oklch()`, complex grid, `:has()`, filters, Shadow DOM, ifram
 ## Version Exits
 
 - `0.6`: A0 contracts, the closed Core/Runtime B1 boundary and proven C1 packs. Canvas and full-screen 30 FPS are not release gates.
-- `0.7`: A1/A2 first developer image/toolchain and B1 first Core release.
+- `0.7`: A1/A2 author-tool delivery for the first developer image and the actual start of the controlled external trial.
+  Core/Runtime B1 was completed in `0.6` and is no longer a `0.7` exit.
 - `1.0`: one stable official board, reproducible Device OS lifecycle, frozen Japp/manifest/diagnostic/profile contracts, supported-port matrix and a dependency/security update policy. Full-browser compatibility is not a 1.0 goal.
 
 ## Change Gate

@@ -228,6 +228,45 @@ void renderer_matches_transformed_layer_own_clip() {
     }
 }
 
+void renderer_matches_nested_source_clips_for_transformed_child_content() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = {0, 0, 40, 40};
+
+    LayerNodePtr rotated(new LayerNode(), LayerNodeDeleter{});
+    rotated->type = LayerType::Composited;
+    rotated->bounds = {6, 4, 24, 22};
+    rotated->has_clip = true;
+    rotated->clip_rect = {11, 9, 14, 11};
+    rotated->transform.rotate_degrees = 90.0F;
+    rotated->transform_origin_x_percent = 50;
+    rotated->transform_origin_y_percent = 50;
+
+    LayerNodePtr child(new LayerNode(), LayerNodeDeleter{});
+    child->type = LayerType::Paint;
+    child->bounds = {2, 1, 32, 28};
+    child->has_clip = true;
+    child->clip_rect = {8, 7, 16, 15};
+    DisplayCommand fill;
+    fill.type = DisplayCommandType::FillRect;
+    fill.rect = child->bounds;
+    fill.color = {240, 80, 90, 255};
+    child->display_list.push_back(fill);
+    rotated->children.push_back(std::move(child));
+    root.children.push_back(std::move(rotated));
+
+    const FrameBuffer expected = SoftwareCompositor().render(root, 40, 40, {255, 255, 255, 255});
+    const ScriptTaskAppFrame frame = make_script_task_app_frame(root, {0, 0, 40, 40}, {}, true);
+    const FrameBuffer actual = ScriptTaskFrameRenderer().render(frame, {255, 255, 255, 255});
+    assert(actual.pixels.size() == expected.pixels.size());
+    for (std::size_t index = 0; index < actual.pixels.size(); ++index) {
+        assert(std::abs(static_cast<int>(actual.pixels[index].r) - static_cast<int>(expected.pixels[index].r)) <= 1);
+        assert(std::abs(static_cast<int>(actual.pixels[index].g) - static_cast<int>(expected.pixels[index].g)) <= 1);
+        assert(std::abs(static_cast<int>(actual.pixels[index].b) - static_cast<int>(expected.pixels[index].b)) <= 1);
+        assert(actual.pixels[index].a == expected.pixels[index].a);
+    }
+}
+
 void renderer_matches_layer_compositor_for_translucent_clip_run() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -1093,6 +1132,7 @@ int script_task_frame_renderer_tests_main() {
     renderer_applies_ancestor_clip_only_in_destination_space_for_transforms();
     renderer_accepts_degenerate_value_frame_transform_as_empty_paint();
     renderer_matches_transformed_layer_own_clip();
+    renderer_matches_nested_source_clips_for_transformed_child_content();
     renderer_matches_layer_compositor_for_translucent_clip_run();
     renderer_keeps_non_dirty_pixels_and_rejects_bad_chain();
     renderer_exposes_rounded_dirty_fast_path_statistics();

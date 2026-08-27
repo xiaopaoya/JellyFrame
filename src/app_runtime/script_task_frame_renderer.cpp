@@ -620,6 +620,7 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
         repaint = normalize_dirty_rects(dirty_rects, dirty_rect_count, target_rect);
     }
     std::vector<RasterClip> clip_chain;
+    std::vector<RasterClip> source_clip_chain;
     SoftwareRasterizerScratch owned_scratch;
     SoftwareRasterizerScratch* working_scratch = scratch != nullptr ? scratch : &owned_scratch;
     const auto rasterize_transformed = [&](const DisplayCommand& command,
@@ -677,30 +678,27 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
                                   safe_negate(command.rect.y),
                                   working_scratch);
         } else {
-            if (command.transform.source_clip_index >= frame.clips.size()) {
+            if (!collect_clip_chain(frame, command.transform.source_clip_index, source_clip_chain)) {
                 report_diagnostic(options_.diagnostics,
                                   DiagnosticStage::Paint,
                                   DiagnosticSeverity::Warning,
                                   "script-frame-transform-source-clip",
-                                  "Value-frame transform source clip is invalid",
-                                  "clip index");
+                                  "Value-frame transform source clip chain is invalid",
+                                  "clip chain");
                 return false;
             }
-            const ScriptTaskFrameClip& source_clip = frame.clips[command.transform.source_clip_index];
-            RasterClip local_source_clip{
-                {safe_add(source_clip.rect.x, safe_negate(command.rect.x)),
-                 safe_add(source_clip.rect.y, safe_negate(command.rect.y)),
-                 source_clip.rect.width,
-                 source_clip.rect.height},
-                source_clip.border_radius};
+            for (RasterClip& source_clip : source_clip_chain) {
+                source_clip.rect.x = safe_add(source_clip.rect.x, safe_negate(command.rect.x));
+                source_clip.rect.y = safe_add(source_clip.rect.y, safe_negate(command.rect.y));
+            }
             rasterizer_.rasterize_clipped(&source_command,
                                           1,
                                           source,
                                           source_surface_rect,
                                           safe_negate(command.rect.x),
                                           safe_negate(command.rect.y),
-                                          &local_source_clip,
-                                          1,
+                                          source_clip_chain.data(),
+                                          source_clip_chain.size(),
                                           working_scratch);
         }
 
