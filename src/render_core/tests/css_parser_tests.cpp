@@ -1509,6 +1509,29 @@ void style_candidate_cache_ignores_irrelevant_identifiers() {
           "irrelevant identifiers do not consume candidate cache capacity");
 }
 
+void style_candidate_cache_canonicalizes_relevant_class_sets() {
+    auto first = make_element("button");
+    first->attributes["class"] = "primary compact primary";
+    auto second = make_element("button");
+    second->attributes["class"] = "compact primary";
+
+    StyleResolver resolver(parse(
+        ".primary { color: #2563eb; }"
+        ".compact { font-size: 12px; }"));
+    const Style first_style = resolver.resolve(*first);
+    const Style second_style = resolver.resolve(*second);
+    const StyleResolverStatistics statistics = resolver.statistics();
+
+    check(first_style.color.b == 0xeb && second_style.color.b == 0xeb,
+          "canonical candidate keys preserve matching declarations");
+    check(first_style.font_size == 12 && second_style.font_size == 12,
+          "canonical candidate keys preserve every relevant class rule");
+    check(statistics.candidate_cache_misses == 1 && statistics.candidate_cache_hits == 1,
+          "reordered or repeated relevant classes share a candidate cache entry");
+    check(statistics.candidate_cache_entries == 1,
+          "equivalent relevant class sets consume one bounded cache entry");
+}
+
 void parser_limits_unbounded_css_fields_without_losing_following_rules() {
     CssParser parser;
     VectorDiagnosticSink diagnostics;
@@ -1651,6 +1674,7 @@ int main() {
         style_candidate_cache_preserves_selector_context();
         style_candidate_cache_respects_tiny_budget_and_inline_style();
         style_candidate_cache_ignores_irrelevant_identifiers();
+        style_candidate_cache_canonicalizes_relevant_class_sets();
         parser_limits_unbounded_css_fields_without_losing_following_rules();
         nonfinite_and_out_of_range_numeric_values_preserve_safe_fallbacks();
         text_overflow_is_specified_but_not_inherited_by_nested_elements();

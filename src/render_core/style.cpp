@@ -5230,6 +5230,14 @@ const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node
             key.append(id);
         }
         key.push_back('\n');
+
+        // Selector matching treats the class attribute as an unordered set.
+        // Keep the bounded candidate cache aligned with that meaning so a
+        // reordered or repeated relevant class does not consume another entry.
+        constexpr std::size_t kInlineIndexedClasses = 8;
+        std::array<std::string_view, kInlineIndexedClasses> inline_indexed_classes;
+        std::size_t inline_indexed_class_count = 0;
+        std::vector<std::string_view> overflow_indexed_classes;
         std::size_t index = 0;
         while (index < classes.size()) {
             while (index < classes.size() && std::isspace(static_cast<unsigned char>(classes[index])) != 0) {
@@ -5242,8 +5250,35 @@ const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node
             if (begin == index) {
                 continue;
             }
-            const std::string class_name = classes.substr(begin, index - begin);
-            if (class_rules_.find(class_name) != class_rules_.end()) {
+            const std::string_view class_name(classes.data() + begin, index - begin);
+            if (class_rules_.find(std::string(class_name)) != class_rules_.end()) {
+                if (inline_indexed_class_count < inline_indexed_classes.size()) {
+                    inline_indexed_classes[inline_indexed_class_count++] = class_name;
+                } else {
+                    overflow_indexed_classes.push_back(class_name);
+                }
+            }
+        }
+        if (overflow_indexed_classes.empty()) {
+            auto indexed_end = inline_indexed_classes.begin() +
+                static_cast<std::ptrdiff_t>(inline_indexed_class_count);
+            std::sort(inline_indexed_classes.begin(), indexed_end);
+            indexed_end = std::unique(inline_indexed_classes.begin(), indexed_end);
+            for (auto current = inline_indexed_classes.begin(); current != indexed_end; ++current) {
+                key.append(*current);
+                key.push_back('\n');
+            }
+        } else {
+            overflow_indexed_classes.reserve(overflow_indexed_classes.size() + inline_indexed_class_count);
+            overflow_indexed_classes.insert(overflow_indexed_classes.end(),
+                                            inline_indexed_classes.begin(),
+                                            inline_indexed_classes.begin() +
+                                                static_cast<std::ptrdiff_t>(inline_indexed_class_count));
+            std::sort(overflow_indexed_classes.begin(), overflow_indexed_classes.end());
+            overflow_indexed_classes.erase(
+                std::unique(overflow_indexed_classes.begin(), overflow_indexed_classes.end()),
+                overflow_indexed_classes.end());
+            for (const std::string_view class_name : overflow_indexed_classes) {
                 key.append(class_name);
                 key.push_back('\n');
             }
