@@ -402,11 +402,19 @@ void style_resolution_context_tracks_its_inputs() {
     StyleResolver resolver(parse(
         ":root { --tone: #112233; }"
         "button { color: var(--tone); }"
+        ".accent { --tone: #445566; }"
         "button:hover { color: #aabbcc; }"));
     StyleResolveContext context;
     const Style before_hover = resolver.resolve(*button, context);
     check(before_hover.color.r == 0x11 && before_hover.color.g == 0x22 && before_hover.color.b == 0x33,
           "context resolves the initial custom property cascade");
+
+    button->set_attribute("class", "accent");
+    clear_dirty_flags(*document);
+    const Style after_attribute_mutation = resolver.resolve(*button, context);
+    check(after_attribute_mutation.color.r == 0x44 && after_attribute_mutation.color.g == 0x55 &&
+              after_attribute_mutation.color.b == 0x66,
+          "context drops selector and custom-property caches after a consumed DOM mutation");
 
     resolver.set_interaction_state(button, nullptr, nullptr);
     const Style while_hovered = resolver.resolve(*button, context);

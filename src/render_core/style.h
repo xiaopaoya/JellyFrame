@@ -505,11 +505,12 @@ using CustomPropertyMap = std::unordered_map<std::string, std::string>;
 class StyleResolver;
 
 struct StyleResolveContext {
-    // A context caches pointers into one resolver and one DOM tree for one
-    // interaction state. StyleResolver refreshes it automatically when any
-    // of those inputs changes.
+    // A context caches pointers into one resolver, DOM revision and
+    // interaction state. StyleResolver refreshes it when any of those inputs
+    // changes.
     const StyleResolver* resolver = nullptr;
     const Node* document_root = nullptr;
+    std::uint64_t document_mutation_generation = 0;
     std::uint64_t interaction_state_generation = 0;
     std::unordered_map<const Node*, const CustomPropertyMap*> custom_property_cache;
     std::vector<std::unique_ptr<CustomPropertyMap>> custom_property_scopes;

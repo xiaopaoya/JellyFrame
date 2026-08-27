@@ -5429,6 +5429,7 @@ void StyleResolveContext::clear() {
     matched_rule_cache.clear();
     resolver = nullptr;
     document_root = nullptr;
+    document_mutation_generation = 0;
     interaction_state_generation = 0;
     custom_property_scan_root = nullptr;
     has_inline_custom_properties = false;
@@ -5441,10 +5442,12 @@ void StyleResolver::prepare_context(StyleResolveContext& context, const Node& no
     }
     if (context.resolver != this ||
         context.document_root != root ||
+        context.document_mutation_generation != root->mutation_generation ||
         context.interaction_state_generation != interaction_state_generation_) {
         context.clear();
         context.resolver = this;
         context.document_root = root;
+        context.document_mutation_generation = root->mutation_generation;
         context.interaction_state_generation = interaction_state_generation_;
     }
 }
