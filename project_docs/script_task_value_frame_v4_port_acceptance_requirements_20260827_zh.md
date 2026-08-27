@@ -1,6 +1,6 @@
 # Script Task Value Frame v4 移植接入与验收要求
 
-日期：2026-08-27  
+最后更新：2026-08-27；适用版本：0.6.0-dev  
 主线基线：`f8b1c3a`（或其后仅包含修复的提交）  
 适用范围：ESP32-S3 / WS147 的 Script Task worker-to-UI value-frame 路径  
 状态：移植接入要求；v4 在完成本文件验收前仍是实验性 profile
