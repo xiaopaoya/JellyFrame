@@ -1280,6 +1280,9 @@ void SoftwareRasterizerScratch::release() {
     FrameBuffer{}.pixels.swap(temporary_surface.pixels);
     temporary_surface.width = 0;
     temporary_surface.height = 0;
+    FrameBuffer{}.pixels.swap(transformed_surface.pixels);
+    transformed_surface.width = 0;
+    transformed_surface.height = 0;
 }
 
 void SoftwareRasterizerStatistics::reset() {

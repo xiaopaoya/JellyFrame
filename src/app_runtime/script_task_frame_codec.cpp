@@ -11,9 +11,13 @@ namespace {
 constexpr std::uint32_t kMagic = 0x4653464aU; // JFSF in little-endian.
 constexpr std::uint8_t kVersionV1 = 1;
 constexpr std::uint8_t kVersionV2 = 2;
+constexpr std::uint8_t kVersionV3 = 3;
+constexpr std::uint8_t kVersionV4 = 4;
 constexpr std::size_t kHeaderBytesV1 = 32;
 constexpr std::size_t kHeaderBytesV2 = 36;
-constexpr std::size_t kCommandBytes = 72;
+constexpr std::size_t kCommandBytesV1V2 = 72;
+constexpr std::size_t kCommandBytesV3 = 100;
+constexpr std::size_t kCommandBytesV4 = 104;
 constexpr std::size_t kTargetBytes = 24;
 constexpr std::size_t kClipBytes = 28;
 
@@ -31,13 +35,52 @@ void put_int(std::vector<std::uint8_t>& out, std::size_t at, int value) {
 int get_int(const std::vector<std::uint8_t>& in, std::size_t at) {
     return static_cast<int>(static_cast<std::int32_t>(get_u32(in, at)));
 }
+std::size_t command_bytes_for(std::uint8_t version) {
+    return version == kVersionV4 ? kCommandBytesV4 :
+        (version == kVersionV3 ? kCommandBytesV3 : kCommandBytesV1V2);
+}
+bool has_transform(const DisplayCommand& command) {
+    return command.transform.enabled;
+}
+
+bool is_identity_transform(const DisplayCommandTransform& transform) {
+    return transform.xx_1024 == 1024 && transform.xy_1024 == 0 &&
+        transform.yx_1024 == 0 && transform.yy_1024 == 1024 &&
+        transform.tx_1024 == 0 && transform.ty_1024 == 0 && transform.source_clip_index == kScriptTaskNoClip;
+}
+
+bool valid_transform(const DisplayCommandTransform& transform) {
+    const std::int32_t values[] = {
+        transform.xx_1024, transform.xy_1024, transform.yx_1024,
+        transform.yy_1024, transform.tx_1024, transform.ty_1024,
+    };
+    const bool values_in_range = std::all_of(std::begin(values), std::end(values), [](std::int32_t value) {
+        constexpr std::int64_t kMaximumFixedValue = 64LL * 1024LL * 1024LL;
+        return static_cast<std::int64_t>(value) >= -kMaximumFixedValue &&
+            static_cast<std::int64_t>(value) <= kMaximumFixedValue;
+    });
+    if (!values_in_range) {
+        return false;
+    }
+    // A disabled transform has no visual effect. Canonicalize that wire state
+    // by requiring identity coefficients, so equal frames cannot differ only
+    // in ignored bytes. Enabled transforms must be invertible enough for the
+    // consumer's inverse affine sampling path. A singular enabled matrix is
+    // still a valid CSS transform (for example scale(0)); the renderer treats
+    // it as a command with no covered destination pixels.
+    if (!transform.enabled) {
+        return is_identity_transform(transform);
+    }
+    return true;
+}
 bool valid_command(const DisplayCommand& c) {
     return static_cast<std::uint8_t>(c.type) <= static_cast<std::uint8_t>(DisplayCommandType::Image) &&
            static_cast<std::uint8_t>(c.text_align) <= static_cast<std::uint8_t>(TextCommandAlign::End) &&
            static_cast<std::uint8_t>(c.gradient_axis) <= static_cast<std::uint8_t>(GradientAxis::RadialPosition) &&
            static_cast<std::uint8_t>(c.object_fit) <= static_cast<std::uint8_t>(ObjectFit::ScaleDown) &&
            static_cast<std::uint8_t>(c.image_rendering) <= static_cast<std::uint8_t>(ImageRendering::CrispEdges) &&
-           c.rect.width >= 0 && c.rect.height >= 0 && c.text.size() <= std::numeric_limits<std::uint32_t>::max();
+           c.rect.width >= 0 && c.rect.height >= 0 && valid_transform(c.transform) &&
+           c.text.size() <= std::numeric_limits<std::uint32_t>::max();
 }
 bool valid_target(const ScriptTaskInputTarget& target) {
     return target.target_key != 0 && target.rect.width >= 0 && target.rect.height >= 0;
@@ -105,7 +148,8 @@ bool point_in_clip_chain(const ScriptTaskAppFrame& frame, std::uint16_t clip_ind
 ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFrame& frame,
                                                             const ScriptTaskAppFrameCodecOptions& options,
                                                             std::vector<std::uint8_t>& output) {
-    if (options.version != kVersionV1 && options.version != kVersionV2) {
+    if (options.version != kVersionV1 && options.version != kVersionV2 && options.version != kVersionV3 &&
+        options.version != kVersionV4) {
         return ScriptTaskAppFrameCodecStatus::UnsupportedVersion;
     }
     const bool has_clip_values = !frame.clips.empty() || !frame.display_clip_indices.empty();
@@ -115,6 +159,15 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
                                               });
     if (options.version == kVersionV1 && (has_clip_values || has_target_clips)) {
         return ScriptTaskAppFrameCodecStatus::UnsupportedClipFeature;
+    }
+    if (options.version < kVersionV3 && std::any_of(frame.display_list.begin(), frame.display_list.end(), has_transform)) {
+        return ScriptTaskAppFrameCodecStatus::UnsupportedTransformFeature;
+    }
+    if (options.version < kVersionV4 && std::any_of(frame.display_list.begin(), frame.display_list.end(),
+                                                     [](const DisplayCommand& command) {
+                                                         return command.transform.source_clip_index != kScriptTaskNoClip;
+                                                     })) {
+        return ScriptTaskAppFrameCodecStatus::UnsupportedTransformFeature;
     }
     if (frame.viewport.width < 0 || frame.viewport.height < 0 || frame.display_list.size() > options.max_commands) {
         return ScriptTaskAppFrameCodecStatus::TooManyCommands;
@@ -141,14 +194,15 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
         return frame.display_clip_indices.empty() ? kScriptTaskNoClip : frame.display_clip_indices[index];
     };
     for (std::size_t index = 0; index < frame.display_list.size(); ++index) {
-        if (!valid_clip_index(clip_for_command(index), frame.clips.size())) {
+        if (!valid_clip_index(clip_for_command(index), frame.clips.size()) ||
+            !valid_clip_index(frame.display_list[index].transform.source_clip_index, frame.clips.size())) {
             return ScriptTaskAppFrameCodecStatus::InvalidClip;
         }
     }
     std::size_t text_bytes = 0;
-    const std::size_t header_bytes = options.version == kVersionV2 ? kHeaderBytesV2 : kHeaderBytesV1;
+    const std::size_t header_bytes = options.version == kVersionV1 ? kHeaderBytesV1 : kHeaderBytesV2;
     std::size_t total = header_bytes;
-    if (options.version == kVersionV2) {
+    if (options.version >= kVersionV2) {
         std::size_t clip_bytes = 0;
         if (!checked_multiply(frame.clips.size(), kClipBytes, clip_bytes) ||
             !checked_total(total, clip_bytes, total)) {
@@ -157,7 +211,8 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
     }
     for (const DisplayCommand& command : frame.display_list) {
         if (!valid_command(command) || !checked_total(text_bytes, command.text.size(), text_bytes) ||
-            !checked_total(total, kCommandBytes, total) || !checked_total(total, command.text.size(), total)) {
+            !checked_total(total, command_bytes_for(options.version), total) ||
+            !checked_total(total, command.text.size(), total)) {
             return ScriptTaskAppFrameCodecStatus::InvalidValue;
         }
     }
@@ -179,7 +234,7 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
     put_u32(output, 24, static_cast<std::uint32_t>(frame.display_list.size()));
     put_u32(output, 28, static_cast<std::uint32_t>(frame.input_targets.size()));
     std::size_t at = header_bytes;
-    if (options.version == kVersionV2) {
+    if (options.version >= kVersionV2) {
         put_u32(output, 32, static_cast<std::uint32_t>(frame.clips.size()));
         for (const ScriptTaskFrameClip& clip : frame.clips) {
             put_int(output, at, clip.rect.x); put_int(output, at + 4, clip.rect.y);
@@ -193,7 +248,7 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
         output[at] = static_cast<std::uint8_t>(c.type); output[at + 1] = static_cast<std::uint8_t>(c.text_align);
         output[at + 2] = c.text_single_line ? 1 : 0; output[at + 3] = static_cast<std::uint8_t>(c.gradient_axis);
         output[at + 4] = static_cast<std::uint8_t>(c.object_fit); output[at + 5] = static_cast<std::uint8_t>(c.image_rendering);
-        if (options.version == kVersionV2) {
+        if (options.version >= kVersionV2) {
             const std::uint16_t clip_index = clip_for_command(index);
             output[at + 6] = static_cast<std::uint8_t>(clip_index & 0xffU);
             output[at + 7] = static_cast<std::uint8_t>(clip_index >> 8U);
@@ -207,13 +262,26 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
         put_u32(output, at + 48, c.font_family_hash); put_int(output, at + 52, c.gradient_stop_percent);
         put_u32(output, at + 56, c.image_handle); put_int(output, at + 60, c.object_position.x_percent);
         put_int(output, at + 64, c.object_position.y_percent); put_u32(output, at + 68, static_cast<std::uint32_t>(c.text.size()));
-        at += kCommandBytes;
+        if (options.version >= kVersionV3) {
+            output[at + 72] = c.transform.enabled ? 1 : 0;
+            put_int(output, at + 76, c.transform.xx_1024);
+            put_int(output, at + 80, c.transform.xy_1024);
+            put_int(output, at + 84, c.transform.yx_1024);
+            put_int(output, at + 88, c.transform.yy_1024);
+            put_int(output, at + 92, c.transform.tx_1024);
+            put_int(output, at + 96, c.transform.ty_1024);
+            if (options.version >= kVersionV4) {
+                output[at + 100] = static_cast<std::uint8_t>(c.transform.source_clip_index & 0xffU);
+                output[at + 101] = static_cast<std::uint8_t>(c.transform.source_clip_index >> 8U);
+            }
+        }
+        at += command_bytes_for(options.version);
         std::copy(c.text.begin(), c.text.end(), output.begin() + static_cast<std::ptrdiff_t>(at)); at += c.text.size();
     }
     for (const ScriptTaskInputTarget& target : frame.input_targets) {
         put_u32(output, at, target.target_key); put_int(output, at + 4, target.rect.x); put_int(output, at + 8, target.rect.y);
         put_int(output, at + 12, target.rect.width); put_int(output, at + 16, target.rect.height); output[at + 20] = target.enabled ? 1 : 0;
-        if (options.version == kVersionV2) {
+        if (options.version >= kVersionV2) {
             output[at + 21] = static_cast<std::uint8_t>(target.clip_index & 0xffU);
             output[at + 22] = static_cast<std::uint8_t>(target.clip_index >> 8U);
         }
@@ -230,9 +298,11 @@ ScriptTaskAppFrameCodecStatus decode_script_task_app_frame(const std::vector<std
         return ScriptTaskAppFrameCodecStatus::Malformed;
     }
     const std::uint8_t version = input[4];
-    if (version != kVersionV1 && version != kVersionV2) return ScriptTaskAppFrameCodecStatus::UnsupportedVersion;
+    if (version != kVersionV1 && version != kVersionV2 && version != kVersionV3 && version != kVersionV4) {
+        return ScriptTaskAppFrameCodecStatus::UnsupportedVersion;
+    }
     if (options.version != version) return ScriptTaskAppFrameCodecStatus::UnsupportedVersion;
-    const std::size_t header_bytes = version == kVersionV2 ? kHeaderBytesV2 : kHeaderBytesV1;
+    const std::size_t header_bytes = version == kVersionV1 ? kHeaderBytesV1 : kHeaderBytesV2;
     if (input.size() < header_bytes) return ScriptTaskAppFrameCodecStatus::Malformed;
     const std::size_t command_count = get_u32(input, 24), target_count = get_u32(input, 28);
     if (command_count > options.max_commands) return ScriptTaskAppFrameCodecStatus::TooManyCommands;
@@ -241,7 +311,7 @@ ScriptTaskAppFrameCodecStatus decode_script_task_app_frame(const std::vector<std
     decoded.viewport = {get_int(input, 8), get_int(input, 12), get_int(input, 16), get_int(input, 20)};
     if (decoded.viewport.width < 0 || decoded.viewport.height < 0) return ScriptTaskAppFrameCodecStatus::Malformed;
     std::size_t at = header_bytes, text_bytes = 0;
-    if (version == kVersionV2) {
+    if (version >= kVersionV2) {
         const std::size_t clip_count = get_u32(input, 32);
         if (clip_count > options.max_clips || clip_count > std::numeric_limits<std::uint16_t>::max()) {
             return ScriptTaskAppFrameCodecStatus::TooManyClips;
@@ -272,16 +342,17 @@ ScriptTaskAppFrameCodecStatus decode_script_task_app_frame(const std::vector<std
         }
     }
     decoded.display_list.reserve(command_count);
-    if (version == kVersionV2) decoded.display_clip_indices.reserve(command_count);
+    if (version >= kVersionV2) decoded.display_clip_indices.reserve(command_count);
     decoded.input_targets.reserve(target_count);
     for (std::size_t index = 0; index < command_count; ++index) {
-        if (at > input.size() || input.size() - at < kCommandBytes) return ScriptTaskAppFrameCodecStatus::Malformed;
+        const std::size_t command_bytes = command_bytes_for(version);
+        if (at > input.size() || input.size() - at < command_bytes) return ScriptTaskAppFrameCodecStatus::Malformed;
         DisplayCommand c;
         c.type = static_cast<DisplayCommandType>(input[at]); c.text_align = static_cast<TextCommandAlign>(input[at + 1]);
         if (input[at + 2] > 1) return ScriptTaskAppFrameCodecStatus::Malformed;
         c.text_single_line = input[at + 2] != 0; c.gradient_axis = static_cast<GradientAxis>(input[at + 3]);
         c.object_fit = static_cast<ObjectFit>(input[at + 4]); c.image_rendering = static_cast<ImageRendering>(input[at + 5]);
-        const std::uint16_t clip_index = version == kVersionV2
+        const std::uint16_t clip_index = version >= kVersionV2
             ? static_cast<std::uint16_t>(input[at + 6] | (static_cast<std::uint16_t>(input[at + 7]) << 8U))
             : kScriptTaskNoClip;
         if (version == kVersionV1 && (input[at + 6] != 0 || input[at + 7] != 0)) return ScriptTaskAppFrameCodecStatus::Malformed;
@@ -291,18 +362,37 @@ ScriptTaskAppFrameCodecStatus decode_script_task_app_frame(const std::vector<std
         c.border_radius = get_int(input, at + 32); c.stroke_width = get_int(input, at + 36); c.font_size = get_int(input, at + 40); c.font_weight = get_int(input, at + 44);
         c.font_family_hash = get_u32(input, at + 48); c.gradient_stop_percent = get_int(input, at + 52); c.image_handle = get_u32(input, at + 56);
         c.object_position = {get_int(input, at + 60), get_int(input, at + 64)}; const std::size_t text_length = get_u32(input, at + 68);
-        at += kCommandBytes;
-        if (!valid_command(c) || text_length > input.size() - at || !checked_total(text_bytes, text_length, text_bytes) || text_bytes > options.max_text_bytes) return ScriptTaskAppFrameCodecStatus::Malformed;
+        if (version >= kVersionV3) {
+            if (input[at + 72] > 1 || input[at + 73] != 0 || input[at + 74] != 0 || input[at + 75] != 0) {
+                return ScriptTaskAppFrameCodecStatus::Malformed;
+            }
+            c.transform.enabled = input[at + 72] != 0;
+            c.transform.xx_1024 = get_int(input, at + 76);
+            c.transform.xy_1024 = get_int(input, at + 80);
+            c.transform.yx_1024 = get_int(input, at + 84);
+            c.transform.yy_1024 = get_int(input, at + 88);
+            c.transform.tx_1024 = get_int(input, at + 92);
+            c.transform.ty_1024 = get_int(input, at + 96);
+            if (version >= kVersionV4) {
+                if (input[at + 102] != 0 || input[at + 103] != 0) return ScriptTaskAppFrameCodecStatus::Malformed;
+                c.transform.source_clip_index = static_cast<std::uint16_t>(
+                    input[at + 100] | (static_cast<std::uint16_t>(input[at + 101]) << 8U));
+            }
+        }
+        at += command_bytes;
+        if (!valid_command(c) || !valid_clip_index(c.transform.source_clip_index, decoded.clips.size()) ||
+            text_length > input.size() - at || !checked_total(text_bytes, text_length, text_bytes) ||
+            text_bytes > options.max_text_bytes) return ScriptTaskAppFrameCodecStatus::Malformed;
         c.text.assign(reinterpret_cast<const char*>(input.data() + at), text_length); at += text_length;
         decoded.display_list.push_back(std::move(c));
-        if (version == kVersionV2) decoded.display_clip_indices.push_back(clip_index);
+        if (version >= kVersionV2) decoded.display_clip_indices.push_back(clip_index);
     }
     for (std::size_t index = 0; index < target_count; ++index) {
         if (at > input.size() || input.size() - at < kTargetBytes || input[at + 20] > 1 ||
             (version == kVersionV1 && (input[at + 21] != 0 || input[at + 22] != 0)) || input[at + 23] != 0) {
             return ScriptTaskAppFrameCodecStatus::Malformed;
         }
-        const std::uint16_t clip_index = version == kVersionV2
+        const std::uint16_t clip_index = version >= kVersionV2
             ? static_cast<std::uint16_t>(input[at + 21] | (static_cast<std::uint16_t>(input[at + 22]) << 8U))
             : kScriptTaskNoClip;
         ScriptTaskInputTarget target{get_u32(input, at), {get_int(input, at + 4), get_int(input, at + 8), get_int(input, at + 12), get_int(input, at + 16)}, input[at + 20] != 0, clip_index};
