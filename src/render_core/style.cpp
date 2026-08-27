@@ -5230,6 +5230,11 @@ const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node
             key.append(id);
         }
         key.push_back('\n');
+
+        // Selector matching treats the class attribute as an unordered set.
+        // Keep the bounded candidate cache aligned with that meaning so a
+        // reordered or repeated relevant class does not consume another entry.
+        std::vector<std::string> indexed_classes;
         std::size_t index = 0;
         while (index < classes.size()) {
             while (index < classes.size() && std::isspace(static_cast<unsigned char>(classes[index])) != 0) {
@@ -5244,9 +5249,14 @@ const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node
             }
             const std::string class_name = classes.substr(begin, index - begin);
             if (class_rules_.find(class_name) != class_rules_.end()) {
-                key.append(class_name);
-                key.push_back('\n');
+                indexed_classes.push_back(class_name);
             }
+        }
+        std::sort(indexed_classes.begin(), indexed_classes.end());
+        indexed_classes.erase(std::unique(indexed_classes.begin(), indexed_classes.end()), indexed_classes.end());
+        for (const std::string& class_name : indexed_classes) {
+            key.append(class_name);
+            key.push_back('\n');
         }
     } else {
         key = "#text";
