@@ -20,7 +20,7 @@ Rect intersect_rect(Rect left, Rect right) {
     if (x2 <= x1 || y2 <= y1) {
         return Rect{x1, y1, 0, 0};
     }
-    return Rect{x1, y1, x2 - x1, y2 - y1};
+    return Rect{x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
 }
 
 Rect union_rect(Rect left, Rect right) {
@@ -34,7 +34,7 @@ Rect union_rect(Rect left, Rect right) {
     const int y1 = std::min(left.y, right.y);
     const int x2 = std::max(safe_edge(left.x, left.width), safe_edge(right.x, right.width));
     const int y2 = std::max(safe_edge(left.y, left.height), safe_edge(right.y, right.height));
-    return Rect{x1, y1, x2 - x1, y2 - y1};
+    return Rect{x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
 }
 
 void merge_overlapping_rects(std::vector<Rect>& rects) {
@@ -127,11 +127,37 @@ Rect expand_rect(Rect rect, int amount) {
     if (empty_rect(rect) || amount <= 0) {
         return rect;
     }
-    rect.x -= amount;
-    rect.y -= amount;
-    rect.width += amount * 2;
-    rect.height += amount * 2;
-    return rect;
+    const int doubled_amount = safe_add(amount, amount);
+    return Rect{safe_add(rect.x, safe_negate(amount)),
+                safe_add(rect.y, safe_negate(amount)),
+                safe_add(rect.width, doubled_amount),
+                safe_add(rect.height, doubled_amount)};
+}
+
+Rect expand_and_clip_rect(Rect rect, int amount, Rect viewport) {
+    if (empty_rect(rect) || empty_rect(viewport)) {
+        return Rect{};
+    }
+    if (amount <= 0) {
+        return intersect_rect(rect, viewport);
+    }
+    const std::int64_t left = static_cast<std::int64_t>(rect.x) - amount;
+    const std::int64_t top = static_cast<std::int64_t>(rect.y) - amount;
+    const std::int64_t right = static_cast<std::int64_t>(rect.x) + rect.width + amount;
+    const std::int64_t bottom = static_cast<std::int64_t>(rect.y) + rect.height + amount;
+    const std::int64_t viewport_right = static_cast<std::int64_t>(viewport.x) + viewport.width;
+    const std::int64_t viewport_bottom = static_cast<std::int64_t>(viewport.y) + viewport.height;
+    const std::int64_t clipped_left = std::max(left, static_cast<std::int64_t>(viewport.x));
+    const std::int64_t clipped_top = std::max(top, static_cast<std::int64_t>(viewport.y));
+    const std::int64_t clipped_right = std::min(right, viewport_right);
+    const std::int64_t clipped_bottom = std::min(bottom, viewport_bottom);
+    if (clipped_right <= clipped_left || clipped_bottom <= clipped_top) {
+        return Rect{};
+    }
+    return Rect{clamp_int64_to_int(clipped_left),
+                clamp_int64_to_int(clipped_top),
+                clamp_int64_to_int(clipped_right - clipped_left),
+                clamp_int64_to_int(clipped_bottom - clipped_top)};
 }
 
 Rect subtree_bounds(const LayoutBox& box) {
@@ -653,10 +679,16 @@ void compute_dirty_region_into(const Node& document,
 
     const std::size_t max_rects = std::max<std::size_t>(1, options.max_rects);
     for (const DirtyNodeBounds& bounds : dirty_bounds) {
-        append_coalesced(result.rects, expand_rect(bounds.bounds, options.expansion_px), options.viewport, max_rects);
+        append_coalesced(result.rects,
+                         expand_and_clip_rect(bounds.bounds, options.expansion_px, options.viewport),
+                         options.viewport,
+                         max_rects);
     }
     for (Rect bounds : active_scratch.transient_bounds) {
-        append_coalesced(result.rects, expand_rect(bounds, options.expansion_px), options.viewport, max_rects);
+        append_coalesced(result.rects,
+                         expand_and_clip_rect(bounds, options.expansion_px, options.viewport),
+                         options.viewport,
+                         max_rects);
     }
     if (result.rects.empty()) {
         set_full_frame_result(result, options.viewport, DirtyRegionFallbackReason::EmptyAfterClipping);

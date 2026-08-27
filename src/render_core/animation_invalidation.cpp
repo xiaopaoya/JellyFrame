@@ -18,7 +18,7 @@ Rect intersect_rect(Rect left, Rect right) {
     if (x2 <= x1 || y2 <= y1) {
         return Rect{x1, y1, 0, 0};
     }
-    return Rect{x1, y1, x2 - x1, y2 - y1};
+    return Rect{x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
 }
 
 Rect union_rect(Rect left, Rect right) {
@@ -32,22 +32,33 @@ Rect union_rect(Rect left, Rect right) {
     const int y1 = std::min(left.y, right.y);
     const int x2 = std::max(safe_edge(left.x, left.width), safe_edge(right.x, right.width));
     const int y2 = std::max(safe_edge(left.y, left.height), safe_edge(right.y, right.height));
-    return Rect{x1, y1, x2 - x1, y2 - y1};
+    return Rect{x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
 }
 
-Rect expand_rect(Rect rect, int amount) {
-    if (empty_rect(rect) || amount <= 0) {
-        return rect;
+Rect expand_and_clip_rect(Rect rect, int amount, Rect viewport) {
+    if (empty_rect(rect) || empty_rect(viewport)) {
+        return Rect{};
     }
-    rect.x -= amount;
-    rect.y -= amount;
-    rect.width += amount * 2;
-    rect.height += amount * 2;
-    return rect;
-}
-
-int round_transform_offset(float value) {
-    return static_cast<int>(value >= 0.0F ? value + 0.5F : value - 0.5F);
+    if (amount <= 0) {
+        return intersect_rect(rect, viewport);
+    }
+    const std::int64_t left = static_cast<std::int64_t>(rect.x) - amount;
+    const std::int64_t top = static_cast<std::int64_t>(rect.y) - amount;
+    const std::int64_t right = static_cast<std::int64_t>(rect.x) + rect.width + amount;
+    const std::int64_t bottom = static_cast<std::int64_t>(rect.y) + rect.height + amount;
+    const std::int64_t viewport_right = static_cast<std::int64_t>(viewport.x) + viewport.width;
+    const std::int64_t viewport_bottom = static_cast<std::int64_t>(viewport.y) + viewport.height;
+    const std::int64_t clipped_left = std::max(left, static_cast<std::int64_t>(viewport.x));
+    const std::int64_t clipped_top = std::max(top, static_cast<std::int64_t>(viewport.y));
+    const std::int64_t clipped_right = std::min(right, viewport_right);
+    const std::int64_t clipped_bottom = std::min(bottom, viewport_bottom);
+    if (clipped_right <= clipped_left || clipped_bottom <= clipped_top) {
+        return Rect{};
+    }
+    return Rect{clamp_int64_to_int(clipped_left),
+                clamp_int64_to_int(clipped_top),
+                clamp_int64_to_int(clipped_right - clipped_left),
+                clamp_int64_to_int(clipped_bottom - clipped_top)};
 }
 
 constexpr int kMaxAnimatedEffectExtent = 128;
@@ -93,11 +104,11 @@ Rect rotated_scaled_bounds(Rect bounds, const Transform2D& transform, int origin
             max_y = std::max(max_y, y);
         }
     }
-    const int x = static_cast<int>(std::floor(min_x));
-    const int y = static_cast<int>(std::floor(min_y));
-    const int right = static_cast<int>(std::ceil(max_x));
-    const int bottom = static_cast<int>(std::ceil(max_y));
-    return Rect{x, y, std::max(1, right - x), std::max(1, bottom - y)};
+    const int x = floor_float_to_int(min_x);
+    const int y = floor_float_to_int(min_y);
+    const int right = ceil_float_to_int(max_x);
+    const int bottom = ceil_float_to_int(max_y);
+    return Rect{x, y, std::max(1, safe_span(x, right)), std::max(1, safe_span(y, bottom))};
 }
 
 Rect subtree_bounds(const LayoutBox& box, std::vector<const LayoutBox*>& pending) {
@@ -139,8 +150,8 @@ Transform2D resolved_transform(const Style& base_style, const StyleOverride* ove
 
 Rect transformed_bounds(Rect bounds, const Style& base_style, const StyleOverride* override) {
     const Transform2D transform = resolved_transform(base_style, override);
-    bounds.x += round_transform_offset(transform.translate_x);
-    bounds.y += round_transform_offset(transform.translate_y);
+    bounds.x = safe_add(bounds.x, round_float_to_int(transform.translate_x));
+    bounds.y = safe_add(bounds.y, round_float_to_int(transform.translate_y));
     if (std::abs(transform.scale_x - 1.0F) >= 0.001F ||
         std::abs(transform.scale_y - 1.0F) >= 0.001F ||
         std::abs(transform.rotate_degrees) >= 0.001F) {
@@ -248,7 +259,7 @@ void collect_animation_rects_iterative(const LayoutBox& box,
                     expand_for_paint_effects(
                         transformed_bounds(base_bounds, current_box.style, current), current_box.style, current_transform));
                 append_coalesced(result.rects,
-                                 expand_rect(dirty, options.expansion_px),
+                                 expand_and_clip_rect(dirty, options.expansion_px, options.viewport),
                                  options.viewport,
                                  std::max<std::size_t>(1, options.max_rects));
             }

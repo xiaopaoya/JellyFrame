@@ -647,6 +647,26 @@ void dirty_region_area_handles_extreme_rects_safely() {
           "extreme dirty region keeps percent bounded by its actual area");
 }
 
+void dirty_region_expansion_saturates_before_viewport_clipping() {
+    HtmlParser html_parser;
+    auto fixture = build_layout(html_parser.parse("<body><input value='A'></body>"), "", 240);
+    clear_dirty_flags(*fixture.document);
+    Node* input = first_element(*fixture.document, "input");
+    check(input != nullptr, "expansion fixture input exists");
+    check(append_text_to_control(*input, "B"), "expansion fixture produces paint dirty state");
+
+    const DirtyRegionResult region = compute_dirty_region(
+        *fixture.document,
+        fixture.layout_tree.get(),
+        fixture.layout_tree.get(),
+        DirtyRegionOptions{Rect{0, 0, 240, 120}, 8, std::numeric_limits<int>::max()});
+    check(region.mode == DirtyRegionMode::DirtyRects && region.rects.size() == 1,
+          "extreme expansion remains a bounded dirty region");
+    check(region.rects.front().x == 0 && region.rects.front().y == 0 &&
+              region.rects.front().width == 240 && region.rects.front().height == 120,
+          "extreme expansion clips safely to the viewport");
+}
+
 void merged_dirty_regions_remove_overlap_and_preserve_full_fallback() {
     DirtyRegionResult target;
     target.mode = DirtyRegionMode::DirtyRects;
@@ -696,6 +716,7 @@ int main() {
         dirty_rect_coalescing_forces_deterministic_low_extra_merge();
         dirty_rect_coalescing_clips_and_handles_large_areas();
         dirty_region_area_handles_extreme_rects_safely();
+        dirty_region_expansion_saturates_before_viewport_clipping();
         merged_dirty_regions_remove_overlap_and_preserve_full_fallback();
     } catch (const std::exception& error) {
         std::cerr << "dirty region test failed: " << error.what() << '\n';
