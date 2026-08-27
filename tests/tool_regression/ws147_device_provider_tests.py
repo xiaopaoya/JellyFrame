@@ -188,6 +188,33 @@ class Ws147DeviceProviderTests(unittest.TestCase):
         with self.assertRaises(provider.ProviderError):
             provider.decode_logs(payload + b"x")
 
+    def test_identity_mismatch_names_the_attested_field_and_recovery_choices(self) -> None:
+        spec = importlib.util.spec_from_file_location("ws147_device_provider_identity", PROVIDER)
+        assert spec is not None and spec.loader is not None
+        provider = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = provider
+        spec.loader.exec_module(provider)
+        manifest = {
+            "imageId": "org.jellyframe.ws147.developer", "imageVersion": "0.6.0-a2",
+            "runtimeVersion": "0.6.0-dev", "renderCore": {"version": "0.6.1", "abi": 1},
+            "source": {"revision": "9e32faced67473c17b50f0268ad7080b9595482a"},
+            "board": {"id": "ws147", "display": {"width": 172, "height": 320, "shape": "rect"}},
+            "profile": {"id": "rect-172x320", "featureFamilies": ["core.document"]},
+            "storage": {"maxBundleBytes": 327680},
+        }
+        capabilities = {"boardId": "ws147", "runtimeVersion": "0.6.0-dev", "width": 172,
+                        "height": 320, "maxBundleBytes": 327680}
+        identity = {"imageId": "org.jellyframe.ws147.developer", "profileId": "rect-172x320",
+                    "imageVersion": "0.6.0-a2", "renderCoreVersion": "0.6.1",
+                    "sourceRevision": "846118199b5719d11255240d2c8a8f7ce62d9d6a",
+                    "renderCoreAbi": 1, "featureFamilies": ["core.document"]}
+        config = provider.ProviderConfig("fixture", "COM19", 115200, Path("manifest.json"), manifest)
+        with self.assertRaisesRegex(provider.ProviderError, "identity mismatch at sourceRevision") as raised:
+            provider.device_from_capabilities(config, capabilities, identity)
+        self.assertIn("9e32faced", str(raised.exception))
+        self.assertIn("846118199", str(raised.exception))
+        self.assertIn("or flash the Developer Image", str(raised.exception))
+
     def test_jfapp_identity_comes_from_bundle_not_package_report(self) -> None:
         spec = importlib.util.spec_from_file_location("ws147_device_provider", PROVIDER)
         assert spec is not None and spec.loader is not None

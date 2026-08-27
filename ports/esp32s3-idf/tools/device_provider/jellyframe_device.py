@@ -500,13 +500,33 @@ def device_from_capabilities(config: ProviderConfig, capabilities: dict[str, Any
     actual = (capabilities["boardId"], capabilities["runtimeVersion"], capabilities["width"], capabilities["height"], capabilities["maxBundleBytes"])
     if actual != expected:
         raise ProviderError("protocol-mismatch", "configured endpoint does not match its Developer Image manifest")
-    expected_identity = (manifest["imageId"], manifest["profile"]["id"], manifest["imageVersion"],
-                         manifest["renderCore"]["version"], manifest["source"]["revision"],
-                         manifest["renderCore"]["abi"])
-    actual_identity = (identity["imageId"], identity["profileId"], identity["imageVersion"],
-                       identity["renderCoreVersion"], identity["sourceRevision"], identity["renderCoreAbi"])
-    if actual_identity != expected_identity or set(identity["featureFamilies"]) != set(manifest["profile"]["featureFamilies"]):
-        raise ProviderError("protocol-mismatch", "wire-attested image identity does not match the Developer Image manifest")
+    expected_identity = {
+        "imageId": manifest["imageId"],
+        "profileId": manifest["profile"]["id"],
+        "imageVersion": manifest["imageVersion"],
+        "renderCoreVersion": manifest["renderCore"]["version"],
+        "sourceRevision": manifest["source"]["revision"],
+        "renderCoreAbi": manifest["renderCore"]["abi"],
+        "featureFamilies": sorted(manifest["profile"]["featureFamilies"]),
+    }
+    actual_identity = {
+        "imageId": identity["imageId"],
+        "profileId": identity["profileId"],
+        "imageVersion": identity["imageVersion"],
+        "renderCoreVersion": identity["renderCoreVersion"],
+        "sourceRevision": identity["sourceRevision"],
+        "renderCoreAbi": identity["renderCoreAbi"],
+        "featureFamilies": sorted(identity["featureFamilies"]),
+    }
+    for field in ("imageId", "profileId", "imageVersion", "renderCoreVersion", "sourceRevision", "renderCoreAbi", "featureFamilies"):
+        if actual_identity[field] != expected_identity[field]:
+            raise ProviderError(
+                "protocol-mismatch",
+                "Developer Image identity mismatch at "
+                f"{field}: manifest expects {expected_identity[field]!r}; "
+                f"device attests {actual_identity[field]!r}. Install the Provider and manifest paired "
+                "with this firmware, or flash the Developer Image described by the configured manifest.",
+            )
     return {
         "endpointId": config.endpoint_id,
         "boardId": manifest["board"]["id"],
