@@ -401,6 +401,31 @@ void translate_offsets_drawing_and_restore_resets_offset() {
     assert(surface->pixels[2 * surface->width + 4].r == 255);
     assert(surface->pixels[2 * surface->width + 3].r == 255);
     assert(!registry.translate(*canvas, std::numeric_limits<double>::infinity(), 0.0));
+    assert(!registry.translate(*canvas, static_cast<double>(std::numeric_limits<int>::max()), 0.0));
+}
+
+void canvas_rejects_unrepresentable_coordinates_without_modifying_pixels() {
+    Canvas2DRegistry registry(Canvas2DPolicy{true, 1, 64, 64, 8, 8});
+    auto canvas = make_element("canvas");
+    assert(registry.set_fill_style(*canvas, "#ff0000"));
+    assert(registry.fill_rect(*canvas, std::numeric_limits<int>::max(), 0, 1, 1));
+    assert(!registry.arc(*canvas,
+                         static_cast<double>(std::numeric_limits<int>::max()),
+                         0.0,
+                         1.0,
+                         0.0,
+                         1.0,
+                         false));
+    assert(!registry.fill_text(*canvas,
+                               "edge",
+                               static_cast<double>(std::numeric_limits<int>::max()),
+                               0.0));
+    assert(!registry.set_font(*canvas, "999999999999999999999999999999px sans-serif"));
+    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
+    assert(surface != nullptr);
+    for (const Color pixel : surface->pixels) {
+        assert(pixel.a == 0);
+    }
 }
 
 void radial_gradient_fills_rect_with_two_stop_concentric_subset() {
@@ -507,6 +532,7 @@ int main() {
     fill_path_fills_closed_polygon();
     linear_gradient_fills_rect_and_is_budgeted();
     translate_offsets_drawing_and_restore_resets_offset();
+    canvas_rejects_unrepresentable_coordinates_without_modifying_pixels();
     reset_transform_clears_pixel_aligned_translation();
     quadratic_curve_to_generates_bounded_smooth_path();
     bezier_curve_to_generates_bounded_smooth_path();

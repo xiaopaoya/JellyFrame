@@ -39,6 +39,16 @@ bool translated_coordinate(int value, int translation, int& result) {
     return true;
 }
 
+bool rounded_coordinate(double value, int& result) {
+    constexpr double kMinimum = static_cast<double>(std::numeric_limits<int>::min()) - 0.5;
+    constexpr double kMaximum = static_cast<double>(std::numeric_limits<int>::max()) + 0.5;
+    if (!std::isfinite(value) || value <= kMinimum || value >= kMaximum) {
+        return false;
+    }
+    result = static_cast<int>(std::round(value));
+    return true;
+}
+
 int parse_positive_int(const std::string& value, int fallback) {
     if (value.empty()) {
         return fallback;
@@ -100,7 +110,11 @@ bool parse_canvas_font(std::string_view raw, Canvas2DState& state) {
     }
     int font_size = 0;
     for (std::size_t index = size_begin; index < px; ++index) {
-        font_size = font_size * 10 + (raw[index] - '0');
+        const int digit = raw[index] - '0';
+        if (font_size > (96 - digit) / 10) {
+            return false;
+        }
+        font_size = font_size * 10 + digit;
     }
     if (font_size <= 0 || font_size > 96) {
         return false;
@@ -371,8 +385,8 @@ void fill_rect_pixels(Canvas2DSurface& surface, int x, int y, int width, int hei
     }
     const int left = std::max(0, x);
     const int top = std::max(0, y);
-    const int right = std::min(surface.width, x + width);
-    const int bottom = std::min(surface.height, y + height);
+    const int right = std::min(surface.width, safe_edge(x, width));
+    const int bottom = std::min(surface.height, safe_edge(y, height));
     if (right <= left || bottom <= top) {
         return;
     }
@@ -394,8 +408,8 @@ void overwrite_rect_pixels(Canvas2DSurface& surface, int x, int y, int width, in
     }
     const int left = std::max(0, x);
     const int top = std::max(0, y);
-    const int right = std::min(surface.width, x + width);
-    const int bottom = std::min(surface.height, y + height);
+    const int right = std::min(surface.width, safe_edge(x, width));
+    const int bottom = std::min(surface.height, safe_edge(y, height));
     if (right <= left || bottom <= top) {
         return;
     }
@@ -426,8 +440,8 @@ void fill_rect_paint(Canvas2DSurface& surface,
     }
     const int left = std::max(0, x);
     const int top = std::max(0, y);
-    const int right = std::min(surface.width, x + width);
-    const int bottom = std::min(surface.height, y + height);
+    const int right = std::min(surface.width, safe_edge(x, width));
+    const int bottom = std::min(surface.height, safe_edge(y, height));
     if (right <= left || bottom <= top) {
         return;
     }
@@ -449,8 +463,8 @@ void draw_line(Canvas2DSurface& surface,
                const std::vector<Canvas2DGradient>& gradients) {
     const double x0 = static_cast<double>(from.x);
     const double y0 = static_cast<double>(from.y);
-    const double dx = static_cast<double>(to.x - from.x);
-    const double dy = static_cast<double>(to.y - from.y);
+    const double dx = static_cast<double>(to.x) - static_cast<double>(from.x);
+    const double dy = static_cast<double>(to.y) - static_cast<double>(from.y);
     const double length_squared = dx * dx + dy * dy;
     if (length_squared <= 0.0) {
         blend_pixel(surface,
@@ -467,10 +481,10 @@ void draw_line(Canvas2DSurface& surface,
     const double inner_radius_squared = inner_radius * inner_radius;
     const double feather_squared = std::max(0.0001, aa_radius_squared - inner_radius_squared);
     const int pad = std::max(1, static_cast<int>(std::ceil(aa_radius)));
-    const int left = std::max(0, std::min(from.x, to.x) - pad);
-    const int right = std::min(surface.width - 1, std::max(from.x, to.x) + pad);
-    const int top = std::max(0, std::min(from.y, to.y) - pad);
-    const int bottom = std::min(surface.height - 1, std::max(from.y, to.y) + pad);
+    const int left = std::max(0, safe_add(std::min(from.x, to.x), -pad));
+    const int right = std::min(surface.width - 1, safe_add(std::max(from.x, to.x), pad));
+    const int top = std::max(0, safe_add(std::min(from.y, to.y), -pad));
+    const int bottom = std::min(surface.height - 1, safe_add(std::max(from.y, to.y), pad));
 
     for (int y = top; y <= bottom; ++y) {
         const double py = static_cast<double>(y) + 0.5;
@@ -599,16 +613,30 @@ bool append_arc_points(Canvas2DSurface& surface,
         return true;
     }
 
-    const int arc_pixels = static_cast<int>(std::ceil(std::abs(sweep) * radius));
-    const int segments = std::max(4, std::min(96, (arc_pixels + 3) / 4));
+    int rounded_bound = 0;
+    if (!rounded_coordinate(x - radius, rounded_bound) || !rounded_coordinate(x + radius, rounded_bound) ||
+        !rounded_coordinate(y - radius, rounded_bound) || !rounded_coordinate(y + radius, rounded_bound)) {
+        return false;
+    }
+    const double arc_pixels = std::abs(sweep) * radius;
+    if (!std::isfinite(arc_pixels)) {
+        return false;
+    }
+    const int segments = arc_pixels >= 384.0
+                             ? 96
+                             : std::max(4, static_cast<int>(std::ceil(arc_pixels / 4.0)));
     const std::size_t max_points = std::max<std::size_t>(1, policy.max_path_points);
     if (surface.path.size() + static_cast<std::size_t>(segments) + 1 > max_points) {
         return false;
     }
     for (int index = 0; index <= segments; ++index) {
         const double angle = start_angle + sweep * static_cast<double>(index) / static_cast<double>(segments);
-        const int px = static_cast<int>(std::round(x + std::cos(angle) * radius));
-        const int py = static_cast<int>(std::round(y + std::sin(angle) * radius));
+        int px = 0;
+        int py = 0;
+        if (!rounded_coordinate(x + std::cos(angle) * radius, px) ||
+            !rounded_coordinate(y + std::sin(angle) * radius, py)) {
+            return false;
+        }
         if (!surface.path.empty() && surface.path.back().x == px && surface.path.back().y == py) {
             continue;
         }
@@ -661,7 +689,7 @@ bool fill_polygon(Canvas2DSurface& surface,
                 const double t = (scan_y - ay) / (by - ay);
                 if (!try_push_back(intersections,
                                    static_cast<int>(std::round(static_cast<double>(a.x) +
-                                                               t * static_cast<double>(b.x - a.x))))) {
+                                                               t * (static_cast<double>(b.x) - a.x))))) {
                     return false;
                 }
             }
@@ -865,7 +893,7 @@ bool Canvas2DRegistry::set_line_width(Node& node, double value) {
     if (surface == nullptr || !std::isfinite(value) || value <= 0) {
         return false;
     }
-    surface->state.line_width = std::max(1, std::min(32, static_cast<int>(std::round(value))));
+    surface->state.line_width = value >= 32.0 ? 32 : std::max(1, static_cast<int>(std::round(value)));
     return true;
 }
 
@@ -896,16 +924,17 @@ bool Canvas2DRegistry::translate(Node& node, double x, double y) {
     if (surface == nullptr || !std::isfinite(x) || !std::isfinite(y)) {
         return false;
     }
-    const long delta_x = std::lround(x);
-    const long delta_y = std::lround(y);
-    const long next_x = static_cast<long>(surface->state.translate_x) + delta_x;
-    const long next_y = static_cast<long>(surface->state.translate_y) + delta_y;
-    if (next_x < std::numeric_limits<int>::min() || next_x > std::numeric_limits<int>::max() ||
-        next_y < std::numeric_limits<int>::min() || next_y > std::numeric_limits<int>::max()) {
+    int delta_x = 0;
+    int delta_y = 0;
+    int next_x = 0;
+    int next_y = 0;
+    if (!rounded_coordinate(x, delta_x) || !rounded_coordinate(y, delta_y) ||
+        !translated_coordinate(surface->state.translate_x, delta_x, next_x) ||
+        !translated_coordinate(surface->state.translate_y, delta_y, next_y)) {
         return false;
     }
-    surface->state.translate_x = static_cast<int>(next_x);
-    surface->state.translate_y = static_cast<int>(next_y);
+    surface->state.translate_x = next_x;
+    surface->state.translate_y = next_y;
     return true;
 }
 
@@ -1010,7 +1039,7 @@ bool Canvas2DRegistry::stroke_rect(Node& node, int x, int y, int width, int heig
     fill_rect_paint(*surface, left, top, width, line, surface->state.stroke_style, surface->state.global_alpha, gradients_);
     fill_rect_paint(*surface,
                     left,
-                    top + height - line,
+                    safe_add(safe_edge(top, height), -line),
                     width,
                     line,
                     surface->state.stroke_style,
@@ -1018,7 +1047,7 @@ bool Canvas2DRegistry::stroke_rect(Node& node, int x, int y, int width, int heig
                     gradients_);
     fill_rect_paint(*surface, left, top, line, height, surface->state.stroke_style, surface->state.global_alpha, gradients_);
     fill_rect_paint(*surface,
-                    left + width - line,
+                    safe_add(safe_edge(left, width), -line),
                     top,
                     line,
                     height,
@@ -1223,13 +1252,24 @@ bool Canvas2DRegistry::fill_text(Node& node, std::string_view text, double x, do
                                  surface->state.font_size,
                                  surface->state.font_weight,
                                  surface->state.font_family_hash);
-    const int left = static_cast<int>(std::round(x)) + surface->state.translate_x;
-    const int baseline = static_cast<int>(std::round(y)) + surface->state.translate_y;
-    int width = max_width > 0.0 ? static_cast<int>(std::round(max_width)) : metrics.width;
+    int text_x = 0;
+    int text_y = 0;
+    int left = 0;
+    int baseline = 0;
+    if (!rounded_coordinate(x, text_x) || !rounded_coordinate(y, text_y) ||
+        !translated_coordinate(text_x, surface->state.translate_x, left) ||
+        !translated_coordinate(text_y, surface->state.translate_y, baseline)) {
+        return false;
+    }
+    int width = metrics.width;
+    if (max_width > 0.0) {
+        int rounded_max_width = 0;
+        width = rounded_coordinate(max_width, rounded_max_width) ? rounded_max_width : surface->width;
+    }
     if (width <= 0) {
         width = metrics.width;
     }
-    const int available_width = surface->width - left;
+    const int available_width = safe_span(left, surface->width);
     if (available_width <= 0) {
         return false;
     }
@@ -1242,7 +1282,7 @@ bool Canvas2DRegistry::fill_text(Node& node, std::string_view text, double x, do
 
     DisplayCommand command;
     command.type = DisplayCommandType::Text;
-    command.rect = Rect{left, baseline - line_height, width, line_height};
+    command.rect = Rect{left, safe_add(baseline, -line_height), width, line_height};
     command.color = with_global_alpha(color_for_style(surface->state.fill_style, gradients_, left, baseline),
                                       surface->state.global_alpha);
     command.text = owned_text;
@@ -1286,16 +1326,16 @@ bool Canvas2DRegistry::draw_image(Node& destination,
     }
     const int left = std::max(0, destination_x);
     const int top = std::max(0, destination_y);
-    const int right = std::min(target->width, destination_x + destination_width);
-    const int bottom = std::min(target->height, destination_y + destination_height);
+    const int right = std::min(target->width, safe_edge(destination_x, destination_width));
+    const int bottom = std::min(target->height, safe_edge(destination_y, destination_height));
     if (left >= right || top >= bottom) {
         return true;
     }
     for (int y = top; y < bottom; ++y) {
-        const std::int64_t scaled_y = static_cast<std::int64_t>(y - destination_y) * source_height;
+        const std::int64_t scaled_y = (static_cast<std::int64_t>(y) - destination_y) * source_height;
         const int input_y = source_y + static_cast<int>(scaled_y / destination_height);
         for (int x = left; x < right; ++x) {
-            const std::int64_t scaled_x = static_cast<std::int64_t>(x - destination_x) * source_width;
+            const std::int64_t scaled_x = (static_cast<std::int64_t>(x) - destination_x) * source_width;
             const int input_x = source_x + static_cast<int>(scaled_x / destination_width);
             const Color color = input->pixels[static_cast<std::size_t>(input_y) * input->width + input_x];
             blend_pixel(*target, x, y, with_global_alpha(color, target->state.global_alpha));

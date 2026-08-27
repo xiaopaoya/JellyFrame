@@ -181,8 +181,10 @@ def verify_export(source_root: Path, output_dir: Path) -> dict[str, object]:
         )
 
     retained_paths = [*CORE_PATHS, *(source for source, _ in PATH_RENAMES)]
+    # git-filter-repo preserves merge commits that retain Core changes. Match
+    # that behavior instead of Git's default path-history simplification.
     source_history = int(
-        run(["git", "rev-list", "--count", "HEAD", "--", *retained_paths], cwd=source_root)
+        run(["git", "rev-list", "--count", "--full-history", "HEAD", "--", *retained_paths], cwd=source_root)
     )
     exported_history = int(run(["git", "rev-list", "--count", "HEAD"], cwd=output_dir))
     if source_history != exported_history:

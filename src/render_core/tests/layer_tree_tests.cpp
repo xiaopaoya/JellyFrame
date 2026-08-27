@@ -683,6 +683,22 @@ void progress_and_meter_emit_value_fill() {
     check(colored_bar_count == 2, "progress and meter emit filled bars");
 }
 
+void progress_and_meter_ignore_invalid_numeric_attributes() {
+    auto pipeline = build_pipeline(
+        "<body><progress value='nan' max='100'></progress>"
+        "<meter min='0' max='10' value='8junk'></meter></body>",
+        "");
+
+    LayerTreeBuilder layer_tree_builder;
+    const DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        check(command.type != DisplayCommandType::FillRect ||
+                  !((command.color.r == 37 && command.color.g == 99 && command.color.b == 235) ||
+                    (command.color.r == 22 && command.color.g == 163 && command.color.b == 74)),
+              "invalid progress and meter values do not produce a filled bar");
+    }
+}
+
 void inline_mark_background_shrinks_to_text() {
     auto pipeline = build_pipeline("<body><p>Use <mark>mark</mark> text</p></body>", "");
 
@@ -797,6 +813,20 @@ void form_paint_only_state_changes_rebuild_visible_commands() {
     };
     check(widest_blue_fill(after_range) > widest_blue_fill(before_range),
           "range paint-only rebuild changes the visible fill command");
+
+    check(set_form_control_value(*range, "999999999999999999999"),
+          "out-of-range range value becomes paint dirty");
+    auto malformed_range_tree = builder.build(*range_pipeline.layout_tree);
+    const DisplayList malformed_range = builder.flatten(*malformed_range_tree);
+    bool painted_range_fill = false;
+    for (const DisplayCommand& command : malformed_range) {
+        if (command.type == DisplayCommandType::FillRect && command.color.r == 37 &&
+            command.color.g == 99 && command.color.b == 235 && command.rect.height == 4) {
+            painted_range_fill = command.rect.width > 0;
+            break;
+        }
+    }
+    check(!painted_range_fill, "out-of-range range value paints as the minimum without narrowing");
 
     auto select_pipeline = build_pipeline(
         "<body><select id='choice'><option>Alpha</option><option>Beta</option></select></body>",
@@ -1559,6 +1589,7 @@ int main() {
         outline_offset_expands_focus_stroke_without_affecting_layout();
         z_index_orders_child_layers();
         progress_and_meter_emit_value_fill();
+        progress_and_meter_ignore_invalid_numeric_attributes();
         inline_mark_background_shrinks_to_text();
         inline_run_flows_horizontally();
         centered_inline_text_aligns_in_parent();
