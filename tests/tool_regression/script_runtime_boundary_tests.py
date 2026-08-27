@@ -39,6 +39,13 @@ class ScriptRuntimeBoundaryTests(unittest.TestCase):
     def read(self, relative_path: str) -> str:
         return (self.source_root / relative_path).read_text(encoding="utf-8-sig")
 
+    def source_files(self, relative_directory: str) -> list[Path]:
+        root = self.source_root / relative_directory
+        return sorted(
+            path for path in root.rglob("*")
+            if path.suffix in {".c", ".cc", ".cpp", ".h", ".hpp"}
+        )
+
     def test_common_consumers_do_not_depend_on_the_current_backend_type(self) -> None:
         contract = self.read("src/script/script_runtime.h")
         worker = self.read("src/script/script_task_worker_runtime.h")
@@ -67,6 +74,27 @@ class ScriptRuntimeBoundaryTests(unittest.TestCase):
             cmake,
             r"(?s)target_link_libraries\(jellyframe_script.*?PRIVATE\s+\$\{JELLYFRAME_SCRIPT_BACKEND_LIBRARIES\}",
         )
+
+    def test_backend_symbols_do_not_leak_into_common_consumers(self) -> None:
+        allowed = {
+            self.source_root / "src/script/jerryscript_runtime.cpp",
+            self.source_root / "src/script/jerryscript_runtime.h",
+            self.source_root / "src/script/tests/script_runtime_tests.cpp",
+        }
+        sources = (
+            self.source_files("src/app_runtime")
+            + self.source_files("src/script")
+            + self.source_files("tools/native")
+        )
+        forbidden = re.compile(r"jerryscript_runtime\.h|JerryScriptRuntime|jerry_[A-Za-z0-9_]+|jerry_value_t")
+        leaks: list[str] = []
+        for source in sources:
+            if source in allowed:
+                continue
+            match = forbidden.search(source.read_text(encoding="utf-8-sig"))
+            if match:
+                leaks.append(f"{source.relative_to(self.source_root)}: {match.group(0)}")
+        self.assertEqual([], leaks, "backend-private symbols leaked into a common consumer")
 
     def test_unknown_backend_fails_before_backend_discovery(self) -> None:
         with tempfile.TemporaryDirectory(prefix="jellyframe-script-engine-") as directory:
