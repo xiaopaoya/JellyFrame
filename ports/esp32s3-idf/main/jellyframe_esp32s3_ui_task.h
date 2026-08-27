@@ -80,6 +80,7 @@ bool start_app_runtime_recovery_acceptance_task();
 bool start_script_task_value_protocol_acceptance_task();
 bool start_script_app_acceptance_task();
 bool start_script_task_value_frame_v2_acceptance_task();
+bool start_script_task_value_frame_v4_acceptance_task();
 bool start_script_service_echo_acceptance_task();
 bool start_script_fault_recovery_acceptance_task();
 

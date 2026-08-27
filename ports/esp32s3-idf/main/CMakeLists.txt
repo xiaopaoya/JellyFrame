@@ -88,6 +88,7 @@ idf_component_register(
         "jellyframe_esp32s3_installed_script_task.cpp"
         "jellyframe_esp32s3_script_app_acceptance.cpp"
         "jellyframe_esp32s3_script_value_frame_v2_acceptance.cpp"
+        "jellyframe_esp32s3_script_value_frame_v4_acceptance.cpp"
         "jellyframe_esp32s3_script_service_acceptance.cpp"
         "jellyframe_esp32s3_script_fault_acceptance.cpp"
         "jellyframe_esp32s3_ui_task.cpp"
