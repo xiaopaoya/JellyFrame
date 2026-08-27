@@ -1,6 +1,6 @@
 # JellyFrame Active Roadmap
 
-> Last updated: 2026-08-25; Applies to: 0.6.0-dev; this is the single active plan.
+> Last updated: 2026-08-27; Applies to: 0.6.0-dev; this is the single active plan.
 
 ## Governing Decision
 
@@ -15,7 +15,17 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 - The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository owns the physical Core branch. The first signed `v0.6.0` release is historical; Runtime `0.6.0-dev` now locks Core `v0.6.1`, ABI `1` and source identity `105d0166...b797c52b`. CI downloads that release artifact, verifies archive SHA-256 `f9d24aca...e18c7`, installs it and runs the Runtime package-consumer tests. The in-tree provider remains only for synchronized local development. For Core ABI `1`, installed `render_core/` headers are the C++ consumer surface; there is no hidden header tier or C ABI. On 2026-08-19, Core-only/Device-contract CMake boundary coverage was added: Core-only cannot create contracts targets/tests, contracts-only remains independently buildable, and the archive/install/package/source-override loop was rechecked.
 - App Runtime has `.jfapp` lifecycle, registry reference semantics, an optional selected script backend and the script-worker session/generation/epoch, value-only frame/input/service/fatal protocol. WS147 P3 worker, service, recovery and mixed-soak evidence is closed.
 - WS147 value-frame-v2 dirty/recovery passes. The full-screen rounded-gradient workload is not 30 FPS. Canvas has no real host binding and remains `not-tested`.
+- Script Task value-frame v4 is merged on the Runtime line. It preserves bounded fixed-point transforms and separates source-space from destination-space clip chains, including nested clips below a transformed layer. The v4 ESP32-S3 acceptance profile is now being implemented under a dedicated requirement; it is not a default Developer Image profile and cannot yet close A2 panel/input evidence.
 - JFDP/1 framing, capability, typed status/progress payloads and staged-install contracts have the isolated `device_runtime_contracts` source owner. WS147 native USB Serial/JTAG wire, A1-2 persistent lifecycle acceptance and the provider handoff are closed. The `provider-handoff-afdcf75-20260821` report passes same-image Identity matching, real in-flight cancellation, durable update/rollback/remove and 30 mixed cycles; the versioned `jellyframe-device@0.1.1-dev` provider is delivered and declares the lifecycle UI capabilities. `0.1.0-dev` remains only as the read-only `discover/info/list` baseline. The Developer Image baseline has a strict manifest and hash-verified factory recovery image; this still does not prove the clean-machine VS Code product workflow or installed-App panel/input behavior.
+
+## Active Order
+
+Parallel work may not change the exit condition of an earlier item.
+
+1. **A2 evidence, active on the port:** complete the isolated value-frame-v4 integration and then use an installed script App to obtain the missing panel/input author-tool evidence. The independent clean-machine VS Code lifecycle remains required.
+2. **R1 Core-only maintenance, active on main:** review parser/style ownership, malformed-input budgets and cache invalidation with standalone, sanitizer and deterministic capture regressions. Do not expand CSS scope or alter the port profile.
+3. **B2 backend preparation, bounded:** retain the configure-time `ScriptRuntime` boundary and its invariants. Do not add a second engine or change the JerryScript default before a separate compatibility/resource RFC and parity evidence exist.
+4. **A3 preparation, in progress:** trial material, hardware procurement, visual assets and feedback operations may proceed, but no external product trial begins before both A2 evidence items pass.
 
 ## Closed Performance Stage
 
@@ -45,6 +55,10 @@ capability-gated lifecycle UI and local candidate smoke are complete. The wider 
 formal evidence items: a clean machine must complete `new -> check -> device install -> live log -> update -> rollback
 -> stop -> remove` from VS Code, and a real installed App must provide panel/input evidence with actionable failure
 ownership across package, transport, registry, Runtime and port.
+
+The ongoing value-frame-v4 port acceptance is a prerequisite for the installed script-App portion when that flow uses
+worker-to-UI rendering. It verifies transform/source-clip correctness and recovery in an isolated profile; it does not
+substitute for install/launch from VS Code or device lifecycle evidence.
 
 ### A3: Controlled External Trial
 
