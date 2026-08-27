@@ -8,6 +8,7 @@
 #include "render_core/style.h"
 #include "render_core/text_backend.h"
 
+#include <array>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -1554,6 +1555,57 @@ void parser_limits_unbounded_css_fields_without_losing_following_rules() {
     check(has_diagnostic_code(diagnostics, "css-declaration-value-limit"), "declaration value cap is reported");
 }
 
+void parser_malformed_corpus_is_bounded_and_recovers_following_rules() {
+    struct MalformedCase {
+        const char* source;
+        bool keeps_following_rule;
+    };
+    constexpr std::array<MalformedCase, 6> corpus{{
+        {"@unknown ignored; .safe { color: #123456; }", true},
+        {".broken; .safe { color: #123456; }", true},
+        {".broken { color: ; } .safe { color: #123456; }", true},
+        {"@media (max-width: nonsense) { .broken { color: red; } } .safe { color: #123456; }", true},
+        {"/* unterminated comment", false},
+        {".broken { content: \"unterminated; .safe { color: #123456; }", false},
+    }};
+
+    CssParser parser;
+    CssParserOptions options;
+    options.max_rules = 8;
+    options.max_declarations_per_rule = 4;
+    options.max_input_bytes = 256;
+    for (const MalformedCase& malformed : corpus) {
+        VectorDiagnosticSink first_diagnostics;
+        options.diagnostics = &first_diagnostics;
+        const Stylesheet first = parser.parse(malformed.source, options);
+
+        VectorDiagnosticSink second_diagnostics;
+        options.diagnostics = &second_diagnostics;
+        const Stylesheet second = parser.parse(malformed.source, options);
+
+        check(first.size() <= options.max_rules,
+              "malformed CSS corpus keeps the stylesheet rule budget");
+        check(first_diagnostics.size() <= options.max_rules + 2,
+              "malformed CSS corpus keeps diagnostics bounded by parser work");
+        check(first.size() == second.size() && first.keyframes_size() == second.keyframes_size(),
+              "malformed CSS corpus has deterministic rule recovery");
+        for (std::size_t index = 0; index < first.size(); ++index) {
+            check(first[index].selector == second[index].selector &&
+                      first[index].declarations.size() == second[index].declarations.size(),
+                  "malformed CSS corpus keeps deterministic recovered rules");
+        }
+
+        if (!malformed.keeps_following_rule) {
+            continue;
+        }
+        auto safe = make_element("div");
+        safe->attributes["class"] = "safe";
+        const Style style = StyleResolver(first).resolve(*safe);
+        check(style.color.r == 0x12 && style.color.g == 0x34 && style.color.b == 0x56,
+              "malformed CSS recovery retains the following supported rule");
+    }
+}
+
 void nonfinite_and_out_of_range_numeric_values_preserve_safe_fallbacks() {
     auto element = make_element("div");
     element->attributes["class"] = "bounded";
@@ -1676,6 +1728,7 @@ int main() {
         style_candidate_cache_ignores_irrelevant_identifiers();
         style_candidate_cache_canonicalizes_relevant_class_sets();
         parser_limits_unbounded_css_fields_without_losing_following_rules();
+        parser_malformed_corpus_is_bounded_and_recovers_following_rules();
         nonfinite_and_out_of_range_numeric_values_preserve_safe_fallbacks();
         text_overflow_is_specified_but_not_inherited_by_nested_elements();
     } catch (const std::exception& error) {
