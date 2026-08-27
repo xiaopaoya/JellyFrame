@@ -393,6 +393,66 @@ void resolves_simple_css_custom_properties() {
           "inline custom property still inherits through contextual resolution");
 }
 
+void style_resolution_context_tracks_its_inputs() {
+    HtmlParser html_parser;
+    auto document = html_parser.parse("<body><button>Go</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    check(button != nullptr, "context fixture button exists");
+
+    StyleResolver resolver(parse(
+        ":root { --tone: #112233; }"
+        "button { color: var(--tone); }"
+        "button:hover { color: #aabbcc; }"));
+    StyleResolveContext context;
+    const Style before_hover = resolver.resolve(*button, context);
+    check(before_hover.color.r == 0x11 && before_hover.color.g == 0x22 && before_hover.color.b == 0x33,
+          "context resolves the initial custom property cascade");
+
+    resolver.set_interaction_state(button, nullptr, nullptr);
+    const Style while_hovered = resolver.resolve(*button, context);
+    check(while_hovered.color.r == 0xaa && while_hovered.color.g == 0xbb && while_hovered.color.b == 0xcc,
+          "context refreshes cached selector matches after interaction changes");
+
+    StyleResolver replacement_resolver(parse(
+        ":root { --tone: #445566; }"
+        "button { color: var(--tone); }"));
+    const Style replacement_style = replacement_resolver.resolve(*button, context);
+    check(replacement_style.color.r == 0x44 && replacement_style.color.g == 0x55 && replacement_style.color.b == 0x66,
+          "context does not retain custom properties from a different resolver");
+
+    auto replacement_document = html_parser.parse("<body><button>Again</button></body>");
+    Node* replacement_button = find_first_by_tag(*replacement_document, "button");
+    check(replacement_button != nullptr, "replacement context fixture button exists");
+    const Style replacement_document_style = replacement_resolver.resolve(*replacement_button, context);
+    check(replacement_document_style.color.r == 0x44 && replacement_document_style.color.g == 0x55 &&
+              replacement_document_style.color.b == 0x66,
+          "context refreshes its DOM-scoped caches for a replacement document");
+
+    auto source_document = html_parser.parse("<body id='source'><button>Move</button></body>");
+    auto destination_document = html_parser.parse("<body id='destination'></body>");
+    Node* source_root = find_first_by_tag(*source_document, "body");
+    Node* destination_root = find_first_by_tag(*destination_document, "body");
+    Node* moved_button = find_first_by_tag(*source_document, "button");
+    check(source_root != nullptr && destination_root != nullptr && moved_button != nullptr,
+          "context migration fixture nodes exist");
+
+    StyleResolver migration_resolver(parse(
+        "#source { --tone: #112233; }"
+        "#destination { --tone: #445566; }"
+        "button { color: var(--tone); }"));
+    StyleResolveContext migration_context;
+    const Style source_style = migration_resolver.resolve(*moved_button, migration_context);
+    check(source_style.color.r == 0x11 && source_style.color.g == 0x22 && source_style.color.b == 0x33,
+          "context caches the source document cascade before migration");
+    auto moved_node = source_root->detach_child(*moved_button);
+    check(moved_node != nullptr, "migration fixture detaches the cached button");
+    destination_root->append_child(std::move(moved_node));
+    const Style destination_style = migration_resolver.resolve(*moved_button, migration_context);
+    check(destination_style.color.r == 0x44 && destination_style.color.g == 0x55 &&
+              destination_style.color.b == 0x66,
+          "context drops cached node state after its document boundary changes");
+}
+
 void linear_gradient_background_applies_without_breaking_fallbacks() {
 #if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     return;
@@ -1533,6 +1593,7 @@ int main() {
         conditional_media_queries_reject_nonrepresentable_lengths();
         preserves_declaration_fallback_order();
         resolves_simple_css_custom_properties();
+        style_resolution_context_tracks_its_inputs();
         linear_gradient_background_applies_without_breaking_fallbacks();
         color_mix_and_bounded_box_shadow_apply();
         two_layer_background_keeps_base_and_highlight();
