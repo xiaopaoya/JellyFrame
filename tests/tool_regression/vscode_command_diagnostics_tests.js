@@ -3,6 +3,7 @@ const {
   DEFAULT_CAPTURE_LIMIT,
   appendBoundedOutput,
   commandFailure,
+  protocolMismatchReason,
   parseStructuredResult
 } = require("../../tools/vscode-jellyframe/command_diagnostics");
 
@@ -34,6 +35,20 @@ function main() {
   assert.match(providerFailure.message, /关闭其他串口监视器/);
   assert.match(providerFailure.message, /configured endpoint is unavailable/);
   assert.doesNotMatch(providerFailure.message, /code 3/);
+
+  const identityMismatch = commandFailure({
+    operation: "发现设备",
+    chinese: true,
+    stdout: JSON.stringify({
+      resultCode: "protocol-mismatch",
+      message: "Developer Image identity mismatch at sourceRevision: manifest expects '9e32face'; device attests '84611819'. Install the Provider and manifest paired with this firmware, or flash the Developer Image described by the configured manifest."
+    })
+  });
+  assert.match(identityMismatch.message, /镜像源版本不匹配/);
+  assert.match(identityMismatch.message, /9e32face/);
+  assert.match(identityMismatch.message, /84611819/);
+  assert.match(identityMismatch.message, /刷写当前 manifest 对应的 Developer Image/);
+  assert.match(protocolMismatchReason("unrecognized protocol response", true), /设备协议/);
 
   const parserFailure = commandFailure({ operation: "Discover device", stderr: "usage: jellyframe_cli.py device ..." });
   assert.match(parserFailure.message, /usage: jellyframe_cli.py device/);
