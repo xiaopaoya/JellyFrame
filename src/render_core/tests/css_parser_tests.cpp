@@ -304,6 +304,20 @@ void conditional_media_queries_respect_viewport() {
     check(stylesheet[2].selector == ".listed", "comma media selector");
 }
 
+void conditional_media_queries_reject_nonrepresentable_lengths() {
+    CssParser parser;
+    CssParserOptions options;
+    options.media_viewport_width = 360;
+    options.media_viewport_height = 240;
+    const Stylesheet stylesheet = parser.parse(
+        "@media (max-width: nanpx) { .nan { color: red; } }"
+        "@media (max-width: infpx) { .infinite { color: green; } }"
+        "@media (max-width: 2147483648px) { .overflow { color: blue; } }",
+        options);
+
+    check(stylesheet.empty(), "nonrepresentable media lengths are rejected");
+}
+
 void preserves_declaration_fallback_order() {
     const Stylesheet stylesheet = parse(".x { color: #123456; color: oklch(50% 0.2 30); }");
     check(stylesheet.size() == 1, "fallback rule count");
@@ -1516,6 +1530,7 @@ int main() {
         style_struct_size_has_embedded_guardrail();
         flattens_layers_and_plain_media();
         conditional_media_queries_respect_viewport();
+        conditional_media_queries_reject_nonrepresentable_lengths();
         preserves_declaration_fallback_order();
         resolves_simple_css_custom_properties();
         linear_gradient_background_applies_without_breaking_fallbacks();

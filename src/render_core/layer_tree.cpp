@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -669,7 +670,13 @@ bool parse_float_attribute(const Node& node, const char* name, float& output) {
     char* end = nullptr;
     errno = 0;
     const float parsed = std::strtof(value.c_str(), &end);
-    if (end == value.c_str() || errno == ERANGE) {
+    if (end == value.c_str() || errno == ERANGE || !std::isfinite(parsed)) {
+        return false;
+    }
+    while (end != nullptr && std::isspace(static_cast<unsigned char>(*end)) != 0) {
+        ++end;
+    }
+    if (end == nullptr || *end != '\0') {
         return false;
     }
     output = parsed;
@@ -796,8 +803,10 @@ void paint_meter_bar(const LayoutBox& box, DisplayList& display_list) {
 
 int range_state_value(const FormControlState& state) {
     char* end = nullptr;
+    errno = 0;
     const long parsed = std::strtol(state.value.c_str(), &end, 10);
-    if (end == state.value.c_str()) {
+    if (end == state.value.c_str() || errno == ERANGE || end == nullptr || *end != '\0' ||
+        parsed < std::numeric_limits<int>::min() || parsed > std::numeric_limits<int>::max()) {
         return state.min;
     }
     return static_cast<int>(parsed);
