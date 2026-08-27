@@ -534,7 +534,8 @@ DeviceBundleStatus validate_resource(const DeviceBundleReader& reader,
                                      const DeviceBundleDescriptor& descriptor,
                                      std::uint32_t index,
                                      std::string_view expected_path,
-                                     DeviceBundleResource* resource) {
+                                     DeviceBundleResource* resource,
+                                     bool* matches_expected_path = nullptr) {
     std::array<std::uint8_t, kDeviceBundleResourceEntryBytes> raw{};
     const std::uint64_t offset64 = static_cast<std::uint64_t>(descriptor.index_offset) +
         static_cast<std::uint64_t>(index) * kDeviceBundleResourceEntryBytes;
@@ -563,8 +564,13 @@ DeviceBundleStatus validate_resource(const DeviceBundleReader& reader,
     if (!path_is_normalized(path.data(), path_bytes) || fnv1a32(path.data(), path_bytes) != path_hash) {
         return DeviceBundleStatus::InvalidResource;
     }
-    if (!expected_path.empty() &&
-        (expected_path.size() != path_bytes || !std::equal(path.begin(), path.begin() + path_bytes, expected_path.begin()))) {
+    const bool expected_path_matches = expected_path.empty() ||
+        (expected_path.size() == path_bytes &&
+         std::equal(path.begin(), path.begin() + path_bytes, expected_path.begin()));
+    if (matches_expected_path != nullptr) {
+        *matches_expected_path = expected_path_matches;
+    }
+    if (!expected_path_matches && matches_expected_path == nullptr) {
         return DeviceBundleStatus::ResourceNotFound;
     }
 
@@ -654,7 +660,7 @@ DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,
     if (descriptor.resource_count > policy.max_resource_entries) {
         return DeviceBundleStatus::TooManyResources;
     }
-    if (descriptor.bundle_crc32 == 0 || descriptor.summary_bytes == 0 ||
+    if (descriptor.resource_count == 0 || descriptor.bundle_crc32 == 0 || descriptor.summary_bytes == 0 ||
         descriptor.summary_bytes > policy.max_summary_bytes || descriptor.summary_bytes > kDeviceBundleMaxSummaryBytes ||
         index_bytes > std::numeric_limits<std::uint32_t>::max() ||
         !section_is_valid(bundle_bytes, descriptor.summary_offset, descriptor.summary_bytes) ||
@@ -687,11 +693,26 @@ DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,
         return DeviceBundleStatus::VersionRejected;
     }
 
+    bool entry_found = false;
     for (std::uint32_t index = 0; index < descriptor.resource_count; ++index) {
-        const DeviceBundleStatus resource_status = validate_resource(reader, descriptor, index, {}, nullptr);
+        bool entry_matches_resource = false;
+        const DeviceBundleStatus resource_status = validate_resource(reader,
+                                                                      descriptor,
+                                                                      index,
+                                                                      descriptor.summary.entry_path_view(),
+                                                                      nullptr,
+                                                                      &entry_matches_resource);
         if (resource_status != DeviceBundleStatus::Ok) {
             return resource_status;
         }
+        entry_found = entry_found || entry_matches_resource;
+    }
+
+    // A successfully installed bundle must be launchable without deferring a
+    // malformed manifest to the App Runtime. The entry is therefore part of
+    // container validity, not merely a later resource lookup convenience.
+    if (!entry_found) {
+        return DeviceBundleStatus::InvalidSummary;
     }
     return DeviceBundleStatus::Ok;
 }

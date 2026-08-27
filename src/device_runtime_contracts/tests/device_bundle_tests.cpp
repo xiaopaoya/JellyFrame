@@ -186,6 +186,25 @@ void rejects_ambiguous_or_incompatible_summary() {
            DeviceBundleStatus::InvalidSummary);
 }
 
+void rejects_summary_entry_that_is_not_packaged() {
+    std::string missing_entry = valid_summary();
+    const std::size_t entry = missing_entry.find("/index.html");
+    assert(entry != std::string::npos);
+    missing_entry.replace(entry, std::strlen("/index.html"), "/missing.htm");
+    std::vector<std::uint8_t> bytes = make_bundle(missing_entry);
+    DeviceBundleMemoryReader reader(bytes.data(), bytes.size());
+    DeviceBundleDescriptor descriptor;
+    assert(inspect_device_bundle(reader, static_cast<std::uint32_t>(bytes.size()), policy(), descriptor) ==
+           DeviceBundleStatus::InvalidSummary);
+
+    bytes = make_bundle(valid_summary());
+    write_le32(bytes.data() + 28, 0);
+    refresh_bundle_crc(bytes);
+    DeviceBundleMemoryReader no_resources_reader(bytes.data(), bytes.size());
+    assert(inspect_device_bundle(no_resources_reader, static_cast<std::uint32_t>(bytes.size()), policy(), descriptor) ==
+           DeviceBundleStatus::InvalidSection);
+}
+
 class FailingReader final : public DeviceBundleReader {
 public:
     explicit FailingReader(const std::vector<std::uint8_t>& bytes) : bytes_(bytes) {}
@@ -263,6 +282,7 @@ int main() {
     default_policy_is_safe_and_usable();
     rejects_bad_bundle_or_resource_checksum();
     rejects_ambiguous_or_incompatible_summary();
+    rejects_summary_entry_that_is_not_packaged();
     read_failures_never_become_valid_bundles();
     resource_reads_stay_inside_the_declared_payload_section();
     policy_limits_are_reported_without_parsing_sections();

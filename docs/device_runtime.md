@@ -132,6 +132,12 @@ generation, sequence, stable reason and launcher/disable/rollback flags. Logs re
 contain at most 11 typed records, each with a copied app id, generation,
 timestamp, level and 255-byte maximum message, plus a dropped-record count.
 These records are never smuggled through JSON or port-private structs.
+Operation-result flags are limited to `complete`, `active` and
+`launcher-active`; reserved bits are rejected by both encoder and decoder.
+For install operations, the transaction id and byte counters are a snapshot of
+the active transaction, not an echo of malformed or rejected request fields;
+an idle controller reports zero. The frame session/request ids remain the
+request-response correlation key.
 
 `src/device_runtime_contracts/device_install_transaction.*` implements a bounded, ordered and
 cancellable staging state machine through the injected `DeviceInstallStore`.
@@ -142,8 +148,9 @@ atomic commit.
 
 `src/device_runtime_contracts/device_bundle.*` is the device-suitable JFAPPV0
 reader. It validates header/reserved fields, whole-bundle CRC32, section
-ranges, every resource path/hash/CRC and the bounded summary identity/version
-subset without filesystem, Python, Render Core or heap requirements. A port
+ranges, every resource path/hash/CRC, the bounded summary identity/version
+subset, and that the declared entry names a packaged resource, without
+filesystem, Python, Render Core or heap requirements. A port
 sets its own size/resource limits through `DeviceBundleValidationPolicy` during
 staging verification. `src/app_runtime/app_installed_bundle.*` then defines the
 separate committed-bundle lease and protected-launcher lifecycle boundary; see

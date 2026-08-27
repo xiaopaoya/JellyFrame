@@ -101,6 +101,9 @@ code、flags、transaction id 与 received/expected byte count。安装 chunk �
 sequence、稳定 reason 与 launcher/disable/rollback flag。Logs response 最多 11 条 typed record，每条复制
 app id、generation、timestamp、level 和最多 255-byte message，并带 dropped-record count。它们不能被塞入 JSON
 或 port-private struct。
+operation-result 的 flag 仅允许 `complete`、`active` 和 `launcher-active`；encoder 与 decoder 都会拒绝保留位。
+安装操作中的 transaction id 与 byte counter 表示活动事务快照，而不是对畸形或被拒绝请求字段的回显；controller
+处于 idle 时返回零。请求/响应关联始终使用 frame 的 session/request id。
 
 `src/device_runtime_contracts/device_install_transaction.*` 提供有界、有序、可取消的 staging 状态机。它只依赖
 `DeviceInstallStore` 注入的存储适配器，因此不会把 flash、文件系统、签名或 registry 实现带入
@@ -109,7 +112,7 @@ Render Core。写入失败、校验失败、提交失败和主动取消都会清
 
 `src/device_runtime_contracts/device_bundle.*` 是适用于 device 的 JFAPPV0 reader。它不依赖 filesystem、
 Python、Render Core 或 heap，并校验 header/reserved field、whole-bundle CRC32、section range、每一条
-resource 的 path/hash/CRC 及有界 summary identity/version 子集。port 在 staging verification 中通过
+resource 的 path/hash/CRC、有界 summary identity/version 子集，以及声明的 entry 确实指向包内 resource。port 在 staging verification 中通过
 `DeviceBundleValidationPolicy` 给出自身的 size/resource limit。随后
 `src/app_runtime/app_installed_bundle.*` 单独定义 committed-bundle lease 与 protected-launcher lifecycle
 边界，详见 `src/app_runtime/docs/installed_bundle_binding_zh.md`。

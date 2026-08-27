@@ -46,6 +46,10 @@ struct DeviceInstallRequest {
 };
 
 struct DeviceInstallResult {
+    // This is a snapshot of the transaction controller, not an echo of the
+    // request. A nonzero id and byte counters describe the active transaction;
+    // idle failures report zero. JFDP frame session/request ids correlate the
+    // individual request and response.
     DeviceInstallStatus status = DeviceInstallStatus::InvalidRequest;
     DeviceInstallPhase phase = DeviceInstallPhase::Idle;
     std::uint32_t transaction_id = 0;
