@@ -31,6 +31,10 @@ struct FrameBuffer {
 // Optional caller-owned storage for clipped text and image commands.
 struct SoftwareRasterizerScratch {
     FrameBuffer temporary_surface;
+    // Used by value-frame consumers when a flattened command carries an
+    // affine transform. It is separate from temporary_surface because text
+    // and rounded-clip raster paths may use that surface recursively.
+    FrameBuffer transformed_surface;
 
     void release();
 };

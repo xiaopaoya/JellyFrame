@@ -56,15 +56,17 @@ enum class ScriptTaskAppFrameCodecStatus {
     InvalidValue,
     UnsupportedVersion,
     UnsupportedClipFeature,
+    UnsupportedTransformFeature,
     TooDeepClipChain,
     InvalidClip,
     Malformed,
 };
 
 // Versioned, value-only wire format. v1 carries only the legacy display list;
-// v2 additionally carries bounded clip records and references. Image handles
-// and font-family hashes are opaque integers; no DisplayCommand storage or text
-// pointer crosses tasks.
+// v2 additionally carries bounded clip records and references; v3 carries
+// fixed-point command transforms; v4 also identifies a transformed layer's
+// source-space clip. Image handles and font-family hashes are
+// opaque integers; no DisplayCommand storage or text pointer crosses tasks.
 ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(
     const ScriptTaskAppFrame& frame,
     const ScriptTaskAppFrameCodecOptions& options,
@@ -79,9 +81,10 @@ ScriptTaskAppFrameCodecStatus decode_script_task_app_frame(
 std::uint32_t resolve_script_task_input_target(const ScriptTaskAppFrame& frame, int x, int y);
 
 // Runs only in the script worker while its LayerNode and DOM remain private.
-// Flattening applies layer clips, transforms and opacity before the copied
-// DisplayList enters the value frame. Input targets are optional hints; raw
-// input remains authoritative for the worker's private InputController.
+// Flattening applies layer clips, opacity and final device-space transforms
+// before the copied DisplayList enters the value frame. Input targets are
+// optional hints; raw input remains authoritative for the worker's private
+// InputController.
 ScriptTaskAppFrame make_script_task_app_frame(const LayerNode& layer_tree,
                                               Rect viewport,
                                               std::vector<ScriptTaskInputTarget> input_targets = {},

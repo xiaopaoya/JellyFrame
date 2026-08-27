@@ -67,7 +67,13 @@ teardown that does not create a task or VM. `script_task_service_bridge.*` maps 
 JerryScript, RTOS, DOM or renderer dependency; it does not start a worker or paint an `AppFrame`.
 `script_task_frame_codec.*` now encodes a bounded `DisplayList`, viewport and paint-ordered opaque input
 target keys into a versioned value frame; session and sequence remain in the surrounding frame lease.
-`make_script_task_app_frame()` flattens the worker-private `LayerNode` before copying this value frame.
+Frame v3 additionally carries a bounded 1/1024 fixed-point affine matrix per command, so worker-local
+`rotate()` and `scale()` do not disappear when a frame crosses into the UI task. Frame v4 adds an optional
+bounded source-clip reference for a transformed layer's own overflow surface; destination clip chains remain
+separate, so ancestor clipping and rounded corners retain compositor-equivalent sampling boundaries. v1/v2
+reject transformed commands explicitly, and v3 rejects a v4 source clip, instead of silently painting an
+untransformed or incompletely clipped result. `make_script_task_app_frame()`
+flattens the worker-private `LayerNode` before copying this value frame.
 `script_task_input_codec.*` provides versioned pointer, wheel, key and bounded text values for the worker inbox.
 `script_task_input_dispatch.*` consumes those values only through the worker-private `InputController`.
 `script_task_service_request_codec.*` encodes a fixed 20-byte typed request and

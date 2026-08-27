@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <utility>
 
 namespace jellyframe {
@@ -1238,13 +1239,71 @@ Color with_opacity(Color color, float opacity) {
     return color;
 }
 
+struct FlattenAffineTransform {
+    float xx = 1.0F;
+    float xy = 0.0F;
+    float yx = 0.0F;
+    float yy = 1.0F;
+    float tx = 0.0F;
+    float ty = 0.0F;
+};
+
+FlattenAffineTransform multiply_transform(const FlattenAffineTransform& outer,
+                                          const FlattenAffineTransform& inner) {
+    return {
+        outer.xx * inner.xx + outer.xy * inner.yx,
+        outer.xx * inner.xy + outer.xy * inner.yy,
+        outer.yx * inner.xx + outer.yy * inner.yx,
+        outer.yx * inner.xy + outer.yy * inner.yy,
+        outer.xx * inner.tx + outer.xy * inner.ty + outer.tx,
+        outer.yx * inner.tx + outer.yy * inner.ty + outer.ty,
+    };
+}
+
+FlattenAffineTransform layer_affine_transform(const LayerNode& layer,
+                                              int translated_x,
+                                              int translated_y) {
+    constexpr float kPi = 3.14159265358979323846F;
+    const float radians = layer.transform.rotate_degrees * kPi / 180.0F;
+    const float cosine = std::cos(radians);
+    const float sine = std::sin(radians);
+    const float origin_x = static_cast<float>(safe_add(layer.bounds.x, translated_x)) +
+        static_cast<float>(layer.bounds.width) * static_cast<float>(layer.transform_origin_x_percent) / 100.0F;
+    const float origin_y = static_cast<float>(safe_add(layer.bounds.y, translated_y)) +
+        static_cast<float>(layer.bounds.height) * static_cast<float>(layer.transform_origin_y_percent) / 100.0F;
+    const float xx = cosine * layer.transform.scale_x;
+    const float xy = -sine * layer.transform.scale_y;
+    const float yx = sine * layer.transform.scale_x;
+    const float yy = cosine * layer.transform.scale_y;
+    return {xx, xy, yx, yy, origin_x - xx * origin_x - xy * origin_y,
+            origin_y - yx * origin_x - yy * origin_y};
+}
+
+bool identity_transform(const FlattenAffineTransform& transform) {
+    return std::abs(transform.xx - 1.0F) < 0.0001F && std::abs(transform.xy) < 0.0001F &&
+        std::abs(transform.yx) < 0.0001F && std::abs(transform.yy - 1.0F) < 0.0001F &&
+        std::abs(transform.tx) < 0.0001F && std::abs(transform.ty) < 0.0001F;
+}
+
+std::int32_t fixed_transform_value(float value) {
+    constexpr float kScale = 1024.0F;
+    constexpr float kMaximumFixed = 64.0F * 1024.0F * 1024.0F;
+    if (!std::isfinite(value)) {
+        return 0;
+    }
+    const float scaled = std::max(-kMaximumFixed, std::min(kMaximumFixed, std::round(value * kScale)));
+    return static_cast<std::int32_t>(scaled);
+}
+
 void append_flattened_command(DisplayList& output,
                               const DisplayCommand& command,
                               Rect clip,
                               bool has_clip,
+                              std::uint32_t transform_source_clip_index,
                               float opacity,
                               int translate_x,
                               int translate_y,
+                              const FlattenAffineTransform& transform,
                               std::size_t max_display_commands,
                               std::vector<std::uint32_t>* display_clip_indices = nullptr,
                               std::uint32_t clip_index = kNoFlattenedClip) {
@@ -1254,7 +1313,12 @@ void append_flattened_command(DisplayList& output,
     DisplayCommand flattened = command;
     flattened.rect.x = safe_add(flattened.rect.x, translate_x);
     flattened.rect.y = safe_add(flattened.rect.y, translate_y);
-    if (has_clip) {
+    const bool has_affine_transform = !identity_transform(transform);
+    // A frame clip is applied in destination space by the value-frame
+    // Frame clips are consumed in destination space. A v4 source-clip index
+    // separately preserves the current transformed layer's pre-transform
+    // overflow clip without cropping away its transparent sampling fringe.
+    if (has_clip && !has_affine_transform) {
         flattened.rect = intersect_rect(flattened.rect, clip);
         if (empty_rect(flattened.rect)) {
             return;
@@ -1262,6 +1326,17 @@ void append_flattened_command(DisplayList& output,
     }
     flattened.color = with_opacity(flattened.color, opacity);
     flattened.color2 = with_opacity(flattened.color2, opacity);
+    if (has_affine_transform) {
+        flattened.transform.enabled = true;
+        flattened.transform.xx_1024 = fixed_transform_value(transform.xx);
+        flattened.transform.xy_1024 = fixed_transform_value(transform.xy);
+        flattened.transform.yx_1024 = fixed_transform_value(transform.yx);
+        flattened.transform.yy_1024 = fixed_transform_value(transform.yy);
+        flattened.transform.tx_1024 = fixed_transform_value(transform.tx);
+        flattened.transform.ty_1024 = fixed_transform_value(transform.ty);
+        flattened.transform.source_clip_index = transform_source_clip_index > std::numeric_limits<std::uint16_t>::max()
+            ? 0xffffU : static_cast<std::uint16_t>(transform_source_clip_index);
+    }
     if (flattened.color.a == 0 &&
         ((flattened.type != DisplayCommandType::LinearGradient &&
           flattened.type != DisplayCommandType::ConicGradient &&
@@ -1281,6 +1356,7 @@ void flatten_layer(const LayerNode& layer,
                    float opacity,
                    int translate_x,
                    int translate_y,
+                   FlattenAffineTransform transform,
                    std::size_t max_display_commands,
                    DiagnosticSink* diagnostics,
                    bool& display_budget_reported,
@@ -1292,11 +1368,14 @@ void flatten_layer(const LayerNode& layer,
         float opacity = 1.0F;
         int translate_x = 0;
         int translate_y = 0;
+        FlattenAffineTransform transform;
+        std::uint32_t transform_source_clip_index = kNoFlattenedClip;
         std::uint32_t clip_index = kNoFlattenedClip;
     };
 
     std::vector<PendingLayer> pending;
-    pending.push_back(PendingLayer{&layer, clip, has_clip, opacity, translate_x, translate_y, kNoFlattenedClip});
+    pending.push_back(PendingLayer{&layer, clip, has_clip, opacity, translate_x, translate_y, transform,
+                                   kNoFlattenedClip, kNoFlattenedClip});
     while (!pending.empty()) {
         const PendingLayer current = pending.back();
         pending.pop_back();
@@ -1318,24 +1397,44 @@ void flatten_layer(const LayerNode& layer,
                                                round_float_to_int(current_layer.transform.translate_x));
         const int layer_translate_y = safe_add(current.translate_y,
                                                round_float_to_int(current_layer.transform.translate_y));
+        const FlattenAffineTransform layer_transform = multiply_transform(
+            current.transform, layer_affine_transform(current_layer, layer_translate_x, layer_translate_y));
         Rect current_clip = current.clip;
         bool current_has_clip = current.has_clip;
+        std::uint32_t transform_source_clip_index = current.transform_source_clip_index;
         std::uint32_t current_clip_index = current.clip_index;
         if (current_layer.has_clip) {
-            current_clip = current_has_clip ? intersect_rect(current_clip, current_layer.clip_rect) : current_layer.clip_rect;
+            const Rect translated_layer_clip{
+                safe_add(current_layer.clip_rect.x, layer_translate_x),
+                safe_add(current_layer.clip_rect.y, layer_translate_y),
+                current_layer.clip_rect.width,
+                current_layer.clip_rect.height,
+            };
+            current_clip = current_has_clip ? intersect_rect(current_clip, translated_layer_clip) : translated_layer_clip;
             current_has_clip = true;
             if (empty_rect(current_clip)) {
                 continue;
             }
             if (metadata != nullptr) {
-                current_clip_index = static_cast<std::uint32_t>(metadata->clips.size());
-                metadata->clips.push_back(FlattenedClip{
-                    Rect{safe_add(current_layer.clip_rect.x, layer_translate_x),
-                         safe_add(current_layer.clip_rect.y, layer_translate_y),
-                         current_layer.clip_rect.width,
-                         current_layer.clip_rect.height},
-                    current_layer.clip_border_radius,
-                    current.clip_index});
+                // The layer that introduces a transform is clipped again in
+                // destination space by SoftwareCompositor. Clips introduced
+                // below that transform have already been rasterized into its
+                // source surface and must not be reapplied after the affine
+                // mapping.
+                if (identity_transform(current.transform)) {
+                    current_clip_index = static_cast<std::uint32_t>(metadata->clips.size());
+                    metadata->clips.push_back(FlattenedClip{
+                        translated_layer_clip,
+                        current_layer.clip_border_radius,
+                        current.clip_index});
+                }
+                if (!identity_transform(layer_transform)) {
+                    transform_source_clip_index = static_cast<std::uint32_t>(metadata->clips.size());
+                    metadata->clips.push_back(FlattenedClip{
+                        translated_layer_clip,
+                        current_layer.clip_border_radius,
+                        current.transform_source_clip_index});
+                }
             }
         }
         for (const DisplayCommand& command : current_layer.display_list) {
@@ -1343,9 +1442,11 @@ void flatten_layer(const LayerNode& layer,
                                      command,
                                      current_clip,
                                      current_has_clip,
+                                     transform_source_clip_index,
                                      layer_opacity,
                                      layer_translate_x,
                                      layer_translate_y,
+                                     layer_transform,
                                      max_display_commands,
                                      metadata != nullptr ? &metadata->display_clip_indices : nullptr,
                                      current_clip_index);
@@ -1358,9 +1459,11 @@ void flatten_layer(const LayerNode& layer,
                                            current_clip,
                                            current_has_clip,
                                            layer_opacity,
-                                           layer_translate_x,
-                                           layer_translate_y,
-                                           current_clip_index});
+                                            layer_translate_x,
+                                            layer_translate_y,
+                                            layer_transform,
+                                            transform_source_clip_index,
+                                            current_clip_index});
         }
     }
 }
@@ -1452,7 +1555,7 @@ void LayerTreeBuilder::flatten_into(const LayerNode& root, DisplayList& output) 
         output.reserve(required_capacity);
     }
     bool display_budget_reported = false;
-    flatten_layer(root, output, Rect{}, false, 1.0F, 0, 0, max_display_commands,
+    flatten_layer(root, output, Rect{}, false, 1.0F, 0, 0, {}, max_display_commands,
                   options_.diagnostics, display_budget_reported);
 }
 
@@ -1471,6 +1574,7 @@ FlattenedLayerTree LayerTreeBuilder::flatten_with_clip_metadata(const LayerNode&
                   1.0F,
                   0,
                   0,
+                  {},
                   max_display_commands,
                   options_.diagnostics,
                   display_budget_reported,

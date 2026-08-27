@@ -219,6 +219,22 @@ struct ObjectPosition {
     int y_percent = 50;
 };
 
+// Value-frame consumers cannot retain LayerNode objects. Keep the final
+// device-space affine matrix alongside a flattened command instead. Values
+// use 1/1024 fixed point so the frame codec stays deterministic across tasks.
+struct DisplayCommandTransform {
+    bool enabled = false;
+    std::int32_t xx_1024 = 1024;
+    std::int32_t xy_1024 = 0;
+    std::int32_t yx_1024 = 0;
+    std::int32_t yy_1024 = 1024;
+    std::int32_t tx_1024 = 0;
+    std::int32_t ty_1024 = 0;
+    // A transformed layer may clip its own source surface before affine
+    // compositing. This is separate from destination-space frame clips.
+    std::uint16_t source_clip_index = 0xffffU;
+};
+
 struct DisplayCommand {
     DisplayCommandType type = DisplayCommandType::FillRect;
     Rect rect;
@@ -238,6 +254,7 @@ struct DisplayCommand {
     ObjectFit object_fit = ObjectFit::Fill;
     ObjectPosition object_position;
     ImageRendering image_rendering = ImageRendering::Auto;
+    DisplayCommandTransform transform;
 };
 
 using DisplayList = std::vector<DisplayCommand>;

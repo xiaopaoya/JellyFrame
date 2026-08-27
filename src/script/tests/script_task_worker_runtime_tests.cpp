@@ -74,6 +74,12 @@ ScriptTaskWorkerRuntimeOptions runtime_options_v2() {
     return options;
 }
 
+ScriptTaskWorkerRuntimeOptions runtime_options_v3() {
+    ScriptTaskWorkerRuntimeOptions options = runtime_options_v2();
+    options.frame_codec.version = 3;
+    return options;
+}
+
 ScriptTaskWorkerRuntimeOptions runtime_options_with_service_callback_limit(std::size_t limit) {
     ScriptTaskWorkerRuntimeOptions options = runtime_options();
     options.script.max_service_callbacks = limit;
@@ -255,6 +261,40 @@ void worker_timer_publishes_value_frame() {
     }
     check(saw_timer, "timer replacement frame contains the worker DOM mutation");
     check(runtime.telemetry().timer_callbacks == 1, "timer callback telemetry increments");
+}
+
+void worker_interval_rotation_publishes_transformed_value_frame() {
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(16);
+    const ScriptTaskWorkerRuntimeOptions options = runtime_options_v3();
+    ScriptTaskWorkerRuntime runtime(session, options);
+    check(runtime.initialize(
+              "<body><div id='hand'></div></body>",
+              "body { position: relative; width: 160px; height: 100px; }"
+              "#hand { position: absolute; left: 79px; top: 10px; width: 2px; height: 60px; "
+              "background: #ff5060; transform-origin: 50% 100%; transform: rotate(0deg); }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "interval rotation fixture initializes");
+    check(runtime.eval(
+              "var hand = document.getElementById('hand'); var turn = 0;"
+              "setInterval(function () { turn += 90; hand.style.transform = 'rotate(' + turn + 'deg)'; }, 5);").ok,
+          "interval rotation callback evaluates");
+    check(runtime.publish_frame(supervisor).accepted(), "interval rotation initial frame publishes");
+    ScriptTaskAppFrame frame;
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, frame) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "interval rotation initial frame is consumed");
+    const ScriptTaskWorkerRuntimeStepResult step = runtime.pump_callbacks(5, supervisor);
+    check(step.dom_mutated && step.frame_published, "interval rotation publishes a replacement frame");
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, frame) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "interval rotation replacement frame is consumed");
+    bool saw_rotation = false;
+    for (const DisplayCommand& command : frame.display_list) {
+        saw_rotation = saw_rotation || command.transform.enabled;
+    }
+    check(saw_rotation, "interval rotation survives worker value-frame flattening");
+    check(runtime.telemetry().timer_callbacks == 1, "interval rotation timer telemetry increments");
 }
 
 void worker_service_completion_reaches_js_as_copied_value() {
@@ -742,6 +782,7 @@ int script_task_worker_runtime_tests_main() {
         worker_resolves_media_queries_against_its_runtime_viewport();
         worker_eval_failure_becomes_value_fatal();
         worker_timer_publishes_value_frame();
+        worker_interval_rotation_publishes_transformed_value_frame();
         worker_service_completion_reaches_js_as_copied_value();
         worker_service_payload_lease_failure_completes_callback_as_error();
         worker_service_callback_budget_rejects_before_queueing();
