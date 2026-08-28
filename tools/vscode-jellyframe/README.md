@@ -1,6 +1,6 @@
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-08-29; Applies to: 0.6.0-dev; extension version: 0.4.29; compatibility baseline: 0.5.0
+> Last updated: 2026-08-29; Applies to: 0.6.0-dev; extension version: 0.4.30; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -81,6 +81,9 @@ When an App command needs an SDK but none is configured, it offers **Configure a
 environment** directly instead of running an incomplete command. SDK installation never
 overwrites an existing directory: transient Windows access or file-lock failures are retried,
 then the extension offers retry, another location, or use of an already-valid SDK.
+The official App Author SDK intentionally contains prebuilt `desktop-release` and
+`desktop-scripting-release` profiles rather than `CMakeCache.txt`; the extension verifies
+those profiles against `sdk-manifest.json` and uses them directly.
 The extension prefers `build/desktop-release/Release`, then
 `build/desktop-debug/Debug` inside the selected SDK.
 For an app whose manifest declares `runtime.script`, the extension uses only

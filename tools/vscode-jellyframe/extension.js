@@ -130,6 +130,7 @@ function nativeBuildDir(context, preferScripting = false) {
 
 function buildDirectoryError(context, selection) {
   const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
+  const sdk = readSdkMetadata(resolvedAuthorSdk(context));
   const code = selection?.issue?.code;
   if (code === "legacy-script-task-option") {
     return chinese
@@ -147,9 +148,19 @@ function buildDirectoryError(context, selection) {
       : "The selected desktop build is not a usable CMake build output. Choose the actual Release/Debug output directory in Settings.";
   }
   if (selection?.issue?.requiresScripting) {
+    if (sdk?.kind === "app-sdk") {
+      return chinese
+        ? "当前 App 作者 SDK 未包含脚本 App 所需的预构建桌面壳。请在“作者环境”中下载或选择包含 desktop-scripting-release 的 SDK。"
+        : "The current App Author SDK does not include the prebuilt desktop shell needed by this script App. Use Author environment to download or select an SDK that includes desktop-scripting-release.";
+    }
     return chinese
       ? "未找到当前的脚本桌面构建。请配置 build/desktop-scripting-release（或 desktop-scripting-debug），并启用 JELLYFRAME_BUILD_SCRIPTING=ON。"
       : "No current scripting desktop build was found. Configure build/desktop-scripting-release (or desktop-scripting-debug) with JELLYFRAME_BUILD_SCRIPTING=ON.";
+  }
+  if (sdk?.kind === "app-sdk") {
+    return chinese
+      ? "当前 App 作者 SDK 未包含兼容的预构建桌面壳。请在“作者环境”中下载或选择包含 desktop-release 的 SDK。"
+      : "The current App Author SDK does not include a compatible prebuilt desktop shell. Use Author environment to download or select an SDK that includes desktop-release.";
   }
   return chinese
     ? "未找到当前的桌面构建。请配置 build/desktop-release 或 build/desktop-debug。"
@@ -173,10 +184,17 @@ function requireNativeBuildDir(context, preferScripting = false) {
   }
   const message = buildDirectoryError(context, selection);
   ensureOutputChannel().appendLine(`JellyFrame build selection: ${message}`);
-  const setup = desktopBuildQuickFixLabel(selection, preferScripting);
+  const packagedSdk = readSdkMetadata(resolvedAuthorSdk(context))?.kind === "app-sdk";
+  const setup = packagedSdk
+    ? (isChinese() ? "管理作者环境" : "Manage author environment")
+    : desktopBuildQuickFixLabel(selection, preferScripting);
   vscode.window.showErrorMessage(message, setup).then((choice) => {
     if (choice === setup) {
-      configureDesktopBuild(context, preferScripting);
+      if (packagedSdk) {
+        manageAuthorEnvironment(context);
+      } else {
+        configureDesktopBuild(context, preferScripting);
+      }
     }
   });
   return undefined;
@@ -296,9 +314,14 @@ async function configureDesktopBuild(context, scripting) {
 
   const root = repoRoot(context);
   if (!fs.existsSync(path.join(root, "CMakeLists.txt"))) {
+    const packagedSdk = readSdkMetadata(root)?.kind === "app-sdk";
     const message = isChinese()
-      ? "当前 JellyFrame SDK 未包含本机构建文件。请安装带桌面运行时的 SDK，或改为选择完整框架源码。"
-      : "The current JellyFrame SDK does not include local build files. Install an SDK with a desktop runtime, or select a full framework source checkout.";
+      ? (packagedSdk
+        ? "当前 App 作者 SDK 是预构建分发，不能在其中创建 CMake 构建。请使用“环境”中的 SDK 自带桌面运行时，或选择完整框架源码。"
+        : "当前 JellyFrame SDK 未包含本机构建文件。请安装带桌面运行时的 SDK，或改为选择完整框架源码。")
+      : (packagedSdk
+        ? "The current App Author SDK is a prebuilt distribution and cannot create a CMake build. Use its bundled desktop runtime from Environment, or select a full framework source checkout."
+        : "The current JellyFrame SDK does not include local build files. Install an SDK with a desktop runtime, or select a full framework source checkout.");
     ensureOutputChannel().appendLine(`[error] ${message}`);
     vscode.window.showErrorMessage(message);
     return undefined;
@@ -3215,11 +3238,18 @@ class JellyFrameStatusProvider {
           chinese ? "正在配置或编译 JellyFrame 桌面壳。可在通知或运行日志中查看当前阶段。" : "JellyFrame is configuring or building the desktop shell. The notification and run log show the current phase.",
           "sync~spin")] : []),
         ...(!buildDirectory && !desktopBuildRunning ? [this.commandItem(
-          labels.createDesktopBuild,
-          chinese
-            ? "创建当前 App 所需的桌面壳构建；仅在确认后运行本机 CMake。"
-            : "Create the desktop-shell build needed by the current App; CMake runs only after confirmation.",
-          "jellyframe.setupDesktopBuild", "tools")] : []),
+          sdkMetadata?.kind === "app-sdk"
+            ? (chinese ? "选择带桌面运行时的 SDK" : "Select an SDK with desktop runtime")
+            : labels.createDesktopBuild,
+          sdkMetadata?.kind === "app-sdk"
+            ? (chinese
+              ? "当前 SDK 未声明当前 App 所需的预构建桌面壳；可下载或选择其他 SDK。"
+              : "The current SDK does not declare the prebuilt desktop shell needed by this App; download or select another SDK.")
+            : (chinese
+              ? "创建当前 App 所需的桌面壳构建；仅在确认后运行本机 CMake。"
+              : "Create the desktop-shell build needed by the current App; CMake runs only after confirmation."),
+          sdkMetadata?.kind === "app-sdk" ? "jellyframe.manageAuthorEnvironment" : "jellyframe.setupDesktopBuild",
+          sdkMetadata?.kind === "app-sdk" ? "package" : "tools")] : []),
         this.commandItem(chinese ? "选择或查看构建" : "Choose or inspect builds",
           chinese ? "显示可用桌面构建，并帮助确认当前选择。" : "Show available desktop builds and confirm the current selection.",
           "jellyframe.listBuilds", "list-tree"),
