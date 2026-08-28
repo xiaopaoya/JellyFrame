@@ -1,6 +1,6 @@
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-08-29; Applies to: 0.6.0-dev; extension version: 0.4.26; compatibility baseline: 0.5.0
+> Last updated: 2026-08-29; Applies to: 0.6.0-dev; extension version: 0.4.27; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -38,12 +38,13 @@ The repository currently provides the extension as source; it is not yet listed
 on the VS Code Marketplace. To try it with the least setup:
 
 1. Install the extension, then open an independent App workspace.
-2. Run **JellyFrame: Download and Install App Author SDK** and select a parent
-   folder. The extension downloads the single SDK ZIP from the official GitHub
-   Release, verifies its SHA-256 digest, safely extracts it and configures the
-   environment. You can also run **JellyFrame: Configure Author Environment**
-   to select an existing SDK.
-3. Click the JellyFrame icon in the Activity Bar, or open
+2. Click **Author environment: Not configured** in the JellyFrame Activity Bar.
+   Choose **Download App Author SDK from GitHub** to download the official SDK,
+   verify its SHA-256 digest, safely extract it and configure the environment;
+   choose **Select an installed JellyFrame SDK** when one is already available.
+3. Once configured, **Author environment** displays the SDK version. Click it
+   to check for updates, switch SDKs, or open the selected SDK folder.
+4. Click the JellyFrame icon in the Activity Bar, or open
    `jellyframe.app.json` or an app HTML/CSS file and use the context menu.
 
 To package, install or update it like a regular local extension, run the helper

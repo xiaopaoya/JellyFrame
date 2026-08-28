@@ -136,18 +136,7 @@ function selectSdkRelease(releases) {
 async function downloadLatestSdk({ onProgress } = {}) {
   const releaseBytes = await request(`https://${API_HOST}/repos/${REPOSITORY}/releases?per_page=20`);
   const { release, asset } = selectSdkRelease(JSON.parse(releaseBytes.toString("utf8")));
-  let expected = parseDigest(asset.digest);
-  if (!expected) {
-    const assets = Array.isArray(release.assets) ? release.assets : [];
-    const sidecar = assets.find((candidate) => candidate.name === `${asset.name}.sha256`);
-    if (sidecar?.browser_download_url) {
-      const sidecarBytes = await request(sidecar.browser_download_url);
-      expected = parseSidecar(sidecarBytes.toString("utf8"));
-    }
-  }
-  if (!expected) {
-    throw new Error("the App Author SDK release has no valid SHA-256 digest; refusing installation");
-  }
+  const metadata = await sdkReleaseMetadata(release, asset);
 
   const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "jellyframe-sdk-download-"));
   const archivePath = path.join(temporaryDirectory, asset.name);
@@ -173,21 +162,47 @@ async function downloadLatestSdk({ onProgress } = {}) {
       stream.on("error", reject);
     });
     const actual = sha256(archivePath);
-    if (actual !== expected) {
-      throw new Error(`SDK SHA-256 mismatch: expected ${expected}, received ${actual}`);
+    if (actual !== metadata.expectedDigest) {
+      throw new Error(`SDK SHA-256 mismatch: expected ${metadata.expectedDigest}, received ${actual}`);
     }
     return {
       archivePath,
       temporaryDirectory,
       assetName: asset.name,
-      releaseTag: String(release.tag_name || release.name || "latest"),
-      expectedDigest: expected,
+      releaseTag: metadata.releaseTag,
+      expectedDigest: metadata.expectedDigest,
       bytes: fs.statSync(archivePath).size
     };
   } catch (error) {
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
     throw error;
   }
+}
+
+async function sdkReleaseMetadata(release, asset) {
+  let expected = parseDigest(asset.digest);
+  if (!expected) {
+    const assets = Array.isArray(release.assets) ? release.assets : [];
+    const sidecar = assets.find((candidate) => candidate.name === `${asset.name}.sha256`);
+    if (sidecar?.browser_download_url) {
+      const sidecarBytes = await request(sidecar.browser_download_url);
+      expected = parseSidecar(sidecarBytes.toString("utf8"));
+    }
+  }
+  if (!expected) {
+    throw new Error("the App Author SDK release has no valid SHA-256 digest; refusing installation");
+  }
+  return {
+    assetName: asset.name,
+    expectedDigest: expected,
+    releaseTag: String(release.tag_name || release.name || "latest")
+  };
+}
+
+async function fetchLatestSdkRelease() {
+  const releaseBytes = await request(`https://${API_HOST}/repos/${REPOSITORY}/releases?per_page=20`);
+  const { release, asset } = selectSdkRelease(JSON.parse(releaseBytes.toString("utf8")));
+  return sdkReleaseMetadata(release, asset);
 }
 
 function sdkInstallName(assetName) {
@@ -200,7 +215,9 @@ module.exports = {
   parseDigest,
   parseSidecar,
   sdkInstallName,
+  sdkReleaseMetadata,
   selectSdkAsset,
   selectSdkRelease,
+  fetchLatestSdkRelease,
   downloadLatestSdk
 };

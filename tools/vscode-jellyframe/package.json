@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.26",
+  "version": "0.4.27",
   "publisher": "jellyframe",
   "repository": {
     "type": "git",
@@ -25,8 +25,6 @@
     "onCommand:jellyframe.openCapture",
     "onCommand:jellyframe.listBuilds",
     "onCommand:jellyframe.setupDesktopBuild",
-    "onCommand:jellyframe.configureEnvironment",
-    "onCommand:jellyframe.installSdk",
     "onCommand:jellyframe.package",
     "onCommand:jellyframe.newFromTemplate",
     "onCommand:jellyframe.showReport",
@@ -90,16 +88,6 @@
         "command": "jellyframe.setupDesktopBuild",
         "title": "%command.setupDesktopBuild%",
         "icon": "$(tools)"
-      },
-      {
-        "command": "jellyframe.configureEnvironment",
-        "title": "%command.configureEnvironment%",
-        "icon": "$(plug)"
-      },
-      {
-        "command": "jellyframe.installSdk",
-        "title": "%command.installSdk%",
-        "icon": "$(cloud-download)"
       },
       {
         "command": "jellyframe.package",
@@ -324,10 +312,6 @@
         {
           "command": "jellyframe.showOutput",
           "group": "report@2"
-        },
-        {
-          "command": "jellyframe.installSdk",
-          "group": "environment@1"
         }
       ],
       "jellyframe.editorActions": [
@@ -389,16 +373,6 @@
           "command": "jellyframe.showOutput",
           "when": "view == jellyframe.status",
           "group": "navigation@4"
-        },
-        {
-          "command": "jellyframe.configureEnvironment",
-          "when": "view == jellyframe.status",
-          "group": "navigation@5"
-        },
-        {
-          "command": "jellyframe.installSdk",
-          "when": "view == jellyframe.status",
-          "group": "navigation@6"
         }
       ]
     },

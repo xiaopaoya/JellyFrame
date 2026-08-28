@@ -4,6 +4,7 @@ const {
   parseDigest,
   parseSidecar,
   sdkInstallName,
+  sdkReleaseMetadata,
   selectSdkAsset,
   selectSdkRelease
 } = require("../../tools/vscode-jellyframe/sdk_download");
@@ -24,6 +25,17 @@ assert.strictEqual(
   selectSdkRelease([{ assets: [] }, { tag_name: "app-sdk-v0.6.0-dev", assets: [asset] }]).release.tag_name,
   "app-sdk-v0.6.0-dev"
 );
+sdkReleaseMetadata({ tag_name: "app-sdk-v0.6.0-dev", assets: [asset] }, asset).then((metadata) => {
+  assert.deepStrictEqual(metadata, {
+    assetName: asset.name,
+    expectedDigest: "a".repeat(64),
+    releaseTag: "app-sdk-v0.6.0-dev"
+  });
+  console.log("VS Code SDK download helper tests passed");
+}).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 assert.throws(
   () => selectSdkAsset({ assets: [] }),
   /does not publish exactly one App Author SDK ZIP/
@@ -32,4 +44,3 @@ assert.throws(
   () => selectSdkAsset({ assets: [asset, { ...asset, name: "jellyframe-app-sdk-0.6.0-dev-2.zip" }] }),
   /publishes more than one App Author SDK ZIP/
 );
-console.log("VS Code SDK download helper tests passed");
