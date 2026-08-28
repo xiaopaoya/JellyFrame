@@ -1,6 +1,6 @@
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-08-29; Applies to: 0.6.0-dev; extension version: 0.4.28; compatibility baseline: 0.5.0
+> Last updated: 2026-08-29; Applies to: 0.6.0-dev; extension version: 0.4.29; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -77,6 +77,10 @@ extension first uses a project `.jellyframe/project.json`, a
 configured SDK, `JELLYFRAME_SDK_ROOT`, or an SDK found above the
 current workspace. `jellyframe.sdkRoot` is the preferred explicit setting;
 `jellyframe.repoRoot` remains a legacy alias. `jellyframe.buildDir` is optional.
+When an App command needs an SDK but none is configured, it offers **Configure author
+environment** directly instead of running an incomplete command. SDK installation never
+overwrites an existing directory: transient Windows access or file-lock failures are retried,
+then the extension offers retry, another location, or use of an already-valid SDK.
 The extension prefers `build/desktop-release/Release`, then
 `build/desktop-debug/Debug` inside the selected SDK.
 For an app whose manifest declares `runtime.script`, the extension uses only

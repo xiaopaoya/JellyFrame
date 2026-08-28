@@ -73,6 +73,25 @@ function cliPath(context) {
   return path.join(repoRoot(context), "tools", "jellyframe_cli.py");
 }
 
+function requireAuthorSdk(context) {
+  const sdkRoot = resolvedAuthorSdk(context);
+  if (sdkRoot && isSdkRoot(sdkRoot)) {
+    return sdkRoot;
+  }
+  const chinese = isChinese();
+  const configure = chinese ? "配置作者环境" : "Configure author environment";
+  const message = chinese
+    ? "此操作需要 JellyFrame 作者 SDK，但当前尚未配置。请选择从 GitHub 下载官方 SDK，或选择已安装的 SDK。"
+    : "This operation needs a JellyFrame App Author SDK, but none is configured. Download the official SDK from GitHub or select an installed SDK.";
+  ensureOutputChannel().appendLine(`[warning] ${message}`);
+  vscode.window.showWarningMessage(message, configure).then((choice) => {
+    if (choice === configure) {
+      manageAuthorEnvironment(context);
+    }
+  });
+  return undefined;
+}
+
 function buildDir(context) {
   const configured = String(config().get("buildDir", "") || "").trim();
   if (configured) {
@@ -271,6 +290,9 @@ async function configureDesktopBuild(context, scripting) {
       : "Desktop-shell quick setup is currently supported on Windows only.");
     return undefined;
   }
+  if (!requireAuthorSdk(context)) {
+    return undefined;
+  }
 
   const root = repoRoot(context);
   if (!fs.existsSync(path.join(root, "CMakeLists.txt"))) {
@@ -436,16 +458,87 @@ async function selectAuthorSdk(context, preferredSdk) {
   return selected;
 }
 
-async function downloadAuthorSdk(context) {
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function sdkInstallFailureMessage(error, installPath, chinese) {
+  const code = String(error?.code || "").toUpperCase();
+  if (code === "EPERM" || code === "EACCES") {
+    return chinese
+      ? `Windows 未允许写入 SDK 目录：${installPath}。这通常是文件占用、杀毒软件扫描或受保护目录权限所致。扩展已自动重试；请关闭占用该目录的程序，或选择“其他位置”安装到有写权限的个人目录。`
+      : `Windows did not allow writing the SDK directory: ${installPath}. This is usually caused by a file lock, antivirus scan, or a protected location. The extension already retried; close programs using the directory or choose another writable personal folder.`;
+  }
+  if (code === "ENOTEMPTY" || code === "EEXIST") {
+    return chinese
+      ? `SDK 目标目录已存在：${installPath}。扩展不会覆盖或删除其中的内容；可使用现有 SDK，或选择其他安装位置。`
+      : `The SDK destination already exists: ${installPath}. The extension will not overwrite or delete its contents; use the existing SDK or choose another install location.`;
+  }
+  return chinese
+    ? `安装 SDK 时发生文件系统错误：${error?.message || "未知错误"}`
+    : `A file-system error occurred while installing the SDK: ${error?.message || "unknown error"}`;
+}
+
+async function moveSdkDirectoryWithRetry(source, destination) {
+  let failure;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      if (fs.existsSync(destination)) {
+        const error = new Error("SDK destination already exists");
+        error.code = "EEXIST";
+        throw error;
+      }
+      fs.renameSync(source, destination);
+      return;
+    } catch (error) {
+      failure = error;
+      const retryable = ["EPERM", "EACCES", "EBUSY"].includes(String(error?.code || "").toUpperCase());
+      if (!retryable || attempt === 2) {
+        throw error;
+      }
+      await wait(250 * (attempt + 1));
+    }
+  }
+  throw failure;
+}
+
+async function resolveExistingSdkDestination(context, installPath) {
   const chinese = isChinese();
-  const picked = await vscode.window.showOpenDialog({
-    canSelectFiles: false,
-    canSelectFolders: true,
-    canSelectMany: false,
-    openLabel: chinese ? "选择 SDK 安装位置" : "Select SDK install location",
-    title: chinese ? "选择 JellyFrame SDK 的父目录" : "Select a parent folder for the JellyFrame SDK"
-  });
-  const parent = picked?.[0]?.fsPath;
+  const existing = isSdkRoot(installPath);
+  const useExisting = chinese ? "使用现有 SDK" : "Use existing SDK";
+  const chooseAnother = chinese ? "选择其他位置" : "Choose another location";
+  const choices = existing ? [useExisting, chooseAnother] : [chooseAnother];
+  const message = existing
+    ? (chinese
+      ? `SDK 目标目录已存在：${installPath}。为保护已有文件，扩展不会覆盖它。`
+      : `The SDK destination already exists: ${installPath}. The extension will not overwrite it.`)
+    : (chinese
+      ? `SDK 目标目录已存在但不是有效 SDK：${installPath}。扩展不会覆盖或删除它。`
+      : `The SDK destination exists but is not a valid SDK: ${installPath}. The extension will not overwrite or remove it.`);
+  const choice = await vscode.window.showWarningMessage(message, ...choices);
+  if (choice === useExisting) {
+    await selectAuthorSdk(context, installPath);
+    return "used-existing";
+  }
+  if (choice === chooseAnother) {
+    await downloadAuthorSdk(context);
+  }
+  return undefined;
+}
+
+async function downloadAuthorSdk(context, preferredParent) {
+  const chinese = isChinese();
+  let parent = preferredParent;
+  if (!parent) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: chinese ? "选择 SDK 安装位置" : "Select SDK install location",
+      title: chinese ? "选择 JellyFrame SDK 的父目录" : "Select a parent folder for the JellyFrame SDK"
+    });
+    parent = picked?.[0]?.fsPath;
+  }
   if (!parent) {
     return undefined;
   }
@@ -488,12 +581,7 @@ async function downloadAuthorSdk(context) {
   const installPath = path.join(parent, installName);
   if (fs.existsSync(installPath)) {
     fs.rmSync(download.temporaryDirectory, { recursive: true, force: true });
-    const message = chinese
-      ? `SDK 目标已存在，为避免覆盖未安装：${installPath}`
-      : `The SDK destination already exists; nothing was overwritten: ${installPath}`;
-    ensureOutputChannel().appendLine(`[error] ${message}`);
-    vscode.window.showErrorMessage(message);
-    return undefined;
+    return resolveExistingSdkDestination(context, installPath);
   }
 
   const staging = fs.mkdtempSync(path.join(parent, ".jellyframe-sdk-install-"));
@@ -514,7 +602,7 @@ async function downloadAuthorSdk(context) {
     if (!rootName || !isSdkRoot(extractedRoot)) {
       throw new Error(chinese ? "下载的归档不是有效 JellyFrame SDK。" : "The downloaded archive is not a valid JellyFrame SDK.");
     }
-    fs.renameSync(extractedRoot, installPath);
+    await moveSdkDirectoryWithRetry(extractedRoot, installPath);
     fs.writeFileSync(path.join(installPath, SDK_INSTALL_METADATA_FILENAME), JSON.stringify({
       format: "jellyframe.sdk-install",
       formatVersion: 1,
@@ -531,11 +619,21 @@ async function downloadAuthorSdk(context) {
     vscode.window.showInformationMessage(message);
     return installPath;
   } catch (error) {
-    const message = chinese
-      ? `安装 SDK 失败：${error.message}`
-      : `Failed to install the SDK: ${error.message}`;
+    const message = sdkInstallFailureMessage(error, installPath, chinese);
     ensureOutputChannel().appendLine(`[error] ${message}`);
-    vscode.window.showErrorMessage(message);
+    const retry = chinese ? "重试" : "Retry";
+    const chooseAnother = chinese ? "选择其他位置" : "Choose another location";
+    const useExisting = isSdkRoot(installPath) ? (chinese ? "使用现有 SDK" : "Use existing SDK") : undefined;
+    const choice = await vscode.window.showErrorMessage(message, ...[retry, chooseAnother, useExisting].filter(Boolean));
+    if (choice === retry) {
+      return downloadAuthorSdk(context, parent);
+    }
+    if (choice === chooseAnother) {
+      return downloadAuthorSdk(context);
+    }
+    if (choice === useExisting) {
+      return selectAuthorSdk(context, installPath);
+    }
     return undefined;
   } finally {
     fs.rmSync(staging, { recursive: true, force: true });
@@ -1154,6 +1252,9 @@ function runCli(context, args) {
 }
 
 function runCliWithOptions(context, args, options = {}) {
+  if (!requireAuthorSdk(context)) {
+    return Promise.resolve({ code: undefined, stdout: "", stderr: "", missingSdk: true });
+  }
   const python = config().get("pythonPath", "python");
   const cli = cliPath(context);
   const channel = ensureOutputChannel();
@@ -1274,6 +1375,9 @@ function loadReport(reportPath, commandName) {
 }
 
 function runDetachedPython(context, script, args, options = {}) {
+  if (!requireAuthorSdk(context)) {
+    return undefined;
+  }
   if (!fs.existsSync(script)) {
     vscode.window.showErrorMessage(`Missing JellyFrame debug tool: ${script}`);
     return;
@@ -1587,6 +1691,9 @@ async function selectFrameScript(root, purpose) {
 }
 
 async function runPackageCommand(context, commandName, resourceUri) {
+  if (!requireAuthorSdk(context)) {
+    return;
+  }
   const root = await packageRoot(resourceUri);
   if (!root) {
     return;
@@ -1646,6 +1753,9 @@ async function runPackageCommand(context, commandName, resourceUri) {
 }
 
 async function previewPackage(context, resourceUri) {
+  if (!requireAuthorSdk(context)) {
+    return;
+  }
   const root = await packageRoot(resourceUri);
   if (!root) {
     return;
@@ -1681,6 +1791,9 @@ async function previewPackage(context, resourceUri) {
 async function debugExternalApp(context, resourceUri) {
   if (process.platform !== "win32") {
     vscode.window.showErrorMessage("JellyFrame desktop shell is only available on Windows.");
+    return;
+  }
+  if (!requireAuthorSdk(context)) {
     return;
   }
   const root = await packageRoot(resourceUri);
@@ -2565,6 +2678,7 @@ async function debugApp(context, resourceUri) {
     vscode.window.showErrorMessage('JellyFrame desktop shell is only available on Windows.');
     return;
   }
+  if (!requireAuthorSdk(context)) return;
   const root = await packageRoot(resourceUri);
   if (!root) return;
   const launcher = debugLauncherPath(context);
@@ -2682,6 +2796,9 @@ async function runFrameScript(context, resourceUri) {
     vscode.window.showErrorMessage("JellyFrame frame-script playback currently requires the desktop shell on Windows.");
     return;
   }
+  if (!requireAuthorSdk(context)) {
+    return;
+  }
   const root = await packageRoot(resourceUri);
   if (!root) {
     return;
@@ -2752,6 +2869,9 @@ async function openCapture(context) {
 }
 
 function listBuilds(context) {
+  if (!requireAuthorSdk(context)) {
+    return;
+  }
   const launcher = debugLauncherPath(context);
   runDetachedPython(context, launcher, ["--list-builds"], { wait: true });
 }
@@ -3542,6 +3662,9 @@ function appIdError(value, chinese) {
 }
 
 async function newFromTemplate(context) {
+  if (!requireAuthorSdk(context)) {
+    return;
+  }
   const chinese = isChinese();
   const picked = await vscode.window.showQuickPick(templateChoices(context), {
     placeHolder: chinese ? "选择 JellyFrame App 起始模板" : "Select a JellyFrame App starter template",
