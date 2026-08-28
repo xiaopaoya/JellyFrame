@@ -26,6 +26,10 @@ const {
   isSdkRoot,
   resolveSdkRoot
 } = require("./author_environment");
+const {
+  downloadLatestSdk,
+  sdkInstallName
+} = require("./sdk_download");
 
 let outputChannel;
 let reportPanel;
@@ -373,7 +377,7 @@ async function configureDesktopBuild(context, scripting) {
   }
 }
 
-async function configureAuthorEnvironment(context) {
+async function configureAuthorEnvironment(context, preferredSdk) {
   const chinese = isChinese();
   const workspace = workspaceFolderPath();
   const detected = resolveSdkRoot({
@@ -381,7 +385,7 @@ async function configureAuthorEnvironment(context) {
     configuredRoot: String(config().get("sdkRoot", "") || config().get("repoRoot", "") || "").trim(),
     extensionPath: context.extensionPath
   });
-  let selected = detected;
+  let selected = preferredSdk || detected;
   if (!selected || !isSdkRoot(selected)) {
     const picked = await vscode.window.showOpenDialog({
       canSelectFiles: false,
@@ -432,6 +436,105 @@ async function configureAuthorEnvironment(context) {
     }
   }
   return selected;
+}
+
+async function downloadAuthorSdk(context) {
+  const chinese = isChinese();
+  const picked = await vscode.window.showOpenDialog({
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: chinese ? "选择 SDK 安装位置" : "Select SDK install location",
+    title: chinese ? "选择 JellyFrame SDK 的父目录" : "Select a parent folder for the JellyFrame SDK"
+  });
+  const parent = picked?.[0]?.fsPath;
+  if (!parent) {
+    return undefined;
+  }
+  if (!fs.existsSync(parent) || !fs.statSync(parent).isDirectory()) {
+    vscode.window.showErrorMessage(chinese ? "SDK 安装位置不是有效文件夹。" : "The SDK install location is not a valid folder.");
+    return undefined;
+  }
+
+  let download;
+  try {
+    let previousBytes = 0;
+    download = await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: chinese ? "正在下载 JellyFrame App 作者 SDK" : "Downloading the JellyFrame App Author SDK",
+      cancellable: false
+    }, async (progress) => downloadLatestSdk({
+      onProgress: ({ received, total }) => {
+        const increment = total > 0
+          ? Math.max(0, Math.min(100, (received - previousBytes) / total * 100))
+          : undefined;
+        previousBytes = received;
+        progress.report({
+          increment,
+          message: total > 0
+            ? `${Math.floor(received / 1024)} / ${Math.ceil(total / 1024)} KiB`
+            : `${Math.floor(received / 1024)} KiB`
+        });
+      }
+    }));
+  } catch (error) {
+    const message = chinese
+      ? `下载 SDK 失败：${error.message}`
+      : `Failed to download the SDK: ${error.message}`;
+    ensureOutputChannel().appendLine(`[error] ${message}`);
+    vscode.window.showErrorMessage(message);
+    return undefined;
+  }
+
+  const installName = sdkInstallName(download.assetName);
+  const installPath = path.join(parent, installName);
+  if (fs.existsSync(installPath)) {
+    fs.rmSync(download.temporaryDirectory, { recursive: true, force: true });
+    const message = chinese
+      ? `SDK 目标已存在，为避免覆盖未安装：${installPath}`
+      : `The SDK destination already exists; nothing was overwritten: ${installPath}`;
+    ensureOutputChannel().appendLine(`[error] ${message}`);
+    vscode.window.showErrorMessage(message);
+    return undefined;
+  }
+
+  const staging = fs.mkdtempSync(path.join(parent, ".jellyframe-sdk-install-"));
+  try {
+    const extraction = await runLocalTool(context, config().get("pythonPath", "python"), [
+      path.join(context.extensionPath, "sdk_archive.py"),
+      download.archivePath,
+      staging
+    ], {
+      label: chinese ? "解压 JellyFrame SDK" : "Extract JellyFrame SDK"
+    });
+    if (extraction.code !== 0) {
+      return undefined;
+    }
+    const result = JSON.parse(extraction.stdout.trim());
+    const rootName = typeof result.root === "string" ? result.root : "";
+    const extractedRoot = path.join(staging, rootName);
+    if (!rootName || !isSdkRoot(extractedRoot)) {
+      throw new Error(chinese ? "下载的归档不是有效 JellyFrame SDK。" : "The downloaded archive is not a valid JellyFrame SDK.");
+    }
+    fs.renameSync(extractedRoot, installPath);
+    await configureAuthorEnvironment(context, installPath);
+    const message = chinese
+      ? `JellyFrame SDK 已安装：${installPath}`
+      : `JellyFrame SDK installed: ${installPath}`;
+    ensureOutputChannel().appendLine(`${message} (${download.releaseTag}, sha256:${download.expectedDigest})`);
+    vscode.window.showInformationMessage(message);
+    return installPath;
+  } catch (error) {
+    const message = chinese
+      ? `安装 SDK 失败：${error.message}`
+      : `Failed to install the SDK: ${error.message}`;
+    ensureOutputChannel().appendLine(`[error] ${message}`);
+    vscode.window.showErrorMessage(message);
+    return undefined;
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
+    fs.rmSync(download.temporaryDirectory, { recursive: true, force: true });
+  }
 }
 
 function debugLauncherPath(context) {
@@ -3451,6 +3554,7 @@ function activate(context) {
       return configureDesktopBuild(context, scripting);
     }),
     vscode.commands.registerCommand("jellyframe.configureEnvironment", () => configureAuthorEnvironment(context)),
+    vscode.commands.registerCommand("jellyframe.installSdk", () => downloadAuthorSdk(context)),
     vscode.commands.registerCommand("jellyframe.package", (resourceUri) => runPackageCommand(context, "package", resourceUri)),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),

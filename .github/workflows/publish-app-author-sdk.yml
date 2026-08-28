@@ -1,0 +1,112 @@
+name: Publish App Author SDK
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Immutable commit SHA or signed tag to package"
+        required: true
+        type: string
+      tag:
+        description: "New GitHub release tag, for example app-sdk-v0.6.0-dev"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark the SDK release as a prerelease"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Build and publish verified App Author SDK
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout requested source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Checkout JerryScript
+        uses: actions/checkout@v5
+        with:
+          repository: jerryscript-project/jerryscript
+          ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
+          path: third_party/jerryscript
+
+      - name: Build JerryScript
+        shell: pwsh
+        run: python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+
+      - name: Configure standard desktop Release
+        shell: pwsh
+        run: >
+          cmake -S . -B build/desktop-release
+          -DJELLYFRAME_BUILD_EXAMPLES=ON
+          -DJELLYFRAME_BUILD_TESTS=OFF
+          -DJELLYFRAME_BUILD_BENCHMARKS=OFF
+          -DJELLYFRAME_BUILD_SCRIPTING=OFF
+
+      - name: Build standard desktop Release
+        shell: pwsh
+        run: cmake --build build/desktop-release --config Release --parallel
+
+      - name: Configure scripting desktop Release
+        shell: pwsh
+        run: >
+          cmake -S . -B build/desktop-scripting-release
+          -DJELLYFRAME_BUILD_EXAMPLES=ON
+          -DJELLYFRAME_BUILD_TESTS=OFF
+          -DJELLYFRAME_BUILD_BENCHMARKS=OFF
+          -DJELLYFRAME_BUILD_SCRIPTING=ON
+          -DJELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON
+          -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE\third_party\jerryscript"
+
+      - name: Build scripting desktop Release
+        shell: pwsh
+        run: cmake --build build/desktop-scripting-release --config Release --parallel
+
+      - name: Package and verify SDK
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          $asset = "jellyframe-app-sdk-$version.zip"
+          python project_tools\package_app_author_sdk.py `
+            --build-dir build\desktop-release\Release `
+            --scripting-build-dir build\desktop-scripting-release\Release `
+            --output "build\$asset"
+          python tests\tool_regression\app_author_sdk_tests.py build\desktop-release\Release
+          $hash = (Get-FileHash "build\$asset" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $asset" | Set-Content -NoNewline -Encoding ascii "build\$asset.sha256"
+          "ASSET=build\$asset" >> $env:GITHUB_ENV
+          "SIDECAR=build\$asset.sha256" >> $env:GITHUB_ENV
+
+      - name: Publish GitHub SDK release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ inputs.tag }}" --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Release tag already exists: ${{ inputs.tag }}"
+          }
+          $arguments = @(
+            'release', 'create', '${{ inputs.tag }}', $env:ASSET, $env:SIDECAR,
+            '--repo', '${{ github.repository }}',
+            '--target', '${{ inputs.ref }}',
+            '--title', 'JellyFrame App Author SDK ${{ inputs.tag }}',
+            '--notes', 'Versioned JellyFrame App Author SDK built from ${{ inputs.ref }}. The VS Code extension verifies the uploaded SHA-256 digest before installation.'
+          )
+          if ('${{ inputs.prerelease }}' -eq 'true') {
+            $arguments += '--prerelease'
+          }
+          gh @arguments

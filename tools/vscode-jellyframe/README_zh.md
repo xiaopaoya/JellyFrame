@@ -1,6 +1,6 @@
 # JellyFrame VS Code 工具
 
-> 最后更新：2026-08-28；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-29；适用版本：0.6.0-dev；扩展版本：0.4.26；兼容基线：0.5.0
 
 JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里检查、预览、调试和
 打包 JellyFrame App。安装后可以从左侧 JellyFrame 活动栏、资源管理器/编辑器右键菜单
@@ -17,6 +17,7 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 - 对 app 作者建议、package warnings 和管线 diagnostics 提供 inline diagnostics。
 - Explorer 中的 JellyFrame 状态视图显示当前 app、构建目录、报告诊断和性能摘要。
 - 首次配置作者环境时选择已安装的 JellyFrame SDK，独立 App 工作区随后可直接使用。
+- 可从 GitHub 最新发布下载并安装经过 SHA-256 校验的 App 作者 SDK，不覆盖已有目录。
 - 自动发现 SDK 的桌面壳构建，也可在设置中指定路径。
 - 可配置 SDK 根目录、Python 可执行文件、默认 target 和字体预算。
 - 在 VS Code 左侧提供始终可见的 `JellyFrame` 活动栏视图，集中显示 App、构建、报告、
@@ -28,8 +29,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 仓库当前提供的是源码版扩展，尚未发布到 VS Code Marketplace。面向 App 作者的使用方式是：
 
 1. 安装扩展后打开独立的 App 工作区。
-2. 执行“JellyFrame：配置作者环境”，选择已安装的 JellyFrame SDK；SDK 提供 CLI、target
-   preset 和匹配的桌面运行时。
+2. 执行“JellyFrame：下载并安装 App 作者 SDK”，选择一个父目录；扩展会从官方 GitHub
+   Release 下载唯一的 SDK ZIP，校验 SHA-256 后安全解压并自动配置环境。也可以执行“配置作者环境”选择已有 SDK。
 3. 点击左侧活动栏中的 JellyFrame 图标开始操作；也可以打开 `jellyframe.app.json`、App
    的 HTML/CSS 文件后使用右键菜单。
 
@@ -51,7 +52,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 安装或更新仍需要 VS Code 的 `code` 命令在 PATH 中；也可以通过 `-CodeCommand` 传入完整 CLI 路径（通常是
 `...\Microsoft VS Code\bin\code.cmd`）。若传入 `Code.exe` 且相邻 CLI 存在，脚本会自动改用该 CLI。若 PowerShell 阻止本地脚本，可在当前窗口执行
 `Set-ExecutionPolicy -Scope Process Bypass`。手动安装时，也可以在 VS Code 的扩展视图中选择“从 VSIX 安装”。
-安装到仓库之外时，扩展依次使用项目 `.jellyframe/project.json`、已配置的 SDK、
+SDK 下载仅接受 `https://github.com/xiaopaoya/JellyFrame` 的最新 Release，并要求 Release
+提供 GitHub SHA-256 摘要或同名 `.sha256` 校验文件；下载失败或校验缺失时不会安装。安装到仓库之外时，扩展依次使用项目 `.jellyframe/project.json`、已配置的 SDK、
 `JELLYFRAME_SDK_ROOT` 或从当前工作区向上找到的 SDK；`jellyframe.sdkRoot` 是推荐的显式
 设置，`jellyframe.repoRoot` 仅保留为旧别名。`jellyframe.buildDir` 可选，用于指定桌面运行目录。
 扩展优先使用 SDK 中的 `build/desktop-release/Release`，其次使用 `build/desktop-debug/Debug`。

@@ -11,6 +11,7 @@
   "command.listBuilds": "JellyFrame: List Desktop Builds",
   "command.setupDesktopBuild": "JellyFrame: Create Compatible Desktop Build",
   "command.configureEnvironment": "JellyFrame: Configure Author Environment",
+  "command.installSdk": "JellyFrame: Download and Install App Author SDK",
   "command.package": "JellyFrame: Generate Resource Package",
   "command.newFromTemplate": "JellyFrame: New App From Template",
   "command.showReport": "JellyFrame: Show Last Report",

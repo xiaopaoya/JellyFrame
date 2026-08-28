@@ -1,6 +1,6 @@
 # App Author Environment
 
-> Last updated: 2026-08-28; Applies to: 0.6.0-dev
+> Last updated: 2026-08-29; Applies to: 0.6.0-dev
 
 JellyFrame has two distinct audiences:
 
@@ -11,9 +11,12 @@ JellyFrame has two distinct audiences:
   hardware toolchains, and process documentation.
 
 An App is an independent workspace containing `jellyframe.app.json`, `index.html`, and its local
-CSS/JavaScript resources. Run **JellyFrame: Configure Author Environment** once in VS Code and
-select the installed SDK. The extension stores the machine-level SDK path, so later independent
-App workspaces need no `repoRoot` setting. A project may pin an SDK with `.jellyframe/project.json`:
+CSS/JavaScript resources. Run **JellyFrame: Download and Install App Author SDK** once in VS Code
+and select a parent folder. The extension downloads the latest verified SDK release, checks its
+SHA-256 and configures it. **JellyFrame: Configure Author Environment** remains available for an
+SDK already installed by an organization or CI. The extension stores the machine-level SDK path,
+so later independent App workspaces need no `repoRoot` setting. A project may pin an SDK with
+`.jellyframe/project.json`:
 
 ```json
 {
@@ -44,6 +47,10 @@ produce a concrete configuration action and path requirement.
 
 Maintainers create the SDK ZIP with `project_tools/package_app_author_sdk.py` from a validated
 standard desktop Release, passing a scripting Release when classic-script App debugging is part of
-the delivery. Its manifest records file SHA-256 values and the included desktop profiles. Release
-the archive only after an unpacked CLI/template smoke test; never substitute an arbitrary source
-checkout or unverified local build directory for an App-author SDK.
+the delivery. Its manifest records file SHA-256 values and the included desktop profiles. Official
+distribution uses the manual **Publish App Author SDK** GitHub Actions workflow: provide an
+immutable commit/tag, a new SDK release tag and prerelease state. It builds standard and scripting
+desktop Releases, runs the SDK smoke test, and uploads the ZIP with a matching `.sha256` sidecar.
+The extension selects the newest release with one SDK ZIP and verifies the GitHub asset digest or
+sidecar before installation. Never substitute an arbitrary source checkout or unverified local
+build directory for an App-author SDK.
