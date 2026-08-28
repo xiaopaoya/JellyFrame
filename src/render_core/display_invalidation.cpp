@@ -1,4 +1,4 @@
-#include "render_core/display_invalidation.h"
+﻿#include "render_core/display_invalidation.h"
 
 #include <algorithm>
 #include <limits>
