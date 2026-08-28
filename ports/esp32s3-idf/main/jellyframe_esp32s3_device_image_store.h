@@ -35,7 +35,7 @@ public:
                                                             jellyframe::AppInstalledBundleLease*& lease) override;
 
     bool list(jellyframe::DeviceAppListPayload& list) const;
-    bool rollback(std::string_view app_id);
+    jellyframe::DeviceRequestResultCode rollback(std::string_view app_id);
     bool remove(std::string_view app_id);
     void copy_recovery(jellyframe::DeviceRecoveryDetailPayload& recovery) const;
     void record_recovery(jellyframe::DeviceRecoveryReason reason,

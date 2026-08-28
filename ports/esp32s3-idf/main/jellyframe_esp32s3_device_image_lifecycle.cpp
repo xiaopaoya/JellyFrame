@@ -549,7 +549,7 @@ private:
             (void)binding_.terminate_current(host_, AppTeardownReason::AppSwitch);
             active_app_id_.clear();
         }
-        result.result_code = store_.rollback(app_id.app_id_view()) ? DeviceRequestResultCode::Ok : DeviceRequestResultCode::NotFound;
+        result.result_code = store_.rollback(app_id.app_id_view());
         result.flags = result.result_code == DeviceRequestResultCode::Ok ? DeviceOperationResultComplete : 0;
     }
 

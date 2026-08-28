@@ -13,9 +13,10 @@ from pathlib import Path
 
 
 STOP_TELEMETRY = re.compile(
-    r"initialized=(?P<initialized>[01]).*input_seq=(?P<input>\d+).*"
+    r"posted=(?P<input>\d+).*rejected=(?P<rejected>\d+).*unsupported=(?P<unsupported>\d+).*"
+    r"queue_dropped=(?P<dropped>\d+).*worker_seq=(?P<worker>\d+).*"
     r"mutation_seq=(?P<mutation>\d+).*published_seq=(?P<published>\d+).*"
-    r"accepted_seq=(?P<accepted>\d+).*presents_failed=(?P<failed>\d+).*fatal=(?P<fatal>[01])"
+    r"accepted_seq=(?P<accepted>\d+).*presents_failed=(?P<failed>\d+)"
 )
 
 
@@ -43,16 +44,17 @@ def stop_snapshot(text: str) -> dict[str, int] | None:
         except json.JSONDecodeError:
             continue
         message = record.get("log", {}).get("message", "")
-        match = STOP_TELEMETRY.search(message) if isinstance(message, str) and "script stopped" in message else None
+        match = STOP_TELEMETRY.search(message) if isinstance(message, str) and "script-input stopped" in message else None
         if match:
             return {key: int(value) for key, value in match.groupdict().items()}
     return None
 
 
 def passed(snapshot: dict[str, int] | None) -> bool:
-    return snapshot is not None and snapshot["initialized"] == 1 and snapshot["input"] >= 1 and \
+    return snapshot is not None and snapshot["input"] >= 1 and snapshot["worker"] >= 1 and \
         snapshot["mutation"] >= 1 and snapshot["published"] >= snapshot["mutation"] and \
-        snapshot["accepted"] >= snapshot["published"] and snapshot["failed"] == 0 and snapshot["fatal"] == 0
+        snapshot["accepted"] >= snapshot["published"] and snapshot["rejected"] == 0 and \
+        snapshot["unsupported"] == 0 and snapshot["dropped"] == 0 and snapshot["failed"] == 0
 
 
 def main() -> int:

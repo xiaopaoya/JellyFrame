@@ -346,19 +346,26 @@ bool DeviceImageStore::list(DeviceAppListPayload& list) const {
     return true;
 }
 
-bool DeviceImageStore::rollback(std::string_view app_id) {
+DeviceRequestResultCode DeviceImageStore::rollback(std::string_view app_id) {
     if (!initialized_ || registry_->active.slot == kNoSlot || registry_->rollback.slot == kNoSlot ||
         app_id != string_view(registry_->active.app_id)) {
-        return false;
+        return DeviceRequestResultCode::NotFound;
+    }
+    // Validate the candidate before changing the durable active pointer. A
+    // damaged rollback slot must leave the currently running generation
+    // intact and be observable as an integrity failure to the provider.
+    if (!validate_record(registry_->rollback, nullptr)) {
+        set_recovery(DeviceRecoveryReason::RegistryInvalid, app_id, DeviceRecoveryLauncherActive);
+        return DeviceRequestResultCode::IntegrityFailed;
     }
     const RegistryRecord previous = *registry_;
     std::swap(registry_->active, registry_->rollback);
     ++registry_->generation;
     if (publish_registry()) {
-        return true;
+        return DeviceRequestResultCode::Ok;
     }
     *registry_ = previous;
-    return false;
+    return DeviceRequestResultCode::Failed;
 }
 
 bool DeviceImageStore::remove(std::string_view app_id) {
