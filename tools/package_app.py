@@ -2260,7 +2260,7 @@ def collect_resource_budget_warnings(resources: list[dict], budgets: dict) -> li
     if limit <= 0 or used <= limit:
         return []
     return [{
-        "level": "warning",
+        "level": "error",
         "code": "resource-budget-exceeded",
         "message": f"total packaged resources exceed maxResourceBytes: {used} > {limit}",
         "source": "jellyframe.app.json:budgets.maxResourceBytes",
@@ -2743,6 +2743,24 @@ def write_debug_dir(root: Path, output_dir: Path, manifest: dict, resources: lis
         encoding="utf-8")
 
 
+def validate_debug_output_path(root: Path, output_dir: Path) -> None:
+    root = root.resolve()
+    output_dir = output_dir.resolve()
+    if output_dir == root:
+        fail("--debug-dir must not be the app source directory")
+    try:
+        root.relative_to(output_dir)
+    except ValueError:
+        pass
+    else:
+        fail("--debug-dir must not contain the app source directory")
+    try:
+        output_dir.relative_to(root)
+    except ValueError:
+        return
+    fail("--debug-dir must be outside the app source directory")
+
+
 def bundle_summary_bytes(manifest: dict) -> bytes:
     return (json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
@@ -2883,6 +2901,9 @@ def main() -> int:
         fail("--svg-raster-size must be between 1 and 256")
 
     root = Path(args.root).resolve()
+    debug_dir = Path(args.debug_dir).resolve() if args.debug_dir else None
+    if debug_dir is not None:
+        validate_debug_output_path(root, debug_dir)
     raw_manifest = read_manifest(root)
     warnings = collect_manifest_warnings(raw_manifest)
     manifest = validate_manifest(raw_manifest)
@@ -2919,6 +2940,10 @@ def main() -> int:
     warnings.extend(reference_warnings)
     font_diagnostics, font_warnings = collect_font_diagnostics(manifest, resources, target_config, budgets)
     warnings.extend(font_warnings)
+
+    errors = [warning for warning in warnings if warning.get("level") == "error"]
+    if errors:
+        fail("package validation failed: " + "; ".join(error["message"] for error in errors))
 
     if not args.validate_only:
         if not args.output_cpp and not args.output_bundle and not args.debug_dir:
@@ -2965,8 +2990,8 @@ def main() -> int:
     report_path = Path(args.report).resolve()
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    if args.debug_dir:
-        write_debug_dir(root, Path(args.debug_dir).resolve(), raw_manifest, resources, report)
+    if debug_dir is not None:
+        write_debug_dir(root, debug_dir, raw_manifest, resources, report)
 
     print(
         f"packaged {manifest['id']} resources={len(resources)} "

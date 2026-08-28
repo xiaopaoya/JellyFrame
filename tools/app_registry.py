@@ -58,7 +58,12 @@ def data_dir(store: Path) -> Path:
 
 
 def app_data_dir(store: Path, app_id: str) -> Path:
-    return data_dir(store) / sanitize_filename(app_id)
+    return data_dir(store) / app_data_directory_name(app_id)
+
+
+def app_data_directory_name(app_id: str) -> str:
+    """Return a filesystem-safe, collision-free directory name for an app ID."""
+    return "app-" + app_id.encode("utf-8").hex()
 
 
 def sanitize_filename(value: str) -> str:
@@ -112,7 +117,11 @@ def load_install_candidate(path: Path) -> dict:
 def atomic_write_json(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    encoded = (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    with tmp.open("wb") as output:
+        output.write(encoded)
+        output.flush()
+        os.fsync(output.fileno())
     os.replace(tmp, path)
 
 

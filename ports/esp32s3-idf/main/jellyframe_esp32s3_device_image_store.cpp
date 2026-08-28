@@ -335,6 +335,12 @@ bool DeviceImageStore::rollback(std::string_view app_id) {
         app_id != string_view(registry_->active.app_id)) {
         return false;
     }
+    DeviceBundleDescriptor rollback_descriptor;
+    if (!validate_record(registry_->rollback, &rollback_descriptor) ||
+        rollback_descriptor.summary.app_id_view() != string_view(registry_->rollback.app_id)) {
+        set_recovery(DeviceRecoveryReason::RegistryInvalid, app_id, DeviceRecoveryLauncherActive);
+        return false;
+    }
     const RegistryRecord previous = *registry_;
     std::swap(registry_->active, registry_->rollback);
     ++registry_->generation;

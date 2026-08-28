@@ -410,12 +410,35 @@ class DeviceReferenceCliTests(unittest.TestCase):
             self.assertEqual(response["sessionId"], 4)
             self.assertEqual(response["requestId"], 7)
 
+    def test_transaction_record_recovers_durable_uncommitted_tail(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-device-reference-recovery-") as directory:
+            store = Path(directory) / "store"
+            record = device_reference.begin_install(store, 7, "org.example.recovery", 3, 0, False)
+            device_reference.append_chunk(store, 7, 0, b"a")
+            part = device_reference.staging_path(store, 7)
+            with part.open("ab") as output:
+                output.write(b"bc")
+            recovered = device_reference.transaction_record(store, 7)
+            self.assertEqual(recovered["receivedBytes"], 1)
+            self.assertEqual(part.read_bytes(), b"a")
+
     def test_operation_result_rejects_reserved_flags(self):
         with self.assertRaisesRegex(device_reference.ReferenceDeviceError, "invalid JFDP operation result"):
             device_reference.encode_jfdp_operation_result("ok", flags=0x8000)
 
         payload = bytearray(device_reference.encode_jfdp_operation_result("ok"))
         payload[2] = 0x80
+        with self.assertRaisesRegex(device_reference.ReferenceDeviceError, "invalid JFDP operation result"):
+            device_reference.decode_jfdp_operation_result(bytes(payload))
+
+    def test_operation_result_rejects_received_bytes_above_expected(self):
+        with self.assertRaisesRegex(device_reference.ReferenceDeviceError, "invalid JFDP operation result"):
+            device_reference.encode_jfdp_operation_result("accepted", received_bytes=2, expected_bytes=1)
+
+        payload = bytearray(device_reference.encode_jfdp_operation_result(
+            "accepted", received_bytes=0, expected_bytes=1
+        ))
+        payload[8:12] = (2).to_bytes(4, "little")
         with self.assertRaisesRegex(device_reference.ReferenceDeviceError, "invalid JFDP operation result"):
             device_reference.decode_jfdp_operation_result(bytes(payload))
 

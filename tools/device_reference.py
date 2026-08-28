@@ -8,6 +8,7 @@ that a board transport must later implement against the same protocol contract.
 from __future__ import annotations
 
 import json
+import os
 import struct
 import zlib
 from pathlib import Path
@@ -218,8 +219,17 @@ def transaction_record(store: Path, transaction_id: int) -> dict:
             record["receivedBytes"] > record["bundleBytes"]):
         raise ReferenceDeviceError("failed", f"invalid transaction metadata: {path}")
     part = staging_path(store, transaction_id)
-    if not part.is_file() or part.stat().st_size != record["receivedBytes"]:
+    if not part.is_file():
         raise ReferenceDeviceError("failed", f"transaction staging is missing or inconsistent: {transaction_id}")
+    part_size = part.stat().st_size
+    if part_size < record["receivedBytes"]:
+        raise ReferenceDeviceError("failed", f"transaction staging is missing or inconsistent: {transaction_id}")
+    if part_size > record["receivedBytes"]:
+        # A power loss can leave a durable chunk behind before its metadata
+        # replacement. Discard only that uncommitted tail so resume/cancel can
+        # continue from the last durable metadata boundary.
+        with part.open("r+b") as output:
+            output.truncate(record["receivedBytes"])
     return record
 
 
@@ -332,6 +342,8 @@ def append_chunk(store: Path, transaction_id: int, offset: int, chunk: bytes) ->
     with path.open("r+b") as output:
         output.seek(offset)
         output.write(chunk)
+        output.flush()
+        os.fsync(output.fileno())
     record["receivedBytes"] += len(chunk)
     save_transaction(store, record)
     return {
@@ -783,7 +795,8 @@ def encode_jfdp_operation_result(result_code: str, *, flags: int = 0, transactio
     if (result_code not in JFDP_RESULT_CODES or not isinstance(flags, int) or
             not 0 <= flags <= 0xffff or flags & ~JFDP_RESULT_FLAG_MASK or
             not all(isinstance(value, int) and 0 <= value <= 0xffffffff
-                    for value in (transaction_id, received_bytes, expected_bytes))):
+                    for value in (transaction_id, received_bytes, expected_bytes)) or
+            received_bytes > expected_bytes):
         raise ReferenceDeviceError("invalid-request", "invalid JFDP operation result")
     return struct.pack("<BBHIII", JFDP_PAYLOAD_VERSION, JFDP_RESULT_CODES[result_code], flags,
                        transaction_id, received_bytes, expected_bytes)
@@ -794,7 +807,7 @@ def decode_jfdp_operation_result(payload: bytes) -> dict:
         raise ReferenceDeviceError("invalid-request", "invalid JFDP operation result size")
     version, result_value, flags, transaction_id, received_bytes, expected_bytes = struct.unpack("<BBHIII", payload)
     if (version != JFDP_PAYLOAD_VERSION or result_value not in JFDP_RESULT_NAMES or
-            flags & ~JFDP_RESULT_FLAG_MASK):
+            flags & ~JFDP_RESULT_FLAG_MASK or received_bytes > expected_bytes):
         raise ReferenceDeviceError("invalid-request", "invalid JFDP operation result")
     return {
         "resultCode": JFDP_RESULT_NAMES[result_value],

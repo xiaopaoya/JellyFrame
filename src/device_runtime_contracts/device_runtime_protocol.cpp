@@ -1045,7 +1045,8 @@ DeviceProtocolStatus encode_device_operation_result_payload(const DeviceOperatio
     output_size = 0;
     if (output == nullptr || !is_device_request_result_code(static_cast<std::uint8_t>(payload.result_code)) ||
         (payload.flags & ~(DeviceOperationResultComplete | DeviceOperationResultActive |
-                           DeviceOperationResultLauncherActive)) != 0) {
+                           DeviceOperationResultLauncherActive)) != 0 ||
+        payload.received_bytes > payload.expected_bytes) {
         return DeviceProtocolStatus::InvalidArgument;
     }
     if (output_capacity < kOperationResultFixedBytes) {
@@ -1080,7 +1081,8 @@ DeviceProtocolStatus decode_device_operation_result_payload(const std::uint8_t* 
     const std::uint16_t flags = read_u16(input + 2);
     if (!is_device_request_result_code(input[1]) ||
         (flags & ~(DeviceOperationResultComplete | DeviceOperationResultActive |
-                   DeviceOperationResultLauncherActive)) != 0) {
+                   DeviceOperationResultLauncherActive)) != 0 ||
+        read_u32(input + 8) > read_u32(input + 12)) {
         return DeviceProtocolStatus::InvalidArgument;
     }
     payload.result_code = static_cast<DeviceRequestResultCode>(input[1]);

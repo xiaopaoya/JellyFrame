@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <numeric>
 #include <sstream>
 #include <vector>
@@ -14,15 +15,24 @@ namespace jellyframe {
 namespace {
 
 int horizontal_edges(const EdgeSizes& edges) {
-    return edges.left + edges.right;
+    const std::int64_t total = static_cast<std::int64_t>(edges.left) + edges.right;
+    return static_cast<int>(std::clamp<std::int64_t>(total,
+                                                     std::numeric_limits<int>::min(),
+                                                     std::numeric_limits<int>::max()));
 }
 
 int vertical_edges(const EdgeSizes& edges) {
-    return edges.top + edges.bottom;
+    const std::int64_t total = static_cast<std::int64_t>(edges.top) + edges.bottom;
+    return static_cast<int>(std::clamp<std::int64_t>(total,
+                                                     std::numeric_limits<int>::min(),
+                                                     std::numeric_limits<int>::max()));
 }
 
 int resolve_percent(int basis, int percent) {
-    return std::max(0, (std::max(0, basis) * percent + 50) / 100);
+    const std::int64_t non_negative_basis = std::max(0, basis);
+    const std::int64_t scaled = non_negative_basis * std::max(0, percent) + 50;
+    return static_cast<int>(std::clamp<std::int64_t>(scaled / 100, 0,
+                                                     std::numeric_limits<int>::max()));
 }
 
 std::string quote_detail_value(const std::string& value, std::size_t max_chars = 48) {
@@ -868,8 +878,10 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
               : fallback_text_metrics({}, box.style.font_size, box.style.font_weight).line_height)
         : 0;
     const int aspect_ratio_height = has_aspect_ratio(box.style) && content_width > 0
-        ? std::max(1, (content_width * box.style.aspect_ratio_height + box.style.aspect_ratio_width / 2) /
-                         box.style.aspect_ratio_width)
+        ? std::max(1, static_cast<int>(std::min<std::int64_t>(
+              std::numeric_limits<int>::max(),
+              (static_cast<std::int64_t>(content_width) * box.style.aspect_ratio_height +
+               box.style.aspect_ratio_width / 2) / box.style.aspect_ratio_width)))
         : 0;
     const int fixed_content_height = specified_content_height(box.style, height);
     int content_height = std::max(specified_content_min_height(box.style, height),

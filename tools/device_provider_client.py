@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import threading
 import uuid
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,7 @@ from device_provider_contract import ProviderContractError, parse_provider_jsonl
 
 DEFAULT_TIMEOUT_SECONDS = 30
 MAX_PROVIDER_OUTPUT_BYTES = 256 * 1024
+_PROVIDER_READ_CHUNK_BYTES = 4096
 
 
 class DeviceProviderClientError(RuntimeError):
@@ -64,26 +66,61 @@ def invoke_provider(
     command.append(operation)
     command.extend(arguments or [])
     try:
-        completed = subprocess.run(command, shell=False, stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   timeout=timeout_seconds, check=False)
+        process = subprocess.Popen(command, shell=False, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except OSError as error:
         raise DeviceProviderClientError(f"provider failed to start: {error}") from error
-    except subprocess.TimeoutExpired as error:
-        raise DeviceProviderClientError("provider timed out") from error
-    if len(completed.stdout) > MAX_PROVIDER_OUTPUT_BYTES:
-        raise DeviceProviderClientError("provider stdout exceeds the host budget")
+
+    streams: dict[str, bytearray] = {"stdout": bytearray(), "stderr": bytearray()}
+    overflow: list[str] = []
+    lock = threading.Lock()
+
+    def read_stream(name: str, stream) -> None:
+        while True:
+            chunk = stream.read(_PROVIDER_READ_CHUNK_BYTES)
+            if not chunk:
+                return
+            with lock:
+                if len(streams[name]) + len(chunk) > MAX_PROVIDER_OUTPUT_BYTES:
+                    if name not in overflow:
+                        overflow.append(name)
+                    try:
+                        process.kill()
+                    except OSError:
+                        pass
+                    return
+                streams[name].extend(chunk)
+
+    readers = [threading.Thread(target=read_stream, args=(name, stream), daemon=True)
+               for name, stream in (("stdout", process.stdout), ("stderr", process.stderr))]
+    for reader in readers:
+        reader.start()
     try:
-        result = parse_provider_jsonl(completed.stdout) if stream else parse_provider_result(completed.stdout)
+        process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired as error:
+        process.kill()
+        process.wait()
+        for reader in readers:
+            reader.join()
+        raise DeviceProviderClientError("provider timed out") from error
+    for reader in readers:
+        reader.join()
+    if overflow:
+        raise DeviceProviderClientError(f"provider {overflow[0]} exceeds the host output budget")
+
+    stdout = bytes(streams["stdout"])
+    completed_returncode = process.returncode
+    try:
+        result = parse_provider_jsonl(stdout) if stream else parse_provider_result(stdout)
     except ProviderContractError as error:
         raise DeviceProviderClientError(f"invalid provider output: {error}") from error
     terminal = result[-1] if stream else result
     if terminal["operation"] != operation or terminal["requestId"] != request:
         raise DeviceProviderClientError("provider response does not match the requested operation")
     expected_returncode = _expected_exit_status(terminal["resultCode"])
-    if completed.returncode != expected_returncode:
+    if completed_returncode != expected_returncode:
         raise DeviceProviderClientError(
             "provider exit status conflicts with resultCode "
-            f"{terminal['resultCode']}: expected {expected_returncode}, got {completed.returncode}"
+            f"{terminal['resultCode']}: expected {expected_returncode}, got {completed_returncode}"
         )
     return result

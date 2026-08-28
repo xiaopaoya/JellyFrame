@@ -178,21 +178,11 @@ private:
             result.flags = DeviceOperationResultLauncherActive;
             return;
         }
-        std::array<std::uint8_t, 512> entry_bytes{};
-        std::size_t read_bytes = 0;
-        DeviceBundleDescriptor descriptor;
-        const DeviceBundleStatus entry_status = binding_.copy_active_descriptor(descriptor)
-            ? binding_.read_active_resource(descriptor.summary.entry_path_view(), entry_bytes.data(),
-                                            entry_bytes.size(), read_bytes)
-            : DeviceBundleStatus::ResourceNotFound;
-        if (entry_status != DeviceBundleStatus::Ok || read_bytes == 0) {
-            store_.record_recovery(DeviceRecoveryReason::AppLoadFailure, app_id.app_id_view(),
-                                   DeviceRecoveryLauncherActive | DeviceRecoveryAppDisabled);
-            (void)binding_.recover_to_protected_launcher(host_, AppTeardownReason::LoadFailure);
-            result.result_code = DeviceRequestResultCode::Failed;
-            result.flags = DeviceOperationResultLauncherActive;
-            return;
-        }
+        // acquire_installed_bundle() has already validated the complete
+        // immutable container, including the entry resource. Do not read the
+        // entry into a fixed-size probe buffer: valid HTML is not bounded by a
+        // transport-sized scratch buffer and the runtime loader owns its
+        // resource streaming policy.
         result.result_code = DeviceRequestResultCode::Ok;
         result.flags = DeviceOperationResultComplete | DeviceOperationResultActive;
     }

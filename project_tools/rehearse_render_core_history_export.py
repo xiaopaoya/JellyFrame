@@ -142,6 +142,8 @@ def verify_source(source_root: Path) -> str:
 def prepare_output(source_root: Path, output_dir: Path, force: bool) -> None:
     if output_dir == source_root:
         raise RuntimeError("--output-dir must not be the source root")
+    if source_root.is_relative_to(output_dir):
+        raise RuntimeError("--output-dir must not contain the source repository")
     if output_dir.is_relative_to(source_root) and not output_dir.is_relative_to(source_root / "build"):
         raise RuntimeError("an in-tree --output-dir must be under the ignored build directory")
     if output_dir.exists():

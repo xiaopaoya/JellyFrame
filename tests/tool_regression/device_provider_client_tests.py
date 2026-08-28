@@ -6,6 +6,7 @@ from __future__ import annotations
 import subprocess
 import tempfile
 import unittest
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -33,6 +34,21 @@ def result(operation: str, request_id: str, result_code: str = "ok") -> bytes:
     ).encode("utf-8")
 
 
+class FakeProviderProcess:
+    def __init__(self, completed: subprocess.CompletedProcess) -> None:
+        self.stdout = BytesIO(completed.stdout)
+        self.stderr = BytesIO(completed.stderr)
+        self.returncode = completed.returncode
+        self.killed = False
+
+    def wait(self, timeout=None) -> int:
+        del timeout
+        return self.returncode
+
+    def kill(self) -> None:
+        self.killed = True
+
+
 class DeviceProviderClientTests(unittest.TestCase):
     def test_requires_an_absolute_existing_provider_path(self) -> None:
         with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "absolute"):
@@ -43,7 +59,8 @@ class DeviceProviderClientTests(unittest.TestCase):
             provider = Path(directory) / "provider.exe"
             provider.write_bytes(b"")
             completed = subprocess.CompletedProcess([], 0, result("discover", "jf-test"), b"")
-            with patch("device_provider_client.subprocess.run", return_value=completed) as run:
+            process = FakeProviderProcess(completed)
+            with patch("device_provider_client.subprocess.Popen", return_value=process) as run:
                 response = device_provider_client.invoke_provider(
                     provider, "discover", request_id="jf-test"
                 )
@@ -57,7 +74,7 @@ class DeviceProviderClientTests(unittest.TestCase):
             provider = Path(directory) / "provider.exe"
             provider.write_bytes(b"")
             mismatched = subprocess.CompletedProcess([], 0, result("launch", "jf-test"), b"")
-            with patch("device_provider_client.subprocess.run", return_value=mismatched):
+            with patch("device_provider_client.subprocess.Popen", return_value=FakeProviderProcess(mismatched)):
                 with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "does not match"):
                     device_provider_client.invoke_provider(provider, "discover", request_id="jf-test")
 
@@ -72,7 +89,7 @@ class DeviceProviderClientTests(unittest.TestCase):
                 + result("install", "jf-test").replace(b'"kind":"result",', b'"kind":"result","sequence":2,')
             )
             completed = subprocess.CompletedProcess([], 0, stream, b"")
-            with patch("device_provider_client.subprocess.run", return_value=completed) as run:
+            with patch("device_provider_client.subprocess.Popen", return_value=FakeProviderProcess(completed)) as run:
                 events = device_provider_client.invoke_provider(
                     provider, "install", stream=True, request_id="jf-test"
                 )
@@ -94,27 +111,27 @@ class DeviceProviderClientTests(unittest.TestCase):
                     b'"kind":"result","sequence":2,"logSummary":{"returnedRecords":1,"droppedRecords":0},')
             )
             completed = subprocess.CompletedProcess([], 0, stream, b"")
-            with patch("device_provider_client.subprocess.run", return_value=completed):
+            with patch("device_provider_client.subprocess.Popen", return_value=FakeProviderProcess(completed)):
                 events = device_provider_client.invoke_provider(
                     provider, "logs", stream=True, request_id="jf-test"
                 )
             self.assertEqual(events[0]["log"]["message"], "started")
             conflicting = subprocess.CompletedProcess([], 1, result("discover", "jf-test"), b"")
-            with patch("device_provider_client.subprocess.run", return_value=conflicting):
+            with patch("device_provider_client.subprocess.Popen", return_value=FakeProviderProcess(conflicting)):
                 with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "exit status"):
                     device_provider_client.invoke_provider(provider, "discover", request_id="jf-test")
 
             failed_with_success_exit = subprocess.CompletedProcess(
                 [], 0, result("discover", "jf-test", "storage-full"), b""
             )
-            with patch("device_provider_client.subprocess.run", return_value=failed_with_success_exit):
+            with patch("device_provider_client.subprocess.Popen", return_value=FakeProviderProcess(failed_with_success_exit)):
                 with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "storage-full"):
                     device_provider_client.invoke_provider(provider, "discover", request_id="jf-test")
 
             unavailable_with_wrong_exit = subprocess.CompletedProcess(
                 [], 1, result("discover", "jf-test", "transport-unavailable"), b""
             )
-            with patch("device_provider_client.subprocess.run", return_value=unavailable_with_wrong_exit):
+            with patch("device_provider_client.subprocess.Popen", return_value=FakeProviderProcess(unavailable_with_wrong_exit)):
                 with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "expected 3"):
                     device_provider_client.invoke_provider(provider, "discover", request_id="jf-test")
 
