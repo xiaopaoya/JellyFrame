@@ -506,12 +506,14 @@ if(JELLYFRAME_BUILD_TESTS)
                         $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-            add_test(
-                NAME jellyframe_app_author_sdk_packaging
-                COMMAND ${Python3_EXECUTABLE}
-                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/app_author_sdk_tests.py
-                        $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
-                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            if(WIN32)
+                add_test(
+                    NAME jellyframe_app_author_sdk_packaging
+                    COMMAND ${Python3_EXECUTABLE}
+                            ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/app_author_sdk_tests.py
+                            $<TARGET_FILE_DIR:jellyframe_desktop_shell>
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            endif()
 
             if(WIN32)
                 add_test(
