@@ -20,6 +20,12 @@ const {
   matchingDeviceTarget
 } = require("./device_presentation");
 const { desktopBuildPresentation } = require("./status_presentation");
+const {
+  authorOutputRoot,
+  isInside,
+  isSdkRoot,
+  resolveSdkRoot
+} = require("./author_environment");
 
 let outputChannel;
 let reportPanel;
@@ -48,16 +54,12 @@ function config() {
 }
 
 function repoRoot(context) {
-  const configured = config().get("repoRoot", "").trim();
-  if (configured) {
-    return configured;
-  }
-  const workspace = findRepoRootFrom(workspaceFolderPath());
-  if (workspace) {
-    return workspace;
-  }
-  return findRepoRootFrom(path.resolve(context.extensionPath, "..", ".."))
-    || path.resolve(context.extensionPath, "..", "..");
+  const configured = String(config().get("sdkRoot", "") || config().get("repoRoot", "") || "").trim();
+  return resolveSdkRoot({
+    workspaceRoot: workspaceFolderPath(),
+    configuredRoot: configured,
+    extensionPath: context.extensionPath
+  }) || configured || workspaceFolderPath() || path.resolve(context.extensionPath, "..", "..");
 }
 
 function cliPath(context) {
@@ -65,7 +67,13 @@ function cliPath(context) {
 }
 
 function buildDir(context) {
-  return path.join(repoRoot(context), "build");
+  const configured = String(config().get("buildDir", "") || "").trim();
+  if (configured) {
+    return path.isAbsolute(configured)
+      ? configured
+      : path.resolve(repoRoot(context), configured);
+  }
+  return authorOutputRoot(workspaceFolderPath(), repoRoot(context)) || path.join(repoRoot(context), "build");
 }
 
 function ensureBuildDir(context) {
@@ -87,7 +95,7 @@ function appRequiresScripting(root) {
 }
 
 function nativeBuildDir(context, preferScripting = false) {
-  const configured = config().get("buildDir", "").trim();
+  const configured = String(config().get("buildDir", "") || "").trim();
   const resolvedConfigured = configured
     ? (path.isAbsolute(configured) ? configured : path.resolve(repoRoot(context), configured))
     : "";
@@ -258,6 +266,14 @@ async function configureDesktopBuild(context, scripting) {
   }
 
   const root = repoRoot(context);
+  if (!fs.existsSync(path.join(root, "CMakeLists.txt"))) {
+    const message = isChinese()
+      ? "当前 JellyFrame SDK 未包含本机构建文件。请安装带桌面运行时的 SDK，或改为选择完整框架源码。"
+      : "The current JellyFrame SDK does not include local build files. Install an SDK with a desktop runtime, or select a full framework source checkout.";
+    ensureOutputChannel().appendLine(`[error] ${message}`);
+    vscode.window.showErrorMessage(message);
+    return undefined;
+  }
   const jerry = jerryscriptState(root);
   const plan = desktopBuildPlan(root, {
     scripting,
@@ -355,6 +371,67 @@ async function configureDesktopBuild(context, scripting) {
     activeDesktopBuildSetup = undefined;
     statusProvider?.refresh();
   }
+}
+
+async function configureAuthorEnvironment(context) {
+  const chinese = isChinese();
+  const workspace = workspaceFolderPath();
+  const detected = resolveSdkRoot({
+    workspaceRoot: workspace,
+    configuredRoot: String(config().get("sdkRoot", "") || config().get("repoRoot", "") || "").trim(),
+    extensionPath: context.extensionPath
+  });
+  let selected = detected;
+  if (!selected || !isSdkRoot(selected)) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: chinese ? "选择 JellyFrame SDK 文件夹" : "Select JellyFrame SDK folder",
+      title: chinese ? "选择已安装的 JellyFrame SDK" : "Select an installed JellyFrame SDK"
+    });
+    selected = picked?.[0]?.fsPath;
+  }
+  if (!selected || !isSdkRoot(selected)) {
+    const message = chinese
+      ? "未找到有效的 JellyFrame SDK。该文件夹必须包含 tools/jellyframe_cli.py。"
+      : "No valid JellyFrame SDK was found. The folder must contain tools/jellyframe_cli.py.";
+    vscode.window.showErrorMessage(message);
+    return undefined;
+  }
+  await config().update("sdkRoot", selected, vscode.ConfigurationTarget.Global);
+  if (workspace && !isInside(workspace, selected)) {
+    const descriptorDirectory = path.join(workspace, ".jellyframe");
+    const descriptorPath = path.join(descriptorDirectory, "project.json");
+    if (!fs.existsSync(descriptorPath)) {
+      fs.mkdirSync(descriptorDirectory, { recursive: true });
+      fs.writeFileSync(descriptorPath, JSON.stringify({
+        format: "jellyframe.app.project",
+        formatVersion: 1,
+        sdkRoot: selected
+      }, null, 2) + "\n", "utf8");
+    }
+  }
+  const message = chinese
+    ? `JellyFrame 作者环境已配置：${selected}`
+    : `JellyFrame author environment configured: ${selected}`;
+  ensureOutputChannel().appendLine(message);
+  vscode.window.showInformationMessage(message);
+  statusProvider?.refresh();
+  const root = currentPackageRoot();
+  const scripting = appRequiresScripting(root);
+  const selection = nativeBuildDir(context, scripting);
+  if (!selection.buildDirectory) {
+    const setup = chinese ? "创建桌面构建" : "Create desktop build";
+    const choice = await vscode.window.showInformationMessage(
+      chinese ? "作者环境已连接，但尚未找到可用的桌面运行时。" : "The author environment is connected, but no desktop runtime build was found.",
+      setup
+    );
+    if (choice === setup) {
+      return configureDesktopBuild(context, scripting);
+    }
+  }
+  return selected;
 }
 
 function debugLauncherPath(context) {
@@ -1072,30 +1149,6 @@ function workspaceFolderPath() {
     return undefined;
   }
   return folders[0].uri.fsPath;
-}
-
-function findRepoRootFrom(startPath) {
-  if (!startPath || !fs.existsSync(startPath)) {
-    return undefined;
-  }
-  let current = startPath;
-  try {
-    if (!fs.statSync(current).isDirectory()) {
-      current = path.dirname(current);
-    }
-  } catch (_) {
-    return undefined;
-  }
-  while (true) {
-    if (fs.existsSync(path.join(current, "tools", "jellyframe_cli.py"))) {
-      return current;
-    }
-    const parent = path.dirname(current);
-    if (parent === current) {
-      return undefined;
-    }
-    current = parent;
-  }
 }
 
 function findPackageRootFrom(startPath) {
@@ -2574,6 +2627,11 @@ class JellyFrameStatusProvider {
     const app = hasPackage ? path.basename(root) : "No package selected";
     const selection = nativeBuildDir(this.context, appRequiresScripting(root));
     const buildDirectory = selection.buildDirectory;
+    const sdkDirectory = resolveSdkRoot({
+      workspaceRoot: workspaceFolderPath(),
+      configuredRoot: String(config().get("sdkRoot", "") || config().get("repoRoot", "") || "").trim(),
+      extensionPath: this.context.extensionPath
+    });
     const desktopBuildRunning = Boolean(activeDesktopBuildSetup);
     const build = buildDirectory || buildDirectoryError(this.context, selection);
     const buildPresentation = desktopBuildPresentation(buildDirectory, /^zh(?:-|$)/i.test(vscode.env.language || ""));
@@ -2594,6 +2652,8 @@ class JellyFrameStatusProvider {
       authoring: "创建与自动化",
       reports: "报告与日志",
       environment: "环境",
+      authorEnvironment: "作者环境",
+      configureEnvironment: "配置作者环境",
       desktopRuntime: "桌面运行时",
       buildProfile: "构建配置",
       buildOutput: "输出目录",
@@ -2655,6 +2715,7 @@ class JellyFrameStatusProvider {
       measured: "已测量",
       notMeasured: "尚未测量",
       buildValue: buildPresentation.summary,
+      sdkValue: sdkDirectory ? path.basename(sdkDirectory) : "未配置",
       actionHints: {
         validate: "快速检查 manifest、入口和本地资源；不启动渲染管线。",
         check: "运行渲染预检、响应式与字体检查；可选程控回放。",
@@ -2664,6 +2725,7 @@ class JellyFrameStatusProvider {
         playback: "按 .jfcapture 脚本回放交互并生成帧证据。",
         create: "从官方模板创建一个新的 App 包。",
         packageResources: "生成供固件或 App Runtime 使用的资源包。",
+        configureEnvironment: "选择一次已安装的 JellyFrame SDK；独立 App 项目随后可直接使用检查、预览和调试。",
         discoverDevice: "通过已配置的 Provider 列出可连接设备。",
         selectDevice: "在已发现设备中切换本次操作的目标。",
         inspectDevice: "读取并校验当前设备的 Developer Image 与 Render Core 身份。",
@@ -2684,6 +2746,8 @@ class JellyFrameStatusProvider {
       authoring: "Create & Automate",
       reports: "Reports & Logs",
       environment: "Environment",
+      authorEnvironment: "Author environment",
+      configureEnvironment: "Configure author environment",
       desktopRuntime: "Desktop Runtime",
       buildProfile: "Build profile",
       buildOutput: "Output directory",
@@ -2745,6 +2809,7 @@ class JellyFrameStatusProvider {
       measured: "Measured",
       notMeasured: "Not measured",
       buildValue: buildPresentation.summary,
+      sdkValue: sdkDirectory ? path.basename(sdkDirectory) : "Not configured",
       actionHints: {
         validate: "Quickly check the manifest, entry point and local resources without starting Render Core.",
         check: "Run render preflight, responsive and font checks; optionally replay a capture.",
@@ -2754,6 +2819,7 @@ class JellyFrameStatusProvider {
         playback: "Replay a .jfcapture interaction script and produce frame evidence.",
         create: "Create a new App package from an official template.",
         packageResources: "Generate a resource package for firmware or App Runtime use.",
+        configureEnvironment: "Choose an installed JellyFrame SDK once; standalone App projects can then use check, preview and debug directly.",
         discoverDevice: "List connectable devices through the configured Provider.",
         selectDevice: "Change the target for subsequent device operations.",
         inspectDevice: "Read and validate the selected Developer Image and Render Core identity.",
@@ -2800,6 +2866,10 @@ class JellyFrameStatusProvider {
           hasRenderData && performance?.rating ? `${labels.performance}: ${performance.rating}` : labels.notMeasured, "dashboard"),
       ]),
       this.group(labels.environment, "settings-gear", [
+        this.statusItem(labels.authorEnvironment, labels.sdkValue,
+          sdkDirectory || (isChinese() ? "未找到 SDK" : "SDK not found"), "package"),
+        this.commandItem(labels.configureEnvironment, labels.actionHints.configureEnvironment,
+          "jellyframe.configureEnvironment", "plug"),
         this.group(labels.desktopRuntime, undefined, [
           this.statusItem(labels.build, labels.buildValue, buildPresentation.summary, "server-environment"),
           this.statusItem(labels.buildProfile, buildPresentation.profile, buildPresentation.profile, "settings-gear"),
@@ -3380,6 +3450,7 @@ function activate(context) {
       const scripting = appRequiresScripting(root);
       return configureDesktopBuild(context, scripting);
     }),
+    vscode.commands.registerCommand("jellyframe.configureEnvironment", () => configureAuthorEnvironment(context)),
     vscode.commands.registerCommand("jellyframe.package", (resourceUri) => runPackageCommand(context, "package", resourceUri)),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),

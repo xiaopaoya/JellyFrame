@@ -1,6 +1,6 @@
 # JellyFrame 文档索引
 
-> 最后更新：2026-08-25；适用版本：0.6.0-dev
+> 最后更新：2026-08-28；适用版本：0.6.0-dev
 
 本目录保存技术文档：模块行为、支持子集、接口和宿主契约，应尽量贴近代码维护。
 
@@ -11,7 +11,7 @@
 
 | 角色 | 先读 | 接着使用 |
 | --- | --- | --- |
-| App 作者 | `../HOW_TO_START_zh.md`、`app_author_guide_zh.md` | 能力速查表、recipes、target preset 和 `../tools/README.md` |
+| App 作者 | `../HOW_TO_START_zh.md`、`app_author_environment_zh.md`、`app_author_guide_zh.md` | 能力速查表、recipes、target preset 和 `../tools/README.md` |
 | Render Core 贡献者 | `engine_architecture_zh.md`、`../src/render_core/README.md` | 修改模块旁的 scope 文档和能力矩阵 |
 | 移植维护者 | `porting_work_guide_zh.md`、`embedded_hal_api_zh.md` | developer transport 请继续读 `jfdp_v1_port_acceptance_zh.md`，Developer Image 再读 `device_image_lifecycle_port_acceptance_zh.md`，以及 `../ports/<port>/README.md`、framebuffer/text 文档和移植侧报告 |
 | Runtime/host 维护者 | `../src/app_runtime/README.md` | lifecycle、packaging、services 和授权边界文档 |
@@ -24,8 +24,9 @@
 1. [../HOW_TO_START_zh.md](../HOW_TO_START_zh.md)
 2. [engine_architecture_zh.md](engine_architecture_zh.md)
 3. 如果要写 app，读 [app_author_guide_zh.md](app_author_guide_zh.md)。
-4. [app_author_recipes_zh.md](app_author_recipes_zh.md)：可复制的小屏 UI 写法。
-5. [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)
+4. 如果从 VS Code 开始写独立 App，先读 [app_author_environment_zh.md](app_author_environment_zh.md)。
+5. [app_author_recipes_zh.md](app_author_recipes_zh.md)：可复制的小屏 UI 写法。
+6. [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)
 6. 如果要拆分或消费构建边界，读 [component_compatibility_matrix_zh.md](component_compatibility_matrix_zh.md) 和 [render_core_release_policy_zh.md](render_core_release_policy_zh.md)。
 7. 修改公开或模块边界前，读 [pre_1_0_evolution_policy_zh.md](pre_1_0_evolution_policy_zh.md)。
 8. 如果要搜索 HTML 或 CSS 特性支持性，读 [html_living_standard_support_table_zh.md](html_living_standard_support_table_zh.md) 或 [csswg_support_table_zh.md](csswg_support_table_zh.md)。

@@ -52,6 +52,9 @@ def main() -> int:
         manifest = json.loads((output / "jellyframe.app.json").read_text(encoding="utf-8"))
         require(manifest["id"] == "org.example.blank-test", "new did not apply the App ID")
         require(manifest["name"] == "Blank Test", "new did not apply the App name")
+        require(manifest["$schema"] ==
+                "https://raw.githubusercontent.com/xiaopaoya/JellyFrame/master/tools/schemas/jellyframe.app.schema.json",
+                "blank template must use the published schema URL")
         require(manifest["targets"]["rect-320x240"]["viewport"] == {
             "width": 320,
             "height": 240,

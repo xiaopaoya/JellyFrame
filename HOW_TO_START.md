@@ -206,15 +206,18 @@ the VS Code Marketplace yet. To try the source version:
 1. Finish the Release build above so `build/desktop-release/Release` exists.
 2. Open `tools/vscode-jellyframe` in VS Code.
 3. Press `F5` to launch an Extension Development Host.
-4. Open the JellyFrame repository in the new window, then open
+4. Open an independent App project in the new window, then open
    `jellyframe.app.json` or an app HTML/CSS file.
 5. Use the `JellyFrame` menubar menu, a file context menu or the Command Palette
    for validation, preview and debugging.
 
 The command titles follow the VS Code display language. The extension first
-looks for the desktop build in `build/desktop-release/Release`, then `build/desktop-debug/Debug`. When the
-extension is launched from another location, set `jellyframe.repoRoot` to the
-JellyFrame repository root and optionally set `jellyframe.buildDir`.
+looks for the desktop build in the SDK's `build/desktop-release/Release`, then
+`build/desktop-debug/Debug`. In an independent App workspace, run **JellyFrame:
+Configure Author Environment** once and select the installed SDK. If the wizard
+cannot detect it, set `jellyframe.sdkRoot` to the SDK root and optionally set
+`jellyframe.buildDir`. Reports, captures and temporary files default to the App's
+`.jellyframe/build`; see [docs/app_author_environment.md](docs/app_author_environment.md).
 
 To package, install or update the extension, run the helper script in its directory:
 

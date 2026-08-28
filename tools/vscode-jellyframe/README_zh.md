@@ -1,6 +1,6 @@
 # JellyFrame VS Code 工具
 
-> 最后更新：2026-08-26；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-28；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里检查、预览、调试和
 打包 JellyFrame App。安装后可以从左侧 JellyFrame 活动栏、资源管理器/编辑器右键菜单
@@ -16,23 +16,21 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
   resources、references、warnings 和管线 diagnostics。
 - 对 app 作者建议、package warnings 和管线 diagnostics 提供 inline diagnostics。
 - Explorer 中的 JellyFrame 状态视图显示当前 app、构建目录、报告诊断和性能摘要。
-- 自动发现 `build/desktop-release/Release`、`build/desktop-debug/Debug` 以及桌面壳，
-  也可在设置中指定路径。
-- 可配置仓库根目录、Python 可执行文件、默认 target 和字体预算。
+- 首次配置作者环境时选择已安装的 JellyFrame SDK，独立 App 工作区随后可直接使用。
+- 自动发现 SDK 的桌面壳构建，也可在设置中指定路径。
+- 可配置 SDK 根目录、Python 可执行文件、默认 target 和字体预算。
 - 在 VS Code 左侧提供始终可见的 `JellyFrame` 活动栏视图，集中显示 App、构建、报告、
   诊断和性能操作；对 `jellyframe.app.json` 以及 HTML/CSS 文件提供针对性的右键菜单。
 - Device OS 生命周期操作按 capability 显式门控；未获当前选中 provider 声明支持时不会显示。
 
 ## 使用扩展
 
-仓库当前提供的是源码版扩展，尚未发布到 VS Code Marketplace。最简单的试用方式是：
+仓库当前提供的是源码版扩展，尚未发布到 VS Code Marketplace。面向 App 作者的使用方式是：
 
-1. 先在 JellyFrame 仓库根目录完成一次桌面 Release 构建，生成
-   `build/desktop-release/Release`。
-2. 用 VS Code 打开 `tools/vscode-jellyframe` 文件夹。
-3. 按 `F5`，在新打开的 Extension Development Host 窗口中打开一个 JellyFrame 仓库，
-   或将 `jellyframe.repoRoot` 设置为仓库根目录。
-4. 点击左侧活动栏中的 JellyFrame 图标开始操作；也可以打开 `jellyframe.app.json`、App
+1. 安装扩展后打开独立的 App 工作区。
+2. 执行“JellyFrame：配置作者环境”，选择已安装的 JellyFrame SDK；SDK 提供 CLI、target
+   preset 和匹配的桌面运行时。
+3. 点击左侧活动栏中的 JellyFrame 图标开始操作；也可以打开 `jellyframe.app.json`、App
    的 HTML/CSS 文件后使用右键菜单。
 
 如果希望像普通扩展一样安装或更新，可以直接在扩展目录运行统一脚本：
@@ -53,16 +51,18 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 安装或更新仍需要 VS Code 的 `code` 命令在 PATH 中；也可以通过 `-CodeCommand` 传入完整 CLI 路径（通常是
 `...\Microsoft VS Code\bin\code.cmd`）。若传入 `Code.exe` 且相邻 CLI 存在，脚本会自动改用该 CLI。若 PowerShell 阻止本地脚本，可在当前窗口执行
 `Set-ExecutionPolicy -Scope Process Bypass`。手动安装时，也可以在 VS Code 的扩展视图中选择“从 VSIX 安装”。
-安装到仓库之外时，扩展会优先从当前工作区向上寻找仓库；仍可在设置中填写 `jellyframe.repoRoot`；`jellyframe.buildDir`
-可选，用于指定桌面运行目录。扩展优先使用 `build/desktop-release/Release`，其次使用
-`build/desktop-debug/Debug`。
+安装到仓库之外时，扩展依次使用项目 `.jellyframe/project.json`、已配置的 SDK、
+`JELLYFRAME_SDK_ROOT` 或从当前工作区向上找到的 SDK；`jellyframe.sdkRoot` 是推荐的显式
+设置，`jellyframe.repoRoot` 仅保留为旧别名。`jellyframe.buildDir` 可选，用于指定桌面运行目录。
+扩展优先使用 SDK 中的 `build/desktop-release/Release`，其次使用 `build/desktop-debug/Debug`。
 如果 App manifest 声明了 `runtime.script`，未显式设置 `jellyframe.buildDir` 时扩展只会使用
 `build/desktop-scripting-release/Release` 或 `build/desktop-scripting-debug/Debug`。所选构建必须启用
 `JELLYFRAME_BUILD_SCRIPTING=ON`；仍保留 1.0 前
 `JELLYFRAME_ENABLE_SCRIPT_TASK_RUNTIME` cache 项的构建会被拒绝，并提示重新配置，而不会被意外运行。
 缺少兼容桌面构建时，错误提示操作和“环境”分组都会提供“创建兼容桌面构建”。在作者明确点击后，它会在本机配置并构建
 受管理的 Release profile；仓库中已有 JerryScript 源码但尚未生成库时，会先构建该依赖。该命令不会下载第三方源码，
-也不会删除自定义构建目录。
+也不会删除自定义构建目录。独立 App 的报告、截图和临时 package 输出会写入 App 自己的
+`.jellyframe/build`，不会污染 SDK。
 
 使用 `JellyFrame: Show Last Report` 可以重新打开最近一次报告面板。
 

@@ -1,0 +1,478 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jellyframe.dev/schemas/jellyframe.app.schema.json",
+  "title": "JellyFrame App Manifest",
+  "description": "Manifest for JellyFrame app source packages.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "formatVersion",
+    "id",
+    "version",
+    "entry",
+    "runtime",
+    "viewport",
+    "budgets",
+    "targets"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "format": {
+      "const": "jellyframe.app"
+    },
+    "formatVersion": {
+      "const": 0
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "role": {
+      "description": "Optional app role. System roles require host trust; declaring a role alone does not grant privileges.",
+      "enum": ["app", "launcher", "watchface", "settings"]
+    },
+    "version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "code"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "code": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "entry": {
+      "$ref": "#/$defs/appPath"
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minJellyFrame", "minRenderCore", "script"],
+      "properties": {
+        "minJellyFrame": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Must match the active JellyFrame pre-1.0 runtime line; the packer rejects historical development-line values."
+        },
+        "minRenderCore": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Must match the active pre-1.0 Render Core line locked by this JellyFrame Runtime."
+        },
+        "script": {
+          "enum": ["none", "classic"]
+        }
+      }
+    },
+    "viewport": {
+      "$ref": "#/$defs/designViewport"
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxResourceBytes"],
+      "properties": {
+        "maxResourceBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxDomNodes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxCssRules": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxDisplayCommands": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxTimers": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxEventListeners": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAppFonts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAppFontBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAppFontGlyphs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "fonts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "source", "profile"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "$ref": "#/$defs/relativePath"
+          },
+          "profile": {
+            "enum": [
+              "tiny",
+              "tiny-plus-symbols",
+              "app-subset-cn",
+              "cn-standard",
+              "global-product"
+            ]
+          },
+          "family": {
+            "description": "Runtime font-family label for this .jffont supplement. When CSS selects the same custom family and the host uses the app-font backend, this supplement is tried before the normal fallback chain.",
+            "type": "string",
+            "minLength": 1
+          },
+          "license": {
+            "description": "Recommended redistribution metadata for bundled font supplements.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "sizes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1
+          },
+          "weights": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1
+          }
+        }
+      }
+    },
+    "targets": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["viewport", "output"],
+        "properties": {
+          "viewport": {
+            "$ref": "#/$defs/runtimeViewport"
+          },
+          "budgets": {
+            "$ref": "#/$defs/budgets"
+          },
+          "fontProfile": {
+            "enum": [
+              "tiny",
+              "tiny-plus-symbols",
+              "app-subset-cn",
+              "cn-standard",
+              "global-product"
+            ]
+          },
+          "output": {
+            "enum": ["cpp", "debug-dir", "jfapp"]
+          },
+          "framebuffer": {
+            "$ref": "#/$defs/framebuffer"
+          },
+          "gate": {
+            "$ref": "#/$defs/targetGate"
+          }
+        }
+      }
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "enum": ["network"]
+      },
+      "uniqueItems": true
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+      },
+      "uniqueItems": true
+    },
+    "requiresFeatures": {
+      "description": "Render Core feature families that must be compiled into the target firmware.",
+      "type": "array",
+      "items": {
+        "enum": [
+          "core.document",
+          "core.paint",
+          "css.flex-grid",
+          "css.modern-paint",
+          "forms.advanced",
+          "graphics.canvas2d"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "optionalFeatures": {
+      "description": "Render Core feature families used when available, with an App-defined fallback.",
+      "type": "array",
+      "items": {
+        "enum": [
+          "core.document",
+          "core.paint",
+          "css.flex-grid",
+          "css.modern-paint",
+          "forms.advanced",
+          "graphics.canvas2d"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "backgroundServices": {
+      "description": "Optional background activity intent. The host profile must still approve every item.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "network": {
+          "$ref": "#/$defs/backgroundService"
+        },
+        "audio": {
+          "$ref": "#/$defs/backgroundService"
+        },
+        "sensors": {
+          "$ref": "#/$defs/backgroundSensorService"
+        },
+        "location": {
+          "$ref": "#/$defs/backgroundSensorService"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "appPath": {
+      "type": "string",
+      "pattern": "^/([^./][^?#]*|[^?#]*[^.][^?#]*)$",
+      "not": {
+        "pattern": "(^|/)\\.\\.(/|$)"
+      }
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^[a-zA-Z][a-zA-Z0-9+.-]*:"
+          },
+          {
+            "pattern": "^//"
+          },
+          {
+            "pattern": "(^|/)\\.\\.(/|$)"
+          }
+        ]
+      }
+    },
+    "designViewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["designWidth", "designHeight"],
+      "properties": {
+        "designWidth": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "designHeight": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "shape": {
+          "enum": ["rect", "round"]
+        }
+      }
+    },
+    "runtimeViewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "shape": {
+          "enum": ["rect", "round"]
+        }
+      }
+    },
+    "targetGate": {
+      "description": "Optional release gate evaluated by desktop tooling during responsive profile checks. It does not affect MCU runtime.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "description": "Decision to emit when the gate is violated.",
+          "enum": ["accept", "warn", "reject"]
+        },
+        "minViewport": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "allowScroll": {
+          "type": "boolean"
+        },
+        "allowHorizontalOverflow": {
+          "type": "boolean"
+        },
+        "maxWarnings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxErrors": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxResourceBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxDomNodes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxCssRules": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxDisplayCommands": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxTimers": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxEventListeners": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAppFonts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAppFontBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAppFontGlyphs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "framebuffer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preferredPixelFormat": {
+          "enum": ["rgba8888", "bgra8888", "rgb565", "bgr565", "rgb332", "gray8", "mono1"]
+        },
+        "fullFramebuffer": {
+          "type": "boolean"
+        },
+        "partialPresent": {
+          "type": "boolean"
+        }
+      }
+    },
+    "backgroundService": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "whileSuspended": {
+          "type": "boolean"
+        },
+        "whileScreenOff": {
+          "type": "boolean"
+        }
+      }
+    },
+    "backgroundSensorService": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "whileSuspended": {
+          "type": "boolean"
+        },
+        "whileScreenOff": {
+          "type": "boolean"
+        },
+        "inLowPower": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

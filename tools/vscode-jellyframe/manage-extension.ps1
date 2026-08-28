@@ -49,10 +49,12 @@ function Assert-VsixContents {
         "extension/device_presentation.js",
         "extension/status_presentation.js",
         "extension/build_profiles.js",
+        "extension/author_environment.js",
         "extension/package.json",
         "extension/package.nls.json",
         "extension/package.nls.zh-cn.json",
-        "extension/media/jellyframe.svg"
+        "extension/media/jellyframe.svg",
+        "extension/schemas/jellyframe.app.schema.json"
     )
     $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $Path))
     try {
@@ -125,6 +127,7 @@ function New-BuiltinVsix {
             "device_presentation.js",
             "status_presentation.js",
             "build_profiles.js",
+            "author_environment.js",
             "package.json",
             "package.nls.json",
             "package.nls.zh-cn.json",
@@ -137,6 +140,7 @@ function New-BuiltinVsix {
         }
         Copy-Item -LiteralPath (Join-Path $extensionRoot "LICENSE") -Destination (Join-Path $extensionStaging "LICENSE.txt")
         Copy-Item -LiteralPath (Join-Path $extensionRoot "media") -Destination (Join-Path $extensionStaging "media") -Recurse
+        Copy-Item -LiteralPath (Join-Path $extensionRoot "schemas") -Destination (Join-Path $extensionStaging "schemas") -Recurse
 
         $id = ConvertTo-XmlText $packageName
         $version = ConvertTo-XmlText $packageVersion

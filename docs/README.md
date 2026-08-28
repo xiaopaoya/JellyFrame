@@ -1,6 +1,6 @@
 # JellyFrame Documentation Index
 
-> Last updated: 2026-08-25; Applies to: 0.6.0-dev
+> Last updated: 2026-08-28; Applies to: 0.6.0-dev
 
 This directory contains technical documents: module behavior, supported subsets,
 interfaces and host contracts. These docs should stay close to the code.
@@ -13,7 +13,7 @@ for whether a document needs another pass after code changes.
 
 | You are | Read first | Then use |
 | --- | --- | --- |
-| App author | `../HOW_TO_START.md`, `app_author_guide.md` | capability table, recipes, target presets and `../tools/README.md` |
+| App author | `../HOW_TO_START.md`, `app_author_environment.md`, `app_author_guide.md` | capability table, recipes, target presets and `../tools/README.md` |
 | Render Core contributor | `engine_architecture.md`, `../src/render_core/README.md` | scope docs beside the affected module and the feature matrix |
 | Port maintainer | `porting_work_guide.md`, `embedded_hal_api.md` | `jfdp_v1_port_acceptance.md` for a developer transport, then `device_image_lifecycle_port_acceptance.md` for a Developer Image, plus `../ports/<port>/README.md`, framebuffer/text docs and port-owned reports |
 | Runtime/host maintainer | `../src/app_runtime/README.md` | lifecycle, packaging, services and authorization contracts |
@@ -26,8 +26,9 @@ for whether a document needs another pass after code changes.
 1. [../HOW_TO_START.md](../HOW_TO_START.md)
 2. [engine_architecture.md](engine_architecture.md)
 3. [app_author_guide.md](app_author_guide.md) if you are writing apps.
-4. [app_author_recipes.md](app_author_recipes.md) for copyable small-screen UI patterns.
-5. [developer_capability_matrix.md](developer_capability_matrix.md)
+4. [app_author_environment.md](app_author_environment.md) for an independent App workspace.
+5. [app_author_recipes.md](app_author_recipes.md) for copyable small-screen UI patterns.
+6. [developer_capability_matrix.md](developer_capability_matrix.md)
 6. [component_compatibility_matrix.md](component_compatibility_matrix.md) and [render_core_release_policy.md](render_core_release_policy.md) if you are splitting or consuming a build boundary.
 7. [pre_1_0_evolution_policy.md](pre_1_0_evolution_policy.md) before changing a public or module boundary.
 8. [html_living_standard_support_table.md](html_living_standard_support_table.md) or [csswg_support_table.md](csswg_support_table.md) if you need to search Web syntax support.
