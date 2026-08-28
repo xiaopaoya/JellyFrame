@@ -1,6 +1,6 @@
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-08-26; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-28; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -20,11 +20,11 @@ Palette as entry points.
   diagnostics.
 - Explorer status view showing the selected app, build, report diagnostics and
   measured performance summary.
-- Automatic discovery of `build/desktop-release/Release`, `build/desktop-debug/Debug`
-  and the desktop shell,
-  with a setting for an explicit build directory.
-- Configurable repository root, Python executable, default target and font
-  budget.
+- A one-time author-environment setup that selects an installed JellyFrame SDK
+  for independent App workspaces.
+- Automatic discovery of the SDK's desktop shell build, with explicit build
+  directory override when required.
+- Configurable SDK root, Python executable, default target and font budget.
 - A dedicated `JellyFrame` Activity Bar view with app, build, report and
   diagnostic actions, plus focused context-menu actions for
   `jellyframe.app.json` and HTML/CSS files.
@@ -36,12 +36,11 @@ Palette as entry points.
 The repository currently provides the extension as source; it is not yet listed
 on the VS Code Marketplace. To try it with the least setup:
 
-1. Build a Release configuration from the JellyFrame repository root so that
-   `build/desktop-release/Release` exists.
-2. Open `tools/vscode-jellyframe` in VS Code.
-3. Press `F5` to launch an Extension Development Host. Open a JellyFrame
-   repository there, or set `jellyframe.repoRoot` to the repository root.
-4. Click the JellyFrame icon in the Activity Bar, or open
+1. Install the extension, then open an independent App workspace.
+2. Run **JellyFrame: Configure Author Environment** and select an installed
+   JellyFrame SDK. The SDK contains the CLI, target presets and matching
+   desktop runtime.
+3. Click the JellyFrame icon in the Activity Bar, or open
    `jellyframe.app.json` or an app HTML/CSS file and use the context menu.
 
 To package, install or update it like a regular local extension, run the helper
@@ -67,11 +66,12 @@ is accepted only when the adjacent CLI is installed, in which case the script re
 `Set-ExecutionPolicy -Scope Process Bypass` in the current window. You can still
 use the Extensions view's `Install from VSIX...` action and select the generated
 `.vsix`. When the extension is installed outside the
-repository, the extension first searches upward from the current workspace for
-the repository; `jellyframe.repoRoot` remains available as an explicit setting.
-`jellyframe.buildDir` is optional. The
-extension prefers `build/desktop-release/Release`, then
-`build/desktop-debug/Debug`.
+repository, the extension first uses a project `.jellyframe/project.json`, a
+configured SDK, `JELLYFRAME_SDK_ROOT`, or an SDK found above the
+current workspace. `jellyframe.sdkRoot` is the preferred explicit setting;
+`jellyframe.repoRoot` remains a legacy alias. `jellyframe.buildDir` is optional.
+The extension prefers `build/desktop-release/Release`, then
+`build/desktop-debug/Debug` inside the selected SDK.
 For an app whose manifest declares `runtime.script`, the extension uses only
 `build/desktop-scripting-release/Release` or `build/desktop-scripting-debug/Debug`
 unless `jellyframe.buildDir` is explicitly set. A selected build must have
@@ -83,6 +83,8 @@ section both offer **Create compatible desktop build**. After explicit author
 selection, it configures and builds the managed Release profile locally; a
 checked-out JerryScript source is built first only when its libraries are absent.
 The command never downloads third-party source or deletes a custom build path.
+For an independent workspace, reports, captures and temporary package output
+go to `.jellyframe/build` in the App project instead of into the SDK.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
 

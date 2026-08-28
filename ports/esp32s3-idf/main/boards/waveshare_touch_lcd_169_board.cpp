@@ -552,7 +552,11 @@ esp_err_t ws169_init_touch(Ws169DisplayContext& display) {
 
 void ws169_release(Ws169DisplayContext& display) {
     display.touch_task_stop = true;
-    for (int wait_ms = 0; display.touch_task != nullptr && wait_ms < 100; wait_ms += 10) {
+    // The task still dereferences display while it exits. Releasing I2C or
+    // LCD state after a bounded wait would turn a slow but valid shutdown into
+    // a use-after-free. The polling operation has a finite timeout, so wait
+    // until the task publishes its exit instead of freeing live dependencies.
+    while (display.touch_task != nullptr) {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
     ESP_ERROR_CHECK_WITHOUT_ABORT(gpio_isr_handler_remove(static_cast<gpio_num_t>(CONFIG_JELLYFRAME_WS169_TOUCH_INT_GPIO)));

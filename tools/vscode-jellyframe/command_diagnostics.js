@@ -90,6 +90,27 @@ function providerReason(resultCode, chinese) {
   return reasons[resultCode] || (chinese ? "设备返回了未完成结果。" : "The device returned an incomplete result.");
 }
 
+function protocolMismatchReason(detail, chinese) {
+  const match = /^Developer Image identity mismatch at ([A-Za-z]+): manifest expects (.+); device attests (.+?)\.(?: Install the Provider and manifest paired with this firmware, or flash the Developer Image described by the configured manifest\.)?$/.exec(detail);
+  if (!match) {
+    return providerReason("protocol-mismatch", chinese);
+  }
+  const labels = chinese ? {
+    imageId: "镜像标识", profileId: "显示配置", imageVersion: "镜像版本",
+    renderCoreVersion: "Render Core 版本", sourceRevision: "镜像源版本",
+    renderCoreAbi: "Render Core ABI", featureFamilies: "功能族"
+  } : {
+    imageId: "image ID", profileId: "display profile", imageVersion: "image version",
+    renderCoreVersion: "Render Core version", sourceRevision: "source revision",
+    renderCoreAbi: "Render Core ABI", featureFamilies: "feature families"
+  };
+  const field = labels[match[1]] || match[1];
+  if (chinese) {
+    return `${field}不匹配：manifest 期望 ${match[2]}，设备实际报告 ${match[3]}。请安装与当前固件配套的 Provider 和 manifest，或刷写当前 manifest 对应的 Developer Image。`;
+  }
+  return `${field} differs: the manifest expects ${match[2]}, while the device attests ${match[3]}. Install the Provider and manifest paired with this firmware, or flash the Developer Image described by the configured manifest.`;
+}
+
 function commandFailure({ operation, stdout, stderr, chinese = false, internalError } = {}) {
   const label = conciseText(operation) || (chinese ? "JellyFrame 命令" : "JellyFrame command");
   const structured = parseStructuredResult(stdout);
@@ -103,11 +124,14 @@ function commandFailure({ operation, stdout, stderr, chinese = false, internalEr
     };
   }
   if (structured && typeof structured.resultCode === "string") {
-    const detail = conciseText(structured.message);
-    const reason = providerReason(structured.resultCode, chinese);
+    const rawDetail = typeof structured.message === "string" ? structured.message : "";
+    const detail = conciseText(rawDetail);
+    const reason = structured.resultCode === "protocol-mismatch"
+      ? protocolMismatchReason(rawDetail, chinese)
+      : providerReason(structured.resultCode, chinese);
     return {
       resultCode: structured.resultCode,
-      message: `${label}${chinese ? "失败" : " failed"}：${reason}${detail ? ` ${detail}` : ""}`
+      message: `${label}${chinese ? "失败" : " failed"}：${reason}${detail && structured.resultCode !== "protocol-mismatch" ? ` ${detail}` : ""}`
     };
   }
   const diagnostic = conciseText(stderr);
@@ -125,5 +149,6 @@ module.exports = {
   DEFAULT_CAPTURE_LIMIT,
   appendBoundedOutput,
   commandFailure,
+  protocolMismatchReason,
   parseStructuredResult
 };

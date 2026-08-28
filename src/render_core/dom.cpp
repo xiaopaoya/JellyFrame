@@ -360,9 +360,12 @@ void mark_dirty(Node& node, DomDirtyFlags flags) {
         return;
     }
     node.local_dirty_flags |= flags;
+    Node* root = &node;
     for (Node* current = &node; current != nullptr; current = current->parent) {
         current->dirty_flags |= flags;
+        root = current;
     }
+    ++root->mutation_generation;
 }
 
 DomDirtyFlags subtree_dirty_flags(const Node& node) {

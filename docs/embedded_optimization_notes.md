@@ -1,6 +1,6 @@
 # Embedded Optimization Notes
 
-> Last updated: 2026-08-02; Applies to: 0.5.0
+> Last updated: 2026-08-28; Applies to: 0.6.0-dev
 
 
 The exact target CPU, memory map, display controller and instruction set are not
@@ -31,8 +31,10 @@ small wearable devices.
   entries each. A style without either feature carries only empty-vector
   metadata and performs no entry allocation.
 - Style resolution caches bounded id/class/tag candidate rule sets inside
-  `StyleResolver`; final selector matching still runs per node, so descendant,
-  child and attribute selector semantics remain correct.
+  `StyleResolver`; equivalent relevant class sets use one canonical cache key.
+  Final selector matching still runs per node, so descendant, child and
+  attribute selector semantics remain correct. This is not computed-style
+  sharing.
 - DOM attributes use compact sequential `AttributeList` storage instead of a
   per-node hash map.
 - DOM event listener storage is allocated lazily, so nodes without listeners do
@@ -185,9 +187,11 @@ Interpretation:
 - Responsive grid cards and `aspect-ratio` add measurable layout work but keep
   the cost bounded and buy a large amount of embedded-app UI expressiveness.
 - Full pipeline time is still dominated by HTML parse and style/render work.
-- The next performance upgrade should target computed-style sharing for
-  repeated class patterns and tile/scanline presentation if hardware memory
-  pressure proves the full framebuffer path too expensive.
+- Computed-style sharing for repeated class patterns remains deferred. It needs
+  a separate RFC covering inheritance, mutation invalidation, cache capacity and
+  lifetime before it can be enabled. If hardware memory pressure proves the
+  full framebuffer path too expensive, proceed to a tile/scanline presentation
+  RFC; desktop style-cache results do not imply device frame-rate gains.
 
 ## CI Regression Guard
 

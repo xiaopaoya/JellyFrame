@@ -42,6 +42,26 @@ bool known_status(std::uint8_t value) {
     return value <= static_cast<std::uint8_t>(HostServiceStatus::Timeout);
 }
 
+bool script_service_kind_allowed(HostServiceJobKind kind) {
+    switch (kind) {
+    case HostServiceJobKind::ImageDecode:
+    case HostServiceJobKind::AudioCommand:
+    case HostServiceJobKind::VideoFrameDecode:
+    case HostServiceJobKind::NetworkFetch:
+    case HostServiceJobKind::StorageKv:
+    case HostServiceJobKind::SensorSample:
+    case HostServiceJobKind::LocationSnapshot:
+    case HostServiceJobKind::ComputeJob:
+        return true;
+    case HostServiceJobKind::AuthorizedFile:
+    case HostServiceJobKind::BundleInstall:
+    case HostServiceJobKind::BundleRemove:
+    case HostServiceJobKind::Other:
+        return false;
+    }
+    return false;
+}
+
 } // namespace
 
 ScriptTaskServicePayloadWriter::ScriptTaskServicePayloadWriter(std::vector<std::uint8_t>& storage,
@@ -158,6 +178,19 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSes
     if (!result.token.valid()) {
         result.status = ScriptTaskServiceSubmitStatus::InvalidToken;
         return result;
+    }
+    if (!script_service_kind_allowed(kind)) {
+        result.status = ScriptTaskServiceSubmitStatus::ServiceNotAllowed;
+        return result;
+    }
+    if (input_handle != 0) {
+        HostHandleInfo input;
+        if (!host_.handles().lookup_copy(input_handle, input) ||
+            input.app_instance_id != session.app_instance_id ||
+            (input.client_token != 0 && input.client_token != client_token)) {
+            result.status = ScriptTaskServiceSubmitStatus::InvalidToken;
+            return result;
+        }
     }
     if (supervisor_.worker_inbox_max_payload_bytes() < kCompletionPacketSize) {
         result.status = ScriptTaskServiceSubmitStatus::PacketBudgetExceeded;
@@ -294,6 +327,9 @@ ScriptTaskServiceRequestPumpResult ScriptTaskServiceBridge::pump_service_request
             break;
         case ScriptTaskServiceSubmitStatus::HostRejected:
             ++result.host_rejected;
+            break;
+        case ScriptTaskServiceSubmitStatus::ServiceNotAllowed:
+            ++result.service_not_allowed;
             break;
         }
     }

@@ -1,6 +1,6 @@
 # JellyFrame 主线路线图
 
-> 最后更新：2026-08-25；适用版本：0.6.0-dev；状态：活动计划的唯一来源
+> 最后更新：2026-08-27；适用版本：0.6.0-dev；状态：活动计划的唯一来源
 
 ## 先决判断
 
@@ -15,8 +15,18 @@
 - 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库现在拥有物理 Core 分支。首个带签名的 `v0.6.0` release 是历史基线；Runtime `0.6.0-dev` 当前精确锁定 Core `v0.6.1`、ABI `1` 与 source identity `105d0166...b797c52b`。CI 会下载该 release artifact、校验 archive SHA-256 `f9d24aca...e18c7`、安装后运行 Runtime package-consumer tests。in-tree provider 只保留给同步本地开发。Core ABI `1` 明确以安装后的 `render_core/` headers 作为 C++ consumer surface；当前没有隐藏 header tier 或 C ABI。2026-08-19 已补齐 Core-only 与 Device contracts 的 CMake 边界回归：Core-only 不能创建 contracts target/test，contracts-only 仍可独立构建，source archive/install/package/source-override 闭环也已复核。
 - App Runtime 已具备 `.jfapp` 生命周期、registry 参考语义、可选的选定脚本后端，以及 script worker 的 session/generation/epoch、value-only frame/input/service/fatal 协议。P3 的 WS147 worker、service、恢复与 mixed soak 验收已关闭。
 - WS147 的 value-frame v2 dirty/recovery fixture 已通过；全屏 rounded/gradient workload 的优化归因已完成，但仍不能达到 30 FPS。Canvas 还没有真实 host binding，保持 `not-tested`。
+- Script Task value-frame v4 已合入 Runtime 主线。它保留有界定点 transform，并分离变换源空间与目标空间的 clip chain，覆盖变换层下的嵌套裁剪。ESP32-S3 的 v4 验收 profile 正在按独立要求接入；它不是 Developer Image 默认 profile，也尚不能单独关闭 A2 的 panel/input 证据。
 - `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。Developer Image 已具有严格 manifest 与 hash 验证的 factory recovery image；这仍不等于干净机器 VS Code 产品流程或已安装 App 的 panel/input 行为已完成。
 - 当前开发线是 Runtime `0.6.0-dev` / Core `0.6.0-dev`。1.0 前不维护历史 package 兼容线。
+
+## 当前执行顺序
+
+并行工作不得改变更早项目的出口条件。
+
+1. **A2 证据，port 正在执行：**完成独立 value-frame v4 接入，随后用已安装的脚本 App 补齐作者工具流程所缺的 panel/input 证据。干净机器 VS Code 完整生命周期仍是独立必需证据。
+2. **R1 Core-only 维护，主线进行中：**以 standalone、sanitizer 与确定性 capture 回归审查 parser/style 所有权、malformed-input budget 与 cache invalidation。不得扩张 CSS 范围或改变 port profile。
+3. **B2 后端准备，受限进行：**保持 configure-time `ScriptRuntime` 边界及其不变量。在具备独立 compatibility/resource RFC 与对等证据前，不引入第二后端，也不改变 JerryScript 默认选择。
+4. **A3 筹备，已经进行中：**试用材料、设备采购、视觉资产与反馈运营可并行，但必须在 A2 的两项证据均通过后才开始外部产品试用。
 
 ## 已关闭的性能阶段
 
@@ -49,6 +59,8 @@ storage/recovery 与 image-identity slice 已关闭：受保护 launcher/fallbac
 3. 设备 telemetry 是唯一的设备性能来源；Win32 预览只用于视觉和流程预检。
 
 WS147 provider handoff 子 gate 已由 `provider-handoff-afdcf75-20260821` 关闭：同镜像 identity、in-flight cancellation、durable lifecycle 与 30 次 mixed cycle 均通过。版本化 `0.1.1-dev` provider、capability-gated lifecycle UI 与本机候选 smoke 已完成。更宽范围作者工具出口只剩两项正式证据：干净机器从 VS Code 完成 `new -> check -> device install -> live log -> update -> rollback -> stop -> remove`，以及真实已安装 App 的 panel/input 证据；错误信息必须能定位到 package、transport、registry、Runtime 或 port。
+
+正在执行的 value-frame v4 移植验收，是 worker-to-UI 渲染路径下已安装脚本 App 的 panel/input 证据前置。它只验证独立 profile 的 transform/source-clip 正确性与恢复，不能代替从 VS Code install/launch 或设备生命周期的作者流程证据。
 
 ### A3：受控外部开发者试用
 

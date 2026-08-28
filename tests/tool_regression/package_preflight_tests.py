@@ -916,8 +916,21 @@ class PackagePreflightTests(unittest.TestCase):
 
         self.assertEqual(len(warnings), 1)
         self.assertEqual(warnings[0]["code"], "resource-budget-exceeded")
+        self.assertEqual(warnings[0]["level"], "error")
         self.assertEqual(warnings[0]["used"], 150)
         self.assertEqual(warnings[0]["limit"], 128)
+
+    def test_debug_output_must_not_overlap_the_source_tree(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-debug-path-") as directory:
+            root = Path(directory) / "app"
+            root.mkdir()
+            with self.assertRaises(SystemExit):
+                package_app.validate_debug_output_path(root, root)
+            with self.assertRaises(SystemExit):
+                package_app.validate_debug_output_path(root, root / "build" / "debug")
+            with self.assertRaises(SystemExit):
+                package_app.validate_debug_output_path(root, root.parent)
+            package_app.validate_debug_output_path(root, root.parent / "debug-output")
 
     def test_resource_discovery_rejects_symlinks_when_supported(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-symlink-resource-") as directory:

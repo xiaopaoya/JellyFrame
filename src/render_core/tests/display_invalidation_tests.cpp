@@ -96,6 +96,23 @@ void extreme_dirty_rects_are_safely_normalized() {
     check(result.dirty_area == 100, "extreme dirty rects keep exact area");
     check(result.layers_visited >= 1, "extreme dirty rects still traverse layers safely");
 }
+
+void maximum_dirty_area_saturates_for_diagnostics() {
+    auto layer_tree = build_layer_tree("<body><section>A</section></body>",
+                                       "body { margin: 0; } section { width: 80px; height: 30px; margin: 0; }");
+    const Rect dirty_rects[] = {
+        Rect{std::numeric_limits<int>::min(), std::numeric_limits<int>::min(),
+             std::numeric_limits<int>::max(), std::numeric_limits<int>::max()},
+        Rect{0, 0, std::numeric_limits<int>::max(), std::numeric_limits<int>::max()},
+    };
+    const DisplayInvalidationResult result = analyze_display_invalidation(*layer_tree, dirty_rects, 2);
+    const std::size_t max_size = std::numeric_limits<std::size_t>::max();
+    const std::size_t max_int = static_cast<std::size_t>(std::numeric_limits<int>::max());
+    const std::size_t rect_area = max_int > max_size / max_int ? max_size : max_int * max_int;
+    const std::size_t expected = rect_area > max_size - rect_area ? max_size : rect_area + rect_area;
+    check(result.dirty_rect_count == 2, "non-contained maximum dirty rects remain distinct");
+    check(result.dirty_area == expected, "maximum dirty area uses saturating diagnostics");
+}
 } // namespace
 int main() {
     try {
@@ -104,6 +121,7 @@ int main() {
         contained_dirty_rects_are_normalized_for_diagnostics();
         clipped_and_composited_layers_are_visible_in_diagnostics();
         extreme_dirty_rects_are_safely_normalized();
+        maximum_dirty_area_saturates_for_diagnostics();
     } catch (const std::exception& error) {
         std::cerr << "display invalidation test failed: " << error.what() << '\n';
         return 1;

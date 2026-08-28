@@ -88,6 +88,10 @@ struct Node : public EventTarget {
     mutable std::unique_ptr<FormControlState> form_control_state;
     DomDirtyFlags dirty_flags = DomDirtyNone;
     DomDirtyFlags local_dirty_flags = DomDirtyNone;
+    // Only the document root's value is observed by reusable caches. Every
+    // DOM mutation advances that root value, even after dirty flags are
+    // consumed for a frame.
+    std::uint64_t mutation_generation = 0;
 
     Node& append_child(std::unique_ptr<Node> child);
     Node& insert_child(std::unique_ptr<Node> child, std::size_t index);

@@ -201,6 +201,19 @@ void rounded_overflow_clip_keeps_geometry_on_clip_layer() {
     check(has_corner_radius(layer->clip_border_radius), "rounded overflow layer keeps corner radii");
 }
 
+void maximum_percentage_radius_does_not_overflow() {
+    LayoutBox root;
+    root.style.overflow = "hidden";
+    root.style.border_radius_percent = std::numeric_limits<int>::max();
+    root.rect = Rect{0, 0, std::numeric_limits<int>::max(), std::numeric_limits<int>::max()};
+
+    LayerTreeBuilder builder;
+    auto layer = builder.build(root);
+    check(layer != nullptr && layer->has_clip, "maximum percentage radius creates a clip layer");
+    check(layer->clip_border_radius == std::numeric_limits<int>::max() / 2,
+          "maximum percentage radius is clamped without integer overflow");
+}
+
 void flatten_clip_metadata_preserves_unclipped_commands() {
     auto pipeline = build_pipeline("<body><p>Plain</p></body>", "body { margin: 0; }");
     LayerTreeBuilder builder;
@@ -1599,6 +1612,7 @@ int main() {
         overflow_y_auto_creates_vertical_scroll_clip_layer();
         extreme_scroll_geometry_remains_scrollable_and_bounded();
         rounded_overflow_clip_keeps_geometry_on_clip_layer();
+        maximum_percentage_radius_does_not_overflow();
         flatten_clip_metadata_preserves_unclipped_commands();
         flatten_clip_metadata_exports_rounded_clip_geometry();
         flatten_clip_metadata_preserves_nested_parent_and_translation();

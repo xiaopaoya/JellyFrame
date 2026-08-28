@@ -256,7 +256,14 @@ inline std::string sanitize_registry_filename(std::string_view value) {
 }
 
 inline std::filesystem::path registry_app_data_dir(const std::filesystem::path& store, std::string_view app_id) {
-    return registry_data_dir(store) / sanitize_registry_filename(app_id);
+    static constexpr char kHex[] = "0123456789abcdef";
+    std::string encoded = "app-";
+    encoded.reserve(4 + app_id.size() * 2U);
+    for (const unsigned char byte : app_id) {
+        encoded.push_back(kHex[byte >> 4U]);
+        encoded.push_back(kHex[byte & 0x0fU]);
+    }
+    return registry_data_dir(store) / encoded;
 }
 
 inline void candidate_json_skip_whitespace(std::string_view text, std::size_t& position) {

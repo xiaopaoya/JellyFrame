@@ -13,6 +13,10 @@ APP_ID = "org.jellyframe.workflow.probe"
 APP_NAME = "Workflow Probe"
 
 
+def app_data_directory_name(app_id: str) -> str:
+    return "app-" + app_id.encode("utf-8").hex()
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
@@ -256,7 +260,7 @@ def run_launcher_keep_data_flow(exe: Path, root: Path, bundle: Path, steps: list
     captures.mkdir(parents=True, exist_ok=True)
     install_result = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(bundle)], logs / "install.log")
     require(install_result.returncode == 0, f"keep-data fixture install must pass: {install_result.stdout}")
-    app_data = store / "data" / APP_ID
+    app_data = store / "data" / app_data_directory_name(APP_ID)
     app_data.mkdir(parents=True, exist_ok=True)
     (app_data / "state.txt").write_text("keep", encoding="utf-8")
     action_result = run_case(
@@ -292,7 +296,7 @@ def run_remove_delete_data_flow(exe: Path, root: Path, bundle: Path, steps: list
     logs.mkdir(parents=True, exist_ok=True)
     install_result = run_case(exe, ["--registry-store", str(store), "--install-bundle", str(bundle)], logs / "install.log")
     require(install_result.returncode == 0, f"delete-data fixture install must pass: {install_result.stdout}")
-    app_data = store / "data" / APP_ID
+    app_data = store / "data" / app_data_directory_name(APP_ID)
     app_data.mkdir(parents=True, exist_ok=True)
     (app_data / "state.txt").write_text("delete", encoding="utf-8")
     remove_result = run_case(exe, ["--registry-store", str(store), "--remove-app", APP_ID], logs / "remove.log")

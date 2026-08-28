@@ -8,6 +8,7 @@
 #include "render_core/style.h"
 #include "render_core/text_backend.h"
 
+#include <array>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -402,11 +403,19 @@ void style_resolution_context_tracks_its_inputs() {
     StyleResolver resolver(parse(
         ":root { --tone: #112233; }"
         "button { color: var(--tone); }"
+        ".accent { --tone: #445566; }"
         "button:hover { color: #aabbcc; }"));
     StyleResolveContext context;
     const Style before_hover = resolver.resolve(*button, context);
     check(before_hover.color.r == 0x11 && before_hover.color.g == 0x22 && before_hover.color.b == 0x33,
           "context resolves the initial custom property cascade");
+
+    button->set_attribute("class", "accent");
+    clear_dirty_flags(*document);
+    const Style after_attribute_mutation = resolver.resolve(*button, context);
+    check(after_attribute_mutation.color.r == 0x44 && after_attribute_mutation.color.g == 0x55 &&
+              after_attribute_mutation.color.b == 0x66,
+          "context drops selector and custom-property caches after a consumed DOM mutation");
 
     resolver.set_interaction_state(button, nullptr, nullptr);
     const Style while_hovered = resolver.resolve(*button, context);
@@ -1501,6 +1510,29 @@ void style_candidate_cache_ignores_irrelevant_identifiers() {
           "irrelevant identifiers do not consume candidate cache capacity");
 }
 
+void style_candidate_cache_canonicalizes_relevant_class_sets() {
+    auto first = make_element("button");
+    first->attributes["class"] = "primary compact primary";
+    auto second = make_element("button");
+    second->attributes["class"] = "compact primary";
+
+    StyleResolver resolver(parse(
+        ".primary { color: #2563eb; }"
+        ".compact { font-size: 12px; }"));
+    const Style first_style = resolver.resolve(*first);
+    const Style second_style = resolver.resolve(*second);
+    const StyleResolverStatistics statistics = resolver.statistics();
+
+    check(first_style.color.b == 0xeb && second_style.color.b == 0xeb,
+          "canonical candidate keys preserve matching declarations");
+    check(first_style.font_size == 12 && second_style.font_size == 12,
+          "canonical candidate keys preserve every relevant class rule");
+    check(statistics.candidate_cache_misses == 1 && statistics.candidate_cache_hits == 1,
+          "reordered or repeated relevant classes share a candidate cache entry");
+    check(statistics.candidate_cache_entries == 1,
+          "equivalent relevant class sets consume one bounded cache entry");
+}
+
 void parser_limits_unbounded_css_fields_without_losing_following_rules() {
     CssParser parser;
     VectorDiagnosticSink diagnostics;
@@ -1521,6 +1553,57 @@ void parser_limits_unbounded_css_fields_without_losing_following_rules() {
     check(has_diagnostic_code(diagnostics, "css-selector-limit"), "selector cap is reported");
     check(has_diagnostic_code(diagnostics, "css-at-rule-prelude-limit"), "at-rule prelude cap is reported");
     check(has_diagnostic_code(diagnostics, "css-declaration-value-limit"), "declaration value cap is reported");
+}
+
+void parser_malformed_corpus_is_bounded_and_recovers_following_rules() {
+    struct MalformedCase {
+        const char* source;
+        bool keeps_following_rule;
+    };
+    constexpr std::array<MalformedCase, 6> corpus{{
+        {"@unknown ignored; .safe { color: #123456; }", true},
+        {".broken; .safe { color: #123456; }", true},
+        {".broken { color: ; } .safe { color: #123456; }", true},
+        {"@media (max-width: nonsense) { .broken { color: red; } } .safe { color: #123456; }", true},
+        {"/* unterminated comment", false},
+        {".broken { content: \"unterminated; .safe { color: #123456; }", false},
+    }};
+
+    CssParser parser;
+    CssParserOptions options;
+    options.max_rules = 8;
+    options.max_declarations_per_rule = 4;
+    options.max_input_bytes = 256;
+    for (const MalformedCase& malformed : corpus) {
+        VectorDiagnosticSink first_diagnostics;
+        options.diagnostics = &first_diagnostics;
+        const Stylesheet first = parser.parse(malformed.source, options);
+
+        VectorDiagnosticSink second_diagnostics;
+        options.diagnostics = &second_diagnostics;
+        const Stylesheet second = parser.parse(malformed.source, options);
+
+        check(first.size() <= options.max_rules,
+              "malformed CSS corpus keeps the stylesheet rule budget");
+        check(first_diagnostics.size() <= options.max_rules + 2,
+              "malformed CSS corpus keeps diagnostics bounded by parser work");
+        check(first.size() == second.size() && first.keyframes_size() == second.keyframes_size(),
+              "malformed CSS corpus has deterministic rule recovery");
+        for (std::size_t index = 0; index < first.size(); ++index) {
+            check(first[index].selector == second[index].selector &&
+                      first[index].declarations.size() == second[index].declarations.size(),
+                  "malformed CSS corpus keeps deterministic recovered rules");
+        }
+
+        if (!malformed.keeps_following_rule) {
+            continue;
+        }
+        auto safe = make_element("div");
+        safe->attributes["class"] = "safe";
+        const Style style = StyleResolver(first).resolve(*safe);
+        check(style.color.r == 0x12 && style.color.g == 0x34 && style.color.b == 0x56,
+              "malformed CSS recovery retains the following supported rule");
+    }
 }
 
 void nonfinite_and_out_of_range_numeric_values_preserve_safe_fallbacks() {
@@ -1643,7 +1726,9 @@ int main() {
         style_candidate_cache_preserves_selector_context();
         style_candidate_cache_respects_tiny_budget_and_inline_style();
         style_candidate_cache_ignores_irrelevant_identifiers();
+        style_candidate_cache_canonicalizes_relevant_class_sets();
         parser_limits_unbounded_css_fields_without_losing_following_rules();
+        parser_malformed_corpus_is_bounded_and_recovers_following_rules();
         nonfinite_and_out_of_range_numeric_values_preserve_safe_fallbacks();
         text_overflow_is_specified_but_not_inherited_by_nested_elements();
     } catch (const std::exception& error) {

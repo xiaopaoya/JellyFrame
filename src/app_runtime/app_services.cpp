@@ -626,18 +626,37 @@ std::size_t decoded_surface_byte_count(int width,
     }
     const std::size_t stride = static_cast<std::size_t>(stride_pixels);
     const std::size_t rows = static_cast<std::size_t>(height);
+    const auto multiply = [](std::size_t left, std::size_t right, std::size_t& output) {
+        constexpr std::size_t kMaxSurfaceBytes = std::numeric_limits<std::uint32_t>::max();
+        if (right != 0 && (left > std::numeric_limits<std::size_t>::max() / right ||
+                           left > kMaxSurfaceBytes / right)) {
+            return false;
+        }
+        output = left * right;
+        return true;
+    };
+    std::size_t row_bytes = 0;
+    std::size_t total_bytes = 0;
     switch (pixel_format) {
     case HostPixelFormat::Rgba8888:
     case HostPixelFormat::Bgra8888:
-        return stride * rows * 4;
+        if (!multiply(stride, 4, row_bytes) || !multiply(row_bytes, rows, total_bytes)) return 0;
+        return total_bytes;
     case HostPixelFormat::Rgb565:
     case HostPixelFormat::Bgr565:
-        return stride * rows * 2;
+        if (!multiply(stride, 2, row_bytes) || !multiply(row_bytes, rows, total_bytes)) return 0;
+        return total_bytes;
     case HostPixelFormat::Rgb332:
     case HostPixelFormat::Gray8:
-        return stride * rows;
-    case HostPixelFormat::Mono1:
-        return ((stride + 7) / 8) * rows;
+        if (!multiply(stride, rows, total_bytes)) return 0;
+        return total_bytes;
+    case HostPixelFormat::Mono1: {
+        if (stride > std::numeric_limits<std::size_t>::max() - 7 || stride >
+                (std::numeric_limits<std::uint32_t>::max() - 7U)) return 0;
+        const std::size_t packed_stride = (stride + 7) / 8;
+        if (!multiply(packed_stride, rows, total_bytes)) return 0;
+        return total_bytes;
+    }
     case HostPixelFormat::Unknown:
         break;
     }

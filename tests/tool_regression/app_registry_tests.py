@@ -355,6 +355,12 @@ class AppRegistryTests(unittest.TestCase):
             self.assertFalse(data_path.exists())
             self.assertEqual(app_registry.load_registry(store)["apps"], [])
 
+    def test_app_private_data_names_do_not_collide_after_sanitization(self):
+        self.assertNotEqual(
+            app_registry.app_data_directory_name("org.example/a"),
+            app_registry.app_data_directory_name("org.example_a"),
+        )
+
     def test_remove_can_keep_app_private_data_explicitly(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-registry-") as directory:
             store = Path(directory)

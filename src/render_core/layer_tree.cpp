@@ -114,9 +114,10 @@ bool has_text_shadow(const Style& style) {
 int resolved_border_radius(const LayoutBox& box) {
     const int max_radius = std::max(0, std::min(box.rect.width, box.rect.height) / 2);
     if (box.style.border_radius_percent >= 0) {
-        return std::min(max_radius,
-                        (std::max(0, std::min(box.rect.width, box.rect.height)) *
-                         box.style.border_radius_percent + 50) / 100);
+        const std::int64_t min_dimension = std::max(0, std::min(box.rect.width, box.rect.height));
+        const std::int64_t percent = box.style.border_radius_percent;
+        const std::int64_t radius = (min_dimension * percent + 50) / 100;
+        return static_cast<int>(std::min<std::int64_t>(max_radius, std::max<std::int64_t>(0, radius)));
     }
     CornerRadii radii = decode_corner_radii(box.style.border_radius);
     radii.top_left = std::min(max_radius, radii.top_left);

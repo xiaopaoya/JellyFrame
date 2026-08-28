@@ -152,6 +152,12 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::strin
         css_parser_options_from_budgets(options_.budgets, options_.viewport.width, options_.viewport.height));
     document_owner_.set_root(std::move(parsed.document));
     runtime_ = create_script_runtime(options_.script);
+    if (options_.script.max_execution_check_count != 0 &&
+        !runtime_->execution_watchdog_supported()) {
+        runtime_.reset();
+        set_fatal(ScriptTaskWorkerRuntimeFatalReason::ScriptWatchdog);
+        return ScriptTaskWorkerRuntimeInitStatus::Fatal;
+    }
     runtime_->bind_document(*document_owner_.root());
     runtime_->bind_script_service_gateway(submit_service_request, this, cancel_service_request);
     service_gateway_available_ = true;

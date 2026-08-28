@@ -511,6 +511,25 @@ void bridge_rejects_mailboxes_that_cannot_hold_completion_payloads() {
     assert(host.requests().empty());
 }
 
+void bridge_rejects_privileged_services_and_foreign_input_handles() {
+    AppRuntimeHost host = make_host();
+    const AppInstance app = host.launch("org.example.script.policy", AppRole::App);
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(app.id);
+    ScriptTaskServiceBridge bridge(host, supervisor, {4});
+
+    const ScriptTaskServiceSubmitResult denied =
+        bridge.submit(session, 1, HostServiceJobKind::BundleInstall, 0, 0, 0, 1);
+    assert(denied.status == ScriptTaskServiceSubmitStatus::ServiceNotAllowed);
+
+    const std::uint32_t foreign_handle = host.handles().allocate(
+        HostServiceHandleKind::Surface, app.id + 1, 8);
+    assert(foreign_handle != 0);
+    assert(bridge.submit(session, 2, HostServiceJobKind::NetworkFetch, foreign_handle).status ==
+           ScriptTaskServiceSubmitStatus::InvalidToken);
+    assert(host.handles().release(foreign_handle));
+}
+
 void bridge_teardown_leaves_late_inflight_work_to_host_stale_cleanup() {
     AppRuntimeHost host = make_host();
     const AppInstance app = host.launch("org.example.script.teardown", AppRole::App);
@@ -559,6 +578,7 @@ int script_task_service_bridge_tests_main() {
     bridge_discards_malformed_completion_without_retiring_inflight_request();
     bridge_rejects_unowned_completion_handle_before_provider_callbacks();
     bridge_rejects_mailboxes_that_cannot_hold_completion_payloads();
+    bridge_rejects_privileged_services_and_foreign_input_handles();
     bridge_teardown_leaves_late_inflight_work_to_host_stale_cleanup();
     bridge_reports_payload_copy_and_lease_failures_as_terminal_values();
     bridge_rejects_oversized_copied_payload_without_leaking_source_handle();

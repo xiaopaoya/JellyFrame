@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -978,6 +979,11 @@ void image_codec_adapter_policy_helpers_are_bounded() {
 
     check(app_decoded_surface_within_policy(8, 8, 8, HostPixelFormat::Rgb565, 0, policy),
           "host-owned external surface may omit copied pixels");
+    check(decoded_surface_byte_count(std::numeric_limits<int>::max(),
+                                     std::numeric_limits<int>::max(),
+                                     std::numeric_limits<int>::max(),
+                                     HostPixelFormat::Rgba8888) == 0,
+          "surface byte count rejects overflowing dimensions");
 }
 
 void kv_storage_enforces_budgets() {

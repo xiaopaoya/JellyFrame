@@ -1,6 +1,6 @@
 # 嵌入式优化说明
 
-> 最后更新：2026-08-02；适用版本：0.5.0
+> 最后更新：2026-08-28；适用版本：0.6.0-dev
 
 
 目前尚未明确目标 CPU、内存布局、显示控制器和指令集，所以当前优化集中在小型可穿戴设备通用的重要约束上。
@@ -24,8 +24,9 @@
 - Style cascade slots 使用固定数组，不为每个节点创建级联 hash map。
 - transition 和 keyframe-animation 条目存储是惰性的，且各自最多四项。没有这些特性的 style
   仅携带空 vector 元数据，不会分配条目存储。
-- Style resolution 在 `StyleResolver` 内缓存有界的 id/class/tag 候选规则集合；最终选择器匹配仍逐节点执行，
-  因此 descendant、child 和 attribute selector 语义保持正确。
+- Style resolution 在 `StyleResolver` 内缓存有界的 id/class/tag 候选规则集合；等价的相关 class 集合
+  规范化为同一缓存键，最终选择器匹配仍逐节点执行，因此 descendant、child 和 attribute selector
+  语义保持正确。该缓存不是 computed-style sharing。
 - DOM attributes 使用紧凑顺序 `AttributeList`，不再为每个节点维护 attribute hash map。
 - DOM event listener storage 惰性分配，没有 listener 的节点不携带空 listener table。
 - DOM dirty bits 会向祖先传播，因此根节点 dirty 检查为 O(1)，dirty 清理会跳过干净子树，
@@ -136,8 +137,9 @@ full_pipeline avg_us=2228.91
 - 响应式 grid card 和 `aspect-ratio` 增加了可测量的 layout 工作，但成本有界，
   换来了明显更强的嵌入式应用 UI 表达能力。
 - 当前 full pipeline 仍主要由 HTML parse 和 style/render 工作主导。
-- 下一项性能升级应转向重复 class pattern 的 computed-style sharing；如果硬件内存压力证明
-  full framebuffer 路径过贵，再推进 tile/scanline presentation。
+- 重复 class pattern 的 computed-style sharing 暂不启用：必须先完成继承、mutation invalidation、
+  缓存容量和生命周期 RFC。若硬件内存压力证明 full framebuffer 路径过贵，再推进 tile/scanline
+  presentation；不能用桌面 style cache 数据推导设备帧率。
 
 ## CI 回归保护
 

@@ -185,17 +185,22 @@ VS Code Marketplace。源码试用流程如下：
 1. 在仓库根目录完成上面的 Release 构建，确保存在 `build/desktop-release/Release`。
 2. 用 VS Code 打开 `tools/vscode-jellyframe` 文件夹。
 3. 按 `F5` 启动 Extension Development Host。
-4. 在新窗口中打开 JellyFrame 仓库，打开一个 `jellyframe.app.json` 或 App 的 HTML/CSS
+4. 在新窗口中打开一个独立 App 项目，打开其中的 `jellyframe.app.json` 或 App 的 HTML/CSS
    文件。
 5. 使用顶部的 `JellyFrame` 菜单、文件右键菜单或命令面板执行验证、预览和调试。
 
-在中文 VS Code 中，命令会显示中文标题。扩展默认从仓库的 `build/desktop-release/Release` 查找桌面构建，
-也会回退到 `build/desktop-debug/Debug`；如果从其他目录启动扩展，请在设置中填写：
+在中文 VS Code 中，命令会显示中文标题。扩展默认从 SDK 的 `build/desktop-release/Release` 查找桌面构建，
+也会回退到 `build/desktop-debug/Debug`。独立 App 第一次使用时执行“JellyFrame：配置作者环境”，
+选择已安装的 SDK；如果环境向导无法识别，才在设置中填写：
 
 ```text
-jellyframe.repoRoot = JellyFrame 仓库根目录
+jellyframe.sdkRoot = JellyFrame SDK 或仓库根目录
 jellyframe.buildDir = 可选的桌面构建目录
 ```
+
+App 作者不需要把 App 放在 JellyFrame 源码目录中。独立项目的报告、截图和临时文件默认
+写入项目自己的 `.jellyframe/build`，SDK 与源码保持干净。完整的 SDK/工作区约定见
+[docs/app_author_environment_zh.md](docs/app_author_environment_zh.md)。
 
 如果希望打包、安装或更新扩展，在扩展目录运行统一脚本：
 

@@ -518,7 +518,21 @@ void typed_payloads_reject_malformed_or_ambiguous_input() {
     valid_result.flags = DeviceOperationResultComplete;
     assert(encode_device_operation_result_payload(valid_result, encoded.data(), encoded.size(), encoded_size) ==
            DeviceProtocolStatus::Ok);
+    valid_result.received_bytes = 2;
+    valid_result.expected_bytes = 1;
+    assert(encode_device_operation_result_payload(valid_result, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::InvalidArgument);
+    valid_result.received_bytes = 0;
+    valid_result.expected_bytes = 1;
+    assert(encode_device_operation_result_payload(valid_result, encoded.data(), encoded.size(), encoded_size) ==
+           DeviceProtocolStatus::Ok);
     encoded[2] = 0x80;
+    assert(decode_device_operation_result_payload(encoded.data(), encoded_size, decoded_result) ==
+           DeviceProtocolStatus::InvalidArgument);
+
+    encoded[2] = 0;
+    encoded[8] = 2;
+    encoded[12] = 1;
     assert(decode_device_operation_result_payload(encoded.data(), encoded_size, decoded_result) ==
            DeviceProtocolStatus::InvalidArgument);
 

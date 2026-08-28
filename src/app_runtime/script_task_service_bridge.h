@@ -91,6 +91,7 @@ enum class ScriptTaskServiceSubmitStatus {
     CapacityExceeded,
     PacketBudgetExceeded,
     HostRejected,
+    ServiceNotAllowed,
 };
 
 struct ScriptTaskServiceSubmitResult {
@@ -132,6 +133,7 @@ struct ScriptTaskServiceRequestPumpResult {
     std::size_t capacity_exceeded = 0;
     std::size_t packet_budget_exceeded = 0;
     std::size_t host_rejected = 0;
+    std::size_t service_not_allowed = 0;
     std::size_t cancelled = 0;
     std::size_t invalid_cancels = 0;
 };
