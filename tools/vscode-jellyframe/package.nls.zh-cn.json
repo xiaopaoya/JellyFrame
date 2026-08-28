@@ -12,6 +12,7 @@
   "command.setupDesktopBuild": "JellyFrame：创建兼容桌面构建",
   "command.package": "JellyFrame：生成资源包",
   "command.newFromTemplate": "JellyFrame：从模板新建 App",
+  "command.visualEditor": "JellyFrame：打开可视化编辑器",
   "command.showReport": "JellyFrame：显示最近报告",
   "command.showOutput": "JellyFrame：查看运行日志",
   "command.deviceDiscover": "JellyFrame：发现设备",

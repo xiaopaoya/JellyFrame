@@ -33,6 +33,7 @@ const {
   fetchLatestSdkRelease,
   sdkInstallName
 } = require("./sdk_download");
+const { openVisualEditor } = require("./visual_editor");
 
 let outputChannel;
 let reportPanel;
@@ -3064,6 +3065,7 @@ class JellyFrameStatusProvider {
       debugExternal: "在外部窗口调试",
       playback: "运行程控回放",
       create: "从模板新建 App",
+      visualEditor: "可视化编辑 App",
       packageResources: "生成资源包",
       openReport: "打开最近报告",
       openCapture: "打开截图或回放文件",
@@ -3086,6 +3088,7 @@ class JellyFrameStatusProvider {
         debugExternal: "在独立原生窗口中运行可交互的桌面壳。",
         playback: "按 .jfcapture 脚本回放交互并生成帧证据。",
         create: "从官方模板创建一个新的 App 包。",
+        visualEditor: "用受 JellyFrame 特性约束的拖放画布编辑当前 App，并生成可读源码。",
         packageResources: "生成供固件或 App Runtime 使用的资源包。",
         discoverDevice: "通过已配置的 Provider 列出可连接设备。",
         selectDevice: "在已发现设备中切换本次操作的目标。",
@@ -3156,6 +3159,7 @@ class JellyFrameStatusProvider {
       debugExternal: "Debug in external window",
       playback: "Run programmed playback",
       create: "Create App from template",
+      visualEditor: "Edit App visually",
       packageResources: "Generate resource package",
       openReport: "Open latest report",
       openCapture: "Open capture or playback file",
@@ -3178,6 +3182,7 @@ class JellyFrameStatusProvider {
         debugExternal: "Run an interactive desktop shell in a separate native window.",
         playback: "Replay a .jfcapture interaction script and produce frame evidence.",
         create: "Create a new App package from an official template.",
+        visualEditor: "Edit the current App on a JellyFrame-constrained drag-and-drop canvas and generate readable source.",
         packageResources: "Generate a resource package for firmware or App Runtime use.",
         discoverDevice: "List connectable devices through the configured Provider.",
         selectDevice: "Change the target for subsequent device operations.",
@@ -3208,6 +3213,7 @@ class JellyFrameStatusProvider {
           this.commandItem(labels.playback, labels.actionHints.playback, "jellyframe.runFrameScript", "play-circle", root),
         ] : []),
         this.commandItem(labels.create, labels.actionHints.create, "jellyframe.newFromTemplate", "new-file"),
+        ...(hasPackage ? [this.commandItem(labels.visualEditor, labels.actionHints.visualEditor, "jellyframe.visualEditor", "layout", root)] : []),
         ...(hasPackage ? [this.commandItem(labels.packageResources, labels.actionHints.packageResources, "jellyframe.package", "package", root)] : []),
       ]),
       this.group(labels.reports, "report", [
@@ -3822,6 +3828,10 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.manageAuthorEnvironment", () => manageAuthorEnvironment(context)),
     vscode.commands.registerCommand("jellyframe.package", (resourceUri) => runPackageCommand(context, "package", resourceUri)),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
+    vscode.commands.registerCommand("jellyframe.visualEditor", async (resourceUri) => {
+      const root = await packageRoot(resourceUri);
+      if (root) await openVisualEditor(context, root);
+    }),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),
     vscode.commands.registerCommand("jellyframe.showOutput", () => showOutputChannel()),
     vscode.commands.registerCommand("jellyframe.deviceDiscover", () => discoverDevice(context)),

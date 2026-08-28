@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.30",
+  "version": "0.4.31",
   "publisher": "jellyframe",
   "repository": {
     "type": "git",
@@ -27,6 +27,7 @@
     "onCommand:jellyframe.setupDesktopBuild",
     "onCommand:jellyframe.package",
     "onCommand:jellyframe.newFromTemplate",
+    "onCommand:jellyframe.visualEditor",
     "onCommand:jellyframe.showReport",
     "onCommand:jellyframe.showOutput",
     "onCommand:jellyframe.deviceDiscover",
@@ -98,6 +99,11 @@
         "command": "jellyframe.newFromTemplate",
         "title": "%command.newFromTemplate%",
         "icon": "$(new-file)"
+      },
+      {
+        "command": "jellyframe.visualEditor",
+        "title": "%command.visualEditor%",
+        "icon": "$(layout)"
       },
       {
         "command": "jellyframe.showReport",
@@ -222,6 +228,10 @@
           "group": "package@5"
         },
         {
+          "command": "jellyframe.visualEditor",
+          "group": "package@6"
+        },
+        {
           "command": "jellyframe.debug",
           "group": "debug@1"
         },
@@ -298,6 +308,10 @@
           "group": "package@4"
         },
         {
+          "command": "jellyframe.visualEditor",
+          "group": "package@5"
+        },
+        {
           "command": "jellyframe.debug",
           "group": "debug@1"
         },
@@ -326,6 +340,10 @@
         {
           "command": "jellyframe.preview",
           "group": "package@3"
+        },
+        {
+          "command": "jellyframe.visualEditor",
+          "group": "package@4"
         },
         {
           "command": "jellyframe.debug",

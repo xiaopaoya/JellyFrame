@@ -37,6 +37,11 @@ python tools\jellyframe_cli.py check `
 在 IDE 中可使用 `python tools/debug/jellyframe_debug.py --app build/my_weather`，
 它会自动发现桌面壳，也可以运行确定性的 frame script。
 
+VS Code 扩展还提供“打开可视化编辑器”，用于受约束的拖放式 App 编排。它只使用
+JellyFrame 已支持的控件生成普通 HTML/CSS，JavaScript 仍由作者维护。首次使用会明确询问
+是否接管入口页面 `body`，并按时间戳备份原始源码；它不是任意 HTML 的双向导入器。
+完成后使用“保存并实际调试”交给真实桌面壳验证，编辑器画布只作为编排时的近似视图。
+
 然后优先读 JSON report 末尾的 `developerAdvice[]`。它是低层 diagnostics 面向 app 作者的解释和修复建议。
 Package report 还会包含 `animationDiagnostics`，在 runtime parser 实际处理样式表前提前识别常见的高成本或不支持 CSS 动画写法。
 部分建议会带 `recipe` 字段，指向 [app_author_recipes_zh.md](app_author_recipes_zh.md)

@@ -114,6 +114,8 @@ jobs:
         run: |
           node --check tools\vscode-jellyframe\extension.js
           node tests\tool_regression\vscode_build_profile_tests.js
+          node tests\tool_regression\vscode_visual_editor_model_tests.js
+          node tests\tool_regression\vscode_visual_editor_files_tests.js
           node tests\tool_regression\vscode_command_diagnostics_tests.js
           node tests\tool_regression\vscode_device_presentation_tests.js
           node tests\tool_regression\vscode_status_presentation_tests.js
