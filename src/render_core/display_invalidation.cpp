@@ -1,6 +1,7 @@
 ﻿#include "render_core/display_invalidation.h"
 
 #include <algorithm>
+#include <limits>
 #include <vector>
 
 namespace jellyframe {
@@ -37,7 +38,19 @@ std::size_t rect_area(Rect rect) {
     if (empty_rect(rect)) {
         return 0;
     }
-    return static_cast<std::size_t>(rect.width) * static_cast<std::size_t>(rect.height);
+    const auto width = static_cast<std::size_t>(rect.width);
+    const auto height = static_cast<std::size_t>(rect.height);
+    if (width > std::numeric_limits<std::size_t>::max() / height) {
+        return std::numeric_limits<std::size_t>::max();
+    }
+    return width * height;
+}
+
+std::size_t saturating_add(std::size_t left, std::size_t right) {
+    if (std::numeric_limits<std::size_t>::max() - left < right) {
+        return std::numeric_limits<std::size_t>::max();
+    }
+    return left + right;
 }
 
 bool contains_rect(Rect outer, Rect inner) {
@@ -101,7 +114,7 @@ DisplayInvalidationResult analyze_display_invalidation(const LayerNode& root,
     }
     result.dirty_rect_count = normalized_dirty_rects.size();
     for (const Rect dirty : normalized_dirty_rects) {
-        result.dirty_area += rect_area(dirty);
+        result.dirty_area = saturating_add(result.dirty_area, rect_area(dirty));
     }
     dirty_rects = normalized_dirty_rects.data();
     dirty_rect_count = normalized_dirty_rects.size();
