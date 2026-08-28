@@ -1,6 +1,6 @@
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-08-29; Applies to: 0.6.0-dev; extension version: 0.4.27; compatibility baseline: 0.5.0
+> Last updated: 2026-08-29; Applies to: 0.6.0-dev; extension version: 0.4.28; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -106,7 +106,7 @@ also offers optional `.jfcapture` programmed playback, merging the static
 pipeline diagnostics with a multi-page interaction path. Use Preview or desktop
 debugging for the actual image and interactive behavior.
 
-The `JellyFrame` Activity Bar view groups check/preview, interactive debugging, and authoring/automation actions.
+The `JellyFrame` Activity Bar uses one level of top-level sections. Each App action, build status and device status appears directly below its section, avoiding misleading multi-level indentation in VS Code's native tree control.
 Commands have icons and functional tooltips; build, device and report results remain read-only status entries.
 It is always contributed, including when no workspace file is open. After
 installing an updated VSIX, run `Developer: Reload Window` once if the old

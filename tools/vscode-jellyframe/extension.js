@@ -2832,6 +2832,10 @@ class JellyFrameStatusProvider {
     return element;
   }
 
+  getParent(element) {
+    return element?.parent;
+  }
+
   getChildren(element) {
     if (element?.children) {
       return element.children;
@@ -3053,21 +3057,15 @@ class JellyFrameStatusProvider {
       ]),
       this.group(labels.workflow, "rocket", [
         ...(hasPackage ? [
-          this.group(labels.packageChecks, undefined, [
-            this.commandItem(labels.validate, labels.actionHints.validate, "jellyframe.validate", "check", root),
-            this.commandItem(labels.check, labels.actionHints.check, "jellyframe.check", "check-all", root),
-            this.commandItem(labels.preview, labels.actionHints.preview, "jellyframe.preview", "preview", root),
-          ]),
-          this.group(labels.interactiveDebugging, undefined, [
-            this.commandItem(labels.debug, labels.actionHints.debug, "jellyframe.debug", "debug-alt", root),
-            this.commandItem(labels.debugExternal, labels.actionHints.debugExternal, "jellyframe.debugExternal", "external-link", root),
-            this.commandItem(labels.playback, labels.actionHints.playback, "jellyframe.runFrameScript", "play-circle", root),
-          ]),
+          this.commandItem(labels.validate, labels.actionHints.validate, "jellyframe.validate", "check", root),
+          this.commandItem(labels.check, labels.actionHints.check, "jellyframe.check", "check-all", root),
+          this.commandItem(labels.preview, labels.actionHints.preview, "jellyframe.preview", "preview", root),
+          this.commandItem(labels.debug, labels.actionHints.debug, "jellyframe.debug", "debug-alt", root),
+          this.commandItem(labels.debugExternal, labels.actionHints.debugExternal, "jellyframe.debugExternal", "external-link", root),
+          this.commandItem(labels.playback, labels.actionHints.playback, "jellyframe.runFrameScript", "play-circle", root),
         ] : []),
-        this.group(labels.authoring, undefined, [
-          this.commandItem(labels.create, labels.actionHints.create, "jellyframe.newFromTemplate", "new-file"),
-          ...(hasPackage ? [this.commandItem(labels.packageResources, labels.actionHints.packageResources, "jellyframe.package", "package", root)] : []),
-        ]),
+        this.commandItem(labels.create, labels.actionHints.create, "jellyframe.newFromTemplate", "new-file"),
+        ...(hasPackage ? [this.commandItem(labels.packageResources, labels.actionHints.packageResources, "jellyframe.package", "package", root)] : []),
       ]),
       this.group(labels.reports, "report", [
         ...(lastReport ? [this.commandItem(labels.openReport, labels.reportReady, "jellyframe.showReport", "output")] : []),
@@ -3087,67 +3085,60 @@ class JellyFrameStatusProvider {
               ? "点击后可从 GitHub 下载官方 App 作者 SDK，或选择本机已安装的 SDK。"
               : "Click to download the official App Author SDK from GitHub or select an installed SDK."),
           sdkDirectory ? "package" : "cloud-download", "jellyframe.manageAuthorEnvironment"),
-        this.group(labels.desktopRuntime, undefined, [
-          this.statusItem(labels.build, labels.buildValue, buildPresentation.summary, "server-environment"),
-          this.statusItem(labels.buildProfile, buildPresentation.profile, buildPresentation.profile, "settings-gear"),
-          this.statusItem(labels.buildOutput, buildPresentation.output, buildPresentation.output, "folder"),
-          this.statusItem(labels.scriptSupport, buildPresentation.scripting, buildPresentation.scripting, "symbol-event"),
-          ...(desktopBuildRunning ? [this.statusItem(
-            labels.desktopBuildInProgress,
-            chinese ? "CMake 正在运行" : "CMake is running",
-            chinese ? "正在配置或编译 JellyFrame 桌面壳。可在通知或运行日志中查看当前阶段。" : "JellyFrame is configuring or building the desktop shell. The notification and run log show the current phase.",
-            "sync~spin")] : []),
-          ...(!buildDirectory && !desktopBuildRunning ? [this.commandItem(
-            labels.createDesktopBuild,
-            chinese
-              ? "创建当前 App 所需的桌面壳构建；仅在确认后运行本机 CMake。"
-              : "Create the desktop-shell build needed by the current App; CMake runs only after confirmation.",
-            "jellyframe.setupDesktopBuild", "tools")] : []),
-          this.commandItem(chinese ? "选择或查看构建" : "Choose or inspect builds",
-            chinese ? "显示可用桌面构建，并帮助确认当前选择。" : "Show available desktop builds and confirm the current selection.",
-            "jellyframe.listBuilds", "list-tree"),
-        ]),
+        this.statusItem(labels.build, labels.buildValue, buildPresentation.summary, "server-environment"),
+        this.statusItem(labels.buildProfile, buildPresentation.profile, buildPresentation.profile, "settings-gear"),
+        this.statusItem(labels.buildOutput, buildPresentation.output, buildPresentation.output, "folder"),
+        this.statusItem(labels.scriptSupport, buildPresentation.scripting, buildPresentation.scripting, "symbol-event"),
+        ...(desktopBuildRunning ? [this.statusItem(
+          labels.desktopBuildInProgress,
+          chinese ? "CMake 正在运行" : "CMake is running",
+          chinese ? "正在配置或编译 JellyFrame 桌面壳。可在通知或运行日志中查看当前阶段。" : "JellyFrame is configuring or building the desktop shell. The notification and run log show the current phase.",
+          "sync~spin")] : []),
+        ...(!buildDirectory && !desktopBuildRunning ? [this.commandItem(
+          labels.createDesktopBuild,
+          chinese
+            ? "创建当前 App 所需的桌面壳构建；仅在确认后运行本机 CMake。"
+            : "Create the desktop-shell build needed by the current App; CMake runs only after confirmation.",
+          "jellyframe.setupDesktopBuild", "tools")] : []),
+        this.commandItem(chinese ? "选择或查看构建" : "Choose or inspect builds",
+          chinese ? "显示可用桌面构建，并帮助确认当前选择。" : "Show available desktop builds and confirm the current selection.",
+          "jellyframe.listBuilds", "list-tree"),
       ]),
       this.group(labels.device, "plug", [
-        this.group(labels.deviceActions, undefined, [
-          this.commandItem(labels.discoverDevice, labels.actionHints.discoverDevice, "jellyframe.deviceDiscover", "plug"),
-          ...(Array.isArray(lastDeviceDiscovery) && lastDeviceDiscovery.length > 1
-            ? [this.commandItem(labels.selectDevice, labels.actionHints.selectDevice, "jellyframe.deviceSelect", "symbol-array")]
-            : []),
-          ...(lastDeviceEndpoint
-            ? [
-              this.commandItem(labels.inspectDevice, labels.actionHints.inspectDevice, "jellyframe.deviceInfo", "info"),
-              this.commandItem(labels.listDeviceApps, labels.actionHints.listDeviceApps, "jellyframe.deviceList", "list-tree")
-            ]
-            : []),
-        ]),
+        this.commandItem(labels.discoverDevice, labels.actionHints.discoverDevice, "jellyframe.deviceDiscover", "plug"),
+        ...(Array.isArray(lastDeviceDiscovery) && lastDeviceDiscovery.length > 1
+          ? [this.commandItem(labels.selectDevice, labels.actionHints.selectDevice, "jellyframe.deviceSelect", "symbol-array")]
+          : []),
+        ...(lastDeviceEndpoint
+          ? [
+            this.commandItem(labels.inspectDevice, labels.actionHints.inspectDevice, "jellyframe.deviceInfo", "info"),
+            this.commandItem(labels.listDeviceApps, labels.actionHints.listDeviceApps, "jellyframe.deviceList", "list-tree")
+          ]
+          : []),
         ...(selectedDevice && supportedDeviceOperations.size > 0 ? [
-          this.group(labels.deviceLifecycle, undefined, [
-            ...(hasPackage && supportedDeviceOperations.has("install")
-              ? [this.commandItem(labels.deployDeviceApp, labels.actionHints.deployDeviceApp, "jellyframe.deviceDeploy", "cloud-upload", root)]
-              : []),
-            ...(supportedDeviceOperations.has("launch")
-              ? [this.commandItem(labels.launchDeviceApp, labels.actionHints.launchDeviceApp, "jellyframe.deviceLaunch", "play")]
-              : []),
-            ...(supportedDeviceOperations.has("stop")
-              ? [this.commandItem(labels.stopDeviceApp, labels.actionHints.stopDeviceApp, "jellyframe.deviceStop", "debug-stop")]
-              : []),
-            ...(supportedDeviceOperations.has("rollback")
-              ? [this.commandItem(labels.rollbackDeviceApp, labels.actionHints.rollbackDeviceApp, "jellyframe.deviceRollback", "discard")]
-              : []),
-            ...(supportedDeviceOperations.has("remove")
-              ? [this.commandItem(labels.removeDeviceApp, labels.actionHints.removeDeviceApp, "jellyframe.deviceRemove", "trash")]
-              : []),
-            ...(supportedDeviceOperations.has("logs")
-              ? [this.commandItem(labels.readDeviceLogs, labels.actionHints.readDeviceLogs, "jellyframe.deviceLogs", "output")]
-              : []),
-            ...(supportedDeviceOperations.has("recovery")
-              ? [this.commandItem(labels.readDeviceRecovery, labels.actionHints.readDeviceRecovery, "jellyframe.deviceRecovery", "heart")]
-              : []),
-          ])
+          ...(hasPackage && supportedDeviceOperations.has("install")
+            ? [this.commandItem(labels.deployDeviceApp, labels.actionHints.deployDeviceApp, "jellyframe.deviceDeploy", "cloud-upload", root)]
+            : []),
+          ...(supportedDeviceOperations.has("launch")
+            ? [this.commandItem(labels.launchDeviceApp, labels.actionHints.launchDeviceApp, "jellyframe.deviceLaunch", "play")]
+            : []),
+          ...(supportedDeviceOperations.has("stop")
+            ? [this.commandItem(labels.stopDeviceApp, labels.actionHints.stopDeviceApp, "jellyframe.deviceStop", "debug-stop")]
+            : []),
+          ...(supportedDeviceOperations.has("rollback")
+            ? [this.commandItem(labels.rollbackDeviceApp, labels.actionHints.rollbackDeviceApp, "jellyframe.deviceRollback", "discard")]
+            : []),
+          ...(supportedDeviceOperations.has("remove")
+            ? [this.commandItem(labels.removeDeviceApp, labels.actionHints.removeDeviceApp, "jellyframe.deviceRemove", "trash")]
+            : []),
+          ...(supportedDeviceOperations.has("logs")
+            ? [this.commandItem(labels.readDeviceLogs, labels.actionHints.readDeviceLogs, "jellyframe.deviceLogs", "output")]
+            : []),
+          ...(supportedDeviceOperations.has("recovery")
+            ? [this.commandItem(labels.readDeviceRecovery, labels.actionHints.readDeviceRecovery, "jellyframe.deviceRecovery", "heart")]
+            : []),
         ] : []),
-        this.group(labels.deviceStatus, undefined, [
-          this.statusItem(labels.connectedDevices,
+        this.statusItem(labels.connectedDevices,
           Array.isArray(lastDeviceDiscovery)
             ? `${lastDeviceDiscovery.filter((device) => device.connected).length}/${lastDeviceDiscovery.length}`
             : labels.noDeviceSession,
@@ -3197,12 +3188,11 @@ class JellyFrameStatusProvider {
             : labels.noLifecycleResult,
           lastDeviceLifecycle?.message || labels.noLifecycleResult,
           lastDeviceLifecycle?.resultCode === "ok" || lastDeviceLifecycle?.resultCode === "accepted" ? "pass" : "history"),
-          ...(lastDeviceApps?.apps || []).map((app) => this.statusItem(
+        ...(lastDeviceApps?.apps || []).map((app) => this.statusItem(
           app.appId || "unknown app",
           `${app.versionName || "?"} · ${app.state || "?"}${app.rollbackAvailable ? " · rollback" : ""}`,
           app.appId || "unknown app", "package"
-          )),
-        ]),
+        )),
       ]),
     ];
   }
@@ -3210,7 +3200,11 @@ class JellyFrameStatusProvider {
   group(label, icon, children) {
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Expanded);
     item.iconPath = icon ? new vscode.ThemeIcon(icon) : undefined;
+    item.id = `group:${label}`;
     item.children = children;
+    for (const child of children) {
+      child.parent = item;
+    }
     item.contextValue = "jellyframe.group";
     return item;
   }
@@ -3220,6 +3214,7 @@ class JellyFrameStatusProvider {
     item.description = description || undefined;
     item.tooltip = description || label;
     item.iconPath = icon ? new vscode.ThemeIcon(icon) : undefined;
+    item.id = `command:${command}:${resource || ""}:${label}`;
     item.command = {
       command,
       title: label,
@@ -3233,6 +3228,7 @@ class JellyFrameStatusProvider {
     item.description = description || undefined;
     item.tooltip = tooltip || description || label;
     item.iconPath = icon ? new vscode.ThemeIcon(icon) : undefined;
+    item.id = `status:${label}`;
     if (command) {
       item.command = { command, title: label };
     }
