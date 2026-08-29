@@ -99,6 +99,8 @@ manifest 可以直接打包。
 也可以在 App 声明的视窗或常见设备尺寸下查看。保存结果是普通、可读的 HTML 和 CSS，
 稳定元素 ID 可以继续供手写 JavaScript listener 使用。
 
+blank 模板自带与 `Hello world` 入口对应的可视化模型，因此首次打开时画布、源码和模型显示一致。对于没有模型的旧 blank starter，编辑器只识别这一种明确的最小结构；其他已有 HTML 不会被自动猜测，首次保存前仍需确认接管并备份入口页面。
+
 这是受约束的 App 设计器，不是任意网页构建器，也不会尝试双向还原已有的任意 HTML。
 第一次保存前，VS Code 会明确询问是否由编辑器接管入口页面的 `body`；确认后，原始 HTML
 和 CSS 会备份到 `.jellyframe/visual-editor-backups/<timestamp>/`。已有 `script` 元素和

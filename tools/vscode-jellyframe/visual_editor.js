@@ -7,6 +7,7 @@ const {
   BODY_START,
   MAX_NODES,
   createDefaultModel,
+  defaultNode,
   updateCss,
   updateHtml,
   validateModel,
@@ -159,7 +160,31 @@ function initialModel(root, files) {
   const stored = readJson(path.join(root, MODEL_FILE));
   if (stored) return validateModel(stored);
   const viewport = files.manifest.viewport || Object.values(files.manifest.targets || {})[0]?.viewport || {};
+  if (isBlankStarter(files.html)) return createBlankStarterModel(viewport);
   return createDefaultModel(viewport, files.manifest.name || path.basename(root));
+}
+
+function isBlankStarter(html) {
+  const body = /<body(?:\s[^>]*)?>([\s\S]*?)<\/body\s*>/i.exec(html)?.[1] || "";
+  const withoutScripts = body.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "").trim();
+  return /^<main>\s*Hello world\s*<\/main>$/i.test(withoutScripts);
+}
+
+function createBlankStarterModel(viewport) {
+  const model = createDefaultModel(viewport, "Blank App");
+  model.root.padding = 0;
+  model.root.gap = 0;
+  model.root.justify = "start";
+  model.root.background = "#ffffff";
+  model.root.children = [{
+    ...defaultNode("text", "main"),
+    text: "Hello world",
+    fontSize: 16,
+    color: "#000000",
+    align: "left",
+    width: "100%"
+  }];
+  return model;
 }
 
 function assetMap(webview, root, model) {
@@ -296,4 +321,4 @@ async function openVisualEditor(context, root) {
   panel.onDidDispose(() => messageDisposable.dispose());
 }
 
-module.exports = { appFiles, ensureStylesheet, initialModel, isPathInside, openVisualEditor, saveModel, stylesheetHrefs, visualEditorHtml };
+module.exports = { appFiles, ensureStylesheet, initialModel, isBlankStarter, isPathInside, openVisualEditor, saveModel, stylesheetHrefs, visualEditorHtml };

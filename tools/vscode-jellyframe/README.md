@@ -139,6 +139,8 @@ reordered, nested, duplicated and edited at the App's declared viewport or
 common device-size presets. Save writes ordinary, readable HTML and CSS;
 stable element IDs remain available to hand-authored event listeners.
 
+The blank template includes a visual model for its `Hello world` entry, so the canvas, source and model agree when it is first opened. Older blank starters without a model are recognized only when they contain this exact minimal structure; arbitrary existing HTML is not guessed. The first save still asks before taking over and backing up the entry page.
+
 The designer is intentionally constrained rather than a browser page builder.
 It does not attempt to round-trip arbitrary existing markup. On the first save,
 VS Code asks before replacing the entry page's `body`, and writes the original

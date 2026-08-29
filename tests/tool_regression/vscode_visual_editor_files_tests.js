@@ -15,6 +15,8 @@ Module._load = function mockVscode(request, parent, isMain) {
 const {
   appFiles,
   ensureStylesheet,
+  initialModel,
+  isBlankStarter,
   isPathInside,
   stylesheetHrefs,
   visualEditorHtml
@@ -45,6 +47,17 @@ try {
   assert(isPathInside(root, path.join(root, "styles", "app.css")));
   assert(!isPathInside(root, root));
   assert(!isPathInside(root, `${root}-sibling${path.sep}app.css`));
+
+  const blankHtml = "<!doctype html><html><head><link rel=\"stylesheet\" href=\"styles/app.css\"></head><body>\n  <main>Hello world</main>\n  <script src=\"scripts/app.js\"></script>\n</body></html>";
+  fs.writeFileSync(path.join(root, "index.html"), blankHtml, "utf8");
+  assert(isBlankStarter(blankHtml));
+  const blankModel = initialModel(root, appFiles(root));
+  assert.equal(blankModel.root.children.length, 1);
+  assert.equal(blankModel.root.children[0].text, "Hello world");
+  assert.equal(blankModel.root.background, "#ffffff");
+
+  const arbitraryHtml = blankHtml.replace("Hello world", "A different page");
+  assert(!isBlankStarter(arbitraryHtml));
 
   const webviewHtml = visualEditorHtml({ cspSource: "vscode-webview:", asWebviewUri: (uri) => uri }, root, {
     format: "jellyframe.visual-editor",
