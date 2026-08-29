@@ -132,8 +132,10 @@ with a letter or digit and may contain only letters, digits, dots, hyphens and
 underscores. The target picker uses only recognized repository presets while
 creating a new App, so generated manifests are immediately packageable.
 
-`JellyFrame: Open Visual Editor` opens a three-pane designer for the current
-App. Its palette contains only JellyFrame-supported containers, text, buttons,
+`JellyFrame: Open Visual Editor` is shown only for Apps with a valid
+`.jellyframe/visual-editor.json` model. Ordinary existing HTML/CSS does not get
+this entry and is not presented as round-trippable. For eligible Apps it opens a
+three-pane designer. Its palette contains only JellyFrame-supported containers, text, buttons,
 package images, inputs and progress indicators. Elements can be added,
 reordered, nested, duplicated and edited at the App's declared viewport or
 common device-size presets. Save writes ordinary, readable HTML and CSS;

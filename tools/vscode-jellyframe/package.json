@@ -229,7 +229,8 @@
         },
         {
           "command": "jellyframe.visualEditor",
-          "group": "package@6"
+          "group": "package@6",
+          "when": "jellyframe.visualEditorEligible"
         },
         {
           "command": "jellyframe.debug",
@@ -309,7 +310,8 @@
         },
         {
           "command": "jellyframe.visualEditor",
-          "group": "package@5"
+          "group": "package@5",
+          "when": "jellyframe.visualEditorEligible"
         },
         {
           "command": "jellyframe.debug",
@@ -343,7 +345,8 @@
         },
         {
           "command": "jellyframe.visualEditor",
-          "group": "package@4"
+          "group": "package@4",
+          "when": "jellyframe.visualEditorEligible"
         },
         {
           "command": "jellyframe.debug",

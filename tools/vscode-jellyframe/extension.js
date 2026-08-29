@@ -33,7 +33,7 @@ const {
   fetchLatestSdkRelease,
   sdkInstallName
 } = require("./sdk_download");
-const { openVisualEditor } = require("./visual_editor");
+const { isVisualEditorPackage, openVisualEditor } = require("./visual_editor");
 
 let outputChannel;
 let reportPanel;
@@ -1550,6 +1550,19 @@ function currentPackageRoot() {
     : undefined;
 }
 
+function updateVisualEditorContext(root) {
+  return vscode.commands.executeCommand(
+    "setContext",
+    "jellyframe.visualEditorEligible",
+    Boolean(root && isVisualEditorPackage(root))
+  );
+}
+
+function refreshVisualEditorContext() {
+  updateVisualEditorContext(currentPackageRoot());
+  statusProvider?.refresh();
+}
+
 async function packageRoot(resourceUri) {
   const selectedResource = resourceUri && resourceUri.fsPath;
   if (selectedResource) {
@@ -2987,6 +3000,8 @@ class JellyFrameStatusProvider {
 
     const root = currentPackageRoot();
     const hasPackage = Boolean(root);
+    const visualEditorAvailable = Boolean(root && isVisualEditorPackage(root));
+    updateVisualEditorContext(root);
     const app = hasPackage ? path.basename(root) : "No package selected";
     const selection = nativeBuildDir(this.context, appRequiresScripting(root));
     const buildDirectory = selection.buildDirectory;
@@ -3066,6 +3081,8 @@ class JellyFrameStatusProvider {
       playback: "运行程控回放",
       create: "从模板新建 App",
       visualEditor: "可视化编辑 App",
+      visualEditorUnavailable: "可视化编辑不可用",
+      visualEditorCompatibility: "仅支持带 .jellyframe/visual-editor.json 模型的 App；任意现有 HTML/CSS 不会自动还原。",
       packageResources: "生成资源包",
       openReport: "打开最近报告",
       openCapture: "打开截图或回放文件",
@@ -3160,6 +3177,8 @@ class JellyFrameStatusProvider {
       playback: "Run programmed playback",
       create: "Create App from template",
       visualEditor: "Edit App visually",
+      visualEditorUnavailable: "Visual editor unavailable",
+      visualEditorCompatibility: "Only Apps with a .jellyframe/visual-editor.json model are supported; arbitrary HTML/CSS is not round-tripped.",
       packageResources: "Generate resource package",
       openReport: "Open latest report",
       openCapture: "Open capture or playback file",
@@ -3213,7 +3232,9 @@ class JellyFrameStatusProvider {
           this.commandItem(labels.playback, labels.actionHints.playback, "jellyframe.runFrameScript", "play-circle", root),
         ] : []),
         this.commandItem(labels.create, labels.actionHints.create, "jellyframe.newFromTemplate", "new-file"),
-        ...(hasPackage ? [this.commandItem(labels.visualEditor, labels.actionHints.visualEditor, "jellyframe.visualEditor", "layout", root)] : []),
+        ...(visualEditorAvailable
+          ? [this.commandItem(labels.visualEditor, labels.actionHints.visualEditor, "jellyframe.visualEditor", "layout", root)]
+          : (hasPackage ? [this.statusItem(labels.visualEditor, labels.visualEditorUnavailable, labels.visualEditorCompatibility, "layout")] : [])),
         ...(hasPackage ? [this.commandItem(labels.packageResources, labels.actionHints.packageResources, "jellyframe.package", "package", root)] : []),
       ]),
       this.group(labels.reports, "report", [
@@ -3787,7 +3808,7 @@ async function newFromTemplate(context) {
   if (!selectedTarget) {
     return;
   }
-  runCli(context, [
+  const outcome = await runCli(context, [
     "new",
     "--template",
     picked.template,
@@ -3800,6 +3821,10 @@ async function newFromTemplate(context) {
     "--target",
     selectedTarget
   ]);
+  if (outcome?.code === 0 && fs.existsSync(path.join(output, "jellyframe.app.json"))) {
+    lastPackageRoot = output;
+    await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(output), false);
+  }
 }
 
 function activate(context) {
@@ -3809,9 +3834,9 @@ function activate(context) {
     capabilityDiagnostics,
     statusProvider.changed,
     vscode.window.registerTreeDataProvider("jellyframe.status", statusProvider),
-    vscode.window.onDidChangeActiveTextEditor(() => statusProvider?.refresh()),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => statusProvider?.refresh()),
-    vscode.workspace.onDidSaveTextDocument(() => statusProvider?.refresh()),
+    vscode.window.onDidChangeActiveTextEditor(refreshVisualEditorContext),
+    vscode.workspace.onDidChangeWorkspaceFolders(refreshVisualEditorContext),
+    vscode.workspace.onDidSaveTextDocument(refreshVisualEditorContext),
     vscode.commands.registerCommand("jellyframe.validate", (resourceUri) => runPackageCommand(context, "validate", resourceUri)),
     vscode.commands.registerCommand("jellyframe.check", (resourceUri) => runPackageCommand(context, "check", resourceUri)),
     vscode.commands.registerCommand("jellyframe.preview", (resourceUri) => previewPackage(context, resourceUri)),
@@ -3830,7 +3855,15 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
     vscode.commands.registerCommand("jellyframe.visualEditor", async (resourceUri) => {
       const root = await packageRoot(resourceUri);
-      if (root) await openVisualEditor(context, root);
+      if (!root) return;
+      if (!isVisualEditorPackage(root)) {
+        const chinese = isChinese();
+        vscode.window.showWarningMessage(chinese
+          ? "当前 App 没有可视化编辑模型。请从模板新建，或先使用可视化编辑创建它；任意 HTML/CSS 不会自动还原。"
+          : "This App has no visual-editor model. Create it from a template or through the visual editor; arbitrary HTML/CSS is not round-tripped.");
+        return;
+      }
+      await openVisualEditor(context, root);
     }),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),
     vscode.commands.registerCommand("jellyframe.showOutput", () => showOutputChannel()),

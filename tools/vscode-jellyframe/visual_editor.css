@@ -398,10 +398,22 @@ body.right-collapsed #right-resizer {
 
 #stage {
   display: grid;
-  grid-template-rows: 36px minmax(0, 1fr) 30px;
+  grid-template-rows: 36px auto minmax(0, 1fr) 30px;
   min-width: 0;
   min-height: 0;
   background: var(--canvas-bg);
+}
+
+#source-notice {
+  min-width: 0;
+  padding: 5px 10px;
+  overflow: hidden;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #stage-toolbar {
@@ -495,6 +507,29 @@ input[type="number"] {
   overflow: hidden;
   color: #f4f7fb;
   background: #0d141b;
+}
+
+#canvas .jf-visual-container {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+#canvas .jf-visual-text {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+#canvas .jf-visual-button,
+#canvas .jf-visual-input {
+  box-sizing: border-box;
+}
+
+#canvas .jf-visual-image {
+  display: block;
+}
+
+#canvas .jf-visual-progress > span {
+  display: block;
 }
 
 #canvas.round,

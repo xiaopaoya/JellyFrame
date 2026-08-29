@@ -208,6 +208,7 @@ function updateCss(source) {
 
 module.exports = {
   BODY_START,
+  BODY_END,
   CSS_START,
   MAX_NODES,
   MODEL_FORMAT,

@@ -94,7 +94,7 @@ SDK 安装不会覆盖已有目录；Windows 的短暂权限或文件占用会�
 字母、数字、点、连字符和下划线。创建 App 时的 target 选择器仅列出已识别的仓库 preset，因此生成的
 manifest 可以直接打包。
 
-“打开可视化编辑器”会为当前 App 打开三栏设计界面。组件库只提供 JellyFrame 已支持的
+“打开可视化编辑器”只对带有合法 `.jellyframe/visual-editor.json` 模型的 App 显示；普通已有 HTML/CSS 不会显示此入口，也不会被假装支持双向还原。它会为符合条件的 App 打开三栏设计界面。组件库只提供 JellyFrame 已支持的
 容器、文本、按钮、包内图片、输入框和进度条；可以添加、调整顺序、嵌套、复制和修改属性，
 也可以在 App 声明的视窗或常见设备尺寸下查看。保存结果是普通、可读的 HTML 和 CSS，
 稳定元素 ID 可以继续供手写 JavaScript listener 使用。

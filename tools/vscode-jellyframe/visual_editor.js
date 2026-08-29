@@ -5,9 +5,11 @@ const path = require("path");
 const vscode = require("vscode");
 const {
   BODY_START,
+  BODY_END,
   MAX_NODES,
   createDefaultModel,
   defaultNode,
+  renderBody,
   updateCss,
   updateHtml,
   validateModel,
@@ -164,6 +166,23 @@ function initialModel(root, files) {
   return createDefaultModel(viewport, files.manifest.name || path.basename(root));
 }
 
+function isVisualEditorPackage(root) {
+  const modelPath = path.join(root, MODEL_FILE);
+  if (!fs.existsSync(modelPath)) return false;
+  try {
+    return Boolean(validateModel(readJson(modelPath)));
+  } catch (_) {
+    return false;
+  }
+}
+
+function hasGeneratedBodyConflict(html, model) {
+  const start = html.indexOf(BODY_START);
+  const end = html.indexOf(BODY_END);
+  if (start < 0 || end < start) return false;
+  return html.slice(start, end + BODY_END.length) !== renderBody(model);
+}
+
 function isBlankStarter(html) {
   const body = /<body(?:\s[^>]*)?>([\s\S]*?)<\/body\s*>/i.exec(html)?.[1] || "";
   const withoutScripts = body.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "").trim();
@@ -205,7 +224,14 @@ function nonce() {
 
 function visualEditorHtml(webview, root, model, assets, resources = {}) {
   const token = nonce();
-  const payload = JSON.stringify({ model, assets, chinese: isChinese(), appName: path.basename(root), maxNodes: MAX_NODES }).replace(/</g, "\\u003c");
+  const payload = JSON.stringify({
+    model,
+    assets,
+    chinese: isChinese(),
+    appName: path.basename(root),
+    maxNodes: MAX_NODES,
+    sourceConflict: Boolean(resources.sourceConflict)
+  }).replace(/</g, "\\u003c");
   const styleUri = String(resources.styleUri || "visual_editor.css");
   const scriptUri = String(resources.scriptUri || "visual_editor_webview.js");
   return `<!doctype html>
@@ -249,6 +275,7 @@ function visualEditorHtml(webview, root, model, assets, resources = {}) {
         </select></div>
         <div class="zoom-controls"><button id="zoom-out" class="icon-button quiet" type="button" aria-label="Zoom out" title="Zoom out">&#8722;</button><button id="zoom-fit" class="quiet" type="button"></button><button id="zoom-in" class="icon-button quiet" type="button" aria-label="Zoom in" title="Zoom in">+</button><span id="zoom-label">100%</span></div>
       </div>
+      <div id="source-notice" hidden role="alert"></div>
       <div id="canvas-wrap"><div id="device-column"><div id="device-caption"></div><div id="canvas-shell"><div id="canvas"></div></div></div></div>
       <div id="breadcrumbs" aria-label="Selection path"></div>
     </main>
@@ -282,7 +309,11 @@ async function openVisualEditor(context, root) {
   const styleUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "visual_editor.css"));
   const scriptUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "visual_editor_webview.js"));
   let takeoverConfirmed = files.html.includes(BODY_START);
-  panel.webview.html = visualEditorHtml(panel.webview, root, model, assetMap(panel.webview, root, model), { styleUri, scriptUri });
+  panel.webview.html = visualEditorHtml(panel.webview, root, model, assetMap(panel.webview, root, model), {
+    styleUri,
+    scriptUri,
+    sourceConflict: hasGeneratedBodyConflict(files.html, model)
+  });
 
   const messageDisposable = panel.webview.onDidReceiveMessage(async (message) => {
     try {
@@ -321,4 +352,4 @@ async function openVisualEditor(context, root) {
   panel.onDidDispose(() => messageDisposable.dispose());
 }
 
-module.exports = { appFiles, ensureStylesheet, initialModel, isBlankStarter, isPathInside, openVisualEditor, saveModel, stylesheetHrefs, visualEditorHtml };
+module.exports = { appFiles, ensureStylesheet, hasGeneratedBodyConflict, initialModel, isBlankStarter, isPathInside, isVisualEditorPackage, openVisualEditor, saveModel, stylesheetHrefs, visualEditorHtml };

@@ -15,8 +15,10 @@ Module._load = function mockVscode(request, parent, isMain) {
 const {
   appFiles,
   ensureStylesheet,
+  hasGeneratedBodyConflict,
   initialModel,
   isBlankStarter,
+  isVisualEditorPackage,
   isPathInside,
   stylesheetHrefs,
   visualEditorHtml
@@ -55,9 +57,16 @@ try {
   assert.equal(blankModel.root.children.length, 1);
   assert.equal(blankModel.root.children[0].text, "Hello world");
   assert.equal(blankModel.root.background, "#ffffff");
+  assert(!isVisualEditorPackage(root));
+  fs.mkdirSync(path.join(root, ".jellyframe"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".jellyframe", "visual-editor.json"), JSON.stringify(blankModel), "utf8");
+  assert(isVisualEditorPackage(root));
 
   const arbitraryHtml = blankHtml.replace("Hello world", "A different page");
   assert(!isBlankStarter(arbitraryHtml));
+  const generatedHtml = blankHtml.replace(/<body>[\s\S]*?<\/body>/i, `<body>\n${require("../../tools/vscode-jellyframe/visual_editor_model").renderBody(blankModel)}\n</body>`);
+  assert(!hasGeneratedBodyConflict(generatedHtml, blankModel));
+  assert(hasGeneratedBodyConflict(generatedHtml.replace("Hello world", "Changed outside"), blankModel));
 
   const webviewHtml = visualEditorHtml({ cspSource: "vscode-webview:", asWebviewUri: (uri) => uri }, root, {
     format: "jellyframe.visual-editor",
@@ -82,6 +91,7 @@ try {
   assert(webviewHtml.includes('src="vscode-webview:/visual_editor_webview.js"'), "visual-editor behavior is external");
   assert(webviewHtml.includes('id="components-tab"'), "components tab is present");
   assert(webviewHtml.includes('id="outline-tab"'), "outline tab is present");
+  assert(webviewHtml.includes('id="source-notice"'), "source conflict notice is present");
   assert(webviewHtml.includes('id="left-resizer"'), "left panel resizer is present");
   assert(webviewHtml.includes('id="right-resizer"'), "right panel resizer is present");
   assert.doesNotThrow(() => new Function(fs.readFileSync(path.join(__dirname, "../../tools/vscode-jellyframe/visual_editor_webview.js"), "utf8")));

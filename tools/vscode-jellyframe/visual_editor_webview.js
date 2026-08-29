@@ -26,6 +26,7 @@
   const collapsedNodes = new Set(Array.isArray(persisted.collapsedNodes) ? persisted.collapsedNodes : []);
   const assets = { ...(initial.assets || {}) };
   const maxNodes = Number(initial.maxNodes) || 128;
+  let suppressClick = false;
 
   const t = initial.chinese ? {
     components: "组件",
@@ -55,6 +56,7 @@
     dirty: "有未保存修改",
     ready: "设计画布为近似预览；实际效果以桌面壳为准",
     saveCancelled: "保存已取消",
+    sourceConflict: "生成源码已在编辑器外发生变化；当前画布仍基于模型。保存将用当前模型替换已标记生成区。",
     selected: "已选择",
     nodes: "个节点",
     page: "页面",
@@ -145,6 +147,7 @@
     dirty: "Unsaved changes",
     ready: "The design canvas is approximate; the desktop shell is authoritative",
     saveCancelled: "Save cancelled",
+    sourceConflict: "The generated source changed outside the editor; the canvas still follows the model. Save will replace the marked generated region with this model.",
     selected: "Selected",
     nodes: "nodes",
     page: "Page",
@@ -402,6 +405,14 @@
     event.dataTransfer.setData("text/plain", payload.kind === "new" ? `new:${payload.type}` : `move:${payload.id}`);
   }
 
+  function allowClick(event) {
+    if (!suppressClick) return true;
+    suppressClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+    return false;
+  }
+
   function clearDropIndicators() {
     document.querySelectorAll(".drop-before,.drop-after,.drop-inside").forEach((element) => {
       element.classList.remove("drop-before", "drop-after", "drop-inside");
@@ -434,6 +445,65 @@
     } else return;
     markDirty();
     renderAll();
+  }
+
+  function bindPointerDrag(element, payload, label) {
+    element.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      const startX = event.clientX;
+      const startY = event.clientY;
+      let dragging = false;
+      let targetId;
+      let targetMode;
+      const ghost = document.createElement("div");
+      ghost.className = "pointer-drag-ghost";
+      ghost.textContent = label;
+
+      const updateTarget = (moveEvent) => {
+        clearDropIndicators();
+        const hit = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+        const candidate = hit?.closest(".designer-node, .outline-row");
+        if (candidate?.dataset.nodeId) {
+          const node = find(candidate.dataset.nodeId);
+          if (node) {
+            targetId = node.id;
+            targetMode = dropMode(moveEvent, candidate, node);
+            candidate.classList.add(`drop-${targetMode}`);
+            return;
+          }
+        }
+        if (hit && $("canvas").contains(hit)) {
+          targetId = model.root.id;
+          targetMode = "inside";
+          $("canvas").classList.add("drop-inside");
+        }
+      };
+      const move = (moveEvent) => {
+        if (!dragging && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 6) return;
+        if (!dragging) {
+          dragging = true;
+          document.body.classList.add("pointer-dragging");
+          document.body.append(ghost);
+        }
+        ghost.style.left = `${moveEvent.clientX}px`;
+        ghost.style.top = `${moveEvent.clientY}px`;
+        updateTarget(moveEvent);
+      };
+      const finish = () => {
+        document.removeEventListener("pointermove", move, true);
+        document.removeEventListener("pointerup", finish, true);
+        document.removeEventListener("pointercancel", finish, true);
+        document.body.classList.remove("pointer-dragging");
+        ghost.remove();
+        if (!dragging) return;
+        suppressClick = true;
+        clearDropIndicators();
+        if (targetId && targetMode) performDrop(payload, targetId, targetMode);
+      };
+      document.addEventListener("pointermove", move, true);
+      document.addEventListener("pointerup", finish, true);
+      document.addEventListener("pointercancel", finish, true);
+    });
   }
 
   function addNode(type) {
@@ -511,6 +581,7 @@
 
   function selectNode(id) {
     if (!find(id)) return;
+    if (selectedId === id) return;
     selectedId = id;
     renderAll();
   }
@@ -575,7 +646,7 @@
   function renderNode(node) {
     let element;
     if (node.type === "container") {
-      element = document.createElement("div");
+      element = document.createElement("section");
       if (!node.children.length) {
         const empty = document.createElement("div");
         empty.className = "designer-empty";
@@ -584,6 +655,9 @@
       } else node.children.forEach((child) => element.append(renderNode(child)));
     } else if (node.type === "text") {
       element = document.createElement("div");
+      element.contentEditable = "true";
+      element.setAttribute("role", "textbox");
+      element.spellcheck = false;
       element.textContent = node.text;
     } else if (node.type === "button") {
       element = document.createElement("button");
@@ -601,7 +675,8 @@
       element = document.createElement("input");
       element.value = node.value || "";
       element.placeholder = node.placeholder || "";
-      element.disabled = true;
+      element.readOnly = true;
+      element.tabIndex = -1;
     } else {
       element = document.createElement("div");
       const fill = document.createElement("span");
@@ -611,7 +686,7 @@
       fill.style.background = node.fill;
       element.append(fill);
     }
-    element.classList.add("designer-node");
+    element.classList.add(`jf-visual-${node.type}`, "designer-node");
     element.dataset.nodeId = node.id;
     if (node.id === selectedId) element.classList.add("selected");
     applyCommonStyle(element, node);
@@ -620,11 +695,30 @@
       event.stopPropagation();
       setDrag(event, { kind: "move", id: node.id });
     });
+    element.addEventListener("dragend", clearDropIndicators);
     element.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      selectNode(node.id);
+      if (allowClick(event)) selectNode(node.id);
     });
+    bindPointerDrag(element, { kind: "move", id: node.id }, nodeLabel(node));
+    if (node.type === "text") {
+      element.addEventListener("blur", () => {
+        const value = element.textContent || "";
+        if (value !== node.text) commitValue(node, "text", value);
+      });
+      element.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          element.textContent = node.text;
+          element.blur();
+        }
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          element.blur();
+        }
+      });
+    }
     bindDropTarget(element, node);
     return element;
   }
@@ -639,6 +733,32 @@
     $("canvas-shell").style.height = `${model.viewport.height}px`;
     $("device-caption").textContent = `${model.viewport.width} x ${model.viewport.height}${round ? " · round" : ""}`;
     requestAnimationFrame(applyZoom);
+  }
+
+  function bindCanvasDrop() {
+    const canvas = $("canvas");
+    canvas.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      if (event.target !== canvas) return;
+      clearDropIndicators();
+      canvas.classList.add("drop-inside");
+    });
+    canvas.addEventListener("dragleave", (event) => {
+      if (event.target === canvas && !canvas.contains(event.relatedTarget)) clearDropIndicators();
+    });
+    canvas.addEventListener("drop", (event) => {
+      if (event.target !== canvas) return;
+      event.preventDefault();
+      const payload = decodeDrag(event);
+      clearDropIndicators();
+      performDrop(payload, model.root.id, "inside");
+    });
+  }
+
+  function renderSourceNotice() {
+    const notice = $("source-notice");
+    notice.hidden = !initial.sourceConflict;
+    notice.textContent = initial.sourceConflict ? t.sourceConflict : "";
   }
 
   function renderPalette() {
@@ -669,7 +789,8 @@
         copy.append(strong, help);
         button.append(icon, copy);
         button.addEventListener("dragstart", (event) => setDrag(event, { kind: "new", type: definition.type }));
-        button.addEventListener("click", () => addNode(definition.type));
+        bindPointerDrag(button, { kind: "new", type: definition.type }, t[definition.label]);
+        button.addEventListener("click", (event) => { if (allowClick(event)) addNode(definition.type); });
         section.append(button);
       });
       list.append(section);
@@ -693,6 +814,7 @@
     const hasChildren = node.type === "container" && node.children.length > 0;
     toggle.textContent = hasChildren ? (collapsedNodes.has(node.id) ? "›" : "⌄") : "";
     toggle.disabled = !hasChildren;
+    toggle.addEventListener("pointerdown", (event) => event.stopPropagation());
     toggle.addEventListener("click", (event) => {
       event.stopPropagation();
       if (collapsedNodes.has(node.id)) collapsedNodes.delete(node.id); else collapsedNodes.add(node.id);
@@ -709,7 +831,8 @@
     kind.className = "outline-kind";
     kind.textContent = node.id;
     row.append(toggle, icon, name, kind);
-    row.addEventListener("click", () => selectNode(node.id));
+    row.addEventListener("click", (event) => { if (allowClick(event)) selectNode(node.id); });
+    bindPointerDrag(row, { kind: "move", id: node.id }, nodeLabel(node));
     row.addEventListener("dragstart", (event) => {
       event.stopPropagation();
       setDrag(event, { kind: "move", id: node.id });
@@ -1017,6 +1140,7 @@
 
   function renderAll() {
     renderPanels();
+    renderSourceNotice();
     renderCanvas();
     renderOutline();
     renderInspector();
@@ -1143,6 +1267,7 @@
   }, { passive: false });
   setupResizer($("left-resizer"), "left");
   setupResizer($("right-resizer"), "right");
+  bindCanvasDrop();
   new ResizeObserver(() => { if (zoom === "fit") applyZoom(); }).observe($("canvas-wrap"));
 
   document.addEventListener("keydown", (event) => {
@@ -1177,6 +1302,7 @@
     if (message.type === "saved") {
       dirty = false;
       saving = false;
+      initial.sourceConflict = false;
       setSaveState("saved", t.saved);
       renderAll();
       if (message.debug) vscode.postMessage({ type: "debug" });
