@@ -27,6 +27,7 @@
 2. **R1 Core-only 维护，主线进行中：**以 standalone、sanitizer 与确定性 capture 回归审查 parser/style 所有权、malformed-input budget 与 cache invalidation。不得扩张 CSS 范围或改变 port profile。
 3. **B2 后端准备，受限进行：**保持 configure-time `ScriptRuntime` 边界及其不变量。在具备独立 compatibility/resource RFC 与对等证据前，不引入第二后端，也不改变 JerryScript 默认选择。
 4. **A3 筹备，已经进行中：**试用材料、设备采购、视觉资产与反馈运营可并行，但必须在 A2 的两项证据均通过后才开始外部产品试用。
+5. **A3 作者体验增强，隔离原型进行中：**按 [可视化 App 编辑器计划](visual_app_editor_plan_zh.md) 收束 VS Code 内的受限可视化编辑流程。该工作可改善演示和 App 创作门槛，但不替代 A2 的干净机器、设备生命周期或 panel/input 证据。
 
 ## 已关闭的性能阶段
 
@@ -67,6 +68,8 @@ WS147 provider handoff 子 gate 已由 `provider-handoff-afdcf75-20260821` 关�
 仅在 A1/A2 完成后开始。试用者不得需要 ESP-IDF。首轮反馈以可复现 App package、设备日志和版本化 developer image 为准；能够阻塞安装、运行、恢复或文档化能力的反馈才升级为主线 P0。
 
 筹备状态：**进行中**。宣传、招募对接、试用说明和反馈收集渠道可并行准备，但不得在 A2 的干净机器与 panel/input 出口通过前分发试用访问、要求参与者刷写非发布镜像或收集产品可用性结论。
+
+可视化 App 编辑器作为并行体验增强按独立阶段门槛推进。近期展示候选只要求完成编辑器壳、结构树、可靠拖放、源码冲突保护和真实桌面壳交接；不得用浏览器近似画布替代 Runtime 或设备证据，也不得扩大 JellyFrame 已声明的 HTML/CSS/JS 能力范围。
 
 出口：独立用户完成完整生命周期；没有 unexplained reset、App 库损坏或开发流程阻塞。
 

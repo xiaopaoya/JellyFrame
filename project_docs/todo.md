@@ -20,6 +20,7 @@ Status: **in progress, with outreach and preparation coordination owned by exter
 - [ ] Prepare the smallest trial kit: released Developer Image/provider, VS Code extension installation instructions, the `blank` template start flow, known capability boundaries and a support channel.
 - [ ] Fix the feedback archive format: App `.jfapp` or source package, image/provider/extension versions, reproduction steps, JellyFrame Output, device logs and a minimal reproducible capture where possible.
 - [ ] Prepare first-round triage: installation, execution, recovery, data corruption and documented-capability failures are P0; unclaimed Canvas, full-screen 30 FPS or full browser APIs are not implied defects.
+- [ ] Complete Stage 1 of the [Visual App Editor plan](visual_app_editor_plan.md), then add only the Stage 2/3 source-conflict and real-shell handoff slices needed before deciding whether it is included in trial promotion.
 
 Preparation does not open the external trial. Trial access and product-usability data collection begin only after the two A2 formal evidence items and installed-App panel/input acceptance close.
 

@@ -26,6 +26,7 @@ Parallel work may not change the exit condition of an earlier item.
 2. **R1 Core-only maintenance, active on main:** review parser/style ownership, malformed-input budgets and cache invalidation with standalone, sanitizer and deterministic capture regressions. Do not expand CSS scope or alter the port profile.
 3. **B2 backend preparation, bounded:** retain the configure-time `ScriptRuntime` boundary and its invariants. Do not add a second engine or change the JerryScript default before a separate compatibility/resource RFC and parity evidence exist.
 4. **A3 preparation, in progress:** trial material, hardware procurement, visual assets and feedback operations may proceed, but no external product trial begins before both A2 evidence items pass.
+5. **A3 authoring UX, isolated prototype:** advance the constrained VS Code visual workflow under the [Visual App Editor plan](visual_app_editor_plan.md). It may improve demos and lower App authoring cost, but it does not replace clean-machine, device-lifecycle or panel/input evidence.
 
 ## Closed Performance Stage
 
@@ -67,6 +68,12 @@ Begins only after A1/A2. Participants require no ESP-IDF. Reproducible package, 
 Preparation status: **in progress**. Outreach coordination, trial instructions and feedback collection may be prepared
 in parallel, but no trial access, non-release image flashing or product-usability conclusions are allowed before the A2
 clean-machine and panel/input exits pass.
+
+The Visual App Editor is a parallel authoring improvement with its own staged
+gates. Its near-term showcase requires a polished shell, Navigator, predictable
+drag/drop, source-conflict protection and real desktop-shell handoff. The
+browser-like design canvas never substitutes for Runtime or device evidence and
+must not expand the documented JellyFrame feature surface.
 
 ## Track B: Independent Engine Projects
 

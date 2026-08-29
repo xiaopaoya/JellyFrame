@@ -20,6 +20,7 @@
 - [ ] 准备最小试用包：已发布 Developer Image/provider、VS Code 扩展安装说明、`blank` 模板起步流程、已知能力边界与支持渠道。
 - [ ] 固定反馈归档格式：App `.jfapp` 或源码包、image/provider/extension 版本、复现步骤、JellyFrame Output、设备 logs 与是否可复现的最小 capture。
 - [ ] 准备首轮筛选与响应规则：安装、运行、恢复、数据损坏和文档化能力不符为 P0；不把未声明 Canvas、全屏 30 FPS 或完整浏览器 API 作为缺陷承诺。
+- [ ] 按 [可视化 App 编辑器计划](visual_app_editor_plan_zh.md) 完成阶段 1；随后只补 generated-region 冲突保护和真实桌面壳交接所需的阶段 2/3 最小切片，再决定是否作为内测宣传功能。
 
 这些筹备项不放行实际外部试用。只有上方两项 A2 正式证据和 panel/input 验收关闭后，才可分发访问与收集产品可用性数据。
 

@@ -5,7 +5,6 @@ const fs = require("fs");
 const Module = require("module");
 const os = require("os");
 const path = require("path");
-const vm = require("vm");
 
 const originalLoad = Module._load;
 Module._load = function mockVscode(request, parent, isMain) {
@@ -65,10 +64,14 @@ try {
       justify: "start",
       children: []
     }
-  }, {});
-  const script = /<script nonce="[^"]+">([\s\S]*?)<\/script>/.exec(webviewHtml)?.[1];
-  assert(script, "visual-editor webview script is present");
-  new vm.Script(script, { filename: "jellyframe-visual-editor-webview.js" });
+  }, {}, { styleUri: "vscode-webview:/visual_editor.css", scriptUri: "vscode-webview:/visual_editor_webview.js" });
+  assert(webviewHtml.includes('href="vscode-webview:/visual_editor.css"'), "visual-editor stylesheet is external");
+  assert(webviewHtml.includes('src="vscode-webview:/visual_editor_webview.js"'), "visual-editor behavior is external");
+  assert(webviewHtml.includes('id="components-tab"'), "components tab is present");
+  assert(webviewHtml.includes('id="outline-tab"'), "outline tab is present");
+  assert(webviewHtml.includes('id="left-resizer"'), "left panel resizer is present");
+  assert(webviewHtml.includes('id="right-resizer"'), "right panel resizer is present");
+  assert.doesNotThrow(() => new Function(fs.readFileSync(path.join(__dirname, "../../tools/vscode-jellyframe/visual_editor_webview.js"), "utf8")));
 
   fs.writeFileSync(path.join(root, "jellyframe.app.json"), "{not json", "utf8");
   assert.throws(() => appFiles(root), /invalid JSON/);
