@@ -14,6 +14,18 @@ from pathlib import Path
 TEST_ARGS: argparse.Namespace | None = None
 
 
+def run_capture(command: list[str]) -> subprocess.CompletedProcess[str]:
+    """Capture tool output without making the test depend on the host code page."""
+    return subprocess.run(
+        command,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cmake", required=True, type=Path)
@@ -40,28 +52,20 @@ class RenderCoreBuildBoundaryTests(unittest.TestCase):
         if self.generator:
             command.extend(["-G", self.generator])
         command.extend(definitions)
-        result = subprocess.run(command, text=True, capture_output=True, check=False)
+        result = run_capture(command)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def build_target(self, build_dir: Path, target: str, *, succeeds: bool) -> None:
-        result = subprocess.run(
-            [str(self.cmake), "--build", str(build_dir), "--target", target, "--parallel"],
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+        result = run_capture([
+            str(self.cmake), "--build", str(build_dir), "--target", target, "--parallel"
+        ])
         if succeeds:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         else:
             self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def ctest_names(self, build_dir: Path) -> str:
-        result = subprocess.run(
-            ["ctest", "--test-dir", str(build_dir), "-N"],
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+        result = run_capture(["ctest", "--test-dir", str(build_dir), "-N"])
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result.stdout + result.stderr
 
