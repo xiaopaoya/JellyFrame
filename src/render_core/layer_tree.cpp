@@ -417,11 +417,16 @@ void push_text_with_layout(DisplayList& display_list,
     const int bounded_spacing = bounded_letter_spacing(style.font_size, style.letter_spacing);
     for (std::size_t line_index = 0; line_index < lines.size(); ++line_index) {
         const std::string& line = lines[line_index];
-        const int y = rect.y + static_cast<int>(line_index) * line_height;
-        if (y >= safe_edge(rect.y, rect.height)) {
+        const std::size_t bounded_line_index = std::min<std::size_t>(
+            line_index, static_cast<std::size_t>(std::numeric_limits<int>::max()));
+        const int line_offset = clamp_int64_to_int(
+            static_cast<std::int64_t>(bounded_line_index) * line_height);
+        const int y = safe_add(rect.y, line_offset);
+        const int rect_bottom = safe_edge(rect.y, rect.height);
+        if (y >= rect_bottom) {
             break;
         }
-        Rect line_rect{rect.x, y, rect.width, std::min(line_height, safe_edge(rect.y, rect.height) - y)};
+        Rect line_rect{rect.x, y, rect.width, std::min(line_height, safe_span(y, rect_bottom))};
         if (!split_scalars) {
             push_text(display_list, line_rect, color, line, style.font_size, style.font_weight,
                       style.font_family_hash, align, true);
@@ -435,9 +440,9 @@ void push_text_with_layout(DisplayList& display_list,
                                                                  style.letter_spacing).width;
         int cursor_x = line_rect.x;
         if (align == TextCommandAlign::Center) {
-            cursor_x += std::max(0, (line_rect.width - line_width) / 2);
+            cursor_x = safe_add(cursor_x, std::max(0, safe_span(line_width, line_rect.width) / 2));
         } else if (align == TextCommandAlign::End) {
-            cursor_x += std::max(0, line_rect.width - line_width);
+            cursor_x = safe_add(cursor_x, std::max(0, safe_span(line_width, line_rect.width)));
         }
         std::size_t scalar_index = 0;
         while (scalar_index < line.size()) {
@@ -458,9 +463,9 @@ void push_text_with_layout(DisplayList& display_list,
                       style.font_family_hash,
                       TextCommandAlign::Start,
                       true);
-            cursor_x += scalar_width;
+            cursor_x = safe_add(cursor_x, scalar_width);
             if (scalar_index < line.size()) {
-                cursor_x += bounded_spacing;
+                cursor_x = safe_add(cursor_x, bounded_spacing);
             }
         }
     }
@@ -496,9 +501,9 @@ void push_text_decorations(DisplayList& display_list, const LayoutBox& box, Rect
     const int thickness = std::max(1, box.style.font_size / 12);
     const int inset = std::max(0, box.style.font_size / 12);
     const Rect line_rect_base{
-        rect.x + inset,
+        safe_add(rect.x, inset),
         rect.y,
-        std::max(0, rect.width - inset * 2),
+        std::max(0, safe_add(rect.width, safe_negate(safe_add(inset, inset)))),
         thickness,
     };
     if (line_rect_base.width <= 0) {
@@ -506,12 +511,14 @@ void push_text_decorations(DisplayList& display_list, const LayoutBox& box, Rect
     }
     if (box.style.text_decoration_line_through) {
         Rect strike = line_rect_base;
-        strike.y = rect.y + std::max(0, (rect.height - thickness) / 2);
+        strike.y = safe_add(rect.y, std::max(0, safe_span(thickness, rect.height) / 2));
         push_fill_rect(display_list, strike, box.style.color);
     }
     if (box.style.text_decoration_underline) {
         Rect underline = line_rect_base;
-        underline.y = rect.y + std::max(0, rect.height - std::max(thickness + 1, box.style.font_size / 5));
+        underline.y = safe_add(
+            rect.y,
+            std::max(0, safe_span(std::max(thickness + 1, box.style.font_size / 5), rect.height)));
         push_fill_rect(display_list, underline, box.style.color);
     }
 }
@@ -529,11 +536,13 @@ TextCommandAlign text_command_align(TextAlign align) {
 }
 
 int estimate_marker_width(const std::string& text, int font_size) {
-    int units = 0;
+    std::int64_t units = 0;
     for (char ch : text) {
-        units += ch == '.' || ch == ' ' ? 4 : 8;
+        units = std::min<std::int64_t>(std::numeric_limits<int>::max(),
+                                       units + (ch == '.' || ch == ' ' ? 4 : 8));
     }
-    return std::max(font_size, (font_size * units + 7) / 14);
+    const std::int64_t width = (static_cast<std::int64_t>(std::max(0, font_size)) * units + 7) / 14;
+    return std::max(font_size, clamp_int64_to_int(width));
 }
 
 int list_item_ordinal(const Node& node) {
@@ -750,8 +759,8 @@ void paint_outline(const LayoutBox& box, DisplayList& display_list) {
     const Rect outline_rect{
         safe_edge(box.rect.x, -extent),
         safe_edge(box.rect.y, -extent),
-        safe_edge(box.rect.width, extent * 2),
-        safe_edge(box.rect.height, extent * 2),
+        safe_edge(box.rect.width, safe_add(extent, extent)),
+        safe_edge(box.rect.height, safe_add(extent, extent)),
     };
     const int border_radius = resolved_border_radius(box);
     push_stroke_rect(display_list,
