@@ -1051,7 +1051,7 @@ bool is_supported_declaration_feature(std::string_view feature) {
                                         "center", "end", "flex-end"});
     }
     if (property == "flex-wrap") {
-        return supported_keyword(value, {"wrap", "wrap-reverse", "nowrap"});
+        return supported_keyword(value, {"wrap", "nowrap"});
     }
     if (property == "grid-template-columns" || property == "grid-template-rows") {
         return value.find("minmax(") != std::string::npos || value.find("repeat(") != std::string::npos ||
@@ -1539,11 +1539,6 @@ bool append_nesting_rule(std::string& output,
     if (trim(declarations).empty()) {
         return true;
     }
-    const std::size_t required = selector.size() + declarations.size() + 2;
-    if (required > budget.remaining_bytes) {
-        budget.report("CSS nesting expansion exceeded its bounded parser budget and was truncated", selector);
-        return false;
-    }
     return budget.append(output, selector, selector) && budget.append_char(output, '{', selector) &&
            budget.append(output, declarations, selector) && budget.append_char(output, '}', selector);
 }
@@ -1591,7 +1586,9 @@ bool expand_single_level_nesting_rule(std::string_view parent_selector,
             const std::vector<std::string> parents = split_top_level_commas(parent_selector);
             const std::vector<std::string> nested_selectors = split_top_level_commas(nested_selector);
             constexpr std::size_t kMaxExpandedSelectors = 16;
-            if (parents.empty() || nested_selectors.empty() || parents.size() * nested_selectors.size() > kMaxExpandedSelectors) {
+            const bool expansion_too_large = parents.empty() || nested_selectors.empty() ||
+                parents.size() > kMaxExpandedSelectors / std::max<std::size_t>(1, nested_selectors.size());
+            if (expansion_too_large) {
                 report_diagnostic(budget.diagnostics, DiagnosticStage::Css, DiagnosticSeverity::Warning,
                                   "css-nesting-skipped", "Nested selector expansion exceeded the bounded subset",
                                   nested_selector);
@@ -1620,7 +1617,7 @@ bool expand_single_level_css_nesting(std::string_view source,
     if (source.find('&') == std::string_view::npos) {
         return budget.append(output, source, {});
     }
-    if (depth >= budget.max_depth) {
+    if (budget.max_depth != 0 && depth >= budget.max_depth) {
         budget.report("CSS nesting exceeded its bounded parser depth and was skipped", {});
         return false;
     }
@@ -1697,6 +1694,13 @@ private:
                 }
                 if (index_ + 1 < source_.size()) {
                     index_ += 2;
+                } else {
+                    report_diagnostic(options_.diagnostics,
+                                      DiagnosticStage::Css,
+                                      DiagnosticSeverity::Warning,
+                                      "css-comment-unclosed",
+                                      "CSS comment reached end of input without a closing delimiter",
+                                      {});
                 }
                 continue;
             }
@@ -1714,7 +1718,7 @@ private:
                 consume();
                 return;
             }
-            if (total_rule_count() >= options_.max_rules) {
+            if (options_.max_rules != 0 && total_rule_count() >= options_.max_rules) {
                 report_diagnostic(options_.diagnostics,
                                   DiagnosticStage::Css,
                                   DiagnosticSeverity::Warning,
@@ -1841,7 +1845,8 @@ private:
         }
 
         consume();
-        std::vector<CssDeclaration> declarations = parse_declaration_block();
+        bool block_closed = false;
+        std::vector<CssDeclaration> declarations = parse_declaration_block(block_closed);
         if (declarations.empty()) {
             report_diagnostic(options_.diagnostics,
                               DiagnosticStage::Css,
@@ -1862,7 +1867,7 @@ private:
         }
 
         for (std::string selector : split_selector_list(selector_text)) {
-            if (total_rule_count() >= options_.max_rules) {
+            if (options_.max_rules != 0 && total_rule_count() >= options_.max_rules) {
                 report_diagnostic(options_.diagnostics,
                                   DiagnosticStage::Css,
                                   DiagnosticSeverity::Warning,
@@ -1916,7 +1921,7 @@ private:
             skip_balanced_block();
             return;
         }
-        if (total_rule_count() >= options_.max_rules) {
+        if (options_.max_rules != 0 && total_rule_count() >= options_.max_rules) {
             report_diagnostic(options_.diagnostics,
                               DiagnosticStage::Css,
                               DiagnosticSeverity::Warning,
@@ -1952,7 +1957,8 @@ private:
                 continue;
             }
             consume();
-            std::vector<CssDeclaration> declarations = parse_declaration_block();
+            bool block_closed = false;
+            std::vector<CssDeclaration> declarations = parse_declaration_block(block_closed);
             if (selector == "from" || selector == "0%") {
                 rule.from_declarations = std::move(declarations);
             } else if (selector == "to" || selector == "100%") {
@@ -1979,8 +1985,9 @@ private:
         stylesheet_.push_keyframes(std::move(rule));
     }
 
-    std::vector<CssDeclaration> parse_declaration_block() {
+    std::vector<CssDeclaration> parse_declaration_block(bool& block_closed) {
         std::vector<CssDeclaration> declarations;
+        block_closed = false;
         while (!eof()) {
             skip_whitespace_and_comments();
             if (eof()) {
@@ -1988,16 +1995,18 @@ private:
             }
             if (peek() == '}') {
                 consume();
+                block_closed = true;
                 break;
             }
-            if (declarations.size() >= options_.max_declarations_per_rule) {
+            if (options_.max_declarations_per_rule != 0 &&
+                declarations.size() >= options_.max_declarations_per_rule) {
                 report_diagnostic(options_.diagnostics,
                                   DiagnosticStage::Css,
                                   DiagnosticSeverity::Warning,
                                   "css-declaration-limit",
                                   "CSS declaration budget was reached; remaining declarations in the block were skipped",
                                   {});
-                skip_balanced_block_tail();
+                block_closed = skip_balanced_block_tail();
                 break;
             }
 
@@ -2034,13 +2043,23 @@ private:
             consume();
 
             bool value_limited = false;
-            std::string value = consume_declaration_value(value_limited);
+            bool unterminated_string = false;
+            std::string value = consume_declaration_value(value_limited, unterminated_string);
             if (value_limited) {
                 report_diagnostic(options_.diagnostics,
                                   DiagnosticStage::Css,
                                   DiagnosticSeverity::Warning,
                                   "css-declaration-value-limit",
                                   "CSS declaration value exceeded its byte budget and was skipped",
+                                  property);
+                continue;
+            }
+            if (unterminated_string) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Css,
+                                  DiagnosticSeverity::Warning,
+                                  "css-declaration-string-malformed",
+                                  "CSS declaration contained an unterminated string and was skipped",
                                   property);
                 continue;
             }
@@ -2059,6 +2078,14 @@ private:
                                   declaration.property);
             }
         }
+        if (!block_closed) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Css,
+                              DiagnosticSeverity::Warning,
+                              "css-declaration-block-unclosed",
+                              "CSS declaration block reached end of input without a closing brace",
+                              {});
+        }
         return declarations;
     }
 
@@ -2073,9 +2100,10 @@ private:
         return '\0';
     }
 
-    std::string consume_declaration_value(bool& limited) {
+    std::string consume_declaration_value(bool& limited, bool& unterminated_string) {
         std::string value;
         limited = false;
+        unterminated_string = false;
         int paren_depth = 0;
         int bracket_depth = 0;
         const auto append = [this, &value, &limited](char ch) {
@@ -2099,14 +2127,20 @@ private:
             if (ch == '"' || ch == '\'') {
                 const char quote = consume();
                 append(quote);
+                bool closed = false;
                 while (!eof()) {
                     const char string_ch = consume();
                     append(string_ch);
                     if (string_ch == '\\' && !eof()) {
                         append(consume());
                     } else if (string_ch == quote) {
+                        closed = true;
                         break;
                     }
+                }
+                if (!closed) {
+                    unterminated_string = true;
+                    break;
                 }
                 continue;
             }
@@ -2205,14 +2239,15 @@ private:
         }
     }
 
-    void skip_balanced_block_tail() {
+    bool skip_balanced_block_tail() {
         while (!eof()) {
             if (peek() == '}') {
                 consume();
-                return;
+                return true;
             }
             consume_component_char();
         }
+        return false;
     }
 
     void skip_until_eof_or_block_end(bool stop_at_block_end) {
@@ -2310,9 +2345,11 @@ Stylesheet CssParser::parse(const std::string& source, const CssParserOptions& o
     const bool uses_nesting_marker = bounded_source.find('&') != std::string_view::npos;
     std::string expanded;
     if (uses_nesting_marker) {
-        const std::size_t expansion_limit = options.max_nesting_expansion_bytes == 0
+        const std::size_t expansion_limit = options.max_nesting_expansion_bytes != 0
+            ? options.max_nesting_expansion_bytes
+            : options.max_input_bytes != 0
             ? options.max_input_bytes
-            : options.max_nesting_expansion_bytes;
+            : std::numeric_limits<std::size_t>::max();
         NestingExpansionBudget budget{expansion_limit, options.max_nesting_depth, options.diagnostics};
         expanded.reserve(std::min(bounded_source.size(), expansion_limit));
         expand_single_level_css_nesting(bounded_source, expanded, budget, 0);

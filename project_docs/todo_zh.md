@@ -1,6 +1,6 @@
 # JellyFrame 活动待办
 
-> 最后更新：2026-08-25；适用版本：0.6.0-dev
+> 最后更新：2026-08-30；适用版本：0.6.0-dev
 >
 > 本清单是 [路线图](roadmap_zh.md) 的近期执行队列，不记录已经关闭的验收、性能微实验或历史移植任务。
 
@@ -11,6 +11,15 @@
 - [ ] 通过 provider 流程完成真实已安装 App 的 panel/input 验收。记录 App launch marker、触控/输入响应、panel/present 错误与恢复行为；provider lifecycle PASS 不等于视觉或输入证据。
 - [ ] 将 B1 作为持续 release gate 维护。首个带签名 Core `v0.6.0` 是历史基线，Runtime 当前锁定 `v0.6.1`；以后每次 Core bump 必须下载或以其他方式认证已审阅的 release artifact、校验 archive SHA-256、更新精确 version/ABI/source lock，并通过 standalone、package-consumer 与 source-override tests。
 - [ ] 执行 [0.6 工程维护审查计划](engineering_review_plan_20260819_zh.md)：先做 R0 package/profile/provenance，再做 R1 document/style、layout/dirty 与 renderer/text。只修复有明确语义或安全缺陷的接口，不做机械式改名。
+- [ ] 在响应式布局基础交付后继续 R1 Core-only 审查：检查 parser/style 所有权、malformed-input budget、cache invalidation 与确定性 capture 行为。`300x300`、`320x240`、`172x320` 矩阵及 Flex 交叉轴回归现作为持续 gate；优先修复已证明的语义缺陷，不以新增控件或浏览器专有声明替代。
+- [x] 完成软件栅格器首轮极值安全审查：圆角 coverage 的距离平方、clipped 几何循环、描边内框和 BMP 导出尺寸使用 checked/saturating 计算；完整与响应式 Core profile 均通过 `9/9`。精简 profile 的聚合 CTest 不作为失败依据，因为该 profile 不生成桌面壳和 pseudo browser 目标。
+- [x] 完成文本路径极值审查：fallback 字体测量、字间距、anywhere wrap 和内置 bitmap 绘制定位均使用有界计算，并覆盖最大字号/间距回归；未改变正常字号布局语义。
+- [x] 收敛布局定位极值：flex wrap、inline flow、文本总高度、flex 汇总/对齐和递归 `shift_box` 使用 bounded 算术，换行行数转换有明确上限；完整与响应式 Core profile `9/9` 通过。
+- [x] 收敛 grid/positioned 极值：列/行 track、gap、跨轨道分配、绝对定位 inset 推导、坐标偏移和 fallback 排布使用 bounded 算术；完整与响应式 profile 均通过 `9/9`，未改变正常尺寸语义。
+- [x] 收敛 layer-tree 绘制边界：多行文本的行号/行高、逐字 letter-spacing cursor、文本装饰线与 outline extent 使用有界坐标计算；完整与响应式 profile 均通过 `9/9`。
+- [x] 修复 CSS nesting 预算语义：深度与展开字节预算为 `0` 时按契约表示不限制，并对 selector 组合数量使用无溢出上界判断；新增零预算回归，完整与响应式 profile 均通过 `9/9`。
+- [x] 修复 CSS `var(...)` malformed 分支绕过 resolved-value 字节预算的问题；空变量名片段统一使用有界追加并增加超预算回归，完整与响应式 profile 均通过 `9/9`。
+- [x] 收敛 compositor 的 offscreen 失败回退：变换或圆角裁剪无法分配临时 surface 时跳过不正确的直接绘制，避免未变换或未裁剪内容进入目标帧；新增圆角预算回归，完整与响应式 profile 均通过 `9/9`。
 - [ ] 维护 B2 脚本运行时边界：通用 host 与 worker 代码只能包含 `script_runtime.h`；引擎 headers、value 和发现逻辑必须留在选定后端内。未经过独立批准的 RFC 与对等证据前，不引入第二后端，也不改变对外开发者口径。
 
 ## 并行：A3 内测筹备

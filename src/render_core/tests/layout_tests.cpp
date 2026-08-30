@@ -185,6 +185,81 @@ void flex_row_justifies_and_aligns_items() {
     check(a->rect.y == 20 && b->rect.y == 20, "center alignment places items vertically");
 }
 
+void flex_cross_axis_stretch_resolves_auto_size() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main id='row'><div id='row-auto'></div><div id='row-fixed'></div></main>"
+        "<main id='column'><div id='column-auto'></div><div id='column-fixed'></div></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: flex; align-items: stretch; }"
+        "#row { width: 100px; height: 40px; }"
+        "#row-auto { width: 20px; } #row-fixed { width: 20px; height: 10px; }"
+        "#column { flex-direction: column; width: 60px; height: 40px; }"
+        "#column-auto { height: 10px; } #column-fixed { width: 20px; height: 10px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 120, 100);
+
+    const LayoutBox* row_auto = find_first_by_id(*layout_tree, "row-auto");
+    const LayoutBox* row_fixed = find_first_by_id(*layout_tree, "row-fixed");
+    const LayoutBox* column_auto = find_first_by_id(*layout_tree, "column-auto");
+    const LayoutBox* column_fixed = find_first_by_id(*layout_tree, "column-fixed");
+    check(row_auto != nullptr && row_fixed != nullptr && column_auto != nullptr && column_fixed != nullptr,
+          "cross-axis stretch fixture boxes exist");
+    check(row_auto->rect.height == 40, "row stretch fills the line for an auto-height item");
+    check(row_fixed->rect.height == 10, "row stretch preserves an explicit height");
+    check(column_auto->rect.width == 60, "column stretch fills the line for an auto-width item");
+    check(column_fixed->rect.width == 20, "column stretch preserves an explicit width");
+}
+
+void flex_cross_axis_alignment_uses_outer_size_and_align_self() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main><div id='center'></div><div id='end'></div><div id='self'></div></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: flex; width: 120px; height: 50px; align-items: center; }"
+        "div { width: 20px; height: 10px; margin-top: 4px; margin-bottom: 6px; }"
+        "#end { align-self: flex-end; } #self { align-self: stretch; height: auto; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 140, 70);
+
+    const LayoutBox* center = find_first_by_id(*layout_tree, "center");
+    const LayoutBox* end = find_first_by_id(*layout_tree, "end");
+    const LayoutBox* self = find_first_by_id(*layout_tree, "self");
+    check(center != nullptr && end != nullptr && self != nullptr,
+          "cross-axis alignment fixture boxes exist");
+    check(center->rect.y == 19, "center aligns the item's outer margin box");
+    check(end->rect.y == 34, "end aligns the item's outer margin box");
+    check(self->rect.y == 4 && self->rect.height == 40,
+          "align-self stretch fills the line while preserving margins");
+}
+
+void flex_wrap_aligns_items_within_each_line() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main><div id='short'></div><div id='tall'></div><div id='next'></div></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: flex; flex-wrap: wrap; width: 90px; align-items: center; column-gap: 5px; row-gap: 7px; }"
+        "div { width: 40px; }"
+        "#short { height: 10px; } #tall { height: 20px; } #next { width: 90px; height: 8px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 110, 80);
+
+    const LayoutBox* short_item = find_first_by_id(*layout_tree, "short");
+    const LayoutBox* tall = find_first_by_id(*layout_tree, "tall");
+    const LayoutBox* next = find_first_by_id(*layout_tree, "next");
+    check(short_item != nullptr && tall != nullptr && next != nullptr,
+          "wrapped cross-axis alignment fixture boxes exist");
+    check(short_item->rect.y == 5 && tall->rect.y == 0,
+          "wrapped items align within the first line's cross size");
+    check(next->rect.y == 27, "wrapped next line starts after line height and row gap");
+}
+
 void flex_row_supports_end_and_space_evenly_justification() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -437,6 +512,86 @@ void percentage_width_and_height_use_containing_box() {
     check(cap->rect.width == 320 && cap->rect.height == 120, "max-height clamps percentage height");
 }
 
+void responsive_layout_matrix_keeps_same_app_inside_three_targets() {
+    struct Target {
+        int width;
+        int height;
+        bool narrow;
+    };
+    constexpr Target targets[] = {
+        {300, 300, false},
+        {320, 240, false},
+        {172, 320, true},
+    };
+
+    for (const Target target : targets) {
+        HtmlParser html_parser;
+        CssParser css_parser;
+        auto document = html_parser.parse(
+            "<body><main id='screen'><section id='primary'><p id='primary-label'>Primary content</p></section>"
+            "<section id='secondary'><p id='secondary-label'>Secondary content</p></section></main></body>");
+        CssParserOptions css_options;
+        css_options.media_viewport_width = target.width;
+        css_options.media_viewport_height = target.height;
+        VectorDiagnosticSink css_diagnostics;
+        css_options.diagnostics = &css_diagnostics;
+        StyleResolver resolver(css_parser.parse(
+            "body { margin: 0; width: 100%; height: 100%; }"
+            "#screen { display: flex; flex-direction: row; box-sizing: border-box; width: 100%; "
+            "height: 100%; gap: 8px; padding: 8px; }"
+            "section { flex: 1 1 0; min-width: 0; height: auto; box-sizing: border-box; }"
+            "p { margin: 0; width: 100%; overflow-wrap: anywhere; }"
+            "@media (max-width: 200px) { #screen { flex-direction: column; gap: 4px; } "
+            "section { width: 100%; flex: 0 0 40px; } }",
+            css_options));
+        RenderTreeBuilder render_tree_builder(resolver);
+        auto render_tree = render_tree_builder.build(*document);
+        VectorDiagnosticSink layout_diagnostics;
+        LayoutEngineOptions layout_options;
+        layout_options.diagnostics = &layout_diagnostics;
+        LayoutEngine layout_engine(resolver, {}, layout_options);
+        auto layout_tree = layout_engine.layout(*render_tree, target.width, target.height);
+
+        const LayoutBox* screen = find_first_by_id(*layout_tree, "screen");
+        const LayoutBox* primary = find_first_by_id(*layout_tree, "primary");
+        const LayoutBox* secondary = find_first_by_id(*layout_tree, "secondary");
+        check(screen != nullptr && primary != nullptr && secondary != nullptr,
+              "responsive matrix boxes exist");
+        check(screen->rect.width == target.width && screen->rect.height == target.height,
+              "responsive matrix root fills every target viewport");
+        const int content_left = screen->rect.x + screen->style.padding.left + screen->style.border_width.left;
+        const int content_right = screen->rect.x + screen->rect.width -
+            screen->style.padding.right - screen->style.border_width.right;
+        check(primary->rect.x >= content_left && secondary->rect.x >= content_left &&
+                  primary->rect.x + primary->rect.width <= content_right &&
+                  secondary->rect.x + secondary->rect.width <= content_right,
+              "responsive matrix children stay inside the padded viewport");
+        if (target.narrow) {
+            check(screen->style.flex_direction == FlexDirection::Column,
+                  "narrow target selects the column media branch");
+            check(primary->rect.width == secondary->rect.width &&
+                      primary->rect.y < secondary->rect.y &&
+                      secondary->rect.y >= primary->rect.y + primary->rect.height + 4,
+                  "narrow target stacks full-width cards with the declared gap");
+        } else {
+            check(screen->style.flex_direction == FlexDirection::Row,
+                  "wide targets keep the row media branch");
+            check(primary->rect.y == secondary->rect.y &&
+                      primary->rect.x < secondary->rect.x &&
+                      primary->rect.width == secondary->rect.width &&
+                      secondary->rect.x >= primary->rect.x + primary->rect.width + 8,
+                  "wide targets distribute equal flex cards with the declared gap");
+        }
+        check(target.narrow
+                  ? !has_diagnostic_code(css_diagnostics, "css-media-query-not-matched")
+                  : has_diagnostic_code(css_diagnostics, "css-media-query-not-matched"),
+              "responsive matrix reports only the non-selected media branch as unmatched");
+        check(!has_diagnostic_code(layout_diagnostics, "visual-horizontal-overflow") &&
+                  !has_diagnostic_code(layout_diagnostics, "visual-vertical-paint-overflow"),
+              "responsive matrix has no viewport overflow diagnostic");
+    }
+}
+
 void border_box_percent_width_accounts_for_edges() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -631,6 +786,22 @@ void nowrap_text_overflow_reports_diagnostic() {
     check(found, "nowrap overflow emits layout diagnostic");
 }
 
+void layout_saturates_extreme_box_values() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main id='extreme'>Content</main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "#extreme { width: 2147483647px; padding: 2147483647px; "
+        "border-width: 2147483647px; margin: 2147483647px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*RenderTreeBuilder(resolver).build(*document), 240, 240);
+    const LayoutBox* extreme = find_first_by_id(*layout_tree, "extreme");
+    check(extreme != nullptr, "extreme layout fixture exists");
+    check(extreme->rect.width >= 0 && extreme->rect.height >= 0,
+          "extreme box arithmetic does not wrap dimensions negative");
+}
+
 } // namespace
 
 int main() {
@@ -638,11 +809,15 @@ int main() {
         layout_tree_can_use_monotonic_arena();
         layout_tree_respects_box_budget();
         layout_tree_reports_box_budget_diagnostic();
+        layout_saturates_extreme_box_values();
         layout_tree_reports_depth_budget_diagnostic();
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         flex_row_distributes_grow_space();
         flex_row_shrinks_basis_widths();
         flex_row_justifies_and_aligns_items();
+        flex_cross_axis_stretch_resolves_auto_size();
+        flex_cross_axis_alignment_uses_outer_size_and_align_self();
+        flex_wrap_aligns_items_within_each_line();
         flex_row_supports_end_and_space_evenly_justification();
         flex_wrap_stacks_lines_with_row_gap();
         flex_wrap_align_content_distributes_lines();
@@ -656,6 +831,9 @@ int main() {
         relative_layout_offsets_visual_box_only();
         border_box_sizing_keeps_declared_width_and_height();
         percentage_width_and_height_use_containing_box();
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
+        responsive_layout_matrix_keeps_same_app_inside_three_targets();
+#endif
         border_box_percent_width_accounts_for_edges();
         max_width_percent_clamps_nested_border_box();
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED

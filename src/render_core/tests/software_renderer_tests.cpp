@@ -547,6 +547,7 @@ void soft_box_shadow_row_path_matches_reference_pixels() {
 #if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     return;
 #endif
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     struct ShadowCase {
         Rect rect;
         Rect clip;
@@ -582,6 +583,7 @@ void soft_box_shadow_row_path_matches_reference_pixels() {
         check_equal_pixels(actual, expected,
                            "row-wise soft shadow path preserves reference pixels for all geometry classes");
     }
+#endif
 }
 
 void rounded_stroke_keeps_corner_pixels_clear() {
@@ -1355,6 +1357,41 @@ void compositor_degrades_oversized_offscreen_layers_without_crashing() {
     check(has_diagnostic_code(diagnostics, "paint-offscreen-budget"), "offscreen fallback is reported");
 }
 
+void compositor_does_not_bypass_rounded_clip_when_offscreen_budget_is_exceeded() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 12, 12};
+
+    auto clip = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    clip->type = LayerType::Clip;
+    clip->bounds = Rect{2, 2, 8, 8};
+    clip->clip_rect = clip->bounds;
+    clip->has_clip = true;
+    clip->clip_border_radius = 4;
+
+    auto content = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    content->bounds = clip->bounds;
+    DisplayCommand fill = black_fill(clip->bounds);
+    fill.color = Color{20, 120, 240, 255};
+    content->display_list.push_back(fill);
+    clip->children.push_back(std::move(content));
+    root.children.push_back(std::move(clip));
+
+    VectorDiagnosticSink diagnostics;
+    SoftwareCompositor::Options options;
+    options.max_offscreen_pixels = 1;
+    options.diagnostics = &diagnostics;
+    const FrameBuffer output =
+        SoftwareCompositor({}, options).render(root, 12, 12, Color{255, 255, 255, 255});
+
+    check(output.pixel(2, 2).r == 255 && output.pixel(2, 2).g == 255,
+          "rounded clip budget failure does not expose an unclipped corner");
+    check(output.pixel(6, 6).r == 255 && output.pixel(6, 6).b == 255,
+          "rounded clip budget failure skips the incomplete layer consistently");
+    check(has_diagnostic_code(diagnostics, "paint-offscreen-budget"),
+          "rounded clip budget failure is reported as an offscreen budget diagnostic");
+}
+
 void compositor_keeps_composited_paint_outside_layout_bounds() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -2056,6 +2093,7 @@ int main() {
         rasterizer_scratch_reuses_clipped_image_storage();
         compositor_smooths_scaled_layers();
         compositor_degrades_oversized_offscreen_layers_without_crashing();
+        compositor_does_not_bypass_rounded_clip_when_offscreen_budget_is_exceeded();
         compositor_keeps_composited_paint_outside_layout_bounds();
         compositor_keeps_nested_composited_paint_outside_parent_layout_bounds();
         compositor_expanded_visual_bounds_keep_border_box_transform_origin();

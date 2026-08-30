@@ -37,12 +37,36 @@ void wrap_opportunities_are_shared() {
     check(!has_text_wrap_opportunity("\xe2\x84\x83"), "common symbol alone is stable");
 }
 
+void invalid_utf8_is_replaced_without_overconsuming_input() {
+    const std::string invalid_sequences =
+        "\xc0\xaf"
+        "\xe0\x80\x80"
+        "\xed\xa0\x80"
+        "\xf4\x90\x80\x80"
+        "\xe4\x01";
+    std::size_t index = 0;
+    int replacements = 0;
+    while (index < invalid_sequences.size()) {
+        if (consume_utf8_codepoint(invalid_sequences, index) == 0xfffdU) {
+            ++replacements;
+        }
+    }
+    check(replacements == 13 && index == invalid_sequences.size(),
+          "invalid UTF-8 sequences consume safely without losing following bytes");
+
+    const std::string truncated = "\xf0\x9f\x8c";
+    index = 0;
+    check(consume_utf8_codepoint(truncated, index) == 0xfffdU && index == 1,
+          "truncated UTF-8 returns replacement without reading past input");
+}
+
 } // namespace
 
 int main() {
     try {
         utf8_codepoint_scanner_advances_safely();
         wrap_opportunities_are_shared();
+        invalid_utf8_is_replaced_without_overconsuming_input();
     } catch (const std::exception& error) {
         std::cerr << "text scan test failed: " << error.what() << '\n';
         return 1;

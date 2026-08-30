@@ -1,6 +1,6 @@
 # App Author Capability Table
 
-> Last updated: 2026-08-15; Applies to: 0.6.0-dev; active development line: 0.6.0
+> Last updated: 2026-08-30; Applies to: 0.6.0-dev; active development line: 0.6.0
 
 This is the quick "can I use it?" table for app authors. The full contract
 remains [developer_capability_matrix.md](developer_capability_matrix.md).
@@ -31,7 +31,7 @@ subset, not complete browser behavior.
 | --- | --- | --- |
 | Color/background | Available subset | Use hex, named colors, `rgb()` / `rgba()` and bounded sRGB `hsl()` / `hsla()`. For a package image background, use `background-color` plus `background-image: url("/assets/image.bmp")`, then optionally `background-size: cover`/`contain`/`100% 100%`, the simple `background-position` subset and `background-repeat: no-repeat`; package reports identify invalid or missing paths. |
 | Layout | Subset | Prefer block, simplified flex (including signed integer `order` for direct flex children), and bounded grid-card layouts. Grid supports 2-4 fixed/`1fr` rows plus positive numeric `grid-column`/`grid-row` start/end/span placement; it is not full Grid. Use fixed bottom bars and explicit scroll containers. Use `visibility: hidden` when a layout slot must remain; use `display: none` when it should collapse. |
-| Responsive sizing | Subset | Use `@media`, percentage sizing, LTR `inline-size` / `block-size`, `max-width: 100%`, `box-sizing: border-box`, `gap` and `aspect-ratio`. Use `overflow-y: auto` for the documented fixed-height vertical scroll-container subset. |
+| Responsive sizing | Bounded contract | Read [responsive_layout_contract.md](responsive_layout_contract.md) before relying on cross-target layout. Use explicit `auto` or omitted width/height for intrinsic sizing, finite pixel/percentage dimensions, LTR `inline-size` / `block-size`, `max-width: 100%`, `box-sizing: border-box`, `gap`, `aspect-ratio`, and the four documented width/height media conditions. Use `overflow-y: auto` only for the fixed-height vertical scroll-container subset. |
 | Radius/shadow/gradient | Subset / profile-gated | Rounded rectangles, percentage radius, non-layout `outline-offset`, linear gradients, two-stop `conic-gradient()` progress rings, two-color center-circle `radial-gradient()` highlights and bounded shadow commands are available when the target profile includes `css.modern-paint`; otherwise gradients keep the documented solid fallback and shadows emit no layer/command. Complex blur/mask/filter are deferred. |
 | Text layout and overflow | Bounded subset | Use `letter-spacing` only for short labels/numbers and `overflow-wrap: anywhere` to break an otherwise unbreakable UTF-8 label at scalar boundaries. `text-wrap: wrap` and `text-wrap: nowrap` are aliases for `white-space: normal` and `white-space: nowrap`; use `white-space: nowrap; text-overflow: ellipsis` for a UTF-8-safe prefix followed by `...` when text overflows. No hyphenation, balanced wrapping or complex-script shaping. |
 | Animation | Subset | Keyframes support opacity, color, background/background-color and documented transform forms. Timing supports linear/ease/ease-in/ease-out/ease-in-out; package checks flag layout animation and unsupported easing before runtime. |

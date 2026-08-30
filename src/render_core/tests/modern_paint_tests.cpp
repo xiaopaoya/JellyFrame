@@ -37,6 +37,25 @@ int modern_paint_tests_main() {
            std::numeric_limits<int>::max());
     assert(expand_corner_radii(127, std::numeric_limits<int>::max()) == 127);
     assert(expand_corner_radii(1, std::numeric_limits<int>::min()) == 0);
+    const RasterRoundedRect extreme = prepare_rounded_rect(
+        Rect{std::numeric_limits<int>::min(), std::numeric_limits<int>::min(),
+             std::numeric_limits<int>::max(), std::numeric_limits<int>::max()},
+        std::numeric_limits<int>::max());
+    const int center = safe_add(extreme.left, extreme.radii.top_left);
+    assert(rounded_rect_coverage(extreme, center, center) == 255);
+    assert(rounded_rect_coverage(extreme, std::numeric_limits<int>::max(),
+                                 std::numeric_limits<int>::max()) >= 0);
+    RasterRoundedRect externally_constructed{};
+    externally_constructed.left = std::numeric_limits<int>::min();
+    externally_constructed.top = std::numeric_limits<int>::min();
+    externally_constructed.right = std::numeric_limits<int>::max();
+    externally_constructed.bottom = std::numeric_limits<int>::max();
+    externally_constructed.radii = CornerRadii{std::numeric_limits<int>::max(),
+                                                std::numeric_limits<int>::max(),
+                                                std::numeric_limits<int>::max(),
+                                                std::numeric_limits<int>::max()};
+    externally_constructed.rounded = true;
+    assert(rounded_rect_coverage(externally_constructed, 0, 0) >= 0);
     (void)modern_paint_rounded_rect_outside_distance_half_px(
         Rect{std::numeric_limits<int>::min(), std::numeric_limits<int>::min(),
              std::numeric_limits<int>::max(), std::numeric_limits<int>::max()},

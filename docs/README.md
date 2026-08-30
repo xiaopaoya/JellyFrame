@@ -25,7 +25,7 @@ for whether a document needs another pass after code changes.
 
 1. [../HOW_TO_START.md](../HOW_TO_START.md)
 2. [engine_architecture.md](engine_architecture.md)
-3. [app_author_guide.md](app_author_guide.md) if you are writing apps.
+3. [app_author_guide.md](app_author_guide.md) and [responsive_layout_contract.md](responsive_layout_contract.md) if you are writing responsive apps.
 4. [app_author_environment.md](app_author_environment.md) for an independent App workspace.
 5. [app_author_recipes.md](app_author_recipes.md) for copyable small-screen UI patterns.
 6. [developer_capability_matrix.md](developer_capability_matrix.md)
@@ -112,6 +112,8 @@ for whether a document needs another pass after code changes.
   recipes and warning fixes.
 - [app_author_capability_table.md](app_author_capability_table.md): quick
   app-author can-I-use-it table for HTML/CSS/JS/resources.
+- [responsive_layout_contract.md](responsive_layout_contract.md): exact
+  viewport, sizing, Flex/Grid, text and cross-target acceptance contract.
 - [app_author_recipes.md](app_author_recipes.md): copyable small-screen
   component recipes for buttons, cards, scroll lists and bottom navigation.
 - [developer_capability_matrix.md](developer_capability_matrix.md): the primary

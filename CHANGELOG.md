@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-08-15; Applies to: 0.6.0-dev
+> Last updated: 2026-08-30; Applies to: 0.6.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -16,6 +16,26 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   profile gate and regression coverage land together.
 
 ### Changed
+
+- CSS custom-property expansion now has a bounded resolved-value budget
+  (`StyleResolverOptions::max_resolved_value_bytes`, 16 KiB by default), so
+  repeated `var()` references cannot create an unbounded intermediate string.
+  Over-budget values keep the existing safe fallback behavior.
+
+- Inline style parsing now has independent source and declaration budgets
+  (`StyleResolverOptions::max_inline_style_bytes` and
+  `max_inline_declarations`). When the source is oversized, only complete
+  declarations before the bounded cutoff are parsed and an actionable
+  diagnostic is emitted.
+
+- Render Core Flex layout now applies cross-axis `stretch` only to auto-sized
+  items, preserves explicit cross-axis dimensions, accounts for margins,
+  padding and borders, and aligns wrapped items within their own flex line.
+  The responsive layout matrix and cross-axis regression coverage run in full,
+  reduced and Flex-disabled profiles.
+
+- `flex-wrap: wrap-reverse` is now rejected with the normal style diagnostic
+  instead of being silently approximated as `wrap`.
 
 - Script-task sealed frame and service-payload leases now use a 64-bit opaque
   ID with a 16-bit slot index and 48-bit reuse generation. This prevents an
@@ -1517,3 +1537,14 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Used fixed cascade slots instead of per-node cascade hash maps.
 - Kept layer creation sparse: ordinary boxes paint into their parent layer until
   clipping, stacking or compositing boundaries require a layer.
+- Render Core CSS parsing now gives zero direct parser rule/declaration budgets
+  the same unlimited meaning as its other optional parser limits, reports
+  unterminated strings and declaration blocks, and keeps recovery deterministic.
+- Style candidate collection now uses pointer-set deduplication across overlapping
+  selector buckets, avoiding quadratic duplicate scans on large stylesheets.
+- CSS recovery now diagnoses unterminated comments, and contextual style tests
+  cover inline custom-property mutation invalidation.
+- Layout now saturates outer box and flex-gap arithmetic for extreme valid CSS
+  dimensions instead of allowing signed geometry wraparound.
+- UTF-8 scanning now rejects malformed, overlong, surrogate and out-of-range
+  sequences as bounded U+FFFD replacement scalars.

@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-08-15；适用版本：0.6.0-dev
+> 最后更新：2026-08-30；适用版本：0.6.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -13,6 +13,20 @@ JellyFrame Engine 的重要变更记录在这里。
 - 启动外部开发者试用线：完善构建 profile/模块证据、打包与启动器工作流，并针对能力缺口做有边界的补全。任何新的浏览器兼容承诺都必须同时落入能力矩阵、profile gate 和回归测试。
 
 ### 变更
+
+- CSS custom property 展开现在具有有界的解析值预算
+  (`StyleResolverOptions::max_resolved_value_bytes`，默认 16 KiB)，重复的 `var()` 引用不会再生成无界的中间字符串。
+  超预算值保持原有的安全 fallback 行为。
+
+- Inline style 解析现在具有独立的源字节数和声明数量预算
+  (`StyleResolverOptions::max_inline_style_bytes` 与 `max_inline_declarations`)。源过长时只解析边界前的完整声明，
+  并输出可定位的诊断。
+
+- Render Core Flex 布局现在只对交叉轴为 `auto` 的 item 应用 `stretch`，保留显式交叉轴尺寸，正确计入
+  margin、padding 和 border，并在每个换行后的独立 flex line 内执行对齐。响应式矩阵和交叉轴回归已在
+  完整、精简及关闭 Flex 的 profile 中运行。
+
+- `flex-wrap: wrap-reverse` 现在会被正常 style diagnostic 拒绝，不再静默近似为 `wrap`。
 
 - Script-task 的 sealed frame 与 service-payload lease 现使用 64-bit 不透明 ID：16-bit slot index
   配合 48-bit reuse generation，避免旧 lease 在原有 16-bit generation 循环后与新发布的值别名。
@@ -950,3 +964,8 @@ JellyFrame Engine 的重要变更记录在这里。
 - CSS rule 按 id/class/tag/universal bucket 建索引，并在 parsing 阶段预计算 selector parts。
 - style cascade 使用固定槽位，避免 per-node cascade hash map。
 - layer creation 保持稀疏：普通 box 绘制进父 layer，只有 clipping、stacking 或 compositing boundary 需要时才成层。
+- Render Core CSS parser 统一直接 parser 选项的零值语义：规则和声明预算为 `0` 时与其他可选 parser 上限一样表示不限制；同时报告未闭合字符串和声明块，并保持可预测的恢复行为。
+- 样式候选规则在重叠的 selector bucket 之间收集时改用指针集合去重，避免大样式表中重复候选的二次复杂度扫描。
+- CSS 恢复现在会报告未闭合注释；上下文样式测试补充 inline custom property 变更后的缓存失效校验。
+- layout 现在对外层 box 和 flex gap 的极端合法 CSS 尺寸使用饱和整数计算，避免有符号几何量溢出回绕。
+- UTF-8 扫描现在会拒绝畸形、过长、代理区和超出范围的序列，并以有界的 U+FFFD replacement scalar 替代。

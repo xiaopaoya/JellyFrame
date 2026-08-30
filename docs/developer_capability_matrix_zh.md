@@ -107,7 +107,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 
 | 功能 | 状态 | 行为 |
 | --- | --- | --- |
-| UTF-8 输入 | 可用 | 解析按字节/字符串处理。最终文字显示质量取决于文本后端。 |
+| UTF-8 输入 | 可用 | 合法 UTF-8 会按 scalar 保留；畸形序列会安全消费并替换为 U+FFFD。最终文字显示质量取决于文本后端。 |
 | 开始/结束标签 | 可用 | 常用标签会生成 DOM 元素。 |
 | 属性 | 可用 | 支持常见引号形式和未加引号形式。HTML 路径会规范化属性名。 |
 | 文本节点 | 可用 | DOM 文本保留作者空白。Render tree 会跳过非保留上下文中的纯格式化空白文本，避免缩进换行污染 block/grid/flex layout；Layout/rendering 会折叠普通显示文本；`pre`、`script`、`style`、`textarea` 和 `title` 保留文本。 |
@@ -165,7 +165,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | Bitmap font pack 生成 | 工具/runtime/fallback 链可用 | `jellyframe_font_pack_gen` 把 BDF bitmap 字体裁剪成嵌入式构建可用的 C++ `BitmapFont` header，也可输出 `.jffont` V0/V1 二进制补充包。V0 是紧凑 1bpp；V1 通过 `--coverage-bits 2|4` 显式 opt-in 2bpp/4bpp glyph coverage，用于字体级抗锯齿；1bpp 字体仍走紧凑路径，不支付 coverage 成本。`BitmapFontResource` 可解析 `.jffont` bytes，`AppFontSet` 已提供 bitmap fallback chain。generic/未指定 family 的文本先尝试系统字体 profile，再用 app supplement 补缺字。CSS `font-family` 的首个自定义 family 若匹配 manifest `.jffont` family hash，则该 app 字体优先，然后再回落到系统/default 链。Win32 壳 `--use-app-fonts` 可让包内字体参与 layout/paint 验收。稳定的 `.jfapp`/flash 字体 payload 可通过 zero-copy view 路径挂载。Package diagnostics 会把显式 CSS `font-family` 声明与 manifest 字体 family 元数据匹配，并检查 `sizes`/`weights` 数组。app-font 渲染支持按 CSS `font-size` 做低成本整数倍缩放，并对 `font-weight >= 600` 做合成粗体；完整浏览器字体匹配、stretch/style/features 和矢量 shaping 仍是后续工作。 |
 | `@keyframes` | 子集 | 解析命名 `@keyframes` block，并保存 `from`/`to` 或 `0%`/`100%` declaration。中间百分比会诊断并忽略。执行范围受下方 animation 属性子集限制。 |
 | 未知 at-rule | 懒处理 | 跳过 statement 或平衡 block。 |
-| CSS custom properties | 子集 | 支持直接 `var(--token)` 和 `var(--token, fallback)`，来源包括继承的 `:root`、祖先、当前元素和 inline custom property declarations。无法解析的 `var()` 不会覆盖之前的受支持 fallback。完整依赖图、区分大小写的 custom property 名称和完整 invalid-at-computed-value-time 语义尚未实现。 |
+| CSS custom properties | 子集 | 支持直接 `var(--token)` 和 `var(--token, fallback)`，来源包括继承的 `:root`、祖先、当前元素和 inline custom property declarations。无法解析或超过预算的展开不会覆盖之前的受支持 fallback；解析后的中间值默认限制为 16 KiB。完整依赖图、区分大小写的 custom property 名称和完整 invalid-at-computed-value-time 语义尚未实现。 |
 | CSS nesting | 显式单层子集 | 一个 qualified rule 内可包含一层嵌套 qualified rule，但每个嵌套 selector 都必须含 `&`，例如 `.card { &:hover { ... } & .label { ... } }`。父声明和嵌套规则保留 source order；逗号展开最多 16 个 selector。隐式 nesting、超过一层、nested at-rule 和不含 `&` 的 selector 会被跳过并输出 `css-nesting-skipped`。 |
 | Cascade origins | 子集 | author + inline + 小型内置默认样式；无 user/animation origin。 |
 | Rule indexing | 可用 | 按最右侧 id/class/tag/universal 建桶。 |
@@ -246,7 +246,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | `order` | 子集 | 直接 flex child 可使用有符号整数 order。只有存在非零 order 时，layout 与同 stack 绘制顺序才构造一次稳定临时排序视图；默认全零的 flex 容器继续走无分配 source-order 路径。它不是供浏览器 API 使用的完整 order-modified document model。 |
 | `flex` | 子集 | Shorthand 支持常见 `none`、`auto`、`<grow>`、`<grow> <basis>` 和 `<grow> <shrink> <basis>` 形式，用于简化 row 和不换行 column flex layout。完整 Flexbox 语法不支持。 |
 | `flex-grow` / `flex-shrink` / `flex-basis` | 子集 | 非负数字 grow/shrink 因子和受支持长度/`auto` basis 会参与简化 row 和不换行 column sizing pass；column 中 basis 是高度基准。 |
-| `flex-wrap` | 子集 | `wrap`/`wrap-reverse` 启用简单 row 换行。column flex 有意保持不换行。换行后只做固定/basis 探测，不执行完整逐行 Flexbox 算法。 |
+| `flex-wrap` | 子集 | `wrap` 启用简单 row 换行。column flex 有意保持不换行；`wrap-reverse` 会被拒绝，不会被静默视为 `wrap`。换行后的 line 使用文档化交叉轴对齐子集，不执行完整浏览器 Flexbox 逐行算法。 |
 | `gap` | 可用 | 1-2 个长度值，用于 grid 和简化 flex。 |
 | `row-gap` / `column-gap` | 可用 | 长度值。 |
 | `grid-template-columns` | 子集 | 从 `repeat(auto-fit, minmax(<length>, 1fr))`、`minmax(<length>, 1fr)`、单个长度或 `1fr` 中提取最小轨道。 |
@@ -357,7 +357,7 @@ JavaScript 只在 `JELLYFRAME_BUILD_SCRIPTING=ON` 时可用。构建通过
 | `matches` / `closest` | 子集 | 简单 tag、`.class`、`#id`、`[attr]` 和 `[attr=value]` selector；不支持 combinator。 |
 | `dataset` | 有界子集 | 已存在的 `data-*` 属性以 camelCase property 读取。可写的 `DOMStringMap` 子集支持 `dataset[key] = value` 与 `delete dataset[key]`，只接受 ASCII identifier-like camelCase key，并反射到普通 attribute dirty 路径；key 最长 48 bytes、value 最长 256 bytes、每个 element 最多 64 个 `data-*` attribute。不提供迭代、任意 key 或完整 DOMStringMap/prototype 语义。 |
 | `getBoundingClientRect()` | frame snapshot 子集 | element 请求测量后，返回上一个完成的宿主 layout frame 的新数值对象 `{x,y,width,height,top,right,bottom,left}`。快照相对 client；Win32 壳会应用根页面 scroll，而 nested scroll 与 transform 后的几何仍延后。它绝不保存 `LayoutBox*`、不强制同步 layout，也不是 live DOMRect。runtime 最多保留 32 个已请求 element 的快照；首次或不可用快照返回零矩形。 |
-| `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`textTransform`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`visibility`、`whiteSpace`、`textOverflow`、`overflow`、`overflowY` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。 |
+| `element.style` | 子集 | 可写 inline style object，支持常见安全 CSS 属性：`display`、`color`、`background*`、`textAlign`、`textTransform`、`fontSize`、`fontWeight`、`lineHeight`、尺寸/min/max 尺寸、`boxSizing`、margin/padding shorthand 与各边、`opacity`、`transform`、`borderRadius`、inset/position、`visibility`、`whiteSpace`、`textOverflow`、`overflow`、`overflowY` 和 `zIndex`。`style.getPropertyValue(name)`、`style.setProperty(name, value)` 和 `style.removeProperty(name)` 接受同一安全 CSS 属性子集，以及 `--progress` 这类 CSS custom property。Inline style 源默认限制为 4 KiB 和 64 个声明；超出部分会诊断并跳过尾部声明。 |
 | `hidden` / `disabled` / `open` / `autofocus` / `tabIndex` properties | 子集 | `hidden`、`disabled`、`open`、`autofocus` 为 Boolean reflection，`tabIndex` 为整数 reflection。`hidden` 提供默认的 `display:none` 行为，正常 author CSS 可以覆盖；当它使节点在重建后的 layer tree 中消失时，命中测试以及恢复的 hover/active/focus 状态会一并清除。CSS `visibility:hidden` 保留 layout，但走同一恢复交互状态清理。disabled 表单控件不会激活或接收文本输入；`open` 反射 details disclosure 和非 modal dialog 的可见状态。host 创建 `InputController` 时会消费 `autofocus`，`tabIndex` 只影响有界 hardware focus order。`HTMLElement.focus()` / `blur()` 继续延后：在 port 能跨 layer-tree rebuild 提供生命周期安全 adapter 前，焦点归属始终由 host 持有。 |
 | `HTMLElement.click()` | 子集 | 派发坐标为 0 的合成 mouse-like `click`。对 JellyFrame 控件会复用现有有界 activation 路径：checkbox/radio 状态变化会派发 `input`/`change`；`forms.advanced` 中单选 `select` 的 click 只会开关选项浮层，不提交 value；未被取消的 `summary.click()` 会切换父 `details`，未取消的 form submit button 会进入有界提交路径。不实现 browser navigation。 |
 | `addEventListener` / `removeEventListener` | 可用 | JS callback 桥接到核心事件派发。 |
@@ -448,7 +448,7 @@ pass，但 framebuffer 阶段已经能对非结构性变化做有界 dirty recta
 
 ## 当前硬限制
 
-- CSS parser：`max_rules` 4096，`max_declarations_per_rule` 256，
+- CSS parser：`max_rules` 4096，`max_declarations_per_rule` 256（直接 parser 选项中 `0` 表示不限制；宿主预算适配层会把零值规整为有界最小值），
   `max_nesting_depth` 8，默认 media viewport 为 360x240。
 - 默认 host budgets 会限制 DOM nodes、render objects、layout boxes、layers、
   display commands、dirty rects、timers、listeners 和 framebuffer pixels。
