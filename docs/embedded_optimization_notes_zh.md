@@ -27,6 +27,8 @@
 - Style resolution 在 `StyleResolver` 内缓存有界的 id/class/tag 候选规则集合；等价的相关 class 集合
   规范化为同一缓存键，最终选择器匹配仍逐节点执行，因此 descendant、child 和 attribute selector
   语义保持正确。该缓存不是 computed-style sharing。
+- 从重叠的 id/class/tag bucket 收集候选规则时，先用逐次查找的指针集合去重，再按 source order 排序；
+  大样式表中存在大量重叠 selector 时不再执行二次复杂度的重复扫描。
 - DOM attributes 使用紧凑顺序 `AttributeList`，不再为每个节点维护 attribute hash map。
 - DOM event listener storage 惰性分配，没有 listener 的节点不携带空 listener table。
 - DOM dirty bits 会向祖先传播，因此根节点 dirty 检查为 O(1)，dirty 清理会跳过干净子树，

@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -5351,15 +5352,14 @@ const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node
 
     std::vector<const CssRule*> candidates;
     candidates.reserve(16);
-    const auto already_added = [&](const CssRule* candidate) {
-        return std::find(candidates.begin(), candidates.end(), candidate) != candidates.end();
-    };
+    std::unordered_set<const CssRule*> seen_rules;
+    seen_rules.reserve(32);
     const auto append_bucket = [&](const std::vector<const CssRule*>* bucket) {
         if (bucket == nullptr) {
             return;
         }
         for (const CssRule* rule : *bucket) {
-            if (!already_added(rule)) {
+            if (seen_rules.insert(rule).second) {
                 candidates.push_back(rule);
             }
         }

@@ -1540,3 +1540,5 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Render Core CSS parsing now gives zero direct parser rule/declaration budgets
   the same unlimited meaning as its other optional parser limits, reports
   unterminated strings and declaration blocks, and keeps recovery deterministic.
+- Style candidate collection now uses pointer-set deduplication across overlapping
+  selector buckets, avoiding quadratic duplicate scans on large stylesheets.

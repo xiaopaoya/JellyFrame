@@ -965,3 +965,4 @@ JellyFrame Engine 的重要变更记录在这里。
 - style cascade 使用固定槽位，避免 per-node cascade hash map。
 - layer creation 保持稀疏：普通 box 绘制进父 layer，只有 clipping、stacking 或 compositing boundary 需要时才成层。
 - Render Core CSS parser 统一直接 parser 选项的零值语义：规则和声明预算为 `0` 时与其他可选 parser 上限一样表示不限制；同时报告未闭合字符串和声明块，并保持可预测的恢复行为。
+- 样式候选规则在重叠的 selector bucket 之间收集时改用指针集合去重，避免大样式表中重复候选的二次复杂度扫描。

@@ -35,6 +35,9 @@ small wearable devices.
   Final selector matching still runs per node, so descendant, child and
   attribute selector semantics remain correct. This is not computed-style
   sharing.
+- Candidate rules from overlapping id/class/tag buckets are deduplicated with
+  a per-lookup pointer set before source-order sorting, avoiding quadratic
+  duplicate scans on large stylesheets.
 - DOM attributes use compact sequential `AttributeList` storage instead of a
   per-node hash map.
 - DOM event listener storage is allocated lazily, so nodes without listeners do
