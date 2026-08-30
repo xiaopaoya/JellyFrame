@@ -437,6 +437,86 @@ void percentage_width_and_height_use_containing_box() {
     check(cap->rect.width == 320 && cap->rect.height == 120, "max-height clamps percentage height");
 }
 
+void responsive_layout_matrix_keeps_same_app_inside_three_targets() {
+    struct Target {
+        int width;
+        int height;
+        bool narrow;
+    };
+    constexpr Target targets[] = {
+        {300, 300, false},
+        {320, 240, false},
+        {172, 320, true},
+    };
+
+    for (const Target target : targets) {
+        HtmlParser html_parser;
+        CssParser css_parser;
+        auto document = html_parser.parse(
+            "<body><main id='screen'><section id='primary'><p id='primary-label'>Primary content</p></section>"
+            "<section id='secondary'><p id='secondary-label'>Secondary content</p></section></main></body>");
+        CssParserOptions css_options;
+        css_options.media_viewport_width = target.width;
+        css_options.media_viewport_height = target.height;
+        VectorDiagnosticSink css_diagnostics;
+        css_options.diagnostics = &css_diagnostics;
+        StyleResolver resolver(css_parser.parse(
+            "body { margin: 0; width: 100%; height: 100%; }"
+            "#screen { display: flex; flex-direction: row; box-sizing: border-box; width: 100%; "
+            "height: 100%; gap: 8px; padding: 8px; }"
+            "section { flex: 1 1 0; min-width: 0; height: auto; box-sizing: border-box; }"
+            "p { margin: 0; width: 100%; overflow-wrap: anywhere; }"
+            "@media (max-width: 200px) { #screen { flex-direction: column; gap: 4px; } "
+            "section { width: 100%; flex: 0 0 40px; } }",
+            css_options));
+        RenderTreeBuilder render_tree_builder(resolver);
+        auto render_tree = render_tree_builder.build(*document);
+        VectorDiagnosticSink layout_diagnostics;
+        LayoutEngineOptions layout_options;
+        layout_options.diagnostics = &layout_diagnostics;
+        LayoutEngine layout_engine(resolver, {}, layout_options);
+        auto layout_tree = layout_engine.layout(*render_tree, target.width, target.height);
+
+        const LayoutBox* screen = find_first_by_id(*layout_tree, "screen");
+        const LayoutBox* primary = find_first_by_id(*layout_tree, "primary");
+        const LayoutBox* secondary = find_first_by_id(*layout_tree, "secondary");
+        check(screen != nullptr && primary != nullptr && secondary != nullptr,
+              "responsive matrix boxes exist");
+        check(screen->rect.width == target.width && screen->rect.height == target.height,
+              "responsive matrix root fills every target viewport");
+        const int content_left = screen->rect.x + screen->style.padding.left + screen->style.border_width.left;
+        const int content_right = screen->rect.x + screen->rect.width -
+            screen->style.padding.right - screen->style.border_width.right;
+        check(primary->rect.x >= content_left && secondary->rect.x >= content_left &&
+                  primary->rect.x + primary->rect.width <= content_right &&
+                  secondary->rect.x + secondary->rect.width <= content_right,
+              "responsive matrix children stay inside the padded viewport");
+        if (target.narrow) {
+            check(screen->style.flex_direction == FlexDirection::Column,
+                  "narrow target selects the column media branch");
+            check(primary->rect.width == secondary->rect.width &&
+                      primary->rect.y < secondary->rect.y &&
+                      secondary->rect.y >= primary->rect.y + primary->rect.height + 4,
+                  "narrow target stacks full-width cards with the declared gap");
+        } else {
+            check(screen->style.flex_direction == FlexDirection::Row,
+                  "wide targets keep the row media branch");
+            check(primary->rect.y == secondary->rect.y &&
+                      primary->rect.x < secondary->rect.x &&
+                      primary->rect.width == secondary->rect.width &&
+                      secondary->rect.x >= primary->rect.x + primary->rect.width + 8,
+                  "wide targets distribute equal flex cards with the declared gap");
+        }
+        check(target.narrow
+                  ? !has_diagnostic_code(css_diagnostics, "css-media-query-not-matched")
+                  : has_diagnostic_code(css_diagnostics, "css-media-query-not-matched"),
+              "responsive matrix reports only the non-selected media branch as unmatched");
+        check(!has_diagnostic_code(layout_diagnostics, "visual-horizontal-overflow") &&
+                  !has_diagnostic_code(layout_diagnostics, "visual-vertical-paint-overflow"),
+              "responsive matrix has no viewport overflow diagnostic");
+    }
+}
+
 void border_box_percent_width_accounts_for_edges() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -656,6 +736,7 @@ int main() {
         relative_layout_offsets_visual_box_only();
         border_box_sizing_keeps_declared_width_and_height();
         percentage_width_and_height_use_containing_box();
+        responsive_layout_matrix_keeps_same_app_inside_three_targets();
         border_box_percent_width_accounts_for_edges();
         max_width_percent_clamps_nested_border_box();
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
