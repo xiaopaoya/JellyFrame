@@ -4173,15 +4173,25 @@ std::size_t find_matching_paren(std::string_view value, std::size_t open) {
 bool resolve_css_vars(std::string_view value,
                       const CustomPropertyMap& custom_properties,
                       std::string& output,
+                      std::size_t max_output_bytes,
                       int depth = 0) {
     constexpr int kMaxVarDepth = 8;
     if (depth > kMaxVarDepth) {
         return false;
     }
 
-    if (value.find("var(") == std::string_view::npos) {
-        output = std::string(value);
+    const auto append_bounded = [&](std::string_view part) {
+        if (max_output_bytes != 0 &&
+            (part.size() > max_output_bytes || output.size() > max_output_bytes - part.size())) {
+            return false;
+        }
+        output.append(part);
         return true;
+    };
+
+    if (value.find("var(") == std::string_view::npos) {
+        output.clear();
+        return append_bounded(value);
     }
 
     output.clear();
@@ -4189,13 +4199,14 @@ bool resolve_css_vars(std::string_view value,
     while (cursor < value.size()) {
         const std::size_t start = value.find("var(", cursor);
         if (start == std::string_view::npos) {
-            output.append(value.substr(cursor));
-            return true;
+            return append_bounded(value.substr(cursor));
         }
-        output.append(value.substr(cursor, start - cursor));
+        if (!append_bounded(value.substr(cursor, start - cursor))) {
+            return false;
+        }
         const std::size_t close = find_matching_paren(value, start + 3);
         if (close == std::string_view::npos) {
-            output.append(value.substr(start));
+            append_bounded(value.substr(start));
             return false;
         }
 
@@ -4210,19 +4221,22 @@ bool resolve_css_vars(std::string_view value,
         std::string replacement;
         const auto found = custom_properties.find(name);
         if (found != custom_properties.end()) {
-            if (!resolve_css_vars(found->second, custom_properties, replacement, depth + 1)) {
+            if (!resolve_css_vars(found->second, custom_properties, replacement, max_output_bytes, depth + 1)) {
                 return false;
             }
         } else if (comma != std::string_view::npos) {
-            if (!resolve_css_vars(body.substr(comma + 1), custom_properties, replacement, depth + 1)) {
+            if (!resolve_css_vars(body.substr(comma + 1), custom_properties, replacement,
+                                  max_output_bytes, depth + 1)) {
                 return false;
             }
             replacement = trim(replacement);
         } else {
-            output.append(value.substr(start, close - start + 1));
+            append_bounded(value.substr(start, close - start + 1));
             return false;
         }
-        output.append(replacement);
+        if (!append_bounded(replacement)) {
+            return false;
+        }
         cursor = close + 1;
     }
     return true;
@@ -4230,13 +4244,14 @@ bool resolve_css_vars(std::string_view value,
 
 const CssDeclaration& resolve_declaration_value(const CssDeclaration& declaration,
                                                 const CustomPropertyMap& custom_properties,
-                                                CssDeclaration& scratch) {
+                                                CssDeclaration& scratch,
+                                                std::size_t max_resolved_value_bytes) {
     if (declaration.value.find("var(") == std::string::npos) {
         return declaration;
     }
     scratch = declaration;
     std::string value;
-    if (resolve_css_vars(declaration.value, custom_properties, value)) {
+    if (resolve_css_vars(declaration.value, custom_properties, value, max_resolved_value_bytes)) {
         scratch.value = trim(value);
     }
     return scratch;
@@ -4678,14 +4693,16 @@ void apply_declarations(Style& style,
                         CssPseudoElement pseudo_element,
                         const CustomPropertyMap& custom_properties,
                         DiagnosticSink* diagnostics,
-                        const StyleResolver* resolver) {
+                        const StyleResolver* resolver,
+                        std::size_t max_resolved_value_bytes) {
     CssDeclaration resolved_scratch;
     for (const CssDeclaration& declaration : declarations) {
         if (is_custom_property_name(declaration.property)) {
             continue;
         }
         const CssDeclaration& resolved_declaration =
-            resolve_declaration_value(declaration, custom_properties, resolved_scratch);
+            resolve_declaration_value(declaration, custom_properties, resolved_scratch,
+                                      max_resolved_value_bytes);
         LogicalDeclarationExpansion expansion;
         const bool is_logical = expand_logical_declaration(resolved_declaration, expansion);
         if (is_logical && expansion.count == 0) {
@@ -5582,7 +5599,7 @@ Style StyleResolver::resolve_with_custom_properties(const Node& node,
         }
         apply_declarations(style, slots, rule->declarations, rule->specificity,
                            rule->source_order, rule->pseudo_element, custom_properties,
-                           options_.diagnostics, this);
+                           options_.diagnostics, this, options_.max_resolved_value_bytes);
     }
     if (node.type == NodeType::Element) {
         CssSpecificity inline_specificity;
@@ -5591,7 +5608,7 @@ Style StyleResolver::resolve_with_custom_properties(const Node& node,
         inline_specificity.elements = 0;
         apply_declarations(style, slots, parse_inline_style(node.attribute("style"), options_.diagnostics), inline_specificity,
                            static_cast<std::size_t>(-1), CssPseudoElement::None, custom_properties,
-                           options_.diagnostics, this);
+                           options_.diagnostics, this, options_.max_resolved_value_bytes);
     }
     return style;
 }

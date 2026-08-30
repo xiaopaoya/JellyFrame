@@ -17,6 +17,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- CSS custom-property expansion now has a bounded resolved-value budget
+  (`StyleResolverOptions::max_resolved_value_bytes`, 16 KiB by default), so
+  repeated `var()` references cannot create an unbounded intermediate string.
+  Over-budget values keep the existing safe fallback behavior.
+
 - Render Core Flex layout now applies cross-axis `stretch` only to auto-sized
   items, preserves explicit cross-axis dimensions, accounts for margins,
   padding and borders, and aligns wrapped items within their own flex line.

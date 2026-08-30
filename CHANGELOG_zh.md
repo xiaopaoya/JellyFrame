@@ -14,6 +14,10 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- CSS custom property 展开现在具有有界的解析值预算
+  (`StyleResolverOptions::max_resolved_value_bytes`，默认 16 KiB)，重复的 `var()` 引用不会再生成无界的中间字符串。
+  超预算值保持原有的安全 fallback 行为。
+
 - Render Core Flex 布局现在只对交叉轴为 `auto` 的 item 应用 `stretch`，保留显式交叉轴尺寸，正确计入
   margin、padding 和 border，并在每个换行后的独立 flex line 内执行对齐。响应式矩阵和交叉轴回归已在
   完整、精简及关闭 Flex 的 profile 中运行。

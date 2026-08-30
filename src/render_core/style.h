@@ -483,6 +483,10 @@ struct StyleResolverOptions {
     const Node* focused_node = nullptr;
     DiagnosticSink* diagnostics = nullptr;
     std::size_t max_background_image_resources = 128;
+    // CSS var() expansion can repeat a custom property many times. Keep the
+    // resolved intermediate value bounded even when each source declaration
+    // is within the parser's individual value limit.
+    std::size_t max_resolved_value_bytes = 16 * 1024;
 };
 
 struct StyleResolverStatistics {

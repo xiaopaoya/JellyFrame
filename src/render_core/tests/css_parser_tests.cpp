@@ -462,6 +462,28 @@ void style_resolution_context_tracks_its_inputs() {
           "context drops cached node state after its document boundary changes");
 }
 
+void custom_property_expansion_is_bounded() {
+    std::string repeated;
+    for (int index = 0; index < 8; ++index) {
+        repeated += "var(--accent)";
+    }
+
+    auto button = make_element("button");
+    button->attributes["class"] = "bounded";
+    button->attributes["style"] = "--accent:#123456";
+    VectorDiagnosticSink diagnostics;
+    StyleResolverOptions options;
+    options.diagnostics = &diagnostics;
+    options.max_resolved_value_bytes = 32;
+    StyleResolver resolver(parse(".bounded { color: " + repeated + "; }"), options);
+
+    const Style style = resolver.resolve(*button);
+    check(!(style.color.r == 0x12 && style.color.g == 0x34 && style.color.b == 0x56),
+          "oversized var expansion does not apply a partial value");
+    check(has_diagnostic_code(diagnostics, "style-declaration-ignored"),
+          "oversized var expansion reports a style diagnostic");
+}
+
 void linear_gradient_background_applies_without_breaking_fallbacks() {
 #if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     return;
@@ -1703,6 +1725,7 @@ int main() {
         conditional_media_queries_reject_nonrepresentable_lengths();
         preserves_declaration_fallback_order();
         resolves_simple_css_custom_properties();
+        custom_property_expansion_is_bounded();
         style_resolution_context_tracks_its_inputs();
         linear_gradient_background_applies_without_breaking_fallbacks();
         color_mix_and_bounded_box_shadow_apply();
