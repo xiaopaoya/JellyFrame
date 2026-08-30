@@ -484,6 +484,35 @@ void custom_property_expansion_is_bounded() {
           "oversized var expansion reports a style diagnostic");
 }
 
+void inline_style_budgets_keep_only_complete_bounded_declarations() {
+    auto long_style_button = make_element("button");
+    long_style_button->attributes["style"] = "color:#123456;background:#abcdef;";
+    VectorDiagnosticSink input_diagnostics;
+    StyleResolverOptions input_options;
+    input_options.diagnostics = &input_diagnostics;
+    input_options.max_inline_style_bytes = 30;
+    const StyleResolver input_resolver(Stylesheet{}, input_options);
+    const Style input_limited = input_resolver.resolve(*long_style_button);
+    check(input_limited.color.r == 0x12 && input_limited.color.g == 0x34 && input_limited.color.b == 0x56,
+          "inline style budget preserves declarations before the bounded cutoff");
+    check(has_diagnostic_code(input_diagnostics, "style-inline-input-limit"),
+          "oversized inline style reports its byte budget");
+
+    auto many_declarations_button = make_element("button");
+    many_declarations_button->attributes["style"] = "color:#123456;background:#abcdef;opacity:0.5;";
+    VectorDiagnosticSink declaration_diagnostics;
+    StyleResolverOptions declaration_options;
+    declaration_options.diagnostics = &declaration_diagnostics;
+    declaration_options.max_inline_declarations = 1;
+    const StyleResolver declaration_resolver(Stylesheet{}, declaration_options);
+    const Style declaration_limited = declaration_resolver.resolve(*many_declarations_button);
+    check(declaration_limited.color.r == 0x12 && declaration_limited.color.g == 0x34 &&
+              declaration_limited.color.b == 0x56,
+          "inline declaration budget preserves the first declaration");
+    check(has_diagnostic_code(declaration_diagnostics, "style-inline-declaration-limit"),
+          "oversized inline declaration list reports its budget");
+}
+
 void linear_gradient_background_applies_without_breaking_fallbacks() {
 #if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     return;
@@ -1726,6 +1755,7 @@ int main() {
         preserves_declaration_fallback_order();
         resolves_simple_css_custom_properties();
         custom_property_expansion_is_bounded();
+        inline_style_budgets_keep_only_complete_bounded_declarations();
         style_resolution_context_tracks_its_inputs();
         linear_gradient_background_applies_without_breaking_fallbacks();
         color_mix_and_bounded_box_shadow_apply();

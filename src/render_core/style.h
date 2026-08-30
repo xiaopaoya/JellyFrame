@@ -487,6 +487,10 @@ struct StyleResolverOptions {
     // resolved intermediate value bounded even when each source declaration
     // is within the parser's individual value limit.
     std::size_t max_resolved_value_bytes = 16 * 1024;
+    // Inline style attributes do not pass through CssParserOptions, so bound
+    // their source and declaration count independently.
+    std::size_t max_inline_style_bytes = 4096;
+    std::size_t max_inline_declarations = 64;
 };
 
 struct StyleResolverStatistics {

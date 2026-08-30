@@ -4805,13 +4805,39 @@ void apply_declarations(Style& style,
     }
 }
 
-std::vector<CssDeclaration> parse_inline_style(const std::string& source, DiagnosticSink* diagnostics = nullptr) {
+std::vector<CssDeclaration> parse_inline_style(const std::string& source,
+                                               std::size_t max_source_bytes,
+                                               std::size_t max_declarations,
+                                               DiagnosticSink* diagnostics = nullptr) {
     std::vector<CssDeclaration> declarations;
+    std::size_t source_size = source.size();
+    if (max_source_bytes != 0 && source_size > max_source_bytes) {
+        const std::size_t bounded_end = source.rfind(';', max_source_bytes - 1);
+        source_size = bounded_end == std::string::npos ? 0 : bounded_end + 1;
+        report_diagnostic(diagnostics,
+                          DiagnosticStage::Style,
+                          DiagnosticSeverity::Warning,
+                          "style-inline-input-limit",
+                          "Inline style exceeded its byte budget; trailing declarations were skipped",
+                          {});
+    }
+    if (source_size == 0) {
+        return declarations;
+    }
     std::size_t index = 0;
-    while (index < source.size()) {
+    while (index < source_size) {
+        if (max_declarations != 0 && declarations.size() >= max_declarations) {
+            report_diagnostic(diagnostics,
+                              DiagnosticStage::Style,
+                              DiagnosticSeverity::Warning,
+                              "style-inline-declaration-limit",
+                              "Inline style declaration budget was reached; trailing declarations were skipped",
+                              {});
+            break;
+        }
         const std::size_t colon = source.find(':', index);
-        if (colon == std::string::npos) {
-            const std::string remaining = trim(std::string_view(source).substr(index));
+        if (colon == std::string::npos || colon >= source_size) {
+            const std::string remaining = trim(std::string_view(source).substr(index, source_size - index));
             if (!remaining.empty()) {
                 report_diagnostic(diagnostics,
                                   DiagnosticStage::Style,
@@ -4823,7 +4849,9 @@ std::vector<CssDeclaration> parse_inline_style(const std::string& source, Diagno
             break;
         }
         const std::size_t semicolon = source.find(';', colon + 1);
-        const std::size_t end = semicolon == std::string::npos ? source.size() : semicolon;
+        const std::size_t end = semicolon == std::string::npos || semicolon >= source_size
+            ? source_size
+            : semicolon;
         CssDeclaration declaration;
         declaration.property = lowercase(trim(std::string_view(source).substr(index, colon - index)));
         declaration.value = trim(std::string_view(source).substr(colon + 1, end - colon - 1));
@@ -4837,7 +4865,7 @@ std::vector<CssDeclaration> parse_inline_style(const std::string& source, Diagno
                               "Inline style declaration had an empty property or value and was ignored",
                               trim(std::string_view(source).substr(index, end - index)));
         }
-        index = end + 1;
+        index = end < source_size ? end + 1 : source_size;
     }
     return declarations;
 }
@@ -5444,7 +5472,10 @@ bool StyleResolver::apply_custom_properties_for_node(CustomPropertyMap& inherite
         CssSpecificity inline_specificity;
         inline_specificity.ids = 1;
         apply_custom_declarations(local,
-                                  parse_inline_style(node.attribute("style"), options_.diagnostics),
+                                  parse_inline_style(node.attribute("style"),
+                                                     options_.max_inline_style_bytes,
+                                                     options_.max_inline_declarations,
+                                                     options_.diagnostics),
                                   inline_specificity,
                                   static_cast<std::size_t>(-1));
     }
@@ -5606,7 +5637,12 @@ Style StyleResolver::resolve_with_custom_properties(const Node& node,
         inline_specificity.ids = 1;
         inline_specificity.classes = 0;
         inline_specificity.elements = 0;
-        apply_declarations(style, slots, parse_inline_style(node.attribute("style"), options_.diagnostics), inline_specificity,
+        apply_declarations(style, slots,
+                           parse_inline_style(node.attribute("style"),
+                                              options_.max_inline_style_bytes,
+                                              options_.max_inline_declarations,
+                                              options_.diagnostics),
+                           inline_specificity,
                            static_cast<std::size_t>(-1), CssPseudoElement::None, custom_properties,
                            options_.diagnostics, this, options_.max_resolved_value_bytes);
     }
