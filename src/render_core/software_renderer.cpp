@@ -890,19 +890,21 @@ void draw_text(FrameBuffer& target,
     const int advance = 6 * scale;
     const int glyph_height = 7 * scale;
     const int stroke_passes = font_weight >= 600 ? 2 : 1;
-    int glyph_count = 0;
+    std::size_t glyph_count = 0;
     for (std::size_t index = 0; index < text.size();) {
         fallback_glyph_for_codepoint(text, index);
         ++glyph_count;
     }
-    const int text_width = std::min(rect.width, glyph_count * advance);
+    const int text_width = std::min(rect.width, clamp_int64_to_int(
+        std::min<std::int64_t>(std::numeric_limits<int>::max(),
+                               static_cast<std::int64_t>(glyph_count) * advance)));
     int cursor_x = rect.x;
     if (align == TextCommandAlign::Center) {
-        cursor_x += std::max(0, (rect.width - text_width) / 2);
+        cursor_x = safe_add(cursor_x, std::max(0, (rect.width - text_width) / 2));
     } else if (align == TextCommandAlign::End) {
-        cursor_x += std::max(0, rect.width - text_width);
+        cursor_x = safe_add(cursor_x, std::max(0, rect.width - text_width));
     }
-    const int baseline_y = rect.y + std::max(0, (rect.height - glyph_height) / 2);
+    const int baseline_y = safe_add(rect.y, std::max(0, (rect.height - glyph_height) / 2));
     for (std::size_t index = 0; index < text.size();) {
         if (static_cast<std::int64_t>(cursor_x) + glyph_width >
             static_cast<std::int64_t>(safe_edge(rect.x, rect.width))) {
@@ -917,12 +919,13 @@ void draw_text(FrameBuffer& target,
                 }
                 for (int pass = 0; pass < stroke_passes; ++pass) {
                     fill_rect(target,
-                              Rect{cursor_x + col * scale + pass, baseline_y + row * scale, scale, scale},
+                              Rect{safe_add(safe_add(cursor_x, col * scale), pass),
+                                   safe_add(baseline_y, row * scale), scale, scale},
                               color);
                 }
             }
         }
-        cursor_x += advance;
+        cursor_x = safe_add(cursor_x, advance);
     }
 }
 

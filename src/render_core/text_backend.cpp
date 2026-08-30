@@ -14,6 +14,11 @@ namespace {
 constexpr std::uint32_t kFontFamilyFnvOffset = 0x811c9dc5U;
 constexpr std::uint32_t kFontFamilyFnvPrime = 0x01000193U;
 
+int clamp_nonnegative_int64(std::int64_t value) {
+    return static_cast<int>(std::clamp<std::int64_t>(
+        value, 0, std::numeric_limits<int>::max()));
+}
+
 TextMetrics sanitize_metrics(TextMetrics metrics, int font_size, int font_weight) {
     const TextMetrics fallback = fallback_text_metrics({}, font_size, font_weight);
     metrics.width = std::max(0, metrics.width);
@@ -105,21 +110,30 @@ bool is_generic_font_family(std::string_view family) {
 
 TextMetrics fallback_text_metrics(const std::string& text, int font_size, int font_weight) {
     const int safe_font_size = std::max(1, font_size);
-    const int ascii_advance = std::max(1, (safe_font_size * 2) / 3);
+    const int ascii_advance = std::max(1, clamp_nonnegative_int64(
+        (static_cast<std::int64_t>(safe_font_size) * 2) / 3));
     const int bold_extra = font_weight >= 600 ? std::max(1, safe_font_size / 12) : 0;
     int width = 0;
     for (std::size_t index = 0; index < text.size();) {
         const std::uint32_t codepoint = consume_utf8_codepoint(text, index);
-        width += codepoint < 0x80U ? ascii_advance : safe_font_size;
+        const int advance = codepoint < 0x80U ? ascii_advance : safe_font_size;
+        width = clamp_nonnegative_int64(static_cast<std::int64_t>(width) + advance);
     }
+    const int padding = std::max(6, safe_font_size / 2);
+    const int line_height = clamp_nonnegative_int64(
+        static_cast<std::int64_t>(safe_font_size) + std::max(6, safe_font_size / 3));
     return TextMetrics{
-        width + (text.empty() ? 0 : std::max(6, safe_font_size / 2)) + bold_extra,
-        safe_font_size + std::max(6, safe_font_size / 3),
+        clamp_nonnegative_int64(static_cast<std::int64_t>(width) +
+                                (text.empty() ? 0 : padding) + bold_extra),
+        line_height,
     };
 }
 
 int bounded_letter_spacing(int font_size, int letter_spacing) {
-    return std::max(-std::max(1, font_size / 2), std::min(std::max(1, font_size) * 2, letter_spacing));
+    const int safe_font_size = std::max(1, font_size);
+    const int lower = -std::max(1, safe_font_size / 2);
+    const int upper = clamp_nonnegative_int64(static_cast<std::int64_t>(safe_font_size) * 2);
+    return std::max(lower, std::min(upper, letter_spacing));
 }
 
 TextMetrics measure_text(const TextMeasureProvider& provider,
@@ -180,10 +194,11 @@ TextMetrics measure_text_with_letter_spacing(const TextMeasureProvider& provider
         begin = end;
     }
     if (codepoint_count > 1) {
+        const std::size_t bounded_gap_count = std::min<std::size_t>(
+            codepoint_count - 1, static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max()));
         const std::int64_t spaced_width = static_cast<std::int64_t>(metrics.width) +
-            static_cast<std::int64_t>(bounded_spacing) * static_cast<std::int64_t>(codepoint_count - 1);
-        metrics.width = static_cast<int>(std::max<std::int64_t>(0,
-            std::min<std::int64_t>(std::numeric_limits<int>::max(), spaced_width)));
+            static_cast<std::int64_t>(bounded_spacing) * static_cast<std::int64_t>(bounded_gap_count);
+        metrics.width = clamp_nonnegative_int64(spaced_width);
     }
     return sanitize_metrics(metrics, font_size, font_weight);
 }
@@ -220,7 +235,10 @@ std::vector<std::string> wrap_text_anywhere(const TextMeasureProvider& provider,
                                               font_size,
                                               font_weight,
                                               font_family_hash).width;
-        const int candidate_width = line.empty() ? scalar_width : line_width + bounded_spacing + scalar_width;
+        const int candidate_width = line.empty()
+            ? scalar_width
+            : clamp_nonnegative_int64(static_cast<std::int64_t>(line_width) +
+                                      bounded_spacing + scalar_width);
         if (!line.empty() && candidate_width > width_limit) {
             lines.push_back(std::move(line));
             line = std::string(scalar);

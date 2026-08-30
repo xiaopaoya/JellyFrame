@@ -24,7 +24,7 @@
 并行工作不得改变更早项目的出口条件。
 
 1. **A2 证据，port 正在执行：**完成独立 value-frame v4 接入，随后用已安装的脚本 App 补齐作者工具流程所缺的 panel/input 证据。干净机器 VS Code 完整生命周期仍是独立必需证据。
-2. **R1 Core-only 维护，主线进行中：**响应式布局基础交付物已完成，包括[响应式布局契约](../docs/responsive_layout_contract_zh.md)、三目标矩阵和 Flex 交叉轴语义回归证据。2026-08-30 已完成软件栅格器的首轮极值安全审查：圆角距离平方、clipped 循环、描边内框和 BMP 导出尺寸均已使用有界计算，并通过完整/响应式 Core profile `9/9`。继续使用 standalone、sanitizer 与确定性 capture 审查 parser/style 所有权、malformed-input budget 与 cache invalidation。不要机会主义地扩张浏览器 CSS 范围或修改 port profile。
+2. **R1 Core-only 维护，主线进行中：**响应式布局基础交付物已完成，包括[响应式布局契约](../docs/responsive_layout_contract_zh.md)、三目标矩阵和 Flex 交叉轴语义回归证据。2026-08-30 已完成软件栅格器的首轮极值安全审查：圆角距离平方、clipped 循环、描边内框和 BMP 导出尺寸均已使用有界计算，并通过完整/响应式 Core profile `9/9`；随后完成文本 fallback 测量、字间距、换行和内置绘制定位的极值审查，避免字号/宽度溢出。继续使用 standalone、sanitizer 与确定性 capture 审查 parser/style 所有权、malformed-input budget 与 cache invalidation。不要机会主义地扩张浏览器 CSS 范围或修改 port profile。
 3. **B2 后端准备，受限进行：**保持 configure-time `ScriptRuntime` 边界及其不变量。在具备独立 compatibility/resource RFC 与对等证据前，不引入第二后端，也不改变 JerryScript 默认选择。
 4. **A3 筹备，已经进行中：**试用材料、设备采购、视觉资产与反馈运营可并行，但必须在 A2 的两项证据均通过后才开始外部产品试用。
 
