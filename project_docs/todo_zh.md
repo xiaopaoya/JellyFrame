@@ -11,6 +11,7 @@
 - [ ] 通过 provider 流程完成真实已安装 App 的 panel/input 验收。记录 App launch marker、触控/输入响应、panel/present 错误与恢复行为；provider lifecycle PASS 不等于视觉或输入证据。
 - [ ] 将 B1 作为持续 release gate 维护。首个带签名 Core `v0.6.0` 是历史基线，Runtime 当前锁定 `v0.6.1`；以后每次 Core bump 必须下载或以其他方式认证已审阅的 release artifact、校验 archive SHA-256、更新精确 version/ABI/source lock，并通过 standalone、package-consumer 与 source-override tests。
 - [ ] 执行 [0.6 工程维护审查计划](engineering_review_plan_20260819_zh.md)：先做 R0 package/profile/provenance，再做 R1 document/style、layout/dirty 与 renderer/text。只修复有明确语义或安全缺陷的接口，不做机械式改名。
+- [ ] 按[响应式布局契约](../docs/responsive_layout_contract_zh.md)完成响应式基础审查：保持 `300x300`、`320x240`、`172x320` 矩阵可执行；优先显式尺寸、轴向对齐、文本测量和诊断，不以新增控件或浏览器专有声明替代语义修复。
 - [ ] 维护 B2 脚本运行时边界：通用 host 与 worker 代码只能包含 `script_runtime.h`；引擎 headers、value 和发现逻辑必须留在选定后端内。未经过独立批准的 RFC 与对等证据前，不引入第二后端，也不改变对外开发者口径。
 
 ## 并行：A3 内测筹备

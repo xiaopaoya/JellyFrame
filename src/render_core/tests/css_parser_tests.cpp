@@ -1122,6 +1122,20 @@ void grid_and_aspect_ratio_properties_apply() {
           "aspect ratio parsed");
 }
 
+void explicit_auto_dimensions_use_intrinsic_sizing() {
+    auto element = make_element("section");
+    element->attributes["class"] = "auto-size";
+
+    StyleResolver resolver(parse(
+        ".auto-size { width: 120px; height: 80px; }"
+        ".auto-size { width: auto; height: auto; }"));
+    const Style style = resolver.resolve(*element);
+
+    check(style.width < 0 && style.width_percent < 0 &&
+              style.height < 0 && style.height_percent < 0,
+          "explicit auto dimensions restore intrinsic sizing");
+}
+
 void physical_edge_longhands_apply_per_side() {
     auto element = make_element("section");
     element->attributes["id"] = "panel";
@@ -1703,6 +1717,7 @@ int main() {
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         grid_and_aspect_ratio_properties_apply();
 #endif
+        explicit_auto_dimensions_use_intrinsic_sizing();
         physical_edge_longhands_apply_per_side();
         font_weight_list_style_and_generated_counter_apply();
         text_transform_parses_and_inherits();

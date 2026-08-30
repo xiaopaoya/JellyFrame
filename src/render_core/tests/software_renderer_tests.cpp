@@ -547,6 +547,7 @@ void soft_box_shadow_row_path_matches_reference_pixels() {
 #if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     return;
 #endif
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     struct ShadowCase {
         Rect rect;
         Rect clip;
@@ -582,6 +583,7 @@ void soft_box_shadow_row_path_matches_reference_pixels() {
         check_equal_pixels(actual, expected,
                            "row-wise soft shadow path preserves reference pixels for all geometry classes");
     }
+#endif
 }
 
 void rounded_stroke_keeps_corner_pixels_clear() {

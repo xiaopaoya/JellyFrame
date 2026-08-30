@@ -3216,9 +3216,19 @@ DeclarationApplyResult apply_sizing_declaration(Style& style,
                                                 const std::string& property,
                                                 const std::string& value) {
     if (property == "width") {
+        if (lowercase(trim(value)) == "auto") {
+            style.width = -1;
+            style.width_percent = -1;
+            return DeclarationApplyResult::Applied;
+        }
         return apply_length_or_percent(style.width, style.width_percent, value, style.font_size);
     }
     if (property == "height") {
+        if (lowercase(trim(value)) == "auto") {
+            style.height = -1;
+            style.height_percent = -1;
+            return DeclarationApplyResult::Applied;
+        }
         return apply_length_or_percent(style.height, style.height_percent, value, style.font_size);
     }
     if (property == "min-width") {

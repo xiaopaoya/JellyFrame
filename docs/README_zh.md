@@ -23,7 +23,7 @@
 
 1. [../HOW_TO_START_zh.md](../HOW_TO_START_zh.md)
 2. [engine_architecture_zh.md](engine_architecture_zh.md)
-3. 如果要写 app，读 [app_author_guide_zh.md](app_author_guide_zh.md)。
+3. 如果要写 app，读 [app_author_guide_zh.md](app_author_guide_zh.md)；响应式 App 还要读 [responsive_layout_contract_zh.md](responsive_layout_contract_zh.md)。
 4. 如果从 VS Code 开始写独立 App，先读 [app_author_environment_zh.md](app_author_environment_zh.md)。
 5. [app_author_recipes_zh.md](app_author_recipes_zh.md)：可复制的小屏 UI 写法。
 6. [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)
@@ -84,6 +84,7 @@
 
 - [app_author_guide_zh.md](app_author_guide_zh.md)：给 app 作者的短契约、布局 recipes 和 warning 修法。
 - [app_author_capability_table_zh.md](app_author_capability_table_zh.md)：app 作者快速判断 HTML/CSS/JS/资源能力能不能用。
+- [responsive_layout_contract_zh.md](responsive_layout_contract_zh.md)：viewport、尺寸、Flex/Grid、文本和跨目标验收的精确契约。
 - [app_author_recipes_zh.md](app_author_recipes_zh.md)：按钮、卡片、滚动列表和固定底部导航等可复制小屏组件写法。
 - [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)：最主要的 can-do/cannot-do 契约。
 - [component_compatibility_matrix_zh.md](component_compatibility_matrix_zh.md)：Core、Runtime、Device OS 和 package consumer 的兼容性证据。

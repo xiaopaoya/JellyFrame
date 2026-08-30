@@ -23,7 +23,7 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 Parallel work may not change the exit condition of an earlier item.
 
 1. **A2 evidence, active on the port:** complete the isolated value-frame-v4 integration and then use an installed script App to obtain the missing panel/input author-tool evidence. The independent clean-machine VS Code lifecycle remains required.
-2. **R1 Core-only maintenance, active on main:** review parser/style ownership, malformed-input budgets and cache invalidation with standalone, sanitizer and deterministic capture regressions. Do not expand CSS scope or alter the port profile.
+2. **R1 Core-only maintenance, active on main:** review parser/style ownership, malformed-input budgets and cache invalidation with standalone, sanitizer and deterministic capture regressions. The first active deliverable is the [responsive layout contract](../docs/responsive_layout_contract.md): make dimensions, axes, Flex/Grid limits, text measurement and cross-target evidence explicit; then fix only demonstrated semantic gaps. Do not expand browser CSS scope or alter the port profile opportunistically.
 3. **B2 backend preparation, bounded:** retain the configure-time `ScriptRuntime` boundary and its invariants. Do not add a second engine or change the JerryScript default before a separate compatibility/resource RFC and parity evidence exist.
 4. **A3 preparation, in progress:** trial material, hardware procurement, visual assets and feedback operations may proceed, but no external product trial begins before both A2 evidence items pass.
 
