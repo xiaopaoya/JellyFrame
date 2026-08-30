@@ -417,6 +417,16 @@ void style_resolution_context_tracks_its_inputs() {
               after_attribute_mutation.color.b == 0x66,
           "context drops selector and custom-property caches after a consumed DOM mutation");
 
+    button->set_attribute("style", "--tone:#778899");
+    clear_dirty_flags(*document);
+    const Style after_inline_custom_property_mutation = resolver.resolve(*button, context);
+    check(after_inline_custom_property_mutation.color.r == 0x77 &&
+              after_inline_custom_property_mutation.color.g == 0x88 &&
+              after_inline_custom_property_mutation.color.b == 0x99,
+          "context refreshes inherited values after an inline custom property mutation");
+    button->remove_attribute("style");
+    clear_dirty_flags(*document);
+
     resolver.set_interaction_state(button, nullptr, nullptr);
     const Style while_hovered = resolver.resolve(*button, context);
     check(while_hovered.color.r == 0xaa && while_hovered.color.g == 0xbb && while_hovered.color.b == 0xcc,
@@ -1717,6 +1727,16 @@ void parser_reports_unterminated_css_constructs() {
     check(string_stylesheet.empty(), "unterminated CSS string is not retained as a rule");
     check(has_diagnostic_code(string_diagnostics, "css-declaration-string-malformed"),
           "unterminated CSS string reports a precise diagnostic");
+
+    VectorDiagnosticSink comment_diagnostics;
+    CssParserOptions comment_options;
+    comment_options.diagnostics = &comment_diagnostics;
+    const Stylesheet comment_stylesheet = parser.parse(
+        "/* unterminated comment",
+        comment_options);
+    check(comment_stylesheet.empty(), "unterminated CSS comment does not create a rule");
+    check(has_diagnostic_code(comment_diagnostics, "css-comment-unclosed"),
+          "unterminated CSS comment reports a precise diagnostic");
 
     VectorDiagnosticSink block_diagnostics;
     CssParserOptions block_options;

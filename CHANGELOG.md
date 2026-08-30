@@ -1542,3 +1542,5 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   unterminated strings and declaration blocks, and keeps recovery deterministic.
 - Style candidate collection now uses pointer-set deduplication across overlapping
   selector buckets, avoiding quadratic duplicate scans on large stylesheets.
+- CSS recovery now diagnoses unterminated comments, and contextual style tests
+  cover inline custom-property mutation invalidation.

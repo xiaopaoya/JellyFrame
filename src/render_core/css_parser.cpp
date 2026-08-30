@@ -1697,6 +1697,13 @@ private:
                 }
                 if (index_ + 1 < source_.size()) {
                     index_ += 2;
+                } else {
+                    report_diagnostic(options_.diagnostics,
+                                      DiagnosticStage::Css,
+                                      DiagnosticSeverity::Warning,
+                                      "css-comment-unclosed",
+                                      "CSS comment reached end of input without a closing delimiter",
+                                      {});
                 }
                 continue;
             }
