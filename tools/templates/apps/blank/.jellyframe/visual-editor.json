@@ -14,7 +14,7 @@
     "padding": 0,
     "width": "100%",
     "height": "100%",
-    "background": "#ffffff",
+    "background": "#000000",
     "radius": 0,
     "align": "stretch",
     "justify": "start",
@@ -24,7 +24,7 @@
         "type": "text",
         "text": "Hello world",
         "fontSize": 16,
-        "color": "#000000",
+        "color": "#f4f7fb",
         "weight": "normal",
         "align": "left",
         "width": "100%"

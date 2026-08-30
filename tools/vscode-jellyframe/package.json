@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.31",
+  "version": "0.4.52",
   "publisher": "jellyframe",
   "repository": {
     "type": "git",
@@ -68,7 +68,7 @@
       {
         "command": "jellyframe.debugExternal",
         "title": "%command.debugExternal%",
-        "icon": "$(external-link)"
+        "icon": "$(link-external)"
       },
       {
         "command": "jellyframe.runFrameScript",

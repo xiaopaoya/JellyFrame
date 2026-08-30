@@ -1,6 +1,6 @@
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-08-29; Applies to: 0.6.0-dev; extension version: 0.4.31; compatibility baseline: 0.5.0
+> Last updated: 2026-08-30; Applies to: 0.6.0-dev; extension version: 0.4.52; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -136,10 +136,27 @@ creating a new App, so generated manifests are immediately packageable.
 `.jellyframe/visual-editor.json` model. Ordinary existing HTML/CSS does not get
 this entry and is not presented as round-trippable. For eligible Apps it opens a
 three-pane designer. Its palette contains only JellyFrame-supported containers, text, buttons,
-package images, inputs and progress indicators. Elements can be added,
+package images, inputs, progress indicators, dividers, spacers, bounded selects,
+short lists, switches and small navigation rows. Elements can be added,
 reordered, nested, duplicated and edited at the App's declared viewport or
 common device-size presets. Save writes ordinary, readable HTML and CSS;
-stable element IDs remain available to hand-authored event listeners.
+stable element IDs remain available to hand-authored event listeners. List and
+option data is edited through bounded add/remove controls rather than an
+unbounded JSON field. The canvas also provides a small icon toolbar for
+history, fit, zoom, structure and save, with full text actions retained in the
+top bar.
+The generated select is the single-select subset and requires the target's
+documented `forms.advanced` capability for the core-rendered option overlay;
+it is not a browser-native multi-select or navigation control.
+The palette also includes three transparent recipes: status card, settings
+row and bottom navigation. Selecting one expands it into ordinary editable
+nodes, so the recipe is only a starting point and never a private runtime
+component.
+New blank and device-oriented materials use a black or near-black surface by
+default, preserving bright text and accent controls for small round displays.
+The inspector reports listeners it can statically recognize for a selected
+stable ID in package-local scripts and can copy a minimal event skeleton. It
+does not modify JavaScript or attempt to infer application behavior.
 
 The blank template includes a visual model for its `Hello world` entry, so the canvas, source and model agree when it is first opened. Older blank starters without a model are recognized only when they contain this exact minimal structure; arbitrary existing HTML is not guessed. The first save still asks before taking over and backing up the entry page.
 

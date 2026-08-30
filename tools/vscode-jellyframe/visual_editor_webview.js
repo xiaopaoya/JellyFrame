@@ -16,6 +16,11 @@
   let future = [];
   let dirty = false;
   let saving = false;
+  let modelCheckTimer;
+  let modelCheckRevision = 0;
+  let dropPreview;
+  let draggedSourceElement;
+  let draggedSourceDisplay;
   let zoom = persisted.zoom === undefined || persisted.zoom === "fit"
     ? "fit"
     : clamp(Number(persisted.zoom) || 1, 0.2, 2);
@@ -23,6 +28,8 @@
   const narrowEditor = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 760px)").matches;
   let leftCollapsed = persisted.leftCollapsed === undefined ? narrowEditor : Boolean(persisted.leftCollapsed);
   let rightCollapsed = persisted.rightCollapsed === undefined ? narrowEditor : Boolean(persisted.rightCollapsed);
+  let panX = Number.isFinite(Number(persisted.panX)) ? Number(persisted.panX) : 0;
+  let panY = Number.isFinite(Number(persisted.panY)) ? Number(persisted.panY) : 0;
   const collapsedNodes = new Set(Array.isArray(persisted.collapsedNodes) ? persisted.collapsedNodes : []);
   const assets = { ...(initial.assets || {}) };
   const maxNodes = Number(initial.maxNodes) || 128;
@@ -34,29 +41,57 @@
     layoutGroup: "布局",
     contentGroup: "内容",
     controlsGroup: "控件",
+    recipesGroup: "模板组合",
     container: "容器",
     text: "文本",
     button: "按钮",
     image: "图片",
     input: "输入框",
     progress: "进度条",
+    divider: "分隔线",
+    spacer: "留白",
+    select: "选择框",
+    list: "列表",
+    navigation: "底部导航",
+    switch: "开关",
+    statusCard: "状态卡",
+    settingsRow: "设置行",
+    bottomNavigation: "底部导航组合",
     containerHelp: "横向或纵向排列内容",
     textHelp: "标题、标签或说明文字",
     buttonHelp: "可绑定事件的操作按钮",
     imageHelp: "App 包内的图片资源",
     inputHelp: "单行文字输入控件",
     progressHelp: "显示有界数值进度",
+    dividerHelp: "在内容之间建立清晰分隔",
+    spacerHelp: "为嵌入式布局保留固定空间",
+    selectHelp: "受限选项选择，不依赖浏览器弹窗",
+    listHelp: "展示短列表或设置项",
+    navigationHelp: "适合小屏设备的有限导航项",
+    statusCardHelp: "标题、状态和值进度组成的常用状态块",
+    settingsRowHelp: "标签与开关组成的设置行",
+    bottomNavigationHelp: "包含内容区和底部导航的设备页面骨架",
+    switchHelp: "适合设备设置的二态开关",
     viewport: "目标",
     modelViewport: "App 声明尺寸",
     fit: "适应",
     save: "保存",
     saveDebug: "保存并运行",
     saved: "已保存",
+    runtimeIdle: "Runtime 未启动",
+    runtimeRunning: "Runtime 运行中",
+    runtimeReporting: "正在生成 Runtime 报告",
+    runtimeStopped: "Runtime 已停止",
     saving: "正在保存...",
+    checking: "正在检查当前模型...",
+    checked: "模型检查通过",
+    checkError: "模型检查失败",
     dirty: "有未保存修改",
     ready: "设计画布为近似预览；实际效果以桌面壳为准",
     saveCancelled: "保存已取消",
     sourceConflict: "生成源码已在编辑器外发生变化；当前画布仍基于模型。保存将用当前模型替换已标记生成区。",
+    viewDiff: "查看差异",
+    restoreBackup: "恢复最近快照",
     selected: "已选择",
     nodes: "个节点",
     page: "页面",
@@ -64,6 +99,11 @@
     content: "内容",
     layout: "布局",
     appearance: "外观",
+    interaction: "交互",
+    detectedListeners: "已检测到的监听器",
+    noListeners: "未检测到本地监听器",
+    copyEventSkeleton: "复制事件骨架",
+    eventSkeletonHelp: "不会修改脚本；请将骨架粘贴到 App 的本地 JavaScript 中。",
     id: "稳定 ID",
     textValue: "文本",
     placeholder: "占位文字",
@@ -101,6 +141,14 @@
     fill: "拉伸",
     track: "轨道颜色",
     fillColor: "进度颜色",
+    options: "选项",
+    selectedOption: "当前选项",
+    items: "项目",
+    itemHeight: "项目高度",
+    activeItem: "当前项目",
+    activeColor: "当前颜色",
+    addItem: "添加项目",
+    removeItem: "删除项目",
     choose: "选择",
     moveUp: "上移",
     moveDown: "下移",
@@ -112,6 +160,7 @@
     redo: "重做",
     invalidId: "ID 必须以字母开头，只能包含字母、数字、下划线或连字符。",
     duplicateId: "该 ID 已被其他节点使用。",
+    invalidValue: "该值不符合此控件的类型或范围。",
     invalidLength: "请输入非负数，并选择 px、% 或 auto。",
     nodeLimit: "节点数量已达到上限。",
     invalidDrop: "不能把节点移动到自身或其后代中。",
@@ -125,29 +174,57 @@
     layoutGroup: "Layout",
     contentGroup: "Content",
     controlsGroup: "Controls",
+    recipesGroup: "Recipes",
     container: "Container",
     text: "Text",
     button: "Button",
     image: "Image",
     input: "Input",
     progress: "Progress",
+    divider: "Divider",
+    spacer: "Spacer",
+    select: "Select",
+    list: "List",
+    navigation: "Bottom navigation",
+    switch: "Switch",
+    statusCard: "Status card",
+    settingsRow: "Settings row",
+    bottomNavigation: "Bottom navigation",
     containerHelp: "Arrange content in a row or column",
     textHelp: "Heading, label, or supporting copy",
     buttonHelp: "Action control with a stable event target",
     imageHelp: "Image resource inside the App package",
     inputHelp: "Single-line text input control",
     progressHelp: "Display a bounded numeric value",
+    dividerHelp: "Separate content without extra runtime behavior",
+    spacerHelp: "Reserve bounded space for embedded layouts",
+    selectHelp: "Choose from a small fixed set of options",
+    listHelp: "Display a short list or settings rows",
+    navigationHelp: "A small-screen navigation row with bounded items",
+    statusCardHelp: "A status label, value and bounded progress indicator",
+    settingsRowHelp: "A label and switch for a compact settings row",
+    bottomNavigationHelp: "A device screen skeleton with content and bottom navigation",
+    switchHelp: "A bounded two-state control for device settings",
     viewport: "Target",
     modelViewport: "App manifest size",
     fit: "Fit",
     save: "Save",
     saveDebug: "Save & run",
     saved: "Saved",
+    runtimeIdle: "Runtime idle",
+    runtimeRunning: "Runtime running",
+    runtimeReporting: "Generating Runtime report",
+    runtimeStopped: "Runtime stopped",
     saving: "Saving...",
+    checking: "Checking the current model...",
+    checked: "Model check passed",
+    checkError: "Model check failed",
     dirty: "Unsaved changes",
     ready: "The design canvas is approximate; the desktop shell is authoritative",
     saveCancelled: "Save cancelled",
     sourceConflict: "The generated source changed outside the editor; the canvas still follows the model. Save will replace the marked generated region with this model.",
+    viewDiff: "View diff",
+    restoreBackup: "Restore latest snapshot",
     selected: "Selected",
     nodes: "nodes",
     page: "Page",
@@ -155,6 +232,11 @@
     content: "Content",
     layout: "Layout",
     appearance: "Appearance",
+    interaction: "Interaction",
+    detectedListeners: "Detected listeners",
+    noListeners: "No local listener detected",
+    copyEventSkeleton: "Copy event skeleton",
+    eventSkeletonHelp: "This does not modify scripts. Paste the skeleton into local App JavaScript.",
     id: "Stable ID",
     textValue: "Text",
     placeholder: "Placeholder",
@@ -192,6 +274,14 @@
     fill: "Fill",
     track: "Track",
     fillColor: "Progress",
+    options: "Options",
+    selectedOption: "Selected option",
+    items: "Items",
+    itemHeight: "Item height",
+    activeItem: "Active item",
+    activeColor: "Active color",
+    addItem: "Add item",
+    removeItem: "Remove item",
     choose: "Choose",
     moveUp: "Move up",
     moveDown: "Move down",
@@ -203,6 +293,7 @@
     redo: "Redo",
     invalidId: "IDs must start with a letter and contain only letters, numbers, underscores, or hyphens.",
     duplicateId: "This ID is already used by another node.",
+    invalidValue: "This value does not match the field type or allowed range.",
     invalidLength: "Enter a non-negative value and select px, %, or auto.",
     nodeLimit: "The node limit has been reached.",
     invalidDrop: "A node cannot be moved into itself or one of its descendants.",
@@ -212,7 +303,7 @@
     error: "Editor error"
   };
 
-  const definitions = [
+  const definitions = Array.isArray(initial.registry) ? initial.registry : [
     { type: "container", group: "layoutGroup", label: "container", help: "containerHelp", icon: "□" },
     { type: "text", group: "contentGroup", label: "text", help: "textHelp", icon: "T" },
     { type: "image", group: "contentGroup", label: "image", help: "imageHelp", icon: "▧" },
@@ -220,6 +311,8 @@
     { type: "input", group: "controlsGroup", label: "input", help: "inputHelp", icon: "I" },
     { type: "progress", group: "controlsGroup", label: "progress", help: "progressHelp", icon: "▬" }
   ];
+  const registryByType = new Map(definitions.map((definition) => [definition.type, definition]));
+  const recipes = Array.isArray(initial.recipes) ? initial.recipes : [];
 
   const $ = (id) => document.getElementById(id);
 
@@ -290,7 +383,14 @@
     if (type === "button") return { id, type, text: t.button, width: "100%", height: "44px", background: "#20b486", color: "#071712", radius: 6 };
     if (type === "image") return { id, type, src: "", alt: "", width: "100%", height: "96px", fit: "cover", radius: 6 };
     if (type === "input") return { id, type, placeholder: t.input, value: "", width: "100%", height: "40px", background: "#18212b", color: "#f4f7fb", radius: 4 };
-    return { id, type: "progress", value: 50, width: "100%", height: "12px", track: "#26313d", fill: "#ffb84d", radius: 6 };
+    if (type === "progress") return { id, type: "progress", value: 50, width: "100%", height: "12px", track: "#26313d", fill: "#ffb84d", radius: 6 };
+    if (type === "divider") return { id, type, width: "100%", height: 1, color: "#344250" };
+    if (type === "spacer") return { id, type, width: "100%", height: 12 };
+    if (type === "select") return { id, type, options: ["Option 1", "Option 2", "Option 3"], selected: 0, width: "100%", height: "40px", background: "#18212b", color: "#f4f7fb", radius: 4 };
+    if (type === "list") return { id, type, items: ["List item 1", "List item 2", "List item 3"], width: "100%", height: "auto", itemHeight: 36, gap: 4, background: "#18212b", color: "#f4f7fb", radius: 6 };
+    if (type === "navigation") return { id, type, items: ["Home", "Stats", "Settings"], active: 0, width: "100%", height: "48px", gap: 4, background: "#18212b", color: "#9aa9b8", activeColor: "#20b486", radius: 6 };
+    if (type === "switch") return { id, type, checked: true, width: "52px", height: "28px", onColor: "#20b486", offColor: "#26313d", thumbColor: "#f4f7fb", radius: 14 };
+    throw new Error(`Unsupported visual-editor node type: ${type}`);
   }
 
   function snapshot() {
@@ -321,6 +421,16 @@
   function markDirty(message = t.dirty) {
     dirty = true;
     setSaveState("dirty", message);
+    scheduleModelCheck();
+  }
+
+  function scheduleModelCheck() {
+    if (modelCheckTimer) clearTimeout(modelCheckTimer);
+    const revision = ++modelCheckRevision;
+    modelCheckTimer = setTimeout(() => {
+      modelCheckTimer = undefined;
+      vscode.postMessage({ type: "model-check", revision, model });
+    }, 180);
   }
 
   function setSaveState(state, message) {
@@ -345,6 +455,8 @@
       rightCollapsed,
       leftWidth: styles.getPropertyValue("--left-width").trim(),
       rightWidth: styles.getPropertyValue("--right-width").trim(),
+      panX,
+      panY,
       collapsedNodes: [...collapsedNodes]
     });
   }
@@ -400,9 +512,9 @@
 
   function setDrag(event, payload) {
     const value = JSON.stringify(payload);
-    event.dataTransfer.effectAllowed = payload.kind === "new" ? "copy" : "move";
+    event.dataTransfer.effectAllowed = payload.kind === "new" || payload.kind === "recipe" ? "copy" : "move";
     event.dataTransfer.setData("application/x-jellyframe-node", value);
-    event.dataTransfer.setData("text/plain", payload.kind === "new" ? `new:${payload.type}` : `move:${payload.id}`);
+    event.dataTransfer.setData("text/plain", payload.kind === "move" ? `move:${payload.id}` : `new:${payload.type}`);
   }
 
   function allowClick(event) {
@@ -417,6 +529,48 @@
     document.querySelectorAll(".drop-before,.drop-after,.drop-inside").forEach((element) => {
       element.classList.remove("drop-before", "drop-after", "drop-inside");
     });
+    dropPreview?.remove();
+    dropPreview = undefined;
+    if (draggedSourceElement) {
+      draggedSourceElement.style.display = draggedSourceDisplay;
+      draggedSourceElement = undefined;
+      draggedSourceDisplay = undefined;
+    }
+  }
+
+  function showDropPreview(payload, target, mode) {
+    if (!payload || !target) return;
+    const moving = payload.kind === "move";
+    const dragged = moving ? find(payload.id) : undefined;
+    const type = moving ? dragged?.type : payload.type;
+    if (!type) return;
+    const definition = registryByType.get(type);
+    const recipe = recipes.find((candidate) => candidate.type === type);
+    const label = t[definition?.label] || t[recipe?.label] || type;
+    let preview;
+    if (moving) {
+      const source = [...document.querySelectorAll(".designer-node")]
+        .find((element) => element.dataset.nodeId === payload.id);
+      if (!source) return;
+      preview = source.cloneNode(true);
+      preview.classList.add("designer-drop-preview", "designer-drop-preview-move");
+      preview.classList.remove("selected");
+      preview.querySelectorAll(".selected").forEach((element) => element.classList.remove("selected"));
+      preview.dataset.previewType = type;
+      preview.removeAttribute("data-node-id");
+      draggedSourceElement = source;
+      draggedSourceDisplay = source.style.display;
+      source.style.display = "none";
+    } else {
+      preview = document.createElement("div");
+      preview.className = "designer-drop-preview";
+      preview.dataset.previewType = type;
+      preview.textContent = `+ ${label}`;
+    }
+    if (mode === "inside") target.append(preview);
+    else if (mode === "before") target.before(preview);
+    else target.after(preview);
+    dropPreview = preview;
   }
 
   function dropMode(event, element, node) {
@@ -436,6 +590,17 @@
       snapshot();
       if (!insertNode(node, insertion.parentId, insertion.index)) return history.pop();
       selectedId = node.id;
+    } else if (payload.kind === "recipe") {
+      const recipe = recipes.find((candidate) => candidate.type === payload.type);
+      if (!recipe) return report(t.invalidDrop, "error");
+      const node = clone(recipe.template);
+      if (nodeCount() + nodeCount(node) > maxNodes) return report(t.nodeLimit, "error");
+      const used = new Set();
+      walk(model.root, (candidate) => used.add(candidate.id));
+      remapIds(node, used);
+      snapshot();
+      if (!insertNode(node, insertion.parentId, insertion.index)) return history.pop();
+      selectedId = node.id;
     } else if (payload.kind === "move") {
       const node = find(payload.id);
       if (!node || containsId(node, insertion.parentId)) return report(t.invalidDrop, "error");
@@ -450,25 +615,33 @@
   function bindPointerDrag(element, payload, label) {
     element.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
+      event.stopPropagation();
       const startX = event.clientX;
       const startY = event.clientY;
       let dragging = false;
       let targetId;
       let targetMode;
+      let lastX = startX;
+      let lastY = startY;
       const ghost = document.createElement("div");
       ghost.className = "pointer-drag-ghost";
       ghost.textContent = label;
 
       const updateTarget = (moveEvent) => {
         clearDropIndicators();
+        targetId = undefined;
+        targetMode = undefined;
         const hit = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
         const candidate = hit?.closest(".designer-node, .outline-row");
         if (candidate?.dataset.nodeId) {
           const node = find(candidate.dataset.nodeId);
           if (node) {
+            const dragged = payload.kind === "move" ? find(payload.id) : undefined;
+            if (dragged && (dragged.id === node.id || containsId(dragged, node.id))) return;
             targetId = node.id;
             targetMode = dropMode(moveEvent, candidate, node);
-            candidate.classList.add(`drop-${targetMode}`);
+            if (payload.kind !== "move") candidate.classList.add(`drop-${targetMode}`);
+            showDropPreview(payload, candidate, targetMode);
             return;
           }
         }
@@ -476,9 +649,12 @@
           targetId = model.root.id;
           targetMode = "inside";
           $("canvas").classList.add("drop-inside");
+          showDropPreview(payload, $("canvas"), targetMode);
         }
       };
       const move = (moveEvent) => {
+        lastX = moveEvent.clientX;
+        lastY = moveEvent.clientY;
         if (!dragging && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 6) return;
         if (!dragging) {
           dragging = true;
@@ -489,11 +665,16 @@
         ghost.style.top = `${moveEvent.clientY}px`;
         updateTarget(moveEvent);
       };
-      const finish = () => {
+      const finish = (upEvent) => {
         document.removeEventListener("pointermove", move, true);
         document.removeEventListener("pointerup", finish, true);
         document.removeEventListener("pointercancel", finish, true);
         document.body.classList.remove("pointer-dragging");
+        if (dragging && upEvent) {
+          lastX = upEvent.clientX;
+          lastY = upEvent.clientY;
+          updateTarget({ clientX: lastX, clientY: lastY });
+        }
         ghost.remove();
         if (!dragging) return;
         suppressClick = true;
@@ -514,6 +695,23 @@
     const node = defaultNode(type);
     snapshot();
     insertNode(node, parent.id, index);
+    selectedId = node.id;
+    markDirty();
+    renderAll();
+  }
+
+  function addRecipe(recipe) {
+    const node = clone(recipe.template);
+    const subtreeSize = nodeCount(node);
+    if (nodeCount() + subtreeSize > maxNodes) return report(t.nodeLimit, "error");
+    const selected = find(selectedId);
+    const parent = selected?.type === "container" ? selected : parentOf(selectedId) || model.root;
+    const index = selected?.type === "container" ? parent.children.length : parent.children.findIndex((child) => child.id === selectedId) + 1;
+    const used = new Set();
+    walk(model.root, (candidate) => used.add(candidate.id));
+    remapIds(node, used);
+    snapshot();
+    if (!insertNode(node, parent.id, index)) return history.pop();
     selectedId = node.id;
     markDirty();
     renderAll();
@@ -586,9 +784,22 @@
     renderAll();
   }
 
+  function styleLength(value) {
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) return `${value}px`;
+    const text = String(value ?? "").trim();
+    return /^(?:0|[0-9]+(?:\.[0-9]+)?(?:px|%))$/.test(text) ? text : "";
+  }
+
+  function visualLineHeight(fontSize) {
+    const size = Math.max(1, Math.round(Number(fontSize) || 16));
+    return `${size + Math.max(6, Math.floor(size / 3))}px`;
+  }
+
   function applyCommonStyle(element, node) {
-    if (node.width && node.width !== "auto") element.style.width = node.width;
-    if (node.height && node.height !== "auto") element.style.height = node.height;
+    const width = styleLength(node.width);
+    const height = styleLength(node.height);
+    if (width) element.style.width = width;
+    if (height) element.style.height = height;
     if (node.type === "container") {
       element.style.display = "flex";
       element.style.flexDirection = node.layout === "row" ? "row" : "column";
@@ -601,16 +812,20 @@
       element.style.boxSizing = "border-box";
     } else if (node.type === "text") {
       element.style.fontSize = `${Number(node.fontSize) || 16}px`;
+      element.style.lineHeight = visualLineHeight(node.fontSize);
       element.style.color = node.color;
       element.style.fontWeight = node.weight === "bold" ? "bold" : "normal";
       element.style.textAlign = node.align || "left";
       element.style.overflowWrap = "anywhere";
     } else if (node.type === "button" || node.type === "input") {
+      element.style.fontSize = "16px";
+      element.style.lineHeight = visualLineHeight(node.fontSize);
       element.style.background = node.background;
       element.style.color = node.color;
       element.style.borderRadius = `${Number(node.radius) || 0}px`;
       element.style.border = "0";
       element.style.padding = "0 12px";
+      element.style.textAlign = node.type === "button" ? "center" : "left";
     } else if (node.type === "image") {
       element.style.objectFit = node.fit || "cover";
       element.style.borderRadius = `${Number(node.radius) || 0}px`;
@@ -618,6 +833,48 @@
       element.style.background = node.track;
       element.style.borderRadius = `${Number(node.radius) || 0}px`;
       element.style.overflow = "hidden";
+    } else if (node.type === "divider") {
+      element.style.background = "transparent";
+      element.style.setProperty("--divider-color", node.color);
+    } else if (node.type === "spacer") {
+      element.style.background = "transparent";
+    } else if (node.type === "select") {
+      element.style.background = node.background;
+      element.style.color = node.color;
+      element.style.border = "0";
+      element.style.borderRadius = `${Number(node.radius) || 0}px`;
+      element.style.padding = "0 10px";
+    } else if (node.type === "list") {
+      element.style.display = "flex";
+      element.style.flexDirection = "column";
+      element.style.gap = `${Number(node.gap) || 0}px`;
+      element.style.margin = "0";
+      element.style.padding = "0";
+      element.style.listStyle = "none";
+      element.style.background = node.background;
+      element.style.color = node.color;
+      element.style.borderRadius = `${Number(node.radius) || 0}px`;
+      element.style.overflow = "hidden";
+    } else if (node.type === "navigation") {
+      element.style.display = "flex";
+      element.style.alignItems = "stretch";
+      element.style.gap = `${Number(node.gap) || 0}px`;
+      element.style.background = node.background;
+      element.style.borderRadius = `${Number(node.radius) || 0}px`;
+      element.style.padding = "4px";
+      element.style.fontSize = `${Number(node.fontSize) || 9}px`;
+      element.style.lineHeight = visualLineHeight(node.fontSize || 9);
+      element.style.boxSizing = "border-box";
+      element.style.overflow = "hidden";
+    } else if (node.type === "switch") {
+      element.style.display = "inline-flex";
+      element.style.alignItems = "center";
+      element.style.justifyContent = node.checked ? "flex-end" : "flex-start";
+      element.style.padding = "3px";
+      element.style.background = node.checked ? node.onColor : node.offColor;
+      element.style.border = "0";
+      element.style.borderRadius = `${Number(node.radius) || 14}px`;
+      element.style.boxSizing = "border-box";
     }
   }
 
@@ -643,54 +900,146 @@
     });
   }
 
-  function renderNode(node) {
-    let element;
-    if (node.type === "container") {
-      element = document.createElement("section");
+  const designRenderers = {
+    container(node) {
+      const element = document.createElement("section");
       if (!node.children.length) {
         const empty = document.createElement("div");
         empty.className = "designer-empty";
         empty.textContent = t.emptyContainer;
         element.append(empty);
       } else node.children.forEach((child) => element.append(renderNode(child)));
-    } else if (node.type === "text") {
-      element = document.createElement("div");
+      return element;
+    },
+    text(node) {
+      const element = document.createElement("div");
       element.contentEditable = "true";
       element.setAttribute("role", "textbox");
       element.spellcheck = false;
       element.textContent = node.text;
-    } else if (node.type === "button") {
-      element = document.createElement("button");
+      return element;
+    },
+    button(node) {
+      const element = document.createElement("button");
       element.type = "button";
       element.textContent = node.text;
-    } else if (node.type === "image" && node.src && assets[node.src]) {
-      element = document.createElement("img");
-      element.src = assets[node.src];
-      element.alt = node.alt || "";
-    } else if (node.type === "image") {
-      element = document.createElement("div");
+      return element;
+    },
+    image(node) {
+      if (node.src && assets[node.src]) {
+        const element = document.createElement("img");
+        element.src = assets[node.src];
+        element.alt = node.alt || "";
+        return element;
+      }
+      const element = document.createElement("div");
       element.className = "image-placeholder";
       element.textContent = t.imageEmpty;
-    } else if (node.type === "input") {
-      element = document.createElement("input");
+      return element;
+    },
+    input(node) {
+      const element = document.createElement("input");
       element.value = node.value || "";
       element.placeholder = node.placeholder || "";
       element.readOnly = true;
       element.tabIndex = -1;
-    } else {
-      element = document.createElement("div");
+      return element;
+    },
+    progress(node) {
+      const element = document.createElement("div");
       const fill = document.createElement("span");
       fill.className = "progress-fill";
       fill.style.width = `${clamp(Number(node.value) || 0, 0, 100)}%`;
-      fill.style.height = node.height || "12px";
+      fill.style.height = styleLength(node.height) || "12px";
       fill.style.background = node.fill;
       element.append(fill);
+      return element;
+    },
+    divider() {
+      const element = document.createElement("div");
+      element.setAttribute("role", "separator");
+      return element;
+    },
+    spacer() {
+      const element = document.createElement("div");
+      element.setAttribute("aria-hidden", "true");
+      return element;
+    },
+    select(node) {
+      const element = document.createElement("select");
+      node.options.forEach((option, index) => {
+        const item = document.createElement("option");
+        item.value = String(index);
+        item.textContent = option;
+        item.selected = index === node.selected;
+        element.append(item);
+      });
+      element.tabIndex = -1;
+      return element;
+    },
+    list(node) {
+      const element = document.createElement("ul");
+      node.items.forEach((item) => {
+        const row = document.createElement("li");
+        row.textContent = item;
+        row.style.minHeight = `${Number(node.itemHeight) || 36}px`;
+        row.style.display = "flex";
+        row.style.alignItems = "center";
+        row.style.padding = "0 10px";
+        element.append(row);
+      });
+      return element;
+    },
+    navigation(node) {
+      const element = document.createElement("nav");
+      element.setAttribute("aria-label", t.navigation);
+      node.items.forEach((item, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = item;
+        button.style.flex = "1 1 0";
+        button.style.boxSizing = "border-box";
+        button.style.minWidth = "0";
+        button.style.minHeight = "0";
+        button.style.margin = "0";
+        button.style.padding = "0";
+        button.style.background = "transparent";
+        button.style.border = "0";
+        button.style.fontSize = `${Number(node.fontSize) || 9}px`;
+        button.style.lineHeight = visualLineHeight(node.fontSize || 9);
+        button.style.color = index === node.active ? node.activeColor : node.color;
+        element.append(button);
+      });
+      return element;
+    },
+    switch(node) {
+      const element = document.createElement("button");
+      const thumb = document.createElement("span");
+      element.type = "button";
+      element.setAttribute("role", "switch");
+      element.setAttribute("aria-checked", String(Boolean(node.checked)));
+      thumb.style.display = "block";
+      thumb.style.width = styleLength(node.height) || "28px";
+      thumb.style.height = styleLength(node.height) || "28px";
+      thumb.style.borderRadius = "50%";
+      thumb.style.background = node.thumbColor;
+      element.append(thumb);
+      return element;
     }
+  };
+
+  function renderNode(node) {
+    const rendererKey = registryByType.get(node.type)?.renderKey;
+    const renderer = designRenderers[rendererKey];
+    if (!renderer) throw new Error(`Unsupported visual-editor node type: ${node.type}`);
+    const element = renderer(node);
     element.classList.add(`jf-visual-${node.type}`, "designer-node");
     element.dataset.nodeId = node.id;
     if (node.id === selectedId) element.classList.add("selected");
     applyCommonStyle(element, node);
-    element.draggable = node.id !== model.root.id;
+    // Use one pointer-drag path so the browser's native drag lifecycle cannot
+    // interrupt the target calculation inside the webview.
+    element.draggable = false;
     element.addEventListener("dragstart", (event) => {
       event.stopPropagation();
       setDrag(event, { kind: "move", id: node.id });
@@ -701,7 +1050,9 @@
       event.stopPropagation();
       if (allowClick(event)) selectNode(node.id);
     });
-    bindPointerDrag(element, { kind: "move", id: node.id }, nodeLabel(node));
+    if (node.id !== model.root.id) {
+      bindPointerDrag(element, { kind: "move", id: node.id }, nodeLabel(node));
+    }
     if (node.type === "text") {
       element.addEventListener("blur", () => {
         const value = element.textContent || "";
@@ -739,30 +1090,80 @@
     const canvas = $("canvas");
     canvas.addEventListener("dragover", (event) => {
       event.preventDefault();
-      if (event.target !== canvas) return;
       clearDropIndicators();
-      canvas.classList.add("drop-inside");
+      if (!event.target.closest?.(".designer-node")) canvas.classList.add("drop-inside");
     });
     canvas.addEventListener("dragleave", (event) => {
-      if (event.target === canvas && !canvas.contains(event.relatedTarget)) clearDropIndicators();
+      if (!canvas.contains(event.relatedTarget)) clearDropIndicators();
     });
     canvas.addEventListener("drop", (event) => {
-      if (event.target !== canvas) return;
       event.preventDefault();
+      event.stopPropagation();
       const payload = decodeDrag(event);
       clearDropIndicators();
-      performDrop(payload, model.root.id, "inside");
+      const target = event.target.closest?.(".designer-node");
+      const node = target?.dataset.nodeId ? find(target.dataset.nodeId) : undefined;
+      performDrop(payload, node?.id || model.root.id, node ? dropMode(event, target, node) : "inside");
+    });
+  }
+
+  function bindCanvasPan() {
+    const wrap = $("canvas-wrap");
+    wrap.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      if (event.target.closest?.("#canvas-floating-toolbar")) return;
+      const onViewport = $("canvas-shell").contains(event.target);
+      const blank = !onViewport && !event.target.closest?.(".designer-node");
+      if (!blank && !(event.ctrlKey || event.metaKey) && onViewport) return;
+      if (!blank && !(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      let lastX = event.clientX;
+      let lastY = event.clientY;
+      const move = (moveEvent) => {
+        panX += moveEvent.clientX - lastX;
+        panY += moveEvent.clientY - lastY;
+        lastX = moveEvent.clientX;
+        lastY = moveEvent.clientY;
+        persistUi();
+        applyZoom();
+      };
+      const finish = () => {
+        document.body.classList.remove("panning");
+        document.removeEventListener("pointermove", move, true);
+        document.removeEventListener("pointerup", finish, true);
+        document.removeEventListener("pointercancel", finish, true);
+        persistUi();
+      };
+      document.body.classList.add("panning");
+      document.addEventListener("pointermove", move, true);
+      document.addEventListener("pointerup", finish, true);
+      document.addEventListener("pointercancel", finish, true);
     });
   }
 
   function renderSourceNotice() {
     const notice = $("source-notice");
     notice.hidden = !initial.sourceConflict;
-    notice.textContent = initial.sourceConflict ? t.sourceConflict : "";
+    notice.replaceChildren();
+    if (!initial.sourceConflict) return;
+    const message = document.createElement("span");
+    message.className = "source-notice-copy";
+    message.textContent = t.sourceConflict;
+    const diff = document.createElement("button");
+    diff.type = "button";
+    diff.className = "quiet source-notice-action";
+    diff.textContent = t.viewDiff;
+    diff.addEventListener("click", () => vscode.postMessage({ type: "show-source-diff" }));
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "quiet source-notice-action";
+    restore.textContent = t.restoreBackup;
+    restore.addEventListener("click", () => vscode.postMessage({ type: "restore-backup" }));
+    notice.append(message, diff, restore);
   }
 
   function renderPalette() {
-    const groups = ["layoutGroup", "contentGroup", "controlsGroup"];
+    const groups = [...new Set(definitions.map((definition) => definition.group))];
     const list = $("palette-list");
     list.replaceChildren();
     groups.forEach((group) => {
@@ -776,7 +1177,7 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = "palette-item";
-        button.draggable = true;
+        button.draggable = false;
         const icon = document.createElement("span");
         icon.className = "palette-icon";
         icon.textContent = definition.icon;
@@ -795,6 +1196,36 @@
       });
       list.append(section);
     });
+    if (recipes.length) {
+      const section = document.createElement("section");
+      section.className = "palette-group palette-recipes";
+      const heading = document.createElement("h3");
+      heading.className = "group-label";
+      heading.textContent = t.recipesGroup;
+      section.append(heading);
+      recipes.forEach((recipe) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "palette-item recipe-item";
+        button.draggable = false;
+        const icon = document.createElement("span");
+        icon.className = "palette-icon";
+        icon.textContent = recipe.icon;
+        const copy = document.createElement("span");
+        copy.className = "palette-copy";
+        const strong = document.createElement("strong");
+        strong.textContent = t[recipe.label] || recipe.type;
+        const help = document.createElement("span");
+        help.textContent = t[recipe.help] || "";
+        copy.append(strong, help);
+        button.append(icon, copy);
+        button.title = help.textContent;
+        bindPointerDrag(button, { kind: "recipe", type: recipe.type }, t[recipe.label] || recipe.type);
+        button.addEventListener("click", () => addRecipe(recipe));
+        section.append(button);
+      });
+      list.append(section);
+    }
   }
 
   function renderOutlineBranch(node, depth) {
@@ -804,7 +1235,7 @@
     row.className = `outline-row${node.id === selectedId ? " selected" : ""}`;
     row.style.setProperty("--depth", depth);
     row.dataset.nodeId = node.id;
-    row.draggable = node.id !== model.root.id;
+    row.draggable = false;
     row.setAttribute("role", "treeitem");
     row.setAttribute("aria-level", String(depth + 1));
     row.setAttribute("aria-selected", String(node.id === selectedId));
@@ -832,7 +1263,9 @@
     kind.textContent = node.id;
     row.append(toggle, icon, name, kind);
     row.addEventListener("click", (event) => { if (allowClick(event)) selectNode(node.id); });
-    bindPointerDrag(row, { kind: "move", id: node.id }, nodeLabel(node));
+    if (node.id !== model.root.id) {
+      bindPointerDrag(row, { kind: "move", id: node.id }, nodeLabel(node));
+    }
     row.addEventListener("dragstart", (event) => {
       event.stopPropagation();
       setDrag(event, { kind: "move", id: node.id });
@@ -859,13 +1292,63 @@
     return element;
   }
 
-  function commitValue(node, key, value, validate) {
+  function typedValue(node, key, rawValue) {
+    const field = registryByType.get(node.type)?.fields?.find((candidate) => candidate.key === key);
+    if (!field) return { value: rawValue };
+    if (field.kind === "number") {
+      const value = Number(rawValue);
+      if (!Number.isFinite(value)) return { error: t.invalidValue };
+      const dynamicMax = key === "selected" && Array.isArray(node.options)
+        ? node.options.length - 1
+        : key === "active" && Array.isArray(node.items)
+          ? node.items.length - 1
+          : field.max;
+      const bounded = clamp(value, field.min ?? -Infinity, dynamicMax ?? Infinity);
+      return { value: field.integer ? Math.round(bounded) : bounded };
+    }
+    if (field.kind === "enum") {
+      const value = String(rawValue);
+      return field.values?.includes(value) ? { value } : { error: t.invalidValue };
+    }
+    if (field.kind === "boolean") {
+      return typeof rawValue === "boolean" ? { value: rawValue } : { error: t.invalidValue };
+    }
+    if (field.kind === "string-list") {
+      if (!Array.isArray(rawValue) || rawValue.length < field.minItems || rawValue.length > field.maxItems ||
+          rawValue.some((item) => typeof item !== "string" || item.length > field.maxLength || /[{};\r\n]/.test(item))) {
+        return { error: t.invalidValue };
+      }
+      return { value: rawValue.map((item) => item.trim()) };
+    }
+    if (field.kind === "length") {
+      const value = String(rawValue ?? "auto").trim();
+      return /^(?:auto|0|[0-9]+(?:\.[0-9]+)?(?:px|%))$/.test(value)
+        ? { value }
+        : { error: t.invalidLength };
+    }
+    if (field.kind === "color") {
+      const value = String(rawValue ?? "").trim();
+      return value && !/[{};\r\n]/.test(value) ? { value } : { error: t.invalidValue };
+    }
+    return { value: String(rawValue ?? "") };
+  }
+
+  function commitValue(node, key, rawValue, validate) {
+    const typed = typedValue(node, key, rawValue);
+    if (typed.error) return typed.error;
+    const value = typed.value;
     const error = validate?.(value);
     if (error) return error;
-    if (node[key] === value) return undefined;
+    const changes = [[key, value]];
+    if (key === "options" && node.type === "select") {
+      changes.push(["selected", clamp(Number(node.selected) || 0, 0, Math.max(0, value.length - 1))]);
+    } else if (key === "items" && node.type === "navigation") {
+      changes.push(["active", clamp(Number(node.active) || 0, 0, Math.max(0, value.length - 1))]);
+    }
+    if (changes.every(([changeKey, changeValue]) => node[changeKey] === changeValue)) return undefined;
     snapshot();
     const oldId = node.id;
-    node[key] = value;
+    changes.forEach(([changeKey, changeValue]) => { node[changeKey] = changeValue; });
     if (key === "id") {
       if (selectedId === oldId) selectedId = value;
       if (collapsedNodes.delete(oldId)) collapsedNodes.add(value);
@@ -914,6 +1397,65 @@
       if (!error) commitValue(node, key, value);
     });
     row.append(input);
+    return row;
+  }
+
+  function stringListField(node, field, label) {
+    const row = fieldRow(label);
+    row.classList.add("field-list");
+    const list = document.createElement("div");
+    list.className = "string-list-control";
+    const values = Array.isArray(node[field.key]) ? node[field.key] : [];
+    const commitItems = (next) => {
+      const typed = typedValue(node, field.key, next);
+      if (typed.error) return showFieldError(row, typed.error);
+      showFieldError(row);
+      commitValue(node, field.key, typed.value);
+    };
+    values.forEach((value, index) => {
+      const item = document.createElement("div");
+      item.className = "string-list-item";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.maxLength = String(field.maxLength);
+      input.value = value;
+      input.addEventListener("change", () => {
+        const next = values.slice();
+        next[index] = input.value;
+        commitItems(next);
+      });
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "icon-button quiet list-item-remove";
+      remove.textContent = "×";
+      remove.title = t.removeItem;
+      remove.setAttribute("aria-label", t.removeItem);
+      remove.disabled = values.length <= field.minItems;
+      remove.addEventListener("click", () => commitItems(values.filter((_, itemIndex) => itemIndex !== index)));
+      item.append(input, remove);
+      list.append(item);
+    });
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "quiet list-item-add";
+    add.textContent = `+ ${t.addItem}`;
+    add.disabled = values.length >= field.maxItems;
+    add.addEventListener("click", () => commitItems([...values, ""]));
+    list.append(add);
+    row.append(list);
+    return row;
+  }
+
+  function booleanField(node, key, label) {
+    const row = fieldRow(label);
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "inspector-toggle";
+    toggle.setAttribute("role", "switch");
+    toggle.setAttribute("aria-checked", String(Boolean(node[key])));
+    toggle.textContent = node[key] ? (initial.chinese ? "开" : "On") : (initial.chinese ? "关" : "Off");
+    toggle.addEventListener("click", () => commitValue(node, key, !node[key]));
+    row.append(toggle);
     return row;
   }
 
@@ -1018,7 +1560,10 @@
     input.type = "text";
     input.value = node[key] || "transparent";
     swatch.addEventListener("change", () => commitValue(node, key, swatch.value));
-    input.addEventListener("change", () => commitValue(node, key, input.value.trim() || "transparent"));
+    input.addEventListener("change", () => {
+      const error = commitValue(node, key, input.value.trim() || "transparent");
+      showFieldError(row, error);
+    });
     control.append(swatch, input);
     row.append(control);
     return row;
@@ -1039,6 +1584,81 @@
     control.append(input, choose);
     row.append(control);
     return row;
+  }
+
+  function registryChoiceLabel(value) {
+    const labels = {
+      "space-between": t.between,
+      "space-around": t.around
+    };
+    return labels[value] || t[value] || value;
+  }
+
+  function registryField(node, field) {
+    const label = t[field.label] || field.label || field.key;
+    if (field.kind === "text") return textField(node, field.key, label);
+    if (field.kind === "number") return numberField(node, field.key, label, field.min ?? 0, field.max ?? 100);
+    if (field.kind === "length") return lengthField(node, field.key, label);
+    if (field.kind === "color") return colorField(node, field.key, label);
+    if (field.kind === "resource") return resourceField(node);
+    if (field.kind === "string-list") return stringListField(node, field, label);
+    if (field.kind === "boolean") return booleanField(node, field.key, label);
+    if (field.kind === "enum") {
+      const choices = (field.values || []).map((value) => [value, registryChoiceLabel(value)]);
+      return field.control === "segmented"
+        ? segmentedField(node, field.key, label, choices)
+        : selectField(node, field.key, label, choices);
+    }
+    return undefined;
+  }
+
+  function defaultEventFor(node) {
+    if (node.type === "input" || node.type === "select" || node.type === "switch") return "change";
+    return "click";
+  }
+
+  function eventSkeleton(node, eventName) {
+    return `document.getElementById(${JSON.stringify(node.id)})?.addEventListener(${JSON.stringify(eventName)}, (event) => {\n  // Update local App state here.\n});\n`;
+  }
+
+  function interactionSection(node) {
+    const element = section(t.interaction);
+    const listeners = Array.isArray(initial.interactions?.[node.id]) ? initial.interactions[node.id] : [];
+    const heading = document.createElement("div");
+    heading.className = "interaction-heading";
+    heading.textContent = t.detectedListeners;
+    element.append(heading);
+    if (listeners.length) {
+      const list = document.createElement("ul");
+      list.className = "listener-list";
+      listeners.forEach((listener) => {
+        const item = document.createElement("li");
+        const eventName = document.createElement("code");
+        eventName.textContent = listener.event;
+        const source = document.createElement("span");
+        source.textContent = listener.source;
+        item.append(eventName, source);
+        list.append(item);
+      });
+      element.append(list);
+    } else {
+      const empty = document.createElement("p");
+      empty.className = "interaction-empty";
+      empty.textContent = t.noListeners;
+      element.append(empty);
+    }
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "quiet interaction-copy";
+    copy.textContent = t.copyEventSkeleton;
+    copy.addEventListener("click", () => {
+      vscode.postMessage({ type: "copy-event-skeleton", code: eventSkeleton(node, defaultEventFor(node)) });
+    });
+    const help = document.createElement("p");
+    help.className = "interaction-help";
+    help.textContent = t.eventSkeletonHelp;
+    element.append(copy, help);
+    return element;
   }
 
   function renderInspector() {
@@ -1073,37 +1693,19 @@
     identity.append(textField(node, "id", t.id));
     body.append(identity);
 
-    if (["text", "button", "input", "image", "progress"].includes(node.type)) {
-      const content = section(t.content);
-      if (node.type === "text" || node.type === "button") content.append(textField(node, "text", t.textValue));
-      if (node.type === "input") content.append(textField(node, "placeholder", t.placeholder), textField(node, "value", t.value));
-      if (node.type === "image") content.append(resourceField(node), textField(node, "alt", t.alt));
-      if (node.type === "progress") content.append(numberField(node, "value", t.value, 0, 100));
-      body.append(content);
+    const groups = new Map();
+    for (const field of registryByType.get(node.type)?.fields || []) {
+      const control = registryField(node, field);
+      if (!control) continue;
+      if (!groups.has(field.group)) groups.set(field.group, []);
+      groups.get(field.group).push(control);
     }
-
-    const layout = section(t.layout);
-    if (node.type === "container") {
-      layout.append(
-        segmentedField(node, "layout", t.direction, [["column", t.column], ["row", t.row]]),
-        numberField(node, "gap", t.gap, 0, 64),
-        numberField(node, "padding", t.padding, 0, 64),
-        selectField(node, "align", t.align, [["stretch", t.stretch], ["start", t.start], ["center", t.center], ["end", t.end]]),
-        selectField(node, "justify", t.justify, [["start", t.start], ["center", t.center], ["end", t.end], ["space-between", t.between], ["space-around", t.around]])
-      );
+    for (const [group, controls] of groups) {
+      const element = section(t[group] || group);
+      element.append(...controls);
+      body.append(element);
     }
-    layout.append(lengthField(node, "width", t.width));
-    if (node.type !== "text") layout.append(lengthField(node, "height", t.height));
-    body.append(layout);
-
-    const appearance = section(t.appearance);
-    if (node.type === "container" || node.type === "button" || node.type === "input") appearance.append(colorField(node, "background", t.background));
-    if (node.type === "text" || node.type === "button" || node.type === "input") appearance.append(colorField(node, "color", t.color));
-    if (node.type === "text") appearance.append(numberField(node, "fontSize", t.fontSize, 8, 72), segmentedField(node, "weight", t.weight, [["normal", t.normal], ["bold", t.bold]]), segmentedField(node, "align", t.textAlign, [["left", t.left], ["center", t.center], ["right", t.right]]));
-    if (node.type === "image") appearance.append(selectField(node, "fit", t.fitMode, [["cover", t.cover], ["contain", t.contain], ["fill", t.fill]]));
-    if (node.type === "progress") appearance.append(colorField(node, "track", t.track), colorField(node, "fill", t.fillColor));
-    if (["container", "button", "image", "input", "progress"].includes(node.type)) appearance.append(numberField(node, "radius", t.radius, 0, 150));
-    body.append(appearance);
+    body.append(interactionSection(node));
   }
 
   function renderBreadcrumbs() {
@@ -1154,10 +1756,17 @@
     const wrap = $("canvas-wrap");
     let scale = zoom;
     if (zoom === "fit") {
-      scale = Math.min(1, (wrap.clientWidth - 68) / model.viewport.width, (wrap.clientHeight - 84) / model.viewport.height);
+      const style = getComputedStyle(wrap);
+      const horizontalPadding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const verticalPadding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      scale = Math.min(1,
+        (wrap.clientWidth - horizontalPadding) / model.viewport.width,
+        (wrap.clientHeight - verticalPadding) / model.viewport.height);
     }
     scale = clamp(Number(scale) || 1, 0.2, 2);
-    $("canvas-shell").style.transform = `scale(${scale})`;
+    wrap.style.setProperty("--pan-x", `${panX}px`);
+    wrap.style.setProperty("--pan-y", `${panY}px`);
+    $("canvas-shell").style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${scale})`;
     $("zoom-label").textContent = `${Math.round(scale * 100)}%`;
   }
 
@@ -1215,10 +1824,13 @@
     if (persisted.leftWidth && /^\d+(?:\.\d+)?px$/.test(persisted.leftWidth)) document.documentElement.style.setProperty("--left-width", persisted.leftWidth);
     if (persisted.rightWidth && /^\d+(?:\.\d+)?px$/.test(persisted.rightWidth)) document.documentElement.style.setProperty("--right-width", persisted.rightWidth);
     $("app-name").textContent = initial.appName;
+    $("runtime-state").textContent = t.runtimeIdle;
     $("components-tab").textContent = t.components;
     $("outline-tab").textContent = t.outline;
     $("viewport-label").textContent = t.viewport;
-    $("viewport-preset").querySelector("option[value=model]").textContent = `${t.modelViewport} · ${model.viewport.width} x ${model.viewport.height}`;
+    const modelViewportOption = $("viewport-preset").querySelector("option[value=model]");
+    modelViewportOption.textContent = initial.chinese ? "App 声明尺寸" : "App declared size";
+    modelViewportOption.title = `${t.modelViewport} · ${model.viewport.width} x ${model.viewport.height}`;
     $("zoom-fit").textContent = t.fit;
     $("save").textContent = t.save;
     $("actual").textContent = t.saveDebug;
@@ -1230,6 +1842,19 @@
     $("undo").setAttribute("aria-label", t.undo);
     $("redo").title = t.redo;
     $("redo").setAttribute("aria-label", t.redo);
+    const canvasToolLabels = {
+      "canvas-tool-undo": t.undo,
+      "canvas-tool-redo": t.redo,
+      "canvas-tool-fit": t.fit,
+      "canvas-tool-zoom-out": initial.chinese ? "缩小" : "Zoom out",
+      "canvas-tool-zoom-in": initial.chinese ? "放大" : "Zoom in",
+      "canvas-tool-outline": initial.chinese ? "显示结构" : "Show structure",
+      "canvas-tool-save": t.save
+    };
+    Object.entries(canvasToolLabels).forEach(([id, label]) => {
+      $(id).title = label;
+      $(id).setAttribute("aria-label", label);
+    });
     renderPalette();
     setSaveState("ready", t.ready);
     renderAll();
@@ -1241,6 +1866,19 @@
   $("toggle-right").addEventListener("click", () => { rightCollapsed = !rightCollapsed; persistUi(); renderPanels(); if (zoom === "fit") applyZoom(); });
   $("undo").addEventListener("click", undo);
   $("redo").addEventListener("click", redo);
+  $("canvas-tool-undo").addEventListener("click", undo);
+  $("canvas-tool-redo").addEventListener("click", redo);
+  $("canvas-tool-fit").addEventListener("click", () => { zoom = "fit"; persistUi(); applyZoom(); });
+  $("canvas-tool-zoom-out").addEventListener("click", () => adjustZoom(-0.1));
+  $("canvas-tool-zoom-in").addEventListener("click", () => adjustZoom(0.1));
+  $("canvas-tool-outline").addEventListener("click", () => {
+    leftCollapsed = false;
+    setPanel("outline");
+    persistUi();
+    renderPanels();
+    if (zoom === "fit") applyZoom();
+  });
+  $("canvas-tool-save").addEventListener("click", () => requestSave(false));
   $("zoom-out").addEventListener("click", () => adjustZoom(-0.1));
   $("zoom-in").addEventListener("click", () => adjustZoom(0.1));
   $("zoom-fit").addEventListener("click", () => { zoom = "fit"; persistUi(); applyZoom(); });
@@ -1268,6 +1906,7 @@
   setupResizer($("left-resizer"), "left");
   setupResizer($("right-resizer"), "right");
   bindCanvasDrop();
+  bindCanvasPan();
   new ResizeObserver(() => { if (zoom === "fit") applyZoom(); }).observe($("canvas-wrap"));
 
   document.addEventListener("keydown", (event) => {
@@ -1303,13 +1942,42 @@
       dirty = false;
       saving = false;
       initial.sourceConflict = false;
+      initial.interactions = message.interactions || initial.interactions || {};
       setSaveState("saved", t.saved);
       renderAll();
       if (message.debug) vscode.postMessage({ type: "debug" });
+    } else if (message.type === "runtime-state") {
+      const labels = {
+        running: t.runtimeRunning,
+        reporting: t.runtimeReporting,
+        stopped: t.runtimeStopped
+      };
+      const state = labels[message.state] ? message.state : "idle";
+      $("runtime-state").textContent = labels[state] || t.runtimeIdle;
+      $("runtime-state").dataset.runtimeState = state;
     } else if (message.type === "save-cancelled") {
       saving = false;
       setSaveState("dirty", t.saveCancelled);
       renderAll();
+    } else if (message.type === "model-check-result") {
+      if (message.revision !== modelCheckRevision) return;
+      if (message.ok) {
+        document.body.dataset.modelCheck = "ok";
+        if (dirty && !saving) report(t.checked, "dirty");
+      } else {
+        document.body.dataset.modelCheck = "error";
+        setSaveState("error", `${t.checkError}: ${message.message || "unknown error"}`);
+        renderAll();
+      }
+    } else if (message.type === "source-conflict") {
+      initial.sourceConflict = Boolean(message.conflict);
+      if (message.interactions) initial.interactions = message.interactions;
+      renderSourceNotice();
+      if (initial.sourceConflict && !saving) setSaveState("dirty", t.sourceConflict);
+      renderInspector();
+    } else if (message.type === "interactions") {
+      initial.interactions = message.interactions || {};
+      renderInspector();
     } else if (message.type === "asset") {
       const node = find(message.nodeId);
       if (node?.type === "image") {

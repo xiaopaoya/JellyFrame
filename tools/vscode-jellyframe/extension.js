@@ -33,7 +33,13 @@ const {
   fetchLatestSdkRelease,
   sdkInstallName
 } = require("./sdk_download");
-const { isVisualEditorPackage, openVisualEditor } = require("./visual_editor");
+const {
+  appFiles,
+  initialModel,
+  isVisualEditorEligible,
+  openVisualEditor
+} = require("./visual_editor");
+const { attributeDiagnostic } = require("./visual_editor_diagnostics");
 
 let outputChannel;
 let reportPanel;
@@ -1554,7 +1560,7 @@ function updateVisualEditorContext(root) {
   return vscode.commands.executeCommand(
     "setContext",
     "jellyframe.visualEditorEligible",
-    Boolean(root && isVisualEditorPackage(root))
+    Boolean(root && isVisualEditorEligible(root))
   );
 }
 
@@ -2340,6 +2346,14 @@ function postEmbeddedMessage(session, message) {
   }
 }
 
+function postVisualEditorRuntime(session, state) {
+  try {
+    session.visualEditorPanel?.webview.postMessage({ type: 'runtime-state', state });
+  } catch (_) {
+    // The visual editor can close while the desktop shell is shutting down.
+  }
+}
+
 function embeddedDiagnosticsText(session) {
   const elapsed = Math.max(0, Date.now() - session.startedAt);
   return [
@@ -2594,6 +2608,21 @@ function validEmbeddedViewport(width, height) {
     width >= 64 && width <= 2048 && height >= 64 && height <= 2048;
 }
 
+function embeddedReportTarget(context, root) {
+  const choices = availableTargets(context, root);
+  if (!choices.length) return undefined;
+  const configured = String(config().get('defaultTarget', 'round-300') || '').trim();
+  return (choices.find((choice) => choice.target === configured) || choices[0]).target;
+}
+
+function requestedEmbeddedViewport(options) {
+  const viewport = options?.requestedViewport;
+  if (!viewport) return { width: 0, height: 0 };
+  const width = Number(viewport.width);
+  const height = Number(viewport.height);
+  return validEmbeddedViewport(width, height) ? { width, height } : undefined;
+}
+
 function resetEmbeddedRunState(session) {
   session.active = true;
   session.stopping = false;
@@ -2615,6 +2644,37 @@ function resetEmbeddedRunState(session) {
   session.forceStopTimer = undefined;
   session.exitPromise = undefined;
   session.resolveExit = undefined;
+  session.reportStarted = false;
+}
+
+function runEmbeddedDebugReport(context, session) {
+  if (session.reportStarted) return;
+  if (!session.reportTarget) {
+    appendEmbeddedLog(session, 'warning', 'debug report skipped: no target preset is available');
+    postVisualEditorRuntime(session, 'stopped');
+    return;
+  }
+  session.reportStarted = true;
+  const args = [
+    'check',
+    '--root', session.appRoot,
+    '--target', session.reportTarget,
+    '--build-dir', session.buildDir,
+    '--report', session.reportPath,
+    '--font-budget', session.fontBudget
+  ];
+  if (session.runtimeLog && fs.existsSync(session.runtimeLog)) {
+    args.push('--runtime-log', session.runtimeLog);
+  }
+  appendEmbeddedLog(session, 'lifecycle', `generating debug report target=${session.reportTarget}`);
+  postEmbeddedMessage(session, { type: 'status', text: isChinese() ? '正在生成调试报告...' : 'Generating debug report...' });
+  postVisualEditorRuntime(session, 'reporting');
+  void runCliWithOptions(context, args, {
+    commandName: 'debug',
+    packageRoot: session.appRoot,
+    reportPath: session.reportPath,
+    onClose: () => postVisualEditorRuntime(session, 'stopped')
+  });
 }
 
 function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
@@ -2629,8 +2689,11 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
   session.frameDir = frameDir;
   session.runId += 1;
   const runId = session.runId;
+  const runBase = `${outputBase(session.appRoot)}-debug-${runId}`;
+  session.runtimeLog = path.join(buildDir(context), 'debug', `${runBase}-runtime.log`);
+  session.reportPath = path.join(buildDir(context), `${runBase}-report.json`);
   const args = [session.launcher, '--build-dir', session.buildDir, '--app', session.appRoot,
-    '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
+    '--runtime-log', session.runtimeLog, '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
   if (session.requestedViewport.width > 0) {
     args.push('--viewport-width', String(session.requestedViewport.width),
       '--viewport-height', String(session.requestedViewport.height));
@@ -2655,6 +2718,7 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
   }
   session.child = child;
   embeddedDebugSession = session;
+  postVisualEditorRuntime(session, 'running');
   postEmbeddedMessage(session, { type: 'reset-frame' });
   postEmbeddedMessage(session, { type: 'session-state', state: 'running' });
   postEmbeddedMessage(session, { type: 'viewport-config', ...session.requestedViewport });
@@ -2692,7 +2756,9 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
     appendEmbeddedLog(session, 'error', `failed to start: ${error.message}`);
     postEmbeddedMessage(session, { type: 'status', text: `Failed to start: ${error.message}` });
     postEmbeddedMessage(session, { type: 'session-state', state: 'stopped' });
+    postVisualEditorRuntime(session, 'stopped');
     scheduleEmbeddedDiagnostics(session);
+    runEmbeddedDebugReport(context, session);
   });
   child.on('close', (code) => {
     if (session.runId !== runId) return;
@@ -2705,12 +2771,14 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
     appendEmbeddedLog(session, 'lifecycle', `shell exited with code ${code ?? 'unknown'}`);
     postEmbeddedMessage(session, { type: 'status', text: `Desktop shell stopped (exit ${code ?? 'unknown'}).` });
     postEmbeddedMessage(session, { type: 'session-state', state: 'stopped' });
+    postVisualEditorRuntime(session, 'stopped');
     scheduleEmbeddedDiagnostics(session);
+    runEmbeddedDebugReport(context, session);
     setTimeout(() => fs.rm(frameDir, { recursive: true, force: true }, () => {}), 250);
   });
 }
 
-async function debugApp(context, resourceUri) {
+async function debugApp(context, resourceUri, options = {}) {
   if (process.platform !== 'win32') {
     vscode.window.showErrorMessage('JellyFrame desktop shell is only available on Windows.');
     return;
@@ -2725,9 +2793,20 @@ async function debugApp(context, resourceUri) {
   }
   const nativeBuildDirectory = requireNativeBuildDir(context, appRequiresScripting(root));
   if (!nativeBuildDirectory) return;
+  const requestedViewport = requestedEmbeddedViewport(options);
+  if (!requestedViewport) {
+    vscode.window.showErrorMessage(isChinese()
+      ? '可视化编辑器传入的 Runtime 分辨率无效，必须是 64 到 2048 之间的整数。'
+      : 'The visual editor supplied an invalid Runtime viewport. Width and height must be whole numbers from 64 to 2048.');
+    return;
+  }
+  const reportTarget = embeddedReportTarget(context, root);
+  const fontBudget = selectedFontBudget();
+  if (!fontBudget) return;
   if (embeddedDebugSession && !embeddedDebugSession.disposed) {
     const previous = embeddedDebugSession;
     if (!previous.active && !previous.stopping && previous.appRoot === root) {
+      if (requestedViewport.width > 0) previous.requestedViewport = requestedViewport;
       previous.panel.reveal(vscode.ViewColumn.Beside);
       const resume = isChinese() ? '继续上次会话' : 'Resume previous session';
       const restart = isChinese() ? '重新启动上次会话' : 'Restart previous session';
@@ -2758,11 +2837,12 @@ async function debugApp(context, resourceUri) {
     buildProfile: path.basename(path.dirname(nativeBuildDirectory)), python: config().get('pythonPath', 'python'),
     launcher, buildDir: nativeBuildDirectory,
     shellPath: path.join(nativeBuildDirectory, process.platform === 'win32' ? 'jellyframe_desktop_shell.exe' : 'jellyframe_desktop_shell'),
-    frameDir: '', startedAt: Date.now(), viewport: { width: 1, height: 1 }, requestedViewport: { width: 0, height: 0 },
+    frameDir: '', startedAt: Date.now(), viewport: { width: 1, height: 1 }, requestedViewport,
     announcedFrames: 0, deliveredFrames: 0, droppedFrames: 0, decodeErrors: 0, inputSent: 0, stdoutLines: 0, stderrLines: 0,
     logLines: [], webviewReady: false, diagnosticsScheduled: false, stopReason: undefined, exitCode: undefined,
     latestAnnouncedSequence: 0, lastDeliveredSequence: 0, recording: false, recordingStartSequence: 0,
-    recordingActions: [], recordingPendingClick: undefined, recordingSkipped: 0, outputBuffer: '', forceStopTimer: undefined
+    recordingActions: [], recordingPendingClick: undefined, recordingSkipped: 0, outputBuffer: '', forceStopTimer: undefined,
+    reportTarget, fontBudget, reportStarted: false, runtimeLog: '', reportPath: '', visualEditorPanel: options.visualEditorPanel
   };
   embeddedDebugSession = session;
   panel.webview.onDidReceiveMessage((message) => {
@@ -2926,8 +3006,10 @@ function diagnosticSeverity(severity) {
   return vscode.DiagnosticSeverity.Warning;
 }
 
-function diagnosticRange() {
-  return new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1));
+function diagnosticRange(location) {
+  if (!location) return new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1));
+  const start = new vscode.Position(location.line, location.character);
+  return new vscode.Range(start, new vscode.Position(location.line, location.character + Math.max(1, location.length || 1)));
 }
 
 function updateReportDiagnostics(root) {
@@ -2935,9 +3017,9 @@ function updateReportDiagnostics(root) {
     return;
   }
   const diagnostics = new Map();
-  const addDiagnostic = (filePath, message, severity) => {
+  const addDiagnostic = (filePath, message, severity, location) => {
     const items = diagnostics.get(filePath) || [];
-    items.push(new vscode.Diagnostic(diagnosticRange(), message, severity));
+    items.push(new vscode.Diagnostic(diagnosticRange(location), message, severity));
     diagnostics.set(filePath, items);
   };
   const entryPath = path.resolve(root, String(lastReport.app?.entry || "jellyframe.app.json").replace(/^[/\\]/, ""));
@@ -2959,12 +3041,31 @@ function updateReportDiagnostics(root) {
   }
 
   const pipeline = lastReport.pipelineDiagnostics || {};
+  let visualModel;
+  try {
+    const modelPath = path.join(root, ".jellyframe", "visual-editor.json");
+    if (fs.existsSync(modelPath)) visualModel = JSON.parse(fs.readFileSync(modelPath, "utf8"));
+  } catch (_) {
+    visualModel = undefined;
+  }
+  let entrySource = "";
+  try {
+    if (fs.existsSync(entryPath) && fs.statSync(entryPath).isFile()) {
+      entrySource = fs.readFileSync(entryPath, "utf8");
+    }
+  } catch (_) {
+    entrySource = "";
+  }
   for (const diagnostic of pipeline.diagnostics || []) {
     const stage = diagnostic.stage || "pipeline";
     const code = diagnostic.code || "diagnostic";
     const detail = diagnostic.detail ? ` (${diagnostic.detail})` : "";
-    const message = `${stage}::${code}: ${diagnostic.message || "Pipeline diagnostic"}${detail}`;
-    addDiagnostic(entryPath, message, diagnosticSeverity(diagnostic.severity));
+    const attribution = attributeDiagnostic(diagnostic, visualModel, entrySource);
+    const ownership = attribution.nodeId
+      ? ` [visual node ${attribution.nodeId}${attribution.propertyGroup ? ` · ${attribution.propertyGroup}` : ""}]`
+      : " [visual node attribution unavailable]";
+    const message = `${stage}::${code}${ownership}: ${diagnostic.message || "Pipeline diagnostic"}${detail}`;
+    addDiagnostic(entryPath, message, diagnosticSeverity(diagnostic.severity), attribution.sourceLocation);
   }
 
   capabilityDiagnostics.clear();
@@ -3000,7 +3101,7 @@ class JellyFrameStatusProvider {
 
     const root = currentPackageRoot();
     const hasPackage = Boolean(root);
-    const visualEditorAvailable = Boolean(root && isVisualEditorPackage(root));
+    const visualEditorAvailable = Boolean(root && isVisualEditorEligible(root));
     updateVisualEditorContext(root);
     const app = hasPackage ? path.basename(root) : "No package selected";
     const selection = nativeBuildDir(this.context, appRequiresScripting(root));
@@ -3082,7 +3183,7 @@ class JellyFrameStatusProvider {
       create: "从模板新建 App",
       visualEditor: "可视化编辑 App",
       visualEditorUnavailable: "可视化编辑不可用",
-      visualEditorCompatibility: "仅支持带 .jellyframe/visual-editor.json 模型的 App；任意现有 HTML/CSS 不会自动还原。",
+      visualEditorCompatibility: "支持可视化模型或标准 blank 起始 App；任意现有 HTML/CSS 不会自动还原。",
       packageResources: "生成资源包",
       openReport: "打开最近报告",
       openCapture: "打开截图或回放文件",
@@ -3178,7 +3279,7 @@ class JellyFrameStatusProvider {
       create: "Create App from template",
       visualEditor: "Edit App visually",
       visualEditorUnavailable: "Visual editor unavailable",
-      visualEditorCompatibility: "Only Apps with a .jellyframe/visual-editor.json model are supported; arbitrary HTML/CSS is not round-tripped.",
+      visualEditorCompatibility: "Visual models and the standard blank starter are supported; arbitrary HTML/CSS is not round-tripped.",
       packageResources: "Generate resource package",
       openReport: "Open latest report",
       openCapture: "Open capture or playback file",
@@ -3228,7 +3329,7 @@ class JellyFrameStatusProvider {
           this.commandItem(labels.check, labels.actionHints.check, "jellyframe.check", "check-all", root),
           this.commandItem(labels.preview, labels.actionHints.preview, "jellyframe.preview", "preview", root),
           this.commandItem(labels.debug, labels.actionHints.debug, "jellyframe.debug", "debug-alt", root),
-          this.commandItem(labels.debugExternal, labels.actionHints.debugExternal, "jellyframe.debugExternal", "external-link", root),
+          this.commandItem(labels.debugExternal, labels.actionHints.debugExternal, "jellyframe.debugExternal", "link-external", root),
           this.commandItem(labels.playback, labels.actionHints.playback, "jellyframe.runFrameScript", "play-circle", root),
         ] : []),
         this.commandItem(labels.create, labels.actionHints.create, "jellyframe.newFromTemplate", "new-file"),
@@ -3673,11 +3774,21 @@ function templateChoices(context) {
       timer: "Local state and button interaction.",
       weather: "Data cards and package-local images."
     };
-  return templateNames(context).map((name) => ({
+  const names = templateNames(context);
+  const choices = names.map((name) => ({
     label: name,
     description: descriptions[name] || (chinese ? "官方 App 起始模板。" : "Official App starter template."),
     template: name
   }));
+  if (names.includes("blank")) {
+    choices.unshift({
+      label: chinese ? "blank（可视化编辑）" : "blank (visual editor)",
+      description: chinese ? "创建带可视化模型的最小 App，可直接打开画布。" : "Create the minimal App with a visual model and open it in the canvas.",
+      template: "blank",
+      visualEditor: true
+    });
+  }
+  return choices;
 }
 
 function suggestedAppId(directoryName) {
@@ -3822,6 +3933,13 @@ async function newFromTemplate(context) {
     selectedTarget
   ]);
   if (outcome?.code === 0 && fs.existsSync(path.join(output, "jellyframe.app.json"))) {
+    if (picked.visualEditor) {
+      const files = appFiles(output);
+      const model = initialModel(output, files);
+      const modelPath = path.join(output, ".jellyframe", "visual-editor.json");
+      fs.mkdirSync(path.dirname(modelPath), { recursive: true });
+      fs.writeFileSync(modelPath, `${JSON.stringify(model, null, 2)}\n`, "utf8");
+    }
     lastPackageRoot = output;
     await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(output), false);
   }
@@ -3840,7 +3958,7 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.validate", (resourceUri) => runPackageCommand(context, "validate", resourceUri)),
     vscode.commands.registerCommand("jellyframe.check", (resourceUri) => runPackageCommand(context, "check", resourceUri)),
     vscode.commands.registerCommand("jellyframe.preview", (resourceUri) => previewPackage(context, resourceUri)),
-    vscode.commands.registerCommand("jellyframe.debug", (resourceUri) => debugApp(context, resourceUri)),
+    vscode.commands.registerCommand("jellyframe.debug", (resourceUri, options) => debugApp(context, resourceUri, options)),
     vscode.commands.registerCommand("jellyframe.debugExternal", (resourceUri) => debugExternalApp(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.runFrameScript", (resourceUri) => runFrameScript(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.openCapture", () => openCapture(context)),
@@ -3856,7 +3974,7 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.visualEditor", async (resourceUri) => {
       const root = await packageRoot(resourceUri);
       if (!root) return;
-      if (!isVisualEditorPackage(root)) {
+      if (!isVisualEditorEligible(root)) {
         const chinese = isChinese();
         vscode.window.showWarningMessage(chinese
           ? "当前 App 没有可视化编辑模型。请从模板新建，或先使用可视化编辑创建它；任意 HTML/CSS 不会自动还原。"
