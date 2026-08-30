@@ -4215,7 +4215,9 @@ bool resolve_css_vars(std::string_view value,
         const std::size_t comma = body.find(',');
         const std::string name_token = trim(body.substr(0, comma));
         if (name_token.empty()) {
-            output.append(value.substr(start, close - start + 1));
+            if (!append_bounded(value.substr(start, close - start + 1))) {
+                return false;
+            }
             return false;
         }
         const std::string name = lowercase(name_token);

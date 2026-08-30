@@ -2028,23 +2028,9 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
         }
         Rect offscreen_bounds = has_scale_or_rotate ? source_bounds : visible_destination;
         std::size_t offscreen_pixels = 0;
-        if (!offscreen_fits_budget(offscreen_bounds, options_, active_offscreen_pixels, offscreen_pixels)) {
-            if (has_scale_or_rotate) {
-                report_diagnostic(options_.diagnostics,
-                                  DiagnosticStage::Paint,
-                                  DiagnosticSeverity::Warning,
-                                  "paint-transform-budget",
-                                  "Transformed layer exceeded the aggregate live offscreen pixel budget and was skipped",
-                                  std::to_string(offscreen_bounds.width) + "x" +
-                                      std::to_string(offscreen_bounds.height));
-                return;
-            }
-            report_diagnostic(options_.diagnostics,
-                              DiagnosticStage::Paint,
-                              DiagnosticSeverity::Warning,
-                              "paint-offscreen-budget",
-                              "Offscreen compositing buffer exceeded aggregate live budget; layer was painted by direct opacity fallback",
-                              std::to_string(offscreen_bounds.width) + "x" + std::to_string(offscreen_bounds.height));
+        const bool requires_offscreen_for_correctness = has_scale_or_rotate ||
+            has_corner_radius(layer.clip_border_radius);
+        const auto direct_opacity_fallback = [&]() {
             rasterize_with_opacity(rasterizer_,
                                    layer.display_list,
                                    target,
@@ -2057,9 +2043,34 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
             for (std::size_t index = 0; index < layer.children.size(); ++index) {
                 composite_layer(*layer.children[index],
                                 compositor_scratch->composite_bounds[bounds.children[index]],
-                                target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity,
-                                active_offscreen_pixels, scratch, compositor_scratch);
+                                target,
+                                layer_clip,
+                                layer_offset_x,
+                                layer_offset_y,
+                                layer_opacity,
+                                active_offscreen_pixels,
+                                scratch,
+                                compositor_scratch);
             }
+        };
+        if (!offscreen_fits_budget(offscreen_bounds, options_, active_offscreen_pixels, offscreen_pixels)) {
+            if (requires_offscreen_for_correctness) {
+                report_diagnostic(options_.diagnostics,
+                                  DiagnosticStage::Paint,
+                                  DiagnosticSeverity::Warning,
+                                  has_scale_or_rotate ? "paint-transform-budget" : "paint-offscreen-budget",
+                                  "Layer requiring an offscreen surface exceeded the aggregate live pixel budget and was skipped",
+                                  std::to_string(offscreen_bounds.width) + "x" +
+                                      std::to_string(offscreen_bounds.height));
+                return;
+            }
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Paint,
+                              DiagnosticSeverity::Warning,
+                              "paint-offscreen-budget",
+                              "Offscreen compositing buffer exceeded aggregate live budget; layer was painted by direct opacity fallback",
+                              std::to_string(offscreen_bounds.width) + "x" + std::to_string(offscreen_bounds.height));
+            direct_opacity_fallback();
             return;
         }
 
@@ -2071,15 +2082,28 @@ void SoftwareCompositor::composite_layer(const LayerNode& layer,
                               DiagnosticStage::Paint,
                               DiagnosticSeverity::Warning,
                               "paint-offscreen-allocation-failed",
-                              "Offscreen compositing allocation failed; layer was painted by direct opacity fallback",
+                              requires_offscreen_for_correctness
+                                  ? "Offscreen compositing allocation failed; layer was skipped to preserve paint semantics"
+                                  : "Offscreen compositing allocation failed; layer was painted by direct opacity fallback",
                               std::to_string(offscreen_bounds.width) + "x" + std::to_string(offscreen_bounds.height));
-            rasterize_with_opacity(rasterizer_, layer.display_list, target, layer_clip,
-                                   layer_offset_x, layer_offset_y, layer_opacity, 0, scratch);
-            for (std::size_t index = 0; index < layer.children.size(); ++index) {
-                composite_layer(*layer.children[index],
-                                compositor_scratch->composite_bounds[bounds.children[index]],
-                                target, layer_clip, layer_offset_x, layer_offset_y, layer_opacity,
-                                active_offscreen_pixels, scratch, compositor_scratch);
+            if (!requires_offscreen_for_correctness) {
+                direct_opacity_fallback();
+            }
+            return;
+        }
+        if (offscreen.width != offscreen_bounds.width ||
+            offscreen.height != offscreen_bounds.height ||
+            offscreen.pixels.size() != offscreen_pixels) {
+            report_diagnostic(options_.diagnostics,
+                              DiagnosticStage::Paint,
+                              DiagnosticSeverity::Warning,
+                              "paint-offscreen-allocation-failed",
+                              requires_offscreen_for_correctness
+                                  ? "Offscreen compositing allocation failed; layer was skipped to preserve paint semantics"
+                                  : "Offscreen compositing allocation failed; layer was painted by direct opacity fallback",
+                              std::to_string(offscreen_bounds.width) + "x" + std::to_string(offscreen_bounds.height));
+            if (!requires_offscreen_for_correctness) {
+                direct_opacity_fallback();
             }
             return;
         }

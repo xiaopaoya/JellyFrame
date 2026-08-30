@@ -18,6 +18,8 @@
 - [x] 收敛 grid/positioned 极值：列/行 track、gap、跨轨道分配、绝对定位 inset 推导、坐标偏移和 fallback 排布使用 bounded 算术；完整与响应式 profile 均通过 `9/9`，未改变正常尺寸语义。
 - [x] 收敛 layer-tree 绘制边界：多行文本的行号/行高、逐字 letter-spacing cursor、文本装饰线与 outline extent 使用有界坐标计算；完整与响应式 profile 均通过 `9/9`。
 - [x] 修复 CSS nesting 预算语义：深度与展开字节预算为 `0` 时按契约表示不限制，并对 selector 组合数量使用无溢出上界判断；新增零预算回归，完整与响应式 profile 均通过 `9/9`。
+- [x] 修复 CSS `var(...)` malformed 分支绕过 resolved-value 字节预算的问题；空变量名片段统一使用有界追加并增加超预算回归，完整与响应式 profile 均通过 `9/9`。
+- [x] 收敛 compositor 的 offscreen 失败回退：变换或圆角裁剪无法分配临时 surface 时跳过不正确的直接绘制，避免未变换或未裁剪内容进入目标帧；新增圆角预算回归，完整与响应式 profile 均通过 `9/9`。
 - [ ] 维护 B2 脚本运行时边界：通用 host 与 worker 代码只能包含 `script_runtime.h`；引擎 headers、value 和发现逻辑必须留在选定后端内。未经过独立批准的 RFC 与对等证据前，不引入第二后端，也不改变对外开发者口径。
 
 ## 并行：A3 内测筹备

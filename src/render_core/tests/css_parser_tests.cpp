@@ -494,6 +494,23 @@ void custom_property_expansion_is_bounded() {
           "oversized var expansion reports a style diagnostic");
 }
 
+void malformed_var_expansion_respects_the_resolved_value_budget() {
+    std::string malformed(96, 'x');
+    auto button = make_element("button");
+    button->attributes["class"] = "malformed-var";
+    VectorDiagnosticSink diagnostics;
+    StyleResolverOptions options;
+    options.diagnostics = &diagnostics;
+    options.max_resolved_value_bytes = 16;
+    StyleResolver resolver(parse(".malformed-var { color: var(," + malformed + "); }"), options);
+
+    const Style style = resolver.resolve(*button);
+    check(!(style.color.r == 0xff && style.color.g == 0xff && style.color.b == 0xff),
+          "malformed var expansion does not apply an over-budget value");
+    check(has_diagnostic_code(diagnostics, "style-declaration-ignored"),
+          "over-budget malformed var expansion reports a style diagnostic");
+}
+
 void inline_style_budgets_keep_only_complete_bounded_declarations() {
     auto long_style_button = make_element("button");
     long_style_button->attributes["style"] = "color:#123456;background:#abcdef;";
@@ -1841,6 +1858,7 @@ int main() {
         preserves_declaration_fallback_order();
         resolves_simple_css_custom_properties();
         custom_property_expansion_is_bounded();
+        malformed_var_expansion_respects_the_resolved_value_budget();
         inline_style_budgets_keep_only_complete_bounded_declarations();
         style_resolution_context_tracks_its_inputs();
         linear_gradient_background_applies_without_breaking_fallbacks();
