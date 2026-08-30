@@ -107,7 +107,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 
 | 功能 | 状态 | 行为 |
 | --- | --- | --- |
-| UTF-8 输入 | 可用 | 解析按字节/字符串处理。最终文字显示质量取决于文本后端。 |
+| UTF-8 输入 | 可用 | 合法 UTF-8 会按 scalar 保留；畸形序列会安全消费并替换为 U+FFFD。最终文字显示质量取决于文本后端。 |
 | 开始/结束标签 | 可用 | 常用标签会生成 DOM 元素。 |
 | 属性 | 可用 | 支持常见引号形式和未加引号形式。HTML 路径会规范化属性名。 |
 | 文本节点 | 可用 | DOM 文本保留作者空白。Render tree 会跳过非保留上下文中的纯格式化空白文本，避免缩进换行污染 block/grid/flex layout；Layout/rendering 会折叠普通显示文本；`pre`、`script`、`style`、`textarea` 和 `title` 保留文本。 |

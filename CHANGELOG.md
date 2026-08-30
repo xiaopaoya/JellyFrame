@@ -1546,3 +1546,5 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   cover inline custom-property mutation invalidation.
 - Layout now saturates outer box and flex-gap arithmetic for extreme valid CSS
   dimensions instead of allowing signed geometry wraparound.
+- UTF-8 scanning now rejects malformed, overlong, surrogate and out-of-range
+  sequences as bounded U+FFFD replacement scalars.

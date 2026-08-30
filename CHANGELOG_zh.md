@@ -968,3 +968,4 @@ JellyFrame Engine 的重要变更记录在这里。
 - 样式候选规则在重叠的 selector bucket 之间收集时改用指针集合去重，避免大样式表中重复候选的二次复杂度扫描。
 - CSS 恢复现在会报告未闭合注释；上下文样式测试补充 inline custom property 变更后的缓存失效校验。
 - layout 现在对外层 box 和 flex gap 的极端合法 CSS 尺寸使用饱和整数计算，避免有符号几何量溢出回绕。
+- UTF-8 扫描现在会拒绝畸形、过长、代理区和超出范围的序列，并以有界的 U+FFFD replacement scalar 替代。

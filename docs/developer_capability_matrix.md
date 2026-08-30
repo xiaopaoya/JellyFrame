@@ -121,7 +121,7 @@ JellyFrame is not ready for:
 
 | Feature | Status | Behavior |
 | --- | --- | --- |
-| UTF-8 input bytes/string | Works | Input is treated as byte/string data. Text rendering quality depends on the renderer backend. |
+| UTF-8 input bytes/string | Works | Valid UTF-8 is preserved as scalars; malformed sequences are consumed safely as U+FFFD replacement scalars. Text rendering quality depends on the renderer backend. |
 | Start/end tags | Works | Common tags become DOM elements. |
 | Attributes | Works | Quoted and common unquoted forms are parsed. Attribute names are normalized by parser paths that lowercase HTML names. |
 | Text nodes | Works | DOM text preserves author whitespace. The render tree skips pure formatting whitespace outside preserving contexts so indentation does not pollute block/grid/flex layout. Layout/rendering collapses ordinary display text while preserving `pre`, `script`, `style`, `textarea` and `title` text. |
