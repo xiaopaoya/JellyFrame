@@ -28,7 +28,7 @@ Preparation does not open the external trial. Trial access and product-usability
 
 New Render Core capability work starts only on the independently governed Core release line, or in the same approved extraction release window. Each candidate requires a reproducible author need, an RFC, positive/negative behavior tests, three-target desktop capture, capability-matrix/diagnostic/recipe updates and a hot-path benchmark.
 
-- [ ] Finish `text-wrap: balance` candidate evidence on the independent Core line. Do not add it to the Runtime author matrix until the evidence is complete and Runtime explicitly chooses its package/default-provider integration.
+- [ ] Re-evaluate and finish `text-wrap: balance` candidate evidence on the independent Core line; the current `0.6.2-dev` head does not advertise it. Do not add it to the Runtime author matrix until the evidence is complete and Runtime explicitly chooses its package/default-provider integration and lock update.
 - [ ] Choose the next Core candidate only after a reproducible author need and an RFC establish the feature, profile impact and hardware budget. Do not reopen broad CSS compatibility work by default.
 
 Core work intervenes only for a required platform-neutral contract. A reference endpoint never substitutes for hardware evidence.

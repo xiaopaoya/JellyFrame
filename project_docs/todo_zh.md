@@ -36,7 +36,7 @@
 
 新的 Render Core 能力仅在独立治理的 Core release line，或已批准的同一拆仓 release window 内开始。每个候选都需要可复现的作者需求、RFC、正/负行为测试、三 target desktop capture、能力矩阵/诊断/recipe 更新和热路径 benchmark。
 
-- [ ] 在独立 Core line 完成 `text-wrap: balance` 的 candidate evidence。完成前不得写入 Runtime 作者能力矩阵；之后还需由 Runtime 明确选择 package/default-provider integration。
+- [ ] 在独立 Core line 重新评估并完成 `text-wrap: balance` 的 candidate evidence（当前 `0.6.2-dev` 未声明该能力）。完成前不得写入 Runtime 作者能力矩阵；之后还需由 Runtime 明确选择 package/default-provider integration，并单独评审 lock 更新。
 - [ ] 只有在可复现作者需求与 RFC 明确 feature、profile impact 和 hardware budget 后，才能选择下一个 Core candidate；不得默认重新开启广泛 CSS 兼容性工作。
 
 核心侧只在需要新增平台无关 contract 时介入；不得以 reference endpoint 伪造实机完成。
