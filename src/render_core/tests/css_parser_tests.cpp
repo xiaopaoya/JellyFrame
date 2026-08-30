@@ -1684,6 +1684,52 @@ void parser_malformed_corpus_is_bounded_and_recovers_following_rules() {
     }
 }
 
+void parser_zero_rule_budgets_mean_unlimited() {
+    CssParser parser;
+    CssParserOptions options;
+    options.max_rules = 0;
+    options.max_declarations_per_rule = 0;
+    VectorDiagnosticSink diagnostics;
+    options.diagnostics = &diagnostics;
+
+    const Stylesheet stylesheet = parser.parse(
+        ".first { color: #123456; background-color: #abcdef; }"
+        ".second { color: #654321; }",
+        options);
+    check(stylesheet.size() == 2, "zero CSS rule budget does not discard all rules");
+    check(stylesheet[0].declarations.size() == 2,
+          "zero declaration budget does not discard all declarations");
+    check(!has_diagnostic_code(diagnostics, "css-rule-limit"),
+          "zero CSS rule budget does not report a false limit");
+    check(!has_diagnostic_code(diagnostics, "css-declaration-limit"),
+          "zero declaration budget does not report a false limit");
+}
+
+void parser_reports_unterminated_css_constructs() {
+    CssParser parser;
+
+    VectorDiagnosticSink string_diagnostics;
+    CssParserOptions string_options;
+    string_options.diagnostics = &string_diagnostics;
+    const Stylesheet string_stylesheet = parser.parse(
+        ".broken { color: \"#123456; }",
+        string_options);
+    check(string_stylesheet.empty(), "unterminated CSS string is not retained as a rule");
+    check(has_diagnostic_code(string_diagnostics, "css-declaration-string-malformed"),
+          "unterminated CSS string reports a precise diagnostic");
+
+    VectorDiagnosticSink block_diagnostics;
+    CssParserOptions block_options;
+    block_options.diagnostics = &block_diagnostics;
+    const Stylesheet block_stylesheet = parser.parse(
+        ".partial { color: #123456;",
+        block_options);
+    check(block_stylesheet.size() == 1,
+          "supported declarations before an unclosed CSS block remain recoverable");
+    check(has_diagnostic_code(block_diagnostics, "css-declaration-block-unclosed"),
+          "unclosed CSS declaration block reports a precise diagnostic");
+}
+
 void nonfinite_and_out_of_range_numeric_values_preserve_safe_fallbacks() {
     auto element = make_element("div");
     element->attributes["class"] = "bounded";
@@ -1811,6 +1857,8 @@ int main() {
         style_candidate_cache_canonicalizes_relevant_class_sets();
         parser_limits_unbounded_css_fields_without_losing_following_rules();
         parser_malformed_corpus_is_bounded_and_recovers_following_rules();
+        parser_zero_rule_budgets_mean_unlimited();
+        parser_reports_unterminated_css_constructs();
         nonfinite_and_out_of_range_numeric_values_preserve_safe_fallbacks();
         text_overflow_is_specified_but_not_inherited_by_nested_elements();
     } catch (const std::exception& error) {

@@ -112,6 +112,12 @@ cascade。Parser 接受常见语法，在 at-rule 和 declaration 边界恢复�
 
 ## 当前 parser 限制
 
+直接使用 parser 时，`max_rules`、`max_declarations_per_rule`、
+`max_input_bytes`、`max_nesting_expansion_bytes`、`max_selector_bytes`、
+`max_at_rule_prelude_bytes` 和 `max_declaration_value_bytes` 使用 `0` 表示不限制。
+生产宿主应通过 `HostBudgets` 提供非零上限；预算适配层会把为零的宿主预算规整为
+有界的最小值，避免嵌入式运行时失去资源边界。
+
 - `max_rules`：4096
 - `max_declarations_per_rule`：256
 - `max_nesting_depth`：8

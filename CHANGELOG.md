@@ -1537,3 +1537,6 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - Used fixed cascade slots instead of per-node cascade hash maps.
 - Kept layer creation sparse: ordinary boxes paint into their parent layer until
   clipping, stacking or compositing boundaries require a layer.
+- Render Core CSS parsing now gives zero direct parser rule/declaration budgets
+  the same unlimited meaning as its other optional parser limits, reports
+  unterminated strings and declaration blocks, and keeps recovery deterministic.

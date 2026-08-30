@@ -448,7 +448,7 @@ pass，但 framebuffer 阶段已经能对非结构性变化做有界 dirty recta
 
 ## 当前硬限制
 
-- CSS parser：`max_rules` 4096，`max_declarations_per_rule` 256，
+- CSS parser：`max_rules` 4096，`max_declarations_per_rule` 256（直接 parser 选项中 `0` 表示不限制；宿主预算适配层会把零值规整为有界最小值），
   `max_nesting_depth` 8，默认 media viewport 为 360x240。
 - 默认 host budgets 会限制 DOM nodes、render objects、layout boxes、layers、
   display commands、dirty rects、timers、listeners 和 framebuffer pixels。

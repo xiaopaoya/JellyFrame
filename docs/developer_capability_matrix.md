@@ -474,7 +474,7 @@ changes.
 
 ## Current Hard Limits
 
-- CSS parser: `max_rules` 4096, `max_declarations_per_rule` 256,
+- CSS parser: `max_rules` 4096, `max_declarations_per_rule` 256 (direct parser options use `0` as unlimited; host budget adapters normalize zero to a bounded minimum),
   `max_nesting_depth` 8, default media viewport 360x240.
 - Default host budgets cap DOM nodes, render objects, layout boxes, layers,
   display commands, dirty rects, timers, listeners and framebuffer pixels.
