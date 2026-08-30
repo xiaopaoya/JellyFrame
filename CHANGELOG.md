@@ -1544,3 +1544,5 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   selector buckets, avoiding quadratic duplicate scans on large stylesheets.
 - CSS recovery now diagnoses unterminated comments, and contextual style tests
   cover inline custom-property mutation invalidation.
+- Layout now saturates outer box and flex-gap arithmetic for extreme valid CSS
+  dimensions instead of allowing signed geometry wraparound.

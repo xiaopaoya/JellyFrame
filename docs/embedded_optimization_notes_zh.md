@@ -29,6 +29,7 @@
   语义保持正确。该缓存不是 computed-style sharing。
 - 从重叠的 id/class/tag bucket 收集候选规则时，先用逐次查找的指针集合去重，再按 source order 排序；
   大样式表中存在大量重叠 selector 时不再执行二次复杂度的重复扫描。
+- layout 外层 box 构造和 flex gap 计算使用 checked/saturating 整数 helper；极端但语法合法的 CSS 尺寸不会再把有符号 `int` 几何量回绕为负尺寸。
 - DOM attributes 使用紧凑顺序 `AttributeList`，不再为每个节点维护 attribute hash map。
 - DOM event listener storage 惰性分配，没有 listener 的节点不携带空 listener table。
 - DOM dirty bits 会向祖先传播，因此根节点 dirty 检查为 O(1)，dirty 清理会跳过干净子树，

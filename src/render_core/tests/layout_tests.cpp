@@ -786,6 +786,22 @@ void nowrap_text_overflow_reports_diagnostic() {
     check(found, "nowrap overflow emits layout diagnostic");
 }
 
+void layout_saturates_extreme_box_values() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><main id='extreme'>Content</main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "#extreme { width: 2147483647px; padding: 2147483647px; "
+        "border-width: 2147483647px; margin: 2147483647px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*RenderTreeBuilder(resolver).build(*document), 240, 240);
+    const LayoutBox* extreme = find_first_by_id(*layout_tree, "extreme");
+    check(extreme != nullptr, "extreme layout fixture exists");
+    check(extreme->rect.width >= 0 && extreme->rect.height >= 0,
+          "extreme box arithmetic does not wrap dimensions negative");
+}
+
 } // namespace
 
 int main() {
@@ -793,6 +809,7 @@ int main() {
         layout_tree_can_use_monotonic_arena();
         layout_tree_respects_box_budget();
         layout_tree_reports_box_budget_diagnostic();
+        layout_saturates_extreme_box_values();
         layout_tree_reports_depth_budget_diagnostic();
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         flex_row_distributes_grow_space();

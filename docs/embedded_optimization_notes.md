@@ -38,6 +38,9 @@ small wearable devices.
 - Candidate rules from overlapping id/class/tag buckets are deduplicated with
   a per-lookup pointer set before source-order sorting, avoiding quadratic
   duplicate scans on large stylesheets.
+- Layout box dimensions and flex gaps use checked, saturating integer helpers
+  at the outer box construction boundary, so extreme but syntactically valid
+  CSS dimensions cannot wrap signed `int` geometry into negative sizes.
 - DOM attributes use compact sequential `AttributeList` storage instead of a
   per-node hash map.
 - DOM event listener storage is allocated lazily, so nodes without listeners do
