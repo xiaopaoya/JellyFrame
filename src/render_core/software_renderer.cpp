@@ -50,11 +50,13 @@ bool rounded_clip_affects_rect(const RasterRoundedRect& rounded, Rect rect) {
     };
     const CornerRadii& radii = rounded.radii;
     return overlaps_corner(rounded.left, rounded.top, radii.top_left) ||
-        overlaps_corner(rounded.right - radii.top_right, rounded.top, radii.top_right) ||
-        overlaps_corner(rounded.right - radii.bottom_right,
-                        rounded.bottom - radii.bottom_right,
+        overlaps_corner(safe_add(rounded.right, safe_negate(radii.top_right)), rounded.top, radii.top_right) ||
+        overlaps_corner(safe_add(rounded.right, safe_negate(radii.bottom_right)),
+                        safe_add(rounded.bottom, safe_negate(radii.bottom_right)),
                         radii.bottom_right) ||
-        overlaps_corner(rounded.left, rounded.bottom - radii.bottom_left, radii.bottom_left);
+        overlaps_corner(rounded.left,
+                        safe_add(rounded.bottom, safe_negate(radii.bottom_left)),
+                        radii.bottom_left);
 }
 
 bool rounded_clip_affects_row(const RasterRoundedRect& rounded, int y) {
@@ -462,8 +464,10 @@ void fill_opaque_rounded_rect(FrameBuffer& target, Rect rect, Rect clip, Color c
           radii.top_left == radii.bottom_left)) {
         const RasterRoundedRect rounded = prepare_rounded_rect(rect, border_radius);
         const Rect visible = clipped_target_rect(target, rect, clip);
-        for (int y = visible.y; y < visible.y + visible.height; ++y) {
-            for (int x = visible.x; x < visible.x + visible.width; ++x) {
+        const int y_end = safe_edge(visible.y, visible.height);
+        const int x_end = safe_edge(visible.x, visible.width);
+        for (int y = visible.y; y < y_end; ++y) {
+            for (int x = visible.x; x < x_end; ++x) {
                 const int coverage = rounded_rect_coverage(rounded, x, y);
                 if (coverage == 255) {
                     target.pixel(x, y) = color;
@@ -475,18 +479,21 @@ void fill_opaque_rounded_rect(FrameBuffer& target, Rect rect, Rect clip, Color c
     }
     border_radius = std::min(radii.top_left, std::min(rect.width, rect.height) / 2);
 
+    const int twice_radius = safe_add(border_radius, border_radius);
+    const int inner_width = std::max(0, safe_add(rect.width, safe_negate(twice_radius)));
+    const int inner_height = std::max(0, safe_add(rect.height, safe_negate(twice_radius)));
     fill_opaque_region(target,
-                       Rect{rect.x, rect.y + border_radius, rect.width, rect.height - border_radius * 2},
+                       Rect{rect.x, safe_add(rect.y, border_radius), rect.width, inner_height},
                        clip,
                        color);
     fill_opaque_region(target,
-                       Rect{rect.x + border_radius, rect.y, rect.width - border_radius * 2, border_radius},
+                       Rect{safe_add(rect.x, border_radius), rect.y, inner_width, border_radius},
                        clip,
                        color);
     fill_opaque_region(target,
-                       Rect{rect.x + border_radius,
-                            rect.y + rect.height - border_radius,
-                            rect.width - border_radius * 2,
+                       Rect{safe_add(rect.x, border_radius),
+                            safe_add(rect.y, safe_add(rect.height, safe_negate(border_radius))),
+                            inner_width,
                             border_radius},
                        clip,
                        color);
@@ -554,8 +561,10 @@ void fill_rect_clipped(FrameBuffer& target, Rect rect, Rect clip, Color color, i
         return;
     }
     const RasterRoundedRect rounded = prepare_rounded_rect(rect, border_radius);
-    for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
-        for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
+    const int y_end = safe_edge(clipped.y, clipped.height);
+    const int x_end = safe_edge(clipped.x, clipped.width);
+    for (int y = clipped.y; y < y_end; ++y) {
+        for (int x = clipped.x; x < x_end; ++x) {
             const int coverage = rounded_rect_coverage(rounded, x, y);
             if (coverage <= 0) {
                 continue;
@@ -579,11 +588,12 @@ void stroke_rect(FrameBuffer& target, Rect rect, Color color, int stroke_width, 
         return;
     }
 
+    const int twice_stroke = safe_add(stroke_width, stroke_width);
     const Rect inner{
-        rect.x + stroke_width,
-        rect.y + stroke_width,
-        std::max(0, rect.width - stroke_width * 2),
-        std::max(0, rect.height - stroke_width * 2),
+        safe_add(rect.x, stroke_width),
+        safe_add(rect.y, stroke_width),
+        std::max(0, safe_add(rect.width, safe_negate(twice_stroke))),
+        std::max(0, safe_add(rect.height, safe_negate(twice_stroke))),
     };
     const int inner_radius = expand_corner_radii(border_radius, -stroke_width);
     const RasterRoundedRect outer = prepare_rounded_rect(rect, border_radius);
@@ -620,11 +630,12 @@ void stroke_rect_clipped(FrameBuffer& target, Rect rect, Rect clip, Color color,
         return;
     }
 
+    const int twice_stroke = safe_add(stroke_width, stroke_width);
     const Rect inner{
-        rect.x + stroke_width,
-        rect.y + stroke_width,
-        std::max(0, rect.width - stroke_width * 2),
-        std::max(0, rect.height - stroke_width * 2),
+        safe_add(rect.x, stroke_width),
+        safe_add(rect.y, stroke_width),
+        std::max(0, safe_add(rect.width, safe_negate(twice_stroke))),
+        std::max(0, safe_add(rect.height, safe_negate(twice_stroke))),
     };
     const int inner_radius = expand_corner_radii(border_radius, -stroke_width);
     const RasterRoundedRect outer = prepare_rounded_rect(rect, border_radius);
@@ -1549,8 +1560,10 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
                           Color{226, 232, 240, 255});
             }
             const RasterRoundedRect rounded = prepare_rounded_rect(rect, command.border_radius);
-            for (int y = visible.y; y < visible.y + visible.height; ++y) {
-                for (int x = visible.x; x < visible.x + visible.width; ++x) {
+            const int y_end = safe_edge(visible.y, visible.height);
+            const int x_end = safe_edge(visible.x, visible.width);
+            for (int y = visible.y; y < y_end; ++y) {
+                for (int x = visible.x; x < x_end; ++x) {
                     blend_pixel(target,
                                 x,
                                 y,
@@ -2172,9 +2185,23 @@ void write_bmp(const FrameBuffer& frame_buffer, const std::string& path) {
         throw std::runtime_error("failed to open output image");
     }
 
-    const int row_stride = ((frame_buffer.width * 3 + 3) / 4) * 4;
-    const int pixel_bytes = row_stride * frame_buffer.height;
-    const int file_bytes = 14 + 40 + pixel_bytes;
+    if (frame_buffer.width <= 0 || frame_buffer.height <= 0) {
+        throw std::runtime_error("cannot write an empty BMP frame");
+    }
+    std::size_t row_bytes = 0;
+    std::size_t row_stride = 0;
+    std::size_t pixel_bytes = 0;
+    std::size_t file_bytes = 0;
+    if (!checked_multiply(static_cast<std::size_t>(frame_buffer.width), 3U, row_bytes) ||
+        !checked_add(row_bytes, 3U, row_stride)) {
+        throw std::runtime_error("BMP row size overflow");
+    }
+    row_stride = (row_stride / 4U) * 4U;
+    if (!checked_multiply(row_stride, static_cast<std::size_t>(frame_buffer.height), pixel_bytes) ||
+        !checked_add(14U + 40U, pixel_bytes, file_bytes) ||
+        file_bytes > std::numeric_limits<std::uint32_t>::max()) {
+        throw std::runtime_error("BMP image is too large");
+    }
 
     const auto put_u16 = [&](std::uint16_t value) {
         output.put(static_cast<char>(value & 0xffU));
@@ -2222,7 +2249,7 @@ void write_bmp(const FrameBuffer& frame_buffer, const std::string& path) {
             output.put(static_cast<char>(pixel.g));
             output.put(static_cast<char>(pixel.r));
         }
-        output.write(padding.data(), row_stride - frame_buffer.width * 3);
+        output.write(padding.data(), static_cast<std::streamsize>(row_stride - row_bytes));
     }
 }
 
