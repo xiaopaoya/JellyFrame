@@ -1539,11 +1539,6 @@ bool append_nesting_rule(std::string& output,
     if (trim(declarations).empty()) {
         return true;
     }
-    const std::size_t required = selector.size() + declarations.size() + 2;
-    if (required > budget.remaining_bytes) {
-        budget.report("CSS nesting expansion exceeded its bounded parser budget and was truncated", selector);
-        return false;
-    }
     return budget.append(output, selector, selector) && budget.append_char(output, '{', selector) &&
            budget.append(output, declarations, selector) && budget.append_char(output, '}', selector);
 }
@@ -1591,7 +1586,9 @@ bool expand_single_level_nesting_rule(std::string_view parent_selector,
             const std::vector<std::string> parents = split_top_level_commas(parent_selector);
             const std::vector<std::string> nested_selectors = split_top_level_commas(nested_selector);
             constexpr std::size_t kMaxExpandedSelectors = 16;
-            if (parents.empty() || nested_selectors.empty() || parents.size() * nested_selectors.size() > kMaxExpandedSelectors) {
+            const bool expansion_too_large = parents.empty() || nested_selectors.empty() ||
+                parents.size() > kMaxExpandedSelectors / std::max<std::size_t>(1, nested_selectors.size());
+            if (expansion_too_large) {
                 report_diagnostic(budget.diagnostics, DiagnosticStage::Css, DiagnosticSeverity::Warning,
                                   "css-nesting-skipped", "Nested selector expansion exceeded the bounded subset",
                                   nested_selector);
@@ -1620,7 +1617,7 @@ bool expand_single_level_css_nesting(std::string_view source,
     if (source.find('&') == std::string_view::npos) {
         return budget.append(output, source, {});
     }
-    if (depth >= budget.max_depth) {
+    if (budget.max_depth != 0 && depth >= budget.max_depth) {
         budget.report("CSS nesting exceeded its bounded parser depth and was skipped", {});
         return false;
     }
@@ -2348,9 +2345,11 @@ Stylesheet CssParser::parse(const std::string& source, const CssParserOptions& o
     const bool uses_nesting_marker = bounded_source.find('&') != std::string_view::npos;
     std::string expanded;
     if (uses_nesting_marker) {
-        const std::size_t expansion_limit = options.max_nesting_expansion_bytes == 0
+        const std::size_t expansion_limit = options.max_nesting_expansion_bytes != 0
+            ? options.max_nesting_expansion_bytes
+            : options.max_input_bytes != 0
             ? options.max_input_bytes
-            : options.max_nesting_expansion_bytes;
+            : std::numeric_limits<std::size_t>::max();
         NestingExpansionBudget budget{expansion_limit, options.max_nesting_depth, options.diagnostics};
         expanded.reserve(std::min(bounded_source.size(), expansion_limit));
         expand_single_level_css_nesting(bounded_source, expanded, budget, 0);

@@ -1715,6 +1715,26 @@ void parser_zero_rule_budgets_mean_unlimited() {
           "zero declaration budget does not report a false limit");
 }
 
+void parser_zero_nesting_budgets_mean_unlimited() {
+    CssParser parser;
+    CssParserOptions options;
+    options.max_input_bytes = 0;
+    options.max_nesting_depth = 0;
+    options.max_nesting_expansion_bytes = 0;
+    VectorDiagnosticSink diagnostics;
+    options.diagnostics = &diagnostics;
+
+    const Stylesheet stylesheet = parser.parse(
+        ".card { color: #123456; &:hover { color: #abcdef; } }",
+        options);
+    check(stylesheet.size() == 2,
+          "zero nesting depth and expansion budgets preserve supported nesting");
+    check(stylesheet[1].selector == ".card:hover",
+          "unlimited nesting budget expands the explicit parent selector");
+    check(!has_diagnostic_code(diagnostics, "css-nesting-expansion-limit"),
+          "zero nesting budgets do not report a false expansion limit");
+}
+
 void parser_reports_unterminated_css_constructs() {
     CssParser parser;
 
@@ -1878,6 +1898,7 @@ int main() {
         parser_limits_unbounded_css_fields_without_losing_following_rules();
         parser_malformed_corpus_is_bounded_and_recovers_following_rules();
         parser_zero_rule_budgets_mean_unlimited();
+        parser_zero_nesting_budgets_mean_unlimited();
         parser_reports_unterminated_css_constructs();
         nonfinite_and_out_of_range_numeric_values_preserve_safe_fallbacks();
         text_overflow_is_specified_but_not_inherited_by_nested_elements();

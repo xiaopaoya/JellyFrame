@@ -17,6 +17,7 @@
 - [x] 收敛布局定位极值：flex wrap、inline flow、文本总高度、flex 汇总/对齐和递归 `shift_box` 使用 bounded 算术，换行行数转换有明确上限；完整与响应式 Core profile `9/9` 通过。
 - [x] 收敛 grid/positioned 极值：列/行 track、gap、跨轨道分配、绝对定位 inset 推导、坐标偏移和 fallback 排布使用 bounded 算术；完整与响应式 profile 均通过 `9/9`，未改变正常尺寸语义。
 - [x] 收敛 layer-tree 绘制边界：多行文本的行号/行高、逐字 letter-spacing cursor、文本装饰线与 outline extent 使用有界坐标计算；完整与响应式 profile 均通过 `9/9`。
+- [x] 修复 CSS nesting 预算语义：深度与展开字节预算为 `0` 时按契约表示不限制，并对 selector 组合数量使用无溢出上界判断；新增零预算回归，完整与响应式 profile 均通过 `9/9`。
 - [ ] 维护 B2 脚本运行时边界：通用 host 与 worker 代码只能包含 `script_runtime.h`；引擎 headers、value 和发现逻辑必须留在选定后端内。未经过独立批准的 RFC 与对等证据前，不引入第二后端，也不改变对外开发者口径。
 
 ## 并行：A3 内测筹备
