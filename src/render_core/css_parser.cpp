@@ -1051,7 +1051,7 @@ bool is_supported_declaration_feature(std::string_view feature) {
                                         "center", "end", "flex-end"});
     }
     if (property == "flex-wrap") {
-        return supported_keyword(value, {"wrap", "wrap-reverse", "nowrap"});
+        return supported_keyword(value, {"wrap", "nowrap"});
     }
     if (property == "grid-template-columns" || property == "grid-template-rows") {
         return value.find("minmax(") != std::string::npos || value.find("repeat(") != std::string::npos ||

@@ -261,7 +261,7 @@ clear older supported fallback declarations.
 | `order` | Subset | Signed integer order for direct flex children. A nonzero order creates one stable temporary ordering view for layout and same-stack paint order; default-zero flex containers retain the allocation-free source-order path. This is not a full order-modified document model for browser APIs. |
 | `flex` | Subset | Shorthand supports common `none`, `auto`, `<grow>`, `<grow> <basis>` and `<grow> <shrink> <basis>` forms for simplified row and non-wrapping column flex layouts. Full Flexbox grammar is absent. |
 | `flex-grow` / `flex-shrink` / `flex-basis` | Subset | Non-negative numeric grow/shrink factors and supported length/`auto` basis values participate in simplified row and non-wrapping column sizing passes. In a column, basis is the height basis. |
-| `flex-wrap` | Subset | `wrap`/`wrap-reverse` enable simple row wrapping. Column flex is intentionally non-wrapping. Wrapped lines use fixed/basis probing and do not run the full per-line Flexbox algorithm. |
+| `flex-wrap` | Subset | `wrap` enables simple row wrapping. Column flex is intentionally non-wrapping; `wrap-reverse` is rejected rather than silently treated as `wrap`. Wrapped lines apply the documented cross-axis alignment subset, not the full browser Flexbox line algorithm. |
 | `gap` | Works | 1-2 length values for grid and simplified flex support. |
 | `row-gap` / `column-gap` | Works | Length values. |
 | `grid-template-columns` | Subset | Extracts minimum track from `repeat(auto-fit, minmax(<length>, 1fr))`, `minmax(<length>, 1fr)`, a length, or `1fr`. |

@@ -246,7 +246,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | `order` | 子集 | 直接 flex child 可使用有符号整数 order。只有存在非零 order 时，layout 与同 stack 绘制顺序才构造一次稳定临时排序视图；默认全零的 flex 容器继续走无分配 source-order 路径。它不是供浏览器 API 使用的完整 order-modified document model。 |
 | `flex` | 子集 | Shorthand 支持常见 `none`、`auto`、`<grow>`、`<grow> <basis>` 和 `<grow> <shrink> <basis>` 形式，用于简化 row 和不换行 column flex layout。完整 Flexbox 语法不支持。 |
 | `flex-grow` / `flex-shrink` / `flex-basis` | 子集 | 非负数字 grow/shrink 因子和受支持长度/`auto` basis 会参与简化 row 和不换行 column sizing pass；column 中 basis 是高度基准。 |
-| `flex-wrap` | 子集 | `wrap`/`wrap-reverse` 启用简单 row 换行。column flex 有意保持不换行。换行后只做固定/basis 探测，不执行完整逐行 Flexbox 算法。 |
+| `flex-wrap` | 子集 | `wrap` 启用简单 row 换行。column flex 有意保持不换行；`wrap-reverse` 会被拒绝，不会被静默视为 `wrap`。换行后的 line 使用文档化交叉轴对齐子集，不执行完整浏览器 Flexbox 逐行算法。 |
 | `gap` | 可用 | 1-2 个长度值，用于 grid 和简化 flex。 |
 | `row-gap` / `column-gap` | 可用 | 长度值。 |
 | `grid-template-columns` | 子集 | 从 `repeat(auto-fit, minmax(<length>, 1fr))`、`minmax(<length>, 1fr)`、单个长度或 `1fr` 中提取最小轨道。 |

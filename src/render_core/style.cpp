@@ -3969,7 +3969,7 @@ bool apply_declaration(Style& style,
         return true;
     } else if (property == "flex-wrap") {
         const std::string lowered = lowercase(trim(value));
-        if (lowered == "wrap" || lowered == "wrap-reverse") {
+        if (lowered == "wrap") {
             style.flex_wrap = true;
         } else if (lowered == "nowrap") {
             style.flex_wrap = false;

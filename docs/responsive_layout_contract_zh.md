@@ -42,8 +42,9 @@ Flex 是普通 App 响应式布局的首选原语：
 - 支持 `row` 和 `column`。
 - 直接子节点支持有限的 `flex-grow`、`flex-shrink`、`flex-basis`、`order` 和 `align-self`。
 - `align-items` 和 `justify-content` 支持 `start`、`center`、`end` 及文档化的分布值；交叉轴的 `stretch` 有效。值会按当前轴解析，不是绝对定位的互换别名。
+- `stretch` 只改变交叉轴为 `auto` 的尺寸；显式交叉轴宽高保持优先，margin、padding 和 border 都计入可用交叉轴范围。
 - `gap`、`row-gap`、`column-gap` 是有界像素/整数值。
-- `flex-wrap` 是有限的行/列换行模式，不替代滚动，也不提供浏览器的行平衡算法。
+- `flex-wrap: wrap` 是有限的 row 换行模式；column flex 保持不换行，`wrap-reverse` 会被拒绝而不是近似处理。它不替代滚动，也不提供浏览器的行平衡算法；每个换行后的 line 都有独立的交叉轴对齐上下文。
 - Flex 尺寸以整数并受边界限制，余数按源码顺序确定性分配。
 
 Grid 保持较窄的范围：使用 2 到 4 个固定或 `1fr` 轨道、有限的

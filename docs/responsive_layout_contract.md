@@ -52,9 +52,14 @@ Flex is the preferred responsive primitive for ordinary App layouts:
   the documented distribution values. `stretch` is valid for cross-axis
   alignment. These values are resolved in the container's current axis; they
   are not interchangeable aliases for absolute positioning.
+- `stretch` changes only an auto cross-axis size. An explicit cross-axis
+  width/height remains authoritative; margins, padding and borders stay inside
+  the available cross-axis extent.
 - `gap`, `row-gap` and `column-gap` are pixel/integer bounded values.
-- `flex-wrap` is supported as a bounded row/column wrapping mode. It is not a
-  replacement for scroll and does not provide browser line balancing.
+- `flex-wrap: wrap` is supported as a bounded row-wrapping mode. Column flex
+  remains non-wrapping, and `wrap-reverse` is rejected rather than approximated.
+  It is not a replacement for scroll and does not provide browser line
+  balancing. Each resulting line is its own cross-axis alignment context.
 - Flex sizing is integer and bounded. Remainders are distributed deterministically
   in source/order order, so adjacent targets can differ by at most the integer
   rounding remainder.

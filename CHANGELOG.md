@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-08-15; Applies to: 0.6.0-dev
+> Last updated: 2026-08-30; Applies to: 0.6.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -16,6 +16,15 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   profile gate and regression coverage land together.
 
 ### Changed
+
+- Render Core Flex layout now applies cross-axis `stretch` only to auto-sized
+  items, preserves explicit cross-axis dimensions, accounts for margins,
+  padding and borders, and aligns wrapped items within their own flex line.
+  The responsive layout matrix and cross-axis regression coverage run in full,
+  reduced and Flex-disabled profiles.
+
+- `flex-wrap: wrap-reverse` is now rejected with the normal style diagnostic
+  instead of being silently approximated as `wrap`.
 
 - Script-task sealed frame and service-payload leases now use a 64-bit opaque
   ID with a 16-bit slot index and 48-bit reuse generation. This prevents an

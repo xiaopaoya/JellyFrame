@@ -1354,6 +1354,19 @@ void flex_direction_column_applies() {
     check(style.flex_direction == FlexDirection::Column, "column flex direction parses");
 }
 
+void flex_wrap_reverse_is_rejected_not_approximated() {
+    auto panel = make_element("section");
+    VectorDiagnosticSink diagnostics;
+    StyleResolverOptions options;
+    options.diagnostics = &diagnostics;
+    StyleResolver resolver(parse("section { display: flex; flex-wrap: wrap-reverse; }"), options);
+
+    const Style style = resolver.resolve(*panel);
+    check(!style.flex_wrap, "unsupported wrap-reverse does not become ordinary wrapping");
+    check(has_diagnostic_code(diagnostics, "style-declaration-ignored"),
+          "unsupported wrap-reverse reports an actionable style diagnostic");
+}
+
 void align_self_applies() {
     auto item = make_element("div");
     StyleResolver resolver(parse("div { align-self: center; }"));
@@ -1731,6 +1744,7 @@ int main() {
         modern_length_functions_and_flex_wrap_apply();
         flex_sizing_properties_apply();
         flex_direction_column_applies();
+        flex_wrap_reverse_is_rejected_not_approximated();
         align_self_applies();
         align_content_applies();
 #endif

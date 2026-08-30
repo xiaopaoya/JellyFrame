@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-08-15；适用版本：0.6.0-dev
+> 最后更新：2026-08-30；适用版本：0.6.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -13,6 +13,12 @@ JellyFrame Engine 的重要变更记录在这里。
 - 启动外部开发者试用线：完善构建 profile/模块证据、打包与启动器工作流，并针对能力缺口做有边界的补全。任何新的浏览器兼容承诺都必须同时落入能力矩阵、profile gate 和回归测试。
 
 ### 变更
+
+- Render Core Flex 布局现在只对交叉轴为 `auto` 的 item 应用 `stretch`，保留显式交叉轴尺寸，正确计入
+  margin、padding 和 border，并在每个换行后的独立 flex line 内执行对齐。响应式矩阵和交叉轴回归已在
+  完整、精简及关闭 Flex 的 profile 中运行。
+
+- `flex-wrap: wrap-reverse` 现在会被正常 style diagnostic 拒绝，不再静默近似为 `wrap`。
 
 - Script-task 的 sealed frame 与 service-payload lease 现使用 64-bit 不透明 ID：16-bit slot index
   配合 48-bit reuse generation，避免旧 lease 在原有 16-bit generation 循环后与新发布的值别名。

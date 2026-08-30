@@ -317,6 +317,50 @@ AlignItems flex_cross_axis_alignment(const LayoutBox& child, AlignItems parent_a
     return child.style.align_self == AlignItems::Auto ? parent_alignment : child.style.align_self;
 }
 
+bool flex_cross_size_is_auto(const Style& style, bool row_direction) {
+    return row_direction
+        ? style.height < 0 && style.height_percent < 0
+        : style.width < 0 && style.width_percent < 0;
+}
+
+int flex_bounded_sum(int first, int second) {
+    return static_cast<int>(std::clamp<std::int64_t>(
+        static_cast<std::int64_t>(first) + second,
+        std::numeric_limits<int>::min(),
+        std::numeric_limits<int>::max()));
+}
+
+int flex_stretch_dimension(const Style& style, int outer_size, bool vertical) {
+    const int margins = vertical
+        ? flex_bounded_sum(style.margin.top, style.margin.bottom)
+        : flex_bounded_sum(style.margin.left, style.margin.right);
+    const int edges = vertical
+        ? flex_bounded_sum(vertical_edges(style.border_width), vertical_edges(style.padding))
+        : flex_bounded_sum(horizontal_edges(style.border_width), horizontal_edges(style.padding));
+    const int target_outer_size = static_cast<int>(std::clamp<std::int64_t>(
+        static_cast<std::int64_t>(outer_size) - margins, 0, std::numeric_limits<int>::max()));
+    return style.box_sizing_border_box
+        ? target_outer_size
+        : std::max(0, target_outer_size - edges);
+}
+
+void set_flex_stretch_cross_size(Style& style, int outer_size, bool row_direction) {
+    if (row_direction) {
+        style.height = flex_stretch_dimension(style, outer_size, true);
+        style.height_percent = -1;
+    } else {
+        style.width = flex_stretch_dimension(style, outer_size, false);
+        style.width_percent = -1;
+    }
+}
+
+int flex_outer_cross_size(const LayoutBox& child, bool row_direction) {
+    const int margins = row_direction
+        ? flex_bounded_sum(child.style.margin.top, child.style.margin.bottom)
+        : flex_bounded_sum(child.style.margin.left, child.style.margin.right);
+    return flex_bounded_sum(row_direction ? child.rect.height : child.rect.width, margins);
+}
+
 std::vector<LayoutBox*> ordered_flex_children(LayoutBox& box) {
     if (box.style.display != Display::Flex) {
         return {};
@@ -357,10 +401,8 @@ int layout_wrapped_flex_children(LayoutBox& box,
     const bool distribute_lines = box.style.align_content != JustifyContent::Start &&
         (fixed_height >= 0 || minimum_height > 0);
     std::vector<FlexWrapLine> lines;
-    if (distribute_lines) {
-        lines.reserve(box.children.size());
-        lines.push_back(FlexWrapLine{content_y, 0, {}});
-    }
+    lines.reserve(box.children.size());
+    lines.push_back(FlexWrapLine{content_y, 0, {}});
     int cursor_x = content_x;
     int line_y = content_y;
     int line_height = 0;
@@ -372,10 +414,8 @@ int layout_wrapped_flex_children(LayoutBox& box,
         const int child_height = child.rect.height + child.style.margin.top + child.style.margin.bottom;
         const bool should_wrap = cursor_x > content_x && cursor_x + child_width > content_x + max_line_width;
         if (should_wrap) {
-            if (distribute_lines) {
-                lines.back().height = line_height;
-                lines.push_back(FlexWrapLine{line_y + std::max(1, line_height) + box.style.row_gap, 0, {}});
-            }
+            lines.back().height = line_height;
+            lines.push_back(FlexWrapLine{line_y + std::max(1, line_height) + box.style.row_gap, 0, {}});
             line_y += std::max(1, line_height) + box.style.row_gap;
             cursor_x = content_x;
             line_height = 0;
@@ -383,9 +423,7 @@ int layout_wrapped_flex_children(LayoutBox& box,
         const int dx = cursor_x + child.style.margin.left - child.rect.x;
         const int dy = line_y + child.style.margin.top - child.rect.y;
         shift_box(child, dx, dy);
-        if (distribute_lines) {
-            lines.back().children.push_back(&child);
-        }
+        lines.back().children.push_back(&child);
         cursor_x += child_width + box.style.column_gap;
         line_height = std::max(line_height, child_height);
     };
@@ -401,11 +439,39 @@ int layout_wrapped_flex_children(LayoutBox& box,
         }
     }
     const int natural_height = line_y - content_y + std::max(0, line_height);
+    lines.back().height = line_height;
+
+    // A wrapped line has its own cross-axis alignment context. Relayout only
+    // auto-sized stretch items; explicit dimensions remain authoritative.
+    for (FlexWrapLine& line : lines) {
+        const int line_cross_size = std::max(1, line.height);
+        for (LayoutBox* child : line.children) {
+            const AlignItems alignment = flex_cross_axis_alignment(*child, box.style.align_items);
+            if (alignment == AlignItems::Stretch && flex_cross_size_is_auto(child->style, true)) {
+                const int old_height = child->style.height;
+                const int old_height_percent = child->style.height_percent;
+                set_flex_stretch_cross_size(child->style, line_cross_size, true);
+                layout_child_for_width(*child, std::max(0, child->rect.width), false);
+                child->style.height = old_height;
+                child->style.height_percent = old_height_percent;
+            }
+            const int child_outer_height = flex_outer_cross_size(*child, true);
+            int target_y = line.y;
+            if (alignment == AlignItems::Center) {
+                target_y += std::max(0, (line_cross_size - child_outer_height) / 2);
+            } else if (alignment == AlignItems::End) {
+                target_y += std::max(0, line_cross_size - child_outer_height);
+            }
+            const int dy = target_y + child->style.margin.top - child->rect.y;
+            if (dy != 0) {
+                shift_box(*child, 0, dy);
+            }
+        }
+    }
     if (!distribute_lines) {
         return natural_height;
     }
 
-    lines.back().height = line_height;
     const int container_height = fixed_height >= 0 ? fixed_height : std::max(minimum_height, natural_height);
     const FlexJustifyPlacement placement = flex_justify_placement(box.style.align_content,
                                                                   content_y,
@@ -1209,10 +1275,19 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
         int cursor_y = placement.cursor;
         for (ColumnFlexItem& item : items) {
             LayoutBox* child = item.child;
-            const int target_x = flex_aligned_x(flex_cross_axis_alignment(*child, box.style.align_items),
+            const AlignItems alignment = flex_cross_axis_alignment(*child, box.style.align_items);
+            if (alignment == AlignItems::Stretch && flex_cross_size_is_auto(child->style, false)) {
+                const int old_width = child->style.width;
+                const int old_width_percent = child->style.width_percent;
+                set_flex_stretch_cross_size(child->style, content_width, false);
+                layout_child_for_size(*child, item.target_height, item.force_height);
+                child->style.width = old_width;
+                child->style.width_percent = old_width_percent;
+            }
+            const int target_x = flex_aligned_x(alignment,
                                                 content_x,
                                                 content_width,
-                                                child->rect.width);
+                                                flex_outer_cross_size(*child, false));
             const int dx = target_x + child->style.margin.left - child->rect.x;
             const int dy = cursor_y + child->style.margin.top - child->rect.y;
             shift_box(*child, dx, dy);
@@ -1296,13 +1371,23 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
     const int container_height = std::max(box.style.min_height, box.style.height >= 0 ? box.style.height : max_child_height);
     for (FlexLayoutItem& item : items) {
         LayoutBox* child = item.child;
-        const int target_y = flex_aligned_y(flex_cross_axis_alignment(*child, box.style.align_items),
+        const AlignItems alignment = flex_cross_axis_alignment(*child, box.style.align_items);
+        if (alignment == AlignItems::Stretch && flex_cross_size_is_auto(child->style, true)) {
+            const int old_height = child->style.height;
+            const int old_height_percent = child->style.height_percent;
+            set_flex_stretch_cross_size(child->style, container_height, true);
+            layout_child_for_width(*child, item.target_width, item.force_width);
+            child->style.height = old_height;
+            child->style.height_percent = old_height_percent;
+        }
+        const int child_outer_height = flex_outer_cross_size(*child, true);
+        const int target_y = flex_aligned_y(alignment,
                                             content_y,
                                             container_height,
-                                            child->rect.height);
+                                            child_outer_height) + child->style.margin.top;
 
         const int dx = cursor_x + child->style.margin.left - child->rect.x;
-        const int dy = target_y + child->style.margin.top - child->rect.y;
+        const int dy = target_y - child->rect.y;
         shift_box(*child, dx, dy);
         cursor_x += child->rect.width + child->style.margin.left + child->style.margin.right +
             placement.extra_gap + box.style.column_gap;
