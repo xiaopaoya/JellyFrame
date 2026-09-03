@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- First-party ESP32-S3 smoke manifests, lifecycle probe fixtures and App Packaging
+  guide examples now follow the locked Render Core `0.6.1` line. Regression tests
+  verify these author-facing inputs against the active Runtime/Core versions.
+
 - CSS custom-property expansion now has a bounded resolved-value budget
   (`StyleResolverOptions::max_resolved_value_bytes`, 16 KiB by default), so
   repeated `var()` references cannot create an unbounded intermediate string.

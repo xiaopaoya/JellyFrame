@@ -14,6 +14,9 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- ESP32-S3 第一方 smoke manifest、lifecycle probe fixture 与 App Packaging 指南示例现在统一跟随锁定的
+  Render Core `0.6.1` 开发线；新增回归会依据当前 Runtime/Core 版本检查这些作者侧输入。
+
 - CSS custom property 展开现在具有有界的解析值预算
   (`StyleResolverOptions::max_resolved_value_bytes`，默认 16 KiB)，重复的 `var()` 引用不会再生成无界的中间字符串。
   超预算值保持原有的安全 fallback 行为。
