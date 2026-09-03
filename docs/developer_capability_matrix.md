@@ -309,7 +309,7 @@ These functions are conservative fallbacks, not a full CSS value algebra.
 
 | Element / feature | Status | Behavior |
 | --- | --- | --- |
-| `button` | Works / submit subset | Native-lite painted box, shrink-wrap-ish default and click events. A default or `type=submit` button inside a form runs bounded validation then dispatches a cancellable `submit` event unless its `click` default is prevented. |
+| `button` | Works / submit subset | Native-lite painted box, shrink-wrap-ish default and click events. Ordinary buttons center inline content in both axes by default; flex/grid buttons follow their explicit cross-axis alignment. A default or `type=submit` button inside a form runs bounded validation then dispatches a cancellable `submit` event unless its `click` default is prevented. |
 | `input type=text` and default input | Works | Value state, UTF-8 text input from host, Backspace. |
 | `input type=search/tel/url/email/number` | Subset | These ASCII-case-insensitive types preserve their canonical IDL `type` token and use the bounded text-entry path. There is no browser keyboard hint, URL/email/number parsing or corresponding constraint validation. |
 | `readonly` / `maxlength` | Subset | Text-entry controls honor `readonly` and `maxlength` for user input. Script `value` writes remain programmatic state changes; V0 validation can report programmatic values that exceed `maxlength`. |

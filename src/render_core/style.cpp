@@ -4961,6 +4961,8 @@ Style default_style_for(const Node& node) {
         style.border_width = EdgeSizes{1, 1, 1, 1};
         style.border_color = Color{107, 114, 128, 255};
         style.background_color = Color{243, 244, 246, 255};
+        style.text_align = TextAlign::Center;
+        style.text_align_specified = true;
         if (node.attributes.find("disabled") != node.attributes.end()) {
             style.color = Color{107, 114, 128, 255};
             style.color_specified = true;

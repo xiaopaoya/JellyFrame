@@ -386,7 +386,12 @@ void push_text_with_layout(DisplayList& display_list,
     const std::string rendered_text = ellipsize_single_line_text(text, style, rect.width, text_measure);
     const int line_height = style.line_height > 0
         ? style.line_height
-        : style.font_size + std::max(6, style.font_size / 3);
+        : std::max(1, measure_text_with_letter_spacing(text_measure,
+                                                        text,
+                                                        style.font_size,
+                                                        style.font_weight,
+                                                        style.font_family_hash,
+                                                        style.letter_spacing).line_height);
     const bool wrap_anywhere = style.overflow_wrap_anywhere && !style.white_space_nowrap;
     const bool wrap_at_opportunities = !wrap_anywhere && !style.white_space_nowrap &&
         has_text_wrap_opportunity(rendered_text);

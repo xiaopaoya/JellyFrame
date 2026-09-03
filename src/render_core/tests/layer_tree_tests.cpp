@@ -57,7 +57,35 @@ struct BuiltPipeline {
           layer_tree(std::move(layer_tree_in)) {}
 };
 
-BuiltPipeline build_pipeline(const char* html, const char* css) {
+bool measured_text_with_tall_line_height(const std::string& text,
+                                         int font_size,
+                                         int,
+                                         TextMetrics* metrics,
+                                         void*) {
+    if (metrics == nullptr) {
+        return false;
+    }
+    metrics->width = static_cast<int>(text.size()) * std::max(1, font_size / 2);
+    metrics->line_height = 19;
+    return true;
+}
+
+bool measured_text_with_run_padding(const std::string& text,
+                                    int,
+                                    int,
+                                    TextMetrics* metrics,
+                                    void*) {
+    if (metrics == nullptr) {
+        return false;
+    }
+    metrics->width = static_cast<int>(text.size()) * 10 + 7;
+    metrics->line_height = 19;
+    return true;
+}
+
+BuiltPipeline build_pipeline(const char* html,
+                             const char* css,
+                             TextMeasureProvider text_measure = {}) {
     HtmlParser html_parser;
     CssParser css_parser;
     auto document = html_parser.parse(html);
@@ -65,9 +93,11 @@ BuiltPipeline build_pipeline(const char* html, const char* css) {
     StyleResolver resolver(stylesheet);
     RenderTreeBuilder render_tree_builder(resolver);
     auto render_tree = render_tree_builder.build(*document);
-    LayoutEngine layout_engine(resolver);
+    LayoutEngine layout_engine(resolver, text_measure);
     auto layout_tree = layout_engine.layout(*render_tree, 240);
-    LayerTreeBuilder layer_tree_builder;
+    LayerTreeBuilderOptions layer_options;
+    layer_options.text_measure = text_measure;
+    LayerTreeBuilder layer_tree_builder(layer_options);
     auto layer_tree = layer_tree_builder.build(*layout_tree);
     return BuiltPipeline(std::move(document), std::move(stylesheet), std::move(resolver),
                          std::move(render_tree), std::move(layout_tree), std::move(layer_tree));
@@ -405,6 +435,60 @@ void normal_text_wrap_matches_layout_line_breaks() {
     check(text_rects.size() >= 2, "ordinary breakable text emits multiple paint commands");
     check(text_rects[0].y != text_rects[1].y,
           "ordinary breakable text paint lines follow the layout line height");
+}
+
+void wrapped_text_uses_the_measured_line_height_for_painting() {
+    const TextMeasureProvider text_measure{measured_text_with_tall_line_height, nullptr};
+    auto pipeline = build_pipeline(
+        "<body><p id='label'>Alpha beta gamma</p></body>",
+        "p { width: 40px; margin: 0; font-size: 10px; }",
+        text_measure);
+    const LayoutBox* label = find_layout_by_id(*pipeline.layout_tree, "label");
+    check(label != nullptr && label->rect.height >= 38,
+          "measured line height reserves every wrapped line");
+
+    LayerTreeBuilderOptions layer_options;
+    layer_options.text_measure = text_measure;
+    LayerTreeBuilder layer_tree_builder(layer_options);
+    const DisplayList commands = layer_tree_builder.flatten(*pipeline.layer_tree);
+    std::vector<Rect> text_rects;
+    for (const DisplayCommand& command : commands) {
+        if (command.type == DisplayCommandType::Text && !command.text.empty()) {
+            text_rects.push_back(command.rect);
+        }
+    }
+    check(text_rects.size() >= 2, "measured text emits every wrapped line");
+    for (std::size_t index = 0; index < text_rects.size(); ++index) {
+        check(text_rects[index].height == 19,
+              "paint line rectangle uses the text backend line height");
+        if (index > 0) {
+            check(text_rects[index].y - text_rects[index - 1].y == 19,
+                  "paint line positions use the text backend line height");
+        }
+    }
+}
+
+void anywhere_wrap_does_not_repeat_run_measurement_padding() {
+    const TextMeasureProvider text_measure{measured_text_with_run_padding, nullptr};
+    auto pipeline = build_pipeline(
+        "<body><p id='label'>ABCD</p></body>",
+        "p { width: 47px; margin: 0; font-size: 10px; overflow-wrap: anywhere; }",
+        text_measure);
+    const LayoutBox* label = find_layout_by_id(*pipeline.layout_tree, "label");
+    check(label != nullptr && label->rect.height == 19,
+          "a run that fits its measured width remains one line");
+
+    LayerTreeBuilderOptions layer_options;
+    layer_options.text_measure = text_measure;
+    const DisplayList commands = LayerTreeBuilder(layer_options).flatten(*pipeline.layer_tree);
+    std::vector<std::string> text_lines;
+    for (const DisplayCommand& command : commands) {
+        if (command.type == DisplayCommandType::Text && !command.text.empty()) {
+            text_lines.push_back(command.text);
+        }
+    }
+    check(text_lines.size() == 1 && text_lines.front() == "ABCD",
+          "anywhere wrapping measures the candidate run once instead of summing per-scalar padding");
 }
 
 void scroll_container_offsets_descendant_paint() {
@@ -1416,6 +1500,87 @@ void grid_item_auto_width_reflows_centered_text() {
     check(first_text.x > first_button.x + 20, "grid button text is centered after stretch");
 }
 
+void button_text_is_centered_in_content_box() {
+    auto pipeline = build_pipeline(
+        "<body><button id='action'>Start</button></body>",
+        "button { width: 120px; height: 44px; padding: 0; border: 0; "
+        "text-align: center; font-size: 14px; }" );
+
+    const LayoutBox* button = find_layout_by_id(*pipeline.layout_tree, "action");
+    check(button != nullptr, "button layout box exists");
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        if (command.type != DisplayCommandType::Text || command.text != "Start") {
+            continue;
+        }
+        const Rect content{
+            button->rect.x + button->style.border_width.left + button->style.padding.left,
+            button->rect.y + button->style.border_width.top + button->style.padding.top,
+            button->rect.width - button->style.border_width.left - button->style.border_width.right -
+                button->style.padding.left - button->style.padding.right,
+            button->rect.height - button->style.border_width.top - button->style.border_width.bottom -
+                button->style.padding.top - button->style.padding.bottom,
+        };
+        check(command.rect.y > content.y, "button text is not pinned to the content top");
+        check(command.rect.y + command.rect.height < content.y + content.height,
+              "button text is not pinned to the content bottom");
+        check(command.rect.y * 2 + command.rect.height == content.y * 2 + content.height,
+              "button text is vertically centered in the content box");
+        return;
+    }
+    check(false, "button text command exists");
+}
+
+void button_horizontal_alignment_does_not_change_vertical_alignment() {
+    auto pipeline = build_pipeline(
+        "<body><button id='action'>Start</button></body>",
+        "button { width: 120px; height: 44px; padding: 0; border: 0; "
+        "text-align: end; font-size: 14px; }" );
+
+    const LayoutBox* button = find_layout_by_id(*pipeline.layout_tree, "action");
+    check(button != nullptr, "aligned button layout box exists");
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        if (command.type != DisplayCommandType::Text || command.text != "Start") {
+            continue;
+        }
+        check(command.text_align == TextCommandAlign::End,
+              "button text keeps the requested horizontal alignment");
+        const int content_y = button->rect.y + button->style.border_width.top + button->style.padding.top;
+        const int content_height = button->rect.height - button->style.border_width.top -
+            button->style.border_width.bottom - button->style.padding.top - button->style.padding.bottom;
+        check(command.rect.y * 2 + command.rect.height == content_y * 2 + content_height,
+              "horizontal alignment does not alter vertical centering");
+        return;
+    }
+    check(false, "aligned button text command exists");
+}
+
+void flex_button_keeps_explicit_cross_axis_alignment() {
+    auto pipeline = build_pipeline(
+        "<body><button id='action'>Start</button></body>",
+        "button { display: flex; width: 120px; height: 44px; padding: 0; border: 0; "
+        "align-items: end; text-align: center; font-size: 14px; }" );
+
+    const LayoutBox* button = find_layout_by_id(*pipeline.layout_tree, "action");
+    check(button != nullptr, "flex button layout box exists");
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    for (const DisplayCommand& command : flattened) {
+        if (command.type != DisplayCommandType::Text || command.text != "Start") {
+            continue;
+        }
+        const int content_bottom = button->rect.y + button->rect.height -
+            button->style.border_width.bottom - button->style.padding.bottom;
+        check(command.rect.y + command.rect.height == content_bottom,
+              "flex button keeps explicit end cross-axis alignment");
+        return;
+    }
+    check(false, "flex button text command exists");
+}
+
 void text_input_respects_text_align() {
     auto pipeline = build_pipeline("<body><input class='display' value='42'></body>",
                                    ".display { width: 120px; height: 32px; padding: 0; "
@@ -1620,6 +1785,8 @@ int main() {
         visibility_preserves_layout_and_suppresses_hidden_paint_and_hit_testing();
         text_spacing_and_anywhere_wrap_emit_only_declared_extra_commands();
         normal_text_wrap_matches_layout_line_breaks();
+        wrapped_text_uses_the_measured_line_height_for_painting();
+        anywhere_wrap_does_not_repeat_run_measurement_padding();
         scroll_container_offsets_descendant_paint();
         scroll_container_keeps_absolute_sibling_navigation_fixed();
         scroll_indicator_is_opt_in_overlay();
@@ -1665,6 +1832,9 @@ int main() {
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         grid_item_auto_width_reflows_centered_text();
 #endif
+        button_text_is_centered_in_content_box();
+        button_horizontal_alignment_does_not_change_vertical_alignment();
+        flex_button_keeps_explicit_cross_axis_alignment();
         text_input_respects_text_align();
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         flex_wrap_places_items_on_new_lines();
