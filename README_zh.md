@@ -220,8 +220,8 @@ cmake --build build/desktop-scripting-release --config Release
 
 ## 版本
 
-- 当前开发版本：`0.6.0-dev`，见 [VERSION](VERSION)。在 `1.0` 前，包必须声明
-  当前 Runtime 与 Render Core 开发线（`0.6.0`）；历史开发产物不构成兼容基线。
+- 当前 Runtime 开发版本：`0.6.0-dev`，见 [VERSION](VERSION)。包必须声明此 Runtime
+  开发线以及锁定的 Render Core `0.6.1`；历史开发产物不构成兼容基线。
 - 变更记录：[CHANGELOG.md](CHANGELOG.md) 和 [CHANGELOG_zh.md](CHANGELOG_zh.md)。
 - 版本规则：[docs/versioning_zh.md](docs/versioning_zh.md)。
 
