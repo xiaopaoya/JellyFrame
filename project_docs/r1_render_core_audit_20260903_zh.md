@@ -36,4 +36,3 @@ generated link map、脚本边界静态检查以及 HTML/CSS 能力表一致性�
   在证实其影响真实 workload 后才优化测量路径。
 - 保持 Core 独立仓库的 package、source override、profile 和 provenance CI 作为
   后续版本升级的必需门禁。
-
