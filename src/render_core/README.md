@@ -58,8 +58,8 @@ configuration, maintainers can create a standalone source archive:
 
 ```powershell
 python project_tools\package_render_core_source.py --output-dir build\dist
-tar -xzf build\dist\jellyframe-render-core-0.6.0.tar.gz -C build\unpacked
-cmake -S build\unpacked\jellyframe-render-core-0.6.0 -B build\core-from-archive
+tar -xzf build\dist\jellyframe-render-core-0.6.1.tar.gz -C build\unpacked
+cmake -S build\unpacked\jellyframe-render-core-0.6.1 -B build\core-from-archive
 cmake --build build\core-from-archive --config Release --parallel
 ctest --test-dir build\core-from-archive -C Release --output-on-failure
 ```
