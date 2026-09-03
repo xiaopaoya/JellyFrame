@@ -252,10 +252,10 @@ Chinese documentation uses the `_zh` suffix, for example
 
 ## Versioning
 
-- Current development version: `0.6.0-dev` in [VERSION](VERSION). Before
-  `1.0`, packages must target the active Runtime and Render Core lines
-  (`0.6.0`); historical development artifacts are intentionally not a
-  compatibility baseline.
+- Current Runtime development version: `0.6.0-dev` in [VERSION](VERSION).
+  Packages must target this Runtime line and the locked Render Core `0.6.1`;
+  historical development artifacts are intentionally not a compatibility
+  baseline.
 - Changelog: [CHANGELOG.md](CHANGELOG.md) and
   [CHANGELOG_zh.md](CHANGELOG_zh.md).
 - Version rules: [docs/versioning.md](docs/versioning.md).

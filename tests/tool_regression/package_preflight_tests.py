@@ -56,6 +56,33 @@ def tiny_png_header(width: int = 2, height: int = 2) -> bytes:
 
 
 class PackagePreflightTests(unittest.TestCase):
+    def test_first_party_manifests_match_active_runtime_and_core_lines(self):
+        runtime_version = package_app.active_runtime_release_version()
+        render_core_version = package_app.active_render_core_release_version()
+        roots = [
+            REPO_ROOT / "tools" / "templates" / "apps",
+            REPO_ROOT / "samples" / "apps" / "packages",
+            REPO_ROOT / "ports" / "esp32s3-idf" / "resources" / "app",
+        ]
+        manifests = [
+            path for root in roots
+            for path in root.rglob("jellyframe.app.json")
+        ]
+        self.assertGreater(len(manifests), 0)
+        for path in manifests:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["runtime"]["minJellyFrame"], runtime_version, str(path))
+            self.assertEqual(manifest["runtime"]["minRenderCore"], render_core_version, str(path))
+
+    def test_packaging_guide_example_matches_active_core_lock(self):
+        render_core_version = package_app.active_render_core_release_version()
+        for path in (
+            REPO_ROOT / "src" / "app_runtime" / "docs" / "app_packaging.md",
+            REPO_ROOT / "src" / "app_runtime" / "docs" / "app_packaging_zh.md",
+        ):
+            content = path.read_text(encoding="utf-8")
+            self.assertIn(f'"minRenderCore": "{render_core_version}"', content, str(path))
+
     def test_cli_forwards_render_core_profile_to_package_tool(self):
         args = type("Args", (), {
             "root": REPO_ROOT / "samples" / "apps" / "packages" / "jelly_canvas_smoke",

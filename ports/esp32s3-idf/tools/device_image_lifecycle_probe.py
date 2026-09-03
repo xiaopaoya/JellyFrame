@@ -238,7 +238,7 @@ def package_fixture(repo, output, version_code, version_name):
         "format": "jellyframe.app", "formatVersion": 0,
         "id": "org.jellyframe.device.lifecycle", "name": "Device Lifecycle",
         "version": {"name": version_name, "code": version_code}, "entry": "/index.html",
-        "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.0", "script": "none"},
+        "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"},
         "viewport": {"designWidth": 172, "designHeight": 320, "shape": "rect"},
         "budgets": {"maxResourceBytes": 4096, "maxDomNodes": 32, "maxCssRules": 8,
                     "maxDisplayCommands": 32, "maxTimers": 0, "maxEventListeners": 0},
