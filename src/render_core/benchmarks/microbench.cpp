@@ -941,6 +941,35 @@ int run_render_core_microbench(int argc, char** argv) {
         (void)typography_layer_tree;
     }));
 
+    // Keep the candidate-measurement cost visible as text length grows. This
+    // is a diagnostic baseline for a future equivalent-measurement optimization.
+    const std::string anywhere_benchmark_text(2048, 'W');
+    for (const std::size_t width : {96U, 65536U}) {
+        const std::string name_prefix = width == 96U
+            ? "text_anywhere_wrap_"
+            : "text_anywhere_wrap_wide_";
+        const int benchmark_iterations = width == 65536U
+            ? std::max(1, iterations / 10)
+            : iterations;
+        for (const std::size_t length : {32U, 128U, 512U, 2048U}) {
+            const std::string text = anywhere_benchmark_text.substr(0, length);
+            volatile std::size_t line_count = 0;
+            print_result((name_prefix + std::to_string(length)).c_str(),
+                         benchmark_iterations,
+                         average_microseconds(benchmark_iterations, [&] {
+                             const auto lines = wrap_text_anywhere(fixed_text_measure(),
+                                                                   text,
+                                                                   12,
+                                                                   400,
+                                                                   0,
+                                                                   0,
+                                                                   static_cast<int>(width));
+                             line_count = lines.size();
+                         }));
+            (void)line_count;
+        }
+    }
+
     auto style_document = html_parser.parse(
         "<body><button id='pulse' class='pill'>Open</button><strong id='frame'>01</strong></body>");
     auto style_stylesheet = css_parser.parse(
