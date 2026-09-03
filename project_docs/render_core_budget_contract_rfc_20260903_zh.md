@@ -37,6 +37,29 @@ codec 已经在进入 Core 前执行 `max_commands`、`max_clips`、`max_dirty_r
 上述风险目前由调用方预算和测试约束住，不能据此宣称 Core 公共 API 已具备统一的
 资源边界。
 
+## 3.1 当前调用方盘点
+
+截至本轮，仓库中可复核到的预算不是一个统一的“设备默认值”，而是按用途分成三类：
+
+| 调用方/用途 | viewport | max commands | max clips/depth | max dirty rects | framebuffer/temporary pixels |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `ports/esp32s3-idf/main.cpp` 正常设备路径 | 运行时 | 2048 | 由 frame profile 提供 | 8 | `width * height` |
+| `jellyframe_esp32s3_ui_task.cpp` UI task | 运行时 | 2048 | 由 frame profile 提供 | 8 | `width * height` |
+| ESP32-S3 v2 acceptance | `172x320` | 128 | 16 / 8 | 8 | 55040 |
+| `virtual_board/virtual_bench.cpp` | 运行时 | 2048 | 由 frame profile 提供 | 8 | `width * height` |
+| `embedded_host_demo` | 固定 demo viewport | 128 | 由 host profile 提供 | 4 | `width * height` |
+| Core `HostBudgets` 默认值 | 由宿主提供 | 8192 | 由 Runtime/codec 提供 | 8 | 230400（480x480） |
+
+已确认的尺寸矩阵像素数为：`300x300 = 90000`、`320x240 = 76800`、
+`172x320 = 55040`。这些数值适合用来检查 framebuffer 乘法和 profile 一致性，
+不能直接推导出 command 或 clip 上限。Acceptance fixture 的 `128/16/8` 只属于
+该 fixture 的严格测试预算，不应自动成为正式 Developer Image 的产品限制。
+
+盘点结论：`max_dirty_rects = 8` 在主要 host/ESP32-S3 路径中已经事实统一；
+`max_display_commands` 至少存在 `128`、`256`、`2048` 和 `8192` 四个有效上下文，
+因此当前不能把它们合并成一个无来源的 Core 默认常量。正式 profile 必须同时记录
+用途、viewport、内存来源和是否允许无限制值。
+
 ## 4. 建议的抽象
 
 在下一次 ABI 变更或明确的 Core minor release window 中，引入只读的入口预算：
