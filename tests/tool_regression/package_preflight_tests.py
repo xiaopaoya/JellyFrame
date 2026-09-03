@@ -83,6 +83,28 @@ class PackagePreflightTests(unittest.TestCase):
             content = path.read_text(encoding="utf-8")
             self.assertIn(f'"minRenderCore": "{render_core_version}"', content, str(path))
 
+    def test_version_entrypoints_match_runtime_and_core_lock(self):
+        render_core_version = package_app.active_render_core_release_version()
+        english = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        chinese = (REPO_ROOT / "README_zh.md").read_text(encoding="utf-8")
+        self.assertIn(
+            f"locked Render Core `{render_core_version}`",
+            english,
+        )
+        self.assertIn(
+            f"锁定的 Render Core `{render_core_version}`",
+            chinese,
+        )
+
+    def test_render_core_archive_example_matches_packager_version(self):
+        render_core_version = package_app.active_render_core_release_version()
+        content = (REPO_ROOT / "src" / "render_core" / "README.md").read_text(
+            encoding="utf-8"
+        )
+        archive_name = f"jellyframe-render-core-{render_core_version}"
+        self.assertIn(f"{archive_name}.tar.gz", content)
+        self.assertIn(f"build\\unpacked\\{archive_name}", content)
+
     def test_cli_forwards_render_core_profile_to_package_tool(self):
         args = type("Args", (), {
             "root": REPO_ROOT / "samples" / "apps" / "packages" / "jelly_canvas_smoke",
