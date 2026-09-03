@@ -122,4 +122,3 @@ struct RenderCoreBudgetReport {
 
 本轮只归档 RFC，不实现 `RenderCoreBudget`。当前 R1 的结论仍是：现有调用方约束足以
 通过已验证测试，但统一 Core 公共预算契约尚未完成，不能把它描述为已解决的安全边界。
-
