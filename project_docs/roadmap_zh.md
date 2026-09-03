@@ -1,6 +1,6 @@
 # JellyFrame 主线路线图
 
-> 最后更新：2026-08-30；适用版本：0.6.0-dev；状态：活动计划的唯一来源
+> 最后更新：2026-09-03；适用版本：0.6.0-dev；状态：活动计划的唯一来源
 
 ## 先决判断
 
@@ -15,7 +15,7 @@
 - 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库现在拥有物理 Core 分支。首个带签名的 `v0.6.0` release 是历史基线；Runtime `0.6.0-dev` 当前精确锁定 Core `v0.6.1`、ABI `1` 与 source identity `105d0166...b797c52b`。CI 会下载该 release artifact、校验 archive SHA-256 `f9d24aca...e18c7`、安装后运行 Runtime package-consumer tests。in-tree provider 只保留给同步本地开发。Core ABI `1` 明确以安装后的 `render_core/` headers 作为 C++ consumer surface；当前没有隐藏 header tier 或 C ABI。2026-08-19 已补齐 Core-only 与 Device contracts 的 CMake 边界回归：Core-only 不能创建 contracts target/test，contracts-only 仍可独立构建，source archive/install/package/source-override 闭环也已复核。
 - App Runtime 已具备 `.jfapp` 生命周期、registry 参考语义、可选的选定脚本后端，以及 script worker 的 session/generation/epoch、value-only frame/input/service/fatal 协议。P3 的 WS147 worker、service、恢复与 mixed soak 验收已关闭。
 - WS147 的 value-frame v2 dirty/recovery fixture 已通过；全屏 rounded/gradient workload 的优化归因已完成，但仍不能达到 30 FPS。Canvas 还没有真实 host binding，保持 `not-tested`。
-- Script Task value-frame v4 已合入 Runtime 主线。它保留有界定点 transform，并分离变换源空间与目标空间的 clip chain，覆盖变换层下的嵌套裁剪。ESP32-S3 的 v4 验收 profile 正在按独立要求接入；它不是 Developer Image 默认 profile，也尚不能单独关闭 A2 的 panel/input 证据。
+- Script Task value-frame v4 已合入 Runtime 主线。它保留有界定点 transform，并分离变换源空间与目标空间的 clip chain，覆盖变换层下的嵌套裁剪。WS147 全帧验收已通过；dirty replay 仍是独立的 `not-tested` 项。它不是 Developer Image 默认 profile，也尚不能单独关闭 A2 的 panel/input 证据。
 - `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。Developer Image 已具有严格 manifest 与 hash 验证的 factory recovery image；这仍不等于干净机器 VS Code 产品流程或已安装 App 的 panel/input 行为已完成。
 - 当前开发线是 Runtime `0.6.0-dev` / Core `0.6.0-dev`。1.0 前不维护历史 package 兼容线。
 
@@ -24,7 +24,7 @@
 并行工作不得改变更早项目的出口条件。
 
 1. **A2 证据，port 正在执行：**完成独立 value-frame v4 接入，随后用已安装的脚本 App 补齐作者工具流程所缺的 panel/input 证据。干净机器 VS Code 完整生命周期仍是独立必需证据。
-2. **R1 Core-only 维护，主线进行中：**响应式布局基础交付物已完成，包括[响应式布局契约](../docs/responsive_layout_contract_zh.md)、三目标矩阵和 Flex 交叉轴语义回归证据。2026-08-30 已完成软件栅格器的首轮极值安全审查：圆角距离平方、clipped 循环、描边内框和 BMP 导出尺寸均已使用有界计算，并通过完整/响应式 Core profile `9/9`；随后完成文本 fallback 测量、字间距、换行和内置绘制定位，以及 flex/inline flow 汇总与对齐、游标/行高、shift 定位、grid/positioned track/offset 和 layer-tree 文本/outline 几何的极值审查，避免字号、宽度、间距或定位运算溢出。继续使用 standalone、sanitizer 与确定性 capture 审查 parser/style 所有权、malformed-input budget 与 cache invalidation。不要机会主义地扩张浏览器 CSS 范围或修改 port profile。
+2. **R1 Core-only 维护，首轮审查已完成：**响应式布局基础交付物已完成，包括[响应式布局契约](../docs/responsive_layout_contract_zh.md)、三目标矩阵和 Flex 交叉轴语义回归证据。软件栅格器、文本、布局和极值安全审查已完成；独立工作树中的 Core-only Debug、Release、Sanitizer 构建及 CTest 均为 `9/9`。剩余工作转为有明确入口和证据门槛的 RFC：统一 dirty/clip/command budget 语义，以及长文本换行测量 benchmark。详见 `r1_render_core_audit_20260903_zh.md`。不要机会主义地扩张浏览器 CSS 范围或修改 port profile。
 3. **B2 后端准备，受限进行：**保持 configure-time `ScriptRuntime` 边界及其不变量。在具备独立 compatibility/resource RFC 与对等证据前，不引入第二后端，也不改变 JerryScript 默认选择。
 4. **A3 筹备，已经进行中：**试用材料、设备采购、视觉资产与反馈运营可并行，但必须在 A2 的两项证据均通过后才开始外部产品试用。
 
