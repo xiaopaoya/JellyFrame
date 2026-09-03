@@ -9,7 +9,6 @@
 - [ ] 在干净作者机完成 WS147 VS Code 的只读 smoke：发现、身份读取和已安装 App 列表必须与 manifest/registry 一致。要求见 `../docs/ws147_provider_vscode_smoke_20260825_zh.md`；该项不执行安装或刷写。此前本机 candidate smoke 不可替代此项。
 - [ ] 在同一干净作者机完成 VS Code 设备流程：`new -> check -> package -> deploy -> launch -> live log -> update -> rollback -> stop -> remove`。桌面与设备 session 必须保持独立，最终报告必须保留可定位的失败归属。
 - [ ] 通过 provider 流程完成真实已安装 App 的 panel/input 验收。记录 App launch marker、触控/输入响应、panel/present 错误与恢复行为；provider lifecycle PASS 不等于视觉或输入证据。
-- [x] WS147 value-frame v4 全帧移植验收已通过：300 次 present、7/7 精确 malformed rejection/recovery、source/destination clip 与旋转路径正常；dirty replay 仍为 `not-tested`，不构成性能或 30 FPS 结论。归档：`script_task_value_frame_v4_ws147_86c1135_20260827`。
 - [ ] 将 B1 作为持续 release gate 维护。首个带签名 Core `v0.6.0` 是历史基线，Runtime 当前锁定 `v0.6.1`；以后每次 Core bump 必须下载或以其他方式认证已审阅的 release artifact、校验 archive SHA-256、更新精确 version/ABI/source lock，并通过 standalone、package-consumer 与 source-override tests。
 - [ ] 执行 [0.6 工程维护审查计划](engineering_review_plan_20260819_zh.md)：先做 R0 package/profile/provenance，再做 R1 document/style、layout/dirty 与 renderer/text。只修复有明确语义或安全缺陷的接口，不做机械式改名。
 - [ ] 在响应式布局基础交付后继续 R1 Core-only 审查：检查 parser/style 所有权、malformed-input budget、cache invalidation 与确定性 capture 行为。`300x300`、`320x240`、`172x320` 矩阵及 Flex 交叉轴回归现作为持续 gate；优先修复已证明的语义缺陷，不以新增控件或浏览器专有声明替代。

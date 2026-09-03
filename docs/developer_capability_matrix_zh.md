@@ -292,7 +292,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 
 | 元素/功能 | 状态 | 行为 |
 | --- | --- | --- |
-| `button` | 可用 / submit 子集 | 轻量原生风格绘制，默认近似按内容收缩，支持 click。普通按钮默认将 inline 内容水平和垂直居中；使用 flex/grid 时遵循显式的交叉轴对齐。form 内默认按钮或 `type=submit` 按钮会在 click 默认动作未被阻止时先执行有界校验，再派发可取消 `submit`。 |
+| `button` | 可用 / submit 子集 | 轻量原生风格绘制，默认近似按内容收缩，支持 click。form 内默认按钮或 `type=submit` 按钮会在 click 默认动作未被阻止时先执行有界校验，再派发可取消 `submit`。 |
 | `input type=text` 和默认 input | 可用 | 有 value 状态，宿主可输入 UTF-8 文本，支持 Backspace。 |
 | `input type=search/tel/url/email/number` | 子集 | 这些 ASCII 大小写不敏感的 type 会保留规范化 IDL `type` token，并走有界 text-entry 路径。没有浏览器键盘提示、URL/email/number 解析或对应 constraint validation。 |
 | `readonly` / `maxlength` | 子集 | 文本输入类控件会在用户输入路径遵守 `readonly` 和 `maxlength`。脚本写 `value` 仍是程序性状态修改；V0 校验会报告程序写入后超过 `maxlength` 的值。 |

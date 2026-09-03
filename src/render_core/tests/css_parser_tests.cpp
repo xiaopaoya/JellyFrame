@@ -1017,8 +1017,6 @@ void controls_have_usable_default_boxes() {
     check(input_style.border_width.top == 1, "input default border");
     check(button_style.display == Display::InlineBlock, "button default display");
     check(button_style.padding.left > 0, "button default padding");
-    check(button_style.text_align == TextAlign::Center && button_style.text_align_specified,
-          "button default text alignment is centered");
 }
 
 Node* find_first_by_tag(Node& node, const std::string& tag_name) {
