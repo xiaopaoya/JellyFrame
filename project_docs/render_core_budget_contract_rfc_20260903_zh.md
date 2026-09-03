@@ -141,6 +141,24 @@ struct RenderCoreBudgetReport {
 
 未满足这些条件前，保持现有调用方预算，不修改公共签名。
 
+## 7.1 文本测量的独立约束
+
+`wrap_text_anywhere()` 的问题不应通过 dirty/clip budget 解决。当前候选实现为了避免
+字体 run padding 被逐字节相加，会对每个新增 UTF-8 scalar 重新调用完整字符串测量。
+这在窄栏中通常很快换行，但宽栏长文本会形成 O(n²) 的后端工作量。
+
+后续实现只能采用以下两类方案之一：
+
+1. 为 `TextMeasureProvider` 增加可选的、由字体后端实现的精确 run 状态接口；接口必须
+   能在追加 scalar 时返回与完整字符串测量相同的宽度、行高和 fallback 结果，并明确
+   reset、生命周期和失败回退语义。
+2. 在 Core 内加入有证明的前缀搜索/缓存，仅当 provider 契约保证宽度单调且前缀测量
+   与完整 shaping 等价时启用；否则继续使用保守路径。
+
+无论采用哪一种，必须通过 ASCII、CJK、UTF-8 malformed sequence、字间距、字体
+fallback、ligature/kerning（若后端支持）和超宽文本的逐行像素/文本等价测试。不能
+把固定最大行长、标量宽度相加或近似字体宽度作为通用替代。
+
 ## 8. 当前决定
 
 本轮只归档 RFC，不实现 `RenderCoreBudget`。当前 R1 的结论仍是：现有调用方约束足以
