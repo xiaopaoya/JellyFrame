@@ -1,6 +1,6 @@
 # JellyFrame
 
-> 最后更新：2026-08-18；适用版本：0.6.0-dev
+> 最后更新：2026-09-04；适用版本：0.6.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -48,7 +48,8 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 `tools/templates/apps` 中的 Jelly 风可穿戴 UI 模板实际渲染生成，展示的是
 JellyFrame 自己轻盈、明快的界面表达。
 
-**渲染管线：** 锁定的 JellyFrame Render Core `0.6.1`；启用 JerryScript 的当前
+**渲染管线：** 当前 Runtime 锁定 JellyFrame Render Core `0.6.2`；下方图库于
+`2026-08-26` 使用 Core `0.6.1` 记录；当前启用 JerryScript 的
 Win32 capture shell；视口 `300x300`；生成日期 `2026-08-26`；源码修订
 `0ffdbf0`。精确的生成记录和命令位于图片旁的
 [docs/assets/screenshots](docs/assets/screenshots/README.md)。
@@ -221,7 +222,7 @@ cmake --build build/desktop-scripting-release --config Release
 ## 版本
 
 - 当前 Runtime 开发版本：`0.6.0-dev`，见 [VERSION](VERSION)。包必须声明此 Runtime
-  开发线以及锁定的 Render Core `0.6.1`；历史开发产物不构成兼容基线。
+  开发线以及锁定的 Render Core `0.6.2`；历史开发产物不构成兼容基线。
 - 变更记录：[CHANGELOG.md](CHANGELOG.md) 和 [CHANGELOG_zh.md](CHANGELOG_zh.md)。
 - 版本规则：[docs/versioning_zh.md](docs/versioning_zh.md)。
 

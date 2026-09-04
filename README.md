@@ -1,6 +1,6 @@
 # JellyFrame
 
-> Last updated: 2026-08-18; Applies to: 0.6.0-dev
+> Last updated: 2026-09-04; Applies to: 0.6.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 
@@ -60,7 +60,9 @@ These 300x300 screenshots are rendered through the current Win32 capture shell
 from Jelly-style wearable templates in `tools/templates/apps`. They show
 JellyFrame's own light, lively visual language.
 
-**Render pipeline:** locked JellyFrame Render Core `0.6.1`; current
+**Render pipeline:** the current Runtime lock is JellyFrame Render Core `0.6.2`;
+the gallery capture below was recorded against Core `0.6.1` on
+`2026-08-26`; current
 JerryScript-enabled Win32 capture shell; viewport `300x300`; generated
 `2026-08-26`; source revision `0ffdbf0`. The exact generation record and
 command are beside the images in
@@ -253,7 +255,7 @@ Chinese documentation uses the `_zh` suffix, for example
 ## Versioning
 
 - Current Runtime development version: `0.6.0-dev` in [VERSION](VERSION).
-  Packages must target this Runtime line and the locked Render Core `0.6.1`;
+  Packages must target this Runtime line and the locked Render Core `0.6.2`;
   historical development artifacts are intentionally not a compatibility
   baseline.
 - Changelog: [CHANGELOG.md](CHANGELOG.md) and

@@ -1,6 +1,6 @@
 # JellyFrame Active Roadmap
 
-> Last updated: 2026-08-27; Applies to: 0.6.0-dev; this is the single active plan.
+> Last updated: 2026-09-04; Applies to: 0.6.0-dev; this is the single active plan.
 
 ## Governing Decision
 
@@ -12,7 +12,7 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 
 ## Current Baseline
 
-- The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository owns the physical Core branch. Its `master` was synchronized to JellyFrame mainline `7735b9a1` on 2026-08-30; the current development head is `0.6.2-dev` with Core ABI `1`, and independent Core CI is green. This is not a signed release. The first signed `v0.6.0` release is historical; Runtime `0.6.0-dev` still locks the published Core `v0.6.1`, ABI `1` and source identity `105d0166...b797c52b`. CI downloads that release artifact, verifies archive SHA-256 `f9d24aca...e18c7`, installs it and runs the Runtime package-consumer tests. The in-tree provider remains only for synchronized local development. For Core ABI `1`, installed `render_core/` headers are the C++ consumer surface; there is no hidden header tier or C ABI. Core-only, Device-contract, source-archive, install, package and source-override boundaries have been rechecked.
+- The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository owns the physical Core branch. Its `master` was synchronized to JellyFrame mainline `7735b9a1` on 2026-08-30; the current development head is `0.6.2-dev` with Core ABI `1`, and independent Core CI is green. The signed `v0.6.2` release is now the Runtime dependency; Runtime `0.6.0-dev` locks Core `0.6.2`, ABI `1` and source identity `539a8945...8462e3f0`. CI downloads that release artifact, verifies archive SHA-256 `d136a0d7...89f43e`, installs it and runs the Runtime package-consumer tests. The in-tree provider remains only for synchronized local development. For Core ABI `1`, installed `render_core/` headers are the C++ consumer surface; there is no hidden header tier or C ABI. Core-only, Device-contract, source-archive, install, package and source-override boundaries have been rechecked.
 - App Runtime has `.jfapp` lifecycle, registry reference semantics, an optional selected script backend and the script-worker session/generation/epoch, value-only frame/input/service/fatal protocol. WS147 P3 worker, service, recovery and mixed-soak evidence is closed.
 - WS147 value-frame-v2 dirty/recovery passes. The full-screen rounded-gradient workload is not 30 FPS. Canvas has no real host binding and remains `not-tested`.
 - Script Task value-frame v4 is merged on the Runtime line. It preserves bounded fixed-point transforms and separates source-space from destination-space clip chains, including nested clips below a transformed layer. The v4 ESP32-S3 acceptance profile is now being implemented under a dedicated requirement; it is not a default Developer Image profile and cannot yet close A2 panel/input evidence.
@@ -80,7 +80,7 @@ Exit: all consumers use Core only through public packages/headers; Runtime/port 
 
 | Project | Initial line | Dependency rule |
 | --- | --- | --- |
-| `jellyframe-render-core` | released `0.6.1`; development head `0.6.2-dev`, Core ABI `1` | Runtime still pins exact `0.6.1`; the development head needs candidate evidence and release gates before it can become a Runtime dependency |
+| `jellyframe-render-core` | released `0.6.2`; development head `0.6.2-dev`, Core ABI `1` | Runtime pins exact `0.6.2`; the development head remains independent until its own candidate evidence and release gates |
 | `jellyframe` | `0.6.0` | Bumps Core only in an explicit dependency change |
 | `jellyframe-device-os` | `0.1.0-dev` | Pins JellyFrame release and board feature profile |
 | JFDP | `JFDP/1` | Breaking wire changes require a major version |

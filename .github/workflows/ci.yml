@@ -323,15 +323,15 @@ jobs:
       - name: Download released Render Core source package
         run: |
           curl --fail --location --retry 3 \
-            --output build/jellyframe-render-core-0.6.1.tar.gz \
-            https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v0.6.1/jellyframe-render-core-0.6.1.tar.gz
-          echo "f9d24aca2b630c5d6aaa8d6a566504bfdda82971140edc2b67f9be2ac0fe18c7  build/jellyframe-render-core-0.6.1.tar.gz" | sha256sum --check --status
+            --output build/jellyframe-render-core-0.6.2.tar.gz \
+            https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v0.6.2/jellyframe-render-core-0.6.2.tar.gz
+          echo "d136a0d7fd7ab58436a5f2fa9c7eb27a497e08bad384a96cd93689ba6898f43e  build/jellyframe-render-core-0.6.2.tar.gz" | sha256sum --check --status
           mkdir -p build/released-render-core-source
-          tar -xzf build/jellyframe-render-core-0.6.1.tar.gz -C build/released-render-core-source
+          tar -xzf build/jellyframe-render-core-0.6.2.tar.gz -C build/released-render-core-source
 
       - name: Install released Render Core package
         run: |
-          cmake -S build/released-render-core-source/jellyframe-render-core-0.6.1 \
+          cmake -S build/released-render-core-source/jellyframe-render-core-0.6.2 \
             -B build/released-render-core-build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DJELLYFRAME_BUILD_TESTS=OFF

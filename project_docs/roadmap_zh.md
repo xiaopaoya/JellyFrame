@@ -1,6 +1,6 @@
 # JellyFrame 主线路线图
 
-> 最后更新：2026-08-30；适用版本：0.6.0-dev；状态：活动计划的唯一来源
+> 最后更新：2026-09-04；适用版本：0.6.0-dev；状态：活动计划的唯一来源
 
 ## 先决判断
 
@@ -12,12 +12,12 @@
 
 ## 当前基线
 
-- 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库现在拥有物理 Core 分支。独立仓库 `master` 已于 2026-08-30 同步到 JellyFrame 主线 `7735b9a1`，当前开发头为 `0.6.2-dev`、Core ABI `1`，独立 Core CI 已通过；这仍不是 signed release。首个带签名的 `v0.6.0` release 是历史基线，Runtime `0.6.0-dev` 仍精确锁定已发布 Core `v0.6.1`、ABI `1` 与 source identity `105d0166...b797c52b`。CI 会下载该 release artifact、校验 archive SHA-256 `f9d24aca...e18c7`、安装后运行 Runtime package-consumer tests。in-tree provider 只保留给同步本地开发。Core ABI `1` 明确以安装后的 `render_core/` headers 作为 C++ consumer surface；当前没有隐藏 header tier 或 C ABI。Core-only、Device contracts、source archive/install/package/source-override 闭环均已复核。
+- 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库现在拥有物理 Core 分支。独立仓库 `master` 已于 2026-08-30 同步到 JellyFrame 主线 `7735b9a1`，当前开发头为 `0.6.2-dev`、Core ABI `1`，独立 Core CI 已通过；签名的 `v0.6.2` release 现已成为 Runtime 依赖。Runtime `0.6.0-dev` 精确锁定 Core `0.6.2`、ABI `1` 与 source identity `539a8945...8462e3f0`。CI 会下载该 release artifact、校验 archive SHA-256 `d136a0d7...89f43e`、安装后运行 Runtime package-consumer tests。in-tree provider 只保留给同步本地开发。Core ABI `1` 明确以安装后的 `render_core/` headers 作为 C++ consumer surface；当前没有隐藏 header tier 或 C ABI。Core-only、Device contracts、source archive/install/package/source-override 闭环均已复核。
 - App Runtime 已具备 `.jfapp` 生命周期、registry 参考语义、可选的选定脚本后端，以及 script worker 的 session/generation/epoch、value-only frame/input/service/fatal 协议。P3 的 WS147 worker、service、恢复与 mixed soak 验收已关闭。
 - WS147 的 value-frame v2 dirty/recovery fixture 已通过；全屏 rounded/gradient workload 的优化归因已完成，但仍不能达到 30 FPS。Canvas 还没有真实 host binding，保持 `not-tested`。
 - Script Task value-frame v4 已合入 Runtime 主线。它保留有界定点 transform，并分离变换源空间与目标空间的 clip chain，覆盖变换层下的嵌套裁剪。ESP32-S3 的 v4 验收 profile 正在按独立要求接入；它不是 Developer Image 默认 profile，也尚不能单独关闭 A2 的 panel/input 证据。
 - `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。Developer Image 已具有严格 manifest 与 hash 验证的 factory recovery image；这仍不等于干净机器 VS Code 产品流程或已安装 App 的 panel/input 行为已完成。
-- 当前消费线是 Runtime `0.6.0-dev` / 锁定 Core `v0.6.1`；独立 Core 的开发头是 `0.6.2-dev`，尚未被 Runtime lock 消费。1.0 前不维护历史 package 兼容线。
+- 当前消费线是 Runtime `0.6.0-dev` / 锁定 Core `v0.6.2`；独立 Core 的 `0.6.2-dev` 开发头仍不属于 Runtime lock。1.0 前不维护历史 package 兼容线。
 
 ## 当前执行顺序
 
@@ -86,7 +86,7 @@ WS147 provider handoff 子 gate 已由 `provider-handoff-afdcf75-20260821` 关�
 
 | 工程 | 初始独立线 | 更新规则 | 依赖规则 |
 | --- | --- | --- | --- |
-| `jellyframe-render-core` | 已发布 `0.6.1`；开发头 `0.6.2-dev` / Core ABI `1` | feature/性能/兼容性可独立发布 | Runtime 仍精确 pin `0.6.1`；开发头必须先完成 candidate evidence 和 release gate，不能直接成为 Runtime 依赖 |
+| `jellyframe-render-core` | 已发布 `0.6.2`；开发头 `0.6.2-dev` / Core ABI `1` | feature/性能/兼容性可独立发布 | Runtime 精确 pin `0.6.2`；开发头仍需独立完成 candidate evidence 和 release gate |
 | `jellyframe` | `0.6.0` | App 格式、Runtime、脚本运行时绑定、桌面工具缓慢发布 | 只在明确的 dependency bump 中升级 Core |
 | `jellyframe-device-os` | `0.1.0-dev` | 板卡与产品镜像快速迭代 | pin JellyFrame release 与 board feature profile |
 | JFDP | `JFDP/1` | 协议独立版本 | 破坏性 wire change 只能升 major |

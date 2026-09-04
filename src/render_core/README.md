@@ -1,6 +1,6 @@
 # Render Core
 
-> Last updated: 2026-08-11; Applies to: 0.6.0-dev
+> Last updated: 2026-09-04; Applies to: 0.6.0-dev
 
 `render_core` is JellyFrame's platform-neutral Living Standard/CSS subset and
 software rendering pipeline.
@@ -58,8 +58,8 @@ configuration, maintainers can create a standalone source archive:
 
 ```powershell
 python project_tools\package_render_core_source.py --output-dir build\dist
-tar -xzf build\dist\jellyframe-render-core-0.6.1.tar.gz -C build\unpacked
-cmake -S build\unpacked\jellyframe-render-core-0.6.1 -B build\core-from-archive
+tar -xzf build\dist\jellyframe-render-core-0.6.2.tar.gz -C build\unpacked
+cmake -S build\unpacked\jellyframe-render-core-0.6.2 -B build\core-from-archive
 cmake --build build\core-from-archive --config Release --parallel
 ctest --test-dir build\core-from-archive -C Release --output-on-failure
 ```

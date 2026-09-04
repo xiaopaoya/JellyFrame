@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-08-30; Applies to: 0.6.0-dev
+> Last updated: 2026-09-04; Applies to: 0.6.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -17,8 +17,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
-- First-party ESP32-S3 smoke manifests, lifecycle probe fixtures and App Packaging
-  guide examples now follow the locked Render Core `0.6.1` line. Regression tests
+- Runtime now locks the signed Render Core `0.6.2` release (ABI `1`, source identity
+  `539a8945...8462e3f0`) and verifies its deterministic archive in package-consumer CI.
+  The lock update is intentionally separate from the pending Device OS image
+  provenance update.
+
+- First-party app manifests, templates and App Packaging guide examples now follow
+  the locked Render Core `0.6.2` line. Regression tests
   verify these author-facing inputs against the active Runtime/Core versions.
 
 - CSS custom-property expansion now has a bounded resolved-value budget
