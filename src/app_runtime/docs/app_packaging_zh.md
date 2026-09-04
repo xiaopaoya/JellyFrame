@@ -1,6 +1,6 @@
 # App Packaging
 
-> 最后更新：2026-09-03；适用版本：0.6.0-dev
+> 最后更新：2026-09-04；适用版本：0.6.0-dev
 
 JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固件集成的 app 资源。
 这里不应照搬手机或手表应用商店的安装包；JellyFrame 更适合保留小型类 Web 的开发体验，
@@ -123,7 +123,7 @@ my_app/
 
 `1.0` 前，`runtime.minJellyFrame` 必须等于由 `VERSION` 推导出的活跃 release line，
 `runtime.minRenderCore` 必须等于此 Runtime 锁定的 Render Core 版本（当前 checkout 均为
-`0.6.1`）。两者共同标识当前 app 契约，不承诺继续支持历史预发布 app。
+`0.6.2`）。两者共同标识当前 app 契约，不承诺继续支持历史预发布 app。
 
 ```json
 {
@@ -140,7 +140,7 @@ my_app/
   "entry": "/index.html",
   "runtime": {
     "minJellyFrame": "0.6.0",
-    "minRenderCore": "0.6.1",
+    "minRenderCore": "0.6.2",
     "script": "classic"
   },
   "viewport": {

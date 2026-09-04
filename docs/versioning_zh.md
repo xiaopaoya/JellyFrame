@@ -1,6 +1,6 @@
 # 版本规则
 
-> 最后更新：2026-08-19；适用版本：0.6.0-dev
+> 最后更新：2026-09-04；适用版本：0.6.0-dev
 
 JellyFrame Engine 使用轻量语义化版本规则：
 
@@ -36,7 +36,7 @@ Render Core package 在仓库版本之外增加一个兼容性维度，但不改
 
 | 版本流 | 示例 | 契约 owner |
 | --- | --- | --- |
-| Render Core | `0.6.1`（已发布；首个 release 为 `0.6.0`） | Core API/ABI、feature profile schema 和渲染行为 |
+| Render Core | `0.6.2`（已发布；首个 release 为 `0.6.0`） | Core API/ABI、feature profile schema 和渲染行为 |
 | JellyFrame Runtime | `0.6.x-dev` | Japp 格式、App Runtime 和 JerryScript binding |
 | JellyFrame Device OS | `0.1.x-dev` | launcher、registry、设备生命周期、镜像和 port |
 | JFDP | `JFDP/1` | 设备控制 framing 和 result-code 兼容性 |
@@ -71,7 +71,7 @@ summary 与原生 Runtime parser 会同步执行这对校验。
 - `0.5.x`：设备可用性阶段，包括 storage lifecycle 接入、retained rendering 分片、
   产品级 image codec adapter、system shell recovery 和更多实机验证。
 - `0.6.x`：设备路径和引擎边界收束阶段。首个带签名 Render Core `0.6.0` release 是历史基线；
-  Runtime 当前锁定 `0.6.1`。本线负责 JFDP/Device Runtime 契约，以及满足 profile 与证据门槛的
+  Runtime 当前锁定 `0.6.2`。本线负责 JFDP/Device Runtime 契约，以及满足 profile 与证据门槛的
   能力包。桌面预检证据本身不能放行外部硬件试用。
 - `0.7.x`：首个官方 developer image/toolchain 和第一轮受控外部硬件试用；前提是受支持板卡上的
   安装、恢复、telemetry 和工具链已完成。
