@@ -1,6 +1,6 @@
 # Developer Image Manifest V0
 
-> 最后更新：2026-08-19；适用版本：0.6.0-dev；状态：契约基线
+> 最后更新：2026-09-04；适用版本：0.6.0-dev；状态：契约基线
 
 每个可发布的第一方 Developer Image 都必须在 firmware 与 recovery
 materials 旁发布一份不可变 JSON manifest。它是 Device OS release tooling 与未来
@@ -73,3 +73,9 @@ WS147 Developer Image manifest 与 factory procedure 已发布并完成实机验
 `RegistryInvalid` 进入 protected launcher，随后无需重新烧录即可通过 JFDP 安装并启动 lifecycle fixture。
 这只关闭 A1 的 manifest/factory-recovery 子项。未来 image revision 必须重新发布 manifest、hash 并做
 compatibility assessment，不能复用此 image identity。
+
+## Core 0.6.2 交接状态
+
+Runtime `master` 已消费带签名的 Render Core `v0.6.2`，但 WS147 尚未基于该依赖重新构建并完成验收。因此，上述已发布基线仍是不可变的 `0.6.1` 产物，不能原地修改其 `renderCore`、source、firmware 或 recovery 字段。
+重新构建、provenance 与实机门槛见
+[`project_docs/device_image_core_062_provenance_handoff_zh.md`](../project_docs/device_image_core_062_provenance_handoff_zh.md)。
