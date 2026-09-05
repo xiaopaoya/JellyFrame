@@ -43,12 +43,12 @@ constexpr std::size_t kInstalledResourceSnapshotMaxEntries = 16u;
 
 constexpr char kImageId[] = "org.jellyframe.ws147.developer";
 constexpr char kProfileId[] = "rect-172x320";
-constexpr char kImageVersion[] = "0.6.0-a2";
+constexpr char kImageVersion[] = "0.6.2-ws147.1";
 #ifndef JELLYFRAME_ESP32S3_SOURCE_REVISION
 #define JELLYFRAME_ESP32S3_SOURCE_REVISION "0000000000000000000000000000000000000000"
 #endif
 #ifndef JELLYFRAME_ESP32S3_RENDER_CORE_VERSION
-#define JELLYFRAME_ESP32S3_RENDER_CORE_VERSION "0.6.1"
+#define JELLYFRAME_ESP32S3_RENDER_CORE_VERSION "0.6.2"
 #endif
 #ifndef JELLYFRAME_ESP32S3_RENDER_CORE_ABI
 #define JELLYFRAME_ESP32S3_RENDER_CORE_ABI 1

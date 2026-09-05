@@ -184,8 +184,8 @@ def main() -> int:
     firmware = args.firmware.resolve()
     manifest = {
         "format": "jellyframe.device-image", "formatVersion": 0,
-        "imageId": "org.jellyframe.ws147.developer", "imageVersion": "0.6.0-a2",
-        "runtimeVersion": "0.6.0-dev", "renderCore": {"version": "0.6.1", "abi": 1},
+        "imageId": "org.jellyframe.ws147.developer", "imageVersion": "0.6.2-ws147.1",
+        "runtimeVersion": "0.6.0-dev", "renderCore": {"version": "0.6.2", "abi": 1},
         "source": {"revision": revision, "firmwareSha256": sha256(firmware)},
         "board": {"id": "ws147", "display": {"width": 172, "height": 320, "shape": "rect"}},
         "profile": {"id": "rect-172x320", "featureFamilies": ["core.document", "core.paint",

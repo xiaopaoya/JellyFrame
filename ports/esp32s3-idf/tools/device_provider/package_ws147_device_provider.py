@@ -21,6 +21,7 @@ FEATURE_FAMILIES = [
     "core.document", "core.paint", "css.flex-grid", "css.modern-paint",
     "forms.advanced", "graphics.canvas2d",
 ]
+RENDER_CORE_VERSION = "0.6.2"
 
 
 def sha256(path: Path) -> str:
@@ -67,7 +68,7 @@ def main() -> int:
     manifest = {
         "format": "jellyframe.device-image", "formatVersion": 0,
         "imageId": "org.jellyframe.ws147.developer", "imageVersion": args.image_version,
-        "runtimeVersion": "0.6.0-dev", "renderCore": {"version": "0.6.1", "abi": 1},
+        "runtimeVersion": "0.6.0-dev", "renderCore": {"version": RENDER_CORE_VERSION, "abi": 1},
         "source": {"revision": args.source_revision, "firmwareSha256": sha256(firmware)},
         "board": {"id": "ws147", "display": {"width": 172, "height": 320, "shape": "rect"}},
         "profile": {"id": "rect-172x320", "featureFamilies": FEATURE_FAMILIES},

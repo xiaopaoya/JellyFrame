@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 
@@ -108,6 +110,21 @@ def make_fixture(repo: Path, output: Path) -> Path:
     return bundle
 
 
+def notify_beacon(enabled: bool, title: str, detail: str) -> None:
+    if not enabled:
+        return
+    payload = json.dumps({"session": "WS147 security R4", "title": title,
+                          "detail": detail, "level": "warning", "ttlSeconds": 120}).encode("utf-8")
+    request = urllib.request.Request("http://127.0.0.1:38471/v1/alerts", data=payload,
+                                     headers={"Content-Type": "application/json; charset=utf-8"}, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=1):
+            pass
+    except (OSError, urllib.error.URLError):
+        # Beacon is only an attention aid; it must never affect test semantics.
+        pass
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", required=True)
@@ -115,6 +132,7 @@ def main() -> int:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--cycles", type=int, default=30)
     parser.add_argument("--touch-window-seconds", type=float, default=7.0)
+    parser.add_argument("--beacon", action="store_true", help="show a local Desk Beacon prompt for each touch window")
     args = parser.parse_args()
     if not 1 <= args.cycles <= 30 or not 3 <= args.touch_window_seconds <= 30 or args.output.exists():
         raise SystemExit("invalid cycle count, touch window, or existing output directory")
@@ -132,6 +150,9 @@ def main() -> int:
         try:
             invoke(output, f"{prefix}-install", provider, config, "install", "--bundle", str(bundle), jsonl=True)
             invoke(output, f"{prefix}-launch", provider, config, "launch", "--id", app_id)
+            instruction = "Hold the green Tap button until this round stops." if number >= 26 else \
+                          "Tap the green Tap button once."
+            notify_beacon(args.beacon, f"R4 cycle {number}/{args.cycles}", instruction)
             print(f"Cycle {number}/{args.cycles}: touch now ({args.touch_window_seconds:.1f}s)", flush=True)
             time.sleep(args.touch_window_seconds)
             invoke(output, f"{prefix}-stop", provider, config, "stop", "--id", app_id)

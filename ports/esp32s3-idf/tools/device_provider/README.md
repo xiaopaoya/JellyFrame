@@ -22,7 +22,7 @@ python ports\esp32s3-idf\tools\device_provider\package_ws147_device_provider.py 
   --firmware <firmware.bin> `
   --factory-image <factory-16mb.bin> `
   --source-revision <40-lowercase-hex> `
-  --image-version 0.6.0-a2 `
+  --image-version 0.6.2-ws147.1 `
   --output <release-directory>
 ```
 
