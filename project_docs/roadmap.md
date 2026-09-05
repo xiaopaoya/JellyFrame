@@ -1,6 +1,6 @@
 # JellyFrame Active Roadmap
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev; this is the single active plan.
+> Last updated: 2026-09-05; Applies to: 0.6.0-dev; this is the single active plan.
 
 ## Governing Decision
 
@@ -17,12 +17,14 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 - WS147 value-frame-v2 dirty/recovery passes. The full-screen rounded-gradient workload is not 30 FPS. Canvas has no real host binding and remains `not-tested`.
 - Script Task value-frame v4 is merged on the Runtime line. It preserves bounded fixed-point transforms and separates source-space from destination-space clip chains, including nested clips below a transformed layer. The v4 ESP32-S3 acceptance profile is now being implemented under a dedicated requirement; it is not a default Developer Image profile and cannot yet close A2 panel/input evidence.
 - JFDP/1 framing, capability, typed status/progress payloads and staged-install contracts have the isolated `device_runtime_contracts` source owner. WS147 native USB Serial/JTAG wire, A1-2 persistent lifecycle acceptance and the provider handoff are closed. The `provider-handoff-afdcf75-20260821` report passes same-image Identity matching, real in-flight cancellation, durable update/rollback/remove and 30 mixed cycles; the versioned `jellyframe-device@0.1.1-dev` provider is delivered and declares the lifecycle UI capabilities. `0.1.0-dev` remains only as the read-only `discover/info/list` baseline. The Developer Image baseline has a strict manifest and hash-verified factory recovery image; this still does not prove the clean-machine VS Code product workflow or installed-App panel/input behavior.
+- JFDP/1 framing, capability, typed status/progress payloads and staged-install contracts have the isolated `device_runtime_contracts` source owner. WS147 native USB Serial/JTAG wire, A1-2 persistent lifecycle acceptance and the provider handoff are closed. The `provider-handoff-afdcf75-20260821` report passes same-image Identity matching, real in-flight cancellation, durable update/rollback/remove and 30 mixed cycles; the versioned `jellyframe-device@0.1.1-dev` provider is delivered and declares the lifecycle UI capabilities. `0.1.0-dev` remains only as the read-only `discover/info/list` baseline. The new `0.6.2-ws147.1` candidate is archived under `core062-developer-image-final-20260905` with matching firmware, recovery and manifest provenance; R1/R2/R3/R4 pass, but the image release gate remains partial pending the report's remaining lifecycle and recovery cases.
+- The App Author SDK `app-sdk-v0.6.0-dev.2` is released from Runtime `ca747011`, includes standard and scripting desktop runtimes, and is verified against Core `0.6.2` with archive SHA-256 `c3245edd...7dc8a9f`. It is an author-tool artifact and does not replace device or clean-machine evidence.
 
 ## Active Order
 
 Parallel work may not change the exit condition of an earlier item.
 
-1. **A2 evidence, active on the port:** complete the isolated value-frame-v4 integration and then use an installed script App to obtain the missing panel/input author-tool evidence. The independent clean-machine VS Code lifecycle remains required.
+1. **A2 evidence, active on the port and author machine:** use the Core `0.6.2` WS147 candidate and SDK to close the remaining Developer Image evidence, then complete the clean-machine VS Code lifecycle and installed-App panel/input evidence. The candidate report is still partial and must not be promoted by manifest edits alone.
 2. **R1 Core-only maintenance, active on main:** the responsive layout foundation is now delivered: the [responsive layout contract](../docs/responsive_layout_contract.md), three-target matrix and Flex cross-axis semantics have regression evidence. Continue with parser/style ownership, malformed-input budgets and cache invalidation using standalone, sanitizer and deterministic capture regressions. Do not expand browser CSS scope or alter the port profile opportunistically.
 3. **B2 backend preparation, bounded:** retain the configure-time `ScriptRuntime` boundary and its invariants. Do not add a second engine or change the JerryScript default before a separate compatibility/resource RFC and parity evidence exist.
 4. **A3 preparation, in progress:** trial material, hardware procurement, visual assets and feedback operations may proceed, but no external product trial begins before both A2 evidence items pass.
@@ -43,6 +45,10 @@ Future performance work needs a real official-image workload and phase telemetry
 Target: ESP32-S3 Waveshare Touch LCD 1.47, `rect-172x320`.
 
 The storage/recovery and image-identity slices are closed: protected launcher/fallback, staged app storage, persistent registry, one real USB JFDP/1 transport and its fault matrix, the WS147 measured manifest and hash-verified factory recovery procedure are integrated. The port reports only measured profiles and bound features.
+
+The Core `0.6.2` candidate `0.6.2-ws147.1` has been built and archived with
+matching firmware, recovery image and manifest provenance. Its accepted R1/R2/R3/R4
+evidence does not yet close the remaining lifecycle and recovery gates.
 
 Exit: a clean machine can flash once using documented tooling and then repeatedly install, update, rollback, remove, recover a bad app and reconnect without reflashing, reset, watchdog or registry corruption. The WS147 port handoff now meets the physical lifecycle portion; A1-2 alone does not replace A2's actual app-render and author-tool workflow.
 

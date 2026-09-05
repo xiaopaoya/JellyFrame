@@ -1,6 +1,6 @@
 # JellyFrame 主线路线图
 
-> 最后更新：2026-09-04；适用版本：0.6.0-dev；状态：活动计划的唯一来源
+> 最后更新：2026-09-05；适用版本：0.6.0-dev；状态：活动计划的唯一来源
 
 ## 先决判断
 
@@ -17,13 +17,15 @@
 - WS147 的 value-frame v2 dirty/recovery fixture 已通过；全屏 rounded/gradient workload 的优化归因已完成，但仍不能达到 30 FPS。Canvas 还没有真实 host binding，保持 `not-tested`。
 - Script Task value-frame v4 已合入 Runtime 主线。它保留有界定点 transform，并分离变换源空间与目标空间的 clip chain，覆盖变换层下的嵌套裁剪。ESP32-S3 的 v4 验收 profile 正在按独立要求接入；它不是 Developer Image 默认 profile，也尚不能单独关闭 A2 的 panel/input 证据。
 - `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。Developer Image 已具有严格 manifest 与 hash 验证的 factory recovery image；这仍不等于干净机器 VS Code 产品流程或已安装 App 的 panel/input 行为已完成。
+- `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。新的 `0.6.2-ws147.1` 候选镜像已归档于 `core062-developer-image-final-20260905`，固件、恢复镜像和 manifest provenance 相互匹配；R1/R2/R3/R4 已通过，但镜像 release gate 仍因报告中的剩余生命周期与恢复 case 保持 partial。
+- App Author SDK `app-sdk-v0.6.0-dev.2` 已从 Runtime `ca747011` 发布，包含标准与 scripting 桌面运行时，并按 Core `0.6.2` 验证，archive SHA-256 为 `c3245edd...7dc8a9f`。它是作者工具产物，不能替代设备或干净机器证据。
 - 当前消费线是 Runtime `0.6.0-dev` / 锁定 Core `v0.6.2`；独立 Core 的 `0.6.2-dev` 开发头仍不属于 Runtime lock。1.0 前不维护历史 package 兼容线。
 
 ## 当前执行顺序
 
 并行工作不得改变更早项目的出口条件。
 
-1. **A2 证据，port 正在执行：**完成独立 value-frame v4 接入，随后用已安装的脚本 App 补齐作者工具流程所缺的 panel/input 证据。干净机器 VS Code 完整生命周期仍是独立必需证据。
+1. **A2 证据，port 与作者机并行：**使用 Core `0.6.2` WS147 候选镜像和 SDK，关闭 Developer Image 剩余证据，再完成干净机器 VS Code 完整生命周期与已安装 App 的 panel/input 证据。当前候选报告仍为 partial，不能只改 manifest 版本字段来放行。
 2. **R1 Core-only 维护，主线进行中：**响应式布局基础交付物已完成，包括[响应式布局契约](../docs/responsive_layout_contract_zh.md)、三目标矩阵和 Flex 交叉轴语义回归证据。2026-08-30 已完成软件栅格器的首轮极值安全审查：圆角距离平方、clipped 循环、描边内框和 BMP 导出尺寸均已使用有界计算，并通过完整/响应式 Core profile `9/9`；随后完成文本 fallback 测量、字间距、换行和内置绘制定位，以及 flex/inline flow 汇总与对齐、游标/行高、shift 定位、grid/positioned track/offset 和 layer-tree 文本/outline 几何的极值审查，避免字号、宽度、间距或定位运算溢出。继续使用 standalone、sanitizer 与确定性 capture 审查 parser/style 所有权、malformed-input budget 与 cache invalidation。不要机会主义地扩张浏览器 CSS 范围或修改 port profile。
 3. **B2 后端准备，受限进行：**保持 configure-time `ScriptRuntime` 边界及其不变量。在具备独立 compatibility/resource RFC 与对等证据前，不引入第二后端，也不改变 JerryScript 默认选择。
 4. **A3 筹备，已经进行中：**试用材料、设备采购、视觉资产与反馈运营可并行，但必须在 A2 的两项证据均通过后才开始外部产品试用。
@@ -48,6 +50,9 @@
 ### A1：首个官方 Developer Image
 
 目标板：ESP32-S3 Waveshare Touch LCD 1.47，profile `rect-172x320`。
+
+Core `0.6.2` 候选 `0.6.2-ws147.1` 已构建并归档，固件、恢复镜像和
+manifest provenance 相互匹配；当前 R1/R2/R3/R4 证据尚不能关闭剩余生命周期与恢复门槛。
 
 storage/recovery 与 image-identity slice 已关闭：受保护 launcher/fallback、App staging storage、持久 registry、恢复启动路径、实际 USB JFDP/1 transport、WS147 measured manifest 与经 hash 验证的 factory recovery procedure 均已合入。端口只报告实测 profile/capability/budget，不能把未链接 feature 或未绑定 Canvas 宣称为可用。
 
