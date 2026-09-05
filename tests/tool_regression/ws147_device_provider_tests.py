@@ -227,7 +227,7 @@ class Ws147DeviceProviderTests(unittest.TestCase):
             (root / "jellyframe.app.json").write_text(json.dumps({
                 "format": "jellyframe.app", "formatVersion": 0, "id": "org.example.installed",
                 "name": "Installed", "version": {"name": "1.0.0", "code": 1}, "entry": "/index.html",
-                "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"},
+                "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "none"},
                 "viewport": {"designWidth": 172, "designHeight": 320, "shape": "rect"},
                 "budgets": {"maxResourceBytes": 1024, "maxDomNodes": 8, "maxCssRules": 4,
                             "maxDisplayCommands": 8, "maxTimers": 0, "maxEventListeners": 0},

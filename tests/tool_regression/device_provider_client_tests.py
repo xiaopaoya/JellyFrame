@@ -83,7 +83,7 @@ class DeviceProviderClientTests(unittest.TestCase):
             provider = Path(directory) / "provider.exe"
             provider.write_bytes(b"")
             completed = subprocess.CompletedProcess([], 0, result("launch", "jf-test"), b"")
-            with patch("device_provider_client.subprocess.run", return_value=completed):
+            with patch("device_provider_client.subprocess.Popen", return_value=FakeProviderProcess(completed)):
                 with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "does not match"):
                     device_provider_client.invoke_provider(
                         provider, "launch", selector="other-endpoint", request_id="jf-test"
