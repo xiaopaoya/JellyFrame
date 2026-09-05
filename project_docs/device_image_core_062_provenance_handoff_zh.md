@@ -1,6 +1,8 @@
 # Device Image Core 0.6.2 Provenance 交接要求
 
-> 最后更新：2026-09-04；适用版本：JellyFrame Runtime 0.6.0-dev / Render Core 0.6.2
+> 最后更新：2026-09-04；适用版本：0.6.0-dev
+
+本文适用于 JellyFrame Runtime `0.6.0-dev` 线路及其锁定的 Render Core `0.6.2` 依赖。
 
 本文定义 WS147 Developer Image 声明 Core `0.6.2` 前必须完成的证据。不提升或修改现有镜像身份。
 

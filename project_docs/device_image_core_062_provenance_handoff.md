@@ -1,6 +1,9 @@
 # Device Image Core 0.6.2 Provenance Handoff
 
-> Last updated: 2026-09-04; Applies to: JellyFrame Runtime 0.6.0-dev / Render Core 0.6.2
+> Last updated: 2026-09-04; Applies to: 0.6.0-dev
+
+This handoff covers the JellyFrame Runtime `0.6.0-dev` line and its locked
+Render Core `0.6.2` dependency.
 
 This handoff defines the evidence required before a new WS147 Developer Image
 may claim Render Core `0.6.2`. It does not promote or mutate the existing image.
