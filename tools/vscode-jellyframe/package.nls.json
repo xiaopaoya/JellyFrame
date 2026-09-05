@@ -12,6 +12,7 @@
   "command.setupDesktopBuild": "JellyFrame: Create Compatible Desktop Build",
   "command.package": "JellyFrame: Generate Resource Package",
   "command.newFromTemplate": "JellyFrame: New App From Template",
+  "command.visualEditor": "JellyFrame: Open Visual Editor",
   "command.showReport": "JellyFrame: Show Last Report",
   "command.showOutput": "JellyFrame: View Run Log",
   "command.deviceDiscover": "JellyFrame: Discover Device",
