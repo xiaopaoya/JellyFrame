@@ -1,6 +1,6 @@
 # Samples 示例
 
-> 最后更新：2026-08-26；适用版本：0.6.0-dev；Render Core 基线：0.6.1
+> 最后更新：2026-09-04；适用版本：0.6.0-dev；Render Core 基线：0.6.2
 
 这里保存 JellyFrame app 和 app-package 生命周期验证样例；桌面 native 工具位于
 `../tools/native`。

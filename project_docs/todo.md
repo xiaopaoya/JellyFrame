@@ -1,6 +1,6 @@
 # JellyFrame Active TODO
 
-> Last updated: 2026-08-25; Applies to: 0.6.0-dev
+> Last updated: 2026-09-04; Applies to: 0.6.0-dev
 >
 > This is the near-term execution queue for the [active roadmap](roadmap.md). It does not repeat closed acceptance, performance micro-experiments or historical port work.
 
@@ -9,8 +9,10 @@
 - [ ] Complete the clean-author-machine, read-only VS Code smoke on the WS147 image: discovery, identity and installed-App list must match the manifest/registry. Use `../docs/ws147_provider_vscode_smoke_20260825_zh.md`; this item does not install or flash anything. The earlier local candidate smoke is not a substitute.
 - [ ] Complete the VS Code device workflow on the same clean author machine: `new -> check -> package -> deploy -> launch -> live log -> update -> rollback -> stop -> remove`. Keep desktop and device sessions distinct and preserve actionable ownership in the final report.
 - [ ] Run real installed-App panel/input acceptance through the provider workflow. Record the app launch marker, touch/input response, panel/present errors and recovery behavior; do not treat provider lifecycle PASS as visual or input evidence.
-- [ ] Maintain B1 as a release gate. The first signed Core `v0.6.0` is historical and Runtime currently locks `v0.6.1`; any Core bump must download or otherwise authenticate the reviewed release artifact, verify its archive SHA-256, update the exact version/ABI/source lock and pass standalone, package-consumer and source-override tests.
+- [ ] Maintain B1 as a release gate. The signed Core `v0.6.2` release is the current Runtime dependency; any Core bump must download or otherwise authenticate the reviewed release artifact, verify its archive SHA-256, update the exact version/ABI/source lock and pass standalone, package-consumer and source-override tests.
+- [ ] Produce and accept a new WS147 Developer Image built from the merged Runtime Core `0.6.2` lock. Keep the published `0.6.1` manifest and evidence immutable; use the [Core 0.6.2 provenance handoff](device_image_core_062_provenance_handoff.md) for the new image, Provider identity and hardware gates.
 - [ ] Execute [the 0.6 engineering review plan](engineering_review_plan_20260819_zh.md): begin with R0 package/profile/provenance, then R1 document/style, layout/dirty and renderer/text. Change an interface only for a demonstrated semantic or safety defect, never as a mechanical rename.
+- [ ] Continue the R1 Core-only audit after the responsive-layout foundation delivery: review parser/style ownership, malformed-input budgets, cache invalidation and deterministic capture behavior. The `300x300`, `320x240` and `172x320` matrix and Flex cross-axis regressions are now maintained as gates; prioritize demonstrated semantic defects over new controls or browser-only declarations.
 - [ ] Maintain the B2 script-runtime boundary: common hosts and worker code may include only `script_runtime.h`; engine headers, values and discovery stay in the selected backend. Do not introduce a second backend or alter public developer guidance without a separately approved RFC and parity evidence.
 
 ## In Parallel: A3 Trial Preparation
@@ -20,6 +22,7 @@ Status: **in progress, with outreach and preparation coordination owned by exter
 - [ ] Prepare the smallest trial kit: released Developer Image/provider, VS Code extension installation instructions, the `blank` template start flow, known capability boundaries and a support channel.
 - [ ] Fix the feedback archive format: App `.jfapp` or source package, image/provider/extension versions, reproduction steps, JellyFrame Output, device logs and a minimal reproducible capture where possible.
 - [ ] Prepare first-round triage: installation, execution, recovery, data corruption and documented-capability failures are P0; unclaimed Canvas, full-screen 30 FPS or full browser APIs are not implied defects.
+- [ ] Complete Stage 1 of the [Visual App Editor plan](visual_app_editor_plan.md), then add only the Stage 2/3 source-conflict and real-shell handoff slices needed before deciding whether it is included in trial promotion.
 
 Preparation does not open the external trial. Trial access and product-usability data collection begin only after the two A2 formal evidence items and installed-App panel/input acceptance close.
 
@@ -27,7 +30,7 @@ Preparation does not open the external trial. Trial access and product-usability
 
 New Render Core capability work starts only on the independently governed Core release line, or in the same approved extraction release window. Each candidate requires a reproducible author need, an RFC, positive/negative behavior tests, three-target desktop capture, capability-matrix/diagnostic/recipe updates and a hot-path benchmark.
 
-- [ ] Finish `text-wrap: balance` candidate evidence on the independent Core line. Do not add it to the Runtime author matrix until the evidence is complete and Runtime explicitly chooses its package/default-provider integration.
+- [ ] Re-evaluate and finish `text-wrap: balance` candidate evidence on the independent Core line; the current `0.6.2-dev` head does not advertise it. Do not add it to the Runtime author matrix until the evidence is complete and Runtime explicitly chooses its package/default-provider integration and lock update.
 - [ ] Choose the next Core candidate only after a reproducible author need and an RFC establish the feature, profile impact and hardware budget. Do not reopen broad CSS compatibility work by default.
 
 Core work intervenes only for a required platform-neutral contract. A reference endpoint never substitutes for hardware evidence.

@@ -371,6 +371,9 @@ void animation_invalidation_covers_previous_and_current_transform_bounds() {
 }
 
 void animation_invalidation_covers_transient_paint_effects() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
     HtmlParser html;
     CssParser css;
     auto document = html.parse("<body><div class='box'></div></body>");

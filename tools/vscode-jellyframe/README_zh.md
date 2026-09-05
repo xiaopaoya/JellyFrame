@@ -1,6 +1,6 @@
 # JellyFrame VS Code 工具
 
-> 最后更新：2026-08-28；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-08-30；适用版本：0.6.0-dev；扩展版本：0.4.49；兼容基线：0.5.0
 
 JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里检查、预览、调试和
 打包 JellyFrame App。安装后可以从左侧 JellyFrame 活动栏、资源管理器/编辑器右键菜单
@@ -11,12 +11,15 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 - 为 `jellyframe.app.json` 关联 JSON schema。
 - 命令面板提供“验证 App 包结构”“检查 App 包渲染”“预览”、VS Code 内嵌调试、外部窗口调试、frame script 回放、打开截图和生成 package。
 - 可从内置 blank、weather、clock、timer 和 calculator 模板创建 app。
+- 提供受 JellyFrame 能力约束的可视化 App 编辑器，支持拖放布局、属性编辑、可读
+  HTML/CSS 生成，并可直接转入桌面壳调试。
 - 在专用 `JellyFrame` output channel 中显示 CLI 输出。
 - `JellyFrame Report` webview 会优先展示 CLI 的 `developerAdvice[]`，再汇总
   resources、references、warnings 和管线 diagnostics。
 - 对 app 作者建议、package warnings 和管线 diagnostics 提供 inline diagnostics。
 - Explorer 中的 JellyFrame 状态视图显示当前 app、构建目录、报告诊断和性能摘要。
 - 首次配置作者环境时选择已安装的 JellyFrame SDK，独立 App 工作区随后可直接使用。
+- 可从 GitHub 最新发布下载并安装经过 SHA-256 校验的 App 作者 SDK，不覆盖已有目录。
 - 自动发现 SDK 的桌面壳构建，也可在设置中指定路径。
 - 可配置 SDK 根目录、Python 可执行文件、默认 target 和字体预算。
 - 在 VS Code 左侧提供始终可见的 `JellyFrame` 活动栏视图，集中显示 App、构建、报告、
@@ -28,9 +31,11 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 仓库当前提供的是源码版扩展，尚未发布到 VS Code Marketplace。面向 App 作者的使用方式是：
 
 1. 安装扩展后打开独立的 App 工作区。
-2. 执行“JellyFrame：配置作者环境”，选择已安装的 JellyFrame SDK；SDK 提供 CLI、target
-   preset 和匹配的桌面运行时。
-3. 点击左侧活动栏中的 JellyFrame 图标开始操作；也可以打开 `jellyframe.app.json`、App
+2. 点击左侧 JellyFrame 视图的“作者环境：未配置”。选择“从 GitHub 下载 App 作者 SDK”时，
+   扩展会从官方 GitHub Release 下载唯一的 SDK ZIP，校验 SHA-256 后安全解压并自动配置环境；
+   已经安装 SDK 时选择“选择已安装的 JellyFrame SDK”。
+3. 配置完成后，“作者环境”会显示 SDK 版本。点击它可检查更新、切换 SDK 或在资源管理器中打开 SDK。
+4. 点击左侧活动栏中的 JellyFrame 图标开始操作；也可以打开 `jellyframe.app.json`、App
    的 HTML/CSS 文件后使用右键菜单。
 
 如果希望像普通扩展一样安装或更新，可以直接在扩展目录运行统一脚本：
@@ -51,9 +56,14 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 安装或更新仍需要 VS Code 的 `code` 命令在 PATH 中；也可以通过 `-CodeCommand` 传入完整 CLI 路径（通常是
 `...\Microsoft VS Code\bin\code.cmd`）。若传入 `Code.exe` 且相邻 CLI 存在，脚本会自动改用该 CLI。若 PowerShell 阻止本地脚本，可在当前窗口执行
 `Set-ExecutionPolicy -Scope Process Bypass`。手动安装时，也可以在 VS Code 的扩展视图中选择“从 VSIX 安装”。
-安装到仓库之外时，扩展依次使用项目 `.jellyframe/project.json`、已配置的 SDK、
+SDK 下载仅接受 `https://github.com/xiaopaoya/JellyFrame` 的最新 Release，并要求 Release
+提供 GitHub SHA-256 摘要或同名 `.sha256` 校验文件；下载失败或校验缺失时不会安装。安装到仓库之外时，扩展依次使用项目 `.jellyframe/project.json`、已配置的 SDK、
 `JELLYFRAME_SDK_ROOT` 或从当前工作区向上找到的 SDK；`jellyframe.sdkRoot` 是推荐的显式
 设置，`jellyframe.repoRoot` 仅保留为旧别名。`jellyframe.buildDir` 可选，用于指定桌面运行目录。
+当 App 操作需要 SDK 而尚未配置时，扩展会直接提供“配置作者环境”，不会继续执行缺少工具的命令。
+SDK 安装不会覆盖已有目录；Windows 的短暂权限或文件占用会自动重试，仍失败时可选择重试、其他位置，或使用已验证的现有 SDK。
+官方 App 作者 SDK 有意只携带预构建的 `desktop-release` 和 `desktop-scripting-release`，不携带
+`CMakeCache.txt`；扩展会用 `sdk-manifest.json` 验证这两套运行时并直接使用。
 扩展优先使用 SDK 中的 `build/desktop-release/Release`，其次使用 `build/desktop-debug/Debug`。
 如果 App manifest 声明了 `runtime.script`，未显式设置 `jellyframe.buildDir` 时扩展只会使用
 `build/desktop-scripting-release/Release` 或 `build/desktop-scripting-debug/Debug`。所选构建必须启用
@@ -72,8 +82,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 该入口还可以附加 `.jfcapture` 程控回放，把静态管线诊断和多页面交互路径合并到一份报告。
 需要查看实际画面或手动交互时，请使用“预览”或桌面调试。
 
-`JellyFrame` 活动栏视图将“检查与预览”“交互式调试”“创建与自动化”分组；命令以图标和功能提示表示，
-构建、设备与报告结果则为只读状态，避免混淆。它不依赖当前是否打开编辑器
+`JellyFrame` 活动栏视图只使用一层顶级分区；每个 App 操作、构建状态和设备状态直接显示在对应分区下，
+避免 VS Code 树控件的多层缩进造成层级误读。命令以图标和功能提示表示，构建、设备与报告结果则为只读状态，避免混淆。它不依赖当前是否打开编辑器
 或工作区文件。安装新版 VSIX 后，如果旧扩展实例仍在运行，请执行一次“Developer: Reload Window”
 （开发人员：重新加载窗口）。资源管理器中
 右键 `jellyframe.app.json`，或在 App 的 HTML/CSS/manifest 文件编辑器中右键，可以
@@ -83,6 +93,32 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 标识。只有需要已有组织命名空间时才选择“指定 App ID”；自定义 ID 必须以字母或数字开头，且只能包含
 字母、数字、点、连字符和下划线。创建 App 时的 target 选择器仅列出已识别的仓库 preset，因此生成的
 manifest 可以直接打包。
+
+“打开可视化编辑器”只对带有合法 `.jellyframe/visual-editor.json` 模型的 App 显示；普通已有 HTML/CSS 不会显示此入口，也不会被假装支持双向还原。它会为符合条件的 App 打开三栏设计界面。组件库只提供 JellyFrame 已支持的
+容器、文本、按钮、包内图片、输入框、进度条、分隔线、留白、受限选择框、短列表、开关和小型导航栏；可以添加、调整顺序、嵌套、复制和修改属性，
+也可以在 App 声明的视窗或常见设备尺寸下查看。保存结果是普通、可读的 HTML 和 CSS，
+稳定元素 ID 可以继续供手写 JavaScript listener 使用。选项和列表内容通过有界的增删项目控件编辑，
+不会暴露无上限的 JSON 输入框。画布下方还提供包含撤销、适应、缩放、结构和保存的简洁图标工具栏，
+完整的文字操作仍保留在顶部栏。
+生成的选择框仅属于单选子集；要使用 Render Core 绘制的选项浮层，目标必须声明文档中的
+`forms.advanced` 能力，不提供浏览器原生多选或页面导航行为。
+组件库还提供状态卡、设置行和底部导航三个透明模板组合。点击后会展开为普通可编辑节点，
+模板只是起点，不会引入私有运行时组件。
+新的 blank 和面向设备的物料默认使用黑色或近黑色表面，并保留明亮文字与强调色控件，
+以减少小型圆屏边缘的视觉黑边。
+
+右侧属性面板会显示包内脚本中可静态识别、与当前稳定 ID 对应的监听器，并可复制最小事件骨架。它不会修改 JavaScript，也不会猜测 App 的业务逻辑。
+
+blank 模板自带与 `Hello world` 入口对应的可视化模型，因此首次打开时画布、源码和模型显示一致。对于没有模型的旧 blank starter，编辑器只识别这一种明确的最小结构；其他已有 HTML 不会被自动猜测，首次保存前仍需确认接管并备份入口页面。
+
+这是受约束的 App 设计器，不是任意网页构建器，也不会尝试双向还原已有的任意 HTML。
+第一次保存前，VS Code 会明确询问是否由编辑器接管入口页面的 `body`；确认后，原始 HTML
+和 CSS 会备份到 `.jellyframe/visual-editor-backups/<timestamp>/`。已有 `script` 元素和
+JavaScript 文件不会被修改。生成区域带有明确标记，标记以外的手写 CSS 会保留，设计模型
+存放在 `.jellyframe/visual-editor.json`。图片必须先存在于当前 App 包内，才能保存源码。
+
+画布只负责编辑时近似显示，不是第二套渲染器。使用“保存并实际调试”可以把生成源码交给
+真实 JellyFrame 桌面壳，部署前应以它验证布局、圆角裁剪、字体、动画和交互。
 
 使用“在 VS Code 中调试 App”会打开一个编辑器标签页：它启动独立的隐藏桌面壳会话，将完整的、单序号
 viewport 帧快照送入标签页，并把点击、拖动、滚轮和常用按键转回该会话。视窗栏可选择 App 默认、常用设备

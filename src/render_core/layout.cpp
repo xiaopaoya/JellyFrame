@@ -14,18 +14,41 @@
 namespace jellyframe {
 namespace {
 
-int horizontal_edges(const EdgeSizes& edges) {
-    const std::int64_t total = static_cast<std::int64_t>(edges.left) + edges.right;
-    return static_cast<int>(std::clamp<std::int64_t>(total,
+int clamp_layout_value(std::int64_t value) {
+    return static_cast<int>(std::clamp<std::int64_t>(value,
                                                      std::numeric_limits<int>::min(),
                                                      std::numeric_limits<int>::max()));
 }
 
+int bounded_add(int left, int right) {
+    return clamp_layout_value(static_cast<std::int64_t>(left) + right);
+}
+
+int bounded_subtract(int left, int right) {
+    return clamp_layout_value(static_cast<std::int64_t>(left) - right);
+}
+
+int bounded_non_negative_add(int left, int right) {
+    return std::max(0, bounded_add(left, right));
+}
+
+int bounded_non_negative_subtract(int left, int right) {
+    return std::max(0, bounded_subtract(left, right));
+}
+
+[[maybe_unused]] int bounded_non_negative_multiply(int left, int right) {
+    if (left <= 0 || right <= 0) {
+        return 0;
+    }
+    return clamp_layout_value(static_cast<std::int64_t>(left) * right);
+}
+
+int horizontal_edges(const EdgeSizes& edges) {
+    return bounded_add(edges.left, edges.right);
+}
+
 int vertical_edges(const EdgeSizes& edges) {
-    const std::int64_t total = static_cast<std::int64_t>(edges.top) + edges.bottom;
-    return static_cast<int>(std::clamp<std::int64_t>(total,
-                                                     std::numeric_limits<int>::min(),
-                                                     std::numeric_limits<int>::max()));
+    return bounded_add(edges.top, edges.bottom);
 }
 
 int resolve_percent(int basis, int percent) {
@@ -82,15 +105,21 @@ int resolved_content_width(const Style& style, int containing_width) {
     if (style.width_percent >= 0) {
         const int border_box_width = resolve_percent(containing_width, style.width_percent);
         return style.box_sizing_border_box
-            ? std::max(0, border_box_width - horizontal_edges(style.border_width) - horizontal_edges(style.padding))
+            ? bounded_non_negative_subtract(
+                  bounded_non_negative_subtract(border_box_width, horizontal_edges(style.border_width)),
+                  horizontal_edges(style.padding))
             : border_box_width;
     }
     if (style.width >= 0) {
         return style.box_sizing_border_box
-            ? std::max(0, style.width - horizontal_edges(style.border_width) - horizontal_edges(style.padding))
+            ? bounded_non_negative_subtract(
+                  bounded_non_negative_subtract(style.width, horizontal_edges(style.border_width)),
+                  horizontal_edges(style.padding))
             : style.width;
     }
-    return std::max(0, containing_width - horizontal_edges(style.border_width) - horizontal_edges(style.padding));
+    return bounded_non_negative_subtract(
+        bounded_non_negative_subtract(containing_width, horizontal_edges(style.border_width)),
+        horizontal_edges(style.padding));
 }
 
 int resolved_min_width(const Style& style, int containing_width) {
@@ -109,7 +138,9 @@ int resolved_max_content_width(const Style& style, int containing_width) {
         return -1;
     }
     return style.box_sizing_border_box
-        ? std::max(0, max_width - horizontal_edges(style.border_width) - horizontal_edges(style.padding))
+        ? bounded_non_negative_subtract(
+              bounded_non_negative_subtract(max_width, horizontal_edges(style.border_width)),
+              horizontal_edges(style.padding))
         : max_width;
 }
 
@@ -122,7 +153,9 @@ int specified_content_height(const Style& style, int containing_height) {
         return -1;
     }
     return style.box_sizing_border_box
-        ? std::max(0, height - vertical_edges(style.border_width) - vertical_edges(style.padding))
+        ? bounded_non_negative_subtract(
+              bounded_non_negative_subtract(height, vertical_edges(style.border_width)),
+              vertical_edges(style.padding))
         : height;
 }
 
@@ -135,7 +168,9 @@ int specified_content_min_height(const Style& style, int containing_height) {
         return -1;
     }
     return style.box_sizing_border_box
-        ? std::max(0, min_height - vertical_edges(style.border_width) - vertical_edges(style.padding))
+        ? bounded_non_negative_subtract(
+              bounded_non_negative_subtract(min_height, vertical_edges(style.border_width)),
+              vertical_edges(style.padding))
         : min_height;
 }
 
@@ -148,7 +183,9 @@ int resolved_max_content_height(const Style& style, int containing_height) {
         return -1;
     }
     return style.box_sizing_border_box
-        ? std::max(0, max_height - vertical_edges(style.border_width) - vertical_edges(style.padding))
+        ? bounded_non_negative_subtract(
+              bounded_non_negative_subtract(max_height, vertical_edges(style.border_width)),
+              vertical_edges(style.padding))
         : max_height;
 }
 
@@ -164,20 +201,24 @@ void shift_box(LayoutBox& box, int dx, int dy);
 
 int horizontal_position_offset(const Style& style, int area_width, int box_width) {
     if (style.inset_left_specified) {
-        return style.inset_left + style.margin.left;
+        return bounded_add(style.inset_left, style.margin.left);
     }
     if (style.inset_right_specified) {
-        return area_width - style.inset_right - box_width - style.margin.right;
+        return bounded_subtract(
+            bounded_subtract(bounded_subtract(area_width, style.inset_right), box_width),
+            style.margin.right);
     }
     return style.margin.left;
 }
 
 int vertical_position_offset(const Style& style, int area_height, int box_height) {
     if (style.inset_top_specified) {
-        return style.inset_top + style.margin.top;
+        return bounded_add(style.inset_top, style.margin.top);
     }
     if (style.inset_bottom_specified && area_height > 0) {
-        return area_height - style.inset_bottom - box_height - style.margin.bottom;
+        return bounded_subtract(
+            bounded_subtract(bounded_subtract(area_height, style.inset_bottom), box_height),
+            style.margin.bottom);
     }
     return style.margin.top;
 }
@@ -240,11 +281,11 @@ void distribute_flex_row_widths(std::vector<FlexLayoutItem>& items,
                 : static_cast<int>((static_cast<std::int64_t>(remaining_space) * grow) / remaining_grow);
             remaining_space -= share;
             remaining_grow -= grow;
-            item.target_width = std::max(0, item.base_width + share);
+            item.target_width = std::max(0, bounded_add(item.base_width, share));
             item.force_width = true;
         }
     } else if (free_space < 0 && total_shrink_weight > 0) {
-        const int deficit = -free_space;
+        const int deficit = bounded_subtract(0, free_space);
         int remaining_deficit = deficit;
         std::int64_t remaining_weight = total_shrink_weight;
         for (FlexLayoutItem& item : items) {
@@ -258,7 +299,7 @@ void distribute_flex_row_widths(std::vector<FlexLayoutItem>& items,
             remaining_deficit -= share;
             remaining_weight -= weight;
             const int min_width = item.child == nullptr ? 0 : std::max(0, item.child->style.min_width);
-            item.target_width = std::max(min_width, item.base_width - share);
+            item.target_width = std::max(min_width, bounded_subtract(item.base_width, share));
             item.force_width = true;
         }
     }
@@ -276,45 +317,91 @@ FlexJustifyPlacement flex_justify_placement(JustifyContent justify_content,
                                             int in_flow_count) {
     FlexJustifyPlacement placement;
     placement.cursor = main_start;
-    const int free_space = std::max(0, main_size - total_child_size);
+    const int free_space = bounded_non_negative_subtract(main_size, total_child_size);
     if (justify_content == JustifyContent::End) {
-        placement.cursor += free_space;
+        placement.cursor = bounded_add(placement.cursor, free_space);
     } else if (justify_content == JustifyContent::Center) {
-        placement.cursor += free_space / 2;
+        placement.cursor = bounded_add(placement.cursor, free_space / 2);
     } else if (justify_content == JustifyContent::SpaceAround) {
         placement.extra_gap = in_flow_count == 0 ? 0 : free_space / in_flow_count;
-        placement.cursor += placement.extra_gap / 2;
+        placement.cursor = bounded_add(placement.cursor, placement.extra_gap / 2);
     } else if (justify_content == JustifyContent::SpaceBetween && in_flow_count > 1) {
         placement.extra_gap = free_space / (in_flow_count - 1);
     } else if (justify_content == JustifyContent::SpaceEvenly && in_flow_count > 0) {
         placement.extra_gap = free_space / (in_flow_count + 1);
-        placement.cursor += placement.extra_gap;
+        placement.cursor = bounded_add(placement.cursor, placement.extra_gap);
     }
     return placement;
 }
 
 int flex_aligned_y(AlignItems align_items, int content_y, int container_height, int child_height) {
     if (align_items == AlignItems::Center) {
-        return content_y + std::max(0, (container_height - child_height) / 2);
+        return bounded_add(content_y,
+                           std::max(0, bounded_subtract(container_height, child_height) / 2));
     }
     if (align_items == AlignItems::End) {
-        return content_y + std::max(0, container_height - child_height);
+        return bounded_add(content_y, std::max(0, bounded_subtract(container_height, child_height)));
     }
     return content_y;
 }
 
 int flex_aligned_x(AlignItems align_items, int content_x, int container_width, int child_width) {
     if (align_items == AlignItems::Center) {
-        return content_x + std::max(0, (container_width - child_width) / 2);
+        return bounded_add(content_x,
+                           std::max(0, bounded_subtract(container_width, child_width) / 2));
     }
     if (align_items == AlignItems::End) {
-        return content_x + std::max(0, container_width - child_width);
+        return bounded_add(content_x, std::max(0, bounded_subtract(container_width, child_width)));
     }
     return content_x;
 }
 
 AlignItems flex_cross_axis_alignment(const LayoutBox& child, AlignItems parent_alignment) {
     return child.style.align_self == AlignItems::Auto ? parent_alignment : child.style.align_self;
+}
+
+bool flex_cross_size_is_auto(const Style& style, bool row_direction) {
+    return row_direction
+        ? style.height < 0 && style.height_percent < 0
+        : style.width < 0 && style.width_percent < 0;
+}
+
+int flex_bounded_sum(int first, int second) {
+    return static_cast<int>(std::clamp<std::int64_t>(
+        static_cast<std::int64_t>(first) + second,
+        std::numeric_limits<int>::min(),
+        std::numeric_limits<int>::max()));
+}
+
+int flex_stretch_dimension(const Style& style, int outer_size, bool vertical) {
+    const int margins = vertical
+        ? flex_bounded_sum(style.margin.top, style.margin.bottom)
+        : flex_bounded_sum(style.margin.left, style.margin.right);
+    const int edges = vertical
+        ? flex_bounded_sum(vertical_edges(style.border_width), vertical_edges(style.padding))
+        : flex_bounded_sum(horizontal_edges(style.border_width), horizontal_edges(style.padding));
+    const int target_outer_size = static_cast<int>(std::clamp<std::int64_t>(
+        static_cast<std::int64_t>(outer_size) - margins, 0, std::numeric_limits<int>::max()));
+    return style.box_sizing_border_box
+        ? target_outer_size
+        : bounded_non_negative_subtract(target_outer_size, edges);
+}
+
+void set_flex_stretch_cross_size(Style& style, int outer_size, bool row_direction) {
+    if (row_direction) {
+        style.height = flex_stretch_dimension(style, outer_size, true);
+        style.height_percent = -1;
+    } else {
+        style.width = flex_stretch_dimension(style, outer_size, false);
+        style.width_percent = -1;
+    }
+}
+
+int flex_outer_cross_size(const LayoutBox& child, bool row_direction) {
+    const int margins = row_direction
+        ? flex_bounded_sum(child.style.margin.top, child.style.margin.bottom)
+        : flex_bounded_sum(child.style.margin.left, child.style.margin.right);
+    return flex_bounded_sum(row_direction ? child.rect.height : child.rect.width, margins);
 }
 
 std::vector<LayoutBox*> ordered_flex_children(LayoutBox& box) {
@@ -357,10 +444,8 @@ int layout_wrapped_flex_children(LayoutBox& box,
     const bool distribute_lines = box.style.align_content != JustifyContent::Start &&
         (fixed_height >= 0 || minimum_height > 0);
     std::vector<FlexWrapLine> lines;
-    if (distribute_lines) {
-        lines.reserve(box.children.size());
-        lines.push_back(FlexWrapLine{content_y, 0, {}});
-    }
+    lines.reserve(box.children.size());
+    lines.push_back(FlexWrapLine{content_y, 0, {}});
     int cursor_x = content_x;
     int line_y = content_y;
     int line_height = 0;
@@ -368,25 +453,25 @@ int layout_wrapped_flex_children(LayoutBox& box,
     const auto place_child = [&](LayoutBox& child) {
         const bool use_basis = child.style.flex_basis >= 0;
         layout_child_for_width(child, use_basis ? child.style.flex_basis : content_width, use_basis);
-        const int child_width = child.rect.width + child.style.margin.left + child.style.margin.right;
-        const int child_height = child.rect.height + child.style.margin.top + child.style.margin.bottom;
-        const bool should_wrap = cursor_x > content_x && cursor_x + child_width > content_x + max_line_width;
+        const int child_width = bounded_add(
+            bounded_add(child.rect.width, child.style.margin.left), child.style.margin.right);
+        const int child_height = bounded_add(
+            bounded_add(child.rect.height, child.style.margin.top), child.style.margin.bottom);
+        const bool should_wrap = cursor_x > content_x &&
+            bounded_add(cursor_x, child_width) > bounded_add(content_x, max_line_width);
         if (should_wrap) {
-            if (distribute_lines) {
-                lines.back().height = line_height;
-                lines.push_back(FlexWrapLine{line_y + std::max(1, line_height) + box.style.row_gap, 0, {}});
-            }
-            line_y += std::max(1, line_height) + box.style.row_gap;
+            lines.back().height = line_height;
+            const int line_advance = bounded_add(std::max(1, line_height), box.style.row_gap);
+            lines.push_back(FlexWrapLine{bounded_add(line_y, line_advance), 0, {}});
+            line_y = bounded_add(line_y, line_advance);
             cursor_x = content_x;
             line_height = 0;
         }
-        const int dx = cursor_x + child.style.margin.left - child.rect.x;
-        const int dy = line_y + child.style.margin.top - child.rect.y;
+        const int dx = bounded_subtract(bounded_add(cursor_x, child.style.margin.left), child.rect.x);
+        const int dy = bounded_subtract(bounded_add(line_y, child.style.margin.top), child.rect.y);
         shift_box(child, dx, dy);
-        if (distribute_lines) {
-            lines.back().children.push_back(&child);
-        }
-        cursor_x += child_width + box.style.column_gap;
+        lines.back().children.push_back(&child);
+        cursor_x = bounded_add(cursor_x, bounded_add(child_width, box.style.column_gap));
         line_height = std::max(line_height, child_height);
     };
     if (ordered_children.empty()) {
@@ -400,12 +485,42 @@ int layout_wrapped_flex_children(LayoutBox& box,
             place_child(*child);
         }
     }
-    const int natural_height = line_y - content_y + std::max(0, line_height);
+    const int natural_height = bounded_add(bounded_subtract(line_y, content_y), std::max(0, line_height));
+    lines.back().height = line_height;
+
+    // A wrapped line has its own cross-axis alignment context. Relayout only
+    // auto-sized stretch items; explicit dimensions remain authoritative.
+    for (FlexWrapLine& line : lines) {
+        const int line_cross_size = std::max(1, line.height);
+        for (LayoutBox* child : line.children) {
+            const AlignItems alignment = flex_cross_axis_alignment(*child, box.style.align_items);
+            if (alignment == AlignItems::Stretch && flex_cross_size_is_auto(child->style, true)) {
+                const int old_height = child->style.height;
+                const int old_height_percent = child->style.height_percent;
+                set_flex_stretch_cross_size(child->style, line_cross_size, true);
+                layout_child_for_width(*child, std::max(0, child->rect.width), false);
+                child->style.height = old_height;
+                child->style.height_percent = old_height_percent;
+            }
+            const int child_outer_height = flex_outer_cross_size(*child, true);
+            int target_y = line.y;
+            if (alignment == AlignItems::Center) {
+                target_y = bounded_add(target_y,
+                                       std::max(0, bounded_subtract(line_cross_size, child_outer_height) / 2));
+            } else if (alignment == AlignItems::End) {
+                target_y = bounded_add(target_y,
+                                       std::max(0, bounded_subtract(line_cross_size, child_outer_height)));
+            }
+            const int dy = bounded_subtract(bounded_add(target_y, child->style.margin.top), child->rect.y);
+            if (dy != 0) {
+                shift_box(*child, 0, dy);
+            }
+        }
+    }
     if (!distribute_lines) {
         return natural_height;
     }
 
-    lines.back().height = line_height;
     const int container_height = fixed_height >= 0 ? fixed_height : std::max(minimum_height, natural_height);
     const FlexJustifyPlacement placement = flex_justify_placement(box.style.align_content,
                                                                   content_y,
@@ -414,13 +529,15 @@ int layout_wrapped_flex_children(LayoutBox& box,
                                                                   static_cast<int>(lines.size()));
     int target_y = placement.cursor;
     for (FlexWrapLine& line : lines) {
-        const int dy = target_y - line.y;
+        const int dy = bounded_subtract(target_y, line.y);
         if (dy != 0) {
             for (LayoutBox* child : line.children) {
                 shift_box(*child, 0, dy);
             }
         }
-        target_y += std::max(1, line.height) + box.style.row_gap + placement.extra_gap;
+        target_y = bounded_add(target_y,
+                               bounded_add(std::max(1, line.height),
+                                           bounded_add(box.style.row_gap, placement.extra_gap)));
     }
     return container_height;
 }
@@ -446,14 +563,16 @@ GridColumns resolve_grid_columns(const Style& style, int content_width, int in_f
             const int width = style.grid_template_column_widths[static_cast<std::size_t>(column)];
             if (width > 0) {
                 columns.widths[static_cast<std::size_t>(column)] = width;
-                fixed_width += width;
+                fixed_width = bounded_add(fixed_width, width);
             } else {
                 ++flexible_count;
             }
         }
-        const int total_gap_width = columns.gap * std::max(0, columns.count - 1);
+        const int total_gap_width = bounded_non_negative_multiply(
+            columns.gap, std::max(0, columns.count - 1));
         const int flexible_width = flexible_count > 0
-            ? std::max(1, (content_width - fixed_width - total_gap_width) / flexible_count)
+            ? std::max(1, bounded_subtract(
+                  bounded_subtract(content_width, fixed_width), total_gap_width) / flexible_count)
             : 0;
         for (int& width : columns.widths) {
             if (width <= 0) {
@@ -462,11 +581,15 @@ GridColumns resolve_grid_columns(const Style& style, int content_width, int in_f
         }
     } else {
         const int min_track = std::max(1, style.grid_min_track_width > 0 ? style.grid_min_track_width : content_width);
-        columns.count = std::max(1, (content_width + columns.gap) / (min_track + columns.gap));
+        const int available_with_gap = bounded_add(content_width, columns.gap);
+        const int track_with_gap = std::max(1, bounded_add(min_track, columns.gap));
+        columns.count = std::max(1, available_with_gap / track_with_gap);
         columns.count = std::min(columns.count, in_flow_count);
         columns.count = std::min(columns.count, kMaxGridColumns);
-        const int total_gap_width = columns.gap * std::max(0, columns.count - 1);
-        const int column_width = std::max(1, (content_width - total_gap_width) / columns.count);
+        const int total_gap_width = bounded_non_negative_multiply(
+            columns.gap, std::max(0, columns.count - 1));
+        const int column_width = std::max(1,
+            bounded_subtract(content_width, total_gap_width) / columns.count);
         columns.widths.assign(static_cast<std::size_t>(columns.count), column_width);
     }
     return columns;
@@ -475,18 +598,20 @@ GridColumns resolve_grid_columns(const Style& style, int content_width, int in_f
 int grid_item_width(const GridColumns& columns, int column, int span) {
     int width = 0;
     for (int offset = 0; offset < span; ++offset) {
-        width += columns.widths[static_cast<std::size_t>(column + offset)];
+        width = bounded_add(width, columns.widths[static_cast<std::size_t>(column + offset)]);
     }
-    width += columns.gap * std::max(0, span - 1);
+    width = bounded_add(width,
+                        bounded_non_negative_multiply(columns.gap, std::max(0, span - 1)));
     return std::max(1, width);
 }
 
 int grid_column_x(const GridColumns& columns, int content_x, int column) {
     int offset = 0;
     for (int i = 0; i < column; ++i) {
-        offset += columns.widths[static_cast<std::size_t>(i)] + columns.gap;
+        offset = bounded_add(offset,
+                             bounded_add(columns.widths[static_cast<std::size_t>(i)], columns.gap));
     }
-    return content_x + offset;
+    return bounded_add(content_x, offset);
 }
 
 struct GridPlacement {
@@ -643,8 +768,8 @@ bool has_only_inline_children(const LayoutBox& box) {
 }
 
 void shift_box(LayoutBox& box, int dx, int dy) {
-    box.rect.x += dx;
-    box.rect.y += dy;
+    box.rect.x = bounded_add(box.rect.x, dx);
+    box.rect.y = bounded_add(box.rect.y, dy);
     for (auto& child : box.children) {
         shift_box(*child, dx, dy);
     }
@@ -780,16 +905,18 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
 
     const int margin_left = box.style.margin_left_auto ? 0 : box.style.margin.left;
     const int margin_right = box.style.margin_right_auto ? 0 : box.style.margin.right;
-    const int border_box_y = y + box.style.margin.top;
-    const int containing_content_width = std::max(0, width - margin_left - margin_right);
+    const int border_box_y = bounded_add(y, box.style.margin.top);
+    const int containing_content_width = bounded_non_negative_subtract(
+        bounded_subtract(width, margin_left), margin_right);
     const int available_content_width = resolved_content_width(box.style, containing_content_width);
     int content_width = available_content_width;
     const int max_content_width = resolved_max_content_width(box.style, containing_content_width);
     if (max_content_width >= 0) {
         content_width = std::min(content_width, max_content_width);
     }
-    const int measured_border_box_width = content_width + horizontal_edges(box.style.padding) +
-        horizontal_edges(box.style.border_width);
+    const int measured_border_box_width = bounded_non_negative_add(
+        bounded_non_negative_add(content_width, horizontal_edges(box.style.padding)),
+        horizontal_edges(box.style.border_width));
     const int min_width = resolved_min_width(box.style, containing_content_width);
     const bool fixed_border_box_width =
         box.style.box_sizing_border_box && (box.style.width >= 0 || box.style.width_percent >= 0);
@@ -801,15 +928,19 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
         preferred_border_box_width = std::min(preferred_border_box_width, measured_border_box_width);
     }
     int border_box_width = std::max(min_width, preferred_border_box_width);
-    const int auto_space = std::max(0, width - border_box_width - margin_left - margin_right);
-    int border_box_x = x + margin_left;
+    const int auto_space = bounded_non_negative_subtract(
+        bounded_non_negative_subtract(
+            bounded_non_negative_subtract(width, border_box_width), margin_left), margin_right);
+    int border_box_x = bounded_add(x, margin_left);
     if (box.style.margin_left_auto && box.style.margin_right_auto) {
-        border_box_x = x + auto_space / 2;
+        border_box_x = bounded_add(x, auto_space / 2);
     } else if (box.style.margin_left_auto) {
-        border_box_x = x + auto_space;
+        border_box_x = bounded_add(x, auto_space);
     }
-    const int content_x = border_box_x + box.style.border_width.left + box.style.padding.left;
-    const int content_y = border_box_y + box.style.border_width.top + box.style.padding.top;
+    const int content_x = bounded_add(bounded_add(border_box_x, box.style.border_width.left),
+                                      box.style.padding.left);
+    const int content_y = bounded_add(bounded_add(border_box_y, box.style.border_width.top),
+                                      box.style.padding.top);
     int cursor_y = content_y;
 
     if (box.node != nullptr && box.node->type == NodeType::Text) {
@@ -834,11 +965,11 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
                     continue;
                 }
                 const int child_height = layout_box(*child, content_x, cursor_y, content_width, height, depth + 1);
-                cursor_y += child_height;
-                flow_height += child_height;
+                cursor_y = bounded_add(cursor_y, child_height);
+                flow_height = bounded_add(flow_height, child_height);
                 const int child_left = safe_edge(child->rect.x, -child->style.margin.left);
                 const int child_right = safe_edge(safe_edge(child->rect.x, child->rect.width), child->style.margin.right);
-                max_child_width = std::max(max_child_width, child_right - child_left);
+                max_child_width = std::max(max_child_width, bounded_subtract(child_right, child_left));
             }
             return flow_height;
         }();
@@ -853,17 +984,20 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
                 max_child_x = std::max(max_child_x,
                     safe_edge(safe_edge(child->rect.x, child->rect.width), child->style.margin.right));
             }
-            max_child_width = std::max(0, max_child_x - min_child_x);
+            max_child_width = std::max(0, bounded_subtract(max_child_x, min_child_x));
         }
         content_width = std::min(available_content_width, max_child_width);
         border_box_width = std::max(min_width,
-            content_width + horizontal_edges(box.style.padding) + horizontal_edges(box.style.border_width));
+            bounded_add(bounded_add(content_width, horizontal_edges(box.style.padding)),
+                        horizontal_edges(box.style.border_width)));
         if (!box.children.empty()) {
-            int min_child_x = box.children.front()->rect.x - box.children.front()->style.margin.left;
+            int min_child_x = bounded_subtract(box.children.front()->rect.x,
+                                               box.children.front()->style.margin.left);
             for (const auto& child : box.children) {
-                min_child_x = std::min(min_child_x, child->rect.x - child->style.margin.left);
+                min_child_x = std::min(min_child_x,
+                    bounded_subtract(child->rect.x, child->style.margin.left));
             }
-            const int dx = content_x - min_child_x;
+            const int dx = bounded_subtract(content_x, min_child_x);
             if (dx != 0) {
                 for (auto& child : box.children) {
                     shift_box(*child, dx, 0);
@@ -892,8 +1026,11 @@ int LayoutEngine::layout_box(LayoutBox& box, int x, int y, int width, int height
     if (max_content_height >= 0) {
         content_height = std::min(content_height, max_content_height);
     }
-    const int border_box_height = vertical_edges(box.style.border_width) + vertical_edges(box.style.padding) + content_height;
-    const int total_height = box.style.margin.top + border_box_height + box.style.margin.bottom;
+    const int border_box_height = bounded_non_negative_add(
+        bounded_non_negative_add(vertical_edges(box.style.border_width), vertical_edges(box.style.padding)),
+        content_height);
+    const int total_height = bounded_add(bounded_add(box.style.margin.top, border_box_height),
+                                         box.style.margin.bottom);
     box.rect = Rect{border_box_x, border_box_y, border_box_width, border_box_height};
     layout_positioned_children(box, content_x, content_y, content_width, content_height, width, depth);
     apply_relative_position_offset(box);
@@ -915,7 +1052,7 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
                                                                  box.style.letter_spacing);
     const int raw_text_width = metrics.width;
     const int text_indent = std::max(0, std::min(box.style.text_indent, content_width));
-    const int usable_text_width = std::max(0, content_width - text_indent);
+    const int usable_text_width = bounded_non_negative_subtract(content_width, text_indent);
     const int text_width = std::max(min_width, std::min(usable_text_width, raw_text_width));
     const int line_height = box.style.line_height > 0 ? box.style.line_height : metrics.line_height;
     const bool can_wrap = !box.style.white_space_nowrap &&
@@ -936,35 +1073,43 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
                                                content_width,
                                                text_indent));
     }
-    const int line_count = can_wrap && usable_text_width > 0
-        ? std::max(1, static_cast<int>((box.style.overflow_wrap_anywhere
-                ? wrap_text_anywhere(text_measure_,
-                                     text,
-                                     box.style.font_size,
-                                     box.style.font_weight,
-                                     box.style.font_family_hash,
-                                     box.style.letter_spacing,
-                                     usable_text_width)
-                : wrap_text_at_opportunities(text_measure_,
-                                             text,
-                                             box.style.font_size,
-                                             box.style.font_weight,
-                                             box.style.font_family_hash,
-                                             box.style.letter_spacing,
-                                             usable_text_width)).size()))
-        : 1;
+    int line_count = 1;
+    if (can_wrap && usable_text_width > 0) {
+        const std::vector<std::string> lines = box.style.overflow_wrap_anywhere
+            ? wrap_text_anywhere(text_measure_,
+                                 text,
+                                 box.style.font_size,
+                                 box.style.font_weight,
+                                 box.style.font_family_hash,
+                                 box.style.letter_spacing,
+                                 usable_text_width)
+            : wrap_text_at_opportunities(text_measure_,
+                                         text,
+                                         box.style.font_size,
+                                         box.style.font_weight,
+                                         box.style.font_family_hash,
+                                         box.style.letter_spacing,
+                                         usable_text_width);
+        line_count = clamp_layout_value(static_cast<std::int64_t>(std::min<std::size_t>(
+            lines.size(), static_cast<std::size_t>(std::numeric_limits<int>::max()))));
+        line_count = std::max(1, line_count);
+    }
     const int fixed_text_height = specified_content_height(box.style, height);
     int text_height = std::max(specified_content_min_height(box.style, height),
-        fixed_text_height >= 0 ? fixed_text_height : line_height * line_count);
+        fixed_text_height >= 0
+            ? fixed_text_height
+            : bounded_non_negative_multiply(std::max(0, line_height), line_count));
     const int max_text_height = resolved_max_content_height(box.style, height);
     if (max_text_height >= 0) {
         text_height = std::min(text_height, max_text_height);
     }
-    int text_x = border_box_x + text_indent;
+    int text_x = bounded_add(border_box_x, text_indent);
     if (box.style.text_align == TextAlign::Center) {
-        text_x += std::max(0, (usable_text_width - text_width) / 2);
+        text_x = bounded_add(text_x,
+                             std::max(0, bounded_subtract(usable_text_width, text_width) / 2));
     } else if (box.style.text_align == TextAlign::End) {
-        text_x += std::max(0, usable_text_width - text_width);
+        text_x = bounded_add(text_x,
+                             std::max(0, bounded_subtract(usable_text_width, text_width)));
     }
     box.rect = Rect{text_x, border_box_y, text_width, text_height};
     return text_height;
@@ -975,7 +1120,7 @@ int LayoutEngine::layout_inline_children(LayoutBox& box,
                                          int content_y,
                                          int content_width,
                                          std::size_t depth) const {
-    int cursor_x = content_x + std::max(0, std::min(box.style.text_indent, content_width));
+    int cursor_x = bounded_add(content_x, std::max(0, std::min(box.style.text_indent, content_width)));
     int line_y = content_y;
     int line_height = 0;
     int line_start_x = cursor_x;
@@ -986,11 +1131,12 @@ int LayoutEngine::layout_inline_children(LayoutBox& box,
             return;
         }
         int dx = 0;
-        const int line_capacity = std::max(0, content_x + content_width - line_start_x);
+        const int line_capacity = std::max(0,
+            bounded_subtract(bounded_add(content_x, content_width), line_start_x));
         if (box.style.text_align == TextAlign::Center) {
-            dx = std::max(0, (line_capacity - used_width) / 2);
+            dx = std::max(0, bounded_subtract(line_capacity, used_width) / 2);
         } else if (box.style.text_align == TextAlign::End) {
-            dx = std::max(0, line_capacity - used_width);
+            dx = std::max(0, bounded_subtract(line_capacity, used_width));
         }
         if (dx == 0) {
             return;
@@ -1006,28 +1152,32 @@ int LayoutEngine::layout_inline_children(LayoutBox& box,
             continue;
         }
         layout_box(*child, 0, 0, content_width, 0, depth + 1);
-        const int child_outer_width = child->style.margin.left + child->rect.width + child->style.margin.right;
-        const int child_outer_height = child->style.margin.top + child->rect.height + child->style.margin.bottom;
-        const int remaining_width = std::max(0, content_x + content_width - cursor_x);
+        const int child_outer_width = bounded_add(
+            bounded_add(child->style.margin.left, child->rect.width), child->style.margin.right);
+        const int child_outer_height = bounded_add(
+            bounded_add(child->style.margin.top, child->rect.height), child->style.margin.bottom);
+        const int remaining_width = std::max(0,
+            bounded_subtract(bounded_add(content_x, content_width), cursor_x));
 
         if (cursor_x > line_start_x && child_outer_width > remaining_width) {
-            finish_line(index, cursor_x - line_start_x);
-            line_y += std::max(1, line_height);
+            finish_line(index, bounded_subtract(cursor_x, line_start_x));
+            line_y = bounded_add(line_y, std::max(1, line_height));
             line_height = 0;
             cursor_x = content_x;
             line_start_x = cursor_x;
             line_start_index = index;
         }
 
-        const int target_x = cursor_x + child->style.margin.left;
-        const int target_y = line_y + child->style.margin.top;
-        shift_box(*child, target_x - child->rect.x, target_y - child->rect.y);
-        cursor_x += child_outer_width;
+        const int target_x = bounded_add(cursor_x, child->style.margin.left);
+        const int target_y = bounded_add(line_y, child->style.margin.top);
+        shift_box(*child, bounded_subtract(target_x, child->rect.x),
+                  bounded_subtract(target_y, child->rect.y));
+        cursor_x = bounded_add(cursor_x, child_outer_width);
         line_height = std::max(line_height, child_outer_height);
     }
 
-    finish_line(box.children.size(), cursor_x - line_start_x);
-    return line_y - content_y + std::max(0, line_height);
+    finish_line(box.children.size(), bounded_subtract(cursor_x, line_start_x));
+    return bounded_add(bounded_subtract(line_y, content_y), std::max(0, line_height));
 }
 
 void LayoutEngine::layout_positioned_children(LayoutBox& box,
@@ -1053,8 +1203,12 @@ void LayoutEngine::layout_positioned_children(LayoutBox& box,
         const bool original_box_sizing = child->style.box_sizing_border_box;
         if (child->style.width < 0 && child->style.width_percent < 0 &&
             child->style.inset_left_specified && child->style.inset_right_specified) {
-            child->style.width = std::max(0, area_width - child->style.inset_left - child->style.inset_right -
-                                             child->style.margin.left - child->style.margin.right);
+            child->style.width = std::max(0,
+                bounded_subtract(
+                    bounded_subtract(
+                        bounded_subtract(area_width, child->style.inset_left),
+                        child->style.inset_right),
+                    bounded_add(child->style.margin.left, child->style.margin.right)));
             child->style.width_percent = -1;
             child->style.box_sizing_border_box = true;
         }
@@ -1064,9 +1218,12 @@ void LayoutEngine::layout_positioned_children(LayoutBox& box,
         child->style.width_percent = original_width_percent;
         child->style.box_sizing_border_box = original_box_sizing;
 
-        const int target_x = area_x + horizontal_position_offset(child->style, area_width, child->rect.width);
-        const int target_y = area_y + vertical_position_offset(child->style, area_height, child->rect.height);
-        shift_box(*child, target_x - child->rect.x, target_y - child->rect.y);
+        const int target_x = bounded_add(
+            area_x, horizontal_position_offset(child->style, area_width, child->rect.width));
+        const int target_y = bounded_add(
+            area_y, vertical_position_offset(child->style, area_height, child->rect.height));
+        shift_box(*child, bounded_subtract(target_x, child->rect.x),
+                  bounded_subtract(target_y, child->rect.y));
     }
 }
 
@@ -1147,18 +1304,23 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
             item.force_height = force_height;
             items.push_back(item);
 
-            total_base_height += base_height;
-            total_margin_height += child.style.margin.top + child.style.margin.bottom;
-            total_grow += std::max(0, child.style.flex_grow);
+            total_base_height = bounded_add(total_base_height, base_height);
+            total_margin_height = bounded_add(total_margin_height,
+                                              bounded_add(child.style.margin.top,
+                                                          child.style.margin.bottom));
+            total_grow = bounded_add(total_grow, std::max(0, child.style.flex_grow));
             total_shrink_weight += static_cast<std::int64_t>(std::max(0, child.style.flex_shrink)) *
                 std::max(1, base_height);
         });
 
-        const int total_gap_height = box.style.row_gap * std::max(0, in_flow_count - 1);
-        const int natural_height = total_base_height + total_margin_height + total_gap_height;
+        const int total_gap_height = bounded_non_negative_multiply(
+            box.style.row_gap, std::max(0, in_flow_count - 1));
+        const int natural_height = bounded_add(
+            bounded_add(total_base_height, total_margin_height), total_gap_height);
         const int container_height = fixed_height >= 0 ? fixed_height : std::max(minimum_height, natural_height);
-        const int available_item_height = std::max(0, container_height - total_margin_height - total_gap_height);
-        const int free_space = available_item_height - total_base_height;
+        const int available_item_height = bounded_non_negative_subtract(
+            bounded_non_negative_subtract(container_height, total_margin_height), total_gap_height);
+        const int free_space = bounded_subtract(available_item_height, total_base_height);
 
         if (free_space > 0 && total_grow > 0) {
             int remaining_space = free_space;
@@ -1173,11 +1335,11 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
                     : static_cast<int>((static_cast<std::int64_t>(remaining_space) * grow) / remaining_grow);
                 remaining_space -= share;
                 remaining_grow -= grow;
-                item.target_height = std::max(0, item.base_height + share);
+                item.target_height = std::max(0, bounded_add(item.base_height, share));
                 item.force_height = true;
             }
         } else if (free_space < 0 && total_shrink_weight > 0) {
-            int remaining_deficit = -free_space;
+            int remaining_deficit = bounded_subtract(0, free_space);
             std::int64_t remaining_weight = total_shrink_weight;
             for (ColumnFlexItem& item : items) {
                 const std::int64_t weight = static_cast<std::int64_t>(std::max(0, item.child->style.flex_shrink)) *
@@ -1190,15 +1352,16 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
                     : static_cast<int>((static_cast<std::int64_t>(remaining_deficit) * weight) / remaining_weight);
                 remaining_deficit -= share;
                 remaining_weight -= weight;
-                item.target_height = std::max(std::max(0, item.child->style.min_height), item.base_height - share);
+                item.target_height = std::max(std::max(0, item.child->style.min_height),
+                                              bounded_subtract(item.base_height, share));
                 item.force_height = true;
             }
         }
 
-        int total_child_height = total_margin_height + total_gap_height;
+        int total_child_height = bounded_add(total_margin_height, total_gap_height);
         for (ColumnFlexItem& item : items) {
             layout_child_for_size(*item.child, item.target_height, item.force_height);
-            total_child_height += item.child->rect.height;
+            total_child_height = bounded_add(total_child_height, item.child->rect.height);
         }
 
         const FlexJustifyPlacement placement = flex_justify_placement(box.style.justify_content,
@@ -1209,15 +1372,31 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
         int cursor_y = placement.cursor;
         for (ColumnFlexItem& item : items) {
             LayoutBox* child = item.child;
-            const int target_x = flex_aligned_x(flex_cross_axis_alignment(*child, box.style.align_items),
+            const AlignItems alignment = flex_cross_axis_alignment(*child, box.style.align_items);
+            if (alignment == AlignItems::Stretch && flex_cross_size_is_auto(child->style, false)) {
+                const int old_width = child->style.width;
+                const int old_width_percent = child->style.width_percent;
+                set_flex_stretch_cross_size(child->style, content_width, false);
+                layout_child_for_size(*child, item.target_height, item.force_height);
+                child->style.width = old_width;
+                child->style.width_percent = old_width_percent;
+            }
+            const int target_x = flex_aligned_x(alignment,
                                                 content_x,
                                                 content_width,
-                                                child->rect.width);
-            const int dx = target_x + child->style.margin.left - child->rect.x;
-            const int dy = cursor_y + child->style.margin.top - child->rect.y;
+                                                flex_outer_cross_size(*child, false));
+            const int dx = bounded_subtract(bounded_add(target_x, child->style.margin.left),
+                                            child->rect.x);
+            const int dy = bounded_subtract(bounded_add(cursor_y, child->style.margin.top),
+                                            child->rect.y);
             shift_box(*child, dx, dy);
-            cursor_y += child->rect.height + child->style.margin.top + child->style.margin.bottom +
-                placement.extra_gap + box.style.row_gap;
+            cursor_y = bounded_add(
+                cursor_y,
+                bounded_add(
+                    bounded_add(
+                        bounded_add(child->rect.height, child->style.margin.top),
+                        child->style.margin.bottom),
+                    bounded_add(placement.extra_gap, box.style.row_gap)));
         }
         return container_height;
     }
@@ -1267,23 +1446,29 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
         item.force_width = force_width;
         items.push_back(item);
 
-        total_base_width += base_width;
-        total_margin_width += child.style.margin.left + child.style.margin.right;
-        total_grow += flex_grow_factor(item);
+        total_base_width = bounded_add(total_base_width, base_width);
+        total_margin_width = bounded_add(total_margin_width,
+                                         bounded_add(child.style.margin.left,
+                                                     child.style.margin.right));
+        total_grow = bounded_add(total_grow, flex_grow_factor(item));
         total_shrink_weight += flex_shrink_weight(item);
     });
 
-    const int total_gap_width = box.style.column_gap * std::max(0, in_flow_count - 1);
-    const int available_item_width = std::max(0, content_width - total_margin_width - total_gap_width);
-    const int free_space = available_item_width - total_base_width;
+    const int total_gap_width = bounded_non_negative_multiply(
+        box.style.column_gap, std::max(0, in_flow_count - 1));
+    const int available_item_width = bounded_non_negative_subtract(
+        bounded_non_negative_subtract(content_width, total_margin_width), total_gap_width);
+    const int free_space = bounded_subtract(available_item_width, total_base_width);
     distribute_flex_row_widths(items, free_space, total_grow, total_shrink_weight);
 
-    int total_child_width = total_margin_width + total_gap_width;
+    int total_child_width = bounded_add(total_margin_width, total_gap_width);
     for (FlexLayoutItem& item : items) {
         layout_child_for_width(*item.child, item.target_width, item.force_width);
-        total_child_width += item.child->rect.width;
+        total_child_width = bounded_add(total_child_width, item.child->rect.width);
         max_child_height = std::max(max_child_height,
-            item.child->rect.height + item.child->style.margin.top + item.child->style.margin.bottom);
+            bounded_add(
+                bounded_add(item.child->rect.height, item.child->style.margin.top),
+                item.child->style.margin.bottom));
     }
 
     const FlexJustifyPlacement placement = flex_justify_placement(box.style.justify_content,
@@ -1296,16 +1481,31 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
     const int container_height = std::max(box.style.min_height, box.style.height >= 0 ? box.style.height : max_child_height);
     for (FlexLayoutItem& item : items) {
         LayoutBox* child = item.child;
-        const int target_y = flex_aligned_y(flex_cross_axis_alignment(*child, box.style.align_items),
-                                            content_y,
-                                            container_height,
-                                            child->rect.height);
+        const AlignItems alignment = flex_cross_axis_alignment(*child, box.style.align_items);
+        if (alignment == AlignItems::Stretch && flex_cross_size_is_auto(child->style, true)) {
+            const int old_height = child->style.height;
+            const int old_height_percent = child->style.height_percent;
+            set_flex_stretch_cross_size(child->style, container_height, true);
+            layout_child_for_width(*child, item.target_width, item.force_width);
+            child->style.height = old_height;
+            child->style.height_percent = old_height_percent;
+        }
+        const int child_outer_height = flex_outer_cross_size(*child, true);
+        const int target_y = bounded_add(
+            flex_aligned_y(alignment, content_y, container_height, child_outer_height),
+            child->style.margin.top);
 
-        const int dx = cursor_x + child->style.margin.left - child->rect.x;
-        const int dy = target_y + child->style.margin.top - child->rect.y;
+        const int dx = bounded_subtract(bounded_add(cursor_x, child->style.margin.left),
+                                        child->rect.x);
+        const int dy = bounded_subtract(target_y, child->rect.y);
         shift_box(*child, dx, dy);
-        cursor_x += child->rect.width + child->style.margin.left + child->style.margin.right +
-            placement.extra_gap + box.style.column_gap;
+        cursor_x = bounded_add(
+            cursor_x,
+            bounded_add(
+                bounded_add(
+                    bounded_add(child->rect.width, child->style.margin.left),
+                    child->style.margin.right),
+                bounded_add(placement.extra_gap, box.style.column_gap)));
     }
 
     return container_height;
@@ -1341,17 +1541,19 @@ int LayoutEngine::layout_grid_box(LayoutBox& box,
         }
         const int fixed_content_height = specified_content_height(box.style, containing_height);
         if (fixed_content_height >= 0) {
-            int fixed_height = row_gap * std::max(0, template_rows - 1);
+            int fixed_height = bounded_non_negative_multiply(row_gap, std::max(0, template_rows - 1));
             int flexible_count = 0;
             for (int row = 0; row < template_rows; ++row) {
                 if (placement_state.row_fixed[static_cast<std::size_t>(row)]) {
-                    fixed_height += placement_state.row_heights[static_cast<std::size_t>(row)];
+                    fixed_height = bounded_add(
+                        fixed_height, placement_state.row_heights[static_cast<std::size_t>(row)]);
                 } else {
                     ++flexible_count;
                 }
             }
             if (flexible_count > 0) {
-                const int flexible_height = std::max(1, (fixed_content_height - fixed_height) / flexible_count);
+                const int flexible_height = std::max(
+                    1, bounded_subtract(fixed_content_height, fixed_height) / flexible_count);
                 for (int row = 0; row < template_rows; ++row) {
                     if (!placement_state.row_fixed[static_cast<std::size_t>(row)]) {
                         placement_state.row_heights[static_cast<std::size_t>(row)] = flexible_height;
@@ -1407,9 +1609,13 @@ int LayoutEngine::layout_grid_box(LayoutBox& box,
         child->style.width = original_width;
         child->style.width_percent = original_width_percent;
         child->style.box_sizing_border_box = original_box_sizing;
-        const int min_allocated_height = box.style.grid_auto_row_min * row_span + row_gap * (row_span - 1);
+        const int min_allocated_height = bounded_add(
+            bounded_non_negative_multiply(box.style.grid_auto_row_min, row_span),
+            bounded_non_negative_multiply(row_gap, row_span - 1));
         const int allocated_height = std::max(child_height, min_allocated_height);
-        const int per_row_height = std::max(1, (allocated_height - row_gap * (row_span - 1) + row_span - 1) / row_span);
+        const int row_gaps = bounded_non_negative_multiply(row_gap, row_span - 1);
+        const int per_row_height = std::max(1,
+            bounded_add(bounded_subtract(allocated_height, row_gaps), row_span - 1) / row_span);
         for (int r = placement.row; r < placement.row + row_span; ++r) {
             if (!placement_state.row_fixed[static_cast<std::size_t>(r)]) {
                 placement_state.row_heights[static_cast<std::size_t>(r)] =
@@ -1424,9 +1630,9 @@ int LayoutEngine::layout_grid_box(LayoutBox& box,
     int total_height = 0;
     for (std::size_t row = 0; row < placement_state.row_heights.size(); ++row) {
         row_offsets[row] = total_height;
-        total_height += placement_state.row_heights[row];
+        total_height = bounded_add(total_height, placement_state.row_heights[row]);
         if (row + 1 < placement_state.row_heights.size()) {
-            total_height += row_gap;
+            total_height = bounded_add(total_height, row_gap);
         }
     }
 
@@ -1437,28 +1643,39 @@ int LayoutEngine::layout_grid_box(LayoutBox& box,
                                               return placement.fallback_block;
                                           });
     if (has_grid_rows && has_fallback) {
-        fallback_y += row_gap;
+        fallback_y = bounded_add(fallback_y, row_gap);
     }
 
     for (const GridPlacement& placement : placements) {
         if (placement.fallback_block) {
-            const int target_x = content_x + placement.child->style.margin.left;
-            const int target_y = content_y + fallback_y + placement.child->style.margin.top;
-            shift_box(*placement.child, target_x - placement.child->rect.x, target_y - placement.child->rect.y);
-            fallback_y += std::max(1, placement.child->rect.height +
-                                          placement.child->style.margin.top +
-                                          placement.child->style.margin.bottom) + row_gap;
+            const int target_x = bounded_add(content_x, placement.child->style.margin.left);
+            const int target_y = bounded_add(
+                bounded_add(content_y, fallback_y), placement.child->style.margin.top);
+            shift_box(*placement.child,
+                      bounded_subtract(target_x, placement.child->rect.x),
+                      bounded_subtract(target_y, placement.child->rect.y));
+            const int fallback_height = bounded_add(
+                bounded_add(placement.child->rect.height, placement.child->style.margin.top),
+                placement.child->style.margin.bottom);
+            fallback_y = bounded_add(fallback_y, bounded_add(std::max(1, fallback_height), row_gap));
             continue;
         }
         int allocated_height = 0;
         for (int r = 0; r < placement.row_span; ++r) {
-            allocated_height += placement_state.row_heights[static_cast<std::size_t>(placement.row + r)];
+            allocated_height = bounded_add(
+                allocated_height,
+                placement_state.row_heights[static_cast<std::size_t>(placement.row + r)]);
         }
-        allocated_height += row_gap * (placement.row_span - 1);
-        const int target_x = grid_column_x(columns, content_x, placement.column) + placement.child->style.margin.left;
-        const int target_y = content_y + row_offsets[static_cast<std::size_t>(placement.row)] +
-            placement.child->style.margin.top;
-        shift_box(*placement.child, target_x - placement.child->rect.x, target_y - placement.child->rect.y);
+        allocated_height = bounded_add(
+            allocated_height, bounded_non_negative_multiply(row_gap, placement.row_span - 1));
+        const int target_x = bounded_add(
+            grid_column_x(columns, content_x, placement.column), placement.child->style.margin.left);
+        const int target_y = bounded_add(
+            bounded_add(content_y, row_offsets[static_cast<std::size_t>(placement.row)]),
+            placement.child->style.margin.top);
+        shift_box(*placement.child,
+                  bounded_subtract(target_x, placement.child->rect.x),
+                  bounded_subtract(target_y, placement.child->rect.y));
         placement.child->rect.width = grid_item_width(columns, placement.column, placement.column_span);
         if (placement.child->style.height < 0) {
             placement.child->rect.height = std::max(placement.child->rect.height, allocated_height);

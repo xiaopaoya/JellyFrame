@@ -113,10 +113,16 @@ jobs:
         shell: pwsh
         run: |
           node --check tools\vscode-jellyframe\extension.js
+          node --check tools\vscode-jellyframe\visual_editor.js
+          node --check tools\vscode-jellyframe\visual_editor_webview.js
           node tests\tool_regression\vscode_build_profile_tests.js
+          node tests\tool_regression\vscode_visual_editor_model_tests.js
+          node tests\tool_regression\vscode_visual_editor_files_tests.js
           node tests\tool_regression\vscode_command_diagnostics_tests.js
           node tests\tool_regression\vscode_device_presentation_tests.js
           node tests\tool_regression\vscode_status_presentation_tests.js
+          node tests\tool_regression\vscode_sdk_download_tests.js
+          python tests\tool_regression\sdk_archive_tests.py
           node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('tools/vscode-jellyframe/package.json','utf8')); const s=fs.readFileSync('tools/vscode-jellyframe/extension.js','utf8'); if(!p.contributes?.viewsContainers?.activitybar?.some(v=>v.id==='jellyframe'&&v.icon==='media/jellyframe.svg')) throw new Error('JellyFrame Activity Bar container is missing'); if(!p.contributes?.views?.jellyframe?.some(v=>v.id==='jellyframe.status')) throw new Error('JellyFrame status view is missing'); if(p.contributes?.menus?.['menubar/main']) throw new Error('unsupported custom menubar contribution remains'); if(!fs.existsSync('tools/vscode-jellyframe/media/jellyframe.svg')) throw new Error('JellyFrame Activity Bar icon is missing'); if(!s.includes('function currentPackageRoot()') || !s.includes('onDidChangeActiveTextEditor')) throw new Error('JellyFrame status view does not follow the active package');"
 
       - name: Run package diagnostics smoke tests
@@ -321,15 +327,15 @@ jobs:
       - name: Download released Render Core source package
         run: |
           curl --fail --location --retry 3 \
-            --output build/jellyframe-render-core-0.6.1.tar.gz \
-            https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v0.6.1/jellyframe-render-core-0.6.1.tar.gz
-          echo "f9d24aca2b630c5d6aaa8d6a566504bfdda82971140edc2b67f9be2ac0fe18c7  build/jellyframe-render-core-0.6.1.tar.gz" | sha256sum --check --status
+            --output build/jellyframe-render-core-0.6.2.tar.gz \
+            https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v0.6.2/jellyframe-render-core-0.6.2.tar.gz
+          echo "d136a0d7fd7ab58436a5f2fa9c7eb27a497e08bad384a96cd93689ba6898f43e  build/jellyframe-render-core-0.6.2.tar.gz" | sha256sum --check --status
           mkdir -p build/released-render-core-source
-          tar -xzf build/jellyframe-render-core-0.6.1.tar.gz -C build/released-render-core-source
+          tar -xzf build/jellyframe-render-core-0.6.2.tar.gz -C build/released-render-core-source
 
       - name: Install released Render Core package
         run: |
-          cmake -S build/released-render-core-source/jellyframe-render-core-0.6.1 \
+          cmake -S build/released-render-core-source/jellyframe-render-core-0.6.2 \
             -B build/released-render-core-build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DJELLYFRAME_BUILD_TESTS=OFF

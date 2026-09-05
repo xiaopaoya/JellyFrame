@@ -1,6 +1,6 @@
 # Component Recipes
 
-> 最后更新：2026-08-26；适用版本：0.6.0-dev；Render Core 基线：0.6.1
+> 最后更新：2026-09-04；适用版本：0.6.0-dev；Render Core 基线：0.6.2
 
 常见可穿戴 UI 结构的确定性 scroll/dirty-region 验收输入。可复制的作者 recipe 正文维护在
 `docs/app_author_recipes_zh.md`；此 package 保持聚焦回放覆盖。

@@ -16,6 +16,20 @@ function makeProfile(root, name, configuration, cacheEntries) {
   return output;
 }
 
+function makePrebuiltSdkProfile(root, name) {
+  const output = path.join(root, "build", name, "Release");
+  fs.mkdirSync(path.join(root, "tools"), { recursive: true });
+  fs.mkdirSync(output, { recursive: true });
+  fs.writeFileSync(path.join(root, "tools", "jellyframe_cli.py"), "", "utf8");
+  fs.writeFileSync(path.join(output, process.platform === "win32" ? "jellyframe_desktop_shell.exe" : "jellyframe_desktop_shell"), "", "utf8");
+  fs.writeFileSync(path.join(root, "sdk-manifest.json"), JSON.stringify({
+    format: "jellyframe.app-author-sdk",
+    formatVersion: 1,
+    desktopProfiles: { [name]: { tools: [process.platform === "win32" ? "jellyframe_desktop_shell.exe" : "jellyframe_desktop_shell"] } }
+  }), "utf8");
+  return output;
+}
+
 function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "jellyframe-vscode-profile-"));
   try {
@@ -44,6 +58,13 @@ function main() {
 
     fs.rmSync(currentScripting, { recursive: true, force: true });
     assert.equal(selectBuildDirectory(root, "", true).issue.code, "no-compatible-build");
+
+    const sdk = path.join(root, "sdk");
+    const prebuiltStandard = makePrebuiltSdkProfile(sdk, "desktop-release");
+    assert.equal(selectBuildDirectory(sdk, "", false).buildDirectory, prebuiltStandard);
+    assert.equal(selectBuildDirectory(sdk, "", true).issue.code, "no-compatible-build");
+    const prebuiltScripting = makePrebuiltSdkProfile(sdk, "desktop-scripting-release");
+    assert.equal(selectBuildDirectory(sdk, "", true).buildDirectory, prebuiltScripting);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

@@ -1,6 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 
+const SDK_MANIFEST_FILENAME = "sdk-manifest.json";
+const SDK_INSTALL_METADATA_FILENAME = ".jellyframe-sdk-install.json";
+
 function existingDirectory(value) {
   if (!value) {
     return undefined;
@@ -100,11 +103,48 @@ function authorOutputRoot(workspaceRoot, sdkRoot) {
   return sdkRoot ? path.join(sdkRoot, "build") : undefined;
 }
 
+function readJsonObject(filename) {
+  try {
+    const value = JSON.parse(fs.readFileSync(filename, "utf8"));
+    return value && typeof value === "object" && !Array.isArray(value) ? value : undefined;
+  } catch (_) {
+    return undefined;
+  }
+}
+
+function readSdkMetadata(root) {
+  if (!isSdkRoot(root)) {
+    return undefined;
+  }
+  const resolved = path.resolve(root);
+  const manifest = readJsonObject(path.join(resolved, SDK_MANIFEST_FILENAME));
+  const install = readJsonObject(path.join(resolved, SDK_INSTALL_METADATA_FILENAME));
+  const sourceVersion = (() => {
+    try {
+      return fs.readFileSync(path.join(resolved, "VERSION"), "utf8").trim() || undefined;
+    } catch (_) {
+      return undefined;
+    }
+  })();
+  const packaged = manifest?.format === "jellyframe.app-author-sdk" && manifest.formatVersion === 1;
+  return {
+    root: resolved,
+    kind: packaged ? "app-sdk" : "source-checkout",
+    runtimeVersion: typeof manifest?.runtimeVersion === "string" ? manifest.runtimeVersion : sourceVersion,
+    releaseTag: typeof install?.releaseTag === "string" ? install.releaseTag : undefined,
+    desktopProfiles: manifest?.desktopProfiles && typeof manifest.desktopProfiles === "object"
+      ? Object.keys(manifest.desktopProfiles).sort()
+      : []
+  };
+}
+
 module.exports = {
   authorOutputRoot,
   findSdkRootFrom,
   isInside,
   isSdkRoot,
+  readSdkMetadata,
   readProjectDescriptor,
-  resolveSdkRoot
+  resolveSdkRoot,
+  SDK_INSTALL_METADATA_FILENAME
 };

@@ -9,6 +9,8 @@
 namespace jellyframe {
 
 struct CssParserOptions {
+    // A zero value disables the corresponding optional limit. HostBudgets
+    // supplies non-zero production limits for embedded profiles.
     std::size_t max_rules = 4096;
     std::size_t max_declarations_per_rule = 256;
     std::size_t max_nesting_depth = 8;

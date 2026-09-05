@@ -56,6 +56,55 @@ def tiny_png_header(width: int = 2, height: int = 2) -> bytes:
 
 
 class PackagePreflightTests(unittest.TestCase):
+    def test_first_party_manifests_match_active_runtime_and_core_lines(self):
+        runtime_version = package_app.active_runtime_release_version()
+        render_core_version = package_app.active_render_core_release_version()
+        roots = [
+            REPO_ROOT / "tools" / "templates" / "apps",
+            REPO_ROOT / "samples" / "apps" / "packages",
+            REPO_ROOT / "ports" / "esp32s3-idf" / "resources" / "app",
+        ]
+        manifests = [
+            path for root in roots
+            for path in root.rglob("jellyframe.app.json")
+        ]
+        self.assertGreater(len(manifests), 0)
+        for path in manifests:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["runtime"]["minJellyFrame"], runtime_version, str(path))
+            self.assertEqual(manifest["runtime"]["minRenderCore"], render_core_version, str(path))
+
+    def test_packaging_guide_example_matches_active_core_lock(self):
+        render_core_version = package_app.active_render_core_release_version()
+        for path in (
+            REPO_ROOT / "src" / "app_runtime" / "docs" / "app_packaging.md",
+            REPO_ROOT / "src" / "app_runtime" / "docs" / "app_packaging_zh.md",
+        ):
+            content = path.read_text(encoding="utf-8")
+            self.assertIn(f'"minRenderCore": "{render_core_version}"', content, str(path))
+
+    def test_version_entrypoints_match_runtime_and_core_lock(self):
+        render_core_version = package_app.active_render_core_release_version()
+        english = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        chinese = (REPO_ROOT / "README_zh.md").read_text(encoding="utf-8")
+        self.assertIn(
+            f"locked Render Core `{render_core_version}`",
+            english,
+        )
+        self.assertIn(
+            f"锁定的 Render Core `{render_core_version}`",
+            chinese,
+        )
+
+    def test_render_core_archive_example_matches_packager_version(self):
+        render_core_version = package_app.active_render_core_release_version()
+        content = (REPO_ROOT / "src" / "render_core" / "README.md").read_text(
+            encoding="utf-8"
+        )
+        archive_name = f"jellyframe-render-core-{render_core_version}"
+        self.assertIn(f"{archive_name}.tar.gz", content)
+        self.assertIn(f"build\\unpacked\\{archive_name}", content)
+
     def test_cli_forwards_render_core_profile_to_package_tool(self):
         args = type("Args", (), {
             "root": REPO_ROOT / "samples" / "apps" / "packages" / "jelly_canvas_smoke",
@@ -116,7 +165,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.profile",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["graphics.canvas2d"],
@@ -138,14 +187,14 @@ class PackagePreflightTests(unittest.TestCase):
                 "id": "org.test.historical-runtime",
                 "entry": "/index.html",
                 "version": {"name": "0.1.0", "code": 1},
-                "runtime": {"minJellyFrame": "0.5.0", "minRenderCore": "0.6.1", "script": "none"},
+                "runtime": {"minJellyFrame": "0.5.0", "minRenderCore": "0.6.2", "script": "none"},
                 "viewport": {"designWidth": 10, "designHeight": 10},
                 "budgets": {"maxResourceBytes": 1024},
                 "targets": {"test": {"viewport": {"width": 10, "height": 10}, "output": "jfapp"}},
             })
 
     def test_manifest_rejects_a_historical_pre_release_render_core_line(self):
-        with self.assertRaisesRegex(SystemExit, "must target the active pre-1.0 Render Core line 0.6.1"):
+        with self.assertRaisesRegex(SystemExit, "must target the active pre-1.0 Render Core line 0.6.2"):
             package_app.validate_manifest({
                 "format": "jellyframe.app",
                 "formatVersion": 0,
@@ -167,7 +216,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.profile",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["graphics.canvas2d"],
@@ -189,7 +238,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.modern-paint",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["css.modern-paint"],
@@ -955,7 +1004,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.services",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "permissions": ["network"],
@@ -1094,7 +1143,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.file.manager",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "capabilities": ["file.read", "file.write", "file.manage"],
@@ -1114,7 +1163,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.strict",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
@@ -1142,7 +1191,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.strict",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
@@ -1964,7 +2013,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.fonts",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "none"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "fonts": [

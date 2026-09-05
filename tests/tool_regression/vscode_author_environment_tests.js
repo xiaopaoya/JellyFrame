@@ -6,6 +6,7 @@ const {
   authorOutputRoot,
   findSdkRootFrom,
   isInside,
+  readSdkMetadata,
   readProjectDescriptor,
   resolveSdkRoot
 } = require("../../tools/vscode-jellyframe/author_environment");
@@ -18,6 +19,17 @@ function main() {
     fs.mkdirSync(path.join(sdk, "tools"), { recursive: true });
     fs.mkdirSync(workspace, { recursive: true });
     fs.writeFileSync(path.join(sdk, "tools", "jellyframe_cli.py"), "", "utf8");
+    fs.writeFileSync(path.join(sdk, "sdk-manifest.json"), JSON.stringify({
+      format: "jellyframe.app-author-sdk",
+      formatVersion: 1,
+      runtimeVersion: "0.6.0-dev",
+      desktopProfiles: { "desktop-release": {} }
+    }), "utf8");
+    fs.writeFileSync(path.join(sdk, ".jellyframe-sdk-install.json"), JSON.stringify({
+      format: "jellyframe.sdk-install",
+      formatVersion: 1,
+      releaseTag: "app-sdk-v0.6.0-dev.1"
+    }), "utf8");
 
     assert.equal(findSdkRootFrom(path.join(workspace, "jellyframe.app.json")), undefined);
     fs.mkdirSync(path.join(workspace, ".jellyframe"), { recursive: true });
@@ -27,6 +39,13 @@ function main() {
       sdkRoot: path.relative(workspace, sdk)
     }), "utf8");
     assert.equal(readProjectDescriptor(workspace).formatVersion, 1);
+    assert.deepStrictEqual(readSdkMetadata(sdk), {
+      root: path.resolve(sdk),
+      kind: "app-sdk",
+      runtimeVersion: "0.6.0-dev",
+      releaseTag: "app-sdk-v0.6.0-dev.1",
+      desktopProfiles: ["desktop-release"]
+    });
     assert.equal(resolveSdkRoot({ workspaceRoot: workspace, extensionPath: root }), path.resolve(sdk));
     const alternativeSdk = path.join(root, "alternative-sdk");
     fs.mkdirSync(path.join(alternativeSdk, "tools"), { recursive: true });

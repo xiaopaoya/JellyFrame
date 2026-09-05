@@ -129,7 +129,7 @@ def write_jfapp(
             "versionCode": version_code,
             "entry": entry,
             "minJellyFrame": "0.6.0",
-            "minRenderCore": "0.6.1",
+            "minRenderCore": "0.6.2",
             "script": "classic",
             "viewport": {"designWidth": 172, "designHeight": 320},
             "budgets": {"maxResourceBytes": 65536},
@@ -284,7 +284,7 @@ def main() -> int:
                 "versionCode": 1,
                 "entry": "/index.html",
                 "runtime": {
-                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"
+                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "none"
                 },
                 "viewport": {"designWidth": 160, "designHeight": 60},
             }),
@@ -365,7 +365,7 @@ def main() -> int:
                 "versionCode": 1,
                 "entry": "/index.html",
                 "runtime": {
-                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"
+                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "none"
                 },
                 "viewport": {"designWidth": 160, "designHeight": 100},
             }),
@@ -438,7 +438,7 @@ def main() -> int:
                     "versionCode": 1,
                     "entry": "/index.html",
                     "runtime": {
-                        "minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"
+                        "minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "none"
                     },
                     "viewport": {"designWidth": 172, "designHeight": 320},
                 }
@@ -476,7 +476,7 @@ def main() -> int:
         historical_core_result = run_case(exe, ["--app", str(app)])
         require(historical_core_result.returncode != 0,
                 "native app loading must reject a historical Render Core contract")
-        require("minRenderCore must target the configured pre-1.0 Render Core line 0.6.1"
+        require("minRenderCore must target the configured pre-1.0 Render Core line 0.6.2"
                 in historical_core_result.stdout,
                 "native app loading must report the configured Render Core requirement")
 

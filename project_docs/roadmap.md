@@ -1,6 +1,6 @@
 # JellyFrame Active Roadmap
 
-> Last updated: 2026-08-27; Applies to: 0.6.0-dev; this is the single active plan.
+> Last updated: 2026-09-04; Applies to: 0.6.0-dev; this is the single active plan.
 
 ## Governing Decision
 
@@ -12,7 +12,7 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 
 ## Current Baseline
 
-- The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository owns the physical Core branch. The first signed `v0.6.0` release is historical; Runtime `0.6.0-dev` now locks Core `v0.6.1`, ABI `1` and source identity `105d0166...b797c52b`. CI downloads that release artifact, verifies archive SHA-256 `f9d24aca...e18c7`, installs it and runs the Runtime package-consumer tests. The in-tree provider remains only for synchronized local development. For Core ABI `1`, installed `render_core/` headers are the C++ consumer surface; there is no hidden header tier or C ABI. On 2026-08-19, Core-only/Device-contract CMake boundary coverage was added: Core-only cannot create contracts targets/tests, contracts-only remains independently buildable, and the archive/install/package/source-override loop was rechecked.
+- The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository owns the physical Core branch. Its `master` was synchronized to JellyFrame mainline `7735b9a1` on 2026-08-30; the current development head is `0.6.2-dev` with Core ABI `1`, and independent Core CI is green. The signed `v0.6.2` release is now the Runtime dependency; Runtime `0.6.0-dev` locks Core `0.6.2`, ABI `1` and source identity `539a8945...8462e3f0`. CI downloads that release artifact, verifies archive SHA-256 `d136a0d7...89f43e`, installs it and runs the Runtime package-consumer tests. The in-tree provider remains only for synchronized local development. For Core ABI `1`, installed `render_core/` headers are the C++ consumer surface; there is no hidden header tier or C ABI. Core-only, Device-contract, source-archive, install, package and source-override boundaries have been rechecked.
 - App Runtime has `.jfapp` lifecycle, registry reference semantics, an optional selected script backend and the script-worker session/generation/epoch, value-only frame/input/service/fatal protocol. WS147 P3 worker, service, recovery and mixed-soak evidence is closed.
 - WS147 value-frame-v2 dirty/recovery passes. The full-screen rounded-gradient workload is not 30 FPS. Canvas has no real host binding and remains `not-tested`.
 - Script Task value-frame v4 is merged on the Runtime line. It preserves bounded fixed-point transforms and separates source-space from destination-space clip chains, including nested clips below a transformed layer. The v4 ESP32-S3 acceptance profile is now being implemented under a dedicated requirement; it is not a default Developer Image profile and cannot yet close A2 panel/input evidence.
@@ -23,9 +23,10 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 Parallel work may not change the exit condition of an earlier item.
 
 1. **A2 evidence, active on the port:** complete the isolated value-frame-v4 integration and then use an installed script App to obtain the missing panel/input author-tool evidence. The independent clean-machine VS Code lifecycle remains required.
-2. **R1 Core-only maintenance, active on main:** review parser/style ownership, malformed-input budgets and cache invalidation with standalone, sanitizer and deterministic capture regressions. Do not expand CSS scope or alter the port profile.
+2. **R1 Core-only maintenance, active on main:** the responsive layout foundation is now delivered: the [responsive layout contract](../docs/responsive_layout_contract.md), three-target matrix and Flex cross-axis semantics have regression evidence. Continue with parser/style ownership, malformed-input budgets and cache invalidation using standalone, sanitizer and deterministic capture regressions. Do not expand browser CSS scope or alter the port profile opportunistically.
 3. **B2 backend preparation, bounded:** retain the configure-time `ScriptRuntime` boundary and its invariants. Do not add a second engine or change the JerryScript default before a separate compatibility/resource RFC and parity evidence exist.
 4. **A3 preparation, in progress:** trial material, hardware procurement, visual assets and feedback operations may proceed, but no external product trial begins before both A2 evidence items pass.
+5. **A3 authoring UX, isolated prototype:** advance the constrained VS Code visual workflow under the [Visual App Editor plan](visual_app_editor_plan.md). It may improve demos and lower App authoring cost, but it does not replace clean-machine, device-lifecycle or panel/input evidence.
 
 ## Closed Performance Stage
 
@@ -68,6 +69,12 @@ Preparation status: **in progress**. Outreach coordination, trial instructions a
 in parallel, but no trial access, non-release image flashing or product-usability conclusions are allowed before the A2
 clean-machine and panel/input exits pass.
 
+The Visual App Editor is a parallel authoring improvement with its own staged
+gates. Its near-term showcase requires a polished shell, Navigator, predictable
+drag/drop, source-conflict protection and real desktop-shell handoff. The
+browser-like design canvas never substitutes for Runtime or device evidence and
+must not expand the documented JellyFrame feature surface.
+
 ## Track B: Independent Engine Projects
 
 ### B0: Freeze Extraction Policy
@@ -80,7 +87,7 @@ Exit: all consumers use Core only through public packages/headers; Runtime/port 
 
 | Project | Initial line | Dependency rule |
 | --- | --- | --- |
-| `jellyframe-render-core` | `0.6.1`, Core ABI `1` | Runtime pins exact version, ABI and source identity; release metadata records the signed archive SHA-256 |
+| `jellyframe-render-core` | released `0.6.2`; development head `0.6.2-dev`, Core ABI `1` | Runtime pins exact `0.6.2`; the development head remains independent until its own candidate evidence and release gates |
 | `jellyframe` | `0.6.0` | Bumps Core only in an explicit dependency change |
 | `jellyframe-device-os` | `0.1.0-dev` | Pins JellyFrame release and board feature profile |
 | JFDP | `JFDP/1` | Breaking wire changes require a major version |
@@ -128,14 +135,11 @@ capture, capability matrix, diagnostics, recipe and hot-path benchmark.
 
 ### C1.1: Independent Core Candidate (release-gated)
 
-The independently governed Core line additionally contains bounded
-`text-wrap: balance` for short naturally wrapped text. Its standalone build,
-unit, install and deterministic-archive CI are green. It is not yet an
-author-facing Runtime capability while normal Runtime builds use the
-synchronized in-tree provider. Before it can move into the Runtime matrix,
-complete the candidate evidence required above, make an explicit Runtime
-dependency/default-provider decision, update the lock where needed and run the
-package-consumer regression.
+`text-wrap: balance` remains an undelivered candidate. The current independent
+`0.6.2-dev` head does not advertise it as supported. If it is reimplemented,
+it needs positive/negative behavior tests, three-target captures, matrix,
+diagnostic, recipe and benchmark evidence before a Runtime dependency/default-
+provider decision. It must not enter the author matrix or Runtime lock first.
 
 ### C2: Deferred Candidates
 

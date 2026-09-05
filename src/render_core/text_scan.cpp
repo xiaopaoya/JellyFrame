@@ -9,25 +9,43 @@ std::uint32_t consume_utf8_codepoint(std::string_view text, std::size_t& index) 
         return 0;
     }
     const unsigned char lead = static_cast<unsigned char>(text[index]);
-    std::uint32_t codepoint = lead;
-    std::size_t width = 1;
-    if ((lead & 0xe0U) == 0xc0U && index + 1 < text.size()) {
-        width = 2;
+    const auto continuation = [&](std::size_t offset) {
+        return index + offset < text.size() &&
+            (static_cast<unsigned char>(text[index + offset]) & 0xc0U) == 0x80U;
+    };
+    std::uint32_t codepoint = 0;
+    std::size_t width = 0;
+    if (lead <= 0x7fU) {
+        codepoint = lead;
+        width = 1;
+    } else if (lead >= 0xc2U && lead <= 0xdfU && continuation(1)) {
         codepoint = ((lead & 0x1fU) << 6U) |
             (static_cast<unsigned char>(text[index + 1]) & 0x3fU);
-    } else if ((lead & 0xf0U) == 0xe0U && index + 2 < text.size()) {
-        width = 3;
-        codepoint = ((lead & 0x0fU) << 12U) |
-            ((static_cast<unsigned char>(text[index + 1]) & 0x3fU) << 6U) |
-            (static_cast<unsigned char>(text[index + 2]) & 0x3fU);
-    } else if ((lead & 0xf8U) == 0xf0U && index + 3 < text.size()) {
-        width = 4;
-        codepoint = ((lead & 0x07U) << 18U) |
-            ((static_cast<unsigned char>(text[index + 1]) & 0x3fU) << 12U) |
-            ((static_cast<unsigned char>(text[index + 2]) & 0x3fU) << 6U) |
-            (static_cast<unsigned char>(text[index + 3]) & 0x3fU);
+        width = 2;
+    } else if (lead >= 0xe0U && lead <= 0xefU && continuation(1) && continuation(2)) {
+        const unsigned char second = static_cast<unsigned char>(text[index + 1]);
+        if ((lead != 0xe0U || second >= 0xa0U) && (lead != 0xedU || second <= 0x9fU)) {
+            codepoint = ((lead & 0x0fU) << 12U) |
+                ((second & 0x3fU) << 6U) |
+                (static_cast<unsigned char>(text[index + 2]) & 0x3fU);
+            width = 3;
+        }
+    } else if (lead >= 0xf0U && lead <= 0xf4U && continuation(1) &&
+               continuation(2) && continuation(3)) {
+        const unsigned char second = static_cast<unsigned char>(text[index + 1]);
+        if ((lead != 0xf0U || second >= 0x90U) && (lead != 0xf4U || second <= 0x8fU)) {
+            codepoint = ((lead & 0x07U) << 18U) |
+                ((second & 0x3fU) << 12U) |
+                ((static_cast<unsigned char>(text[index + 2]) & 0x3fU) << 6U) |
+                (static_cast<unsigned char>(text[index + 3]) & 0x3fU);
+            width = 4;
+        }
     }
-    index += std::min(width, text.size() - index);
+    if (width == 0) {
+        ++index;
+        return 0xfffdU;
+    }
+    index += width;
     return codepoint;
 }
 

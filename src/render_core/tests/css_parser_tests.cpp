@@ -417,6 +417,16 @@ void style_resolution_context_tracks_its_inputs() {
               after_attribute_mutation.color.b == 0x66,
           "context drops selector and custom-property caches after a consumed DOM mutation");
 
+    button->set_attribute("style", "--tone:#778899");
+    clear_dirty_flags(*document);
+    const Style after_inline_custom_property_mutation = resolver.resolve(*button, context);
+    check(after_inline_custom_property_mutation.color.r == 0x77 &&
+              after_inline_custom_property_mutation.color.g == 0x88 &&
+              after_inline_custom_property_mutation.color.b == 0x99,
+          "context refreshes inherited values after an inline custom property mutation");
+    button->remove_attribute("style");
+    clear_dirty_flags(*document);
+
     resolver.set_interaction_state(button, nullptr, nullptr);
     const Style while_hovered = resolver.resolve(*button, context);
     check(while_hovered.color.r == 0xaa && while_hovered.color.g == 0xbb && while_hovered.color.b == 0xcc,
@@ -460,6 +470,74 @@ void style_resolution_context_tracks_its_inputs() {
     check(destination_style.color.r == 0x44 && destination_style.color.g == 0x55 &&
               destination_style.color.b == 0x66,
           "context drops cached node state after its document boundary changes");
+}
+
+void custom_property_expansion_is_bounded() {
+    std::string repeated;
+    for (int index = 0; index < 8; ++index) {
+        repeated += "var(--accent)";
+    }
+
+    auto button = make_element("button");
+    button->attributes["class"] = "bounded";
+    button->attributes["style"] = "--accent:#123456";
+    VectorDiagnosticSink diagnostics;
+    StyleResolverOptions options;
+    options.diagnostics = &diagnostics;
+    options.max_resolved_value_bytes = 32;
+    StyleResolver resolver(parse(".bounded { color: " + repeated + "; }"), options);
+
+    const Style style = resolver.resolve(*button);
+    check(!(style.color.r == 0x12 && style.color.g == 0x34 && style.color.b == 0x56),
+          "oversized var expansion does not apply a partial value");
+    check(has_diagnostic_code(diagnostics, "style-declaration-ignored"),
+          "oversized var expansion reports a style diagnostic");
+}
+
+void malformed_var_expansion_respects_the_resolved_value_budget() {
+    std::string malformed(96, 'x');
+    auto button = make_element("button");
+    button->attributes["class"] = "malformed-var";
+    VectorDiagnosticSink diagnostics;
+    StyleResolverOptions options;
+    options.diagnostics = &diagnostics;
+    options.max_resolved_value_bytes = 16;
+    StyleResolver resolver(parse(".malformed-var { color: var(," + malformed + "); }"), options);
+
+    const Style style = resolver.resolve(*button);
+    check(!(style.color.r == 0xff && style.color.g == 0xff && style.color.b == 0xff),
+          "malformed var expansion does not apply an over-budget value");
+    check(has_diagnostic_code(diagnostics, "style-declaration-ignored"),
+          "over-budget malformed var expansion reports a style diagnostic");
+}
+
+void inline_style_budgets_keep_only_complete_bounded_declarations() {
+    auto long_style_button = make_element("button");
+    long_style_button->attributes["style"] = "color:#123456;background:#abcdef;";
+    VectorDiagnosticSink input_diagnostics;
+    StyleResolverOptions input_options;
+    input_options.diagnostics = &input_diagnostics;
+    input_options.max_inline_style_bytes = 30;
+    const StyleResolver input_resolver(Stylesheet{}, input_options);
+    const Style input_limited = input_resolver.resolve(*long_style_button);
+    check(input_limited.color.r == 0x12 && input_limited.color.g == 0x34 && input_limited.color.b == 0x56,
+          "inline style budget preserves declarations before the bounded cutoff");
+    check(has_diagnostic_code(input_diagnostics, "style-inline-input-limit"),
+          "oversized inline style reports its byte budget");
+
+    auto many_declarations_button = make_element("button");
+    many_declarations_button->attributes["style"] = "color:#123456;background:#abcdef;opacity:0.5;";
+    VectorDiagnosticSink declaration_diagnostics;
+    StyleResolverOptions declaration_options;
+    declaration_options.diagnostics = &declaration_diagnostics;
+    declaration_options.max_inline_declarations = 1;
+    const StyleResolver declaration_resolver(Stylesheet{}, declaration_options);
+    const Style declaration_limited = declaration_resolver.resolve(*many_declarations_button);
+    check(declaration_limited.color.r == 0x12 && declaration_limited.color.g == 0x34 &&
+              declaration_limited.color.b == 0x56,
+          "inline declaration budget preserves the first declaration");
+    check(has_diagnostic_code(declaration_diagnostics, "style-inline-declaration-limit"),
+          "oversized inline declaration list reports its budget");
 }
 
 void linear_gradient_background_applies_without_breaking_fallbacks() {
@@ -1122,6 +1200,20 @@ void grid_and_aspect_ratio_properties_apply() {
           "aspect ratio parsed");
 }
 
+void explicit_auto_dimensions_use_intrinsic_sizing() {
+    auto element = make_element("section");
+    element->attributes["class"] = "auto-size";
+
+    StyleResolver resolver(parse(
+        ".auto-size { width: 120px; height: 80px; }"
+        ".auto-size { width: auto; height: auto; }"));
+    const Style style = resolver.resolve(*element);
+
+    check(style.width < 0 && style.width_percent < 0 &&
+              style.height < 0 && style.height_percent < 0,
+          "explicit auto dimensions restore intrinsic sizing");
+}
+
 void physical_edge_longhands_apply_per_side() {
     auto element = make_element("section");
     element->attributes["id"] = "panel";
@@ -1338,6 +1430,19 @@ void flex_direction_column_applies() {
     const Style style = resolver.resolve(*panel);
     check(style.display == Display::Flex, "flex display remains available with column direction");
     check(style.flex_direction == FlexDirection::Column, "column flex direction parses");
+}
+
+void flex_wrap_reverse_is_rejected_not_approximated() {
+    auto panel = make_element("section");
+    VectorDiagnosticSink diagnostics;
+    StyleResolverOptions options;
+    options.diagnostics = &diagnostics;
+    StyleResolver resolver(parse("section { display: flex; flex-wrap: wrap-reverse; }"), options);
+
+    const Style style = resolver.resolve(*panel);
+    check(!style.flex_wrap, "unsupported wrap-reverse does not become ordinary wrapping");
+    check(has_diagnostic_code(diagnostics, "style-declaration-ignored"),
+          "unsupported wrap-reverse reports an actionable style diagnostic");
 }
 
 void align_self_applies() {
@@ -1606,6 +1711,82 @@ void parser_malformed_corpus_is_bounded_and_recovers_following_rules() {
     }
 }
 
+void parser_zero_rule_budgets_mean_unlimited() {
+    CssParser parser;
+    CssParserOptions options;
+    options.max_rules = 0;
+    options.max_declarations_per_rule = 0;
+    VectorDiagnosticSink diagnostics;
+    options.diagnostics = &diagnostics;
+
+    const Stylesheet stylesheet = parser.parse(
+        ".first { color: #123456; background-color: #abcdef; }"
+        ".second { color: #654321; }",
+        options);
+    check(stylesheet.size() == 2, "zero CSS rule budget does not discard all rules");
+    check(stylesheet[0].declarations.size() == 2,
+          "zero declaration budget does not discard all declarations");
+    check(!has_diagnostic_code(diagnostics, "css-rule-limit"),
+          "zero CSS rule budget does not report a false limit");
+    check(!has_diagnostic_code(diagnostics, "css-declaration-limit"),
+          "zero declaration budget does not report a false limit");
+}
+
+void parser_zero_nesting_budgets_mean_unlimited() {
+    CssParser parser;
+    CssParserOptions options;
+    options.max_input_bytes = 0;
+    options.max_nesting_depth = 0;
+    options.max_nesting_expansion_bytes = 0;
+    VectorDiagnosticSink diagnostics;
+    options.diagnostics = &diagnostics;
+
+    const Stylesheet stylesheet = parser.parse(
+        ".card { color: #123456; &:hover { color: #abcdef; } }",
+        options);
+    check(stylesheet.size() == 2,
+          "zero nesting depth and expansion budgets preserve supported nesting");
+    check(stylesheet[1].selector == ".card:hover",
+          "unlimited nesting budget expands the explicit parent selector");
+    check(!has_diagnostic_code(diagnostics, "css-nesting-expansion-limit"),
+          "zero nesting budgets do not report a false expansion limit");
+}
+
+void parser_reports_unterminated_css_constructs() {
+    CssParser parser;
+
+    VectorDiagnosticSink string_diagnostics;
+    CssParserOptions string_options;
+    string_options.diagnostics = &string_diagnostics;
+    const Stylesheet string_stylesheet = parser.parse(
+        ".broken { color: \"#123456; }",
+        string_options);
+    check(string_stylesheet.empty(), "unterminated CSS string is not retained as a rule");
+    check(has_diagnostic_code(string_diagnostics, "css-declaration-string-malformed"),
+          "unterminated CSS string reports a precise diagnostic");
+
+    VectorDiagnosticSink comment_diagnostics;
+    CssParserOptions comment_options;
+    comment_options.diagnostics = &comment_diagnostics;
+    const Stylesheet comment_stylesheet = parser.parse(
+        "/* unterminated comment",
+        comment_options);
+    check(comment_stylesheet.empty(), "unterminated CSS comment does not create a rule");
+    check(has_diagnostic_code(comment_diagnostics, "css-comment-unclosed"),
+          "unterminated CSS comment reports a precise diagnostic");
+
+    VectorDiagnosticSink block_diagnostics;
+    CssParserOptions block_options;
+    block_options.diagnostics = &block_diagnostics;
+    const Stylesheet block_stylesheet = parser.parse(
+        ".partial { color: #123456;",
+        block_options);
+    check(block_stylesheet.size() == 1,
+          "supported declarations before an unclosed CSS block remain recoverable");
+    check(has_diagnostic_code(block_diagnostics, "css-declaration-block-unclosed"),
+          "unclosed CSS declaration block reports a precise diagnostic");
+}
+
 void nonfinite_and_out_of_range_numeric_values_preserve_safe_fallbacks() {
     auto element = make_element("div");
     element->attributes["class"] = "bounded";
@@ -1676,6 +1857,9 @@ int main() {
         conditional_media_queries_reject_nonrepresentable_lengths();
         preserves_declaration_fallback_order();
         resolves_simple_css_custom_properties();
+        custom_property_expansion_is_bounded();
+        malformed_var_expansion_respects_the_resolved_value_budget();
+        inline_style_budgets_keep_only_complete_bounded_declarations();
         style_resolution_context_tracks_its_inputs();
         linear_gradient_background_applies_without_breaking_fallbacks();
         color_mix_and_bounded_box_shadow_apply();
@@ -1703,6 +1887,7 @@ int main() {
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         grid_and_aspect_ratio_properties_apply();
 #endif
+        explicit_auto_dimensions_use_intrinsic_sizing();
         physical_edge_longhands_apply_per_side();
         font_weight_list_style_and_generated_counter_apply();
         text_transform_parses_and_inherits();
@@ -1716,6 +1901,7 @@ int main() {
         modern_length_functions_and_flex_wrap_apply();
         flex_sizing_properties_apply();
         flex_direction_column_applies();
+        flex_wrap_reverse_is_rejected_not_approximated();
         align_self_applies();
         align_content_applies();
 #endif
@@ -1729,6 +1915,9 @@ int main() {
         style_candidate_cache_canonicalizes_relevant_class_sets();
         parser_limits_unbounded_css_fields_without_losing_following_rules();
         parser_malformed_corpus_is_bounded_and_recovers_following_rules();
+        parser_zero_rule_budgets_mean_unlimited();
+        parser_zero_nesting_budgets_mean_unlimited();
+        parser_reports_unterminated_css_constructs();
         nonfinite_and_out_of_range_numeric_values_preserve_safe_fallbacks();
         text_overflow_is_specified_but_not_inherited_by_nested_elements();
     } catch (const std::exception& error) {

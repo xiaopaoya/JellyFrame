@@ -1,6 +1,6 @@
 # Developer Image Manifest V0
 
-> Last updated: 2026-08-19; Applies to: 0.6.0-dev; status: contract baseline
+> Last updated: 2026-09-04; Applies to: 0.6.0-dev; status: contract baseline
 
 Each releasable first-party Developer Image publishes one immutable JSON
 manifest beside its firmware and recovery materials. It is the common identity
@@ -83,3 +83,12 @@ were verified on WS147: recovery selected the protected launcher with
 without reflashing. This closes the manifest/factory-recovery A1 sub-item only.
 A future image revision needs a new manifest, hashes and compatibility
 assessment; it cannot reuse this image identity.
+
+## Core 0.6.2 Handoff Status
+
+Runtime `master` now consumes the signed Render Core `v0.6.2` release, but no
+WS147 image has yet been rebuilt and accepted against that dependency. The
+published baseline above therefore remains valid as an immutable `0.6.1`
+artifact. Do not edit its `renderCore`, source, firmware or recovery fields in
+place. The rebuild, provenance and hardware gates are defined in
+[`project_docs/device_image_core_062_provenance_handoff.md`](../project_docs/device_image_core_062_provenance_handoff.md).

@@ -26,7 +26,7 @@ def write_jfapp(
     entry: str = "/index.html",
     script: str = "classic",
     min_jellyframe: str = "0.6.0",
-    min_render_core: str = "0.6.1",
+    min_render_core: str = "0.6.2",
     capabilities: list[str] | None = None,
     network_allowed: bool = False,
     summary_text: str | None = None,
@@ -101,7 +101,7 @@ def write_jfapp_with_invalid_resource_entry(path: Path) -> None:
         "versionCode": 1,
         "entry": "/index.html",
         "minJellyFrame": "0.6.0",
-        "minRenderCore": "0.6.1",
+        "minRenderCore": "0.6.2",
         "script": "classic",
         "viewport": {"designWidth": 172, "designHeight": 320},
         "budgets": {"maxResourceBytes": 65536},
@@ -234,7 +234,7 @@ class AppRegistryTests(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 SystemExit,
-                "must target the active pre-1.0 Render Core line 0.6.1",
+                "must target the active pre-1.0 Render Core line 0.6.2",
             ):
                 app_registry.install_bundle(
                     root / "store",

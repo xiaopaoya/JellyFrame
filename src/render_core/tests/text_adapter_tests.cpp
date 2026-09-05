@@ -1,6 +1,7 @@
 ﻿#include "render_core/text_adapter.h"
 
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 using namespace jellyframe;
@@ -111,6 +112,19 @@ void extreme_letter_spacing_uses_one_bounded_value() {
           "measurement uses the bounded positive letter spacing");
 }
 
+void extreme_fallback_font_sizes_remain_defined() {
+    const int maximum = std::numeric_limits<int>::max();
+    const TextMetrics metrics = fallback_text_metrics("A", maximum, 700);
+    check(metrics.width == maximum && metrics.line_height == maximum,
+          "fallback metrics saturate extreme font sizes");
+    check(bounded_letter_spacing(maximum, maximum) == maximum,
+          "extreme font size keeps spacing bound representable");
+    const std::vector<std::string> lines = wrap_text_anywhere(
+        TextMeasureProvider{}, "AB", maximum, 400, 0, maximum, 10);
+    check(lines.size() == 2 && lines[0] == "A" && lines[1] == "B",
+          "extreme fallback widths wrap without arithmetic overflow");
+}
+
 } // namespace
 
 int main() {
@@ -119,6 +133,7 @@ int main() {
         incomplete_adapter_degrades_to_core_fallbacks();
         letter_spacing_and_utf8_anywhere_wrap_share_scalar_boundaries();
         extreme_letter_spacing_uses_one_bounded_value();
+        extreme_fallback_font_sizes_remain_defined();
     } catch (const std::exception& error) {
         std::cerr << "text adapter test failed: " << error.what() << '\n';
         return 1;

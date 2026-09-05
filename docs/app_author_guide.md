@@ -41,6 +41,13 @@ python tools\jellyframe_cli.py check `
 For IDE use, `python tools/debug/jellyframe_debug.py --app build/my_weather`
 discovers the desktop shell and can also run deterministic frame scripts.
 
+The VS Code extension also provides **Open Visual Editor** for constrained
+drag-and-drop authoring. It generates ordinary HTML/CSS from JellyFrame-supported
+controls and leaves JavaScript author-owned. First use is an explicit takeover
+of the entry-page body with timestamped source backups; it is not an arbitrary
+HTML round-trip importer. Use **Save & debug** to verify the result in the real
+desktop shell, because the editor canvas is only an authoring approximation.
+
 Then read the final `developerAdvice[]` section in the JSON report. It is the
 app-author view of the lower-level diagnostics. Package reports also include
 `animationDiagnostics`, which catches common costly or unsupported CSS animation

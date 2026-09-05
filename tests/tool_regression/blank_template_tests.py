@@ -66,6 +66,11 @@ def main() -> int:
                 "/* Add app styles here. */", "blank CSS must remain a single starter comment")
         require((output / "scripts" / "app.js").read_text(encoding="utf-8").strip() ==
                 "// Add app behavior here.", "blank JavaScript must remain a single starter comment")
+        visual_model = output / ".jellyframe" / "visual-editor.json"
+        require(visual_model.is_file(), "blank template must include its visual-editor model")
+        model = json.loads(visual_model.read_text(encoding="utf-8"))
+        require(model["root"]["children"][0]["text"] == "Hello world",
+                "blank visual model must match the Hello world entry point")
 
         report = output / "validation.json"
         run([sys.executable, str(CLI), "validate", "--root", str(output), "--report", str(report)])

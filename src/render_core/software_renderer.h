@@ -232,6 +232,9 @@ private:
 class SoftwareCompositor {
 public:
     struct Options {
+        // Zero means unlimited. A layer that needs an offscreen surface for a
+        // transform or rounded clip is skipped when this aggregate live-pixel
+        // budget cannot be met; opacity-only layers may use direct fallback.
         std::size_t max_framebuffer_pixels = 0;
         std::size_t max_offscreen_pixels = 0;
         DiagnosticSink* diagnostics = nullptr;

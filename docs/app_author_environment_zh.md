@@ -1,6 +1,6 @@
 # App 作者环境
 
-> 最后更新：2026-08-28；适用版本：0.6.0-dev
+> 最后更新：2026-08-29；适用版本：0.6.0-dev
 
 JellyFrame 有两类使用者，安装方式也应当不同：
 
@@ -21,9 +21,10 @@ my-app/
 ```
 
 SDK 是提供 CLI、target preset、schema 以及可用桌面运行时的安装目录。开发者第一次在
-独立 App 工作区使用扩展时，执行 **JellyFrame：配置作者环境**，选择 SDK 文件夹。扩展会
-保存一次机器级配置；之后打开其他 App 项目无需再次设置 `repoRoot`。若项目需要固定使用
-某个 SDK，也可以在 `.jellyframe/project.json` 中记录：
+独立 App 工作区使用扩展时，执行 **JellyFrame：下载并安装 App 作者 SDK**，选择 SDK 的父目录；
+扩展会下载最新可验证 SDK release、校验 SHA-256 并自动配置环境。**JellyFrame：配置作者环境**
+仍用于选择企业或 CI 已安装的 SDK。扩展会保存一次机器级配置；之后打开其他 App 项目无需再次设置
+`repoRoot`。若项目需要固定使用某个 SDK，也可以在 `.jellyframe/project.json` 中记录：
 
 ```json
 {
@@ -61,5 +62,8 @@ VS Code 扩展是 App 作者入口，不是完整框架源码的替代品。正�
 
 维护者使用 `project_tools/package_app_author_sdk.py` 从验证过的标准桌面 Release 生成 SDK ZIP；
 若要调试带脚本的 App，同时传入 scripting Release。SDK manifest 记录每个文件的 SHA-256 和
-实际包含的 desktop profile。发布 SDK 前必须运行解包后的 CLI/template 冒烟测试，不能把本地
-源码 checkout 或未验证的 build 目录直接作为作者下载包。
+实际包含的 desktop profile。正式分发使用 GitHub Actions 的 **Publish App Author SDK** 手动工作流：
+输入不可变 commit/tag、尚未占用的 SDK release tag 和 prerelease 状态，工作流构建标准与脚本
+desktop Release、运行 SDK 冒烟测试，并上传 ZIP 与同名 `.sha256` sidecar。扩展从发布列表中选择
+最新一个含唯一 SDK ZIP 的 release，校验 GitHub asset digest 或 sidecar 后才安装。不能把本地源码
+checkout 或未验证的 build 目录直接作为作者下载包。

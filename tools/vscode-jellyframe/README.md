@@ -1,6 +1,6 @@
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-08-28; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-08-30; Applies to: 0.6.0-dev; extension version: 0.4.52; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -13,6 +13,8 @@ Palette as entry points.
 - Command palette actions for package-structure validation, render preflight, preview, embedded VS Code debugging,
   external-window debugging, frame-script playback, capture opening and package generation.
 - App creation from the built-in blank, weather, clock, timer and calculator templates.
+- A constrained visual App editor with drag-and-drop layout, property editing,
+  readable HTML/CSS generation and direct handoff to desktop-shell debugging.
 - CLI output in a dedicated `JellyFrame` output channel.
 - A `JellyFrame Report` webview that puts CLI `developerAdvice[]` first, then
   summarizes resources, references, warnings and pipeline diagnostics.
@@ -22,6 +24,7 @@ Palette as entry points.
   measured performance summary.
 - A one-time author-environment setup that selects an installed JellyFrame SDK
   for independent App workspaces.
+- Download and installation of the latest GitHub App Author SDK with SHA-256 verification.
 - Automatic discovery of the SDK's desktop shell build, with explicit build
   directory override when required.
 - Configurable SDK root, Python executable, default target and font budget.
@@ -37,10 +40,13 @@ The repository currently provides the extension as source; it is not yet listed
 on the VS Code Marketplace. To try it with the least setup:
 
 1. Install the extension, then open an independent App workspace.
-2. Run **JellyFrame: Configure Author Environment** and select an installed
-   JellyFrame SDK. The SDK contains the CLI, target presets and matching
-   desktop runtime.
-3. Click the JellyFrame icon in the Activity Bar, or open
+2. Click **Author environment: Not configured** in the JellyFrame Activity Bar.
+   Choose **Download App Author SDK from GitHub** to download the official SDK,
+   verify its SHA-256 digest, safely extract it and configure the environment;
+   choose **Select an installed JellyFrame SDK** when one is already available.
+3. Once configured, **Author environment** displays the SDK version. Click it
+   to check for updates, switch SDKs, or open the selected SDK folder.
+4. Click the JellyFrame icon in the Activity Bar, or open
    `jellyframe.app.json` or an app HTML/CSS file and use the context menu.
 
 To package, install or update it like a regular local extension, run the helper
@@ -66,10 +72,20 @@ is accepted only when the adjacent CLI is installed, in which case the script re
 `Set-ExecutionPolicy -Scope Process Bypass` in the current window. You can still
 use the Extensions view's `Install from VSIX...` action and select the generated
 `.vsix`. When the extension is installed outside the
-repository, the extension first uses a project `.jellyframe/project.json`, a
+repository, SDK download accepts only the latest Release from
+`https://github.com/xiaopaoya/JellyFrame` and requires a GitHub SHA-256 digest
+or a matching `.sha256` asset; missing verification stops installation. The
+extension first uses a project `.jellyframe/project.json`, a
 configured SDK, `JELLYFRAME_SDK_ROOT`, or an SDK found above the
 current workspace. `jellyframe.sdkRoot` is the preferred explicit setting;
 `jellyframe.repoRoot` remains a legacy alias. `jellyframe.buildDir` is optional.
+When an App command needs an SDK but none is configured, it offers **Configure author
+environment** directly instead of running an incomplete command. SDK installation never
+overwrites an existing directory: transient Windows access or file-lock failures are retried,
+then the extension offers retry, another location, or use of an already-valid SDK.
+The official App Author SDK intentionally contains prebuilt `desktop-release` and
+`desktop-scripting-release` profiles rather than `CMakeCache.txt`; the extension verifies
+those profiles against `sdk-manifest.json` and uses them directly.
 The extension prefers `build/desktop-release/Release`, then
 `build/desktop-debug/Debug` inside the selected SDK.
 For an app whose manifest declares `runtime.script`, the extension uses only
@@ -99,7 +115,7 @@ also offers optional `.jfcapture` programmed playback, merging the static
 pipeline diagnostics with a multi-page interaction path. Use Preview or desktop
 debugging for the actual image and interactive behavior.
 
-The `JellyFrame` Activity Bar view groups check/preview, interactive debugging, and authoring/automation actions.
+The `JellyFrame` Activity Bar uses one level of top-level sections. Each App action, build status and device status appears directly below its section, avoiding misleading multi-level indentation in VS Code's native tree control.
 Commands have icons and functional tooltips; build, device and report results remain read-only status entries.
 It is always contributed, including when no workspace file is open. After
 installing an updated VSIX, run `Developer: Reload Window` once if the old
@@ -115,6 +131,49 @@ App ID` only when an organization namespace is needed; custom IDs must start
 with a letter or digit and may contain only letters, digits, dots, hyphens and
 underscores. The target picker uses only recognized repository presets while
 creating a new App, so generated manifests are immediately packageable.
+
+`JellyFrame: Open Visual Editor` is shown only for Apps with a valid
+`.jellyframe/visual-editor.json` model. Ordinary existing HTML/CSS does not get
+this entry and is not presented as round-trippable. For eligible Apps it opens a
+three-pane designer. Its palette contains only JellyFrame-supported containers, text, buttons,
+package images, inputs, progress indicators, dividers, spacers, bounded selects,
+short lists, switches and small navigation rows. Elements can be added,
+reordered, nested, duplicated and edited at the App's declared viewport or
+common device-size presets. Save writes ordinary, readable HTML and CSS;
+stable element IDs remain available to hand-authored event listeners. List and
+option data is edited through bounded add/remove controls rather than an
+unbounded JSON field. The canvas also provides a small icon toolbar for
+history, fit, zoom, structure and save, with full text actions retained in the
+top bar.
+The generated select is the single-select subset and requires the target's
+documented `forms.advanced` capability for the core-rendered option overlay;
+it is not a browser-native multi-select or navigation control.
+The palette also includes three transparent recipes: status card, settings
+row and bottom navigation. Selecting one expands it into ordinary editable
+nodes, so the recipe is only a starting point and never a private runtime
+component.
+New blank and device-oriented materials use a black or near-black surface by
+default, preserving bright text and accent controls for small round displays.
+The inspector reports listeners it can statically recognize for a selected
+stable ID in package-local scripts and can copy a minimal event skeleton. It
+does not modify JavaScript or attempt to infer application behavior.
+
+The blank template includes a visual model for its `Hello world` entry, so the canvas, source and model agree when it is first opened. Older blank starters without a model are recognized only when they contain this exact minimal structure; arbitrary existing HTML is not guessed. The first save still asks before taking over and backing up the entry page.
+
+The designer is intentionally constrained rather than a browser page builder.
+It does not attempt to round-trip arbitrary existing markup. On the first save,
+VS Code asks before replacing the entry page's `body`, and writes the original
+HTML and CSS to `.jellyframe/visual-editor-backups/<timestamp>/`. Existing
+`script` elements and JavaScript files are preserved. Generated regions are
+marked explicitly, hand-authored CSS outside the generated region remains
+untouched, and the editable model lives in
+`.jellyframe/visual-editor.json`. Package images must exist inside the current
+App before source can be saved.
+
+The canvas is an authoring approximation, not a second renderer. Use **Save &
+debug** to pass the generated source to the real JellyFrame desktop shell and
+verify layout, rounded clipping, fonts, animation and interaction before
+deployment.
 
 `JellyFrame: Debug App In VS Code` opens an editor tab backed by an isolated,
 hidden desktop-shell session. It delivers complete viewport snapshots with

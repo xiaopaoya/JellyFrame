@@ -163,8 +163,26 @@ inline RoundedRectCoverage rounded_rect_coverage_detail(const RasterRoundedRect&
     constexpr int kSubpixel = 4;
     const std::int64_t center_x = cx * kSubpixel;
     const std::int64_t center_y = cy * kSubpixel;
-    const int radius_scaled = radius * kSubpixel;
-    const int radius_squared = radius_scaled * radius_scaled;
+    const auto saturated_multiply = [](std::uint64_t left, std::uint64_t right) {
+        if (left != 0 && right > std::numeric_limits<std::uint64_t>::max() / left) {
+            return std::numeric_limits<std::uint64_t>::max();
+        }
+        return left * right;
+    };
+    const std::uint64_t radius_scaled = saturated_multiply(static_cast<std::uint64_t>(radius), kSubpixel);
+    const std::uint64_t radius_squared = saturated_multiply(radius_scaled, radius_scaled);
+    const auto saturated_square = [saturated_multiply](std::int64_t value) {
+        const std::uint64_t magnitude = value < 0
+            ? static_cast<std::uint64_t>(-(value + 1)) + 1U
+            : static_cast<std::uint64_t>(value);
+        return saturated_multiply(magnitude, magnitude);
+    };
+    const auto saturated_add = [](std::uint64_t left, std::uint64_t right) {
+        if (std::numeric_limits<std::uint64_t>::max() - left < right) {
+            return std::numeric_limits<std::uint64_t>::max();
+        }
+        return left + right;
+    };
     int covered = 0;
     for (int sy = 0; sy < kSubpixel; ++sy) {
         const std::int64_t sample_y = static_cast<std::int64_t>(y) * kSubpixel + sy;
@@ -172,7 +190,7 @@ inline RoundedRectCoverage rounded_rect_coverage_detail(const RasterRoundedRect&
         for (int sx = 0; sx < kSubpixel; ++sx) {
             const std::int64_t sample_x = static_cast<std::int64_t>(x) * kSubpixel + sx;
             const std::int64_t dx = sample_x - center_x;
-            if (dx * dx + dy * dy <= radius_squared) {
+            if (saturated_add(saturated_square(dx), saturated_square(dy)) <= radius_squared) {
                 ++covered;
             }
         }

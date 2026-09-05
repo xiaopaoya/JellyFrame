@@ -33,13 +33,47 @@ function readCmakeCache(cachePath) {
   return values;
 }
 
+function prebuiltSdkProfile(buildDirectory) {
+  const output = path.resolve(buildDirectory);
+  const profileDirectory = path.dirname(output);
+  const buildDirectoryRoot = path.dirname(profileDirectory);
+  const sdkRoot = path.dirname(buildDirectoryRoot);
+  if (path.basename(buildDirectoryRoot) !== "build" || path.basename(output) !== "Release") {
+    return undefined;
+  }
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(path.join(sdkRoot, "sdk-manifest.json"), "utf8"));
+  } catch (_) {
+    return undefined;
+  }
+  if (manifest?.format !== "jellyframe.app-author-sdk" || manifest.formatVersion !== 1 ||
+      !fs.existsSync(path.join(sdkRoot, "tools", "jellyframe_cli.py"))) {
+    return undefined;
+  }
+  const profileId = path.basename(profileDirectory);
+  const tools = manifest?.desktopProfiles?.[profileId]?.tools;
+  const shell = process.platform === "win32" ? "jellyframe_desktop_shell.exe" : "jellyframe_desktop_shell";
+  if (!Array.isArray(tools) || !tools.includes(shell) || !fs.existsSync(path.join(output, shell))) {
+    return undefined;
+  }
+  return { sdkRoot, profileId };
+}
+
 function buildDirectoryIssue(buildDirectory, requiresScripting) {
   if (!fs.existsSync(buildDirectory)) {
     return { code: "missing-directory" };
   }
   const cachePath = cmakeCacheFor(buildDirectory);
   if (!cachePath) {
-    return { code: "missing-cache" };
+    const prebuilt = prebuiltSdkProfile(buildDirectory);
+    if (!prebuilt) {
+      return { code: "missing-cache" };
+    }
+    if (requiresScripting && !/(?:^|-)scripting(?:-|$)/.test(prebuilt.profileId)) {
+      return { code: "scripting-disabled", prebuilt };
+    }
+    return undefined;
   }
   const cache = readCmakeCache(cachePath);
   if (cache.has(LEGACY_SCRIPT_TASK_OPTION)) {
@@ -92,6 +126,7 @@ module.exports = {
   buildCandidates,
   buildDirectoryIssue,
   cmakeCacheFor,
+  prebuiltSdkProfile,
   readCmakeCache,
   selectBuildDirectory
 };

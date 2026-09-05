@@ -131,6 +131,13 @@ layout behavior.
 
 ## Current Parser Limits
 
+The `max_rules`, `max_declarations_per_rule`, `max_input_bytes`,
+`max_nesting_expansion_bytes`, `max_selector_bytes`,
+`max_at_rule_prelude_bytes` and `max_declaration_value_bytes` options use
+`0` to mean no limit when the parser is used directly. A production host
+should provide non-zero limits through `HostBudgets`; the budget adapter
+normalizes zero host budgets to a minimum bounded value.
+
 - `max_rules`: 4096
 - `max_declarations_per_rule`: 256
 - `max_nesting_depth`: 8

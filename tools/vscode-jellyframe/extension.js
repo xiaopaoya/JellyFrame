@@ -24,8 +24,22 @@ const {
   authorOutputRoot,
   isInside,
   isSdkRoot,
-  resolveSdkRoot
+  readSdkMetadata,
+  resolveSdkRoot,
+  SDK_INSTALL_METADATA_FILENAME
 } = require("./author_environment");
+const {
+  downloadLatestSdk,
+  fetchLatestSdkRelease,
+  sdkInstallName
+} = require("./sdk_download");
+const {
+  appFiles,
+  initialModel,
+  isVisualEditorEligible,
+  openVisualEditor
+} = require("./visual_editor");
+const { attributeDiagnostic } = require("./visual_editor_diagnostics");
 
 let outputChannel;
 let reportPanel;
@@ -66,6 +80,25 @@ function cliPath(context) {
   return path.join(repoRoot(context), "tools", "jellyframe_cli.py");
 }
 
+function requireAuthorSdk(context) {
+  const sdkRoot = resolvedAuthorSdk(context);
+  if (sdkRoot && isSdkRoot(sdkRoot)) {
+    return sdkRoot;
+  }
+  const chinese = isChinese();
+  const configure = chinese ? "配置作者环境" : "Configure author environment";
+  const message = chinese
+    ? "此操作需要 JellyFrame 作者 SDK，但当前尚未配置。请选择从 GitHub 下载官方 SDK，或选择已安装的 SDK。"
+    : "This operation needs a JellyFrame App Author SDK, but none is configured. Download the official SDK from GitHub or select an installed SDK.";
+  ensureOutputChannel().appendLine(`[warning] ${message}`);
+  vscode.window.showWarningMessage(message, configure).then((choice) => {
+    if (choice === configure) {
+      manageAuthorEnvironment(context);
+    }
+  });
+  return undefined;
+}
+
 function buildDir(context) {
   const configured = String(config().get("buildDir", "") || "").trim();
   if (configured) {
@@ -104,6 +137,7 @@ function nativeBuildDir(context, preferScripting = false) {
 
 function buildDirectoryError(context, selection) {
   const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
+  const sdk = readSdkMetadata(resolvedAuthorSdk(context));
   const code = selection?.issue?.code;
   if (code === "legacy-script-task-option") {
     return chinese
@@ -121,9 +155,19 @@ function buildDirectoryError(context, selection) {
       : "The selected desktop build is not a usable CMake build output. Choose the actual Release/Debug output directory in Settings.";
   }
   if (selection?.issue?.requiresScripting) {
+    if (sdk?.kind === "app-sdk") {
+      return chinese
+        ? "当前 App 作者 SDK 未包含脚本 App 所需的预构建桌面壳。请在“作者环境”中下载或选择包含 desktop-scripting-release 的 SDK。"
+        : "The current App Author SDK does not include the prebuilt desktop shell needed by this script App. Use Author environment to download or select an SDK that includes desktop-scripting-release.";
+    }
     return chinese
       ? "未找到当前的脚本桌面构建。请配置 build/desktop-scripting-release（或 desktop-scripting-debug），并启用 JELLYFRAME_BUILD_SCRIPTING=ON。"
       : "No current scripting desktop build was found. Configure build/desktop-scripting-release (or desktop-scripting-debug) with JELLYFRAME_BUILD_SCRIPTING=ON.";
+  }
+  if (sdk?.kind === "app-sdk") {
+    return chinese
+      ? "当前 App 作者 SDK 未包含兼容的预构建桌面壳。请在“作者环境”中下载或选择包含 desktop-release 的 SDK。"
+      : "The current App Author SDK does not include a compatible prebuilt desktop shell. Use Author environment to download or select an SDK that includes desktop-release.";
   }
   return chinese
     ? "未找到当前的桌面构建。请配置 build/desktop-release 或 build/desktop-debug。"
@@ -147,10 +191,17 @@ function requireNativeBuildDir(context, preferScripting = false) {
   }
   const message = buildDirectoryError(context, selection);
   ensureOutputChannel().appendLine(`JellyFrame build selection: ${message}`);
-  const setup = desktopBuildQuickFixLabel(selection, preferScripting);
+  const packagedSdk = readSdkMetadata(resolvedAuthorSdk(context))?.kind === "app-sdk";
+  const setup = packagedSdk
+    ? (isChinese() ? "管理作者环境" : "Manage author environment")
+    : desktopBuildQuickFixLabel(selection, preferScripting);
   vscode.window.showErrorMessage(message, setup).then((choice) => {
     if (choice === setup) {
-      configureDesktopBuild(context, preferScripting);
+      if (packagedSdk) {
+        manageAuthorEnvironment(context);
+      } else {
+        configureDesktopBuild(context, preferScripting);
+      }
     }
   });
   return undefined;
@@ -264,12 +315,20 @@ async function configureDesktopBuild(context, scripting) {
       : "Desktop-shell quick setup is currently supported on Windows only.");
     return undefined;
   }
+  if (!requireAuthorSdk(context)) {
+    return undefined;
+  }
 
   const root = repoRoot(context);
   if (!fs.existsSync(path.join(root, "CMakeLists.txt"))) {
+    const packagedSdk = readSdkMetadata(root)?.kind === "app-sdk";
     const message = isChinese()
-      ? "当前 JellyFrame SDK 未包含本机构建文件。请安装带桌面运行时的 SDK，或改为选择完整框架源码。"
-      : "The current JellyFrame SDK does not include local build files. Install an SDK with a desktop runtime, or select a full framework source checkout.";
+      ? (packagedSdk
+        ? "当前 App 作者 SDK 是预构建分发，不能在其中创建 CMake 构建。请使用“环境”中的 SDK 自带桌面运行时，或选择完整框架源码。"
+        : "当前 JellyFrame SDK 未包含本机构建文件。请安装带桌面运行时的 SDK，或改为选择完整框架源码。")
+      : (packagedSdk
+        ? "The current App Author SDK is a prebuilt distribution and cannot create a CMake build. Use its bundled desktop runtime from Environment, or select a full framework source checkout."
+        : "The current JellyFrame SDK does not include local build files. Install an SDK with a desktop runtime, or select a full framework source checkout.");
     ensureOutputChannel().appendLine(`[error] ${message}`);
     vscode.window.showErrorMessage(message);
     return undefined;
@@ -373,15 +432,10 @@ async function configureDesktopBuild(context, scripting) {
   }
 }
 
-async function configureAuthorEnvironment(context) {
+async function selectAuthorSdk(context, preferredSdk) {
   const chinese = isChinese();
   const workspace = workspaceFolderPath();
-  const detected = resolveSdkRoot({
-    workspaceRoot: workspace,
-    configuredRoot: String(config().get("sdkRoot", "") || config().get("repoRoot", "") || "").trim(),
-    extensionPath: context.extensionPath
-  });
-  let selected = detected;
+  let selected = preferredSdk;
   if (!selected || !isSdkRoot(selected)) {
     const picked = await vscode.window.showOpenDialog({
       canSelectFiles: false,
@@ -432,6 +486,295 @@ async function configureAuthorEnvironment(context) {
     }
   }
   return selected;
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function sdkInstallFailureMessage(error, installPath, chinese) {
+  const code = String(error?.code || "").toUpperCase();
+  if (code === "EPERM" || code === "EACCES") {
+    return chinese
+      ? `Windows 未允许写入 SDK 目录：${installPath}。这通常是文件占用、杀毒软件扫描或受保护目录权限所致。扩展已自动重试；请关闭占用该目录的程序，或选择“其他位置”安装到有写权限的个人目录。`
+      : `Windows did not allow writing the SDK directory: ${installPath}. This is usually caused by a file lock, antivirus scan, or a protected location. The extension already retried; close programs using the directory or choose another writable personal folder.`;
+  }
+  if (code === "ENOTEMPTY" || code === "EEXIST") {
+    return chinese
+      ? `SDK 目标目录已存在：${installPath}。扩展不会覆盖或删除其中的内容；可使用现有 SDK，或选择其他安装位置。`
+      : `The SDK destination already exists: ${installPath}. The extension will not overwrite or delete its contents; use the existing SDK or choose another install location.`;
+  }
+  return chinese
+    ? `安装 SDK 时发生文件系统错误：${error?.message || "未知错误"}`
+    : `A file-system error occurred while installing the SDK: ${error?.message || "unknown error"}`;
+}
+
+async function moveSdkDirectoryWithRetry(source, destination) {
+  let failure;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      if (fs.existsSync(destination)) {
+        const error = new Error("SDK destination already exists");
+        error.code = "EEXIST";
+        throw error;
+      }
+      fs.renameSync(source, destination);
+      return;
+    } catch (error) {
+      failure = error;
+      const retryable = ["EPERM", "EACCES", "EBUSY"].includes(String(error?.code || "").toUpperCase());
+      if (!retryable || attempt === 2) {
+        throw error;
+      }
+      await wait(250 * (attempt + 1));
+    }
+  }
+  throw failure;
+}
+
+async function resolveExistingSdkDestination(context, installPath) {
+  const chinese = isChinese();
+  const existing = isSdkRoot(installPath);
+  const useExisting = chinese ? "使用现有 SDK" : "Use existing SDK";
+  const chooseAnother = chinese ? "选择其他位置" : "Choose another location";
+  const choices = existing ? [useExisting, chooseAnother] : [chooseAnother];
+  const message = existing
+    ? (chinese
+      ? `SDK 目标目录已存在：${installPath}。为保护已有文件，扩展不会覆盖它。`
+      : `The SDK destination already exists: ${installPath}. The extension will not overwrite it.`)
+    : (chinese
+      ? `SDK 目标目录已存在但不是有效 SDK：${installPath}。扩展不会覆盖或删除它。`
+      : `The SDK destination exists but is not a valid SDK: ${installPath}. The extension will not overwrite or remove it.`);
+  const choice = await vscode.window.showWarningMessage(message, ...choices);
+  if (choice === useExisting) {
+    await selectAuthorSdk(context, installPath);
+    return "used-existing";
+  }
+  if (choice === chooseAnother) {
+    await downloadAuthorSdk(context);
+  }
+  return undefined;
+}
+
+async function downloadAuthorSdk(context, preferredParent) {
+  const chinese = isChinese();
+  let parent = preferredParent;
+  if (!parent) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: chinese ? "选择 SDK 安装位置" : "Select SDK install location",
+      title: chinese ? "选择 JellyFrame SDK 的父目录" : "Select a parent folder for the JellyFrame SDK"
+    });
+    parent = picked?.[0]?.fsPath;
+  }
+  if (!parent) {
+    return undefined;
+  }
+  if (!fs.existsSync(parent) || !fs.statSync(parent).isDirectory()) {
+    vscode.window.showErrorMessage(chinese ? "SDK 安装位置不是有效文件夹。" : "The SDK install location is not a valid folder.");
+    return undefined;
+  }
+
+  let download;
+  try {
+    let previousBytes = 0;
+    download = await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: chinese ? "正在下载 JellyFrame App 作者 SDK" : "Downloading the JellyFrame App Author SDK",
+      cancellable: false
+    }, async (progress) => downloadLatestSdk({
+      onProgress: ({ received, total }) => {
+        const increment = total > 0
+          ? Math.max(0, Math.min(100, (received - previousBytes) / total * 100))
+          : undefined;
+        previousBytes = received;
+        progress.report({
+          increment,
+          message: total > 0
+            ? `${Math.floor(received / 1024)} / ${Math.ceil(total / 1024)} KiB`
+            : `${Math.floor(received / 1024)} KiB`
+        });
+      }
+    }));
+  } catch (error) {
+    const message = chinese
+      ? `下载 SDK 失败：${error.message}`
+      : `Failed to download the SDK: ${error.message}`;
+    ensureOutputChannel().appendLine(`[error] ${message}`);
+    vscode.window.showErrorMessage(message);
+    return undefined;
+  }
+
+  const installName = sdkInstallName(download.assetName);
+  const installPath = path.join(parent, installName);
+  if (fs.existsSync(installPath)) {
+    fs.rmSync(download.temporaryDirectory, { recursive: true, force: true });
+    return resolveExistingSdkDestination(context, installPath);
+  }
+
+  const staging = fs.mkdtempSync(path.join(parent, ".jellyframe-sdk-install-"));
+  try {
+    const extraction = await runLocalTool(context, config().get("pythonPath", "python"), [
+      path.join(context.extensionPath, "sdk_archive.py"),
+      download.archivePath,
+      staging
+    ], {
+      label: chinese ? "解压 JellyFrame SDK" : "Extract JellyFrame SDK"
+    });
+    if (extraction.code !== 0) {
+      return undefined;
+    }
+    const result = JSON.parse(extraction.stdout.trim());
+    const rootName = typeof result.root === "string" ? result.root : "";
+    const extractedRoot = path.join(staging, rootName);
+    if (!rootName || !isSdkRoot(extractedRoot)) {
+      throw new Error(chinese ? "下载的归档不是有效 JellyFrame SDK。" : "The downloaded archive is not a valid JellyFrame SDK.");
+    }
+    await moveSdkDirectoryWithRetry(extractedRoot, installPath);
+    fs.writeFileSync(path.join(installPath, SDK_INSTALL_METADATA_FILENAME), JSON.stringify({
+      format: "jellyframe.sdk-install",
+      formatVersion: 1,
+      releaseTag: download.releaseTag,
+      assetName: download.assetName,
+      sha256: download.expectedDigest,
+      installedAt: new Date().toISOString()
+    }, null, 2) + "\n", "utf8");
+    await selectAuthorSdk(context, installPath);
+    const message = chinese
+      ? `JellyFrame SDK 已安装：${installPath}`
+      : `JellyFrame SDK installed: ${installPath}`;
+    ensureOutputChannel().appendLine(`${message} (${download.releaseTag}, sha256:${download.expectedDigest})`);
+    vscode.window.showInformationMessage(message);
+    return installPath;
+  } catch (error) {
+    const message = sdkInstallFailureMessage(error, installPath, chinese);
+    ensureOutputChannel().appendLine(`[error] ${message}`);
+    const retry = chinese ? "重试" : "Retry";
+    const chooseAnother = chinese ? "选择其他位置" : "Choose another location";
+    const useExisting = isSdkRoot(installPath) ? (chinese ? "使用现有 SDK" : "Use existing SDK") : undefined;
+    const choice = await vscode.window.showErrorMessage(message, ...[retry, chooseAnother, useExisting].filter(Boolean));
+    if (choice === retry) {
+      return downloadAuthorSdk(context, parent);
+    }
+    if (choice === chooseAnother) {
+      return downloadAuthorSdk(context);
+    }
+    if (choice === useExisting) {
+      return selectAuthorSdk(context, installPath);
+    }
+    return undefined;
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
+    fs.rmSync(download.temporaryDirectory, { recursive: true, force: true });
+  }
+}
+
+function resolvedAuthorSdk(context) {
+  return resolveSdkRoot({
+    workspaceRoot: workspaceFolderPath(),
+    configuredRoot: String(config().get("sdkRoot", "") || config().get("repoRoot", "") || "").trim(),
+    extensionPath: context.extensionPath
+  });
+}
+
+async function checkAuthorSdkUpdate(context, sdkDirectory) {
+  const chinese = isChinese();
+  const installed = readSdkMetadata(sdkDirectory);
+  let latest;
+  try {
+    latest = await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: chinese ? "正在检查 JellyFrame SDK 更新" : "Checking for JellyFrame SDK updates",
+      cancellable: false
+    }, () => fetchLatestSdkRelease());
+  } catch (error) {
+    const message = chinese
+      ? `无法检查 SDK 更新：${error.message}`
+      : `Unable to check for SDK updates: ${error.message}`;
+    ensureOutputChannel().appendLine(`[error] ${message}`);
+    vscode.window.showErrorMessage(message);
+    return;
+  }
+
+  if (installed?.releaseTag === latest.releaseTag) {
+    vscode.window.showInformationMessage(chinese
+      ? `当前已使用最新 App 作者 SDK（${latest.releaseTag}）。`
+      : `This workspace already uses the latest App Author SDK (${latest.releaseTag}).`);
+    return;
+  }
+
+  const download = chinese ? "下载并安装最新 SDK" : "Download and install latest SDK";
+  const detail = installed?.releaseTag
+    ? (chinese
+      ? `当前 SDK：${installed.releaseTag}；最新发布：${latest.releaseTag}。`
+      : `Current SDK: ${installed.releaseTag}; latest release: ${latest.releaseTag}.`)
+    : (chinese
+      ? `当前 SDK 未记录下载来源；最新发布：${latest.releaseTag}。`
+      : `The current SDK has no recorded download provenance; latest release: ${latest.releaseTag}.`);
+  const choice = await vscode.window.showInformationMessage(detail, download);
+  if (choice === download) {
+    await downloadAuthorSdk(context);
+  }
+}
+
+async function manageAuthorEnvironment(context) {
+  const chinese = isChinese();
+  const sdkDirectory = resolvedAuthorSdk(context);
+  if (!sdkDirectory) {
+    const picked = await vscode.window.showQuickPick([
+      {
+        label: chinese ? "从 GitHub 下载 App 作者 SDK" : "Download App Author SDK from GitHub",
+        description: chinese ? "下载官方 Release，校验 SHA-256 后安装。" : "Download the official Release and verify SHA-256 before installation.",
+        action: "download"
+      },
+      {
+        label: chinese ? "选择已安装的 JellyFrame SDK" : "Select an installed JellyFrame SDK",
+        description: chinese ? "选择包含 tools/jellyframe_cli.py 的 SDK 或源码根目录。" : "Choose an SDK or source root containing tools/jellyframe_cli.py.",
+        action: "select"
+      }
+    ], {
+      title: chinese ? "配置 JellyFrame 作者环境" : "Configure JellyFrame author environment",
+      placeHolder: chinese ? "选择作者 SDK 的来源" : "Choose an App Author SDK source"
+    });
+    if (picked?.action === "download") {
+      await downloadAuthorSdk(context);
+    } else if (picked?.action === "select") {
+      await selectAuthorSdk(context);
+    }
+    return;
+  }
+
+  const metadata = readSdkMetadata(sdkDirectory);
+  const version = metadata?.releaseTag || metadata?.runtimeVersion || path.basename(sdkDirectory);
+  const picked = await vscode.window.showQuickPick([
+    {
+      label: chinese ? "检查 SDK 更新" : "Check for SDK updates",
+      description: chinese ? `当前：${version}` : `Current: ${version}`,
+      action: "update"
+    },
+    {
+      label: chinese ? "选择其他已安装 SDK" : "Select another installed SDK",
+      description: chinese ? "切换当前工作区使用的 JellyFrame SDK。" : "Change the JellyFrame SDK used by this workspace.",
+      action: "select"
+    },
+    {
+      label: chinese ? "在资源管理器中打开 SDK" : "Open SDK in Explorer",
+      description: sdkDirectory,
+      action: "open"
+    }
+  ], {
+    title: chinese ? `JellyFrame 作者环境：${version}` : `JellyFrame author environment: ${version}`,
+    placeHolder: chinese ? "选择要执行的环境操作" : "Choose an environment action"
+  });
+  if (picked?.action === "update") {
+    await checkAuthorSdkUpdate(context, sdkDirectory);
+  } else if (picked?.action === "select") {
+    await selectAuthorSdk(context);
+  } else if (picked?.action === "open") {
+    await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(sdkDirectory));
+  }
 }
 
 function debugLauncherPath(context) {
@@ -939,6 +1282,9 @@ function runCli(context, args) {
 }
 
 function runCliWithOptions(context, args, options = {}) {
+  if (!requireAuthorSdk(context)) {
+    return Promise.resolve({ code: undefined, stdout: "", stderr: "", missingSdk: true });
+  }
   const python = config().get("pythonPath", "python");
   const cli = cliPath(context);
   const channel = ensureOutputChannel();
@@ -1059,6 +1405,9 @@ function loadReport(reportPath, commandName) {
 }
 
 function runDetachedPython(context, script, args, options = {}) {
+  if (!requireAuthorSdk(context)) {
+    return undefined;
+  }
   if (!fs.existsSync(script)) {
     vscode.window.showErrorMessage(`Missing JellyFrame debug tool: ${script}`);
     return;
@@ -1205,6 +1554,19 @@ function currentPackageRoot() {
   return lastPackageRoot && isPackageRoot(lastPackageRoot)
     ? lastPackageRoot
     : undefined;
+}
+
+function updateVisualEditorContext(root) {
+  return vscode.commands.executeCommand(
+    "setContext",
+    "jellyframe.visualEditorEligible",
+    Boolean(root && isVisualEditorEligible(root))
+  );
+}
+
+function refreshVisualEditorContext() {
+  updateVisualEditorContext(currentPackageRoot());
+  statusProvider?.refresh();
 }
 
 async function packageRoot(resourceUri) {
@@ -1372,6 +1734,9 @@ async function selectFrameScript(root, purpose) {
 }
 
 async function runPackageCommand(context, commandName, resourceUri) {
+  if (!requireAuthorSdk(context)) {
+    return;
+  }
   const root = await packageRoot(resourceUri);
   if (!root) {
     return;
@@ -1431,6 +1796,9 @@ async function runPackageCommand(context, commandName, resourceUri) {
 }
 
 async function previewPackage(context, resourceUri) {
+  if (!requireAuthorSdk(context)) {
+    return;
+  }
   const root = await packageRoot(resourceUri);
   if (!root) {
     return;
@@ -1466,6 +1834,9 @@ async function previewPackage(context, resourceUri) {
 async function debugExternalApp(context, resourceUri) {
   if (process.platform !== "win32") {
     vscode.window.showErrorMessage("JellyFrame desktop shell is only available on Windows.");
+    return;
+  }
+  if (!requireAuthorSdk(context)) {
     return;
   }
   const root = await packageRoot(resourceUri);
@@ -1975,6 +2346,14 @@ function postEmbeddedMessage(session, message) {
   }
 }
 
+function postVisualEditorRuntime(session, state) {
+  try {
+    session.visualEditorPanel?.webview.postMessage({ type: 'runtime-state', state });
+  } catch (_) {
+    // The visual editor can close while the desktop shell is shutting down.
+  }
+}
+
 function embeddedDiagnosticsText(session) {
   const elapsed = Math.max(0, Date.now() - session.startedAt);
   return [
@@ -2229,6 +2608,21 @@ function validEmbeddedViewport(width, height) {
     width >= 64 && width <= 2048 && height >= 64 && height <= 2048;
 }
 
+function embeddedReportTarget(context, root) {
+  const choices = availableTargets(context, root);
+  if (!choices.length) return undefined;
+  const configured = String(config().get('defaultTarget', 'round-300') || '').trim();
+  return (choices.find((choice) => choice.target === configured) || choices[0]).target;
+}
+
+function requestedEmbeddedViewport(options) {
+  const viewport = options?.requestedViewport;
+  if (!viewport) return { width: 0, height: 0 };
+  const width = Number(viewport.width);
+  const height = Number(viewport.height);
+  return validEmbeddedViewport(width, height) ? { width, height } : undefined;
+}
+
 function resetEmbeddedRunState(session) {
   session.active = true;
   session.stopping = false;
@@ -2250,6 +2644,37 @@ function resetEmbeddedRunState(session) {
   session.forceStopTimer = undefined;
   session.exitPromise = undefined;
   session.resolveExit = undefined;
+  session.reportStarted = false;
+}
+
+function runEmbeddedDebugReport(context, session) {
+  if (session.reportStarted) return;
+  if (!session.reportTarget) {
+    appendEmbeddedLog(session, 'warning', 'debug report skipped: no target preset is available');
+    postVisualEditorRuntime(session, 'stopped');
+    return;
+  }
+  session.reportStarted = true;
+  const args = [
+    'check',
+    '--root', session.appRoot,
+    '--target', session.reportTarget,
+    '--build-dir', session.buildDir,
+    '--report', session.reportPath,
+    '--font-budget', session.fontBudget
+  ];
+  if (session.runtimeLog && fs.existsSync(session.runtimeLog)) {
+    args.push('--runtime-log', session.runtimeLog);
+  }
+  appendEmbeddedLog(session, 'lifecycle', `generating debug report target=${session.reportTarget}`);
+  postEmbeddedMessage(session, { type: 'status', text: isChinese() ? '正在生成调试报告...' : 'Generating debug report...' });
+  postVisualEditorRuntime(session, 'reporting');
+  void runCliWithOptions(context, args, {
+    commandName: 'debug',
+    packageRoot: session.appRoot,
+    reportPath: session.reportPath,
+    onClose: () => postVisualEditorRuntime(session, 'stopped')
+  });
 }
 
 function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
@@ -2264,8 +2689,11 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
   session.frameDir = frameDir;
   session.runId += 1;
   const runId = session.runId;
+  const runBase = `${outputBase(session.appRoot)}-debug-${runId}`;
+  session.runtimeLog = path.join(buildDir(context), 'debug', `${runBase}-runtime.log`);
+  session.reportPath = path.join(buildDir(context), `${runBase}-report.json`);
   const args = [session.launcher, '--build-dir', session.buildDir, '--app', session.appRoot,
-    '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
+    '--runtime-log', session.runtimeLog, '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
   if (session.requestedViewport.width > 0) {
     args.push('--viewport-width', String(session.requestedViewport.width),
       '--viewport-height', String(session.requestedViewport.height));
@@ -2290,6 +2718,7 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
   }
   session.child = child;
   embeddedDebugSession = session;
+  postVisualEditorRuntime(session, 'running');
   postEmbeddedMessage(session, { type: 'reset-frame' });
   postEmbeddedMessage(session, { type: 'session-state', state: 'running' });
   postEmbeddedMessage(session, { type: 'viewport-config', ...session.requestedViewport });
@@ -2327,7 +2756,9 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
     appendEmbeddedLog(session, 'error', `failed to start: ${error.message}`);
     postEmbeddedMessage(session, { type: 'status', text: `Failed to start: ${error.message}` });
     postEmbeddedMessage(session, { type: 'session-state', state: 'stopped' });
+    postVisualEditorRuntime(session, 'stopped');
     scheduleEmbeddedDiagnostics(session);
+    runEmbeddedDebugReport(context, session);
   });
   child.on('close', (code) => {
     if (session.runId !== runId) return;
@@ -2340,16 +2771,19 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
     appendEmbeddedLog(session, 'lifecycle', `shell exited with code ${code ?? 'unknown'}`);
     postEmbeddedMessage(session, { type: 'status', text: `Desktop shell stopped (exit ${code ?? 'unknown'}).` });
     postEmbeddedMessage(session, { type: 'session-state', state: 'stopped' });
+    postVisualEditorRuntime(session, 'stopped');
     scheduleEmbeddedDiagnostics(session);
+    runEmbeddedDebugReport(context, session);
     setTimeout(() => fs.rm(frameDir, { recursive: true, force: true }, () => {}), 250);
   });
 }
 
-async function debugApp(context, resourceUri) {
+async function debugApp(context, resourceUri, options = {}) {
   if (process.platform !== 'win32') {
     vscode.window.showErrorMessage('JellyFrame desktop shell is only available on Windows.');
     return;
   }
+  if (!requireAuthorSdk(context)) return;
   const root = await packageRoot(resourceUri);
   if (!root) return;
   const launcher = debugLauncherPath(context);
@@ -2359,9 +2793,20 @@ async function debugApp(context, resourceUri) {
   }
   const nativeBuildDirectory = requireNativeBuildDir(context, appRequiresScripting(root));
   if (!nativeBuildDirectory) return;
+  const requestedViewport = requestedEmbeddedViewport(options);
+  if (!requestedViewport) {
+    vscode.window.showErrorMessage(isChinese()
+      ? '可视化编辑器传入的 Runtime 分辨率无效，必须是 64 到 2048 之间的整数。'
+      : 'The visual editor supplied an invalid Runtime viewport. Width and height must be whole numbers from 64 to 2048.');
+    return;
+  }
+  const reportTarget = embeddedReportTarget(context, root);
+  const fontBudget = selectedFontBudget();
+  if (!fontBudget) return;
   if (embeddedDebugSession && !embeddedDebugSession.disposed) {
     const previous = embeddedDebugSession;
     if (!previous.active && !previous.stopping && previous.appRoot === root) {
+      if (requestedViewport.width > 0) previous.requestedViewport = requestedViewport;
       previous.panel.reveal(vscode.ViewColumn.Beside);
       const resume = isChinese() ? '继续上次会话' : 'Resume previous session';
       const restart = isChinese() ? '重新启动上次会话' : 'Restart previous session';
@@ -2392,11 +2837,12 @@ async function debugApp(context, resourceUri) {
     buildProfile: path.basename(path.dirname(nativeBuildDirectory)), python: config().get('pythonPath', 'python'),
     launcher, buildDir: nativeBuildDirectory,
     shellPath: path.join(nativeBuildDirectory, process.platform === 'win32' ? 'jellyframe_desktop_shell.exe' : 'jellyframe_desktop_shell'),
-    frameDir: '', startedAt: Date.now(), viewport: { width: 1, height: 1 }, requestedViewport: { width: 0, height: 0 },
+    frameDir: '', startedAt: Date.now(), viewport: { width: 1, height: 1 }, requestedViewport,
     announcedFrames: 0, deliveredFrames: 0, droppedFrames: 0, decodeErrors: 0, inputSent: 0, stdoutLines: 0, stderrLines: 0,
     logLines: [], webviewReady: false, diagnosticsScheduled: false, stopReason: undefined, exitCode: undefined,
     latestAnnouncedSequence: 0, lastDeliveredSequence: 0, recording: false, recordingStartSequence: 0,
-    recordingActions: [], recordingPendingClick: undefined, recordingSkipped: 0, outputBuffer: '', forceStopTimer: undefined
+    recordingActions: [], recordingPendingClick: undefined, recordingSkipped: 0, outputBuffer: '', forceStopTimer: undefined,
+    reportTarget, fontBudget, reportStarted: false, runtimeLog: '', reportPath: '', visualEditorPanel: options.visualEditorPanel
   };
   embeddedDebugSession = session;
   panel.webview.onDidReceiveMessage((message) => {
@@ -2465,6 +2911,9 @@ async function debugApp(context, resourceUri) {
 async function runFrameScript(context, resourceUri) {
   if (process.platform !== "win32") {
     vscode.window.showErrorMessage("JellyFrame frame-script playback currently requires the desktop shell on Windows.");
+    return;
+  }
+  if (!requireAuthorSdk(context)) {
     return;
   }
   const root = await packageRoot(resourceUri);
@@ -2537,6 +2986,9 @@ async function openCapture(context) {
 }
 
 function listBuilds(context) {
+  if (!requireAuthorSdk(context)) {
+    return;
+  }
   const launcher = debugLauncherPath(context);
   runDetachedPython(context, launcher, ["--list-builds"], { wait: true });
 }
@@ -2554,8 +3006,10 @@ function diagnosticSeverity(severity) {
   return vscode.DiagnosticSeverity.Warning;
 }
 
-function diagnosticRange() {
-  return new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1));
+function diagnosticRange(location) {
+  if (!location) return new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1));
+  const start = new vscode.Position(location.line, location.character);
+  return new vscode.Range(start, new vscode.Position(location.line, location.character + Math.max(1, location.length || 1)));
 }
 
 function updateReportDiagnostics(root) {
@@ -2563,9 +3017,9 @@ function updateReportDiagnostics(root) {
     return;
   }
   const diagnostics = new Map();
-  const addDiagnostic = (filePath, message, severity) => {
+  const addDiagnostic = (filePath, message, severity, location) => {
     const items = diagnostics.get(filePath) || [];
-    items.push(new vscode.Diagnostic(diagnosticRange(), message, severity));
+    items.push(new vscode.Diagnostic(diagnosticRange(location), message, severity));
     diagnostics.set(filePath, items);
   };
   const entryPath = path.resolve(root, String(lastReport.app?.entry || "jellyframe.app.json").replace(/^[/\\]/, ""));
@@ -2587,12 +3041,31 @@ function updateReportDiagnostics(root) {
   }
 
   const pipeline = lastReport.pipelineDiagnostics || {};
+  let visualModel;
+  try {
+    const modelPath = path.join(root, ".jellyframe", "visual-editor.json");
+    if (fs.existsSync(modelPath)) visualModel = JSON.parse(fs.readFileSync(modelPath, "utf8"));
+  } catch (_) {
+    visualModel = undefined;
+  }
+  let entrySource = "";
+  try {
+    if (fs.existsSync(entryPath) && fs.statSync(entryPath).isFile()) {
+      entrySource = fs.readFileSync(entryPath, "utf8");
+    }
+  } catch (_) {
+    entrySource = "";
+  }
   for (const diagnostic of pipeline.diagnostics || []) {
     const stage = diagnostic.stage || "pipeline";
     const code = diagnostic.code || "diagnostic";
     const detail = diagnostic.detail ? ` (${diagnostic.detail})` : "";
-    const message = `${stage}::${code}: ${diagnostic.message || "Pipeline diagnostic"}${detail}`;
-    addDiagnostic(entryPath, message, diagnosticSeverity(diagnostic.severity));
+    const attribution = attributeDiagnostic(diagnostic, visualModel, entrySource);
+    const ownership = attribution.nodeId
+      ? ` [visual node ${attribution.nodeId}${attribution.propertyGroup ? ` · ${attribution.propertyGroup}` : ""}]`
+      : " [visual node attribution unavailable]";
+    const message = `${stage}::${code}${ownership}: ${diagnostic.message || "Pipeline diagnostic"}${detail}`;
+    addDiagnostic(entryPath, message, diagnosticSeverity(diagnostic.severity), attribution.sourceLocation);
   }
 
   capabilityDiagnostics.clear();
@@ -2617,6 +3090,10 @@ class JellyFrameStatusProvider {
     return element;
   }
 
+  getParent(element) {
+    return element?.parent;
+  }
+
   getChildren(element) {
     if (element?.children) {
       return element.children;
@@ -2624,6 +3101,8 @@ class JellyFrameStatusProvider {
 
     const root = currentPackageRoot();
     const hasPackage = Boolean(root);
+    const visualEditorAvailable = Boolean(root && isVisualEditorEligible(root));
+    updateVisualEditorContext(root);
     const app = hasPackage ? path.basename(root) : "No package selected";
     const selection = nativeBuildDir(this.context, appRequiresScripting(root));
     const buildDirectory = selection.buildDirectory;
@@ -2632,6 +3111,7 @@ class JellyFrameStatusProvider {
       configuredRoot: String(config().get("sdkRoot", "") || config().get("repoRoot", "") || "").trim(),
       extensionPath: this.context.extensionPath
     });
+    const sdkMetadata = readSdkMetadata(sdkDirectory);
     const desktopBuildRunning = Boolean(activeDesktopBuildSetup);
     const build = buildDirectory || buildDirectoryError(this.context, selection);
     const buildPresentation = desktopBuildPresentation(buildDirectory, /^zh(?:-|$)/i.test(vscode.env.language || ""));
@@ -2653,7 +3133,6 @@ class JellyFrameStatusProvider {
       reports: "报告与日志",
       environment: "环境",
       authorEnvironment: "作者环境",
-      configureEnvironment: "配置作者环境",
       desktopRuntime: "桌面运行时",
       buildProfile: "构建配置",
       buildOutput: "输出目录",
@@ -2702,6 +3181,9 @@ class JellyFrameStatusProvider {
       debugExternal: "在外部窗口调试",
       playback: "运行程控回放",
       create: "从模板新建 App",
+      visualEditor: "可视化编辑 App",
+      visualEditorUnavailable: "可视化编辑不可用",
+      visualEditorCompatibility: "支持可视化模型或标准 blank 起始 App；任意现有 HTML/CSS 不会自动还原。",
       packageResources: "生成资源包",
       openReport: "打开最近报告",
       openCapture: "打开截图或回放文件",
@@ -2715,7 +3197,7 @@ class JellyFrameStatusProvider {
       measured: "已测量",
       notMeasured: "尚未测量",
       buildValue: buildPresentation.summary,
-      sdkValue: sdkDirectory ? path.basename(sdkDirectory) : "未配置",
+      sdkValue: sdkDirectory ? (sdkMetadata?.releaseTag || sdkMetadata?.runtimeVersion || path.basename(sdkDirectory)) : "未配置",
       actionHints: {
         validate: "快速检查 manifest、入口和本地资源；不启动渲染管线。",
         check: "运行渲染预检、响应式与字体检查；可选程控回放。",
@@ -2724,8 +3206,8 @@ class JellyFrameStatusProvider {
         debugExternal: "在独立原生窗口中运行可交互的桌面壳。",
         playback: "按 .jfcapture 脚本回放交互并生成帧证据。",
         create: "从官方模板创建一个新的 App 包。",
+        visualEditor: "用受 JellyFrame 特性约束的拖放画布编辑当前 App，并生成可读源码。",
         packageResources: "生成供固件或 App Runtime 使用的资源包。",
-        configureEnvironment: "选择一次已安装的 JellyFrame SDK；独立 App 项目随后可直接使用检查、预览和调试。",
         discoverDevice: "通过已配置的 Provider 列出可连接设备。",
         selectDevice: "在已发现设备中切换本次操作的目标。",
         inspectDevice: "读取并校验当前设备的 Developer Image 与 Render Core 身份。",
@@ -2747,7 +3229,6 @@ class JellyFrameStatusProvider {
       reports: "Reports & Logs",
       environment: "Environment",
       authorEnvironment: "Author environment",
-      configureEnvironment: "Configure author environment",
       desktopRuntime: "Desktop Runtime",
       buildProfile: "Build profile",
       buildOutput: "Output directory",
@@ -2796,6 +3277,9 @@ class JellyFrameStatusProvider {
       debugExternal: "Debug in external window",
       playback: "Run programmed playback",
       create: "Create App from template",
+      visualEditor: "Edit App visually",
+      visualEditorUnavailable: "Visual editor unavailable",
+      visualEditorCompatibility: "Visual models and the standard blank starter are supported; arbitrary HTML/CSS is not round-tripped.",
       packageResources: "Generate resource package",
       openReport: "Open latest report",
       openCapture: "Open capture or playback file",
@@ -2809,7 +3293,7 @@ class JellyFrameStatusProvider {
       measured: "Measured",
       notMeasured: "Not measured",
       buildValue: buildPresentation.summary,
-      sdkValue: sdkDirectory ? path.basename(sdkDirectory) : "Not configured",
+      sdkValue: sdkDirectory ? (sdkMetadata?.releaseTag || sdkMetadata?.runtimeVersion || path.basename(sdkDirectory)) : "Not configured",
       actionHints: {
         validate: "Quickly check the manifest, entry point and local resources without starting Render Core.",
         check: "Run render preflight, responsive and font checks; optionally replay a capture.",
@@ -2818,8 +3302,8 @@ class JellyFrameStatusProvider {
         debugExternal: "Run an interactive desktop shell in a separate native window.",
         playback: "Replay a .jfcapture interaction script and produce frame evidence.",
         create: "Create a new App package from an official template.",
+        visualEditor: "Edit the current App on a JellyFrame-constrained drag-and-drop canvas and generate readable source.",
         packageResources: "Generate a resource package for firmware or App Runtime use.",
-        configureEnvironment: "Choose an installed JellyFrame SDK once; standalone App projects can then use check, preview and debug directly.",
         discoverDevice: "List connectable devices through the configured Provider.",
         selectDevice: "Change the target for subsequent device operations.",
         inspectDevice: "Read and validate the selected Developer Image and Render Core identity.",
@@ -2841,21 +3325,18 @@ class JellyFrameStatusProvider {
       ]),
       this.group(labels.workflow, "rocket", [
         ...(hasPackage ? [
-          this.group(labels.packageChecks, undefined, [
-            this.commandItem(labels.validate, labels.actionHints.validate, "jellyframe.validate", "check", root),
-            this.commandItem(labels.check, labels.actionHints.check, "jellyframe.check", "check-all", root),
-            this.commandItem(labels.preview, labels.actionHints.preview, "jellyframe.preview", "preview", root),
-          ]),
-          this.group(labels.interactiveDebugging, undefined, [
-            this.commandItem(labels.debug, labels.actionHints.debug, "jellyframe.debug", "debug-alt", root),
-            this.commandItem(labels.debugExternal, labels.actionHints.debugExternal, "jellyframe.debugExternal", "external-link", root),
-            this.commandItem(labels.playback, labels.actionHints.playback, "jellyframe.runFrameScript", "play-circle", root),
-          ]),
+          this.commandItem(labels.validate, labels.actionHints.validate, "jellyframe.validate", "check", root),
+          this.commandItem(labels.check, labels.actionHints.check, "jellyframe.check", "check-all", root),
+          this.commandItem(labels.preview, labels.actionHints.preview, "jellyframe.preview", "preview", root),
+          this.commandItem(labels.debug, labels.actionHints.debug, "jellyframe.debug", "debug-alt", root),
+          this.commandItem(labels.debugExternal, labels.actionHints.debugExternal, "jellyframe.debugExternal", "link-external", root),
+          this.commandItem(labels.playback, labels.actionHints.playback, "jellyframe.runFrameScript", "play-circle", root),
         ] : []),
-        this.group(labels.authoring, undefined, [
-          this.commandItem(labels.create, labels.actionHints.create, "jellyframe.newFromTemplate", "new-file"),
-          ...(hasPackage ? [this.commandItem(labels.packageResources, labels.actionHints.packageResources, "jellyframe.package", "package", root)] : []),
-        ]),
+        this.commandItem(labels.create, labels.actionHints.create, "jellyframe.newFromTemplate", "new-file"),
+        ...(visualEditorAvailable
+          ? [this.commandItem(labels.visualEditor, labels.actionHints.visualEditor, "jellyframe.visualEditor", "layout", root)]
+          : (hasPackage ? [this.statusItem(labels.visualEditor, labels.visualEditorUnavailable, labels.visualEditorCompatibility, "layout")] : [])),
+        ...(hasPackage ? [this.commandItem(labels.packageResources, labels.actionHints.packageResources, "jellyframe.package", "package", root)] : []),
       ]),
       this.group(labels.reports, "report", [
         ...(lastReport ? [this.commandItem(labels.openReport, labels.reportReady, "jellyframe.showReport", "output")] : []),
@@ -2867,70 +3348,75 @@ class JellyFrameStatusProvider {
       ]),
       this.group(labels.environment, "settings-gear", [
         this.statusItem(labels.authorEnvironment, labels.sdkValue,
-          sdkDirectory || (isChinese() ? "未找到 SDK" : "SDK not found"), "package"),
-        this.commandItem(labels.configureEnvironment, labels.actionHints.configureEnvironment,
-          "jellyframe.configureEnvironment", "plug"),
-        this.group(labels.desktopRuntime, undefined, [
-          this.statusItem(labels.build, labels.buildValue, buildPresentation.summary, "server-environment"),
-          this.statusItem(labels.buildProfile, buildPresentation.profile, buildPresentation.profile, "settings-gear"),
-          this.statusItem(labels.buildOutput, buildPresentation.output, buildPresentation.output, "folder"),
-          this.statusItem(labels.scriptSupport, buildPresentation.scripting, buildPresentation.scripting, "symbol-event"),
-          ...(desktopBuildRunning ? [this.statusItem(
-            labels.desktopBuildInProgress,
-            chinese ? "CMake 正在运行" : "CMake is running",
-            chinese ? "正在配置或编译 JellyFrame 桌面壳。可在通知或运行日志中查看当前阶段。" : "JellyFrame is configuring or building the desktop shell. The notification and run log show the current phase.",
-            "sync~spin")] : []),
-          ...(!buildDirectory && !desktopBuildRunning ? [this.commandItem(
-            labels.createDesktopBuild,
-            chinese
+          sdkDirectory
+            ? (chinese
+              ? `${sdkMetadata?.kind === "app-sdk" ? "App 作者 SDK" : "源码工作区"}：${sdkDirectory}`
+              : `${sdkMetadata?.kind === "app-sdk" ? "App Author SDK" : "Source checkout"}: ${sdkDirectory}`)
+            : (chinese
+              ? "点击后可从 GitHub 下载官方 App 作者 SDK，或选择本机已安装的 SDK。"
+              : "Click to download the official App Author SDK from GitHub or select an installed SDK."),
+          sdkDirectory ? "package" : "cloud-download", "jellyframe.manageAuthorEnvironment"),
+        this.statusItem(labels.build, labels.buildValue, buildPresentation.summary, "server-environment"),
+        this.statusItem(labels.buildProfile, buildPresentation.profile, buildPresentation.profile, "settings-gear"),
+        this.statusItem(labels.buildOutput, buildPresentation.output, buildPresentation.output, "folder"),
+        this.statusItem(labels.scriptSupport, buildPresentation.scripting, buildPresentation.scripting, "symbol-event"),
+        ...(desktopBuildRunning ? [this.statusItem(
+          labels.desktopBuildInProgress,
+          chinese ? "CMake 正在运行" : "CMake is running",
+          chinese ? "正在配置或编译 JellyFrame 桌面壳。可在通知或运行日志中查看当前阶段。" : "JellyFrame is configuring or building the desktop shell. The notification and run log show the current phase.",
+          "sync~spin")] : []),
+        ...(!buildDirectory && !desktopBuildRunning ? [this.commandItem(
+          sdkMetadata?.kind === "app-sdk"
+            ? (chinese ? "选择带桌面运行时的 SDK" : "Select an SDK with desktop runtime")
+            : labels.createDesktopBuild,
+          sdkMetadata?.kind === "app-sdk"
+            ? (chinese
+              ? "当前 SDK 未声明当前 App 所需的预构建桌面壳；可下载或选择其他 SDK。"
+              : "The current SDK does not declare the prebuilt desktop shell needed by this App; download or select another SDK.")
+            : (chinese
               ? "创建当前 App 所需的桌面壳构建；仅在确认后运行本机 CMake。"
-              : "Create the desktop-shell build needed by the current App; CMake runs only after confirmation.",
-            "jellyframe.setupDesktopBuild", "tools")] : []),
-          this.commandItem(chinese ? "选择或查看构建" : "Choose or inspect builds",
-            chinese ? "显示可用桌面构建，并帮助确认当前选择。" : "Show available desktop builds and confirm the current selection.",
-            "jellyframe.listBuilds", "list-tree"),
-        ]),
+              : "Create the desktop-shell build needed by the current App; CMake runs only after confirmation."),
+          sdkMetadata?.kind === "app-sdk" ? "jellyframe.manageAuthorEnvironment" : "jellyframe.setupDesktopBuild",
+          sdkMetadata?.kind === "app-sdk" ? "package" : "tools")] : []),
+        this.commandItem(chinese ? "选择或查看构建" : "Choose or inspect builds",
+          chinese ? "显示可用桌面构建，并帮助确认当前选择。" : "Show available desktop builds and confirm the current selection.",
+          "jellyframe.listBuilds", "list-tree"),
       ]),
       this.group(labels.device, "plug", [
-        this.group(labels.deviceActions, undefined, [
-          this.commandItem(labels.discoverDevice, labels.actionHints.discoverDevice, "jellyframe.deviceDiscover", "plug"),
-          ...(Array.isArray(lastDeviceDiscovery) && lastDeviceDiscovery.length > 1
-            ? [this.commandItem(labels.selectDevice, labels.actionHints.selectDevice, "jellyframe.deviceSelect", "symbol-array")]
-            : []),
-          ...(lastDeviceEndpoint
-            ? [
-              this.commandItem(labels.inspectDevice, labels.actionHints.inspectDevice, "jellyframe.deviceInfo", "info"),
-              this.commandItem(labels.listDeviceApps, labels.actionHints.listDeviceApps, "jellyframe.deviceList", "list-tree")
-            ]
-            : []),
-        ]),
+        this.commandItem(labels.discoverDevice, labels.actionHints.discoverDevice, "jellyframe.deviceDiscover", "plug"),
+        ...(Array.isArray(lastDeviceDiscovery) && lastDeviceDiscovery.length > 1
+          ? [this.commandItem(labels.selectDevice, labels.actionHints.selectDevice, "jellyframe.deviceSelect", "symbol-array")]
+          : []),
+        ...(lastDeviceEndpoint
+          ? [
+            this.commandItem(labels.inspectDevice, labels.actionHints.inspectDevice, "jellyframe.deviceInfo", "info"),
+            this.commandItem(labels.listDeviceApps, labels.actionHints.listDeviceApps, "jellyframe.deviceList", "list-tree")
+          ]
+          : []),
         ...(selectedDevice && supportedDeviceOperations.size > 0 ? [
-          this.group(labels.deviceLifecycle, undefined, [
-            ...(hasPackage && supportedDeviceOperations.has("install")
-              ? [this.commandItem(labels.deployDeviceApp, labels.actionHints.deployDeviceApp, "jellyframe.deviceDeploy", "cloud-upload", root)]
-              : []),
-            ...(supportedDeviceOperations.has("launch")
-              ? [this.commandItem(labels.launchDeviceApp, labels.actionHints.launchDeviceApp, "jellyframe.deviceLaunch", "play")]
-              : []),
-            ...(supportedDeviceOperations.has("stop")
-              ? [this.commandItem(labels.stopDeviceApp, labels.actionHints.stopDeviceApp, "jellyframe.deviceStop", "debug-stop")]
-              : []),
-            ...(supportedDeviceOperations.has("rollback")
-              ? [this.commandItem(labels.rollbackDeviceApp, labels.actionHints.rollbackDeviceApp, "jellyframe.deviceRollback", "discard")]
-              : []),
-            ...(supportedDeviceOperations.has("remove")
-              ? [this.commandItem(labels.removeDeviceApp, labels.actionHints.removeDeviceApp, "jellyframe.deviceRemove", "trash")]
-              : []),
-            ...(supportedDeviceOperations.has("logs")
-              ? [this.commandItem(labels.readDeviceLogs, labels.actionHints.readDeviceLogs, "jellyframe.deviceLogs", "output")]
-              : []),
-            ...(supportedDeviceOperations.has("recovery")
-              ? [this.commandItem(labels.readDeviceRecovery, labels.actionHints.readDeviceRecovery, "jellyframe.deviceRecovery", "heart")]
-              : []),
-          ])
+          ...(hasPackage && supportedDeviceOperations.has("install")
+            ? [this.commandItem(labels.deployDeviceApp, labels.actionHints.deployDeviceApp, "jellyframe.deviceDeploy", "cloud-upload", root)]
+            : []),
+          ...(supportedDeviceOperations.has("launch")
+            ? [this.commandItem(labels.launchDeviceApp, labels.actionHints.launchDeviceApp, "jellyframe.deviceLaunch", "play")]
+            : []),
+          ...(supportedDeviceOperations.has("stop")
+            ? [this.commandItem(labels.stopDeviceApp, labels.actionHints.stopDeviceApp, "jellyframe.deviceStop", "debug-stop")]
+            : []),
+          ...(supportedDeviceOperations.has("rollback")
+            ? [this.commandItem(labels.rollbackDeviceApp, labels.actionHints.rollbackDeviceApp, "jellyframe.deviceRollback", "discard")]
+            : []),
+          ...(supportedDeviceOperations.has("remove")
+            ? [this.commandItem(labels.removeDeviceApp, labels.actionHints.removeDeviceApp, "jellyframe.deviceRemove", "trash")]
+            : []),
+          ...(supportedDeviceOperations.has("logs")
+            ? [this.commandItem(labels.readDeviceLogs, labels.actionHints.readDeviceLogs, "jellyframe.deviceLogs", "output")]
+            : []),
+          ...(supportedDeviceOperations.has("recovery")
+            ? [this.commandItem(labels.readDeviceRecovery, labels.actionHints.readDeviceRecovery, "jellyframe.deviceRecovery", "heart")]
+            : []),
         ] : []),
-        this.group(labels.deviceStatus, undefined, [
-          this.statusItem(labels.connectedDevices,
+        this.statusItem(labels.connectedDevices,
           Array.isArray(lastDeviceDiscovery)
             ? `${lastDeviceDiscovery.filter((device) => device.connected).length}/${lastDeviceDiscovery.length}`
             : labels.noDeviceSession,
@@ -2980,12 +3466,11 @@ class JellyFrameStatusProvider {
             : labels.noLifecycleResult,
           lastDeviceLifecycle?.message || labels.noLifecycleResult,
           lastDeviceLifecycle?.resultCode === "ok" || lastDeviceLifecycle?.resultCode === "accepted" ? "pass" : "history"),
-          ...(lastDeviceApps?.apps || []).map((app) => this.statusItem(
+        ...(lastDeviceApps?.apps || []).map((app) => this.statusItem(
           app.appId || "unknown app",
           `${app.versionName || "?"} · ${app.state || "?"}${app.rollbackAvailable ? " · rollback" : ""}`,
           app.appId || "unknown app", "package"
-          )),
-        ]),
+        )),
       ]),
     ];
   }
@@ -2993,7 +3478,11 @@ class JellyFrameStatusProvider {
   group(label, icon, children) {
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Expanded);
     item.iconPath = icon ? new vscode.ThemeIcon(icon) : undefined;
+    item.id = `group:${label}`;
     item.children = children;
+    for (const child of children) {
+      child.parent = item;
+    }
     item.contextValue = "jellyframe.group";
     return item;
   }
@@ -3003,6 +3492,7 @@ class JellyFrameStatusProvider {
     item.description = description || undefined;
     item.tooltip = description || label;
     item.iconPath = icon ? new vscode.ThemeIcon(icon) : undefined;
+    item.id = `command:${command}:${resource || ""}:${label}`;
     item.command = {
       command,
       title: label,
@@ -3011,11 +3501,15 @@ class JellyFrameStatusProvider {
     return item;
   }
 
-  statusItem(label, description, tooltip, icon) {
+  statusItem(label, description, tooltip, icon, command) {
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
     item.description = description || undefined;
     item.tooltip = tooltip || description || label;
     item.iconPath = icon ? new vscode.ThemeIcon(icon) : undefined;
+    item.id = `status:${label}`;
+    if (command) {
+      item.command = { command, title: label };
+    }
     return item;
   }
 }
@@ -3280,11 +3774,21 @@ function templateChoices(context) {
       timer: "Local state and button interaction.",
       weather: "Data cards and package-local images."
     };
-  return templateNames(context).map((name) => ({
+  const names = templateNames(context);
+  const choices = names.map((name) => ({
     label: name,
     description: descriptions[name] || (chinese ? "官方 App 起始模板。" : "Official App starter template."),
     template: name
   }));
+  if (names.includes("blank")) {
+    choices.unshift({
+      label: chinese ? "blank（可视化编辑）" : "blank (visual editor)",
+      description: chinese ? "创建带可视化模型的最小 App，可直接打开画布。" : "Create the minimal App with a visual model and open it in the canvas.",
+      template: "blank",
+      visualEditor: true
+    });
+  }
+  return choices;
 }
 
 function suggestedAppId(directoryName) {
@@ -3326,6 +3830,9 @@ function appIdError(value, chinese) {
 }
 
 async function newFromTemplate(context) {
+  if (!requireAuthorSdk(context)) {
+    return;
+  }
   const chinese = isChinese();
   const picked = await vscode.window.showQuickPick(templateChoices(context), {
     placeHolder: chinese ? "选择 JellyFrame App 起始模板" : "Select a JellyFrame App starter template",
@@ -3412,7 +3919,7 @@ async function newFromTemplate(context) {
   if (!selectedTarget) {
     return;
   }
-  runCli(context, [
+  const outcome = await runCli(context, [
     "new",
     "--template",
     picked.template,
@@ -3425,6 +3932,17 @@ async function newFromTemplate(context) {
     "--target",
     selectedTarget
   ]);
+  if (outcome?.code === 0 && fs.existsSync(path.join(output, "jellyframe.app.json"))) {
+    if (picked.visualEditor) {
+      const files = appFiles(output);
+      const model = initialModel(output, files);
+      const modelPath = path.join(output, ".jellyframe", "visual-editor.json");
+      fs.mkdirSync(path.dirname(modelPath), { recursive: true });
+      fs.writeFileSync(modelPath, `${JSON.stringify(model, null, 2)}\n`, "utf8");
+    }
+    lastPackageRoot = output;
+    await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(output), false);
+  }
 }
 
 function activate(context) {
@@ -3434,13 +3952,13 @@ function activate(context) {
     capabilityDiagnostics,
     statusProvider.changed,
     vscode.window.registerTreeDataProvider("jellyframe.status", statusProvider),
-    vscode.window.onDidChangeActiveTextEditor(() => statusProvider?.refresh()),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => statusProvider?.refresh()),
-    vscode.workspace.onDidSaveTextDocument(() => statusProvider?.refresh()),
+    vscode.window.onDidChangeActiveTextEditor(refreshVisualEditorContext),
+    vscode.workspace.onDidChangeWorkspaceFolders(refreshVisualEditorContext),
+    vscode.workspace.onDidSaveTextDocument(refreshVisualEditorContext),
     vscode.commands.registerCommand("jellyframe.validate", (resourceUri) => runPackageCommand(context, "validate", resourceUri)),
     vscode.commands.registerCommand("jellyframe.check", (resourceUri) => runPackageCommand(context, "check", resourceUri)),
     vscode.commands.registerCommand("jellyframe.preview", (resourceUri) => previewPackage(context, resourceUri)),
-    vscode.commands.registerCommand("jellyframe.debug", (resourceUri) => debugApp(context, resourceUri)),
+    vscode.commands.registerCommand("jellyframe.debug", (resourceUri, options) => debugApp(context, resourceUri, options)),
     vscode.commands.registerCommand("jellyframe.debugExternal", (resourceUri) => debugExternalApp(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.runFrameScript", (resourceUri) => runFrameScript(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.openCapture", () => openCapture(context)),
@@ -3450,9 +3968,21 @@ function activate(context) {
       const scripting = appRequiresScripting(root);
       return configureDesktopBuild(context, scripting);
     }),
-    vscode.commands.registerCommand("jellyframe.configureEnvironment", () => configureAuthorEnvironment(context)),
+    vscode.commands.registerCommand("jellyframe.manageAuthorEnvironment", () => manageAuthorEnvironment(context)),
     vscode.commands.registerCommand("jellyframe.package", (resourceUri) => runPackageCommand(context, "package", resourceUri)),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
+    vscode.commands.registerCommand("jellyframe.visualEditor", async (resourceUri) => {
+      const root = await packageRoot(resourceUri);
+      if (!root) return;
+      if (!isVisualEditorEligible(root)) {
+        const chinese = isChinese();
+        vscode.window.showWarningMessage(chinese
+          ? "当前 App 没有可视化编辑模型。请从模板新建，或先使用可视化编辑创建它；任意 HTML/CSS 不会自动还原。"
+          : "This App has no visual-editor model. Create it from a template or through the visual editor; arbitrary HTML/CSS is not round-tripped.");
+        return;
+      }
+      await openVisualEditor(context, root);
+    }),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),
     vscode.commands.registerCommand("jellyframe.showOutput", () => showOutputChannel()),
     vscode.commands.registerCommand("jellyframe.deviceDiscover", () => discoverDevice(context)),
