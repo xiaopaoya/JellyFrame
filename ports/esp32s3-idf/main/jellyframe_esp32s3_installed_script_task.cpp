@@ -142,7 +142,7 @@ namespace {
 jellyframe::ScriptTaskWorkerRuntimeOptions worker_options(const InstalledBundleScriptSession& state) {
     jellyframe::ScriptTaskWorkerRuntimeOptions options;
     options.budgets = installed_script_budgets(state.width, state.height);
-    options.script = jellyframe::jerryscript_runtime_options_from_host_budgets(options.budgets);
+    options.script = jellyframe::script_runtime_options_from_host_budgets(options.budgets);
     options.viewport = {0, 0, state.width, state.height};
     options.frame_codec = frame_codec_options();
     options.input_codec = {32, 256};
