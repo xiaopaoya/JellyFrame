@@ -1,6 +1,6 @@
 # Developer Image Manifest V0
 
-> 最后更新：2026-09-04；适用版本：0.6.0-dev；状态：契约基线
+> 最后更新：2026-09-06；适用版本：0.6.0-dev；状态：契约基线
 
 每个可发布的第一方 Developer Image 都必须在 firmware 与 recovery
 materials 旁发布一份不可变 JSON manifest。它是 Device OS release tooling 与未来
@@ -76,6 +76,14 @@ compatibility assessment，不能复用此 image identity。
 
 ## Core 0.6.2 交接状态
 
-Runtime `master` 已消费带签名的 Render Core `v0.6.2`，但 WS147 尚未基于该依赖重新构建并完成验收。因此，上述已发布基线仍是不可变的 `0.6.1` 产物，不能原地修改其 `renderCore`、source、firmware 或 recovery 字段。
-重新构建、provenance 与实机门槛见
+Runtime `master` 已消费带签名的 Render Core `v0.6.2`。上述已发布的
+`0.1.0-dev` 基线仍是不可变的 `0.6.1` 产物，不能原地修改。Core `0.6.2` 的 WS147 候选为
+`0.6.2-ws147.1`，归档于 `core062-developer-image-final-20260905`：image source revision 为
+`131ce8c15702eea6fff3187c10a0926ef21cfc98`，firmware SHA-256 为
+`9a67aef07b833fe7f6be8ace4ce70a23eed58df33bb3cda4642d4c022a2ebb72`，factory recovery SHA-256 为
+`7256568c5741d4131d526a25e4072eda49c68778b70746efdc99c86a29eb427e`，manifest SHA-256 为
+`c118df34a7f98eee3efb0b1b711b78b9d69ff614ce1f2acb390a9d11447ef031`，归档 SHA-256 为
+`cdc7385ed08e37e322d39d734948781106205af29cd756fb56727c4243cb2e4e`。
+候选已通过有界入口/重连、rollback 完整性、已安装脚本 App 输入和 30 次混合生命周期证据，但仍为 **partial**：非脚本生命周期、显式更新、in-flight cancellation、chunk/commit 掉电恢复、malformed/CRC/oversize/storage-full 矩阵，以及 registry corruption recovery 仍待完成。
+完整交接要求见
 [`project_docs/device_image_core_062_provenance_handoff_zh.md`](../project_docs/device_image_core_062_provenance_handoff_zh.md)。

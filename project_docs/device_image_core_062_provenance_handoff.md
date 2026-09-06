@@ -1,6 +1,6 @@
 # Device Image Core 0.6.2 Provenance Handoff
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev
+> Last updated: 2026-09-06; Applies to: 0.6.0-dev
 
 This handoff covers the JellyFrame Runtime `0.6.0-dev` line and its locked
 Render Core `0.6.2` dependency.
@@ -14,9 +14,25 @@ Runtime `master` consumes signed Render Core `v0.6.2`, ABI `1`, source identity
 `539a894519d3251f02c8b3aee8d0d0fb715bf49a732fc74126ccb2188462e3f0`, and archive
 SHA-256 `d136a0d7fd7ab58436a5f2fa9c7eb27a497e08bad384a96cd93689ba6898f43e`.
 
-The published WS147 image remains an immutable historical artifact using Core
-`0.6.1`. Its manifest, firmware hash, recovery hash, provider identity and
-hardware reports must remain unchanged until a new image is built and tested.
+The published WS147 baseline remains an immutable historical artifact using
+Core `0.6.1`. A new candidate `0.6.2-ws147.1` has now been built from Device OS
+revision `131ce8c15702eea6fff3187c10a0926ef21cfc98`. Its firmware SHA-256 is
+`9a67aef07b833fe7f6be8ace4ce70a23eed58df33bb3cda4642d4c022a2ebb72`, factory
+recovery SHA-256 is `7256568c5741d4131d526a25e4072eda49c68778b70746efdc99c86a29eb427e`,
+manifest SHA-256 is `c118df34a7f98eee3efb0b1b711b78b9d69ff614ce1f2acb390a9d11447ef031`,
+and the complete archive SHA-256 is
+`cdc7385ed08e37e322d39d734948781106205af29cd756fb56727c4243cb2e4e`.
+These identities must remain tied to the archived candidate; the historical
+manifest and evidence must not be edited in place.
+
+## Candidate Status
+
+The candidate passes bounded entry/reconnect, rollback integrity, installed
+script input (20 cycles) and mixed lifecycle (30 cycles). Its report remains
+**partial** because non-script lifecycle, explicit update, confirmed in-flight
+cancellation, chunk/commit power-loss recovery, malformed/CRC/oversize/
+storage-full coverage and registry-corruption protected-launcher recovery have
+not yet been evidenced.
 
 ## Required Image Change
 
@@ -44,7 +60,8 @@ identity was hand-written, or a report mixes old image and new Core versions.
 
 ## Next Owner Action
 
-The port maintainer should use the existing WS147 acceptance fixture to produce
-the candidate image and report. After it passes, update manifest/recovery and
-Provider delivery metadata together in one reviewed change. Until then, tools
-must accept the historical image only under its `0.6.1` identity.
+The port maintainer should complete the listed remaining cases against this
+candidate. After they pass, update manifest/recovery and Provider delivery
+metadata together in one reviewed change. Until then, tooling may accept the
+candidate only as a partial `0.6.2` image, while the historical image remains
+accepted only under its `0.6.1` identity.
