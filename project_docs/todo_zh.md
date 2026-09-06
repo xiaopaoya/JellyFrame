@@ -1,6 +1,6 @@
 # JellyFrame 活动待办
 
-> 最后更新：2026-09-05；适用版本：0.6.0-dev
+> 最后更新：2026-09-07；适用版本：0.6.0-dev
 >
 > 本清单是 [路线图](roadmap_zh.md) 的近期执行队列，不记录已经关闭的验收、性能微实验或历史移植任务。
 
@@ -10,8 +10,7 @@
 - [ ] 在同一干净作者机完成 VS Code 设备流程：`new -> check -> package -> deploy -> launch -> live log -> update -> rollback -> stop -> remove`。桌面与设备 session 必须保持独立，最终报告必须保留可定位的失败归属。
 - [ ] 通过 provider 流程完成真实已安装 App 的 panel/input 验收。记录 App launch marker、触控/输入响应、panel/present 错误与恢复行为；provider lifecycle PASS 不等于视觉或输入证据。
 - [ ] 将 B1 作为持续 release gate 维护。带签名的 Core `v0.6.2` release 是当前 Runtime 依赖；以后每次 Core bump 必须下载或以其他方式认证已审阅的 release artifact、校验 archive SHA-256、更新精确 version/ABI/source lock，并通过 standalone、package-consumer 与 source-override tests。
-- [x] 基于已合入的 Runtime Core `0.6.2` lock 构建并归档 WS147 Developer Image 候选 `0.6.2-ws147.1`。历史 `0.6.1` manifest 与证据保持不可变；候选报告为 `core062-developer-image-final-20260905`，当前仍为 **partial**。
-- [ ] 关闭 Core `0.6.2` 镜像剩余门槛：非脚本生命周期、显式更新、确认中的取消、chunk/commit 掉电恢复、malformed/CRC/oversize/storage-full 矩阵，以及 registry corruption 后 protected launcher recovery。完成证据前不得提升候选 manifest 的发布身份。
+- [x] 基于已合入的 Runtime Core `0.6.2` lock 构建并验收 WS147 Developer Image `0.6.2-ws147.1`。历史 `0.6.1` manifest 与证据保持不可变；R1-R17、host/provider 与 package-smoke 完整报告为 `core062-developer-image-final-20260905`，物理 Developer Image gate 已关闭。
 - [x] 从 Runtime `ca747011` 发布 App Author SDK `app-sdk-v0.6.0-dev.2`；标准与 scripting 桌面运行时均消费 Core `0.6.2`，release archive SHA-256 为 `c3245edd...7dc8a9f`。
 - [ ] 执行 [0.6 工程维护审查计划](engineering_review_plan_20260819_zh.md)：先做 R0 package/profile/provenance，再做 R1 document/style、layout/dirty 与 renderer/text。只修复有明确语义或安全缺陷的接口，不做机械式改名。
 - [ ] 在响应式布局基础交付后继续 R1 Core-only 审查：检查 parser/style 所有权、malformed-input budget、cache invalidation 与确定性 capture 行为。`300x300`、`320x240`、`172x320` 矩阵及 Flex 交叉轴回归现作为持续 gate；优先修复已证明的语义缺陷，不以新增控件或浏览器专有声明替代。

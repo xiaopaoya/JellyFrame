@@ -83,7 +83,7 @@ Runtime `master` 已消费带签名的 Render Core `v0.6.2`。上述已发布的
 `9a67aef07b833fe7f6be8ace4ce70a23eed58df33bb3cda4642d4c022a2ebb72`，factory recovery SHA-256 为
 `7256568c5741d4131d526a25e4072eda49c68778b70746efdc99c86a29eb427e`，manifest SHA-256 为
 `c118df34a7f98eee3efb0b1b711b78b9d69ff614ce1f2acb390a9d11447ef031`，归档 SHA-256 为
-`cdc7385ed08e37e322d39d734948781106205af29cd756fb56727c4243cb2e4e`。
-候选已通过有界入口/重连、rollback 完整性、已安装脚本 App 输入和 30 次混合生命周期证据，但仍为 **partial**：非脚本生命周期、显式更新、in-flight cancellation、chunk/commit 掉电恢复、malformed/CRC/oversize/storage-full 矩阵，以及 registry corruption recovery 仍待完成。
+`687d57903e8c1565c966cf3c7c4f9eaf8ef2e5fecdf29a4e1ac28ae4ab8839b1`。
+候选已通过有界入口/重连、rollback 完整性、已安装脚本 App 输入、非脚本生命周期、显式更新/rollback/remove、确认中的取消、chunk/commit 掉电恢复、malformed/CRC/oversize/storage-full 矩阵、registry corruption recovery 和 30 次混合生命周期证据。完整 Developer Image gate 为 **PASS**。受控拒绝和 load-failure case 仅是验收 fixture，不是产品能力。
 完整交接要求见
 [`project_docs/device_image_core_062_provenance_handoff_zh.md`](../project_docs/device_image_core_062_provenance_handoff_zh.md)。
