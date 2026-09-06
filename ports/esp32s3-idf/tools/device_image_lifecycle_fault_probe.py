@@ -48,7 +48,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--point", required=True, type=int, choices=range(1, 9))
+    parser.add_argument("--point", required=True, type=int, choices=range(1, 10))
     args = parser.parse_args()
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -64,6 +64,14 @@ def main():
             recovery = p.decode_recovery(wire.request(p.RECOVERY, 0x9300, 2, label="corrupt-registry-recovery"))
             assert entries == [] and recovery["reason"] == 1
             cases["corrupt_registry_protected_launcher"] = {"result": "pass"}
+        elif args.point == 9:
+            assert_active(wire, 1, 1)
+            rejected = p.decode_result(wire.request(
+                p.INSTALL_BEGIN, 0x9300, 10,
+                p.begin_payload(8000 + args.point, APP_ID, second), "fault-reject-staging-allocation"))
+            assert rejected["code"] == 12
+            assert_active(wire, 20, 1)
+            cases["fault_point_9_storage_full"] = {"result": "pass"}
         else:
             assert_active(wire, 1, 1)
             begin = p.begin_payload(8000 + args.point, APP_ID, second)

@@ -36,13 +36,14 @@ config JELLYFRAME_ESP32S3_RUN_DEVICE_IMAGE_LIFECYCLE_ACCEPTANCE
 config JELLYFRAME_ESP32S3_DEVICE_IMAGE_TEST_FAULT_POINT
     int "Developer Image acceptance fault point"
     depends on JELLYFRAME_ESP32S3_RUN_DEVICE_IMAGE_LIFECYCLE_ACCEPTANCE
-    range 0 8
+    range 0 9
     default 0
     help
         Test-only persistent lifecycle interruption selector. Zero is normal;
         nonzero values reset after begin, first/last chunk, verification or
-        registry publication, corrupt both registry records on boot, or reject
-        registry publication. It is never enabled by a product profile.
+        registry publication, corrupt both registry records on boot, reject
+        registry publication, or reject a legal staging allocation. It is
+        never enabled by a product profile.
 
 config JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK
     bool "Start 172x320 Band System Shell UI task"

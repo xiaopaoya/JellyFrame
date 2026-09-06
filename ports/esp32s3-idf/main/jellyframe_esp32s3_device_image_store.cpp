@@ -32,6 +32,7 @@ enum class AcceptanceFaultPoint : int {
     AfterRegistryPublish = 6,
     CorruptRegistryAtBoot = 7,
     RejectRegistryPublish = 8,
+    RejectStagingAllocation = 9,
 };
 
 bool has_acceptance_fault(AcceptanceFaultPoint point) {
@@ -163,6 +164,13 @@ bool DeviceImageStore::initialize() {
 
 bool DeviceImageStore::begin_staging(const DeviceInstallRequest& request) {
     if (!initialized_ || staging_active_ || request.bundle_bytes == 0 || request.bundle_bytes > kMaxBundleBytes) {
+        return false;
+    }
+    // Test-only port adapter refusal. This reaches the real transaction/store
+    // boundary used when flash capacity or a staging allocation is unavailable;
+    // the shared transaction controller must return StorageFull and leave the
+    // current durable registry untouched.
+    if (has_acceptance_fault(AcceptanceFaultPoint::RejectStagingAllocation)) {
         return false;
     }
     // A staged replacement must never overwrite the rollback generation.
