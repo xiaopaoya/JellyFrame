@@ -1,12 +1,13 @@
 # Device Image Core 0.6.2 Provenance Handoff
 
-> Last updated: 2026-09-06; Applies to: 0.6.0-dev
+> Last updated: 2026-09-07; Applies to: 0.6.0-dev
 
 This handoff covers the JellyFrame Runtime `0.6.0-dev` line and its locked
 Render Core `0.6.2` dependency.
 
-This handoff defines the evidence required before a new WS147 Developer Image
-may claim Render Core `0.6.2`. It does not promote or mutate the existing image.
+This handoff records the evidence required for the accepted WS147 Developer
+Image using Render Core `0.6.2`. It does not promote or mutate the historical
+image.
 
 ## Current Boundary
 
@@ -21,23 +22,24 @@ revision `131ce8c15702eea6fff3187c10a0926ef21cfc98`. Its firmware SHA-256 is
 recovery SHA-256 is `7256568c5741d4131d526a25e4072eda49c68778b70746efdc99c86a29eb427e`,
 manifest SHA-256 is `c118df34a7f98eee3efb0b1b711b78b9d69ff614ce1f2acb390a9d11447ef031`,
 and the complete archive SHA-256 is
-`cdc7385ed08e37e322d39d734948781106205af29cd756fb56727c4243cb2e4e`.
+`687d57903e8c1565c966cf3c7c4f9eaf8ef2e5fecdf29a4e1ac28ae4ab8839b1`.
 These identities must remain tied to the archived candidate; the historical
 manifest and evidence must not be edited in place.
 
 ## Candidate Status
 
 The candidate passes bounded entry/reconnect, rollback integrity, installed
-script input (20 cycles) and mixed lifecycle (30 cycles). Its report remains
-**partial** because non-script lifecycle, explicit update, confirmed in-flight
-cancellation, chunk/commit power-loss recovery, malformed/CRC/oversize/
-storage-full coverage and registry-corruption protected-launcher recovery have
-not yet been evidenced.
+script input (20 cycles), non-script lifecycle, explicit update/rollback/remove,
+confirmed in-flight cancellation, chunk/commit power-loss recovery, malformed/
+CRC/oversize/storage-full coverage, registry-corruption protected-launcher
+recovery and mixed lifecycle (30 cycles). The complete Developer Image gate is
+**PASS**. The controlled storage-refusal and load-failure images remain
+acceptance fixtures only; they are not enabled product capabilities.
 
-## Required Image Change
+## Accepted Image Record
 
-The next image must be built from the merged Runtime commit containing the
-`0.6.2` lock and the selected WS147 feature profile. The delivery must contain:
+The accepted image was built from the merged Runtime commit containing the
+`0.6.2` lock and the selected WS147 feature profile. Its delivery contains:
 
 - firmware and factory-recovery image from the same source/configuration;
 - a new image version and source revision, never reused historical hashes;
@@ -60,8 +62,7 @@ identity was hand-written, or a report mixes old image and new Core versions.
 
 ## Next Owner Action
 
-The port maintainer should complete the listed remaining cases against this
-candidate. After they pass, update manifest/recovery and Provider delivery
-metadata together in one reviewed change. Until then, tooling may accept the
-candidate only as a partial `0.6.2` image, while the historical image remains
-accepted only under its `0.6.1` identity.
+The port maintainer should retain the complete report and its exact artifact
+hashes as the release record. Provider delivery metadata may now identify this
+candidate as the accepted `0.6.2-ws147.1` Developer Image. The historical image
+remains accepted only under its `0.6.1` identity.

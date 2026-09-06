@@ -94,10 +94,12 @@ edited in place. A Core `0.6.2` WS147 candidate, `0.6.2-ws147.1`, is archived in
 `9a67aef07b833fe7f6be8ace4ce70a23eed58df33bb3cda4642d4c022a2ebb72`, factory
 recovery SHA-256 `7256568c5741d4131d526a25e4072eda49c68778b70746efdc99c86a29eb427e`,
 manifest SHA-256 `c118df34a7f98eee3efb0b1b711b78b9d69ff614ce1f2acb390a9d11447ef031`,
-and archive SHA-256 `cdc7385ed08e37e322d39d734948781106205af29cd756fb56727c4243cb2e4e`.
+and archive SHA-256 `687d57903e8c1565c966cf3c7c4f9eaf8ef2e5fecdf29a4e1ac28ae4ab8839b1`.
 The candidate has passed bounded entry/reconnect, rollback integrity, installed
-script input and 30-cycle mixed lifecycle evidence, but remains **partial**:
-non-script lifecycle, explicit update, in-flight cancellation, chunk/commit
-power-loss recovery, malformed/CRC/oversize/storage-full coverage and registry
-corruption recovery are still required. The full handoff is defined in
+script input, non-script lifecycle, explicit update/rollback/remove, confirmed
+in-flight cancellation, chunk/commit power-loss recovery, malformed/CRC/
+oversize/storage-full coverage, registry corruption recovery and 30-cycle
+mixed lifecycle evidence. The complete Developer Image gate is **PASS**. The
+controlled refusal and load-failure cases are acceptance fixtures only, not
+product capabilities. The full handoff is defined in
 [`project_docs/device_image_core_062_provenance_handoff.md`](../project_docs/device_image_core_062_provenance_handoff.md).
