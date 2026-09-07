@@ -63,7 +63,8 @@ struct InteractionInvalidationOptions {
 class InputController {
 public:
     explicit InputController(const LayerNode& layer_tree,
-                             InteractionInvalidationOptions invalidation_options = {});
+                             InteractionInvalidationOptions invalidation_options = {},
+                             bool dispatch_initial_autofocus = true);
     ~InputController();
 
     const Node* hovered_node() const;

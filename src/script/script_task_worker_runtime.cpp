@@ -472,7 +472,7 @@ bool ScriptTaskWorkerRuntime::rebuild_pipeline() {
     RenderTreeBuilder render_builder(*style_resolver_, render_tree_options_from_budgets(options_.budgets));
     RenderObjectPtr render_tree = render_builder.build(*document_owner_.root());
     if (!render_tree) return false;
-    LayoutEngine layout_engine(*style_resolver_);
+    LayoutEngine layout_engine(*style_resolver_, {}, layout_engine_options_from_budgets(options_.budgets));
     LayoutBoxPtr layout_tree = layout_engine.layout(*render_tree, options_.viewport.width, options_.viewport.height);
     if (!layout_tree) return false;
     LayerTreeBuilder layer_builder(layer_tree_options_from_budgets(options_.budgets));
@@ -482,7 +482,10 @@ bool ScriptTaskWorkerRuntime::rebuild_pipeline() {
     const Node* hovered = input_controller_ != nullptr ? input_controller_->hovered_node() : nullptr;
     const Node* active = input_controller_ != nullptr ? input_controller_->active_node() : nullptr;
     const Node* focused = input_controller_ != nullptr ? input_controller_->focused_node() : nullptr;
-    std::unique_ptr<InputController> input_controller = std::make_unique<InputController>(*layer_tree);
+    // Rebuilding the layer tree must restore the existing focus silently;
+    // autofocus is an initialization action, not a layout-change event.
+    std::unique_ptr<InputController> input_controller = std::make_unique<InputController>(
+        *layer_tree, InteractionInvalidationOptions{}, input_controller_ == nullptr);
     if (input_controller_) {
         input_controller->set_interaction_state(hovered, active, focused);
     }

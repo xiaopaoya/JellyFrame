@@ -216,6 +216,50 @@ void worker_resolves_media_queries_against_its_runtime_viewport() {
     check(saw_media_color, "worker CSS media queries use its configured viewport rather than parser defaults");
 }
 
+void worker_rebuild_does_not_refire_autofocus() {
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(73);
+    ScriptTaskWorkerRuntime runtime(session, runtime_options());
+    check(runtime.initialize(
+              "<body><input id='field' autofocus><p id='status'>idle</p></body>",
+              "body { margin: 0; } input, p { display: block; width: 120px; height: 20px; margin: 0; }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "autofocus fixture initializes");
+    check(runtime.eval(
+              "var focusCount = 0;"
+              "var field = document.getElementById('field');"
+              "field.addEventListener('focus', function () { focusCount++; });"
+              "document.getElementById('status').textContent = 'one';").ok,
+          "first unrelated mutation evaluates");
+    check(runtime.eval(
+              "document.getElementById('status').textContent = 'two';").ok,
+          "second unrelated mutation evaluates");
+    check(runtime.eval("focusCount;").value == "0",
+          "layout rebuild preserves focus without dispatching a new focus event");
+}
+
+void worker_applies_host_layout_box_budget() {
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(74);
+    ScriptTaskWorkerRuntimeOptions options = runtime_options();
+    options.budgets.max_layout_boxes = 1;
+    ScriptTaskWorkerRuntime runtime(session, options);
+    check(runtime.initialize(
+              "<body><button>must-not-reach-layout</button></body>",
+              "button { display: block; width: 120px; height: 40px; }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "layout budget fixture initializes");
+    check(runtime.publish_frame(supervisor).accepted(), "layout budget frame publishes");
+    ScriptTaskAppFrame frame;
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, frame) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "layout budget frame is received");
+    for (const DisplayCommand& command : frame.display_list) {
+        check(command.text != "must-not-reach-layout",
+              "worker layout honors the host box budget before display-list generation");
+    }
+}
+
 void worker_eval_failure_becomes_value_fatal() {
     const ScriptAppSession session{8, 1, 1};
     ScriptTaskWorkerRuntime runtime(session, runtime_options());
@@ -780,6 +824,8 @@ int script_task_worker_runtime_tests_main() {
         worker_retries_dirty_frame_after_ui_mailbox_backpressure();
         worker_v2_publishes_clip_metadata_without_cross_task_objects();
         worker_resolves_media_queries_against_its_runtime_viewport();
+        worker_rebuild_does_not_refire_autofocus();
+        worker_applies_host_layout_box_budget();
         worker_eval_failure_becomes_value_fatal();
         worker_timer_publishes_value_frame();
         worker_interval_rotation_publishes_transformed_value_frame();
