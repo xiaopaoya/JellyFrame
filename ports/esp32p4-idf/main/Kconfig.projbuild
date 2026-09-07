@@ -1,0 +1,10 @@
+menu "JellyFrame ESP32-P4"
+
+config JELLYFRAME_P4_ACCEL_SMOKE
+    bool "Run PPA/JPEG driver smoke test at boot"
+    default y
+    help
+        Exercises PPA RGB565 fill and acquires the JPEG decoder. This runs
+        independently of a display panel, making it safe for initial board bring-up.
+
+endmenu
