@@ -6,6 +6,7 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -421,6 +422,18 @@ class DeviceReferenceCliTests(unittest.TestCase):
             recovered = device_reference.transaction_record(store, 7)
             self.assertEqual(recovered["receivedBytes"], 1)
             self.assertEqual(part.read_bytes(), b"a")
+
+    def test_reference_staging_syncs_at_boundaries_not_every_chunk(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-device-reference-sync-") as directory:
+            store = Path(directory) / "store"
+            device_reference.begin_install(store, 8, "org.example.sync", 20, 0, False)
+            with mock.patch.object(device_reference.os, "fsync") as fsync:
+                for offset in range(0, 20, 4):
+                    device_reference.append_chunk(store, 8, offset, b"data")
+                # Each metadata replacement is durable by contract; only two
+                # of the five staging writes add a staging-file sync.
+                self.assertEqual(fsync.call_count, 7,
+                                 "staging sync is batched while metadata stays durable")
 
     def test_operation_result_rejects_reserved_flags(self):
         with self.assertRaisesRegex(device_reference.ReferenceDeviceError, "invalid JFDP operation result"):

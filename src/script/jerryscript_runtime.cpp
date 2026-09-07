@@ -456,6 +456,7 @@ struct ScriptRuntimeAccess {
             }
             binding.layout_snapshot_requested = true;
             runtime.layout_snapshot_bindings_.push_back(&binding);
+            runtime.layout_snapshot_binding_index_[binding.node].push_back(&binding);
         }
         return binding.has_layout_snapshot;
     }
@@ -6286,6 +6287,16 @@ void JerryScriptRuntime::forget_script_node_binding(ScriptNodeBinding& binding) 
     layout_snapshot_bindings_.erase(
         std::remove(layout_snapshot_bindings_.begin(), layout_snapshot_bindings_.end(), &binding),
         layout_snapshot_bindings_.end());
+    if (binding.node != nullptr) {
+        auto indexed = layout_snapshot_binding_index_.find(binding.node);
+        if (indexed != layout_snapshot_binding_index_.end()) {
+            auto& bindings = indexed->second;
+            bindings.erase(std::remove(bindings.begin(), bindings.end(), &binding), bindings.end());
+            if (bindings.empty()) {
+                layout_snapshot_binding_index_.erase(indexed);
+            }
+        }
+    }
     auto it = std::find(node_bindings_.begin(), node_bindings_.end(), &binding);
     if (it != node_bindings_.end()) {
         node_bindings_.erase(it);
@@ -6310,6 +6321,14 @@ void JerryScriptRuntime::invalidate_script_node(Node& node) {
                            return state == nullptr || state->node == &node;
                        }),
         dialog_states_.end());
+    layout_snapshot_bindings_.erase(
+        std::remove_if(layout_snapshot_bindings_.begin(),
+                       layout_snapshot_bindings_.end(),
+                       [&node](const ScriptNodeBinding* binding) {
+                           return binding == nullptr || binding->node == &node;
+                       }),
+        layout_snapshot_bindings_.end());
+    layout_snapshot_binding_index_.erase(&node);
     for (ScriptNodeBinding* binding : node_bindings_) {
         if (binding != nullptr && binding->node == &node) {
             binding->node = nullptr;
@@ -6318,13 +6337,6 @@ void JerryScriptRuntime::invalidate_script_node(Node& node) {
             binding->has_layout_snapshot = false;
         }
     }
-    layout_snapshot_bindings_.erase(
-        std::remove_if(layout_snapshot_bindings_.begin(),
-                       layout_snapshot_bindings_.end(),
-                       [&node](const ScriptNodeBinding* binding) {
-                           return binding == nullptr || binding->node == &node;
-                       }),
-        layout_snapshot_bindings_.end());
     for (Node*& observed : observed_nodes_) {
         if (observed == &node) {
             observed = nullptr;
@@ -6340,6 +6352,7 @@ void JerryScriptRuntime::clear_script_node_bindings() {
     }
     observed_nodes_.clear();
     layout_snapshot_bindings_.clear();
+    layout_snapshot_binding_index_.clear();
     for (ScriptNodeBinding* binding : node_bindings_) {
         if (binding != nullptr) {
             binding->runtime = nullptr;
@@ -6373,12 +6386,15 @@ void JerryScriptRuntime::capture_layout_snapshot(const LayoutBox& root,
         if (box == nullptr) {
             continue;
         }
-        for (ScriptNodeBinding* binding : layout_snapshot_bindings_) {
-            if (binding != nullptr && binding->active && binding->node == box->node) {
-                binding->layout_rect = box->rect;
-                binding->layout_rect.x += client_offset_x;
-                binding->layout_rect.y += client_offset_y;
-                binding->has_layout_snapshot = true;
+        const auto indexed = layout_snapshot_binding_index_.find(box->node);
+        if (indexed != layout_snapshot_binding_index_.end()) {
+            for (ScriptNodeBinding* binding : indexed->second) {
+                if (binding != nullptr && binding->active) {
+                    binding->layout_rect = box->rect;
+                    binding->layout_rect.x += client_offset_x;
+                    binding->layout_rect.y += client_offset_y;
+                    binding->has_layout_snapshot = true;
+                }
             }
         }
         for (const LayoutBoxPtr& child : box->children) {

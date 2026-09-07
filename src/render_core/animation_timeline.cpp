@@ -154,6 +154,7 @@ std::size_t AnimationTimeline::active_count() const {
 AnimationTimelineStatistics AnimationTimeline::statistics() const {
     AnimationTimelineStatistics statistics;
     statistics.active_animations = active_count();
+    statistics.sampled_overrides = sampled_overrides_;
     statistics.rejected_animations = rejected_animations_;
     return statistics;
 }
@@ -421,6 +422,7 @@ bool AnimationTimeline::sample(std::uint64_t now_ms, std::vector<StyleOverride>&
         }
     }
     keyframes_.swap(remaining_keyframes);
+    sampled_overrides_ += overrides.size();
     return !overrides.empty();
 }
 

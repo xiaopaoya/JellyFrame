@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace jellyframe {
@@ -98,6 +99,7 @@ private:
     std::vector<std::unique_ptr<ScriptDialogState>> dialog_states_;
     std::vector<ScriptNodeBinding*> node_bindings_;
     std::vector<ScriptNodeBinding*> layout_snapshot_bindings_;
+    std::unordered_map<const Node*, std::vector<ScriptNodeBinding*>> layout_snapshot_binding_index_;
     std::vector<ScriptLocalStorageBinding*> local_storage_bindings_;
     std::vector<Node*> observed_nodes_;
     ScriptRuntimeOptions options_;

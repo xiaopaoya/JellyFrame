@@ -193,6 +193,15 @@ because it does not configure or guess physical endpoints. USB, serial and
 Wi-Fi transports are registered by their respective Device OS tools rather
 than inferred by the core.
 
+The reference staging writer acknowledges bytes after the write reaches the
+operating-system file buffer. It synchronizes the staging file on the first
+chunk, every 16 KiB boundary, and the final chunk; transaction metadata is
+written atomically after each accepted chunk. `commit`, `cancel`, and recovery
+remain durable phase boundaries. This batching is an implementation policy of
+the desktop reference endpoint, not a JFDP wire requirement; a physical port
+must document its own acknowledged-versus-durable boundary and test it across
+reboot or power interruption.
+
 ## Official Board Profiles
 
 An official profile is more than a port compiling. It publishes a stable board
