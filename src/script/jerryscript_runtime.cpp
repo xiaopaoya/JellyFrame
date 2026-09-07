@@ -7096,9 +7096,6 @@ std::size_t JerryScriptRuntime::pump_animation_frame(std::uint64_t now_ms, std::
                 (*completed)->callback = 0;
             }
         }
-        if (script_callback_failed()) {
-            break;
-        }
     }
     jerry_value_free(timestamp);
     pumping_animation_frames_ = false;

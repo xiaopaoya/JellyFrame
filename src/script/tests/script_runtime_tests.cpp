@@ -1481,6 +1481,27 @@ void javascript_cancel_animation_frame_cancels_callback_in_same_pump() {
     check(!runtime.has_pending_animation_frames(), "same-pump animation callbacks are reclaimed");
 }
 
+void javascript_animation_frame_failure_does_not_drop_later_callbacks() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var fired = 0;"
+        "requestAnimationFrame(function () { throw new Error('first'); });"
+        "requestAnimationFrame(function () { fired = 1; });"
+        "'ready'");
+    check(result.ok, "animation failure recovery setup succeeds");
+    check(runtime.pump_animation_frame(16, 4) == 2,
+          "animation pump executes later callbacks after an earlier failure");
+    check(runtime.script_callback_failed(), "animation callback failure remains observable");
+    check(runtime.take_script_callback_failure().status == ScriptCallbackFailureStatus::Exception,
+          "animation callback reports the original exception status");
+    check(runtime.eval("String(fired)").value == "1",
+          "later animation callback survives an earlier callback failure");
+}
+
 void javascript_animation_frame_budget_is_bounded() {
     HtmlParser parser;
     auto document = parser.parse("<body></body>");
@@ -2702,6 +2723,7 @@ int main() {
         javascript_request_animation_frame_is_host_pumped();
         javascript_cancel_animation_frame_cancels_callback();
         javascript_cancel_animation_frame_cancels_callback_in_same_pump();
+        javascript_animation_frame_failure_does_not_drop_later_callbacks();
         javascript_animation_frame_budget_is_bounded();
         javascript_xml_http_request_get_completes_from_host_service();
         javascript_xml_http_request_error_callback_runs_on_missing_fixture();

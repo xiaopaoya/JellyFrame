@@ -154,3 +154,7 @@ Runtime lock。
 ## 全局变更门槛
 
 每项变更必须通过 `git diff --check`、相关 Debug/Release CTest；脚本、工具、package 或 profile 改动另有针对性回归。性能声明必须包含 workload、target/profile、p50/p95、内存水位和失败计数。实机结论只能来自对应 port 的版本化报告。任何阶段出口被证伪时，先回到该阶段修复，不让后续功能掩盖问题。
+
+## 2026-09-07 Core/Runtime 维护批次
+
+本批次已完成并进入持续门禁：动画失效区域按节点索引，避免布局节点与动画覆盖的乘积式线性查找；只有针对当前字体参数明确声明 scalar advance 可加和的 provider 才启用增量换行，未知 provider 继续使用整段测量；CSS class 索引不再为 `string_view` 查询构造临时字符串；同帧 rAF 回调异常只记录失败，不静默丢弃尚未执行的回调。该批次只改变已证明的性能/调度行为，不扩大 CSS 或脚本能力范围。

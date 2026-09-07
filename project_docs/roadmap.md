@@ -161,3 +161,7 @@ Container queries, `oklch()`, complex grid, `:has()`, filters, Shadow DOM, ifram
 ## Change Gate
 
 Every change needs `git diff --check` and relevant Debug/Release CTest. Script, tool, package and profile changes need focused regression. Performance claims record workload, target/profile, p50/p95, memory watermarks and failures. Hardware claims require a versioned port report.
+
+## 2026-09-07 Core/Runtime Maintenance Batch
+
+Completed and kept under the normal gates: animation invalidation now indexes overrides by node; only text providers that explicitly guarantee additive scalar advances for the requested font arguments use incremental wrapping, while unknown providers retain whole-string measurement semantics; CSS class indexing no longer allocates temporary strings for `string_view` lookups; an exception in one animation-frame callback no longer silently drops later callbacks already queued for that frame. This batch changes demonstrated performance/scheduling behavior only and does not expand the CSS or script capability surface.

@@ -1125,7 +1125,7 @@ std::vector<HtmlToken> HtmlTokenizer::tokenize(const std::string& source,
                                                const HtmlTokenizerOptions& options) const {
     VectorTokenSink sink;
     tokenize_to_sink(source, sink, options);
-    return std::move(sink.tokens);
+    return sink.tokens;
 }
 
 void HtmlTokenizer::tokenize_to_sink(const std::string& source,

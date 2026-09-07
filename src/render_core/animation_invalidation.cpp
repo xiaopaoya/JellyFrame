@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 
 namespace jellyframe {
 namespace {
@@ -129,13 +130,22 @@ Rect subtree_bounds(const LayoutBox& box, std::vector<const LayoutBox*>& pending
     return bounds;
 }
 
-const StyleOverride* find_override(const std::vector<StyleOverride>& overrides, const Node* node) {
+using OverrideIndex = std::unordered_map<const Node*, const StyleOverride*>;
+
+OverrideIndex build_override_index(const std::vector<StyleOverride>& overrides) {
+    OverrideIndex index;
+    index.reserve(overrides.size());
     for (const StyleOverride& override : overrides) {
-        if (override.node == node) {
-            return &override;
+        if (override.node != nullptr && index.find(override.node) == index.end()) {
+            index.emplace(override.node, &override);
         }
     }
-    return nullptr;
+    return index;
+}
+
+const StyleOverride* find_override(const OverrideIndex& overrides, const Node* node) {
+    const auto found = overrides.find(node);
+    return found == overrides.end() ? nullptr : found->second;
 }
 
 Transform2D resolved_transform(const Style& base_style, const StyleOverride* override) {
@@ -234,8 +244,8 @@ void append_coalesced(std::vector<Rect>& rects, Rect rect, Rect viewport, std::s
 }
 
 void collect_animation_rects_iterative(const LayoutBox& box,
-                                       const std::vector<StyleOverride>& previous_overrides,
-                                       const std::vector<StyleOverride>& current_overrides,
+                                       const OverrideIndex& previous_overrides,
+                                       const OverrideIndex& current_overrides,
                                        const AnimationInvalidationOptions& options,
                                        std::vector<const LayoutBox*>& pending_boxes,
                                        DirtyRegionResult& result) {
@@ -293,7 +303,9 @@ void compute_animation_dirty_region_into(const LayoutBox& layout,
         return;
     }
     std::vector<const LayoutBox*> pending_boxes;
-    collect_animation_rects_iterative(layout, previous_overrides, current_overrides, options, pending_boxes, result);
+    const OverrideIndex previous_index = build_override_index(previous_overrides);
+    const OverrideIndex current_index = build_override_index(current_overrides);
+    collect_animation_rects_iterative(layout, previous_index, current_index, options, pending_boxes, result);
     if (!result.rects.empty()) {
         result.mode = DirtyRegionMode::DirtyRects;
     } else {
