@@ -2,6 +2,10 @@ build*/
 cmake-build-*/
 out/
 .vs/
+.vscode/
+/CMakeFiles/
+/generated/
+/a2/
 *.user
 *.suo
 *.pdb
@@ -25,4 +29,12 @@ ports/esp32s3-idf/p3-*.log
 ports/esp32s3-idf/h4-*/
 ports/esp32s3-idf/sdkconfig.p3-*
 ports/esp32s3-idf/jerryscript-config.h
+ports/esp32s3-idf/p3q/
+ports/esp32s3-idf/bfb*/
+ports/esp32s3-idf/di/
+ports/esp32s3-idf/dm/
+ports/esp32s3-idf/a2/
+ports/esp32s3-idf/*.log
+ports/esp32s3-idf/sdkconfig.v4-generated-profile
+ports/esp32p4-idf/build-*/
 test_artifacts/
