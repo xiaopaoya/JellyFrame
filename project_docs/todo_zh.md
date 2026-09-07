@@ -14,6 +14,7 @@
 - [x] 从 Runtime `ca747011` 发布 App Author SDK `app-sdk-v0.6.0-dev.2`；标准与 scripting 桌面运行时均消费 Core `0.6.2`，release archive SHA-256 为 `c3245edd...7dc8a9f`。
 - [ ] 执行 [0.6 工程维护审查计划](engineering_review_plan_20260819_zh.md)：先做 R0 package/profile/provenance，再做 R1 document/style、layout/dirty 与 renderer/text。只修复有明确语义或安全缺陷的接口，不做机械式改名。
 - [ ] 在响应式布局基础交付后继续 R1 Core-only 审查：检查 parser/style 所有权、malformed-input budget、cache invalidation 与确定性 capture 行为。`300x300`、`320x240`、`172x320` 矩阵及 Flex 交叉轴回归现作为持续 gate；优先修复已证明的语义缺陷，不以新增控件或浏览器专有声明替代。
+- [x] 关闭 2026-09-07 定向审查发现：Flex sizing 跳过约束未变化的 probe layout，通用 worker 保留非零 `client_token`，worker pipeline rebuild 静默恢复 autofocus 状态而不重复派发 `focus`，worker layout 使用宿主 budget。Debug、启用 scripting 的 MinSizeRel 与 ASan/UBSan 回归均通过；审查 probe 复核当前基线的 `anywhere` 测量为线性。
 - [x] 完成软件栅格器首轮极值安全审查：圆角 coverage 的距离平方、clipped 几何循环、描边内框和 BMP 导出尺寸使用 checked/saturating 计算；完整与响应式 Core profile 均通过 `9/9`。精简 profile 的聚合 CTest 不作为失败依据，因为该 profile 不生成桌面壳和 pseudo browser 目标。
 - [x] 完成文本路径极值审查：fallback 字体测量、字间距、anywhere wrap 和内置 bitmap 绘制定位均使用有界计算，并覆盖最大字号/间距回归；未改变正常字号布局语义。
 - [x] 收敛布局定位极值：flex wrap、inline flow、文本总高度、flex 汇总/对齐和递归 `shift_box` 使用 bounded 算术，换行行数转换有明确上限；完整与响应式 Core profile `9/9` 通过。

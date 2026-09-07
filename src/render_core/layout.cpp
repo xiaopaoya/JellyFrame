@@ -250,6 +250,8 @@ struct FlexLayoutItem {
     int base_width = 0;
     int target_width = 0;
     bool force_width = false;
+    int probe_width = 0;
+    bool probe_forced_width = false;
 };
 
 int flex_grow_factor(const FlexLayoutItem& item) {
@@ -1260,6 +1262,8 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
             int base_height = 0;
             int target_height = 0;
             bool force_height = false;
+            int probe_height = 0;
+            bool probe_forced_height = false;
         };
 
         const int fixed_height = specified_content_height(box.style, containing_height);
@@ -1302,6 +1306,8 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
             item.base_height = base_height;
             item.target_height = base_height;
             item.force_height = force_height;
+            item.probe_height = probe_height;
+            item.probe_forced_height = force_height;
             items.push_back(item);
 
             total_base_height = bounded_add(total_base_height, base_height);
@@ -1360,7 +1366,10 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
 
         int total_child_height = bounded_add(total_margin_height, total_gap_height);
         for (ColumnFlexItem& item : items) {
-            layout_child_for_size(*item.child, item.target_height, item.force_height);
+            if (item.force_height != item.probe_forced_height ||
+                (item.force_height && item.target_height != item.probe_height)) {
+                layout_child_for_size(*item.child, item.target_height, item.force_height);
+            }
             total_child_height = bounded_add(total_child_height, item.child->rect.height);
         }
 
@@ -1444,6 +1453,8 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
         item.base_width = base_width;
         item.target_width = base_width;
         item.force_width = force_width;
+        item.probe_width = probe_width;
+        item.probe_forced_width = force_width;
         items.push_back(item);
 
         total_base_width = bounded_add(total_base_width, base_width);
@@ -1463,7 +1474,10 @@ int LayoutEngine::layout_flex_box(LayoutBox& box,
 
     int total_child_width = bounded_add(total_margin_width, total_gap_width);
     for (FlexLayoutItem& item : items) {
-        layout_child_for_width(*item.child, item.target_width, item.force_width);
+        if (item.force_width != item.probe_forced_width ||
+            (item.force_width && item.target_width != item.probe_width)) {
+            layout_child_for_width(*item.child, item.target_width, item.force_width);
+        }
         total_child_width = bounded_add(total_child_width, item.child->rect.width);
         max_child_height = std::max(max_child_height,
             bounded_add(

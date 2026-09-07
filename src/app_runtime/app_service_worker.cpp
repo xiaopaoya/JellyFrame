@@ -8,6 +8,7 @@ HostServiceCompletion normalize_completion(const HostServiceRequest& request,
     completion.job_id = request.job_id;
     completion.kind = request.kind;
     completion.app_instance_id = request.app_instance_id;
+    completion.client_token = request.client_token;
     return completion;
 }
 
