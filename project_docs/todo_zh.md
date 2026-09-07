@@ -8,7 +8,7 @@
 
 - [ ] 在干净作者机完成 WS147 VS Code 的只读 smoke：发现、身份读取和已安装 App 列表必须与 manifest/registry 一致。要求见 `../docs/ws147_provider_vscode_smoke_20260825_zh.md`；该项不执行安装或刷写。此前本机 candidate smoke 不可替代此项。
 - [ ] 在同一干净作者机完成 VS Code 设备流程：`new -> check -> package -> deploy -> launch -> live log -> update -> rollback -> stop -> remove`。桌面与设备 session 必须保持独立，最终报告必须保留可定位的失败归属。
-- [ ] 通过 provider 流程完成真实已安装 App 的 panel/input 验收。记录 App launch marker、触控/输入响应、panel/present 错误与恢复行为；provider lifecycle PASS 不等于视觉或输入证据。
+- [ ] 通过 provider 流程完成真实已安装 App 的 panel/input 验收。2026-09-08 用户补充观察称实机操作响应正常，但归档中的 `posted=0` 采样不是结构化输入证据。仍需按 App 记录 launch marker、触控/输入响应、panel/present 错误与恢复行为；provider lifecycle PASS 或非结构化观察不等于完成视觉/输入验收。
 - [ ] 将 B1 作为持续 release gate 维护。带签名的 Core `v0.6.2` release 是当前 Runtime 依赖；以后每次 Core bump 必须下载或以其他方式认证已审阅的 release artifact、校验 archive SHA-256、更新精确 version/ABI/source lock，并通过 standalone、package-consumer 与 source-override tests。
 - [x] 基于已合入的 Runtime Core `0.6.2` lock 构建并验收 WS147 Developer Image `0.6.2-ws147.1`。历史 `0.6.1` manifest 与证据保持不可变；R1-R17、host/provider 与 package-smoke 完整报告为 `core062-developer-image-final-20260905`，物理 Developer Image gate 已关闭。
 - [x] 从 Runtime `ca747011` 发布 App Author SDK `app-sdk-v0.6.0-dev.2`；标准与 scripting 桌面运行时均消费 Core `0.6.2`，release archive SHA-256 为 `c3245edd...7dc8a9f`。

@@ -1,6 +1,6 @@
 # Device OS A2 就绪度与实现要求
 
-> 最后更新：2026-08-25；适用版本：0.6.0-dev；状态：实现前置阶段
+> 最后更新：2026-09-08；适用版本：0.6.0-dev；状态：实现前置阶段
 
 ## 当前结论
 
@@ -32,6 +32,12 @@ A2 provider handoff 对 `jellyframe-device@0.1.1-dev`、firmware `ee5604a` 与�
 identity cross-match、in-flight cancellation、durable lifecycle 和 30 次 mixed cycle 均通过。更宽范围的 A2 仍为 **partial**，因为该证据尚未关闭
 干净机器上的 VS Code 产品流程，以及真实已安装 App 的 panel/input 验收。这份 provider handoff 报告不是外部试用
 发布签字。
+
+2026-09-08 的 first-run 归档记录了已验收的 `0.6.2-ws147.1` 镜像、
+`app-sdk-v0.6.0-dev.2`、`0.1.1-dev` provider、三个已安装脚本 App 以及成功的帧接收。
+用户另行确认实机操作响应正常。这属于有价值的人工输入观察，但还不是按 App 可追溯的
+input-to-present 结构化记录：归档中的采样 `posted` 计数仍为 0，也没有面板目检记录。
+因此它只能补充，不能关闭正式的 panel/input 或干净机器 VS Code 出口。
 
 ## 所有权与完成度
 
