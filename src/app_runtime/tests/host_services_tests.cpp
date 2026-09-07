@@ -338,6 +338,24 @@ void handle_table_lookup_copy_remains_valid_after_release() {
     assert(snapshot.payload == reinterpret_cast<void*>(0x20));
 }
 
+void handle_table_retires_slot_before_generation_wraparound() {
+    HostHandleTable handles(1, 64);
+    std::uint32_t stale = handles.allocate(HostServiceHandleKind::Surface, 7, 1);
+    assert(stale != 0);
+    for (std::size_t iteration = 0; iteration < 65534; ++iteration) {
+        assert(handles.release(stale));
+        stale = handles.allocate(HostServiceHandleKind::Surface, 7, 1);
+        assert(stale != 0);
+    }
+
+    // The next release would wrap the 16-bit generation. The slot is retired
+    // instead, so the stale handle can never become valid again.
+    assert(handles.release(stale));
+    assert(!handles.contains(stale));
+    assert(handles.allocate(HostServiceHandleKind::Surface, 7, 1) == 0);
+    assert(handles.active_count() == 0);
+}
+
 void queue_helpers_use_capability_budgets() {
     HostAsyncCapabilities caps;
     caps.max_in_flight_jobs = 3;
@@ -381,6 +399,7 @@ int main() {
     handle_table_releases_only_matching_client();
     handle_table_reuses_released_slot_with_new_generation();
     handle_table_lookup_copy_remains_valid_after_release();
+    handle_table_retires_slot_before_generation_wraparound();
     queue_helpers_use_capability_budgets();
     cancelled_completion_preserves_request_identity();
     return 0;

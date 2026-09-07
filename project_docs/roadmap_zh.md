@@ -27,6 +27,7 @@
 
 1. **A2 证据，作者机继续：**使用已验收的 Core `0.6.2` WS147 镜像和 SDK，完成干净机器 VS Code 完整生命周期与已安装 App 的 panel/input 证据。物理 Developer Image gate 已关闭；作者工具出口仍独立计算。
 2. **R1 Core-only 维护，主线进行中：**响应式布局基础交付物已完成，包括[响应式布局契约](../docs/responsive_layout_contract_zh.md)、三目标矩阵和 Flex 交叉轴语义回归证据。2026-08-30 已完成软件栅格器的首轮极值安全审查：圆角距离平方、clipped 循环、描边内框和 BMP 导出尺寸均已使用有界计算，并通过完整/响应式 Core profile `9/9`；随后完成文本 fallback 测量、字间距、换行和内置绘制定位，以及 flex/inline flow 汇总与对齐、游标/行高、shift 定位、grid/positioned track/offset 和 layer-tree 文本/outline 几何的极值审查，避免字号、宽度、间距或定位运算溢出。2026-09-07 的定向审查已关闭已证明的嵌套 Flex 重复布局、service completion token、worker autofocus 与 layout budget 缺陷；当前基线的 `anywhere` 字间距路径已是线性实现，并由审查 probe 复核。继续使用 standalone、sanitizer 与确定性 capture 审查 parser/style 所有权、malformed-input budget 与 cache invalidation。不要机会主义地扩张浏览器 CSS 范围或修改 port profile。
+   后续审查还关闭了 timer 批次顺序、同帧 rAF 取消和排队 XHR 的 provider payload 清理问题；均已有 Debug 与 scripting MinSizeRel 定向回归，已被 worker 取走的 XHR 仍走迟到 completion 释放路径。
 3. **B2 后端准备，受限进行：**保持 configure-time `ScriptRuntime` 边界及其不变量。在具备独立 compatibility/resource RFC 与对等证据前，不引入第二后端，也不改变 JerryScript 默认选择。
 4. **A3 筹备，已经进行中：**试用材料、设备采购、视觉资产与反馈运营可并行，但必须在 A2 的两项证据均通过后才开始外部产品试用。
 5. **A3 作者体验增强，隔离原型进行中：**按 [可视化 App 编辑器计划](visual_app_editor_plan_zh.md) 收束 VS Code 内的受限可视化编辑流程。该工作可改善演示和 App 创作门槛，但不替代 A2 的干净机器、设备生命周期或 panel/input 证据。
@@ -153,3 +154,7 @@ Runtime lock。
 ## 全局变更门槛
 
 每项变更必须通过 `git diff --check`、相关 Debug/Release CTest；脚本、工具、package 或 profile 改动另有针对性回归。性能声明必须包含 workload、target/profile、p50/p95、内存水位和失败计数。实机结论只能来自对应 port 的版本化报告。任何阶段出口被证伪时，先回到该阶段修复，不让后续功能掩盖问题。
+
+## 2026-09-07 Core/Runtime 维护批次
+
+本批次已完成并进入持续门禁：动画失效区域按节点索引，避免布局节点与动画覆盖的乘积式线性查找；只有针对当前字体参数明确声明 scalar advance 可加和的 provider 才启用增量换行，未知 provider 继续使用整段测量；CSS class 索引不再为 `string_view` 查询构造临时字符串；同帧 rAF 回调异常只记录失败，不静默丢弃尚未执行的回调。该批次只改变已证明的性能/调度行为，不扩大 CSS 或脚本能力范围。

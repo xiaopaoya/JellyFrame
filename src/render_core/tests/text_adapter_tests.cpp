@@ -36,6 +36,10 @@ bool probe_measure(const std::string& text,
     return true;
 }
 
+bool probe_additive_measurement(int, int, std::uint32_t, void*) {
+    return true;
+}
+
 bool probe_paint(FrameBuffer& target,
                  Rect rect,
                  Color color,
@@ -103,6 +107,16 @@ void letter_spacing_and_utf8_anywhere_wrap_share_scalar_boundaries() {
           "anywhere wrap never splits the bytes of a utf-8 scalar");
 }
 
+void additive_provider_wraps_without_remeasuring_the_current_line() {
+    ProbeTextBackend probe;
+    const TextMeasureProvider measure{probe_measure, &probe, nullptr, probe_additive_measurement};
+    const std::vector<std::string> lines = wrap_text_at_opportunities(
+        measure, "A-A-A-A-A-A", 10, 400, 0, 0, 20);
+    check(lines.size() == 6, "additive provider wraps each fixed-width token");
+    check(probe.measure_calls == 6,
+          "additive provider measures each token once instead of each growing candidate");
+}
+
 void extreme_letter_spacing_uses_one_bounded_value() {
     ProbeTextBackend probe;
     const TextMeasureProvider measure{probe_measure, &probe};
@@ -132,6 +146,7 @@ int main() {
         adapter_wraps_measure_and_paint_callbacks();
         incomplete_adapter_degrades_to_core_fallbacks();
         letter_spacing_and_utf8_anywhere_wrap_share_scalar_boundaries();
+        additive_provider_wraps_without_remeasuring_the_current_line();
         extreme_letter_spacing_uses_one_bounded_value();
         extreme_fallback_font_sizes_remain_defined();
     } catch (const std::exception& error) {

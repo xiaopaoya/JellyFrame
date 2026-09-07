@@ -1404,6 +1404,24 @@ void javascript_interval_repeats_and_can_clear_itself() {
     check(runtime.eval("count").value == "2", "interval callback updates JS state twice");
 }
 
+void javascript_timer_addition_does_not_reorder_current_pump() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var order = '';"
+        "setTimeout(function () { order += 'A'; setTimeout(function () { order += 'C'; }, 0); }, 1);"
+        "setTimeout(function () { order += 'B'; }, 1);"
+        "'ready'");
+    check(result.ok, "timer ordering setup succeeds");
+    check(runtime.pump_timers(1) == 2, "both timers due in the first pump run");
+    check(runtime.eval("order").value == "AB", "a timer added by a callback waits for the next pump");
+    check(runtime.pump_timers(1) == 1, "new timer runs in the next pump");
+    check(runtime.eval("order").value == "ABC", "timer callback order remains stable");
+}
+
 void javascript_request_animation_frame_is_host_pumped() {
     HtmlParser parser;
     auto document = parser.parse("<body><p id='status'>0</p></body>");
@@ -1443,6 +1461,45 @@ void javascript_cancel_animation_frame_cancels_callback() {
     check(!runtime.has_pending_animation_frames(), "cancelled animation callback is removed");
     check(runtime.pump_animation_frame(16, 4) == 0, "cancelled animation callback does not run");
     check(runtime.eval("String(fired)").value == "0", "cancelled animation leaves JS state unchanged");
+}
+
+void javascript_cancel_animation_frame_cancels_callback_in_same_pump() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var order = '';"
+        "var b = 0;"
+        "requestAnimationFrame(function () { order += 'A'; cancelAnimationFrame(b); });"
+        "b = requestAnimationFrame(function () { order += 'B'; });"
+        "'ready'");
+    check(result.ok, "same-pump animation cancellation setup succeeds");
+    check(runtime.pump_animation_frame(16, 4) == 1, "cancelled same-pump callback is not counted as executed");
+    check(runtime.eval("order").value == "A", "same-pump cancelAnimationFrame prevents the later callback");
+    check(!runtime.has_pending_animation_frames(), "same-pump animation callbacks are reclaimed");
+}
+
+void javascript_animation_frame_failure_does_not_drop_later_callbacks() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var fired = 0;"
+        "requestAnimationFrame(function () { throw new Error('first'); });"
+        "requestAnimationFrame(function () { fired = 1; });"
+        "'ready'");
+    check(result.ok, "animation failure recovery setup succeeds");
+    check(runtime.pump_animation_frame(16, 4) == 2,
+          "animation pump executes later callbacks after an earlier failure");
+    check(runtime.script_callback_failed(), "animation callback failure remains observable");
+    check(runtime.take_script_callback_failure().status == ScriptCallbackFailureStatus::Exception,
+          "animation callback reports the original exception status");
+    check(runtime.eval("String(fired)").value == "1",
+          "later animation callback survives an earlier callback failure");
 }
 
 void javascript_animation_frame_budget_is_bounded() {
@@ -2662,8 +2719,11 @@ int main() {
         javascript_timeout_runs_when_host_pumps_time();
         javascript_clear_timeout_cancels_callback();
         javascript_interval_repeats_and_can_clear_itself();
+        javascript_timer_addition_does_not_reorder_current_pump();
         javascript_request_animation_frame_is_host_pumped();
         javascript_cancel_animation_frame_cancels_callback();
+        javascript_cancel_animation_frame_cancels_callback_in_same_pump();
+        javascript_animation_frame_failure_does_not_drop_later_callbacks();
         javascript_animation_frame_budget_is_bounded();
         javascript_xml_http_request_get_completes_from_host_service();
         javascript_xml_http_request_error_callback_runs_on_missing_fixture();

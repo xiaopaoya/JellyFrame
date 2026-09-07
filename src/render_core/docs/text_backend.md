@@ -20,6 +20,8 @@ is meant for bring-up and diagnostics, not production CJK typography.
 - `TextMetrics { width, line_height }`
 - `TextMeasureCallback`
 - `TextMeasureFamilyCallback` for optional manifest-family-aware backends
+- `TextAdditiveMeasurementCallback` for providers whose scalar advances can be
+  added without changing whole-string measurement semantics
 - `TextMeasureProvider`
 - `normalized_font_family_hash(...)`
 - `measure_text(...)`
@@ -38,6 +40,11 @@ provider may also expose `measure_family`; when the computed CSS `font-family`
 matches a manifest-declared app font, layout passes a normalized 32-bit family
 hash so the backend can select that face without carrying family strings through
 the display list.
+When `additive_measurement_supported` returns true for the requested font
+arguments, opportunity wrapping maintains an incremental line width and avoids
+remeasuring the full candidate line. Hosts with shaping, kerning, ligatures or
+other context-sensitive whole-string behavior must leave this callback null (or
+return false); the conservative candidate measurement path is then retained.
 
 `src/render_core/software_renderer.h` still owns the paint-side callback:
 

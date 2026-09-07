@@ -25,6 +25,7 @@ Parallel work may not change the exit condition of an earlier item.
 
 1. **A2 evidence, active on the author machine:** use the accepted Core `0.6.2` WS147 image and SDK to complete the clean-machine VS Code lifecycle and installed-App panel/input evidence. The physical Developer Image gate is closed; these author-tool exits remain independent.
 2. **R1 Core-only maintenance, active on main:** the responsive layout foundation is now delivered: the [responsive layout contract](../docs/responsive_layout_contract.md), three-target matrix and Flex cross-axis semantics have regression evidence. The 2026-09-07 focused review closed the demonstrated nested-Flex repeated-layout, service completion token, worker autofocus and layout-budget defects; the `anywhere` letter-spacing path on the current baseline was already linear and is now covered by the review probe. Continue with parser/style ownership, malformed-input budgets and cache invalidation using standalone, sanitizer and deterministic capture regressions. Do not expand browser CSS scope or alter the port profile opportunistically.
+   The follow-up review also closed timer-batch ordering, same-frame rAF cancellation and queued XHR provider-payload cleanup. These are covered by focused Debug and scripting MinSizeRel regressions; worker-owned XHR requests still use the late-completion release path.
 3. **B2 backend preparation, bounded:** retain the configure-time `ScriptRuntime` boundary and its invariants. Do not add a second engine or change the JerryScript default before a separate compatibility/resource RFC and parity evidence exist.
 4. **A3 preparation, in progress:** trial material, hardware procurement, visual assets and feedback operations may proceed, but no external product trial begins before both A2 evidence items pass.
 5. **A3 authoring UX, isolated prototype:** advance the constrained VS Code visual workflow under the [Visual App Editor plan](visual_app_editor_plan.md). It may improve demos and lower App authoring cost, but it does not replace clean-machine, device-lifecycle or panel/input evidence.
@@ -160,3 +161,7 @@ Container queries, `oklch()`, complex grid, `:has()`, filters, Shadow DOM, ifram
 ## Change Gate
 
 Every change needs `git diff --check` and relevant Debug/Release CTest. Script, tool, package and profile changes need focused regression. Performance claims record workload, target/profile, p50/p95, memory watermarks and failures. Hardware claims require a versioned port report.
+
+## 2026-09-07 Core/Runtime Maintenance Batch
+
+Completed and kept under the normal gates: animation invalidation now indexes overrides by node; only text providers that explicitly guarantee additive scalar advances for the requested font arguments use incremental wrapping, while unknown providers retain whole-string measurement semantics; CSS class indexing no longer allocates temporary strings for `string_view` lookups; an exception in one animation-frame callback no longer silently drops later callbacks already queued for that frame. This batch changes demonstrated performance/scheduling behavior only and does not expand the CSS or script capability surface.

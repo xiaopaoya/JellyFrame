@@ -203,6 +203,8 @@ void animation_timeline_samples_paint_only_properties() {
     check(overrides[0].has_color && overrides[0].color.g >= 127, "text color is interpolated");
     check(timeline.sample(100, overrides), "timeline samples final frame");
     check(timeline.empty(), "finished transition is removed");
+    check(timeline.statistics().sampled_overrides == 2,
+          "timeline statistics count sampled override sets");
 }
 
 void animation_timeline_samples_keyframes_subset() {

@@ -5253,6 +5253,61 @@ StyleResolver::StyleResolver(Stylesheet stylesheet, StyleResolverOptions options
     }
 }
 
+StyleResolver::StyleResolver(const StyleResolver& other)
+    : StyleResolver(other.stylesheet_, other.options_) {}
+
+StyleResolver& StyleResolver::operator=(const StyleResolver& other) {
+    if (this != &other) {
+        stylesheet_ = other.stylesheet_;
+        options_ = other.options_;
+        rebuild_derived_state();
+    }
+    return *this;
+}
+
+StyleResolver::StyleResolver(StyleResolver&& other) noexcept
+    : stylesheet_(std::move(other.stylesheet_)),
+      options_(std::move(other.options_)),
+      statistics_(other.statistics_),
+      interaction_state_generation_(other.interaction_state_generation_) {
+    rebuild_derived_state();
+}
+
+StyleResolver& StyleResolver::operator=(StyleResolver&& other) noexcept {
+    if (this != &other) {
+        stylesheet_ = std::move(other.stylesheet_);
+        options_ = std::move(other.options_);
+        statistics_ = other.statistics_;
+        interaction_state_generation_ = other.interaction_state_generation_;
+        rebuild_derived_state();
+    }
+    return *this;
+}
+
+void StyleResolver::rebuild_derived_state() {
+    id_rules_.clear();
+    class_rules_.clear();
+    tag_rules_.clear();
+    universal_rules_.clear();
+    candidate_cache_.clear();
+    uncached_candidates_.clear();
+    background_image_resources_.clear();
+    interaction_hints_ = {};
+    has_custom_property_declarations_ = false;
+    build_rule_index();
+    for (const CssRule& rule : stylesheet_) {
+        for (const CssDeclaration& declaration : rule.declarations) {
+            if (declaration.property != "background" && declaration.property != "background-image") {
+                continue;
+            }
+            std::string_view url;
+            if (parse_package_background_image_url(declaration.value, url)) {
+                background_image_resource_id_for(url);
+            }
+        }
+    }
+}
+
 void StyleResolver::build_rule_index() {
     for (const CssRule& rule : stylesheet_) {
         add_interaction_hints_for_selector(rule.selector, interaction_hints_);
@@ -5309,7 +5364,7 @@ const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node
                 continue;
             }
             const std::string_view class_name(classes.data() + begin, index - begin);
-            if (class_rules_.find(std::string(class_name)) != class_rules_.end()) {
+            if (class_rules_.find(class_name) != class_rules_.end()) {
                 if (inline_indexed_class_count < inline_indexed_classes.size()) {
                     inline_indexed_classes[inline_indexed_class_count++] = class_name;
                 } else {
@@ -5383,7 +5438,7 @@ const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node
                 ++index;
             }
             if (begin != index) {
-                const auto class_it = class_rules_.find(classes.substr(begin, index - begin));
+                const auto class_it = class_rules_.find(std::string_view(classes.data() + begin, index - begin));
                 append_bucket(class_it == class_rules_.end() ? nullptr : &class_it->second);
             }
         }
