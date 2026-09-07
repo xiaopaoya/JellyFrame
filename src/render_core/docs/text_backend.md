@@ -39,6 +39,16 @@ matches a manifest-declared app font, layout passes a normalized 32-bit family
 hash so the backend can select that face without carrying family strings through
 the display list.
 
+The width is a run measurement, not a per-glyph advance. The core measures the
+candidate line as a whole when wrapping, so providers may include run-level
+padding or shaping adjustments without causing the last scalar to disappear.
+
+For a text node without an explicit CSS `line-height`, the returned
+`TextMetrics::line_height` is the contract for both layout and wrapped display
+commands. Hosts must pass the same provider to `LayoutEngine` and
+`LayerTreeBuilderOptions::text_measure`; otherwise line breaks and the final
+line's visible height cannot be expected to match.
+
 `src/render_core/software_renderer.h` still owns the paint-side callback:
 
 - `TextPainter`
@@ -71,8 +81,8 @@ SoftwareCompositor compositor(text_painter_from_adapter(adapter));
 When an app uses the documented `letter-spacing` or `overflow-wrap: anywhere`
 subset, pass the same measure provider to `LayerTreeBuilderOptions::text_measure`.
 The builder then emits scalar-positioned commands using exactly the advances
-used by layout. Ordinary text keeps the old single-command path and does not
-consult this provider during layer construction.
+used by layout. Ordinary text keeps the old single-command path, but the builder
+still uses the provider's line height so its command rectangle matches layout.
 
 This helper exists to keep board ports consistent. It does not add font
 discovery, shaping or caching to the core.
@@ -80,8 +90,11 @@ discovery, shaping or caching to the core.
 `AppFontSet` in `jellyframe_app_runtime` uses the optional family-aware
 callbacks. Generic/no-family text keeps the compact system-first fallback chain;
 CSS `font-family` can select a manifest `.jffont` family before falling back to
-system/default fonts. Hosts that do not need app-provided fonts can ignore the
-family-aware callbacks.
+system/default fonts. App-font scaling is exact only for integer multiples of
+the resource line height; other sizes are bounded approximations and should be
+fixed through package preflight's `font-size-not-declared` diagnostic instead
+of being treated as silently supported. Hosts that do not need app-provided
+fonts can ignore the family-aware callbacks.
 
 ## Fallback Behavior
 

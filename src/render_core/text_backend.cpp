@@ -200,10 +200,8 @@ std::vector<std::string> wrap_text_anywhere(const TextMeasureProvider& provider,
         return lines;
     }
     const int width_limit = std::max(1, available_width);
-    const int bounded_spacing = bounded_letter_spacing(font_size, letter_spacing);
     std::string line;
     line.reserve(std::min<std::size_t>(text.size(), 64));
-    int line_width = 0;
     for (std::size_t begin = 0; begin < text.size();) {
         std::size_t end = begin;
         consume_utf8_codepoint(text, end);
@@ -211,23 +209,22 @@ std::vector<std::string> wrap_text_anywhere(const TextMeasureProvider& provider,
         if (scalar == "\n") {
             lines.push_back(std::move(line));
             line.clear();
-            line_width = 0;
             begin = end;
             continue;
         }
-        const int scalar_width = measure_text(provider,
-                                              std::string(scalar),
-                                              font_size,
-                                              font_weight,
-                                              font_family_hash).width;
-        const int candidate_width = line.empty() ? scalar_width : line_width + bounded_spacing + scalar_width;
+        std::string candidate = line;
+        candidate.append(scalar.data(), scalar.size());
+        const int candidate_width = measure_text_with_letter_spacing(provider,
+                                                                     candidate,
+                                                                     font_size,
+                                                                     font_weight,
+                                                                     font_family_hash,
+                                                                     letter_spacing).width;
         if (!line.empty() && candidate_width > width_limit) {
             lines.push_back(std::move(line));
             line = std::string(scalar);
-            line_width = scalar_width;
         } else {
-            line.append(scalar.data(), scalar.size());
-            line_width = candidate_width;
+            line = std::move(candidate);
         }
         begin = end;
     }

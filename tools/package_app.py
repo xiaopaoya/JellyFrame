@@ -303,6 +303,88 @@ def collect_font_family_usage(resources: list[dict], manifest_fonts: list[dict])
     }
 
 
+def parse_static_css_pixel_size(value: str) -> int | None:
+    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)px", value.strip(), flags=re.IGNORECASE)
+    if not match:
+        return None
+    parsed = float(match.group(1))
+    if parsed <= 0 or parsed > 4096:
+        return None
+    return int(parsed + 0.5)
+
+
+def collect_font_size_usage(resources: list[dict], manifest_fonts: list[dict]) -> dict:
+    manifest_by_family = {}
+    for font in manifest_fonts:
+        family = normalize_font_family_name(font.get("family", ""))
+        if family:
+            manifest_by_family[family.lower()] = font
+
+    entries = []
+    seen = set()
+    for resource in resources:
+        kind = resource_kind_name(resource["kind"])
+        suffix = resource["file"].suffix.lower()
+        if kind != "Stylesheet" and suffix not in {".html", ".htm"}:
+            continue
+        try:
+            text = resource["file"].read_text(encoding="utf-8-sig")
+        except UnicodeDecodeError:
+            continue
+        css_sources = []
+        if kind == "Stylesheet":
+            css_sources.append(text)
+        else:
+            css_sources.extend(match.group(1) for match in re.finditer(
+                r"<style[^>]*>(.*?)</style>", text, flags=re.IGNORECASE | re.DOTALL))
+            css_sources.extend("*{" + match.group(1) + "}" for match in re.finditer(
+                r"style\s*=\s*\"([^\"]*)\"", text, flags=re.IGNORECASE | re.DOTALL))
+            css_sources.extend("*{" + match.group(1) + "}" for match in re.finditer(
+                r"style\s*=\s*'([^']*)'", text, flags=re.IGNORECASE | re.DOTALL))
+
+        for css_text in css_sources:
+            for block in re.finditer(r"([^{}]+)\{([^{}]*)\}", strip_css_comments(css_text), flags=re.DOTALL):
+                declarations = block.group(2)
+                family_match = re.search(r"font-family\s*:\s*([^;{}]+)", declarations, flags=re.IGNORECASE)
+                if family_match is None:
+                    continue
+                size_matches = re.finditer(r"font-size\s*:\s*([^;{}]+)", declarations, flags=re.IGNORECASE)
+                sizes = [parse_static_css_pixel_size(match.group(1)) for match in size_matches]
+                sizes = [size for size in sizes if size is not None]
+                if not sizes:
+                    continue
+                families = split_css_top_level(family_match.group(1), ",")
+                for family in families:
+                    normalized = normalize_font_family_name(family)
+                    manifest_font = manifest_by_family.get(normalized.lower())
+                    if manifest_font is None:
+                        continue
+                    supported = manifest_font.get("effectiveSizes", manifest_font.get("sizes", []))
+                    supported = normalized_int_list(supported, 1) if isinstance(supported, list) else []
+                    for requested_size in sizes:
+                        key = (resource["path"], normalized.lower(), requested_size)
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        supported_exact = requested_size in supported
+                        entries.append({
+                            "family": normalized,
+                            "source": resource["path"],
+                            "requestedSize": requested_size,
+                            "supportedSizes": supported,
+                            "status": "declared" if supported_exact else "undeclared",
+                            "staticValue": True,
+                        })
+
+    undeclared = [entry for entry in entries if entry["status"] == "undeclared"]
+    return {
+        "model": "static-px-font-size-against-manifest-family",
+        "entries": entries,
+        "entryCount": len(entries),
+        "undeclaredCount": len(undeclared),
+    }
+
+
 def parse_background_service_policy(manifest: dict) -> dict:
     services = manifest.get("backgroundServices", {})
     if services and not isinstance(services, dict):
@@ -2568,13 +2650,35 @@ def collect_font_diagnostics(manifest: dict,
         usable_runtime_fonts += 1
         total_runtime_font_glyphs += parsed["glyphCount"]
         app_covered.update(source_codepoints & glyphs)
+        declared_sizes = font_entry["sizes"]
+        line_height = parsed["lineHeight"]
+        scalable_sizes = [line_height * scale for scale in range(1, 9)]
+        effective_sizes = [size for size in declared_sizes if size in scalable_sizes]
+        unsupported_metadata_sizes = [size for size in declared_sizes if size not in scalable_sizes]
+        if unsupported_metadata_sizes:
+            warnings.append({
+                "level": "warning",
+                "code": "font-size-metadata-inconsistent",
+                "message": (
+                    f"manifest font {font_entry['family'] or font_entry['id']} declares sizes "
+                    f"that cannot be represented by its .jffont lineHeight={line_height}: "
+                    f"{', '.join(str(size) for size in unsupported_metadata_sizes)}"
+                ),
+                "source": "jellyframe.app.json",
+                "family": font_entry["family"],
+                "lineHeight": line_height,
+                "declaredSizes": declared_sizes,
+                "representableSizes": scalable_sizes,
+            })
         font_entry.update({
             "status": "usable",
             "format": parsed["format"],
             "coverageBits": parsed["coverageBits"],
             "glyphCount": parsed["glyphCount"],
-            "lineHeight": parsed["lineHeight"],
+            "lineHeight": line_height,
             "fallbackAdvance": parsed["fallbackAdvance"],
+            "representableSizes": scalable_sizes,
+            "effectiveSizes": effective_sizes,
             "usedGlyphCount": len(source_codepoints & glyphs),
             "usedGlyphSample": codepoint_sample(source_codepoints & glyphs, 24),
             })
@@ -2589,6 +2693,24 @@ def collect_font_diagnostics(manifest: dict,
             "code": "font-family-unmatched",
             "message": f"CSS primary font-family is not declared as a manifest runtime font: {entry['family']}",
             "source": entry["source"],
+        })
+
+    font_size_usage = collect_font_size_usage(resources, manifest_fonts)
+    for entry in font_size_usage["entries"]:
+        if entry["status"] != "undeclared":
+            continue
+        supported = ", ".join(str(size) for size in entry["supportedSizes"]) or "none"
+        warnings.append({
+            "level": "warning",
+            "code": "font-size-not-declared",
+            "message": (
+                f"CSS requests {entry['requestedSize']}px for manifest font family "
+                f"{entry['family']}, but supported sizes are: {supported}"
+            ),
+            "source": entry["source"],
+            "family": entry["family"],
+            "requestedSize": entry["requestedSize"],
+            "supportedSizes": entry["supportedSizes"],
         })
 
     missing = source_codepoints - system_covered - app_covered
@@ -2648,6 +2770,7 @@ def collect_font_diagnostics(manifest: dict,
         "missingNonAsciiSample": codepoint_sample(missing_non_ascii),
         "manifestFonts": manifest_fonts,
         "fontFamilyUsage": font_family_usage,
+        "fontSizeUsage": font_size_usage,
     }
     return diagnostics, warnings
 

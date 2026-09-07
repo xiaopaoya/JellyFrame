@@ -785,6 +785,16 @@ ADVICE_BY_CODE = {
         "explanation": "Some source characters are not covered by the target font profile or app font supplements.",
         "action": "Run the default font subset preflight, generate a .jffont supplement from the used-chars file, then declare it in manifest fonts[].",
     },
+    "font-size-not-declared": {
+        "title": "CSS font size is not declared for the runtime font",
+        "explanation": "The app requests a pixel size that is not listed for the selected manifest font. The runtime may use a bitmap scale approximation, which can change line breaks and vertical layout.",
+        "action": "Add or generate a .jffont resource validated at the requested size and list that size in fonts[].sizes, or change CSS to one of the declared sizes. Do not package an operating-system font without redistribution permission.",
+    },
+    "font-size-metadata-inconsistent": {
+        "title": "Font size metadata does not match the .jffont resource",
+        "explanation": "A bitmap font can only represent its line height and bounded integer multiples in the current runtime. A manifest size such as 18px for an 8px resource would silently select an approximation.",
+        "action": "Regenerate the font at the requested base size, use a representable integer multiple, or remove the unsupported value from fonts[].sizes before preview/install.",
+    },
     "missing-font-resource": {
         "title": "Declared font resource is not packaged",
         "explanation": "The manifest points at a font file that was not found in the app package.",
@@ -1443,6 +1453,35 @@ def enrich_font_advice(advice: list[dict],
                     f"Generate a .jffont subset covering {sample_text} ({missing_count} missing non-ASCII "
                     "codepoint(s)), declare it in manifest fonts[], then rerun the default font preflight."
                 )
+
+    size_usage = font_diagnostics.get("fontSizeUsage", {})
+    size_entries = size_usage.get("entries", []) if isinstance(size_usage, dict) else []
+    undeclared_sizes = [
+        item for item in size_entries
+        if isinstance(item, dict) and item.get("status") == "undeclared"
+    ]
+    size_advice = [entry for entry in advice if entry.get("code") == "font-size-not-declared"]
+    if undeclared_sizes and not size_advice:
+        entry = append_developer_advice(
+            advice,
+            seen,
+            "font-size-not-declared",
+            "warning",
+            "jellyframe.app.json",
+            f"undeclaredFontSizeCount={len(undeclared_sizes)}",
+        )
+        if entry is not None:
+            size_advice.append(entry)
+    if size_advice:
+        size_advice[0]["fontSizes"] = [
+            {
+                "family": str(item.get("family", "")),
+                "requestedSize": int(item.get("requestedSize", 0) or 0),
+                "supportedSizes": item.get("supportedSizes", []),
+                "source": str(item.get("source", "")),
+            }
+            for item in undeclared_sizes
+        ]
 
     usage = font_diagnostics.get("fontFamilyUsage", {})
     entries = usage.get("entries", []) if isinstance(usage, dict) else []

@@ -36,10 +36,14 @@ def assert_font_report(report_path: Path) -> None:
     assert fonts["tiny-cn"]["status"] == "usable"
     assert fonts["tiny-cn"]["sizes"] == [8, 12, 18, 36]
     assert fonts["tiny-cn"]["weights"] == [400, 700]
+    assert fonts["tiny-cn"]["representableSizes"] == [8, 16, 24, 32, 40, 48, 56, 64]
+    assert fonts["tiny-cn"]["effectiveSizes"] == [8]
     assert fonts["tiny-cn"]["usedGlyphCount"] == 2
     assert fonts["tiny-symbols"]["status"] == "usable"
     assert fonts["tiny-symbols"]["sizes"] == [8, 12, 18, 36]
     assert fonts["tiny-symbols"]["weights"] == [400, 700]
+    assert fonts["tiny-symbols"]["representableSizes"] == [8, 16, 24, 32, 40, 48, 56, 64]
+    assert fonts["tiny-symbols"]["effectiveSizes"] == [8]
     assert fonts["tiny-symbols"]["usedGlyphCount"] == 3
 
     family_status = {
@@ -51,7 +55,19 @@ def assert_font_report(report_path: Path) -> None:
     assert diagnostics["fontFamilyUsage"]["unmatchedPrimaryCount"] == 0
 
     warnings = report.get("warnings", [])
-    assert [warning["code"] for warning in warnings] == ["font-missing-glyphs"]
+    assert [warning["code"] for warning in warnings] == [
+        "font-size-metadata-inconsistent",
+        "font-size-metadata-inconsistent",
+        "font-size-not-declared",
+        "font-size-not-declared",
+        "font-missing-glyphs",
+    ]
+    assert diagnostics["fontSizeUsage"]["undeclaredCount"] == 2
+    assert {
+        (entry["family"], entry["requestedSize"])
+        for entry in diagnostics["fontSizeUsage"]["entries"]
+        if entry["status"] == "undeclared"
+    } == {("Jelly Tiny Symbols", 18), ("Jelly Tiny CN", 12)}
 
     subset = report["fontSubset"]
     assert subset["mode"] == "auto"

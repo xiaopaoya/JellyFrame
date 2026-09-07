@@ -35,6 +35,13 @@ layout engine 会用这个宽度在可用内容宽度内估算换行。provider 
 当计算后的 CSS `font-family` 命中 manifest 声明的 app 字体时，layout 会传入规范化的 32-bit family
 hash，让后端选择对应字体，而不把 family 字符串带进 display list。
 
+这里的宽度是整段文本的测量值，而不是逐字宽度之和。核心在换行时会整体测量候选行，
+因此 provider 可以包含整段文本级别的安全余量或 shaping 修正，不会把最后一个码点静默挤掉。
+
+对于没有显式 CSS `line-height` 的文本节点，返回的 `TextMetrics::line_height` 同时是 layout
+和换行 display command 的行高契约。宿主必须将同一个 provider 传给 `LayoutEngine` 和
+`LayerTreeBuilderOptions::text_measure`；否则不能保证换行位置以及最后一行的可见高度一致。
+
 `src/render_core/software_renderer.h` 仍然负责绘制侧回调：
 
 - `TextPainter`
@@ -63,13 +70,16 @@ SoftwareCompositor compositor(text_painter_from_adapter(adapter));
 
 App 使用文档化的 `letter-spacing` 或 `overflow-wrap: anywhere` 子集时，必须把同一个 measure
 provider 传给 `LayerTreeBuilderOptions::text_measure`。builder 会据此按 layout 使用的同一 advance
-发出 scalar 定位命令。普通文本继续走原有单条 command 路径，构建 layer 时不会查询该 provider。
+发出 scalar 定位命令。普通文本继续走原有单条 command 路径，但 builder 仍会使用 provider 返回的
+行高，使 command 矩形与 layout 保持一致。
 
 这个 helper 只是为了让板级 port 的接入形态一致，不会把字体发现、shaping 或 cache 放进核心。
 
 `jellyframe_app_runtime` 中的 `AppFontSet` 使用可选 family-aware callback。generic/未指定 family
 的文本保留紧凑的系统优先 fallback 链；CSS `font-family` 可以先选择 manifest `.jffont` family，
-再回落到系统/default 字体。不需要 app 自带字体的宿主可以忽略 family-aware callback。
+再回落到系统/default 字体。app-font 的缩放只保证字体 line height 的整数倍；其他字号会得到受限的近似值，
+应在打包预检中通过 `font-size-not-declared` 修正，而不应依赖静默 fallback。不需要 app 自带字体的宿主可以忽略
+family-aware callback。
 
 ## Fallback 行为
 

@@ -236,9 +236,11 @@ manifest 中的每个 font 条目可以写：
 等 generic family 会报告为 generic fallback；未匹配的首选自定义 family 会产生
 `font-family-unmatched`。runtime 匹配刻意很小：只规范化 CSS family list 中首个自定义 family，
 并与 manifest `.jffont` family 匹配；不实现完整浏览器 cascade、`@font-face`、stretch/style/features
-和完整字体匹配。app-font backend 使用便宜的整数倍字号策略：根据 CSS `font-size` 除以字体
-line height 选择 1x/2x/3x... 缩放，并设置上限避免异常字号失控；`font-weight >= 600`
-沿用合成粗体描边。`sizes`、`weights` 用来声明这个 package font 已验收的 CSS 字号和字重。
+和完整字体匹配。app-font backend 使用有上限的整数倍字号策略：根据 CSS `font-size` 除以字体
+line height 选择 1x/2x/3x... 缩放。只有字体 line height 的整数倍是 bitmap 资源可以无比例误差表达的字号；
+其他字号只能得到近似结果，不能作为已支持的精确排版。`font-weight >= 600` 沿用合成粗体描边。
+`sizes`、`weights` 用来声明这个 package font 已验收的 CSS 字号和字重，工具会同时检查声明值与
+`.jffont` 的 line height 是否一致。
 工具仍会检查这些数组是否存在且合法，
 发布前可报告 `font-axis-metadata-missing` 或 `font-axis-metadata-invalid`。`license.name` 和 `license.source`
 是推荐字段；缺失时 pack/check 会给出 `font-license-missing` 或 `font-license-incomplete`，
@@ -634,7 +636,11 @@ CI 或发布打包希望 warning 也失败时，传入 `--strict`。
 
 Package report 还包含 `fontDiagnostics`。这是工具层估算，不是运行时字体加载器：它会扫描
 package 文本资源中出现的 codepoints，套用目标 `fontProfile`，解析 manifest 声明的 `.jffont`
-V0 glyph table，并把剩余缺失的非 ASCII glyph 作为 warning 报告。`.ttf`、`.otf`、`.woff`、
+V0 glyph table，并把剩余缺失的非 ASCII glyph 作为 warning 报告。它还会检查静态可识别的
+`font-family` + `font-size: Npx` 用法：如果字号不在该字体的可表达/已声明集合中，会报告
+`font-size-not-declared`；manifest 自身声明了无法由 line height 表达的字号时，会报告
+`font-size-metadata-inconsistent`。这两类 warning 表示预览、安装前必须修正的排版风险，而不是
+可以忽略的字体 fallback。`.ttf`、`.otf`、`.woff`、
 `.bdf` 等字体文件可以作为文档或未来工具资源被打包，但当前不是 runtime-loadable font
 supplement；如果写进 manifest `fonts`，会被报告为不支持的字体资源格式。
 

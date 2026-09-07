@@ -57,7 +57,35 @@ struct BuiltPipeline {
           layer_tree(std::move(layer_tree_in)) {}
 };
 
-BuiltPipeline build_pipeline(const char* html, const char* css) {
+bool measured_text_with_tall_line_height(const std::string& text,
+                                         int font_size,
+                                         int,
+                                         TextMetrics* metrics,
+                                         void*) {
+    if (metrics == nullptr) {
+        return false;
+    }
+    metrics->width = static_cast<int>(text.size()) * std::max(1, font_size / 2);
+    metrics->line_height = 19;
+    return true;
+}
+
+bool measured_text_with_run_padding(const std::string& text,
+                                    int,
+                                    int,
+                                    TextMetrics* metrics,
+                                    void*) {
+    if (metrics == nullptr) {
+        return false;
+    }
+    metrics->width = static_cast<int>(text.size()) * 10 + 7;
+    metrics->line_height = 19;
+    return true;
+}
+
+BuiltPipeline build_pipeline(const char* html,
+                             const char* css,
+                             TextMeasureProvider text_measure = {}) {
     HtmlParser html_parser;
     CssParser css_parser;
     auto document = html_parser.parse(html);
@@ -65,9 +93,11 @@ BuiltPipeline build_pipeline(const char* html, const char* css) {
     StyleResolver resolver(stylesheet);
     RenderTreeBuilder render_tree_builder(resolver);
     auto render_tree = render_tree_builder.build(*document);
-    LayoutEngine layout_engine(resolver);
+    LayoutEngine layout_engine(resolver, text_measure);
     auto layout_tree = layout_engine.layout(*render_tree, 240);
-    LayerTreeBuilder layer_tree_builder;
+    LayerTreeBuilderOptions layer_options;
+    layer_options.text_measure = text_measure;
+    LayerTreeBuilder layer_tree_builder(layer_options);
     auto layer_tree = layer_tree_builder.build(*layout_tree);
     return BuiltPipeline(std::move(document), std::move(stylesheet), std::move(resolver),
                          std::move(render_tree), std::move(layout_tree), std::move(layer_tree));
@@ -405,6 +435,60 @@ void normal_text_wrap_matches_layout_line_breaks() {
     check(text_rects.size() >= 2, "ordinary breakable text emits multiple paint commands");
     check(text_rects[0].y != text_rects[1].y,
           "ordinary breakable text paint lines follow the layout line height");
+}
+
+void wrapped_text_uses_the_measured_line_height_for_painting() {
+    const TextMeasureProvider text_measure{measured_text_with_tall_line_height, nullptr};
+    auto pipeline = build_pipeline(
+        "<body><p id='label'>Alpha beta gamma</p></body>",
+        "p { width: 40px; margin: 0; font-size: 10px; }",
+        text_measure);
+    const LayoutBox* label = find_layout_by_id(*pipeline.layout_tree, "label");
+    check(label != nullptr && label->rect.height >= 38,
+          "measured line height reserves every wrapped line");
+
+    LayerTreeBuilderOptions layer_options;
+    layer_options.text_measure = text_measure;
+    LayerTreeBuilder layer_tree_builder(layer_options);
+    const DisplayList commands = layer_tree_builder.flatten(*pipeline.layer_tree);
+    std::vector<Rect> text_rects;
+    for (const DisplayCommand& command : commands) {
+        if (command.type == DisplayCommandType::Text && !command.text.empty()) {
+            text_rects.push_back(command.rect);
+        }
+    }
+    check(text_rects.size() >= 2, "measured text emits every wrapped line");
+    for (std::size_t index = 0; index < text_rects.size(); ++index) {
+        check(text_rects[index].height == 19,
+              "paint line rectangle uses the text backend line height");
+        if (index > 0) {
+            check(text_rects[index].y - text_rects[index - 1].y == 19,
+                  "paint line positions use the text backend line height");
+        }
+    }
+}
+
+void anywhere_wrap_does_not_repeat_run_measurement_padding() {
+    const TextMeasureProvider text_measure{measured_text_with_run_padding, nullptr};
+    auto pipeline = build_pipeline(
+        "<body><p id='label'>ABCD</p></body>",
+        "p { width: 47px; margin: 0; font-size: 10px; overflow-wrap: anywhere; }",
+        text_measure);
+    const LayoutBox* label = find_layout_by_id(*pipeline.layout_tree, "label");
+    check(label != nullptr && label->rect.height == 19,
+          "a run that fits its measured width remains one line");
+
+    LayerTreeBuilderOptions layer_options;
+    layer_options.text_measure = text_measure;
+    const DisplayList commands = LayerTreeBuilder(layer_options).flatten(*pipeline.layer_tree);
+    std::vector<std::string> text_lines;
+    for (const DisplayCommand& command : commands) {
+        if (command.type == DisplayCommandType::Text && !command.text.empty()) {
+            text_lines.push_back(command.text);
+        }
+    }
+    check(text_lines.size() == 1 && text_lines.front() == "ABCD",
+          "anywhere wrapping measures the candidate run once instead of summing per-scalar padding");
 }
 
 void scroll_container_offsets_descendant_paint() {
@@ -806,6 +890,29 @@ void button_inline_block_shrink_wraps_text() {
         }
     }
     check(false, "button background command exists");
+}
+
+void button_default_text_aligns_center() {
+    auto pipeline = build_pipeline("<body><button>Submit</button></body>",
+                                   "button { width: 120px; height: 32px; padding: 0; border: 0; }");
+
+    LayerTreeBuilder layer_tree_builder;
+    DisplayList flattened = layer_tree_builder.flatten(*pipeline.layer_tree);
+    Rect button_rect{};
+    Rect text_rect{};
+    for (const DisplayCommand& command : flattened) {
+        if (command.type == DisplayCommandType::FillRect &&
+            command.color.r == 243 && command.color.g == 244 && command.color.b == 246) {
+            button_rect = command.rect;
+        }
+        if (command.type == DisplayCommandType::Text && command.text == "Submit") {
+            text_rect = command.rect;
+            check(command.text_align == TextCommandAlign::Center,
+                  "button default text command is centered");
+        }
+    }
+    check(button_rect.width == 120 && text_rect.width > 0, "fixed button and text commands exist");
+    check(text_rect.x > button_rect.x + 10, "button default text is not flush left");
 }
 
 void select_does_not_paint_option_list_inline() {
@@ -1620,6 +1727,8 @@ int main() {
         visibility_preserves_layout_and_suppresses_hidden_paint_and_hit_testing();
         text_spacing_and_anywhere_wrap_emit_only_declared_extra_commands();
         normal_text_wrap_matches_layout_line_breaks();
+        wrapped_text_uses_the_measured_line_height_for_painting();
+        anywhere_wrap_does_not_repeat_run_measurement_padding();
         scroll_container_offsets_descendant_paint();
         scroll_container_keeps_absolute_sibling_navigation_fixed();
         scroll_indicator_is_opt_in_overlay();
@@ -1637,6 +1746,7 @@ int main() {
         inline_run_flows_horizontally();
         centered_inline_text_aligns_in_parent();
         button_inline_block_shrink_wraps_text();
+        button_default_text_aligns_center();
         select_does_not_paint_option_list_inline();
         form_paint_only_state_changes_rebuild_visible_commands();
         select_popup_paints_above_document_and_hit_tests_to_owner();

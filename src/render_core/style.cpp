@@ -4899,6 +4899,10 @@ Style default_style_for(const Node& node) {
         style.background_color = Color{226, 232, 240, 255};
     } else if (node.tag_name == "button") {
         style.display = Display::InlineBlock;
+        // Buttons use the platform-neutral HTML default expected by the
+        // authoring tools. Ports may override it explicitly with CSS.
+        style.text_align = TextAlign::Center;
+        style.text_align_specified = true;
         style.padding = EdgeSizes{4, 8, 4, 8};
         style.border_width = EdgeSizes{1, 1, 1, 1};
         style.border_color = Color{107, 114, 128, 255};

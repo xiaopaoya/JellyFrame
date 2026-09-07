@@ -303,12 +303,15 @@ fallback, while an unmatched primary custom family produces
 `font-family-unmatched`. Runtime matching is intentionally small: only the first
 custom family in the CSS list is normalized and matched against manifest
 `.jffont` families; full browser cascade, `@font-face`, stretch/style/features
-and full font matching are not implemented. The app-font backend uses a cheap
-integer-size policy: bitmap glyphs draw at 1x/2x/3x... according to CSS
-`font-size` divided by the font line height, with a cap for pathological sizes;
-`font-weight >= 600` uses the existing synthetic bold stroke. `sizes` and
-`weights` declare the CSS sizes and weights the app has validated for that
-package font. Tooling still checks that these arrays are present and valid,
+and full font matching are not implemented. The app-font backend uses a bounded
+integer-scale policy: bitmap glyphs draw at 1x/2x/3x... according to CSS
+`font-size` divided by the font line height. Only integer multiples of the
+resource line height are representable without a size approximation; other
+sizes must not be treated as precisely supported. `font-weight >= 600` uses
+the existing synthetic bold stroke. `sizes` and `weights` declare the CSS sizes
+and weights the app has validated for that package font. Tooling checks that
+these arrays are present and valid, and also checks that declared sizes are
+representable by the `.jffont` line height,
 reporting `font-axis-metadata-missing` or
 `font-axis-metadata-invalid` before release. `license.name` and
 `license.source` are recommended for redistributed font supplements. Missing
@@ -764,7 +767,12 @@ well.
 Package reports also include `fontDiagnostics`. This is a tooling estimate, not
 a runtime font loader: it scans package text resources for codepoints, applies
 the selected target `fontProfile`, parses manifest-declared `.jffont` V0 glyph
-tables and reports remaining missing non-ASCII glyphs as warnings. `.ttf`,
+tables and reports remaining missing non-ASCII glyphs as warnings. It also
+checks statically recognizable `font-family` plus `font-size: Npx` declarations.
+An undeclared or non-representable request is reported as
+`font-size-not-declared`; inconsistent manifest metadata is reported as
+`font-size-metadata-inconsistent`. These warnings identify a layout risk to fix
+before preview or install, rather than a harmless fallback. `.ttf`,
 `.otf`, `.woff`, `.bdf` and other font files may be packaged for documentation
 or future tooling, but they are not runtime-loadable font supplements yet and
 will be reported as unsupported manifest font formats.
