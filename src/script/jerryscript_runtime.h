@@ -89,6 +89,8 @@ private:
     std::vector<std::unique_ptr<ScriptEventListener>> event_listeners_;
     std::vector<std::unique_ptr<ScriptTimer>> timers_;
     std::vector<std::unique_ptr<ScriptAnimationFrameCallback>> animation_frame_callbacks_;
+    bool pumping_timers_ = false;
+    bool pumping_animation_frames_ = false;
     std::vector<std::unique_ptr<ScriptXmlHttpRequest>> xml_http_requests_;
     std::vector<std::unique_ptr<ScriptAudioElement>> audio_elements_;
     std::vector<std::unique_ptr<ScriptGeolocationRequest>> geolocation_requests_;

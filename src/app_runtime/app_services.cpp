@@ -504,6 +504,21 @@ AppServiceSubmitResult NetworkFetchMock::submit_fetch(AppRuntimeHost& host,
     return result;
 }
 
+bool NetworkFetchMock::cancel_pending_fetch(AppRuntimeHost& host, std::uint32_t job_id) {
+    if (job_id == 0 || !host.requests().cancel_pending(job_id)) {
+        return false;
+    }
+    const auto pending = find_job(pending_, job_id);
+    if (pending != pending_.end()) {
+        pending_.erase(pending);
+    }
+    return true;
+}
+
+std::size_t NetworkFetchMock::pending_count() const {
+    return pending_.size();
+}
+
 bool NetworkFetchMock::complete_next(AppRuntimeHost& host) {
     HostServiceRequest request;
     if (!host.pop_worker_request(HostServiceJobKind::NetworkFetch, request)) {

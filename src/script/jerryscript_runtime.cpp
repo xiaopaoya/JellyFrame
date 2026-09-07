@@ -108,6 +108,7 @@ struct ScriptAnimationFrameCallback {
     std::uint32_t id = 0;
     jerry_value_t callback = 0;
     bool active = false;
+    bool queued_for_pump = false;
 };
 
 struct ScriptXmlHttpRequest {
@@ -3720,7 +3721,10 @@ jerry_value_t xhr_abort(const jerry_call_info_t* call_info_p,
     if (xhr == nullptr || runtime == nullptr || host == nullptr) {
         return jerry_undefined();
     }
-    xhr->request.abort(*host);
+    NetworkFetchMock* network = ScriptRuntimeAccess::network_fetch(*runtime);
+    if (network != nullptr) {
+        xhr->request.abort(*host, *network);
+    }
     dispatch_xhr_events(*xhr);
     return jerry_undefined();
 }
@@ -6985,6 +6989,13 @@ bool JerryScriptRuntime::dispatch_audio_event(std::uint32_t audio_id, ScriptAudi
 std::size_t JerryScriptRuntime::pump_timers(std::uint64_t now_ms, std::size_t max_callbacks) {
     callback_failure_ = {};
     current_time_ms_ = now_ms;
+    timers_.erase(std::remove_if(timers_.begin(), timers_.end(), [](const std::unique_ptr<ScriptTimer>& timer) {
+        return !timer->active;
+    }), timers_.end());
+    if (max_callbacks == 0) {
+        return 0;
+    }
+    pumping_timers_ = true;
     std::size_t callbacks = 0;
     const std::size_t initial_count = timers_.size();
     for (std::size_t index = 0; index < initial_count && callbacks < max_callbacks; ++index) {
@@ -7016,6 +7027,7 @@ std::size_t JerryScriptRuntime::pump_timers(std::uint64_t now_ms, std::size_t ma
         }
     }
 
+    pumping_timers_ = false;
     timers_.erase(std::remove_if(timers_.begin(), timers_.end(), [](const std::unique_ptr<ScriptTimer>& timer) {
         return !timer->active;
     }), timers_.end());
@@ -7025,33 +7037,44 @@ std::size_t JerryScriptRuntime::pump_timers(std::uint64_t now_ms, std::size_t ma
 std::size_t JerryScriptRuntime::pump_animation_frame(std::uint64_t now_ms, std::size_t max_callbacks) {
     callback_failure_ = {};
     current_time_ms_ = now_ms;
-    if (animation_frame_callbacks_.empty() || max_callbacks == 0) {
-        return 0;
-    }
-    std::vector<jerry_value_t> callbacks;
-    callbacks.reserve(std::min(max_callbacks, animation_frame_callbacks_.size()));
-    std::size_t pumped = 0;
-    for (const auto& entry : animation_frame_callbacks_) {
-        if (pumped >= max_callbacks || !entry->active || entry->callback == 0) {
-            continue;
-        }
-        callbacks.push_back(jerry_value_copy(entry->callback));
-        entry->active = false;
-        jerry_value_free(entry->callback);
-        entry->callback = 0;
-        ++pumped;
-    }
     animation_frame_callbacks_.erase(
-        std::remove_if(animation_frame_callbacks_.begin(),
-                       animation_frame_callbacks_.end(),
+        std::remove_if(animation_frame_callbacks_.begin(), animation_frame_callbacks_.end(),
                        [](const std::unique_ptr<ScriptAnimationFrameCallback>& callback) {
                            return !callback->active;
                        }),
         animation_frame_callbacks_.end());
+    if (animation_frame_callbacks_.empty() || max_callbacks == 0) {
+        return 0;
+    }
+    struct QueuedCallback {
+        std::uint32_t id = 0;
+        jerry_value_t value = 0;
+    };
+    pumping_animation_frames_ = true;
+    std::vector<QueuedCallback> callbacks;
+    callbacks.reserve(std::min(max_callbacks, animation_frame_callbacks_.size()));
+    std::size_t queued = 0;
+    for (const auto& entry : animation_frame_callbacks_) {
+        if (queued >= max_callbacks || !entry->active || entry->queued_for_pump || entry->callback == 0) {
+            continue;
+        }
+        callbacks.push_back(QueuedCallback{entry->id, jerry_value_copy(entry->callback)});
+        entry->queued_for_pump = true;
+        ++queued;
+    }
 
     const jerry_value_t timestamp = jerry_number(static_cast<double>(now_ms));
-    for (jerry_value_t raw_callback : callbacks) {
-        JerryValue callback(raw_callback);
+    std::size_t pumped = 0;
+    for (const QueuedCallback& queued_callback : callbacks) {
+        JerryValue callback(queued_callback.value);
+        const auto current = std::find_if(
+            animation_frame_callbacks_.begin(), animation_frame_callbacks_.end(),
+            [&queued_callback](const std::unique_ptr<ScriptAnimationFrameCallback>& entry) {
+                return entry->id == queued_callback.id;
+            });
+        if (current == animation_frame_callbacks_.end() || !(*current)->active || (*current)->callback == 0) {
+            continue;
+        }
         JerryValue result(run_with_execution_budget(*this, [&]() {
             return jerry_call(callback.get(), jerry_undefined(), &timestamp, 1);
         }));
@@ -7059,11 +7082,42 @@ std::size_t JerryScriptRuntime::pump_animation_frame(std::uint64_t now_ms, std::
             JerryValue exception_value(jerry_exception_value(result.release(), true));
             (void) exception_value;
         }
+        ++pumped;
+        const auto completed = std::find_if(
+            animation_frame_callbacks_.begin(), animation_frame_callbacks_.end(),
+            [&queued_callback](const std::unique_ptr<ScriptAnimationFrameCallback>& entry) {
+                return entry->id == queued_callback.id;
+            });
+        if (completed != animation_frame_callbacks_.end()) {
+            (*completed)->active = false;
+            (*completed)->queued_for_pump = false;
+            if ((*completed)->callback != 0) {
+                jerry_value_free((*completed)->callback);
+                (*completed)->callback = 0;
+            }
+        }
         if (script_callback_failed()) {
             break;
         }
     }
     jerry_value_free(timestamp);
+    pumping_animation_frames_ = false;
+    for (const auto& entry : animation_frame_callbacks_) {
+        if (entry->queued_for_pump) {
+            entry->active = false;
+            if (entry->callback != 0) {
+                jerry_value_free(entry->callback);
+                entry->callback = 0;
+            }
+        }
+        entry->queued_for_pump = false;
+    }
+    animation_frame_callbacks_.erase(
+        std::remove_if(animation_frame_callbacks_.begin(), animation_frame_callbacks_.end(),
+                       [](const std::unique_ptr<ScriptAnimationFrameCallback>& callback) {
+                           return !callback->active;
+                       }),
+        animation_frame_callbacks_.end());
     return pumped;
 }
 
@@ -7819,10 +7873,14 @@ void JerryScriptRuntime::clear_script_event_listeners() {
 std::uint32_t JerryScriptRuntime::add_timer(std::uint32_t callback_value,
                                             std::uint32_t delay_ms,
                                             bool repeat) {
-    timers_.erase(std::remove_if(timers_.begin(), timers_.end(), [](const std::unique_ptr<ScriptTimer>& timer) {
-        return !timer->active;
-    }), timers_.end());
-    if (timers_.size() >= options_.max_timers) {
+    if (!pumping_timers_) {
+        timers_.erase(std::remove_if(timers_.begin(), timers_.end(), [](const std::unique_ptr<ScriptTimer>& timer) {
+            return !timer->active;
+        }), timers_.end());
+    }
+    const std::size_t active_timer_count = static_cast<std::size_t>(std::count_if(
+        timers_.begin(), timers_.end(), [](const std::unique_ptr<ScriptTimer>& timer) { return timer->active; }));
+    if (active_timer_count >= options_.max_timers) {
         return 0;
     }
     auto timer = std::make_unique<ScriptTimer>();
@@ -7869,14 +7927,19 @@ void JerryScriptRuntime::clear_timers() {
 }
 
 std::uint32_t JerryScriptRuntime::add_animation_frame_callback(std::uint32_t callback_value) {
-    animation_frame_callbacks_.erase(
-        std::remove_if(animation_frame_callbacks_.begin(),
-                       animation_frame_callbacks_.end(),
-                       [](const std::unique_ptr<ScriptAnimationFrameCallback>& callback) {
-                           return !callback->active;
-                       }),
-        animation_frame_callbacks_.end());
-    if (animation_frame_callbacks_.size() >= options_.max_animation_frame_callbacks) {
+    if (!pumping_animation_frames_) {
+        animation_frame_callbacks_.erase(
+            std::remove_if(animation_frame_callbacks_.begin(),
+                           animation_frame_callbacks_.end(),
+                           [](const std::unique_ptr<ScriptAnimationFrameCallback>& callback) {
+                               return !callback->active;
+                           }),
+            animation_frame_callbacks_.end());
+    }
+    const std::size_t active_callback_count = static_cast<std::size_t>(std::count_if(
+        animation_frame_callbacks_.begin(), animation_frame_callbacks_.end(),
+        [](const std::unique_ptr<ScriptAnimationFrameCallback>& callback) { return callback->active; }));
+    if (active_callback_count >= options_.max_animation_frame_callbacks) {
         return 0;
     }
     auto callback = std::make_unique<ScriptAnimationFrameCallback>();
@@ -7906,13 +7969,15 @@ void JerryScriptRuntime::cancel_animation_frame_callback(std::uint32_t id) {
         }
         break;
     }
-    animation_frame_callbacks_.erase(
-        std::remove_if(animation_frame_callbacks_.begin(),
-                       animation_frame_callbacks_.end(),
-                       [](const std::unique_ptr<ScriptAnimationFrameCallback>& callback) {
-                           return !callback->active;
-                       }),
-        animation_frame_callbacks_.end());
+    if (!pumping_animation_frames_) {
+        animation_frame_callbacks_.erase(
+            std::remove_if(animation_frame_callbacks_.begin(),
+                           animation_frame_callbacks_.end(),
+                           [](const std::unique_ptr<ScriptAnimationFrameCallback>& callback) {
+                               return !callback->active;
+                           }),
+            animation_frame_callbacks_.end());
+    }
 }
 
 void JerryScriptRuntime::clear_animation_frame_callbacks() {
@@ -7951,7 +8016,9 @@ ScriptXmlHttpRequest* JerryScriptRuntime::create_xml_http_request() {
 void JerryScriptRuntime::clear_xml_http_requests() {
     for (const auto& xhr : xml_http_requests_) {
         if (xhr->active && app_host_ != nullptr) {
-            xhr->request.abort(*app_host_);
+            if (network_fetch_ != nullptr) {
+                xhr->request.abort(*app_host_, *network_fetch_);
+            }
         }
         if (xhr->object != 0) {
             jerry_value_free(xhr->object);

@@ -102,9 +102,9 @@ AppXhrStatus AppXmlHttpRequest::send(AppRuntimeHost& host,
     return AppXhrStatus::Ok;
 }
 
-void AppXmlHttpRequest::abort(AppRuntimeHost& host) {
+void AppXmlHttpRequest::abort(AppRuntimeHost& host, NetworkFetchMock& network) {
     if (job_id_ != 0) {
-        if (!host.requests().cancel_pending(job_id_)) {
+        if (!network.cancel_pending_fetch(host, job_id_)) {
             track_abandoned_job(job_id_);
         }
     }
