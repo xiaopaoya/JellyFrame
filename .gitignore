@@ -37,4 +37,5 @@ ports/esp32s3-idf/a2/
 ports/esp32s3-idf/*.log
 ports/esp32s3-idf/sdkconfig.v4-generated-profile
 ports/esp32p4-idf/build-*/
+ports/esp32p4-idf/sdkconfig
 test_artifacts/
