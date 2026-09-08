@@ -2113,7 +2113,7 @@ void run_retained_ui_task(void* raw_context) {
                 ? jellyframe::Rect{}
                 : context->frame_scratch.dirty_region.rects.front();
             ESP_LOGI(kTag,
-                     "ui_task_frame kind=%s frame=%u elapsed=%u running=%d clicks=%u scroll_y=%d drag=%d action=%s reason=%s dirty_flags=0x%08x dirty_mode=%s dirty_rects=%u dirty_rect0=%d,%d,%d,%d input=%u queue_left=%u moves_coalesced=%u present_us=%u ok=%d stack_free=%u",
+                     "ui_task_frame kind=%s frame=%u elapsed=%u running=%d clicks=%u scroll_y=%d drag=%d action=%s reason=%s dirty_flags=0x%08x dirty_mode=%s dirty_rects=%u dirty_rect0=%d,%d,%d,%d input=%u queue_left=%u moves_coalesced=%u input_dropped=%u present_us=%u ok=%d stack_free=%u",
                      ui_task_kind(*context),
                      static_cast<unsigned>(context->telemetry.frames),
                      static_cast<unsigned>(context->elapsed_seconds),
@@ -2133,6 +2133,7 @@ void run_retained_ui_task(void* raw_context) {
                      static_cast<unsigned>(input_stats.dispatched),
                      static_cast<unsigned>(context->input_queue.size()),
                      static_cast<unsigned>(context->input_queue.coalesced_move_count()),
+                     static_cast<unsigned>(context->input_queue.dropped_count()),
                      static_cast<unsigned>(present_us),
                      presented ? 1 : 0,
                      static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
