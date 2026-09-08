@@ -17,6 +17,18 @@ std::size_t bounded_text_length(const char* text, std::size_t capacity) {
 
 bool BoardInputQueue::enqueue(const BoardInputEvent& event) {
     portENTER_CRITICAL(&lock_);
+    // Pointer moves are state samples, not discrete actions. Retaining the
+    // newest adjacent sample prevents a slow render/present cycle from making
+    // a drag replay stale coordinates after the finger has stopped moving.
+    if (event.kind == BoardInputKind::PointerMove && count_ != 0) {
+        const std::size_t previous = (tail_ + kCapacity - 1) % kCapacity;
+        if (events_[previous].kind == BoardInputKind::PointerMove) {
+            events_[previous] = event;
+            ++coalesced_move_count_;
+            portEXIT_CRITICAL(&lock_);
+            return true;
+        }
+    }
     if (count_ == kCapacity) {
         ++dropped_count_;
         portEXIT_CRITICAL(&lock_);
@@ -66,6 +78,13 @@ std::uint32_t BoardInputQueue::dropped_count() const {
     const std::uint32_t dropped = dropped_count_;
     portEXIT_CRITICAL(&lock_);
     return dropped;
+}
+
+std::uint32_t BoardInputQueue::coalesced_move_count() const {
+    portENTER_CRITICAL(&lock_);
+    const std::uint32_t coalesced = coalesced_move_count_;
+    portEXIT_CRITICAL(&lock_);
+    return coalesced;
 }
 
 BoardInputDispatchStats dispatch_input_events(BoardInputQueue& queue,
