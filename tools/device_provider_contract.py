@@ -23,6 +23,11 @@ MAX_REQUEST_ID_BYTES = 64
 MAX_FEATURE_FAMILIES = 64
 OPERATIONS = frozenset({"discover", "info", "list", "install", "cancel", "launch", "stop", "remove", "rollback", "logs", "recovery"})
 DEVICE_OPERATIONS = frozenset(OPERATIONS - {"discover"})
+# Discovery serializes capability declarations in this order so raw provider
+# output is stable and all hosts render an identical lifecycle action order.
+SUPPORTED_DEVICE_OPERATIONS = (
+    "install", "cancel", "launch", "stop", "remove", "rollback", "logs", "recovery",
+)
 RESULT_CODES = frozenset({"ok", "accepted", "queued", "invalid-request", "busy", "unsupported", "denied", "not-found", "stale-session", "stale-request", "payload-too-large", "integrity-failed", "storage-full", "cancelled", "failed", "transport-unavailable", "protocol-mismatch", "provider-failed"})
 FEATURE_FAMILY_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{0,95}$")
 SOURCE_REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -151,6 +156,9 @@ def _validate_device(value: Any, name: str) -> None:
         if (any(not isinstance(operation, str) for operation in operations) or
                 len(set(operations)) != len(operations) or set(operations) - DEVICE_OPERATIONS):
             raise ProviderContractError(f"{name}.capabilities.supportedOperations is invalid")
+        expected = [operation for operation in SUPPORTED_DEVICE_OPERATIONS if operation in operations]
+        if operations != expected:
+            raise ProviderContractError(f"{name}.capabilities.supportedOperations is not in stable order")
 
 
 def _validate_app_library_entry(value: Any, name: str) -> None:

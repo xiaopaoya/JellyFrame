@@ -1,0 +1,2 @@
+# The provider otherwise uses only the Python standard library.
+pyserial==3.5

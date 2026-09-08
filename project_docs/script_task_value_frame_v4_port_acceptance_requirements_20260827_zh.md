@@ -174,15 +174,16 @@ destination-space 区域；不能把 source clip、transform bounds 或旧 v2 di
 从可接受的已编码 v4 packet 单字节构造以下独立用例，保持 session 正确：
 
 1. `source_clip_index` 超出 clip table；
-2. source clip parent 指向自身或未来 index；
-3. source clip chain 超过 configured `max_clip_depth`；
-4. v4 packet 被 v3 options 接收；
-5. transform source temporary surface 超过 `max_temporary_pixels`；
-6. viewport 与 framebuffer 不一致。
+2. source clip parent 指向自身；
+3. source clip parent 指向未来 index；
+4. source clip chain 超过 configured `max_clip_depth`；
+5. v4 packet 被 v3 options 接收；
+6. transform source temporary surface 超过 `max_temporary_pixels`；
+7. viewport 与 framebuffer 不一致。
 
 每个用例必须记录 typed take/decode/render rejection、无 present、lease release，随后
-至少显示 5 个正常 v4 frame。禁止通过 MCU reset、重新烧录、强杀 UI task 或回退 v1
-来宣称恢复成功。
+至少显示 5 个正常 v4 frame。终态必须恰有 7 个预期拒绝，且 `unexpected_rejections=0`；
+禁止通过 MCU reset、重新烧录、强杀 UI task 或回退 v1 来宣称恢复成功。
 
 ### F. 有界资源与退出
 
@@ -209,7 +210,8 @@ raster、affine sampling、RGB565 conversion 或 panel present，不能把总耗
 - full/dirty frame count、render/present/render+present p50/p95；
 - internal/PSRAM low-water、diagnostic count、frame lease release count；
 - watchdog/reset/panic/brownout/DMA/SPI/panel/failed-flush error counters；
-- 每个 E 用例的 rejection reason、present count 和后续恢复 frame count。
+- 每个 E 用例的 rejection reason、present count 和后续恢复 frame count，以及总
+  `expected_rejections` 与 `unexpected_rejections`。
 
 `report.md` 还必须写明 B--D 的人工观察或桌面 reference 比较方式，以及 C 中嵌套
 source clip 不是由 port 私有直接画图伪造。
@@ -221,8 +223,8 @@ source clip 不是由 port 私有直接画图伪造。
 
 以下任一情况为 `partial` 或失败：worker/UI codec version 不一致、transform/source clip
 未实际出现、source clip 被忽略或重复 destination clipping、任何 reject 后无法连续恢复、
-任一异常重启/硬件错误、temporary budget 越界后仍 present、或使用跨任务指针绕过 value
-frame。
+任一异常重启/硬件错误、非 E 用例的 rejection、temporary budget 越界后仍 present、或使用
+跨任务指针绕过 value frame。
 
 交付目录：
 

@@ -1,0 +1,13 @@
+{
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.fixture.installed-static-switch",
+  "name": "Installed Static Switch Fixture",
+  "version": {"name": "1.0.0", "code": 1},
+  "entry": "/index.html",
+  "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.1", "script": "none"},
+  "viewport": {"designWidth": 172, "designHeight": 320, "shape": "rect"},
+  "budgets": {"maxResourceBytes": 8192, "maxDomNodes": 24, "maxCssRules": 12, "maxDisplayCommands": 48},
+  "capabilities": [],
+  "targets": {"rect-172x320": {"viewport": {"width": 172, "height": 320, "shape": "rect"}, "output": "jfapp"}}
+}

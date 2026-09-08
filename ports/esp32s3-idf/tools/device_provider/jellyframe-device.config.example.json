@@ -1,0 +1,6 @@
+{
+  "endpointId": "ws147-developer-local",
+  "port": "COM19",
+  "baud": 115200,
+  "manifest": "../developer-image/ws147-developer-image.manifest.json"
+}

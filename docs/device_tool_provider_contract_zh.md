@@ -57,7 +57,7 @@ jellyframe-device --output json --request-id <host-id> --selector <endpoint-id> 
   "operation": "discover",
   "requestId": "host-000042",
   "resultCode": "ok",
-  "provider": { "id": "jellyframe-device", "version": "0.1.0-dev" },
+  "provider": { "id": "jellyframe-device", "version": "0.1.1-dev" },
   "devices": []
 }
 ```
@@ -80,7 +80,7 @@ path、private key 或 native handle。
 discovery device record 可选携带 `capabilities.supportedOperations` array。为兼容已发布的
 `jellyframe-device@0.1.0-dev` 包，该字段可以缺失；一旦出现，它就是作者侧生命周期控件唯一可信的 opt-in
 列表。每项必须唯一，且只能是 `install`、`cancel`、`launch`、`stop`、`remove`、`rollback`、`logs`、
-`recovery` 之一；`discover` 有意不在其中，因为它是 host 建立 session 的动作，而非 selected device capability。
+`recovery` 之一，输出顺序固定为上述顺序；`discover` 有意不在其中，因为它是 host 建立 session 的动作，而非 selected device capability。
 
 VS Code 扩展只会在当前选中设备声明相应值时显示部署、变更和 App 调试入口。字段缺失或为空时，仅显示只读的
 发现、身份和 App 列表流程。即使已声明，provider 仍可返回 typed result code 拒绝请求；能力声明不能替代

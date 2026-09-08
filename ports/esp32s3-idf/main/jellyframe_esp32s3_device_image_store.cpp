@@ -2,6 +2,7 @@
 
 #include "esp_rom_crc.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 
 #include <algorithm>
 #include <cstring>
@@ -31,6 +32,7 @@ enum class AcceptanceFaultPoint : int {
     AfterRegistryPublish = 6,
     CorruptRegistryAtBoot = 7,
     RejectRegistryPublish = 8,
+    RejectStagingAllocation = 9,
 };
 
 bool has_acceptance_fault(AcceptanceFaultPoint point) {
@@ -106,7 +108,7 @@ public:
     PartitionReader(const DeviceImageStore& store, std::uint8_t slot) : store_(store), slot_(slot) {}
 
     bool read_at(std::uint32_t offset, std::uint8_t* output, std::size_t size) const override {
-        return store_.read_slot(slot_, offset, output, size);
+        return store_.read_slot_cached(slot_, offset, output, size);
     }
 
 private:
@@ -164,6 +166,13 @@ bool DeviceImageStore::begin_staging(const DeviceInstallRequest& request) {
     if (!initialized_ || staging_active_ || request.bundle_bytes == 0 || request.bundle_bytes > kMaxBundleBytes) {
         return false;
     }
+    // Test-only port adapter refusal. This reaches the real transaction/store
+    // boundary used when flash capacity or a staging allocation is unavailable;
+    // the shared transaction controller must return StorageFull and leave the
+    // current durable registry untouched.
+    if (has_acceptance_fault(AcceptanceFaultPoint::RejectStagingAllocation)) {
+        return false;
+    }
     // A staged replacement must never overwrite the rollback generation.
     // With three physical slots there is always a third, currently unreferenced
     // slot while an active and a rollback record coexist.
@@ -177,7 +186,12 @@ bool DeviceImageStore::begin_staging(const DeviceInstallRequest& request) {
     if (staging_slot_ == kNoSlot) {
         return false;
     }
-    if (!erase_slot(staging_slot_)) {
+    // The registry records the exact trusted bundle length, so bytes beyond
+    // this package are never readable by a committed lease.  Erasing only
+    // the incoming package's sector range keeps InstallBegin bounded on the
+    // USB endpoint without weakening staging isolation.
+    if (!slot_range_is_erased(staging_slot_, request.bundle_bytes) &&
+        !erase_slot_range(staging_slot_, request.bundle_bytes)) {
         return false;
     }
     staging_active_ = true;
@@ -216,18 +230,25 @@ bool DeviceImageStore::verify_staging(const DeviceInstallRequest& request) {
     policy.max_resource_entries = 128;
     policy.max_summary_bytes = kDeviceBundleMaxSummaryBytes;
     DeviceBundleDescriptor descriptor;
-    std::array<std::uint8_t, 1024> scratch{};
     std::uint32_t transport_crc = 0;
+    verify_telemetry_ = {};
+    reader_cache_slot_ = kNoSlot;
+    reader_cache_offset_ = 0xffffffffu;
+    const std::int64_t crc_started_us = esp_timer_get_time();
     for (std::uint32_t offset = 0; offset < request.bundle_bytes;) {
-        const std::size_t bytes = std::min<std::size_t>(scratch.size(), request.bundle_bytes - offset);
-        if (!reader.read_at(offset, scratch.data(), bytes)) {
+        const std::size_t bytes = std::min<std::size_t>(verify_scratch_.size(), request.bundle_bytes - offset);
+        if (!reader.read_at(offset, verify_scratch_.data(), bytes)) {
             return false;
         }
-        transport_crc = esp_rom_crc32_le(transport_crc, scratch.data(), bytes);
+        transport_crc = esp_rom_crc32_le(transport_crc, verify_scratch_.data(), bytes);
         offset += static_cast<std::uint32_t>(bytes);
     }
-    if (transport_crc != request.bundle_crc32 ||
-        inspect_device_bundle(reader, request.bundle_bytes, policy, descriptor) != DeviceBundleStatus::Ok ||
+    verify_telemetry_.transport_crc_us = static_cast<std::uint32_t>(esp_timer_get_time() - crc_started_us);
+    const std::int64_t inspect_started_us = esp_timer_get_time();
+    const DeviceBundleStatus inspect = inspect_device_bundle(reader, request.bundle_bytes, policy,
+                                                              inspection_workspace_, descriptor);
+    verify_telemetry_.inspect_bundle_us = static_cast<std::uint32_t>(esp_timer_get_time() - inspect_started_us);
+    if (transport_crc != request.bundle_crc32 || inspect != DeviceBundleStatus::Ok ||
         descriptor.summary.app_id_view() != request.app_id_view()) {
         return false;
     }
@@ -265,10 +286,13 @@ bool DeviceImageStore::commit_staging(const DeviceInstallRequest& request) {
         return false;
     }
     *registry_ = next_registry;
+    const std::int64_t publish_started_us = esp_timer_get_time();
     if (!publish_registry()) {
+        verify_telemetry_.registry_publish_us = static_cast<std::uint32_t>(esp_timer_get_time() - publish_started_us);
         *registry_ = previous;
         return false;
     }
+    verify_telemetry_.registry_publish_us = static_cast<std::uint32_t>(esp_timer_get_time() - publish_started_us);
     staging_active_ = false;
     staging_verified_ = false;
     staging_transaction_id_ = 0;
@@ -282,7 +306,7 @@ void DeviceImageStore::abort_staging(std::uint32_t transaction_id) {
     if (!staging_active_ || transaction_id != staging_transaction_id_) {
         return;
     }
-    (void)erase_slot(staging_slot_);
+    (void)erase_slot_range(staging_slot_, staging_bundle_bytes_);
     staging_active_ = false;
     staging_verified_ = false;
     staging_transaction_id_ = 0;
@@ -330,25 +354,32 @@ bool DeviceImageStore::list(DeviceAppListPayload& list) const {
     return true;
 }
 
-bool DeviceImageStore::rollback(std::string_view app_id) {
+DeviceRequestResultCode DeviceImageStore::rollback(std::string_view app_id) {
     if (!initialized_ || registry_->active.slot == kNoSlot || registry_->rollback.slot == kNoSlot ||
         app_id != string_view(registry_->active.app_id)) {
-        return false;
+        return DeviceRequestResultCode::NotFound;
+    }
+    // Validate the candidate before changing the durable active pointer. A
+    // damaged rollback slot must leave the currently running generation
+    // intact and be observable as an integrity failure to the provider.
+    if (!validate_record(registry_->rollback, nullptr)) {
+        set_recovery(DeviceRecoveryReason::RegistryInvalid, app_id, DeviceRecoveryLauncherActive);
+        return DeviceRequestResultCode::IntegrityFailed;
     }
     DeviceBundleDescriptor rollback_descriptor;
     if (!validate_record(registry_->rollback, &rollback_descriptor) ||
         rollback_descriptor.summary.app_id_view() != string_view(registry_->rollback.app_id)) {
         set_recovery(DeviceRecoveryReason::RegistryInvalid, app_id, DeviceRecoveryLauncherActive);
-        return false;
+        return DeviceRequestResultCode::IntegrityFailed;
     }
     const RegistryRecord previous = *registry_;
     std::swap(registry_->active, registry_->rollback);
     ++registry_->generation;
     if (publish_registry()) {
-        return true;
+        return DeviceRequestResultCode::Ok;
     }
     *registry_ = previous;
-    return false;
+    return DeviceRequestResultCode::Failed;
 }
 
 bool DeviceImageStore::remove(std::string_view app_id) {
@@ -438,14 +469,63 @@ bool DeviceImageStore::erase_slot(std::uint8_t slot) {
     if (partition_ == nullptr || slot >= kBundleSlots) {
         return false;
     }
-    const std::uint32_t bytes = bundle_slot_bytes(partition_);
-    return esp_partition_erase_range(partition_, kStorageHeaderBytes + slot * bytes, bytes) == ESP_OK;
+    return erase_slot_range(slot, bundle_slot_bytes(partition_));
+}
+
+bool DeviceImageStore::erase_slot_range(std::uint8_t slot, std::uint32_t bytes) {
+    if (partition_ == nullptr || slot >= kBundleSlots) {
+        return false;
+    }
+    const std::uint32_t slot_bytes = bundle_slot_bytes(partition_);
+    if (bytes == 0 || bytes > slot_bytes || bytes > UINT32_MAX - (kFlashSectorBytes - 1u)) {
+        return false;
+    }
+    const std::uint32_t erased_bytes = (bytes + kFlashSectorBytes - 1u) & ~(kFlashSectorBytes - 1u);
+    return esp_partition_erase_range(partition_, kStorageHeaderBytes + slot * slot_bytes, erased_bytes) == ESP_OK;
+}
+
+bool DeviceImageStore::slot_range_is_erased(std::uint8_t slot, std::uint32_t bytes) const {
+    const std::uint32_t slot_bytes = bundle_slot_bytes(partition_);
+    if (partition_ == nullptr || slot >= kBundleSlots || bytes == 0 || bytes > slot_bytes) {
+        return false;
+    }
+    std::array<std::uint8_t, 256> probe{};
+    for (std::uint32_t offset = 0; offset < bytes;) {
+        const std::size_t read_bytes = std::min<std::size_t>(probe.size(), bytes - offset);
+        if (!read_slot(slot, offset, probe.data(), read_bytes) ||
+            std::any_of(probe.begin(), probe.begin() + read_bytes,
+                        [](std::uint8_t value) { return value != 0xffu; })) {
+            return false;
+        }
+        offset += static_cast<std::uint32_t>(read_bytes);
+    }
+    return true;
 }
 
 bool DeviceImageStore::read_slot(std::uint8_t slot, std::uint32_t offset, void* output, std::size_t size) const {
     const std::uint32_t bytes = bundle_slot_bytes(partition_);
     return partition_ != nullptr && output != nullptr && slot < kBundleSlots && offset <= bytes && size <= bytes - offset &&
            esp_partition_read(partition_, kStorageHeaderBytes + slot * bytes + offset, output, size) == ESP_OK;
+}
+
+bool DeviceImageStore::read_slot_cached(std::uint8_t slot, std::uint32_t offset, void* output, std::size_t size) const {
+    ++verify_telemetry_.reader_calls;
+    verify_telemetry_.reader_bytes += static_cast<std::uint32_t>(size);
+    if (output == nullptr || size == 0) return false;
+    const std::uint32_t sector_offset = offset & ~(kFlashSectorBytes - 1u);
+    const std::size_t in_sector = offset - sector_offset;
+    if (size > reader_cache_.size() - in_sector) return read_slot(slot, offset, output, size);
+    if (reader_cache_slot_ != slot || reader_cache_offset_ != sector_offset) {
+        if (!read_slot(slot, sector_offset, reader_cache_.data(), reader_cache_.size())) return false;
+        reader_cache_slot_ = slot;
+        reader_cache_offset_ = sector_offset;
+    }
+    std::memcpy(output, reader_cache_.data() + in_sector, size);
+    return true;
+}
+
+DeviceImageStore::VerifyTelemetry DeviceImageStore::copy_verify_telemetry() const {
+    return verify_telemetry_;
 }
 
 bool DeviceImageStore::write_slot(std::uint8_t slot, std::uint32_t offset, const void* bytes, std::size_t size) {
@@ -464,7 +544,7 @@ bool DeviceImageStore::validate_record(const BundleRecord& record, DeviceBundleD
     policy.max_resource_entries = 128;
     policy.max_summary_bytes = kDeviceBundleMaxSummaryBytes;
     DeviceBundleDescriptor inspected;
-    if (inspect_device_bundle(reader, record.bundle_bytes, policy, inspected) != DeviceBundleStatus::Ok ||
+    if (inspect_device_bundle(reader, record.bundle_bytes, policy, inspection_workspace_, inspected) != DeviceBundleStatus::Ok ||
         inspected.bundle_crc32 != record.bundle_crc32 || inspected.summary.app_id_view() != string_view(record.app_id)) {
         return false;
     }

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace jellyframe_esp32s3 {
 
@@ -19,6 +20,25 @@ struct ResourceEntry {
 struct ResourceBundle {
     const ResourceEntry* entries = nullptr;
     std::size_t count = 0;
+};
+
+// An installed app is snapshotted before its UI task starts.  The snapshot
+// owns every byte it exposes, so the UI never retains a registry lease or a
+// raw-partition pointer after launch.
+struct InstalledResourceSnapshotEntry {
+    std::string url;
+    jellyframe::HostResourceKind kind = jellyframe::HostResourceKind::Other;
+    std::vector<std::uint8_t> bytes;
+};
+
+struct InstalledResourceSnapshot {
+    std::vector<InstalledResourceSnapshotEntry> entries;
+    std::vector<ResourceEntry> views;
+    ResourceBundle bundle{};
+    std::size_t total_bytes = 0;
+
+    bool rebuild_views();
+    void clear();
 };
 
 struct ResourceLoadStats {
@@ -42,6 +62,17 @@ const ResourceBundle& generated_resource_bundle();
 ResourceBundleContext make_resource_context(const jellyframe::HostBudgets& budgets,
                                             std::string_view base_url,
                                             ResourceLoadStats* stats = nullptr);
+
+ResourceBundleContext make_resource_context(const jellyframe::HostBudgets& budgets,
+                                            std::string_view base_url,
+                                            const ResourceBundle& bundle,
+                                            ResourceLoadStats* stats = nullptr);
+
+// Resolves a package-local URL to a normalized absolute package path. This is
+// shared by launch-time snapshotting and UI-time resource loading.
+bool resolve_local_resource_url(std::string_view url,
+                                std::string_view base_url,
+                                std::string& output);
 
 bool load_resource(const jellyframe::HostResourceRequest& request,
                    std::string& output,

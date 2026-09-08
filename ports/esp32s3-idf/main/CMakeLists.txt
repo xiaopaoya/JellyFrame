@@ -16,10 +16,7 @@ set(JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_H
 file(MAKE_DIRECTORY "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}")
 
 set(JELLYFRAME_ESP32S3_SCRIPT_REQUIRES)
-if(CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE OR
-   CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_FRAME_V2_ACCEPTANCE OR
-   CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE OR
-   CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_FAULT_RECOVERY_ACCEPTANCE)
+if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME)
     list(APPEND JELLYFRAME_ESP32S3_SCRIPT_REQUIRES jellyframe_jerryscript)
 endif()
 
@@ -88,8 +85,10 @@ idf_component_register(
         "jellyframe_esp32s3_resources.cpp"
         "jellyframe_esp32s3_soc_power_acceptance.cpp"
         "jellyframe_esp32s3_script_task_acceptance.cpp"
+        "jellyframe_esp32s3_installed_script_task.cpp"
         "jellyframe_esp32s3_script_app_acceptance.cpp"
         "jellyframe_esp32s3_script_value_frame_v2_acceptance.cpp"
+        "jellyframe_esp32s3_script_value_frame_v4_acceptance.cpp"
         "jellyframe_esp32s3_script_service_acceptance.cpp"
         "jellyframe_esp32s3_script_fault_acceptance.cpp"
         "jellyframe_esp32s3_ui_task.cpp"
@@ -114,3 +113,31 @@ idf_component_register(
         jellyframe_render_core
         ${JELLYFRAME_ESP32S3_SCRIPT_REQUIRES}
 )
+
+# Identity is emitted by the JFDP endpoint from the compiled image, not copied
+# from a host manifest. The manifest is generated only after this candidate is
+# built and hashed.
+get_filename_component(JELLYFRAME_ESP32S3_SOURCE_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+include("${JELLYFRAME_ESP32S3_SOURCE_ROOT}/cmake/render_core_version.cmake")
+find_program(JELLYFRAME_ESP32S3_GIT_EXECUTABLE git)
+if(NOT JELLYFRAME_ESP32S3_GIT_EXECUTABLE)
+    message(FATAL_ERROR "git is required to wire-attest an ESP32-S3 Developer Image source revision")
+endif()
+execute_process(
+    COMMAND "${JELLYFRAME_ESP32S3_GIT_EXECUTABLE}" -C "${JELLYFRAME_ESP32S3_SOURCE_ROOT}" rev-parse HEAD
+    OUTPUT_VARIABLE JELLYFRAME_ESP32S3_SOURCE_REVISION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE JELLYFRAME_ESP32S3_GIT_RESULT)
+string(LENGTH "${JELLYFRAME_ESP32S3_SOURCE_REVISION}" JELLYFRAME_ESP32S3_SOURCE_REVISION_LENGTH)
+if(NOT JELLYFRAME_ESP32S3_SOURCE_REVISION MATCHES "^[0-9a-f]+$" OR
+   NOT JELLYFRAME_ESP32S3_SOURCE_REVISION_LENGTH EQUAL 40)
+    message(FATAL_ERROR "unable to resolve ESP32-S3 Developer Image source revision: ${JELLYFRAME_ESP32S3_GIT_RESULT}")
+endif()
+target_compile_definitions(${COMPONENT_LIB} PRIVATE
+    "JELLYFRAME_ESP32S3_SOURCE_REVISION=\"${JELLYFRAME_ESP32S3_SOURCE_REVISION}\""
+    "JELLYFRAME_ESP32S3_RENDER_CORE_VERSION=\"${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}\""
+    "JELLYFRAME_ESP32S3_RENDER_CORE_ABI=${JELLYFRAME_RENDER_CORE_ENGINE_ABI}")
+unset(JELLYFRAME_ESP32S3_SOURCE_ROOT)
+unset(JELLYFRAME_ESP32S3_GIT_EXECUTABLE)
+unset(JELLYFRAME_ESP32S3_GIT_RESULT)
+unset(JELLYFRAME_ESP32S3_SOURCE_REVISION_LENGTH)

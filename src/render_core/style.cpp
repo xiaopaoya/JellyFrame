@@ -5373,12 +5373,26 @@ const std::vector<const CssRule*>& StyleResolver::candidate_rules_for(const Node
             }
         }
         if (overflow_indexed_classes.empty()) {
-            auto indexed_end = inline_indexed_classes.begin() +
-                static_cast<std::ptrdiff_t>(inline_indexed_class_count);
-            std::sort(inline_indexed_classes.begin(), indexed_end);
-            indexed_end = std::unique(inline_indexed_classes.begin(), indexed_end);
-            for (auto current = inline_indexed_classes.begin(); current != indexed_end; ++current) {
-                key.append(*current);
+            // This is deliberately indexed rather than std::sort over an
+            // iterator subrange. Xtensa GCC 13 misdiagnoses the latter as an
+            // out-of-bounds insertion sort for this fixed eight-item array.
+            for (std::size_t current = 1; current < inline_indexed_class_count; ++current) {
+                const std::string_view value = inline_indexed_classes[current];
+                std::size_t position = current;
+                while (position > 0 && value < inline_indexed_classes[position - 1]) {
+                    inline_indexed_classes[position] = inline_indexed_classes[position - 1];
+                    --position;
+                }
+                inline_indexed_classes[position] = value;
+            }
+            std::size_t unique_count = 0;
+            for (std::size_t current = 0; current < inline_indexed_class_count; ++current) {
+                if (unique_count == 0 || inline_indexed_classes[current] != inline_indexed_classes[unique_count - 1]) {
+                    inline_indexed_classes[unique_count++] = inline_indexed_classes[current];
+                }
+            }
+            for (std::size_t current = 0; current < unique_count; ++current) {
+                key.append(inline_indexed_classes[current]);
                 key.push_back('\n');
             }
         } else {

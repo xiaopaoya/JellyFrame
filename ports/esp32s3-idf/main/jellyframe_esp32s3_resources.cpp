@@ -98,6 +98,33 @@ void record_success(ResourceBundleContext* context, std::size_t bytes) {
 
 } // namespace
 
+bool InstalledResourceSnapshot::rebuild_views() {
+    try {
+        views.clear();
+        views.reserve(entries.size());
+        total_bytes = 0;
+        for (const InstalledResourceSnapshotEntry& entry : entries) {
+            if (entry.url.empty() || entry.bytes.empty()) {
+                return false;
+            }
+            views.push_back(ResourceEntry{entry.url, entry.kind, entry.bytes.data(), entry.bytes.size()});
+            total_bytes += entry.bytes.size();
+        }
+    } catch (...) {
+        clear();
+        return false;
+    }
+    bundle = ResourceBundle{views.data(), views.size()};
+    return true;
+}
+
+void InstalledResourceSnapshot::clear() {
+    entries.clear();
+    views.clear();
+    bundle = {};
+    total_bytes = 0;
+}
+
 const ResourceBundle& default_resource_bundle() {
     return generated_resource_bundle();
 }
@@ -106,6 +133,19 @@ ResourceBundleContext make_resource_context(const jellyframe::HostBudgets& budge
                                             std::string_view base_url,
                                             ResourceLoadStats* stats) {
     return ResourceBundleContext{&default_resource_bundle(), budgets.max_resource_bytes, base_url, stats};
+}
+
+ResourceBundleContext make_resource_context(const jellyframe::HostBudgets& budgets,
+                                            std::string_view base_url,
+                                            const ResourceBundle& bundle,
+                                            ResourceLoadStats* stats) {
+    return ResourceBundleContext{&bundle, budgets.max_resource_bytes, base_url, stats};
+}
+
+bool resolve_local_resource_url(std::string_view url,
+                                std::string_view base_url,
+                                std::string& output) {
+    return resolve_resource_url(url, base_url, output);
 }
 
 bool load_resource(const jellyframe::HostResourceRequest& request,
