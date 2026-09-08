@@ -39,6 +39,7 @@ public:
     std::size_t size() const;
     std::size_t capacity() const;
     std::uint32_t dropped_count() const;
+    std::uint32_t coalesced_move_count() const;
 
 private:
     static constexpr std::size_t kCapacity = 64;
@@ -49,6 +50,7 @@ private:
     std::size_t tail_ = 0;
     std::size_t count_ = 0;
     std::uint32_t dropped_count_ = 0;
+    std::uint32_t coalesced_move_count_ = 0;
 };
 
 struct BoardInputDispatchStats {
