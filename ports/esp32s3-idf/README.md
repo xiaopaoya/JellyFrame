@@ -646,8 +646,9 @@ behavior.
 UI task should drain a bounded number per frame and call `dispatch_input_events`
 to forward them into `InputController`. Adjacent pointer-move samples are
 coalesced to their newest coordinate, while down/up, wheel, text and focus
-events remain ordered. This bounds drag latency behind a slow present without
-losing a press or release. Text events are copied from a fixed 16-byte buffer
+events remain ordered. If the queue is full, the oldest replaceable move sample
+is evicted before a new event is rejected. This bounds drag latency behind a
+slow present without losing a press or release. Text events are copied from a fixed 16-byte buffer
 with bounded length handling, so an unterminated hardware buffer cannot read
 past the event object.
 

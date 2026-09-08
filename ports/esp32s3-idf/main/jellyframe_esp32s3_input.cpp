@@ -15,6 +15,28 @@ std::size_t bounded_text_length(const char* text, std::size_t capacity) {
 
 } // namespace
 
+bool BoardInputQueue::discard_oldest_move_locked() {
+    for (std::size_t offset = 0; offset < count_; ++offset) {
+        const std::size_t index = (head_ + offset) % kCapacity;
+        if (events_[index].kind != BoardInputKind::PointerMove) {
+            continue;
+        }
+
+        // Move samples are replaceable state. Remove one in-place while the
+        // queue lock is held, preserving every discrete event's order.
+        for (std::size_t shift = offset; shift + 1 < count_; ++shift) {
+            const std::size_t current = (head_ + shift) % kCapacity;
+            const std::size_t next = (head_ + shift + 1) % kCapacity;
+            events_[current] = events_[next];
+        }
+        tail_ = (tail_ + kCapacity - 1) % kCapacity;
+        --count_;
+        ++dropped_count_;
+        return true;
+    }
+    return false;
+}
+
 bool BoardInputQueue::enqueue(const BoardInputEvent& event) {
     portENTER_CRITICAL(&lock_);
     // Pointer moves are state samples, not discrete actions. Retaining the
@@ -30,9 +52,13 @@ bool BoardInputQueue::enqueue(const BoardInputEvent& event) {
         }
     }
     if (count_ == kCapacity) {
-        ++dropped_count_;
-        portEXIT_CRITICAL(&lock_);
-        return false;
+        // Pointer moves are lossy samples. Make room for the newest sample
+        // or for a release event before rejecting a genuinely discrete event.
+        if (!discard_oldest_move_locked()) {
+            ++dropped_count_;
+            portEXIT_CRITICAL(&lock_);
+            return false;
+        }
     }
     events_[tail_] = event;
     tail_ = (tail_ + 1) % kCapacity;
