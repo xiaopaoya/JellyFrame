@@ -44,6 +44,8 @@ public:
 private:
     static constexpr std::size_t kCapacity = 64;
 
+    bool discard_oldest_move_locked();
+
     mutable portMUX_TYPE lock_ = portMUX_INITIALIZER_UNLOCKED;
     BoardInputEvent events_[kCapacity]{};
     std::size_t head_ = 0;
