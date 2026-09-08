@@ -279,9 +279,9 @@ private:
                              const InstalledBundleUiTaskTelemetry& telemetry) {
         char message[kDeviceAppLogMaxMessageBytes + 1]{};
         std::snprintf(message, sizeof(message),
-                      "ui frames=%u input=%u queue_left=%u queue_max=%u moves_coalesced=%u input_dropped=%u "
-                      "presents=%u present_failures=%u present_us_last=%u present_us_p50=%u present_us_p95=%u "
-                      "present_us_max=%u ok=%u stack_free=%u internal_free_min=%u psram_free_min=%u",
+                      "ui f=%u input=%u queue_left=%u queue_max=%u moves_coalesced=%u input_dropped=%u "
+                      "p=%u pf=%u present_us=%u present_p50=%u present_p95=%u present_max=%u ok=%u "
+                      "stack=%u heap_min=%u psram_min=%u",
                       static_cast<unsigned>(telemetry.frames), static_cast<unsigned>(telemetry.input_events),
                       static_cast<unsigned>(telemetry.queue_left), static_cast<unsigned>(telemetry.queue_depth_max),
                       static_cast<unsigned>(telemetry.moves_coalesced), static_cast<unsigned>(telemetry.input_dropped),
