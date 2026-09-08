@@ -87,6 +87,8 @@ JellyFrame 的胶体语言由四个概念组成：
 
 ## 色彩 Tokens
 
+品牌 Logo 的实际色号、扩展色阶和深浅主题语义映射见 [JellyFrame 项目色卡](assets/brand/PALETTE_zh.md)。可复用数据位于 [palette.json](assets/brand/palette.json)，CSS 变量位于 [palette.css](assets/brand/palette.css)。下方保留原始凝胶材质参数。
+
 默认主题是 `native-jelly`。它使用浅海蓝作为胶体主色，并用珊瑚、青柠作为
 状态点，避免整套界面只剩单一蓝色。
 

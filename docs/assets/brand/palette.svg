@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1480" viewBox="0 0 1440 1480">
+<rect width="1440" height="1480" fill="#F6FBFF"/>
+<text x="64" y="58" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#496373">JELLYFRAME / PROJECT PALETTE</text>
+<text x="64" y="112" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="36" font-weight="600" fill="#101820">浅海蓝，让界面轻盈而清晰。</text>
+<text x="64" y="150" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="17" font-weight="400" fill="#496373">品牌色 · 中性色 · 辅助色 · 深浅主题 · 语义状态</text>
+<text x="64" y="199" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="600" fill="#496373">01  LOGO 原色 / PRIMARY IDENTITY</text>
+<rect x="64" y="218" width="316" height="126" rx="12" fill="#67DDED"/>
+<text x="80" y="302" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">浅海青 / 高光</text>
+<text x="80" y="326" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#67DDED</text>
+<rect x="396" y="218" width="316" height="126" rx="12" fill="#26B9DE"/>
+<text x="412" y="302" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">水母蓝 / 品牌主色</text>
+<text x="412" y="326" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#26B9DE</text>
+<rect x="728" y="218" width="316" height="126" rx="12" fill="#1680C7"/>
+<text x="744" y="302" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#000000">海洋蓝 / 渐变终点</text>
+<text x="744" y="326" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#000000">#1680C7</text>
+<rect x="1060" y="218" width="316" height="126" rx="12" fill="#176DB1"/>
+<text x="1076" y="302" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF">深海蓝 / 收尾</text>
+<text x="1076" y="326" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#FFFFFF">#176DB1</text>
+<text x="64" y="375" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="400" fill="#496373">触手补色：左 #40C7DE   ·   中 #239BCF   ·   右 #188BC8</text>
+<text x="64" y="423" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="600" fill="#496373">02  品牌色阶 / BRAND SCALE</text>
+<rect x="64" y="442" width="112" height="96" rx="12" fill="#F0FCFE"/>
+<text x="80" y="496" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">50</text>
+<text x="80" y="520" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#F0FCFE</text>
+<rect x="184" y="442" width="112" height="96" rx="12" fill="#DDF7FB"/>
+<text x="200" y="496" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">100</text>
+<text x="200" y="520" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#DDF7FB</text>
+<rect x="304" y="442" width="112" height="96" rx="12" fill="#B6EDF5"/>
+<text x="320" y="496" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">200</text>
+<text x="320" y="520" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#B6EDF5</text>
+<rect x="424" y="442" width="112" height="96" rx="12" fill="#8AE5F0"/>
+<text x="440" y="496" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">300</text>
+<text x="440" y="520" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#8AE5F0</text>
+<rect x="544" y="442" width="112" height="96" rx="12" fill="#67DDED"/>
+<text x="560" y="496" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">400</text>
+<text x="560" y="520" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#67DDED</text>
+<rect x="664" y="442" width="112" height="96" rx="12" fill="#26B9DE"/>
+<text x="680" y="496" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">500</text>
+<text x="680" y="520" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#26B9DE</text>
+<rect x="784" y="442" width="112" height="96" rx="12" fill="#1680C7"/>
+<text x="800" y="496" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#000000">600</text>
+<text x="800" y="520" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#000000">#1680C7</text>
+<rect x="904" y="442" width="112" height="96" rx="12" fill="#176DB1"/>
+<text x="920" y="496" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF">700</text>
+<text x="920" y="520" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#FFFFFF">#176DB1</text>
+<rect x="1024" y="442" width="112" height="96" rx="12" fill="#15558A"/>
+<text x="1040" y="496" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF">800</text>
+<text x="1040" y="520" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#FFFFFF">#15558A</text>
+<rect x="1144" y="442" width="112" height="96" rx="12" fill="#153D61"/>
+<text x="1160" y="496" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF">900</text>
+<text x="1160" y="520" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#FFFFFF">#153D61</text>
+<rect x="1264" y="442" width="112" height="96" rx="12" fill="#10283F"/>
+<text x="1280" y="496" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF">950</text>
+<text x="1280" y="520" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#FFFFFF">#10283F</text>
+<text x="64" y="580" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="600" fill="#496373">03  中性色 / NEUTRALS</text>
+<rect x="64" y="600" width="102" height="94" rx="12" fill="#FFFFFF"/>
+<text x="80" y="652" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">0</text>
+<text x="80" y="676" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#FFFFFF</text>
+<rect x="174" y="600" width="102" height="94" rx="12" fill="#F6FBFF"/>
+<text x="190" y="652" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">50</text>
+<text x="190" y="676" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#F6FBFF</text>
+<rect x="284" y="600" width="102" height="94" rx="12" fill="#E8F3FA"/>
+<text x="300" y="652" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">100</text>
+<text x="300" y="676" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#E8F3FA</text>
+<rect x="394" y="600" width="102" height="94" rx="12" fill="#D5E4ED"/>
+<text x="410" y="652" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">200</text>
+<text x="410" y="676" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#D5E4ED</text>
+<rect x="504" y="600" width="102" height="94" rx="12" fill="#ADC4D2"/>
+<text x="520" y="652" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">300</text>
+<text x="520" y="676" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#ADC4D2</text>
+<rect x="614" y="600" width="102" height="94" rx="12" fill="#829DAC"/>
+<text x="630" y="652" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">400</text>
+<text x="630" y="676" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#829DAC</text>
+<rect x="724" y="600" width="102" height="94" rx="12" fill="#607C8C"/>
+<text x="740" y="652" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#000000">500</text>
+<text x="740" y="676" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#000000">#607C8C</text>
+<rect x="834" y="600" width="102" height="94" rx="12" fill="#496373"/>
+<text x="850" y="652" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF">600</text>
+<text x="850" y="676" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#FFFFFF">#496373</text>
+<rect x="944" y="600" width="102" height="94" rx="12" fill="#344D5D"/>
+<text x="960" y="652" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF">700</text>
+<text x="960" y="676" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#FFFFFF">#344D5D</text>
+<rect x="1054" y="600" width="102" height="94" rx="12" fill="#243747"/>
+<text x="1070" y="652" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF">800</text>
+<text x="1070" y="676" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#FFFFFF">#243747</text>
+<rect x="1164" y="600" width="102" height="94" rx="12" fill="#0F1A29"/>
+<text x="1180" y="652" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF">900</text>
+<text x="1180" y="676" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#FFFFFF">#0F1A29</text>
+<rect x="1274" y="600" width="102" height="94" rx="12" fill="#101820"/>
+<text x="1290" y="652" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#FFFFFF">950</text>
+<text x="1290" y="676" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#FFFFFF">#101820</text>
+<text x="64" y="737" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="600" fill="#496373">04  辅助色 / ACCENTS</text>
+<rect x="64" y="757" width="250" height="96" rx="12" fill="#FF7E67"/>
+<text x="80" y="811" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">珊瑚 / 活力</text>
+<text x="80" y="835" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#FF7E67</text>
+<rect x="330" y="757" width="250" height="96" rx="12" fill="#B7F36B"/>
+<text x="346" y="811" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">青柠 / 焦点</text>
+<text x="346" y="835" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#B7F36B</text>
+<rect x="596" y="757" width="250" height="96" rx="12" fill="#73DEB8"/>
+<text x="612" y="811" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">薄荷 / 成功</text>
+<text x="612" y="835" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#73DEB8</text>
+<rect x="862" y="757" width="250" height="96" rx="12" fill="#FFCC88"/>
+<text x="878" y="811" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">琥珀 / 警告</text>
+<text x="878" y="835" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#FFCC88</text>
+<rect x="1128" y="757" width="250" height="96" rx="12" fill="#EC86A4"/>
+<text x="1144" y="811" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="600" fill="#101820">玫瑰 / 错误</text>
+<text x="1144" y="835" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#101820">#EC86A4</text>
+<text x="64" y="896" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="600" fill="#496373">05  界面语义 / LIGHT &amp; DARK</text>
+<rect x="64" y="916" width="648" height="332" rx="20" fill="#F6FBFF"/>
+<rect x="80" y="932" width="616" height="300" rx="16" fill="#FFFFFF"/>
+<text x="104" y="970" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#101820">浅色主题</text>
+<text x="104" y="1004" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#496373">正文 #101820   /   次要文字 #496373</text>
+<rect x="104" y="1030" width="164" height="44" rx="12" fill="#176DB1"/>
+<text x="133" y="1058" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="17" font-weight="600" fill="#FFFFFF">开始创作</text>
+<text x="296" y="1058" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#176DB1">操作色 #176DB1</text>
+<rect x="104" y="1100" width="132" height="84" rx="12" fill="#E5F8F0"/>
+<text x="118" y="1132" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#146B50">成功</text>
+<text x="118" y="1160" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="400" fill="#146B50">#146B50</text>
+<rect x="250" y="1100" width="132" height="84" rx="12" fill="#FFF3DF"/>
+<text x="264" y="1132" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#85500A">警告</text>
+<text x="264" y="1160" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="400" fill="#85500A">#85500A</text>
+<rect x="396" y="1100" width="132" height="84" rx="12" fill="#FDECF1"/>
+<text x="410" y="1132" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#A52D54">错误</text>
+<text x="410" y="1160" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="400" fill="#A52D54">#A52D54</text>
+<rect x="542" y="1100" width="132" height="84" rx="12" fill="#E8F3FA"/>
+<text x="556" y="1132" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#176DB1">信息</text>
+<text x="556" y="1160" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="400" fill="#176DB1">#176DB1</text>
+<text x="104" y="1214" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#496373">按钮与状态文字已验证对比度 ≥ 4.5:1</text>
+<rect x="736" y="916" width="648" height="332" rx="20" fill="#0F1A29"/>
+<rect x="752" y="932" width="616" height="300" rx="16" fill="#243747"/>
+<text x="776" y="970" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="22" font-weight="600" fill="#E8F3FA">深色主题</text>
+<text x="776" y="1004" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#ADC4D2">正文 #E8F3FA   /   次要文字 #ADC4D2</text>
+<rect x="776" y="1030" width="164" height="44" rx="12" fill="#67DDED"/>
+<text x="805" y="1058" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="17" font-weight="600" fill="#101820">开始创作</text>
+<text x="968" y="1058" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="400" fill="#67DDED">操作色 #67DDED</text>
+<rect x="776" y="1100" width="132" height="84" rx="12" fill="#173D35"/>
+<text x="790" y="1132" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#73DEB8">成功</text>
+<text x="790" y="1160" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="400" fill="#73DEB8">#73DEB8</text>
+<rect x="922" y="1100" width="132" height="84" rx="12" fill="#42331F"/>
+<text x="936" y="1132" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#FFCC88">警告</text>
+<text x="936" y="1160" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="400" fill="#FFCC88">#FFCC88</text>
+<rect x="1068" y="1100" width="132" height="84" rx="12" fill="#452536"/>
+<text x="1082" y="1132" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#EC86A4">错误</text>
+<text x="1082" y="1160" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="400" fill="#EC86A4">#EC86A4</text>
+<rect x="1214" y="1100" width="132" height="84" rx="12" fill="#153D61"/>
+<text x="1228" y="1132" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="16" font-weight="600" fill="#67DDED">信息</text>
+<text x="1228" y="1160" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="15" font-weight="400" fill="#67DDED">#67DDED</text>
+<text x="776" y="1214" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#ADC4D2">按钮与状态文字已验证对比度 ≥ 4.5:1</text>
+<text x="64" y="1300" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="20" font-weight="600" fill="#101820">使用比例建议：中性背景 70% · 品牌蓝 20% · 辅助点缀 10%</text>
+<text x="64" y="1340" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="17" font-weight="400" fill="#496373">亮青用于品牌和高光；浅色界面的小字号链接、白字按钮使用深海蓝 #176DB1。</text>
+<text x="64" y="1370" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="17" font-weight="400" fill="#496373">半透明凝胶保留 native-jelly 原始材质参数；状态同时配合文字或图标表达。</text>
+<text x="64" y="1434" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#496373">JellyFrame · Color System v1</text>
+<text x="1096" y="1434" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" font-weight="400" fill="#496373">HEX / CSS / JSON / SVG</text>
+</svg>

@@ -100,6 +100,8 @@ Short principle: **not glassmorphism, not frosted blur, but hydrated gel.**
 
 ## Color Tokens
 
+The [project palette](assets/brand/PALETTE_zh.md) documents the exact logo colors, extended scales and light/dark semantic mappings. Reusable values are available in [palette.json](assets/brand/palette.json) and [palette.css](assets/brand/palette.css), with a [visual color card](assets/brand/palette.png). The original gel material parameters remain below.
+
 Default theme: `native-jelly`.
 
 ```json

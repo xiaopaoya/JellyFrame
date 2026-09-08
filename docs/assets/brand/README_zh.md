@@ -6,6 +6,8 @@
 
 ## 文件
 
+项目配色见 [完整色卡与使用规范](PALETTE_zh.md)，附 [色卡预览](palette.png)、[SVG 色卡](palette.svg)、[CSS 变量](palette.css) 和 [JSON 数据](palette.json)。
+
 | 文件 | 用途 |
 | --- | --- |
 | `jellyframe-logo.svg` | 常规彩色标识，透明背景，可缩放 |
