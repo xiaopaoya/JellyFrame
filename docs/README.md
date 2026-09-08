@@ -1,3 +1,5 @@
+<p><img src="assets/brand/jellyframe-logo-128.png" alt="JellyFrame logo" width="64" height="64"></p>
+
 # JellyFrame Documentation Index
 
 > Last updated: 2026-09-08; Applies to: 0.6.0-dev

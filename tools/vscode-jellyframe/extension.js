@@ -2830,6 +2830,7 @@ async function debugApp(context, resourceUri, options = {}) {
     'jellyframeEmbeddedDebug', `JellyFrame: ${path.basename(root)}`, vscode.ViewColumn.Beside,
     { enableScripts: true, retainContextWhenHidden: true }
   );
+  panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'jellyframe.png');
   panel.webview.html = embeddedDebugHtml(panel.webview);
   const session = {
     active: false, stopping: false, exited: true, disposed: false, runId: 0, child: undefined, panel,
@@ -3741,6 +3742,7 @@ function showReportPanel(context) {
       vscode.ViewColumn.Beside,
       { enableScripts: false }
     );
+    reportPanel.iconPath = vscode.Uri.joinPath(context.extensionUri, "media", "jellyframe.png");
     reportPanel.onDidDispose(() => {
       reportPanel = undefined;
     }, null, context.subscriptions);

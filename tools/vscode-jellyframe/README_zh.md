@@ -1,6 +1,8 @@
+<p><img src="media/jellyframe.png" alt="JellyFrame 标识" width="80" height="80"></p>
+
 # JellyFrame VS Code 工具
 
-> 最后更新：2026-08-30；适用版本：0.6.0-dev；扩展版本：0.4.49；兼容基线：0.5.0
+> 最后更新：2026-09-08；适用版本：0.6.0-dev；扩展版本：0.4.52；兼容基线：0.5.0
 
 JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里检查、预览、调试和
 打包 JellyFrame App。安装后可以从左侧 JellyFrame 活动栏、资源管理器/编辑器右键菜单

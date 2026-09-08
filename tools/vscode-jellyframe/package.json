@@ -4,6 +4,7 @@
   "description": "%extension.description%",
   "version": "0.4.52",
   "publisher": "jellyframe",
+  "icon": "media/jellyframe.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/xiaopaoya/JellyFrame.git"

@@ -1,6 +1,8 @@
+<p><img src="assets/brand/jellyframe-logo-128.png" alt="JellyFrame 标识" width="64" height="64"></p>
+
 # JellyFrame 文档索引
 
-> 最后更新：2026-08-28；适用版本：0.6.0-dev
+> 最后更新：2026-09-08；适用版本：0.6.0-dev
 
 本目录保存技术文档：模块行为、支持子集、接口和宿主契约，应尽量贴近代码维护。
 
