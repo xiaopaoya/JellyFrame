@@ -1,6 +1,21 @@
 {
   "name": "JellyFrame",
-  "version": 1,
+  "version": 2,
+  "priority": ["watches", "fitness-bands", "other-embedded-devices"],
+  "wearable": {
+    "background": "#000000",
+    "surface": "#121C28",
+    "surfaceRaised": "#1C2C3C",
+    "primaryPressed": "#26B9DE",
+    "heartRate": "#FF7E67",
+    "activity": "#B7F36B",
+    "progressTrack": "#243747"
+  },
+  "aod": {
+    "background": "#000000",
+    "time": "#ADC4D2",
+    "text": "#829DAC"
+  },
   "brand": {
     "50": "#F0FCFE",
     "100": "#DDF7FB",

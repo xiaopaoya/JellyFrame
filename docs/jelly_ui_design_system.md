@@ -11,6 +11,8 @@ shippable, testable and degradable on the current engine.
 
 ## Goals
 
+Watches and fitness bands are the primary audience; other embedded devices are secondary. Prioritize glanceable information, circular-screen safe areas, narrow single-column layouts and touch feedback. The [wearable-first palette](assets/brand/PALETTE_zh.md) provides watch, fitness-band and always-on display examples. Design active and always-on screens separately, and validate outdoor readability and power behavior on the target panel.
+
 - Make JellyFrame apps visually recognizable as soft gel interfaces.
 - Use only features the current runtime can reliably honor.
 - Give every visual effect a low-cost fallback.

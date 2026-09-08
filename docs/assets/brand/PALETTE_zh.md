@@ -1,10 +1,10 @@
-# JellyFrame 项目色卡
+# JellyFrame 可穿戴优先项目色卡
 
-> 最后更新：2026-09-08；色卡版本：1；适用版本：0.6.0-dev
+> 最后更新：2026-09-08；适用版本：0.6.0-dev；色卡版本：2
 
 ![JellyFrame 项目色卡](palette.png)
 
-本色卡从实际 Logo 配色扩展，沿用 `native-jelly` 的浅海蓝、珊瑚、青柠与凝胶材质。新增色阶和语义映射供后续界面使用；当前应用模板的配色不会因添加色卡自动改变。
+首要服务对象是小屏可穿戴设备，尤其是手表与手环；其他嵌入式屏幕为次要场景。保留已确定的 Logo 原色和色阶，以深底亮字、大数字、少量数据色和短时扫读为主要应用方式。色卡示例为设计参考，未自动修改现有 app 模板。
 
 ## Logo 的实际用色
 
@@ -57,6 +57,42 @@
 | `info` | `#176DB1` | `#67DDED` |
 | `infoSurface` | `#E8F3FA` | `#153D61` |
 
+## 可穿戴主题（首选）
+
+`.jf-theme-wearable` 继承深色语义，使用以下覆盖和数据色。适用于 OLED 手表、手环的活跃界面；LCD 或反射式屏幕按面板特性和户外实测选择深浅主题，纯黑底的功耗收益不适用于所有显示技术。
+
+| Token | 值 |
+| --- | --- |
+| `background` | `#000000` |
+| `surface` | `#121C28` |
+| `surfaceRaised` | `#1C2C3C` |
+| `primaryPressed` | `#26B9DE` |
+| `heartRate` | `#FF7E67` |
+| `activity` | `#B7F36B` |
+| `progressTrack` | `#243747` |
+
+`primaryPressed` 用于触控按下反馈；腕上交互不依赖 hover。珊瑚心率色和青柠运动色表示数据类别，不能直接表示健康异常或告警级别。提醒继续使用 warning，错误使用 danger，并配合文字或图标。
+
+### 息屏表盘（AOD）
+
+| Token | 值 |
+| --- | --- |
+| `background` | `#000000` |
+| `time` | `#ADC4D2` |
+| `text` | `#829DAC` |
+
+AOD 是独立的显示建议：只保留时间和必要日期，去除进度环、渐变、大面积填充和按钮。色值本身不会启用息屏模式或保证功耗；低亮度、刷新间隔、像素位移与防烧屏策略由设备端实现并验证。
+
+### 小屏布局与配色示例
+
+- 300×300 圆表：时间为第一层，步数为第二层，进度环只作为辅助。重要信息居中并避开圆屏裁切区；示意边缘环允许使用边缘区域。
+- 172×320 手环：单列显示运动时长、距离和心率，底部仅一个“暂停”操作。不要把桌面多列卡片等比缩小。示例按钮为 124×48 像素，实际触控目标应根据面板尺寸、像素密度、交互方式和触控误差验证。
+- 色卡中的设备画面采用对应的逻辑像素尺寸；图片在文档中缩放后不代表真实物理尺寸。它们是设计示意，不是 JellyFrame 引擎截图。
+- 活跃界面使用大面积暗底与留白，单屏通常一个品牌焦点，按需增加 1–2 种数据色。不要机械执行桌面页面的 70/20/10 色块比例。
+- 主数字建议从 32–64 逻辑像素探索，关键标签从 16–20 像素探索；最终以字体包、面板像素密度、腕距和户外可读性校准。
+- 优先使用实色文字和实色进度，凝胶高光限于小范围主动交互，常驻界面避免持续装饰动画；AOD 不使用凝胶叠层。
+- RGB565、灰度和单色目标需要实机复核色差、条带、文字与进度辨识度。即使没有色彩，数值、标签和进度形状也应传达状态。
+
 ## 凝胶材质
 
 以下数值保留现有设计系统定义。RGBA 是叠加层参数，最终观感取决于底色，不能当成固定 HEX 或直接作为文字对比度保证。
@@ -75,7 +111,7 @@
 
 ## 使用规则与接入
 
-- 建议中性色约 70%、品牌蓝约 20%、辅助点缀约 10%；这是视觉配比建议，不是布局约束。
+- 手表、手环优先使用可穿戴主题；其他嵌入式界面复用深浅主题与相同状态语义。
 - 亮青优先用于标识、图形和高光。浅色主题的小字链接、白字按钮使用 `#176DB1`；不要直接在明亮的品牌 500 上叠加白色小字。
 - `border` 用于装饰分隔；需要识别控件边界时使用 `controlBorder`。焦点环与控件之间留出背景色间隔。
 - 状态同时配合文案或图标；珊瑚与青柠是点缀色，不默认绑定错误或成功。
@@ -84,10 +120,14 @@
 - `palette.css` 使用 `--jf-brand-*`、`--jf-neutral-*`、`--jf-accent-*`、`--jf-material-*` 和 `--jf-color-*`，避开现有 `--jf-surface` 等模板变量。导入后将语义变量映射到需要的控件样式。
 
 ```css
-/* 引入 palette.css；默认浅色。给主题容器添加 jf-theme-dark 可切换深色。 */
+/* 引入 palette.css，并为设备 app 的根容器添加 jf-theme-wearable。 */
 .app { background-color: var(--jf-color-background); color: var(--jf-color-text); }
 .primary-button { background-color: var(--jf-color-primary); color: var(--jf-color-on-primary); }
+.jf-theme-wearable .primary-button:active { background-color: var(--jf-color-primary-pressed); }
+.aod { background-color: var(--jf-aod-background); color: var(--jf-aod-time); }
 ```
+
+CSS 保留默认浅色以兼容已有引用；腕上 app 显式使用 `jf-theme-wearable`。`jf-theme-light` / `jf-theme-dark` 可供其他设备选择。AOD 变量仅提供显示色值，不触发设备生命周期或电源管理。
 
 Logo 的三色渐变用于 SVG 品牌素材。嵌入式 UI 按现有渲染能力使用两色渐变 `linear-gradient(#67DDED, #1680C7)`，不将 SVG 或三色渐变支持视为运行时前提。
 
@@ -133,3 +173,26 @@ Logo 的三色渐变用于 SVG 品牌素材。嵌入式 UI 按现有渲染能力
 | dark | `focus` / `surface`（非文本） | 7.67:1 |
 | dark | `controlBorder` / `background`（非文本） | 6.14:1 |
 | dark | `controlBorder` / `surface`（非文本） | 4.30:1 |
+| wearable | `text` / `background` | 18.63:1 |
+| wearable | `text` / `surface` | 15.24:1 |
+| wearable | `text` / `surfaceRaised` | 12.63:1 |
+| wearable | `textMuted` / `background` | 11.60:1 |
+| wearable | `textMuted` / `surface` | 9.49:1 |
+| wearable | `link` / `background` | 13.14:1 |
+| wearable | `link` / `surface` | 10.75:1 |
+| wearable | `onPrimary` / `primary` | 11.20:1 |
+| wearable | `onPrimary` / `primaryHover` | 12.40:1 |
+| wearable | `onSelection` / `selection` | 6.91:1 |
+| wearable | `success` / `successSurface` | 7.33:1 |
+| wearable | `warning` / `warningSurface` | 8.26:1 |
+| wearable | `danger` / `dangerSurface` | 5.42:1 |
+| wearable | `info` / `infoSurface` | 7.02:1 |
+| wearable | `focus` / `background`（非文本） | 13.14:1 |
+| wearable | `focus` / `surface`（非文本） | 10.75:1 |
+| wearable | `controlBorder` / `background`（非文本） | 7.37:1 |
+| wearable | `controlBorder` / `surface`（非文本） | 6.03:1 |
+| wearable | `heartRate` / `background` | 8.43:1 |
+| wearable | `activity` / `background` | 16.05:1 |
+| wearable | `onPrimary` / `primaryPressed` | 7.73:1 |
+| aod | `time` / `background` | 11.60:1 |
+| aod | `text` / `background` | 7.37:1 |

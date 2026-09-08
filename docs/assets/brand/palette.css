@@ -95,3 +95,38 @@
   --jf-color-info: #67DDED;
   --jf-color-info-surface: #153D61;
 }
+
+.jf-theme-wearable {
+  --jf-color-background: #000000;
+  --jf-color-surface: #121C28;
+  --jf-color-surface-raised: #1C2C3C;
+  --jf-color-text: #E8F3FA;
+  --jf-color-text-muted: #ADC4D2;
+  --jf-color-border: #344D5D;
+  --jf-color-control-border: #829DAC;
+  --jf-color-primary: #67DDED;
+  --jf-color-primary-hover: #8AE5F0;
+  --jf-color-on-primary: #101820;
+  --jf-color-link: #67DDED;
+  --jf-color-focus: #67DDED;
+  --jf-color-selection: #15558A;
+  --jf-color-on-selection: #E8F3FA;
+  --jf-color-success: #73DEB8;
+  --jf-color-success-surface: #173D35;
+  --jf-color-warning: #FFCC88;
+  --jf-color-warning-surface: #42331F;
+  --jf-color-danger: #EC86A4;
+  --jf-color-danger-surface: #452536;
+  --jf-color-info: #67DDED;
+  --jf-color-info-surface: #153D61;
+  --jf-color-primary-pressed: #26B9DE;
+  --jf-color-heart-rate: #FF7E67;
+  --jf-color-activity: #B7F36B;
+  --jf-color-progress-track: #243747;
+}
+
+:root {
+  --jf-aod-background: #000000;
+  --jf-aod-time: #ADC4D2;
+  --jf-aod-text: #829DAC;
+}

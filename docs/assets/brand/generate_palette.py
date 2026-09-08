@@ -1,11 +1,14 @@
 """Generate palette CSS, SVG and reference from palette.json (Python stdlib only)."""
 import json
+import math
 import re
 from html import escape
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 data = json.loads((ROOT / 'palette.json').read_text(encoding='utf-8'))
+wearable = {**data['themes']['dark'], **data['wearable']}
+themes = {**data['themes'], 'wearable': wearable}
 
 
 def kebab(value):
@@ -33,10 +36,18 @@ for theme, selector in [('light', ':root, .jf-theme-light'), ('dark', '.jf-theme
     for name, value in data['themes'][theme].items():
         css.append(f'  --jf-color-{kebab(name)}: {value};')
     css.append('}')
+css.append('\n.jf-theme-wearable {')
+for name, value in wearable.items():
+    css.append(f'  --jf-color-{kebab(name)}: {value};')
+css.append('}')
+css.append('\n:root {')
+for name, value in data['aod'].items():
+    css.append(f'  --jf-aod-{kebab(name)}: {value};')
+css.append('}')
 (ROOT / 'palette.css').write_text('\n'.join(css) + '\n', encoding='utf-8')
 
 checks = []
-for theme, colors in data['themes'].items():
+for theme, colors in themes.items():
     pairs = [('text', 'background'), ('text', 'surface'), ('text', 'surfaceRaised'),
              ('textMuted', 'background'), ('textMuted', 'surface'),
              ('link', 'background'), ('link', 'surface'),
@@ -52,9 +63,20 @@ for theme, colors in data['themes'].items():
             ratio = contrast(colors[foreground], colors[background])
             assert ratio >= 3, (theme, foreground, background, ratio)
             checks.append(f'| {theme} | `{foreground}` / `{background}`（非文本） | {ratio:.2f}:1 |')
+for key in ('heartRate', 'activity'):
+    ratio = contrast(wearable[key], wearable['background'])
+    assert ratio >= 4.5
+    checks.append(f'| wearable | `{key}` / `background` | {ratio:.2f}:1 |')
+ratio = contrast(wearable['onPrimary'], wearable['primaryPressed'])
+assert ratio >= 4.5
+checks.append(f'| wearable | `onPrimary` / `primaryPressed` | {ratio:.2f}:1 |')
+for key in ('time', 'text'):
+    ratio = contrast(data['aod'][key], data['aod']['background'])
+    assert ratio >= 4.5
+    checks.append(f'| aod | `{key}` / `background` | {ratio:.2f}:1 |')
 
-parts = ['<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1480" viewBox="0 0 1440 1480">',
-         '<rect width="1440" height="1480" fill="#F6FBFF"/>']
+parts = ['<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1800" viewBox="0 0 1440 1800">',
+         '<rect width="1440" height="1800" fill="#F6FBFF"/>']
 
 
 def rect(x, y, w, h, fill, radius=0):
@@ -74,9 +96,9 @@ def swatch(x, y, width, height, color, title):
     text(x + 16, y + height - 18, color, 16, ink)
 
 
-text(64, 58, 'JELLYFRAME / PROJECT PALETTE', 14, '#496373', 600)
-text(64, 112, '浅海蓝，让界面轻盈而清晰。', 36, weight=600)
-text(64, 150, '品牌色 · 中性色 · 辅助色 · 深浅主题 · 语义状态', 17, '#496373')
+text(64, 58, 'JELLYFRAME / WEARABLE FIRST', 14, '#496373', 600)
+text(64, 112, '腕间一瞥，清晰可见。', 36, weight=600)
+text(64, 150, '手表与手环优先 · 深底亮字 · 单一视觉焦点 · 其他嵌入式屏幕为补充', 17, '#496373')
 text(64, 199, '01  LOGO 原色 / PRIMARY IDENTITY', 15, '#496373', 600)
 for i, (key, label) in enumerate([('highlight', '浅海青 / 高光'), ('primary', '水母蓝 / 品牌主色'), ('ocean', '海洋蓝 / 渐变终点'), ('depth', '深海蓝 / 收尾')]):
     swatch(64 + i * 332, 218, 316, 126, data['logo'][key], label)
@@ -88,36 +110,62 @@ text(64, 580, '03  中性色 / NEUTRALS', 15, '#496373', 600)
 for i, (key, color) in enumerate(data['neutral'].items()):
     swatch(64 + i * 110, 600, 102, 94, color, key)
 text(64, 737, '04  辅助色 / ACCENTS', 15, '#496373', 600)
-for i, (key, label) in enumerate([('coral', '珊瑚 / 活力'), ('lime', '青柠 / 焦点'), ('mint', '薄荷 / 成功'), ('amber', '琥珀 / 警告'), ('rose', '玫瑰 / 错误')]):
+for i, (key, label) in enumerate([('coral', '珊瑚 / 心率'), ('lime', '青柠 / 运动'), ('mint', '薄荷 / 完成'), ('amber', '琥珀 / 提醒'), ('rose', '玫瑰 / 错误')]):
     swatch(64 + i * 266, 757, 250, 96, data['accent'][key], label)
-text(64, 896, '05  界面语义 / LIGHT & DARK', 15, '#496373', 600)
-for index, theme in enumerate(('light', 'dark')):
-    c = data['themes'][theme]
-    x = 64 + index * 672
-    rect(x, 916, 648, 332, c['background'], 20)
-    rect(x + 16, 932, 616, 300, c['surface'], 16)
-    text(x + 40, 970, '浅色主题' if theme == 'light' else '深色主题', 22, c['text'], 600)
-    text(x + 40, 1004, f"正文 {c['text']}   /   次要文字 {c['textMuted']}", 16, c['textMuted'])
-    rect(x + 40, 1030, 164, 44, c['primary'], 12)
-    text(x + 69, 1058, '开始创作', 17, c['onPrimary'], 600)
-    text(x + 232, 1058, f"操作色 {c['primary']}", 16, c['link'])
-    for j, (key, label) in enumerate([('success', '成功'), ('warning', '警告'), ('danger', '错误'), ('info', '信息')]):
-        sx = x + 40 + j * 146
-        rect(sx, 1100, 132, 84, c[key + 'Surface'], 12)
-        text(sx + 14, 1132, label, 16, c[key], 600)
-        text(sx + 14, 1160, c[key], 15, c[key])
-    text(x + 40, 1214, '按钮与状态文字已验证对比度 ≥ 4.5:1', 14, c['textMuted'])
-text(64, 1300, '使用比例建议：中性背景 70% · 品牌蓝 20% · 辅助点缀 10%', 20, weight=600)
-text(64, 1340, '亮青用于品牌和高光；浅色界面的小字号链接、白字按钮使用深海蓝 #176DB1。', 17, '#496373')
-text(64, 1370, '半透明凝胶保留 native-jelly 原始材质参数；状态同时配合文字或图标表达。', 17, '#496373')
-text(64, 1434, 'JellyFrame · Color System v1', 14, '#496373')
-text(1096, 1434, 'HEX / CSS / JSON / SVG', 14, '#496373')
+text(64, 896, '05  腕上场景 / WATCH · BAND · ALWAYS-ON', 15, '#496373', 600)
+rect(64, 916, 1312, 446, '#E8F3FA', 20)
+c = wearable
+
+
+def center(x, y, label, size, fill, weight=400):
+    parts.append(f'<text x="{x}" y="{y}" text-anchor="middle" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="{size}" font-weight="{weight}" fill="{fill}">{escape(label)}</text>')
+
+
+# Device coordinates are literal pixel sizes; these are design references, not runtime captures.
+parts.append('<circle cx="294" cy="1112" r="150" fill="#000000"/>')
+parts.append(f'<circle cx="294" cy="1112" r="137" fill="none" stroke="{c["progressTrack"]}" stroke-width="8"/>')
+ring_length = 2 * math.pi * 137
+parts.append(f'<circle cx="294" cy="1112" r="137" fill="none" stroke="{c["primary"]}" stroke-width="8" stroke-dasharray="{ring_length * 6280 / 8000:.2f} {ring_length:.2f}" transform="rotate(-90 294 1112)"/>')
+center(294, 1047, '周二  09/08', 18, c['textMuted'])
+center(294, 1125, '10:08', 64, c['text'], 600)
+center(294, 1170, '6,280 步', 24, c['primary'], 600)
+center(294, 1206, '目标 8,000', 16, c['textMuted'])
+center(294, 1304, '日常表盘 · 300 × 300', 18, '#101820', 600)
+center(294, 1334, '时间优先，一圈进度足够', 16, '#496373')
+
+rect(638, 952, 172, 320, '#000000', 42)
+center(724, 984, '户外跑步', 18, c['textMuted'])
+center(724, 1036, '24:36', 38, c['text'], 600)
+center(724, 1064, '运动时长', 16, c['textMuted'])
+center(724, 1110, '3.28', 34, c['activity'], 600)
+center(724, 1137, '公里', 16, c['textMuted'])
+center(724, 1172, '心率 128', 22, c['heartRate'], 600)
+rect(662, 1195, 124, 48, c['primary'], 24)
+center(724, 1226, '暂停', 20, c['onPrimary'], 600)
+center(724, 1304, '运动手环 · 172 × 320', 18, '#101820', 600)
+center(724, 1334, '纵向单列，一个主要操作', 16, '#496373')
+
+aod = data['aod']
+parts.append(f'<circle cx="1146" cy="1112" r="150" fill="{aod["background"]}"/>')
+center(1146, 1120, '10:08', 58, aod['time'])
+center(1146, 1160, '周二  09/08', 18, aod['text'])
+center(1146, 1304, '息屏表盘 · 300 × 300', 18, '#101820', 600)
+center(1146, 1334, '低面积显示，仅保留时间与日期', 16, '#496373')
+text(64, 1406, '06  可穿戴用色 / WEARABLE TOKENS', 15, '#496373', 600)
+for i, (color, label) in enumerate([(c['background'], 'OLED 黑底'), (c['surface'], '弱层次容器'), (c['text'], '主数字 / 正文'), (c['primary'], '操作 / 进度'), (c['heartRate'], '心率'), (c['activity'], '运动'), (c['warning'], '电量提醒')]):
+    swatch(64 + i * 190, 1426, 174, 96, color, label)
+text(64, 1568, '用色原则：大部分区域保持暗色留白；单屏 1 个品牌焦点，按需增加 1–2 种数据色。', 20, weight=600)
+text(64, 1610, '高光集中在数字、进度和主要操作上；圆屏中心布局，手环单列浏览，触控状态使用按压反馈。', 17, '#496373')
+text(64, 1644, 'OLED 可选纯黑底；LCD、反射式屏幕按实机可读性选择深浅主题。息屏亮度与刷新由设备控制。', 17, '#496373')
+text(64, 1678, '其他嵌入式界面复用同一色阶与状态语义；浅色主题作为补充，不主导腕上示例。', 17, '#496373')
+text(64, 1750, 'JellyFrame · Wearable Color System v2 · 设计示意，非实机截图', 14, '#496373')
+text(1096, 1750, 'HEX / CSS / JSON / SVG', 14, '#496373')
 parts.append('</svg>')
 (ROOT / 'palette.svg').write_text('\n'.join(parts) + '\n', encoding='utf-8')
 
-doc = ['# JellyFrame 项目色卡', '', '> 最后更新：2026-09-08；色卡版本：1；适用版本：0.6.0-dev', '',
+doc = ['# JellyFrame 可穿戴优先项目色卡', '', '> 最后更新：2026-09-08；适用版本：0.6.0-dev；色卡版本：2', '',
        '![JellyFrame 项目色卡](palette.png)', '',
-       '本色卡从实际 Logo 配色扩展，沿用 `native-jelly` 的浅海蓝、珊瑚、青柠与凝胶材质。新增色阶和语义映射供后续界面使用；当前应用模板的配色不会因添加色卡自动改变。', '',
+       '首要服务对象是小屏可穿戴设备，尤其是手表与手环；其他嵌入式屏幕为次要场景。保留已确定的 Logo 原色和色阶，以深底亮字、大数字、少量数据色和短时扫读为主要应用方式。色卡示例为设计参考，未自动修改现有 app 模板。', '',
        '## Logo 的实际用色', '', '| 角色 | HEX |', '| --- | --- |']
 for key, color in data['logo'].items():
     doc.append(f'| {key} | `{color}` |')
@@ -129,20 +177,39 @@ doc += ['', '品牌 500 是视觉主色；品牌 700 是浅色界面的主要操
         '## 深浅主题语义', '', '| Token | 浅色 | 深色 |', '| --- | --- | --- |']
 for key, value in data['themes']['light'].items():
     doc.append(f"| `{key}` | `{value}` | `{data['themes']['dark'][key]}` |")
-doc += ['', '## 凝胶材质', '', '以下数值保留现有设计系统定义。RGBA 是叠加层参数，最终观感取决于底色，不能当成固定 HEX 或直接作为文字对比度保证。', '', '| Token | 值 |', '| --- | --- |']
+doc += ['', '## 可穿戴主题（首选）', '',
+        '`.jf-theme-wearable` 继承深色语义，使用以下覆盖和数据色。适用于 OLED 手表、手环的活跃界面；LCD 或反射式屏幕按面板特性和户外实测选择深浅主题，纯黑底的功耗收益不适用于所有显示技术。', '',
+        '| Token | 值 |', '| --- | --- |']
+doc += [f'| `{key}` | `{value}` |' for key, value in data['wearable'].items()]
+doc += ['', '`primaryPressed` 用于触控按下反馈；腕上交互不依赖 hover。珊瑚心率色和青柠运动色表示数据类别，不能直接表示健康异常或告警级别。提醒继续使用 warning，错误使用 danger，并配合文字或图标。', '',
+        '### 息屏表盘（AOD）', '', '| Token | 值 |', '| --- | --- |']
+doc += [f'| `{key}` | `{value}` |' for key, value in data['aod'].items()]
+doc += ['', 'AOD 是独立的显示建议：只保留时间和必要日期，去除进度环、渐变、大面积填充和按钮。色值本身不会启用息屏模式或保证功耗；低亮度、刷新间隔、像素位移与防烧屏策略由设备端实现并验证。', '',
+        '### 小屏布局与配色示例', '',
+        '- 300×300 圆表：时间为第一层，步数为第二层，进度环只作为辅助。重要信息居中并避开圆屏裁切区；示意边缘环允许使用边缘区域。',
+        '- 172×320 手环：单列显示运动时长、距离和心率，底部仅一个“暂停”操作。不要把桌面多列卡片等比缩小。示例按钮为 124×48 像素，实际触控目标应根据面板尺寸、像素密度、交互方式和触控误差验证。',
+        '- 色卡中的设备画面采用对应的逻辑像素尺寸；图片在文档中缩放后不代表真实物理尺寸。它们是设计示意，不是 JellyFrame 引擎截图。',
+        '- 活跃界面使用大面积暗底与留白，单屏通常一个品牌焦点，按需增加 1–2 种数据色。不要机械执行桌面页面的 70/20/10 色块比例。',
+        '- 主数字建议从 32–64 逻辑像素探索，关键标签从 16–20 像素探索；最终以字体包、面板像素密度、腕距和户外可读性校准。',
+        '- 优先使用实色文字和实色进度，凝胶高光限于小范围主动交互，常驻界面避免持续装饰动画；AOD 不使用凝胶叠层。',
+        '- RGB565、灰度和单色目标需要实机复核色差、条带、文字与进度辨识度。即使没有色彩，数值、标签和进度形状也应传达状态。', '',
+        '## 凝胶材质', '', '以下数值保留现有设计系统定义。RGBA 是叠加层参数，最终观感取决于底色，不能当成固定 HEX 或直接作为文字对比度保证。', '', '| Token | 值 |', '| --- | --- |']
 doc += [f'| `{key}` | `{value}` |' for key, value in data['material'].items()]
 doc += ['', '## 使用规则与接入', '',
-        '- 建议中性色约 70%、品牌蓝约 20%、辅助点缀约 10%；这是视觉配比建议，不是布局约束。',
+        '- 手表、手环优先使用可穿戴主题；其他嵌入式界面复用深浅主题与相同状态语义。',
         '- 亮青优先用于标识、图形和高光。浅色主题的小字链接、白字按钮使用 `#176DB1`；不要直接在明亮的品牌 500 上叠加白色小字。',
         '- `border` 用于装饰分隔；需要识别控件边界时使用 `controlBorder`。焦点环与控件之间留出背景色间隔。',
         '- 状态同时配合文案或图标；珊瑚与青柠是点缀色，不默认绑定错误或成功。',
         '- VS Code 内部控件继续使用 `--vscode-*` 主题变量，保持用户主题与高对比主题适配；本色卡适合项目自有界面和品牌素材。',
         '- `palette.json` 是色卡数据源；运行 `python docs/assets/brand/generate_palette.py` 更新 CSS、SVG 和本文，并验证不透明颜色配对的对比度。PNG 是 SVG 的栅格预览，需在修改后重新导出。',
         '- `palette.css` 使用 `--jf-brand-*`、`--jf-neutral-*`、`--jf-accent-*`、`--jf-material-*` 和 `--jf-color-*`，避开现有 `--jf-surface` 等模板变量。导入后将语义变量映射到需要的控件样式。', '',
-        '```css', '/* 引入 palette.css；默认浅色。给主题容器添加 jf-theme-dark 可切换深色。 */',
+        '```css', '/* 引入 palette.css，并为设备 app 的根容器添加 jf-theme-wearable。 */',
         '.app { background-color: var(--jf-color-background); color: var(--jf-color-text); }',
         '.primary-button { background-color: var(--jf-color-primary); color: var(--jf-color-on-primary); }',
+        '.jf-theme-wearable .primary-button:active { background-color: var(--jf-color-primary-pressed); }',
+        '.aod { background-color: var(--jf-aod-background); color: var(--jf-aod-time); }',
         '```', '',
+        'CSS 保留默认浅色以兼容已有引用；腕上 app 显式使用 `jf-theme-wearable`。`jf-theme-light` / `jf-theme-dark` 可供其他设备选择。AOD 变量仅提供显示色值，不触发设备生命周期或电源管理。', '',
         'Logo 的三色渐变用于 SVG 品牌素材。嵌入式 UI 按现有渲染能力使用两色渐变 `linear-gradient(#67DDED, #1680C7)`，不将 SVG 或三色渐变支持视为运行时前提。', '',
         '## 对比度记录', '', '按 WCAG sRGB 相对亮度计算，以下不透明文字配对通过 AA 普通文本 4.5:1；标注“非文本”的焦点与控件边界配对通过 3:1。该记录只覆盖列出的组合，不代表任意叠层、渐变或整套应用均通过检查。', '',
         '| 主题 | 前景 / 背景 | 对比度 |', '| --- | --- | --- |', *checks, '']
