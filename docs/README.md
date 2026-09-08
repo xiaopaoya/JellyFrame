@@ -1,6 +1,8 @@
+<p><img src="assets/brand/jellyframe-logo-128.png" alt="JellyFrame logo" width="64" height="64"></p>
+
 # JellyFrame Documentation Index
 
-> Last updated: 2026-08-28; Applies to: 0.6.0-dev
+> Last updated: 2026-09-08; Applies to: 0.6.0-dev
 
 This directory contains technical documents: module behavior, supported subsets,
 interfaces and host contracts. These docs should stay close to the code.
@@ -108,6 +110,8 @@ for whether a document needs another pass after code changes.
 - [embedded_optimization_notes.md](embedded_optimization_notes.md): current
   optimization choices and benchmark baseline.
 - [porting_work_guide.md](porting_work_guide.md): staged board-port work guide.
+- [ws147_touch_drag_latency_acceptance_zh.md](ws147_touch_drag_latency_acceptance_zh.md):
+  WS147 touch drag responsiveness, queue-pressure and visual-latency gate.
 
 ### Developer-Facing Feature Contract
 

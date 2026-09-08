@@ -1,6 +1,6 @@
 # Device OS A2 Readiness And Implementation Requirements
 
-> Last updated: 2026-08-25; Applies to: 0.6.0-dev; Status: implementation prerequisite stage
+> Last updated: 2026-09-08; Applies to: 0.6.0-dev; Status: implementation prerequisite stage
 
 ## Current Conclusion
 
@@ -46,6 +46,15 @@ cancellation, durable lifecycle and 30 mixed cycles all passed. Wider A2 remains
 does not close the clean-machine VS Code product workflow or real installed-App
 panel/input acceptance. The provider handoff report is not an external-trial
 release signoff.
+
+The 2026-09-08 first-run archive records the accepted `0.6.2-ws147.1` image,
+SDK `app-sdk-v0.6.0-dev.2`, provider `0.1.1-dev`, three installed script Apps,
+and successful frame reception. The user additionally confirmed that the
+physical device interaction responded normally. This is useful manual input
+observation, but it is not yet a structured per-App input-to-present record:
+the archive's sampled `posted` counters remain zero and it does not contain a
+panel inspection record. It therefore supplements, but does not close, the
+formal panel/input or clean-machine VS Code gates.
 
 ## Ownership And Completion
 

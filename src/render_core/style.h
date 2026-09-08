@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -532,6 +533,10 @@ struct StyleResolveContext {
 class StyleResolver {
 public:
     explicit StyleResolver(Stylesheet stylesheet, StyleResolverOptions options = {});
+    StyleResolver(const StyleResolver& other);
+    StyleResolver& operator=(const StyleResolver& other);
+    StyleResolver(StyleResolver&& other) noexcept;
+    StyleResolver& operator=(StyleResolver&& other) noexcept;
 
     Style resolve(const Node& node) const;
     Style resolve(const Node& node, StyleResolveContext& context) const;
@@ -547,7 +552,10 @@ private:
     Stylesheet stylesheet_;
     StyleResolverOptions options_;
     std::unordered_map<std::string, std::vector<const CssRule*>> id_rules_;
-    std::unordered_map<std::string, std::vector<const CssRule*>> class_rules_;
+    // Keys refer to CssRule::index_key strings owned by stylesheet_. The
+    // stylesheet is immutable after construction, so class lookup needs no
+    // temporary std::string allocation.
+    std::unordered_map<std::string_view, std::vector<const CssRule*>> class_rules_;
     std::unordered_map<std::string, std::vector<const CssRule*>> tag_rules_;
     std::vector<const CssRule*> universal_rules_;
     mutable std::unordered_map<std::string, std::vector<const CssRule*>> candidate_cache_;
@@ -563,6 +571,7 @@ private:
     mutable std::vector<std::string> background_image_resources_;
 
     void build_rule_index();
+    void rebuild_derived_state();
     void prepare_context(StyleResolveContext& context, const Node& node) const;
     const std::vector<const CssRule*>& candidate_rules_for(const Node& node) const;
     bool apply_custom_properties_for_node(CustomPropertyMap& inherited,

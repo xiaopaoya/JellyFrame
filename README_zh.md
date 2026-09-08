@@ -1,6 +1,8 @@
+<p><img src="docs/assets/brand/jellyframe-logo-128.png" alt="JellyFrame 标识" width="96" height="96"></p>
+
 # JellyFrame
 
-> 最后更新：2026-09-04；适用版本：0.6.0-dev
+> 最后更新：2026-09-08；适用版本：0.6.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 

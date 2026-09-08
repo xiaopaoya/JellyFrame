@@ -190,7 +190,7 @@ void worker_pump_processes_only_selected_service_kind() {
 void worker_pump_normalizes_completion_identity() {
     AppRuntimeHost host = make_host();
     const AppInstance app = host.launch("org.example.identity", AppRole::App);
-    assert(host.submit_current(HostServiceJobKind::NetworkFetch).accepted);
+    assert(host.submit_current(HostServiceJobKind::NetworkFetch, 0, 0, 0, 42).accepted);
 
     EchoWorker worker;
     worker.error_code = 404;
@@ -207,6 +207,7 @@ void worker_pump_normalizes_completion_identity() {
     assert(accepted.front().job_id == 1);
     assert(accepted.front().kind == HostServiceJobKind::NetworkFetch);
     assert(accepted.front().app_instance_id == app.id);
+    assert(accepted.front().client_token == 42);
     assert(accepted.front().error_code == 404);
 }
 

@@ -190,6 +190,7 @@ private:
         HostHandleInfo info;
         std::uint16_t generation = 1;
         bool active = false;
+        bool retired = false;
     };
 
     static std::uint32_t make_handle(std::size_t slot_index, std::uint16_t generation);

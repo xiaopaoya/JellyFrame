@@ -1,6 +1,6 @@
 # JellyFrame Active Roadmap
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev; this is the single active plan.
+> Last updated: 2026-09-07; Applies to: 0.6.0-dev; this is the single active plan.
 
 ## Governing Decision
 
@@ -16,14 +16,16 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 - App Runtime has `.jfapp` lifecycle, registry reference semantics, an optional selected script backend and the script-worker session/generation/epoch, value-only frame/input/service/fatal protocol. WS147 P3 worker, service, recovery and mixed-soak evidence is closed.
 - WS147 value-frame-v2 dirty/recovery passes. The full-screen rounded-gradient workload is not 30 FPS. Canvas has no real host binding and remains `not-tested`.
 - Script Task value-frame v4 is merged on the Runtime line. It preserves bounded fixed-point transforms and separates source-space from destination-space clip chains, including nested clips below a transformed layer. The v4 ESP32-S3 acceptance profile is now being implemented under a dedicated requirement; it is not a default Developer Image profile and cannot yet close A2 panel/input evidence.
-- JFDP/1 framing, capability, typed status/progress payloads and staged-install contracts have the isolated `device_runtime_contracts` source owner. WS147 native USB Serial/JTAG wire, A1-2 persistent lifecycle acceptance and the provider handoff are closed. The `provider-handoff-afdcf75-20260821` report passes same-image Identity matching, real in-flight cancellation, durable update/rollback/remove and 30 mixed cycles; the versioned `jellyframe-device@0.1.1-dev` provider is delivered and declares the lifecycle UI capabilities. `0.1.0-dev` remains only as the read-only `discover/info/list` baseline. The Developer Image baseline has a strict manifest and hash-verified factory recovery image; this still does not prove the clean-machine VS Code product workflow or installed-App panel/input behavior.
+- JFDP/1 framing, capability, typed status/progress payloads and staged-install contracts have the isolated `device_runtime_contracts` source owner. WS147 native USB Serial/JTAG wire, A1-2 persistent lifecycle acceptance and the provider handoff are closed. The `provider-handoff-afdcf75-20260821` report passes same-image Identity matching, real in-flight cancellation, durable update/rollback/remove and 30 mixed cycles; the versioned `jellyframe-device@0.1.1-dev` provider is delivered and declares the lifecycle UI capabilities. `0.1.0-dev` remains only as the read-only `discover/info/list` baseline. The accepted `0.6.2-ws147.1` Developer Image is archived under `core062-developer-image-final-20260905`; its R1-R17, host/provider and package-smoke evidence pass, with matching firmware/recovery/manifest provenance and zero panic, watchdog, reset, DMA, SPI, panel or present errors. The controlled refusal and load-failure images remain test-only fixtures.
+- The App Author SDK `app-sdk-v0.6.0-dev.2` is released from Runtime `ca747011`, includes standard and scripting desktop runtimes, and is verified against Core `0.6.2` with archive SHA-256 `c3245edd...7dc8a9f`. It is an author-tool artifact and does not replace device or clean-machine evidence.
 
 ## Active Order
 
 Parallel work may not change the exit condition of an earlier item.
 
-1. **A2 evidence, active on the port:** complete the isolated value-frame-v4 integration and then use an installed script App to obtain the missing panel/input author-tool evidence. The independent clean-machine VS Code lifecycle remains required.
-2. **R1 Core-only maintenance, active on main:** the responsive layout foundation is now delivered: the [responsive layout contract](../docs/responsive_layout_contract.md), three-target matrix and Flex cross-axis semantics have regression evidence. Continue with parser/style ownership, malformed-input budgets and cache invalidation using standalone, sanitizer and deterministic capture regressions. Do not expand browser CSS scope or alter the port profile opportunistically.
+1. **A2 evidence, active on the author machine:** use the accepted Core `0.6.2` WS147 image and SDK to complete the clean-machine VS Code lifecycle and installed-App panel/input evidence. A 2026-09-08 user-supplemented manual observation reports normal physical interaction response, but the archived `posted=0` sample and missing panel record keep the formal panel/input exit open. The physical Developer Image gate is closed; these author-tool exits remain independent.
+2. **R1 Core-only maintenance, active on main:** the responsive layout foundation is now delivered: the [responsive layout contract](../docs/responsive_layout_contract.md), three-target matrix and Flex cross-axis semantics have regression evidence. The 2026-09-07 focused review closed the demonstrated nested-Flex repeated-layout, service completion token, worker autofocus and layout-budget defects; the `anywhere` letter-spacing path on the current baseline was already linear and is now covered by the review probe. Continue with parser/style ownership, malformed-input budgets and cache invalidation using standalone, sanitizer and deterministic capture regressions. Do not expand browser CSS scope or alter the port profile opportunistically.
+   The follow-up review also closed timer-batch ordering, same-frame rAF cancellation and queued XHR provider-payload cleanup. These are covered by focused Debug and scripting MinSizeRel regressions; worker-owned XHR requests still use the late-completion release path.
 3. **B2 backend preparation, bounded:** retain the configure-time `ScriptRuntime` boundary and its invariants. Do not add a second engine or change the JerryScript default before a separate compatibility/resource RFC and parity evidence exist.
 4. **A3 preparation, in progress:** trial material, hardware procurement, visual assets and feedback operations may proceed, but no external product trial begins before both A2 evidence items pass.
 5. **A3 authoring UX, isolated prototype:** advance the constrained VS Code visual workflow under the [Visual App Editor plan](visual_app_editor_plan.md). It may improve demos and lower App authoring cost, but it does not replace clean-machine, device-lifecycle or panel/input evidence.
@@ -43,6 +45,10 @@ Future performance work needs a real official-image workload and phase telemetry
 Target: ESP32-S3 Waveshare Touch LCD 1.47, `rect-172x320`.
 
 The storage/recovery and image-identity slices are closed: protected launcher/fallback, staged app storage, persistent registry, one real USB JFDP/1 transport and its fault matrix, the WS147 measured manifest and hash-verified factory recovery procedure are integrated. The port reports only measured profiles and bound features.
+
+The accepted Core `0.6.2` candidate `0.6.2-ws147.1` is archived with matching
+firmware, recovery image and manifest provenance. Its R1-R17, host/provider and
+package-smoke evidence close the physical Developer Image gate.
 
 Exit: a clean machine can flash once using documented tooling and then repeatedly install, update, rollback, remove, recover a bad app and reconnect without reflashing, reset, watchdog or registry corruption. The WS147 port handoff now meets the physical lifecycle portion; A1-2 alone does not replace A2's actual app-render and author-tool workflow.
 
@@ -155,3 +161,7 @@ Container queries, `oklch()`, complex grid, `:has()`, filters, Shadow DOM, ifram
 ## Change Gate
 
 Every change needs `git diff --check` and relevant Debug/Release CTest. Script, tool, package and profile changes need focused regression. Performance claims record workload, target/profile, p50/p95, memory watermarks and failures. Hardware claims require a versioned port report.
+
+## 2026-09-07 Core/Runtime Maintenance Batch
+
+Completed and kept under the normal gates: animation invalidation now indexes overrides by node; only text providers that explicitly guarantee additive scalar advances for the requested font arguments use incremental wrapping, while unknown providers retain whole-string measurement semantics; CSS class indexing no longer allocates temporary strings for `string_view` lookups; an exception in one animation-frame callback no longer silently drops later callbacks already queued for that frame. This batch changes demonstrated performance/scheduling behavior only and does not expand the CSS or script capability surface.

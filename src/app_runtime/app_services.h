@@ -88,9 +88,13 @@ public:
     void set_policy(NetworkFetchPolicy policy);
     bool add_fixture(NetworkFetchFixture fixture);
     AppServiceSubmitResult submit_fetch(AppRuntimeHost& host,
-                                        const std::string& url,
-                                        std::uint32_t timeout_ms = 0,
-                                        std::uint32_t client_token = 0);
+                                         const std::string& url,
+                                         std::uint32_t timeout_ms = 0,
+                                         std::uint32_t client_token = 0);
+    // Cancels a request that is still in the host queue and drops its copied
+    // fixture. A worker-owned request remains available for late completion.
+    bool cancel_pending_fetch(AppRuntimeHost& host, std::uint32_t job_id);
+    std::size_t pending_count() const;
     // Converts a worker-popped request into a completion and allocates the
     // response handle through host budgets. The caller still owns completion
     // queue posting.

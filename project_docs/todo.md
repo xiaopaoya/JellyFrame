@@ -1,6 +1,6 @@
 # JellyFrame Active TODO
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev
+> Last updated: 2026-09-07; Applies to: 0.6.0-dev
 >
 > This is the near-term execution queue for the [active roadmap](roadmap.md). It does not repeat closed acceptance, performance micro-experiments or historical port work.
 
@@ -8,11 +8,15 @@
 
 - [ ] Complete the clean-author-machine, read-only VS Code smoke on the WS147 image: discovery, identity and installed-App list must match the manifest/registry. Use `../docs/ws147_provider_vscode_smoke_20260825_zh.md`; this item does not install or flash anything. The earlier local candidate smoke is not a substitute.
 - [ ] Complete the VS Code device workflow on the same clean author machine: `new -> check -> package -> deploy -> launch -> live log -> update -> rollback -> stop -> remove`. Keep desktop and device sessions distinct and preserve actionable ownership in the final report.
-- [ ] Run real installed-App panel/input acceptance through the provider workflow. Record the app launch marker, touch/input response, panel/present errors and recovery behavior; do not treat provider lifecycle PASS as visual or input evidence.
+- [ ] Run real installed-App panel/input acceptance through the provider workflow. A 2026-09-08 user observation reports normal physical interaction response, but the archived `posted=0` sample is not structured input evidence. Record per-App launch marker, touch/input response, panel/present errors and recovery behavior; do not treat provider lifecycle PASS or an informal observation as complete visual/input evidence.
 - [ ] Maintain B1 as a release gate. The signed Core `v0.6.2` release is the current Runtime dependency; any Core bump must download or otherwise authenticate the reviewed release artifact, verify its archive SHA-256, update the exact version/ABI/source lock and pass standalone, package-consumer and source-override tests.
-- [ ] Produce and accept a new WS147 Developer Image built from the merged Runtime Core `0.6.2` lock. Keep the published `0.6.1` manifest and evidence immutable; use the [Core 0.6.2 provenance handoff](device_image_core_062_provenance_handoff.md) for the new image, Provider identity and hardware gates.
+- [x] Build and accept the WS147 Developer Image `0.6.2-ws147.1` from the merged Runtime Core `0.6.2` lock. Keep the historical `0.6.1` manifest and evidence immutable; the complete R1-R17, host/provider and package-smoke report is `core062-developer-image-final-20260905`.
+- [x] Publish the App Author SDK `app-sdk-v0.6.0-dev.2` from Runtime `ca747011`; standard and scripting desktop runtimes consume Core `0.6.2`, and the release archive SHA-256 is `c3245edd...7dc8a9f`.
 - [ ] Execute [the 0.6 engineering review plan](engineering_review_plan_20260819_zh.md): begin with R0 package/profile/provenance, then R1 document/style, layout/dirty and renderer/text. Change an interface only for a demonstrated semantic or safety defect, never as a mechanical rename.
 - [ ] Continue the R1 Core-only audit after the responsive-layout foundation delivery: review parser/style ownership, malformed-input budgets, cache invalidation and deterministic capture behavior. The `300x300`, `320x240` and `172x320` matrix and Flex cross-axis regressions are now maintained as gates; prioritize demonstrated semantic defects over new controls or browser-only declarations.
+- [x] Close the focused 2026-09-07 review findings: Flex sizing skips an unchanged probe layout, generic workers preserve nonzero `client_token`, worker pipeline rebuilds restore autofocus state without replaying `focus`, and worker layout uses host budgets. Debug, scripting MinSizeRel and ASan/UBSan regressions pass; the review probe confirms linear `anywhere` measurement on the current baseline.
+- [x] Close the follow-up callback/service findings: timer cleanup is deferred during a timer pump so callbacks added by a callback cannot reorder the current batch; rAF callbacks remain cancellable until their turn and are reclaimed after the batch; queued XHR cancellation drops provider-owned fixture copies while worker-owned requests retain late-completion cleanup. Debug and scripting MinSizeRel focused tests pass. The `client_token` finding is already covered above and is not counted twice.
+- [x] Close the 2026-09-07 performance/behavior follow-up: animation overrides are indexed by node; the built-in font path reuses scalar letter-spacing measurements; providers that explicitly guarantee additive measurement use incremental wrap widths; CSS class candidate indexing uses stable `string_view` keys; one failing rAF callback no longer drops later callbacks in the same frame. Unknown font providers retain whole-string measurement semantics, and ownership-transfer `std::move` calls remain intentional.
 - [ ] Maintain the B2 script-runtime boundary: common hosts and worker code may include only `script_runtime.h`; engine headers, values and discovery stay in the selected backend. Do not introduce a second backend or alter public developer guidance without a separately approved RFC and parity evidence.
 
 ## In Parallel: A3 Trial Preparation

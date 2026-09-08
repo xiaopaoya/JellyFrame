@@ -8,6 +8,12 @@
 namespace jellyframe {
 namespace {
 
+// Pairwise coalescing is useful for the small lists produced by normal frame
+// planning, but it must not become an unbounded frame-time cost for hostile or
+// unusually busy documents. Above this threshold a conservative enclosing
+// region is cheaper and remains repaint-safe.
+constexpr std::size_t kMaxPairwiseMergeRects = 128;
+
 bool empty_rect(Rect rect) {
     return rect.width <= 0 || rect.height <= 0;
 }
@@ -38,6 +44,15 @@ Rect union_rect(Rect left, Rect right) {
 }
 
 void merge_overlapping_rects(std::vector<Rect>& rects) {
+    if (rects.size() > kMaxPairwiseMergeRects) {
+        Rect enclosing = rects.front();
+        for (std::size_t index = 1; index < rects.size(); ++index) {
+            enclosing = union_rect(enclosing, rects[index]);
+        }
+        rects.clear();
+        rects.push_back(enclosing);
+        return;
+    }
     bool merged = true;
     while (merged) {
         merged = false;
@@ -556,6 +571,12 @@ void coalesce_dirty_rects_into(const Rect* input,
 
     const std::size_t max_rects = std::max<std::size_t>(1, options.max_rects);
     const int max_extra_area_percent = std::max(0, options.max_extra_area_percent);
+    if (output.size() > kMaxPairwiseMergeRects) {
+        const std::size_t previous_count = output.size();
+        output.clear();
+        output.push_back(viewport);
+        local_result.forced_merges += previous_count - 1;
+    }
     while (output.size() > 1) {
         const bool forced = output.size() > max_rects;
         std::size_t best_left = output.size();

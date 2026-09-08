@@ -10,6 +10,8 @@
 
 ## 设计目标
 
+首要服务对象是手表、手环等小屏可穿戴设备，其他嵌入式设备为次要场景。优先设计腕间短时扫读、圆屏安全区、窄屏单列与触控反馈；配色和示例以 [可穿戴优先项目色卡](assets/brand/PALETTE_zh.md) 的圆表、运动手环及息屏表盘为参考。活跃界面和 AOD 分别设计，显示功耗与户外可读性按面板实测。
+
 - 让 JellyFrame app 一眼能被识别为胶体、水母、果冻气质，而不是普通卡片 UI。
 - 只依赖当前运行时能稳定兑现的 HTML/CSS/render-core 能力。
 - 所有视觉效果都有低成本降级路径，不能依赖浏览器专有的 blur、blend、SVG 或
@@ -86,6 +88,8 @@ JellyFrame 的胶体语言由四个概念组成：
 一句话原则：**不是玻璃拟态，不是磨砂，是含水凝胶。**
 
 ## 色彩 Tokens
+
+品牌 Logo 的实际色号、扩展色阶和深浅主题语义映射见 [JellyFrame 项目色卡](assets/brand/PALETTE_zh.md)。可复用数据位于 [palette.json](assets/brand/palette.json)，CSS 变量位于 [palette.css](assets/brand/palette.css)。下方保留原始凝胶材质参数。
 
 默认主题是 `native-jelly`。它使用浅海蓝作为胶体主色，并用珊瑚、青柠作为
 状态点，避免整套界面只剩单一蓝色。

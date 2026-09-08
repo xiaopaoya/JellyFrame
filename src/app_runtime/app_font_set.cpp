@@ -32,6 +32,15 @@ bool app_font_set_measure_family_callback(const std::string& text,
     return true;
 }
 
+bool app_font_set_additive_measurement_supported(int,
+                                                 int font_weight,
+                                                 std::uint32_t font_family_hash,
+                                                 void* context) {
+    const auto* fonts = static_cast<const AppFontSet*>(context);
+    return fonts != nullptr && font_weight < 600 &&
+        (font_family_hash == 0 || fonts->has_family(font_family_hash));
+}
+
 bool app_font_set_paint_callback(FrameBuffer& target,
                                  Rect rect,
                                  Color color,
@@ -188,7 +197,10 @@ const BitmapFont* AppFontSet::primary_font() const {
 
 TextMeasureProvider AppFontSet::measure_provider() {
     refresh_context();
-    return TextMeasureProvider{app_font_set_measure_callback, this, app_font_set_measure_family_callback};
+    return TextMeasureProvider{app_font_set_measure_callback,
+                               this,
+                               app_font_set_measure_family_callback,
+                               app_font_set_additive_measurement_supported};
 }
 
 TextPainter AppFontSet::painter() {

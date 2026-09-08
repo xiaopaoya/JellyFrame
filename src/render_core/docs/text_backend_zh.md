@@ -19,6 +19,8 @@ JellyFrame 不把字体加载和平台文本 API 放进 `jellyframe_render_core`
 - `TextMetrics { width, line_height }`
 - `TextMeasureCallback`
 - 可选的 family-aware `TextMeasureFamilyCallback`
+- 可选的 `TextAdditiveMeasurementCallback`，用于明确保证码点 advance
+  可以相加且不改变整段测量语义的后端
 - `TextMeasureProvider`
 - `normalized_font_family_hash(...)`
 - `measure_text(...)`
@@ -34,6 +36,9 @@ LayoutEngine layout_engine(style_resolver, TextMeasureProvider{measure, context}
 layout engine 会用这个宽度在可用内容宽度内估算换行。provider 也可以暴露 `measure_family`；
 当计算后的 CSS `font-family` 命中 manifest 声明的 app 字体时，layout 会传入规范化的 32-bit family
 hash，让后端选择对应字体，而不把 family 字符串带进 display list。
+当 `additive_measurement_supported` 针对当前字体参数返回 true 时，按机会换行会维护增量行宽，
+避免反复测量完整候选行。具有 shaping、kerning、ligature 或其他上下文相关整段测量语义的宿主
+必须保持该 callback 为空（或返回 false），此时继续使用保守的完整候选测量路径。
 
 `src/render_core/software_renderer.h` 仍然负责绘制侧回调：
 

@@ -1,6 +1,8 @@
+<p><img src="media/jellyframe.png" alt="JellyFrame logo" width="80" height="80"></p>
+
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-08-30; Applies to: 0.6.0-dev; extension version: 0.4.52; compatibility baseline: 0.5.0
+> Last updated: 2026-09-08; Applies to: 0.6.0-dev; extension version: 0.4.52; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a

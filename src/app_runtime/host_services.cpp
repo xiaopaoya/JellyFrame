@@ -10,9 +10,15 @@ namespace {
 constexpr std::uint32_t kSlotMask = 0x0000ffffu;
 constexpr std::uint32_t kGenerationShift = 16u;
 
-std::uint16_t next_generation(std::uint16_t generation) {
+void advance_generation(std::uint16_t& generation, bool& retired) {
+    if (generation == std::numeric_limits<std::uint16_t>::max()) {
+        // A 16-bit generation is part of the public handle encoding. Once it
+        // is exhausted, retiring this slot is safer than reusing an old ABA
+        // value that may still be held by an asynchronous client.
+        retired = true;
+        return;
+    }
     ++generation;
-    return generation == 0 ? 1 : generation;
 }
 
 } // namespace
@@ -285,7 +291,7 @@ std::uint32_t HostHandleTable::allocate(HostServiceHandleKind kind,
     std::size_t i = next_free_hint_;
     for (std::size_t offset = 0; offset < slots_.size(); ++offset) {
         Slot& slot = slots_[i];
-        if (slot.active) {
+        if (slot.active || slot.retired) {
             ++i;
             if (i == slots_.size()) {
                 i = 0;
@@ -314,7 +320,7 @@ bool HostHandleTable::release(std::uint32_t handle) {
     slot->active = false;
     used_bytes_ -= slot->info.bytes;
     slot->info = {};
-    slot->generation = next_generation(slot->generation);
+    advance_generation(slot->generation, slot->retired);
     --active_count_;
     next_free_hint_ = slot_index_from_handle(handle);
     return true;
@@ -341,7 +347,7 @@ std::size_t HostHandleTable::release_app_instance(std::uint32_t app_instance_id)
         used_bytes_ -= slot.info.bytes;
         slot.active = false;
         slot.info = {};
-        slot.generation = next_generation(slot.generation);
+        advance_generation(slot.generation, slot.retired);
         --active_count_;
         if (released == 0) {
             next_free_hint_ = i;
@@ -366,7 +372,7 @@ std::size_t HostHandleTable::release_client(std::uint32_t app_instance_id, std::
         used_bytes_ -= slot.info.bytes;
         slot.active = false;
         slot.info = {};
-        slot.generation = next_generation(slot.generation);
+        advance_generation(slot.generation, slot.retired);
         --active_count_;
         if (released == 0) {
             next_free_hint_ = i;
@@ -380,7 +386,7 @@ void HostHandleTable::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     for (Slot& slot : slots_) {
         if (slot.active) {
-            slot.generation = next_generation(slot.generation);
+            advance_generation(slot.generation, slot.retired);
         }
         slot.active = false;
         slot.info = {};

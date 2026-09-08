@@ -1638,6 +1638,18 @@ void style_candidate_cache_canonicalizes_relevant_class_sets() {
           "equivalent relevant class sets consume one bounded cache entry");
 }
 
+void moved_style_resolver_rebuilds_string_view_class_index() {
+    CssParser parser;
+    StyleResolver source(parser.parse(".card { color: #123456; }"));
+    StyleResolver moved(std::move(source));
+    auto document = HtmlParser().parse("<body><div class='card'>x</div></body>");
+    const Node* card = find_first_by_tag(*document, "div");
+    const Style style = card == nullptr ? Style{} : moved.resolve(*card);
+    check(card != nullptr && style.color.r == 0x12 && style.color.g == 0x34 &&
+              style.color.b == 0x56 && style.color.a == 0xff,
+          "moved style resolver rebuilds class index storage");
+}
+
 void parser_limits_unbounded_css_fields_without_losing_following_rules() {
     CssParser parser;
     VectorDiagnosticSink diagnostics;
@@ -1913,6 +1925,7 @@ int main() {
         style_candidate_cache_respects_tiny_budget_and_inline_style();
         style_candidate_cache_ignores_irrelevant_identifiers();
         style_candidate_cache_canonicalizes_relevant_class_sets();
+        moved_style_resolver_rebuilds_string_view_class_index();
         parser_limits_unbounded_css_fields_without_losing_following_rules();
         parser_malformed_corpus_is_bounded_and_recovers_following_rules();
         parser_zero_rule_budgets_mean_unlimited();

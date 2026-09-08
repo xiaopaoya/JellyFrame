@@ -25,10 +25,19 @@ using TextMeasureFamilyCallback = bool (*)(const std::string& text,
                                            TextMetrics* metrics,
                                            void* context);
 
+using TextAdditiveMeasurementCallback = bool (*)(int font_size,
+                                                 int font_weight,
+                                                 std::uint32_t font_family_hash,
+                                                 void* context);
+
 struct TextMeasureProvider {
     TextMeasureCallback measure = nullptr;
     void* context = nullptr;
     TextMeasureFamilyCallback measure_family = nullptr;
+    // Returns true only when concatenated scalar advances are equivalent to
+    // measuring the complete string for these font arguments. Keep it null
+    // for shaping/kerning-aware hosts.
+    TextAdditiveMeasurementCallback additive_measurement_supported = nullptr;
 };
 
 std::uint32_t normalized_font_family_hash(std::string_view family);
