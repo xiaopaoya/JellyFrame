@@ -1,6 +1,6 @@
 # Render Core Benchmarks
 
-> Last updated: 2026-08-13; Applies to: 0.6.0-dev
+> Last updated: 2026-09-03; Applies to: 0.6.0-dev
 
 Microbenchmarks in this directory measure the platform-neutral render pipeline:
 HTML parsing, CSS parsing, style resolution, render tree, layout, layer tree,
@@ -71,6 +71,12 @@ Retained repaint probes:
 - `packed_rgb565_dither_present` measures 172x320 direct packed RGB565 ordered
   dithering. It exists because low-color-depth quality is port-opt-in and must
   be measured separately from RGBA composition and panel/DMA time.
+- `text_anywhere_wrap_32`, `text_anywhere_wrap_128`, `text_anywhere_wrap_512`,
+  and `text_anywhere_wrap_2048` measure the current UTF-8 scalar wrapping path
+  at four text lengths in a narrow column. The corresponding `*_wide_*` probes
+  keep the candidate on one line to expose the worst candidate-string
+  measurement shape. These results are a baseline, not a performance target,
+  and do not authorize a semantic change to font-run measurement.
 
 These probes quantify the remaining cost after text/style layout reuse. They do
 not imply display-list diffing or subtree replay.

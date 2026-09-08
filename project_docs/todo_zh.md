@@ -1,6 +1,6 @@
 # JellyFrame 活动待办
 
-> 最后更新：2026-09-07；适用版本：0.6.0-dev
+> 最后更新：2026-09-09；适用版本：0.6.0-dev
 >
 > 本清单是 [路线图](roadmap_zh.md) 的近期执行队列，不记录已经关闭的验收、性能微实验或历史移植任务。
 
@@ -9,11 +9,11 @@
 - [ ] 在干净作者机完成 WS147 VS Code 的只读 smoke：发现、身份读取和已安装 App 列表必须与 manifest/registry 一致。要求见 `../docs/ws147_provider_vscode_smoke_20260825_zh.md`；该项不执行安装或刷写。此前本机 candidate smoke 不可替代此项。
 - [ ] 在同一干净作者机完成 VS Code 设备流程：`new -> check -> package -> deploy -> launch -> live log -> update -> rollback -> stop -> remove`。桌面与设备 session 必须保持独立，最终报告必须保留可定位的失败归属。
 - [ ] 通过 provider 流程完成真实已安装 App 的 panel/input 验收。2026-09-08 用户补充观察称实机操作响应正常，但归档中的 `posted=0` 采样不是结构化输入证据。仍需按 App 记录 launch marker、触控/输入响应、panel/present 错误与恢复行为；provider lifecycle PASS 或非结构化观察不等于完成视觉/输入验收。
-- [ ] 将 B1 作为持续 release gate 维护。带签名的 Core `v0.6.2` release 是当前 Runtime 依赖；以后每次 Core bump 必须下载或以其他方式认证已审阅的 release artifact、校验 archive SHA-256、更新精确 version/ABI/source lock，并通过 standalone、package-consumer 与 source-override tests。
+- [ ] 将 B1 作为持续 release gate 维护。带签名的 Core `v0.6.2` release 是当前 Runtime 依赖，Runtime 锁定 Core `0.6.2`、ABI `1` 和 source identity；以后每次 Core bump 必须下载或以其他方式认证已审阅的 release artifact、校验 archive SHA-256、更新精确 version/ABI/source lock，并通过 standalone、package-consumer 与 source-override tests。
 - [x] 基于已合入的 Runtime Core `0.6.2` lock 构建并验收 WS147 Developer Image `0.6.2-ws147.1`。历史 `0.6.1` manifest 与证据保持不可变；R1-R17、host/provider 与 package-smoke 完整报告为 `core062-developer-image-final-20260905`，物理 Developer Image gate 已关闭。
 - [x] 从 Runtime `ca747011` 发布 App Author SDK `app-sdk-v0.6.0-dev.2`；标准与 scripting 桌面运行时均消费 Core `0.6.2`，release archive SHA-256 为 `c3245edd...7dc8a9f`。
-- [ ] 执行 [0.6 工程维护审查计划](engineering_review_plan_20260819_zh.md)：先做 R0 package/profile/provenance，再做 R1 document/style、layout/dirty 与 renderer/text。只修复有明确语义或安全缺陷的接口，不做机械式改名。
-- [ ] 在响应式布局基础交付后继续 R1 Core-only 审查：检查 parser/style 所有权、malformed-input budget、cache invalidation 与确定性 capture 行为。`300x300`、`320x240`、`172x320` 矩阵及 Flex 交叉轴回归现作为持续 gate；优先修复已证明的语义缺陷，不以新增控件或浏览器专有声明替代。
+- [x] 完成 [0.6 工程维护审查计划](engineering_review_plan_20260819_zh.md) 中已安排的 R0/R1 首轮检查：package/profile/provenance、style/layout/dirty、renderer/text 和确定性 capture 均有对应回归；只修复有明确语义或安全缺陷的接口，不做机械式改名。
+- [x] 完成响应式布局基础后的 R1 Core-only 首轮审查：`300x300`、`320x240`、`172x320` 矩阵及 Flex 交叉轴回归作为持续 gate；parser/style 所有权、malformed-input budget、cache invalidation 与确定性 capture 的剩余设计问题已转入 RFC，不以新增控件或浏览器专有声明替代。
 - [x] 关闭 2026-09-07 定向审查发现：Flex sizing 跳过约束未变化的 probe layout，通用 worker 保留非零 `client_token`，worker pipeline rebuild 静默恢复 autofocus 状态而不重复派发 `focus`，worker layout 使用宿主 budget。Debug、启用 scripting 的 MinSizeRel 与 ASan/UBSan 回归均通过；审查 probe 复核当前基线的 `anywhere` 测量为线性。
 - [x] 关闭后续 callback/service 审查项：timer pump 期间延迟清理，回调中新建 timer 不会改变当前批次顺序；rAF 在实际轮到执行前保持可取消，并在批次结束后回收；排队中的 XHR 取消会释放 provider 持有的 fixture 副本，已被 worker 取走的请求继续使用迟到 completion 回收路径。Debug 与 scripting MinSizeRel 定向测试通过。`client_token` 已由上一项覆盖，不重复计数。
 - [x] 关闭 2026-09-07 性能/行为复核中的低风险项：动画 override 按节点建立索引；内置字体字间距复用 UTF-8 scalar 测量；具备 additive measurement 契约的 provider 使用增量换行宽度；CSS class 候选索引使用稳定 `string_view`；单个 rAF 异常不会丢弃同帧后续回调。未知字体 provider 仍保留整段测量语义，成员所有权转移处保留 `std::move`。
@@ -25,6 +25,7 @@
 - [x] 修复 CSS nesting 预算语义：深度与展开字节预算为 `0` 时按契约表示不限制，并对 selector 组合数量使用无溢出上界判断；新增零预算回归，完整与响应式 profile 均通过 `9/9`。
 - [x] 修复 CSS `var(...)` malformed 分支绕过 resolved-value 字节预算的问题；空变量名片段统一使用有界追加并增加超预算回归，完整与响应式 profile 均通过 `9/9`。
 - [x] 收敛 compositor 的 offscreen 失败回退：变换或圆角裁剪无法分配临时 surface 时跳过不正确的直接绘制，避免未变换或未裁剪内容进入目标帧；新增圆角预算回归，完整与响应式 profile 均通过 `9/9`。
+- [x] 将 R1 审查记录、预算契约 RFC 和 `wrap_text_anywhere` 长度 benchmark 整理到主线；RFC 仍不改变公共 ABI/API，benchmark 仅作为后续等价优化的诊断基线。
 - [ ] 维护 B2 脚本运行时边界：通用 host 与 worker 代码只能包含 `script_runtime.h`；引擎 headers、value 和发现逻辑必须留在选定后端内。未经过独立批准的 RFC 与对等证据前，不引入第二后端，也不改变对外开发者口径。
 
 ## 并行：A3 内测筹备

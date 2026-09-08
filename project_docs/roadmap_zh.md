@@ -1,6 +1,6 @@
 # JellyFrame 主线路线图
 
-> 最后更新：2026-09-05；适用版本：0.6.0-dev；状态：活动计划的唯一来源
+> 最后更新：2026-09-09；适用版本：0.6.0-dev；状态：活动计划的唯一来源
 
 ## 先决判断
 
@@ -12,21 +12,21 @@
 
 ## 当前基线
 
-- 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库现在拥有物理 Core 分支。独立仓库 `master` 已于 2026-08-30 同步到 JellyFrame 主线 `7735b9a1`，当前开发头为 `0.6.2-dev`、Core ABI `1`，独立 Core CI 已通过；签名的 `v0.6.2` release 现已成为 Runtime 依赖。Runtime `0.6.0-dev` 精确锁定 Core `0.6.2`、ABI `1` 与 source identity `539a8945...8462e3f0`。CI 会下载该 release artifact、校验 archive SHA-256 `d136a0d7...89f43e`、安装后运行 Runtime package-consumer tests。in-tree provider 只保留给同步本地开发。Core ABI `1` 明确以安装后的 `render_core/` headers 作为 C++ consumer surface；当前没有隐藏 header tier 或 C ABI。Core-only、Device contracts、source archive/install/package/source-override 闭环均已复核。
+- 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库已完成物理拆分，远端 `master` 当前为 `687e467a`；签名的 `v0.6.2` release 是 Runtime 依赖，Runtime `0.6.0-dev` 精确锁定 Core `0.6.2`、ABI `1` 和对应 source identity。CI 会下载 release artifact、校验 archive SHA-256、安装后运行 Runtime package-consumer tests。in-tree provider 只保留给同步本地开发；Core ABI `1` 明确以安装后的 `render_core/` headers 作为 C++ consumer surface，当前没有隐藏 header tier 或 C ABI。Core-only、Device contracts、source archive/install/package/source-override 闭环均已复核。
 - App Runtime 已具备 `.jfapp` 生命周期、registry 参考语义、可选的选定脚本后端，以及 script worker 的 session/generation/epoch、value-only frame/input/service/fatal 协议。P3 的 WS147 worker、service、恢复与 mixed soak 验收已关闭。
 - WS147 的 value-frame v2 dirty/recovery fixture 已通过；全屏 rounded/gradient workload 的优化归因已完成，但仍不能达到 30 FPS。Canvas 还没有真实 host binding，保持 `not-tested`。
 - Script Task value-frame v4 已合入 Runtime 主线。它保留有界定点 transform，并分离变换源空间与目标空间的 clip chain，覆盖变换层下的嵌套裁剪。ESP32-S3 的 v4 验收 profile 正在按独立要求接入；它不是 Developer Image 默认 profile，也尚不能单独关闭 A2 的 panel/input 证据。
 - `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。Developer Image 已具有严格 manifest 与 hash 验证的 factory recovery image；这仍不等于干净机器 VS Code 产品流程或已安装 App 的 panel/input 行为已完成。
 - `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。已验收的 `0.6.2-ws147.1` Developer Image 归档于 `core062-developer-image-final-20260905`，R1-R17、host/provider 和 package-smoke 证据均通过，firmware/recovery/manifest provenance 匹配，panic、watchdog、reset、DMA、SPI、panel、present 错误均为 0。受控拒绝和 load-failure 镜像仅为测试 fixture。
 - App Author SDK `app-sdk-v0.6.0-dev.2` 已从 Runtime `ca747011` 发布，包含标准与 scripting 桌面运行时，并按 Core `0.6.2` 验证，archive SHA-256 为 `c3245edd...7dc8a9f`。它是作者工具产物，不能替代设备或干净机器证据。
-- 当前消费线是 Runtime `0.6.0-dev` / 锁定 Core `v0.6.2`；独立 Core 的 `0.6.2-dev` 开发头仍不属于 Runtime lock。1.0 前不维护历史 package 兼容线。
+- 当前消费线是 Runtime `0.6.0-dev` / 锁定 Core `v0.6.2`；独立 Core 的后续开发头仍不自动进入 Runtime lock。1.0 前不维护历史 package 兼容线。
 
 ## 当前执行顺序
 
 并行工作不得改变更早项目的出口条件。
 
-1. **A2 证据，作者机继续：**使用已验收的 Core `0.6.2` WS147 镜像和 SDK，完成干净机器 VS Code 完整生命周期与已安装 App 的 panel/input 证据。2026-09-08 用户补充确认实机操作响应正常，但归档中的 `posted=0` 采样和缺失的面板记录使正式 panel/input 出口仍保持开放。物理 Developer Image gate 已关闭；作者工具出口仍独立计算。
-2. **R1 Core-only 维护，主线进行中：**响应式布局基础交付物已完成，包括[响应式布局契约](../docs/responsive_layout_contract_zh.md)、三目标矩阵和 Flex 交叉轴语义回归证据。2026-08-30 已完成软件栅格器的首轮极值安全审查：圆角距离平方、clipped 循环、描边内框和 BMP 导出尺寸均已使用有界计算，并通过完整/响应式 Core profile `9/9`；随后完成文本 fallback 测量、字间距、换行和内置绘制定位，以及 flex/inline flow 汇总与对齐、游标/行高、shift 定位、grid/positioned track/offset 和 layer-tree 文本/outline 几何的极值审查，避免字号、宽度、间距或定位运算溢出。2026-09-07 的定向审查已关闭已证明的嵌套 Flex 重复布局、service completion token、worker autofocus 与 layout budget 缺陷；当前基线的 `anywhere` 字间距路径已是线性实现，并由审查 probe 复核。继续使用 standalone、sanitizer 与确定性 capture 审查 parser/style 所有权、malformed-input budget 与 cache invalidation。不要机会主义地扩张浏览器 CSS 范围或修改 port profile。
+1. **A2 作者工具证据，实机继续：**WS147 Device OS/provider、已安装脚本 App、触摸诊断和 touch-latency 样例已合入主线。干净机器 VS Code 完整生命周期，以及真实已安装 App 的 panel/input 证据仍按独立报告验收，不能由源码 CI 或 provider lifecycle PASS 替代。
+2. **R1 Core-only 维护，首轮审查已归档：**响应式布局、软件栅格器、文本、布局和极值安全审查已完成；Core-only Debug、Release、Sanitizer 构建及 CTest 均通过。统一 dirty/clip/command budget 契约仍是 RFC 待评审事项，长文本换行 benchmark 已加入主线作为诊断基线。详见 `r1_render_core_audit_20260903_zh.md` 和 `render_core_budget_contract_rfc_20260903_zh.md`。不要机会主义地扩张浏览器 CSS 范围或修改 port profile。
    后续审查还关闭了 timer 批次顺序、同帧 rAF 取消和排队 XHR 的 provider payload 清理问题；均已有 Debug 与 scripting MinSizeRel 定向回归，已被 worker 取走的 XHR 仍走迟到 completion 释放路径。
 3. **B2 后端准备，受限进行：**保持 configure-time `ScriptRuntime` 边界及其不变量。在具备独立 compatibility/resource RFC 与对等证据前，不引入第二后端，也不改变 JerryScript 默认选择。
 4. **A3 筹备，已经进行中：**试用材料、设备采购、视觉资产与反馈运营可并行，但必须在 A2 的两项证据均通过后才开始外部产品试用。
