@@ -151,6 +151,8 @@ namespace jellyframe_esp32s3 {
 struct InstalledBundleUiSession {
     TaskHandle_t task = nullptr;
     SemaphoreHandle_t stopped = nullptr;
+    portMUX_TYPE telemetry_lock = portMUX_INITIALIZER_UNLOCKED;
+    InstalledBundleUiTaskTelemetry telemetry{};
 };
 
 namespace {
@@ -258,6 +260,7 @@ struct PortTelemetry {
     std::uint32_t input_events = 0;
     std::uint32_t completion_events = 0;
     std::uint32_t flushes = 0;
+    std::uint32_t present_failures = 0;
     std::uint32_t band_route_transitions = 0;
     std::uint64_t packed_bytes = 0;
     std::uint64_t frame_us_total = 0;
@@ -880,6 +883,38 @@ void signal_installed_session(TimerUiTaskContext& context) {
     if (context.installed_session != nullptr && context.installed_session->stopped != nullptr) {
         xSemaphoreGive(context.installed_session->stopped);
     }
+}
+
+void publish_installed_ui_telemetry(TimerUiTaskContext& context,
+                                    const BoardInputDispatchStats& input_stats,
+                                    std::uint32_t present_us,
+                                    bool presented,
+                                    bool attempted_present) {
+    InstalledBundleUiSession* const session = context.installed_session;
+    if (session == nullptr) {
+        return;
+    }
+    portENTER_CRITICAL(&session->telemetry_lock);
+    InstalledBundleUiTaskTelemetry& snapshot = session->telemetry;
+    snapshot.frames = context.telemetry.frames;
+    snapshot.input_events += input_stats.dispatched;
+    snapshot.queue_left = static_cast<std::uint32_t>(context.input_queue.size());
+    snapshot.queue_depth_max = std::max(snapshot.queue_depth_max, snapshot.queue_left + input_stats.dispatched);
+    snapshot.moves_coalesced = static_cast<std::uint32_t>(context.input_queue.coalesced_move_count());
+    snapshot.input_dropped = static_cast<std::uint32_t>(context.input_queue.dropped_count());
+    snapshot.presents = context.telemetry.flushes;
+    snapshot.present_failures = context.telemetry.present_failures;
+    if (attempted_present) {
+        snapshot.present_us_last = present_us;
+        snapshot.present_ok_last = presented;
+    }
+    snapshot.present_us_p50 = context.telemetry.present_histogram.percentile_us(50);
+    snapshot.present_us_p95 = context.telemetry.present_histogram.percentile_us(95);
+    snapshot.present_us_max = context.telemetry.present_us_max;
+    snapshot.stack_free = static_cast<std::uint32_t>(uxTaskGetStackHighWaterMark(nullptr));
+    snapshot.internal_free_min = context.telemetry.min_internal_free;
+    snapshot.psram_free_min = context.telemetry.min_spiram_free;
+    portEXIT_CRITICAL(&session->telemetry_lock);
 }
 
 int resolve_scroll_y(const jellyframe::Node& node, int max_scroll_y, void* raw_context) {
@@ -2155,7 +2190,12 @@ void run_retained_ui_task(void* raw_context) {
         if (present_us > 0) {
             context->telemetry.present_histogram.record(present_us);
         }
+        if (frame_plan.update.action != jellyframe::FrameUpdateAction::None && !presented) {
+            ++context->telemetry.present_failures;
+        }
         update_heap_telemetry(context->telemetry);
+        publish_installed_ui_telemetry(*context, input_stats, present_us, presented,
+                                       frame_plan.update.action != jellyframe::FrameUpdateAction::None);
 
         const bool suppress_periodic_frame_log =
             ((context->scroll_benchmark && context->scroll_autorun) || context->gradient_fastpath_benchmark) &&
@@ -2448,6 +2488,18 @@ bool stop_installed_bundle_ui_task(InstalledBundleUiSession*& session, std::uint
     delete session;
     session = nullptr;
     return true;
+}
+
+InstalledBundleUiTaskTelemetry installed_bundle_ui_task_telemetry(const InstalledBundleUiSession* session) {
+    InstalledBundleUiTaskTelemetry snapshot{};
+    if (session == nullptr) {
+        return snapshot;
+    }
+    auto* mutable_session = const_cast<InstalledBundleUiSession*>(session);
+    portENTER_CRITICAL(&mutable_session->telemetry_lock);
+    snapshot = mutable_session->telemetry;
+    portEXIT_CRITICAL(&mutable_session->telemetry_lock);
+    return snapshot;
 }
 
 } // namespace jellyframe_esp32s3
