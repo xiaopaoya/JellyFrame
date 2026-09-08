@@ -61,6 +61,7 @@ function Assert-VsixContents {
         "extension/package.nls.json",
         "extension/package.nls.zh-cn.json",
         "extension/media/jellyframe.svg",
+        "extension/$($manifest.icon)",
         "extension/schemas/jellyframe.app.schema.json"
     )
     $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $Path))
@@ -163,6 +164,7 @@ function New-BuiltinVsix {
         $repository = ConvertTo-XmlText ([string]$manifest.repository.url)
         $engine = ConvertTo-XmlText ([string]$manifest.engines.vscode)
         $publisher = ConvertTo-XmlText ([string]$manifest.publisher)
+        $icon = ConvertTo-XmlText ("extension/" + [string]$manifest.icon)
         @"
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
@@ -178,6 +180,7 @@ function New-BuiltinVsix {
       <Property Id="Microsoft.VisualStudio.Services.Links.Source" Value="$repository" />
     </Properties>
     <License>extension/LICENSE.txt</License>
+    <Icon>$icon</Icon>
   </Metadata>
   <Installation><InstallationTarget Id="Microsoft.VisualStudio.Code" /></Installation>
   <Dependencies />
@@ -185,6 +188,7 @@ function New-BuiltinVsix {
     <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true" />
     <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="extension/README.md" Addressable="true" />
     <Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE.txt" Addressable="true" />
+    <Asset Type="Microsoft.VisualStudio.Services.Icons.Default" Path="$icon" Addressable="true" />
   </Assets>
 </PackageManifest>
 "@ | ForEach-Object { Write-Utf8NoBom -Path (Join-Path $staging "extension.vsixmanifest") -Content $_ }
@@ -197,6 +201,7 @@ function New-BuiltinVsix {
   <Default Extension="md" ContentType="text/markdown" />
   <Default Extension="ps1" ContentType="text/plain" />
   <Default Extension="svg" ContentType="image/svg+xml" />
+  <Default Extension="png" ContentType="image/png" />
 </Types>
 "@ | ForEach-Object { Write-Utf8NoBom -Path (Join-Path $staging "[Content_Types].xml") -Content $_ }
         if (Test-Path -LiteralPath $vsixPath) {
@@ -206,7 +211,13 @@ function New-BuiltinVsix {
         [IO.Compression.ZipFile]::CreateFromDirectory($staging, $vsixPath, [IO.Compression.CompressionLevel]::Optimal, $false)
     } finally {
         if (Test-Path -LiteralPath $staging) {
-            Remove-Item -LiteralPath $staging -Recurse -Force
+            $resolvedStaging = (Resolve-Path -LiteralPath $staging).Path
+            $resolvedTemp = (Resolve-Path -LiteralPath ([IO.Path]::GetTempPath())).Path.TrimEnd('\', '/')
+            if ((Split-Path -Parent $resolvedStaging).TrimEnd('\', '/') -ne $resolvedTemp -or
+                (Split-Path -Leaf $resolvedStaging) -notmatch '^jellyframe-vsix-[0-9a-f]{32}$') {
+                throw "Refusing to remove an unexpected VSIX staging path: $resolvedStaging"
+            }
+            Remove-Item -LiteralPath $resolvedStaging -Recurse -Force
         }
     }
 }

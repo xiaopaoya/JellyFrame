@@ -644,9 +644,13 @@ behavior.
 `main/jellyframe_esp32s3_input.*` contains a fixed-capacity
 `BoardInputQueue`. Drivers or ISRs should enqueue small board events, then the
 UI task should drain a bounded number per frame and call `dispatch_input_events`
-to forward them into `InputController`. Text events are copied from a fixed
-16-byte buffer with bounded length handling, so an unterminated hardware buffer
-cannot read past the event object.
+to forward them into `InputController`. Adjacent pointer-move samples are
+coalesced to their newest coordinate, while down/up, wheel, text and focus
+events remain ordered. If the queue is full, the oldest replaceable move sample
+is evicted before a new event is rejected. This bounds drag latency behind a
+slow present without losing a press or release. Text events are copied from a fixed 16-byte buffer
+with bounded length handling, so an unterminated hardware buffer cannot read
+past the event object.
 
 The P4/P5/P6 smoke path remains a validation harness. It proves that bitmap
 font callbacks, focus navigation, activation, text input, checkbox state,
