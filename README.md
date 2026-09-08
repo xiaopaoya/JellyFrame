@@ -1,6 +1,8 @@
+<p><img src="docs/assets/brand/jellyframe-logo-128.png" alt="JellyFrame logo" width="96" height="96"></p>
+
 # JellyFrame
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev
+> Last updated: 2026-09-08; Applies to: 0.6.0-dev
 
 [![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
 

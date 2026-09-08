@@ -648,8 +648,10 @@ void ws147_enqueue_touch_release(Ws147DisplayContext& display) {
     }
     BoardInputEvent event;
     event.kind = BoardInputKind::PointerUp;
-    event.x = display.touch_start_x;
-    event.y = display.touch_start_y;
+    // Pointer-up belongs to the final sampled position. This preserves normal
+    // hit-test semantics after a drag and matches the 1.69-inch adapter.
+    event.x = display.last_touch_x;
+    event.y = display.last_touch_y;
     if (!display.input_queue->enqueue(event)) {
         ESP_LOGW(kTag, "waveshare 1.47 touch input queue full; dropped=%u",
                  static_cast<unsigned>(display.input_queue->dropped_count()));

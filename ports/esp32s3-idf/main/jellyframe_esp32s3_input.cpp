@@ -15,12 +15,50 @@ std::size_t bounded_text_length(const char* text, std::size_t capacity) {
 
 } // namespace
 
+bool BoardInputQueue::discard_oldest_move_locked() {
+    for (std::size_t offset = 0; offset < count_; ++offset) {
+        const std::size_t index = (head_ + offset) % kCapacity;
+        if (events_[index].kind != BoardInputKind::PointerMove) {
+            continue;
+        }
+
+        // Move samples are replaceable state. Remove one in-place while the
+        // queue lock is held, preserving every discrete event's order.
+        for (std::size_t shift = offset; shift + 1 < count_; ++shift) {
+            const std::size_t current = (head_ + shift) % kCapacity;
+            const std::size_t next = (head_ + shift + 1) % kCapacity;
+            events_[current] = events_[next];
+        }
+        tail_ = (tail_ + kCapacity - 1) % kCapacity;
+        --count_;
+        ++dropped_count_;
+        return true;
+    }
+    return false;
+}
+
 bool BoardInputQueue::enqueue(const BoardInputEvent& event) {
     portENTER_CRITICAL(&lock_);
+    // Pointer moves are state samples, not discrete actions. Retaining the
+    // newest adjacent sample prevents a slow render/present cycle from making
+    // a drag replay stale coordinates after the finger has stopped moving.
+    if (event.kind == BoardInputKind::PointerMove && count_ != 0) {
+        const std::size_t previous = (tail_ + kCapacity - 1) % kCapacity;
+        if (events_[previous].kind == BoardInputKind::PointerMove) {
+            events_[previous] = event;
+            ++coalesced_move_count_;
+            portEXIT_CRITICAL(&lock_);
+            return true;
+        }
+    }
     if (count_ == kCapacity) {
-        ++dropped_count_;
-        portEXIT_CRITICAL(&lock_);
-        return false;
+        // Pointer moves are lossy samples. Make room for the newest sample
+        // or for a release event before rejecting a genuinely discrete event.
+        if (!discard_oldest_move_locked()) {
+            ++dropped_count_;
+            portEXIT_CRITICAL(&lock_);
+            return false;
+        }
     }
     events_[tail_] = event;
     tail_ = (tail_ + 1) % kCapacity;
@@ -66,6 +104,13 @@ std::uint32_t BoardInputQueue::dropped_count() const {
     const std::uint32_t dropped = dropped_count_;
     portEXIT_CRITICAL(&lock_);
     return dropped;
+}
+
+std::uint32_t BoardInputQueue::coalesced_move_count() const {
+    portENTER_CRITICAL(&lock_);
+    const std::uint32_t coalesced = coalesced_move_count_;
+    portEXIT_CRITICAL(&lock_);
+    return coalesced;
 }
 
 BoardInputDispatchStats dispatch_input_events(BoardInputQueue& queue,

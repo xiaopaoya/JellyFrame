@@ -1,0 +1,123 @@
+{
+  "name": "JellyFrame",
+  "version": 2,
+  "priority": ["watches", "fitness-bands", "other-embedded-devices"],
+  "wearable": {
+    "background": "#000000",
+    "surface": "#121C28",
+    "surfaceRaised": "#1C2C3C",
+    "primaryPressed": "#26B9DE",
+    "heartRate": "#FF7E67",
+    "activity": "#B7F36B",
+    "progressTrack": "#243747"
+  },
+  "aod": {
+    "background": "#000000",
+    "time": "#ADC4D2",
+    "text": "#829DAC"
+  },
+  "brand": {
+    "50": "#F0FCFE",
+    "100": "#DDF7FB",
+    "200": "#B6EDF5",
+    "300": "#8AE5F0",
+    "400": "#67DDED",
+    "500": "#26B9DE",
+    "600": "#1680C7",
+    "700": "#176DB1",
+    "800": "#15558A",
+    "900": "#153D61",
+    "950": "#10283F"
+  },
+  "logo": {
+    "highlight": "#67DDED",
+    "primary": "#26B9DE",
+    "ocean": "#1680C7",
+    "depth": "#176DB1",
+    "tentacleLeft": "#40C7DE",
+    "tentacleCenter": "#239BCF",
+    "tentacleRight": "#188BC8"
+  },
+  "accent": {
+    "coral": "#FF7E67",
+    "lime": "#B7F36B",
+    "mint": "#73DEB8",
+    "amber": "#FFCC88",
+    "rose": "#EC86A4"
+  },
+  "neutral": {
+    "0": "#FFFFFF",
+    "50": "#F6FBFF",
+    "100": "#E8F3FA",
+    "200": "#D5E4ED",
+    "300": "#ADC4D2",
+    "400": "#829DAC",
+    "500": "#607C8C",
+    "600": "#496373",
+    "700": "#344D5D",
+    "800": "#243747",
+    "900": "#0F1A29",
+    "950": "#101820"
+  },
+  "material": {
+    "gel": "rgba(156, 224, 247, 0.45)",
+    "gelThick": "rgba(82, 170, 204, 0.22)",
+    "gelHighlight": "rgba(255, 255, 255, 0.28)",
+    "gelEdge": "rgba(100, 200, 235, 0.60)",
+    "glowCoral": "rgba(255, 126, 103, 0.55)",
+    "glowLime": "rgba(183, 243, 107, 0.55)",
+    "stateSuccess": "rgba(115, 222, 184, 0.50)",
+    "stateWarning": "rgba(255, 204, 136, 0.50)",
+    "stateDanger": "rgba(236, 134, 164, 0.50)"
+  },
+  "themes": {
+    "light": {
+      "background": "#F6FBFF",
+      "surface": "#FFFFFF",
+      "surfaceRaised": "#E8F3FA",
+      "text": "#101820",
+      "textMuted": "#496373",
+      "border": "#D5E4ED",
+      "controlBorder": "#607C8C",
+      "primary": "#176DB1",
+      "primaryHover": "#15558A",
+      "onPrimary": "#FFFFFF",
+      "link": "#176DB1",
+      "focus": "#176DB1",
+      "selection": "#DDF7FB",
+      "onSelection": "#153D61",
+      "success": "#146B50",
+      "successSurface": "#E5F8F0",
+      "warning": "#85500A",
+      "warningSurface": "#FFF3DF",
+      "danger": "#A52D54",
+      "dangerSurface": "#FDECF1",
+      "info": "#176DB1",
+      "infoSurface": "#E8F3FA"
+    },
+    "dark": {
+      "background": "#0F1A29",
+      "surface": "#243747",
+      "surfaceRaised": "#344D5D",
+      "text": "#E8F3FA",
+      "textMuted": "#ADC4D2",
+      "border": "#344D5D",
+      "controlBorder": "#829DAC",
+      "primary": "#67DDED",
+      "primaryHover": "#8AE5F0",
+      "onPrimary": "#101820",
+      "link": "#67DDED",
+      "focus": "#67DDED",
+      "selection": "#15558A",
+      "onSelection": "#E8F3FA",
+      "success": "#73DEB8",
+      "successSurface": "#173D35",
+      "warning": "#FFCC88",
+      "warningSurface": "#42331F",
+      "danger": "#EC86A4",
+      "dangerSurface": "#452536",
+      "info": "#67DDED",
+      "infoSurface": "#153D61"
+    }
+  }
+}

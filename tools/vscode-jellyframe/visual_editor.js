@@ -536,6 +536,7 @@ async function openVisualEditor(context, root) {
     vscode.ViewColumn.Beside,
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [vscode.Uri.file(root), context.extensionUri] }
   );
+  panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "media", "jellyframe.png");
   const styleUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "visual_editor.css"));
   const scriptUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, "visual_editor_webview.js"));
   let takeoverConfirmed = files.html.includes(BODY_START);

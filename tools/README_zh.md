@@ -19,7 +19,7 @@
 
 ```powershell
 python tools\jellyframe_cli.py new --template weather --output build\my_app
-python tools\jellyframe_cli.py check --root build\my_app --all-targets --build-dir build\desktop-release\Release
+python tools\jellyframe_cli.py check --root build\my_app --all-targets --report build/my_app.report.json --build-dir build\desktop-release\Release
 python tools\jellyframe_cli.py preview --root build\my_app --target round-300 --build-dir build\desktop-release\Release --output build\my_app.bmp
 python tools\jellyframe_cli.py package --root build\my_app --report build\my_app.report.json --output-bundle build\my_app.jfapp --build-dir build\desktop-release\Release
 ```
