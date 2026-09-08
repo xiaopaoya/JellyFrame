@@ -172,10 +172,11 @@ const LayoutBox* find_layout_box_for_node(const LayoutBox* box, const Node* node
 } // namespace
 
 InputController::InputController(const LayerNode& layer_tree,
-                                 InteractionInvalidationOptions invalidation_options)
+                                 InteractionInvalidationOptions invalidation_options,
+                                 bool dispatch_initial_autofocus)
     : layer_tree_(layer_tree),
       invalidation_options_(invalidation_options) {
-    if (layer_tree_.box != nullptr) {
+    if (dispatch_initial_autofocus && layer_tree_.box != nullptr) {
         set_focused_node(find_autofocus_node(*layer_tree_.box));
     }
 }

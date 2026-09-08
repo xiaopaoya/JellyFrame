@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cstddef>
 #include <limits>
+#include <unordered_map>
 #include <vector>
 
 namespace jellyframe {
@@ -175,15 +176,24 @@ TextMetrics measure_text_with_letter_spacing(const TextMeasureProvider& provider
 
     const int bounded_spacing = bounded_letter_spacing(font_size, letter_spacing);
     TextMetrics metrics;
+    // A scalar can occur many times in a label or paragraph. Reuse its
+    // backend measurement while keeping the existing per-codepoint spacing
+    // semantics and avoiding a temporary string on cache hits.
+    std::unordered_map<std::uint32_t, TextMetrics> scalar_metrics;
+    scalar_metrics.reserve(std::min<std::size_t>(text.size(), 32));
+    std::string scalar_text;
     std::size_t codepoint_count = 0;
     for (std::size_t begin = 0; begin < text.size();) {
         std::size_t end = begin;
-        consume_utf8_codepoint(text, end);
-        const TextMetrics scalar = measure_text(provider,
-                                                std::string(text.substr(begin, end - begin)),
-                                                font_size,
-                                                font_weight,
-                                                font_family_hash);
+        const std::uint32_t codepoint = consume_utf8_codepoint(text, end);
+        scalar_text.assign(text.data() + begin, end - begin);
+        const auto cached = scalar_metrics.find(codepoint);
+        const TextMetrics scalar = cached != scalar_metrics.end()
+            ? cached->second
+            : measure_text(provider, scalar_text, font_size, font_weight, font_family_hash);
+        if (cached == scalar_metrics.end()) {
+            scalar_metrics.emplace(codepoint, scalar);
+        }
         if (metrics.width > std::numeric_limits<int>::max() - scalar.width) {
             metrics.width = std::numeric_limits<int>::max();
         } else {
@@ -269,26 +279,72 @@ std::vector<std::string> wrap_text_at_opportunities(const TextMeasureProvider& p
     std::string line;
     std::string token;
     bool pending_space = false;
+    int line_width = 0;
+    const int bounded_spacing = bounded_letter_spacing(font_size, letter_spacing);
+    int separator_width = -1;
+
+    const auto measured_separator_width = [&]() {
+        if (separator_width < 0) {
+            separator_width = measure_text(provider,
+                                           " ",
+                                           font_size,
+                                           font_weight,
+                                           font_family_hash).width;
+        }
+        return separator_width;
+    };
 
     const auto append_token = [&]() {
         if (token.empty()) {
             return;
         }
-        std::string candidate = line;
-        if (!candidate.empty() && pending_space) {
-            candidate.push_back(' ');
-        }
-        candidate += token;
-        if (!line.empty() && measure_text_with_letter_spacing(provider,
-                                                              candidate,
-                                                              font_size,
-                                                              font_weight,
-                                                              font_family_hash,
-                                                              letter_spacing).width > width_limit) {
-            lines.push_back(std::move(line));
-            line = std::move(token);
+        const bool additive_measurement = provider.additive_measurement_supported != nullptr &&
+            provider.additive_measurement_supported(font_size,
+                                                    font_weight,
+                                                    font_family_hash,
+                                                    provider.context);
+        if (additive_measurement) {
+            const int token_width = measure_text_with_letter_spacing(provider,
+                                                                      token,
+                                                                      font_size,
+                                                                      font_weight,
+                                                                      font_family_hash,
+                                                                      letter_spacing).width;
+            const bool has_separator = !line.empty() && pending_space;
+            const std::int64_t transition_spacing = line.empty()
+                ? 0
+                : static_cast<std::int64_t>(bounded_spacing) * (has_separator ? 2 : 1);
+            const std::int64_t candidate_width = static_cast<std::int64_t>(line_width) +
+                (has_separator ? measured_separator_width() : 0) +
+                transition_spacing + token_width;
+            if (!line.empty() && clamp_nonnegative_int64(candidate_width) > width_limit) {
+                lines.push_back(std::move(line));
+                line = std::move(token);
+                line_width = token_width;
+            } else {
+                if (has_separator) {
+                    line.push_back(' ');
+                }
+                line += token;
+                line_width = clamp_nonnegative_int64(candidate_width);
+            }
         } else {
-            line = std::move(candidate);
+            std::string candidate = line;
+            if (!candidate.empty() && pending_space) {
+                candidate.push_back(' ');
+            }
+            candidate += token;
+            if (!line.empty() && measure_text_with_letter_spacing(provider,
+                                                                  candidate,
+                                                                  font_size,
+                                                                  font_weight,
+                                                                  font_family_hash,
+                                                                  letter_spacing).width > width_limit) {
+                lines.push_back(std::move(line));
+                line = std::move(token);
+            } else {
+                line = std::move(candidate);
+            }
         }
         token.clear();
         pending_space = false;
@@ -302,6 +358,7 @@ std::vector<std::string> wrap_text_at_opportunities(const TextMeasureProvider& p
             append_token();
             lines.push_back(std::move(line));
             line.clear();
+            line_width = 0;
             pending_space = false;
             begin = end;
             continue;

@@ -109,8 +109,9 @@ void xhr_abort_cancels_pending_request() {
     take_events(xhr);
     check(xhr.send(host, network) == AppXhrStatus::Ok, "xhr abort send");
     check(host.requests().size() == 1, "xhr request queued");
-    xhr.abort(host);
+    xhr.abort(host, network);
     check(host.requests().empty(), "xhr abort cancels queued request");
+    check(network.pending_count() == 0, "xhr abort drops provider pending response copy");
     check(xhr.ready_state() == AppXhrReadyState::Unsent, "xhr abort unsent");
     check(xhr.status() == 0, "xhr abort status");
 
@@ -119,6 +120,30 @@ void xhr_abort_cancels_pending_request() {
     check(events[0] == AppXhrEventKind::ReadyStateChange, "xhr abort readystatechange");
     check(events[1] == AppXhrEventKind::Abort, "xhr abort event");
     check(events[2] == AppXhrEventKind::LoadEnd, "xhr abort loadend");
+}
+
+void xhr_repeated_abort_does_not_retain_provider_payloads() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.abort-many", AppRole::App);
+    NetworkFetchMock network(NetworkFetchPolicy{true, 128, 4096});
+    check(network.add_fixture(NetworkFetchFixture{
+        "/data/repeated.txt",
+        200,
+        "text/plain",
+        std::string(4096, 'x'),
+    }), "repeated abort fixture");
+
+    AppXmlHttpRequest xhr;
+    for (int index = 0; index < 1000; ++index) {
+        check(xhr.open("GET", "/data/repeated.txt", true) == AppXhrStatus::Ok,
+              "repeated abort open");
+        take_events(xhr);
+        check(xhr.send(host, network) == AppXhrStatus::Ok, "repeated abort send");
+        xhr.abort(host, network);
+        take_events(xhr);
+    }
+    check(host.requests().empty(), "repeated abort leaves no host requests");
+    check(network.pending_count() == 0, "repeated abort releases every provider payload copy");
 }
 
 void xhr_abort_consumes_late_worker_completion() {
@@ -135,7 +160,7 @@ void xhr_abort_consumes_late_worker_completion() {
     HostServiceRequest request;
     check(host.pop_worker_request(HostServiceJobKind::NetworkFetch, request), "worker owns request");
     check(host.requests().in_flight_size() == 1, "request counted in flight");
-    xhr.abort(host);
+    xhr.abort(host, network);
     check(host.requests().in_flight_size() == 1, "abort cannot cancel worker-owned request");
     take_events(xhr);
 
@@ -241,6 +266,7 @@ int main() {
     xhr_rejects_non_subset_calls();
     xhr_send_failure_becomes_error_event();
     xhr_abort_cancels_pending_request();
+    xhr_repeated_abort_does_not_retain_provider_payloads();
     xhr_abort_consumes_late_worker_completion();
     xhr_reopen_consumes_late_previous_completion();
     xhr_multiple_reopens_consume_every_late_completion();

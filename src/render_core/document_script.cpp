@@ -183,7 +183,7 @@ std::vector<DocumentScript> collect_classic_scripts(const Node& document,
                                                     const DocumentScriptCollectionOptions& options) {
     ScriptCollectionState state{options, {}, 0, false};
     collect_scripts(document, state, load_script, context, options.diagnostics);
-    return std::move(state.scripts);
+    return state.scripts;
 }
 
 } // namespace jellyframe

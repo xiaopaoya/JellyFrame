@@ -47,7 +47,7 @@ public:
                       NetworkFetchMock& network,
                       std::uint32_t timeout_ms = 0,
                       std::uint32_t client_token = 0);
-    void abort(AppRuntimeHost& host);
+    void abort(AppRuntimeHost& host, NetworkFetchMock& network);
     bool handle_completion(AppRuntimeHost& host,
                            NetworkFetchMock& network,
                            const HostServiceCompletion& completion);

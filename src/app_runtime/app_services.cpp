@@ -504,6 +504,21 @@ AppServiceSubmitResult NetworkFetchMock::submit_fetch(AppRuntimeHost& host,
     return result;
 }
 
+bool NetworkFetchMock::cancel_pending_fetch(AppRuntimeHost& host, std::uint32_t job_id) {
+    if (job_id == 0 || !host.requests().cancel_pending(job_id)) {
+        return false;
+    }
+    const auto pending = find_job(pending_, job_id);
+    if (pending != pending_.end()) {
+        pending_.erase(pending);
+    }
+    return true;
+}
+
+std::size_t NetworkFetchMock::pending_count() const {
+    return pending_.size();
+}
+
 bool NetworkFetchMock::complete_next(AppRuntimeHost& host) {
     HostServiceRequest request;
     if (!host.pop_worker_request(HostServiceJobKind::NetworkFetch, request)) {
@@ -573,8 +588,14 @@ bool NetworkFetchMock::release_response(AppRuntimeHost& host, std::uint32_t hand
         }
         return host.handles().release(handle);
     }
+    HostHandleInfo info;
+    if (!host.handles().lookup_copy(handle, info) ||
+        info.kind != HostServiceHandleKind::FetchResponse ||
+        !host.handles().release(handle)) {
+        return false;
+    }
     records_.erase(found);
-    return host.handles().release(handle);
+    return true;
 }
 
 std::size_t NetworkFetchMock::release_client_responses(AppRuntimeHost& host,
@@ -1105,8 +1126,14 @@ bool ImageDecodeMock::release_surface(AppRuntimeHost& host, std::uint32_t handle
         }
         return host.handles().release(handle);
     }
+    HostHandleInfo info;
+    if (!host.handles().lookup_copy(handle, info) ||
+        info.kind != HostServiceHandleKind::Surface ||
+        !host.handles().release(handle)) {
+        return false;
+    }
     records_.erase(found);
-    return host.handles().release(handle);
+    return true;
 }
 
 std::size_t ImageDecodeMock::collect_released_surfaces(const AppRuntimeHost& host) {
@@ -1420,15 +1447,14 @@ bool AudioCommandMock::release_stream(AppRuntimeHost& host, std::uint32_t audio_
     if (found == streams_.end()) {
         return false;
     }
-    streams_.erase(found);
     HostHandleInfo info;
-    if (!host.handles().lookup_copy(audio_handle, info)) {
-        return true;
-    }
-    if (info.kind != HostServiceHandleKind::AudioStream) {
+    if (!host.handles().lookup_copy(audio_handle, info) ||
+        info.kind != HostServiceHandleKind::AudioStream ||
+        !host.handles().release(audio_handle)) {
         return false;
     }
-    return host.handles().release(audio_handle);
+    streams_.erase(found);
+    return true;
 }
 
 std::size_t AudioCommandMock::release_app_streams(AppRuntimeHost& host, std::uint32_t app_instance_id) {
@@ -1439,12 +1465,15 @@ std::size_t AudioCommandMock::release_app_streams(AppRuntimeHost& host, std::uin
             continue;
         }
         const std::uint32_t handle = it->handle;
-        it = streams_.erase(it);
         HostHandleInfo info;
-        if (host.handles().lookup_copy(handle, info) && info.kind == HostServiceHandleKind::AudioStream) {
-            host.handles().release(handle);
+        if (host.handles().lookup_copy(handle, info) &&
+            info.kind == HostServiceHandleKind::AudioStream &&
+            host.handles().release(handle)) {
+            it = streams_.erase(it);
+            ++released;
+            continue;
         }
-        ++released;
+        ++it;
     }
     return released;
 }
@@ -1668,14 +1697,22 @@ AppImageSurfaceEvictionResult AppImageSurfaceCache::evict_unreferenced_with_resu
             continue;
         }
         if (!decoder.release_surface(host, handle)) {
-            entries_.erase(std::remove_if(entries_.begin(),
-                                          entries_.end(),
-                                          [handle](const Entry& entry) {
-                                              return entry.state == AppImageSurfaceState::Ready && entry.handle == handle;
-                                          }),
-                           entries_.end());
-            ++result.dropped_stale_entries;
-            continue;
+            // A failed release is not proof that the cache entry is stale:
+            // the host may reject a type/ownership mismatch. Reconcile only
+            // when the decoder confirms that the record disappeared.
+            decoder.collect_released_surfaces(host);
+            if (decoder.surface(handle) == nullptr) {
+                entries_.erase(std::remove_if(entries_.begin(),
+                                              entries_.end(),
+                                              [handle](const Entry& entry) {
+                                                  return entry.state == AppImageSurfaceState::Ready &&
+                                                         entry.handle == handle;
+                                              }),
+                               entries_.end());
+                ++result.dropped_stale_entries;
+                continue;
+            }
+            break;
         }
         ++result.released_surfaces;
         entries_.erase(std::remove_if(entries_.begin(),
@@ -1697,13 +1734,24 @@ std::size_t AppImageSurfaceCache::evict_unreferenced(AppRuntimeHost& host,
 
 std::size_t AppImageSurfaceCache::release_all(AppRuntimeHost& host, ImageDecodeMock& decoder) {
     std::size_t released = 0;
-    for (Entry& entry : entries_) {
-        if (entry.state == AppImageSurfaceState::Ready && entry.handle != 0 &&
-            decoder.release_surface(host, entry.handle)) {
-            ++released;
+    for (auto it = entries_.begin(); it != entries_.end();) {
+        if (it->state != AppImageSurfaceState::Ready || it->handle == 0) {
+            it = entries_.erase(it);
+            continue;
         }
+        const std::uint32_t handle = it->handle;
+        if (decoder.release_surface(host, handle)) {
+            it = entries_.erase(it);
+            ++released;
+            continue;
+        }
+        decoder.collect_released_surfaces(host);
+        if (decoder.surface(handle) == nullptr) {
+            it = entries_.erase(it);
+            continue;
+        }
+        ++it;
     }
-    clear();
     return released;
 }
 
@@ -2088,8 +2136,14 @@ bool AppPrivateKvStorageMock::release_value(AppRuntimeHost& host, std::uint32_t 
     if (found == records_.end()) {
         return false;
     }
+    HostHandleInfo info;
+    if (!host.handles().lookup_copy(handle, info) ||
+        info.kind != HostServiceHandleKind::StorageValue ||
+        !host.handles().release(handle)) {
+        return false;
+    }
     records_.erase(found);
-    return host.handles().release(handle);
+    return true;
 }
 
 std::size_t AppPrivateKvStorageMock::collect_released_values(const AppRuntimeHost& host) {

@@ -309,8 +309,14 @@ bool AppSensorSampleMock::release_sample(AppRuntimeHost& host, std::uint32_t han
     if (found == records_.end()) {
         return false;
     }
+    HostHandleInfo info;
+    if (!host.handles().lookup_copy(handle, info) ||
+        info.kind != HostServiceHandleKind::SensorSample ||
+        !host.handles().release(handle)) {
+        return false;
+    }
     records_.erase(found);
-    return host.handles().release(handle);
+    return true;
 }
 
 std::size_t AppSensorSampleMock::release_app_samples(AppRuntimeHost& host, std::uint32_t app_instance_id) {
@@ -494,8 +500,14 @@ bool AppLocationSnapshotMock::release_snapshot(AppRuntimeHost& host, std::uint32
     if (found == records_.end()) {
         return false;
     }
+    HostHandleInfo info;
+    if (!host.handles().lookup_copy(handle, info) ||
+        info.kind != HostServiceHandleKind::LocationSnapshot ||
+        !host.handles().release(handle)) {
+        return false;
+    }
     records_.erase(found);
-    return host.handles().release(handle);
+    return true;
 }
 
 std::size_t AppLocationSnapshotMock::release_client_snapshots(AppRuntimeHost& host,

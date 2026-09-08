@@ -53,6 +53,22 @@ bool has_diagnostic_code(const VectorDiagnosticSink& sink, const std::string& co
     return false;
 }
 
+struct TextMeasureCounter {
+    int calls = 0;
+};
+
+bool count_text_measure(const std::string& text,
+                        int,
+                        int,
+                        TextMetrics* metrics,
+                        void* context) {
+    auto* counter = static_cast<TextMeasureCounter*>(context);
+    ++counter->calls;
+    metrics->width = static_cast<int>(text.size()) * 8;
+    metrics->line_height = 20;
+    return true;
+}
+
 void layout_tree_can_use_monotonic_arena() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -123,6 +139,32 @@ void layout_tree_reports_depth_budget_diagnostic() {
     check(has_diagnostic_code(diagnostics, "layout-depth-limit"), "layout depth diagnostic is reported");
     const LayoutBox* main = find_first_by_tag(*layout_tree, "main");
     check(main == nullptr || main->rect.height == 0, "layout beyond depth budget is skipped");
+}
+
+void nested_flex_sizing_does_not_repeat_subtree_layout() {
+    std::string html = "<body>";
+    for (int depth = 0; depth < 12; ++depth) {
+        html += "<div>";
+    }
+    html += "abc";
+    for (int depth = 0; depth < 12; ++depth) {
+        html += "</div>";
+    }
+    html += "</body>";
+
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(html);
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; } div { display: flex; flex-direction: column; width: 100px; }"));
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    TextMeasureCounter counter;
+    LayoutEngine layout_engine(resolver, TextMeasureProvider{count_text_measure, &counter});
+    auto layout_tree = layout_engine.layout(*render_tree, 100, 240);
+
+    check(layout_tree != nullptr, "nested flex fixture produces a layout tree");
+    check(counter.calls <= 4, "nested flex layout does not exponentially repeat text measurement");
 }
 
 void flex_row_distributes_grow_space() {
@@ -812,6 +854,7 @@ int main() {
         layout_saturates_extreme_box_values();
         layout_tree_reports_depth_budget_diagnostic();
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
+        nested_flex_sizing_does_not_repeat_subtree_layout();
         flex_row_distributes_grow_space();
         flex_row_shrinks_basis_widths();
         flex_row_justifies_and_aligns_items();

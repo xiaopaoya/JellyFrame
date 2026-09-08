@@ -109,6 +109,7 @@ private:
     std::vector<ActiveTransition> active_;
     std::vector<ActiveKeyframeAnimation> keyframes_;
     std::size_t rejected_animations_ = 0;
+    std::size_t sampled_overrides_ = 0;
 };
 
 } // namespace jellyframe

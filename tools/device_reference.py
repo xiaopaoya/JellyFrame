@@ -21,6 +21,10 @@ REFERENCE_DIRECTORY = ".jfdp_reference"
 MAX_REFERENCE_LOG_ENTRIES = 256
 DEFAULT_CHUNK_BYTES = 1024
 MAX_CHUNK_BYTES = 4096
+# Staging bytes are acknowledged immediately, while the reference store
+# synchronizes the file at the first chunk, each interval boundary, and the
+# final chunk. Commit/cancel still force their own durable metadata transitions.
+REFERENCE_FSYNC_INTERVAL_BYTES = 16 * 1024
 JFDP_MAGIC = b"JFDP"
 JFDP_PROTOCOL_VERSION = 1
 JFDP_MAX_PAYLOAD_BYTES = 4096
@@ -339,11 +343,16 @@ def append_chunk(store: Path, transaction_id: int, offset: int, chunk: bytes) ->
     if len(chunk) > record["bundleBytes"] - offset:
         raise ReferenceDeviceError("payload-too-large", "chunk exceeds the declared bundle size")
     path = staging_path(store, transaction_id)
+    next_received = offset + len(chunk)
+    synchronize = (offset == 0 or
+                   next_received == record["bundleBytes"] or
+                   next_received % REFERENCE_FSYNC_INTERVAL_BYTES == 0)
     with path.open("r+b") as output:
         output.seek(offset)
         output.write(chunk)
         output.flush()
-        os.fsync(output.fileno())
+        if synchronize:
+            os.fsync(output.fileno())
     record["receivedBytes"] += len(chunk)
     save_transaction(store, record)
     return {

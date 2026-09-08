@@ -635,6 +635,21 @@ void dirty_rect_coalescing_clips_and_handles_large_areas() {
           "coalescing area accounting handles maximum representable rectangles");
 }
 
+void dirty_rect_coalescing_bounds_large_pairwise_inputs() {
+    std::vector<Rect> input;
+    input.reserve(129);
+    for (int index = 0; index < 129; ++index) {
+        input.push_back(Rect{index * 2, 0, 1, 1});
+    }
+    std::vector<Rect> output;
+    DirtyRectCoalescingResult result;
+    coalesce_dirty_rects_into(input.data(), input.size(), Rect{0, 0, 300, 20},
+                              DirtyRectCoalescingOptions{8, 0, 100}, output, &result);
+    check(output.size() == 1 && output.front().x == 0 && output.front().width == 300,
+          "large coalescing input conservatively falls back to viewport");
+    check(result.forced_merges == 128, "large coalescing fallback reports forced merges");
+}
+
 void dirty_region_area_handles_extreme_rects_safely() {
     DirtyRegionResult result;
     result.rects.push_back(Rect{std::numeric_limits<int>::max() - 1,
@@ -715,6 +730,7 @@ int main() {
         dirty_rect_coalescing_respects_extra_area_budget();
         dirty_rect_coalescing_forces_deterministic_low_extra_merge();
         dirty_rect_coalescing_clips_and_handles_large_areas();
+        dirty_rect_coalescing_bounds_large_pairwise_inputs();
         dirty_region_area_handles_extreme_rects_safely();
         dirty_region_expansion_saturates_before_viewport_clipping();
         merged_dirty_regions_remove_overlap_and_preserve_full_fallback();
