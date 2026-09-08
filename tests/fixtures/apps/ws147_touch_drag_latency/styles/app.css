@@ -1,0 +1,47 @@
+body {
+  margin: 0;
+  padding: 12px;
+  background: #101827;
+  color: #f8fafc;
+}
+
+.screen {
+  padding: 10px;
+  background: #1f2a44;
+  border-radius: 12px;
+}
+
+h1 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  color: #7dd3fc;
+}
+
+.range-label,
+.action {
+  display: block;
+  margin-top: 8px;
+  font-size: 16px;
+}
+
+#latency-range {
+  width: 132px;
+  height: 24px;
+}
+
+.scroll-area {
+  height: 136px;
+  margin-top: 10px;
+  overflow: scroll;
+  background: #162138;
+  border-radius: 8px;
+}
+
+.scroll-area button {
+  display: block;
+  width: 140px;
+  height: 30px;
+  margin: 3px;
+  color: #052e16;
+  background: #86efac;
+}

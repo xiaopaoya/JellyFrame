@@ -43,7 +43,10 @@ constexpr std::size_t kInstalledResourceSnapshotMaxEntries = 16u;
 
 constexpr char kImageId[] = "org.jellyframe.ws147.developer";
 constexpr char kProfileId[] = "rect-172x320";
-constexpr char kImageVersion[] = "0.6.2-ws147.1";
+#ifndef JELLYFRAME_ESP32S3_IMAGE_VERSION
+#define JELLYFRAME_ESP32S3_IMAGE_VERSION "0.6.2-ws147.1"
+#endif
+constexpr char kImageVersion[] = JELLYFRAME_ESP32S3_IMAGE_VERSION;
 #ifndef JELLYFRAME_ESP32S3_SOURCE_REVISION
 #define JELLYFRAME_ESP32S3_SOURCE_REVISION "0000000000000000000000000000000000000000"
 #endif
@@ -271,6 +274,27 @@ private:
                        app_id, generation, message);
     }
 
+    void record_ui_telemetry(std::string_view app_id,
+                             std::uint32_t generation,
+                             const InstalledBundleUiTaskTelemetry& telemetry) {
+        char message[kDeviceAppLogMaxMessageBytes + 1]{};
+        std::snprintf(message, sizeof(message),
+                      "ui f=%u input=%u queue_left=%u queue_max=%u moves_coalesced=%u input_dropped=%u "
+                      "p=%u pf=%u present_us=%u present_p50=%u present_p95=%u present_max=%u ok=%u "
+                      "stack=%u heap_min=%u psram_min=%u",
+                      static_cast<unsigned>(telemetry.frames), static_cast<unsigned>(telemetry.input_events),
+                      static_cast<unsigned>(telemetry.queue_left), static_cast<unsigned>(telemetry.queue_depth_max),
+                      static_cast<unsigned>(telemetry.moves_coalesced), static_cast<unsigned>(telemetry.input_dropped),
+                      static_cast<unsigned>(telemetry.presents), static_cast<unsigned>(telemetry.present_failures),
+                      static_cast<unsigned>(telemetry.present_us_last), static_cast<unsigned>(telemetry.present_us_p50),
+                      static_cast<unsigned>(telemetry.present_us_p95), static_cast<unsigned>(telemetry.present_us_max),
+                      telemetry.present_ok_last ? 1u : 0u, static_cast<unsigned>(telemetry.stack_free),
+                      static_cast<unsigned>(telemetry.internal_free_min),
+                      static_cast<unsigned>(telemetry.psram_free_min));
+        record_app_log(telemetry.present_failures == 0 ? DeviceAppLogLevel::Info : DeviceAppLogLevel::Error,
+                       app_id, generation, message);
+    }
+
     bool stop_active_ui(InstalledBundleScriptTaskTelemetry* script_telemetry = nullptr) {
         const bool had_session = ui_session_ != nullptr || script_session_ != nullptr;
         if (!stop_installed_bundle_ui_task(ui_session_)) {
@@ -291,6 +315,14 @@ private:
     }
 
     void poll_active_session() {
+        if (ui_session_ != nullptr && !active_app_id_.empty()) {
+            const std::int64_t now_us = esp_timer_get_time();
+            if (last_ui_telemetry_us_ == 0 || now_us - last_ui_telemetry_us_ >= 2000000) {
+                record_ui_telemetry(active_app_id_, store_.registry_generation(),
+                                    installed_bundle_ui_task_telemetry(ui_session_));
+                last_ui_telemetry_us_ = now_us;
+            }
+        }
         if (script_session_ != nullptr && !script_worker_initialized_logged_) {
             const InstalledBundleScriptTaskTelemetry telemetry =
                 installed_bundle_script_task_telemetry(script_session_);
@@ -479,6 +511,7 @@ private:
         active_app_id_.assign(app_id.app_id_view());
         script_worker_initialized_logged_ = false;
         last_script_telemetry_us_ = 0;
+        last_ui_telemetry_us_ = 0;
         if (script_app) {
             record_script_telemetry(app_id.app_id_view(), store_.registry_generation(), "launch-prepared",
                                     installed_bundle_script_task_telemetry(script_session_));
@@ -749,6 +782,7 @@ private:
     InstalledBundleScriptSession* script_session_ = nullptr;
     bool script_worker_initialized_logged_ = false;
     std::int64_t last_script_telemetry_us_ = 0;
+    std::int64_t last_ui_telemetry_us_ = 0;
     std::string active_app_id_;
     std::array<DeviceAppLogEntry, kAppLogCapacity> app_logs_{};
     std::array<std::uint8_t, kDeviceProtocolHeaderBytes + kDeviceProtocolMaxPayloadBytes> response_frame_{};
