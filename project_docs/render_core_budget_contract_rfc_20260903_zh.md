@@ -1,5 +1,6 @@
 # Render Core 预算契约 RFC 草案
 
+> 最后更新：2026-09-03；适用版本：0.6.0-dev
 > 状态：草案，不改变当前 ABI/API。
 > 日期：2026-09-03
 > 范围：dirty region、display invalidation、clip chain 和 display command 输入。
