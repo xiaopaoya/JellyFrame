@@ -364,6 +364,14 @@ struct TimerUiTaskContext {
     bool scroll_benchmark = false;
     bool scroll_autorun = false;
     bool layer_tree_has_gradients = false;
+    struct ScrollOffsetSlot {
+        const jellyframe::Node* node = nullptr;
+        int scroll_y = 0;
+    };
+    static constexpr std::size_t kScrollOffsetSlotCount = 4;
+    std::array<ScrollOffsetSlot, kScrollOffsetSlotCount> scroll_offsets{};
+    std::size_t active_scroll_slot = kScrollOffsetSlotCount;
+    std::size_t pending_scroll_slot = kScrollOffsetSlotCount;
     jellyframe::Node* scroll_node = nullptr;
     int scroll_y = 0;
     int scroll_direction = 1;
@@ -919,10 +927,18 @@ void publish_installed_ui_telemetry(TimerUiTaskContext& context,
 
 int resolve_scroll_y(const jellyframe::Node& node, int max_scroll_y, void* raw_context) {
     auto* context = static_cast<TimerUiTaskContext*>(raw_context);
-    if (context == nullptr || !context->scroll_benchmark || context->scroll_node != &node) {
+    if (context == nullptr) {
         return 0;
     }
-    return std::max(0, std::min(context->scroll_y, max_scroll_y));
+    if (context->scroll_benchmark && context->scroll_node == &node) {
+        return std::max(0, std::min(context->scroll_y, max_scroll_y));
+    }
+    for (const TimerUiTaskContext::ScrollOffsetSlot& slot : context->scroll_offsets) {
+        if (slot.node == &node) {
+            return std::max(0, std::min(slot.scroll_y, max_scroll_y));
+        }
+    }
+    return 0;
 }
 
 jellyframe::LayerTreeBuilderOptions make_layer_tree_options(const TimerUiTaskContext& context) {
@@ -931,10 +947,11 @@ jellyframe::LayerTreeBuilderOptions make_layer_tree_options(const TimerUiTaskCon
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     options.image_resolver = make_bmp_image_resolver(const_cast<BmpImageAdapter&>(context.image_adapter));
 #endif
-    if (context.scroll_benchmark) {
+    if (context.scroll_benchmark || context.installed_bundle_app) {
         options.scroll_resolver = jellyframe::ScrollOffsetResolver{resolve_scroll_y,
                                                                     const_cast<TimerUiTaskContext*>(&context)};
-        options.paint_scroll_indicators = !CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL;
+        options.paint_scroll_indicators = context.scroll_benchmark &&
+            !CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL;
     }
     return options;
 }
@@ -1096,10 +1113,118 @@ bool point_in_rect(int x, int y, const jellyframe::Rect& rect) {
     return x >= rect.x && y >= rect.y && x < rect.x + rect.width && y < rect.y + rect.height;
 }
 
+std::size_t scroll_slot_for_node(TimerUiTaskContext& context, const jellyframe::Node* node, bool create) {
+    if (node == nullptr) {
+        return TimerUiTaskContext::kScrollOffsetSlotCount;
+    }
+    for (std::size_t index = 0; index < context.scroll_offsets.size(); ++index) {
+        if (context.scroll_offsets[index].node == node) {
+            return index;
+        }
+    }
+    if (!create) {
+        return TimerUiTaskContext::kScrollOffsetSlotCount;
+    }
+    for (std::size_t index = 0; index < context.scroll_offsets.size(); ++index) {
+        if (context.scroll_offsets[index].node == nullptr) {
+            context.scroll_offsets[index].node = node;
+            context.scroll_offsets[index].scroll_y = 0;
+            return index;
+        }
+    }
+    return TimerUiTaskContext::kScrollOffsetSlotCount;
+}
+
+bool begin_installed_scroll(TimerUiTaskContext& context, int x, int y) {
+    if (!context.installed_bundle_app || context.pipeline.layer_tree == nullptr) {
+        return false;
+    }
+    jellyframe::HitTester hit_tester;
+    jellyframe::HitTestResult hit = hit_tester.hit_test(*context.pipeline.layer_tree, x, y);
+    for (const jellyframe::Node* node = hit.node; node != nullptr; node = node->parent) {
+        const jellyframe::LayerNode* layer = find_layer_for_node(*context.pipeline.layer_tree, node);
+        const jellyframe::Rect viewport = layer != nullptr && layer->has_clip ? layer->clip_rect
+                                                                             : (layer != nullptr ? layer->bounds
+                                                                                                 : jellyframe::Rect{});
+        if (layer == nullptr || layer->max_scroll_y <= 0 || !point_in_rect(x, y, viewport)) {
+            continue;
+        }
+        const std::size_t slot = scroll_slot_for_node(context, node, true);
+        if (slot == TimerUiTaskContext::kScrollOffsetSlotCount) {
+            return false;
+        }
+        context.scroll_offsets[slot].scroll_y = layer->scroll_y;
+        context.active_scroll_slot = slot;
+        context.scroll_gesture.begin(y);
+        return true;
+    }
+    return false;
+}
+
+bool schedule_installed_scroll_offset(TimerUiTaskContext& context,
+                                      std::size_t slot,
+                                      int requested_scroll_y) {
+    if (slot >= context.scroll_offsets.size() || context.pipeline.layer_tree == nullptr) {
+        return false;
+    }
+    TimerUiTaskContext::ScrollOffsetSlot& offset = context.scroll_offsets[slot];
+    const jellyframe::LayerNode* layer = find_layer_for_node(*context.pipeline.layer_tree, offset.node);
+    if (layer == nullptr || layer->max_scroll_y <= 0) {
+        return false;
+    }
+    const int next = std::max(0, std::min(requested_scroll_y, layer->max_scroll_y));
+    if (next == offset.scroll_y) {
+        return false;
+    }
+    offset.scroll_y = next;
+    context.explicit_dirty_rect = layer->has_clip ? layer->clip_rect : layer->bounds;
+    context.has_explicit_dirty_rect = context.explicit_dirty_rect.width > 0 &&
+        context.explicit_dirty_rect.height > 0;
+    return context.has_explicit_dirty_rect;
+}
+
 bool observe_scroll_input(const BoardInputEvent& event, void* raw_context) {
     auto* context = static_cast<TimerUiTaskContext*>(raw_context);
-    if (context == nullptr || !context->scroll_benchmark) {
+    if (context == nullptr) {
         return false;
+    }
+
+    if (!context->scroll_benchmark) {
+        if (!context->installed_bundle_app) {
+            return false;
+        }
+        switch (event.kind) {
+        case BoardInputKind::PointerDown:
+            (void)begin_installed_scroll(*context, event.x, event.y);
+            return false;
+        case BoardInputKind::PointerMove: {
+            if (context->active_scroll_slot == TimerUiTaskContext::kScrollOffsetSlotCount) {
+                return false;
+            }
+            const jellyframe::VerticalScrollGestureUpdate update = context->scroll_gesture.update(event.y);
+            if (update.dragging_started && context->input_controller) {
+                context->input_controller->clear_pointer_state();
+            }
+            if (update.dragging && update.delta_y != 0) {
+                context->pending_scroll_drag_delta += update.delta_y;
+                context->pending_scroll_slot = context->active_scroll_slot;
+            }
+            return update.dragging;
+        }
+        case BoardInputKind::PointerUp: {
+            if (context->active_scroll_slot == TimerUiTaskContext::kScrollOffsetSlotCount) {
+                return false;
+            }
+            const bool consumed = context->scroll_gesture.end();
+            // Installed Apps use direct manipulation; do not replay drag input
+            // as inertia after the finger has already left the display.
+            context->scroll_gesture.stop_inertia();
+            context->active_scroll_slot = TimerUiTaskContext::kScrollOffsetSlotCount;
+            return consumed;
+        }
+        default:
+            return false;
+        }
     }
 
     switch (event.kind) {
@@ -2030,6 +2155,7 @@ void run_retained_ui_task(void* raw_context) {
             continue;
         }
         context->pending_scroll_drag_delta = 0;
+        context->pending_scroll_slot = TimerUiTaskContext::kScrollOffsetSlotCount;
         const std::uint64_t input_dispatch_start = esp_timer_get_time();
         const BoardInputDispatchStats input_stats =
             dispatch_input_events(context->input_queue,
@@ -2046,6 +2172,12 @@ void run_retained_ui_task(void* raw_context) {
         if (context->scroll_benchmark && context->pending_scroll_drag_delta != 0) {
             scroll_changed = schedule_scroll_offset(
                 *context, context->scroll_y + context->pending_scroll_drag_delta);
+        } else if (context->installed_bundle_app &&
+                   context->pending_scroll_slot != TimerUiTaskContext::kScrollOffsetSlotCount &&
+                   context->pending_scroll_drag_delta != 0) {
+            const std::size_t slot = context->pending_scroll_slot;
+            scroll_changed = schedule_installed_scroll_offset(
+                *context, slot, context->scroll_offsets[slot].scroll_y + context->pending_scroll_drag_delta);
         }
         if (work_plan.timer_callbacks_to_pump > 0 || force_first_frame) {
             if (context->scroll_benchmark) {
