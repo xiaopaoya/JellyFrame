@@ -92,6 +92,25 @@ python tools\jellyframe_cli.py doctor `
 
 汇总行会输出 `measured=`，方便审阅者区分纯静态预检与已经合并 Win32/实机证据的报告。
 
+需要比较多次采样时，可使用 `render_performance_report.py` 生成统一 JSON 和可打开的
+HTML 汇总：
+
+```powershell
+python tools\render_performance_report.py `
+  --report build\watch_weather.package.report.json `
+  --trace build\watch_weather.render.trace.jsonl `
+  --device-telemetry build\watch_weather.port.log `
+  --microbench build\render-core-microbench.txt `
+  --output build\watch_weather.performance.json `
+  --html-output build\watch_weather.performance.html
+```
+
+其中 `--trace` 使用版本化的 `jellyframe.render.trace.v0` JSONL：每条 frame 记录可包含
+`stagesUs`、`dirtyRectCount`、`dirtyAreaPercent`、`action`、`reason`、`pipeline` 和
+可选的 `commands` 归因。当前 Win32/port 尚未默认产生该逐帧文件，因此没有 trace 时
+工具仍会报告已有的单帧 timings 和设备 aggregate telemetry，但会明确列出限制；不能
+把 isolated microbench 或 desktop 时间解释为某个 MCU 元素的真实耗时。
+
 诊断标题和解释会尽量复用 Web/CSS 规范中已有的表达：parse error、invalid declaration、
 unsupported value、overflow、clipping、deferred API 等。JellyFrame 自己的 `code` 字段只作为
 稳定的机器可读标识，便于工具和 CI 使用。

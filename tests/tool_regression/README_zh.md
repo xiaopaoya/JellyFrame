@@ -16,6 +16,7 @@ render-core 或 app-runtime C++ 单元测试的行为。
 | 视觉 diagnostics 和布局捕获 | `pipeline_visual_diagnostics_tests.py`、`flex_grid_capture_tests.py` |
 | 模板和外部作者流程 | `template_trial_tests.py` |
 | 字体、链接图和构建切片 | `font_policy_report_tests.py`、`render_core_link_map_tests.py` |
+| 渲染性能报告 | `render_performance_report_tests.py` |
 
 缩小问题时可以直接运行单个 Python 文件；确认修复时优先运行对应 CTest，
 因为 CTest 会提供正确的构建 executable 和工作目录。
