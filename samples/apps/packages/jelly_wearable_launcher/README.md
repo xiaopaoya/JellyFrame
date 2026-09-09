@@ -1,6 +1,6 @@
 # Wearable Launcher
 
-> Last updated: 2026-07-14; Applies to: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
 An icon-first, round-300 wearable launcher visual sample. Compact `max-height`
 and `max-width` rules also keep its app grid usable on the standard 320 x 240
@@ -11,3 +11,9 @@ The six icons are built from bounded CSS primitives: radial and conic gradients,
 rounded boxes, circles and short line elements. The page uses no JavaScript,
 host services, images or Canvas, so it is a low-cost reference for a consumer
 wearable app grid.
+
+## Visual role
+
+Uses the wearable palette. Native host support and the acceptance limitations below still apply.
+
+Regression input only; excluded from the recommended showcase set.

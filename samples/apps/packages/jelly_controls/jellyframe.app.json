@@ -60,8 +60,8 @@
       "gate": {
         "policy": "reject",
         "minViewport": {
-          "width": 300,
-          "height": 220
+          "width": 320,
+          "height": 240
         },
         "allowScroll": false,
         "allowHorizontalOverflow": false,
@@ -81,7 +81,7 @@
         "policy": "reject",
         "minViewport": {
           "width": 172,
-          "height": 300
+          "height": 320
         },
         "allowScroll": false,
         "allowHorizontalOverflow": false,
@@ -89,5 +89,9 @@
         "maxErrors": 0
       }
     }
-  }
+  },
+  "requiresFeatures": [
+    "css.flex-grid",
+    "css.modern-paint"
+  ]
 }

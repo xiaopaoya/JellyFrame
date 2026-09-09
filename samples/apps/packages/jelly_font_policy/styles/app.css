@@ -1,68 +1,74 @@
 :root {
-  display: block;
-  background: #101319;
-  color: #f7fafc;
-  font-family: system-ui, sans-serif;
+  display:block;
+  background:#000000;
+  color:#E8F3FA;
+  font-family:system-ui, sans-serif;
 }
 
 body {
-  display: block;
-  margin: 0;
-  padding: 18px;
-  background: linear-gradient(#172033, #0b0d12);
+  display:block;
+  margin:0;
+  padding:18px;
+  background:linear-gradient(#121C28, #000000);
 }
 
 .screen {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 264px;
-  height: 264px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:264px;
+  height:264px;
 }
 
 .panel {
-  display: block;
-  width: 210px;
-  padding: 18px;
-  border-radius: 24px;
-  background: linear-gradient(#26344f, #171d2a);
-  color: #ffffff;
-  text-align: center;
+  display:block;
+  width:210px;
+  padding:18px;
+  border-radius:24px;
+  background:linear-gradient(#121C28, #121C28);
+  color:#E8F3FA;
+  text-align:center;
 }
 
 .label {
-  margin: 0 0 14px 0;
-  color: #9fb4d8;
-  font-size: 13px;
+  margin:0 0 14px 0;
+  color:#ADC4D2;
+  font-size:13px;
 }
 
 h1 {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 700;
+  margin:0;
+  font-size:28px;
+  font-weight:700;
 }
 
 .cn {
-  font-family: "Jelly Tiny CN", system-ui, sans-serif;
+  font-family:"Jelly Tiny CN", system-ui, sans-serif;
 }
 
 .symbols {
-  margin: 10px 0 0 0;
-  color: #ffe6a7;
-  font-family: "Jelly Tiny Symbols", system-ui, sans-serif;
-  font-size: 18px;
-  font-weight: 700;
+  margin:10px 0 0 0;
+  color:#E8F3FA;
+  font-family:"Jelly Tiny Symbols", system-ui, sans-serif;
+  font-size:18px;
+  font-weight:700;
 }
 
 .body {
-  margin: 12px 0 0 0;
-  color: #d7e3f8;
-  font-size: 14px;
+  margin:12px 0 0 0;
+  color:#E8F3FA;
+  font-size:14px;
 }
 
 .missing {
-  margin: 8px 0 0 0;
-  color: #ffb4c4;
-  font-family: "Jelly Tiny CN", system-ui, sans-serif;
-  font-size: 12px;
+  margin:8px 0 0 0;
+  color:#E8F3FA;
+  font-family:"Jelly Tiny CN", system-ui, sans-serif;
+  font-size:12px;
 }
+
+/* Shared wearable colors from JellyFrame palette v2. Layout remains app-local. */
+html, body { background: #000000; color: #E8F3FA; }
+button:focus { outline-color: #67DDED; }
+ :root, body { background: #000000; color: #E8F3FA; } .panel { background: #121C28; }
+.label, .body { color: #ADC4D2; } .symbols { color: #FFCC88; } .missing { color: #EC86A4; }

@@ -1,12 +1,11 @@
-# Weather Template
+# weather
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
-Brand-neutral weather app template for local-first data UI, package BMP image
-resources, event delegation and future host network integration.
+A local-only weather starter with three deterministic datasets, BMP icons and responsive cards. No network or storage service is required.
 
-The template asks the host data service for `/data/weather.json` through the
-JellyFrame `XMLHttpRequest` V0 subset when scripting is available, but keeps
-local fallback data because remote page loading is intentionally not part of the
-embedded core. It follows the shared template structure in
-`../CONVENTIONS.md`.
+Follows [template conventions](../CONVENTIONS.md).
+
+```powershell
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app tools/templates/apps/weather --frame-script tools/templates/apps/weather/capture_review.jfcapture
+```

@@ -1,22 +1,3 @@
 <!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Route Tabs</title>
-  <link rel="stylesheet" href="styles/app.css">
-</head>
-<body>
-  <main class="screen">
-    <p class="eyebrow">APP-LOCAL ROUTE</p>
-    <h1 id="title">Today</h1>
-    <p id="summary" class="summary">Your next focus block starts at 09:30.</p>
-    <section class="card"><p id="detail">Morning plan</p></section>
-    <nav class="tabs" aria-label="Route tabs">
-      <button data-route="today">Today</button>
-      <button data-route="focus">Focus</button>
-      <button data-route="settings">Prefs</button>
-    </nav>
-  </main>
-  <script src="scripts/app.js"></script>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8"><title>Daybook</title><link rel="stylesheet" href="styles/app.css"></head>
+<body><main class="screen" id="app"><section class="heading"><p class="eyebrow">DAYBOOK</p><button id="back">Back</button></section><h1 id="title">Today</h1><section class="card"><p id="detail">UP NEXT</p><strong id="value">09:30</strong><p id="summary">Morning reading</p></section><nav class="tabs"><button id="today" data-route="today">Today</button><button id="focus" data-route="focus">Focus</button><button id="settings" data-route="settings">Prefs</button></nav></main><script src="scripts/app.js"></script></body></html>

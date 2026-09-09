@@ -1,6 +1,6 @@
 # JellyFrame 胶体界面系统
 
-> 最后更新：2026-07-14；适用版本：0.5.0
+> 最后更新：2026-09-09；适用版本：0.6.0-dev
 
 本文定义 JellyFrame 的第一套原生视觉与动效体系。它把项目名里的
 `Jelly` 解释为水母和果冻共享的胶体特性：柔软膜面、半透明厚度、内部微光、
@@ -67,8 +67,8 @@ layout motion。它们可以出现在设计稿中，但实现必须提供 JellyF
 
 ## 已落地示例
 
-- `samples/apps/packages/jelly_controls`：完整可安装 source package，展示胶体按钮、输入框、
-  switch、进度条和小型 keyframe pulse。
+- `samples/apps/packages/jelly_controls`：完整可安装 source package，展示原生文本、滑块、
+  复选框和当前会话的保存反馈。
 - `samples/apps/packages/jelly_motion_lab`：带 manifest 的确定性动效展示，使用
   paint-safe transform、opacity 和脚本化回放。
 - `samples/apps/packages/jelly_wearable_launcher`：图标网格绘制回归输入，不是 app 作者 starter。

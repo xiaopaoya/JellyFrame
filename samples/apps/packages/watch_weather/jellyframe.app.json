@@ -27,8 +27,13 @@
     "maxTimers": 4,
     "maxEventListeners": 32
   },
-  "permissions": ["network"],
-  "capabilities": ["network.fetch", "storage.kv"],
+  "permissions": [
+    "network"
+  ],
+  "capabilities": [
+    "network.fetch",
+    "storage.kv"
+  ],
   "targets": {
     "round-300": {
       "viewport": {
@@ -37,9 +42,9 @@
         "shape": "round"
       },
       "fontProfile": "tiny-plus-symbols",
-      "output": "cpp",
+      "output": "jfapp",
       "gate": {
-        "policy": "warn",
+        "policy": "reject",
         "minViewport": {
           "width": 300,
           "height": 300
@@ -57,12 +62,12 @@
         "shape": "rect"
       },
       "fontProfile": "tiny-plus-symbols",
-      "output": "cpp",
+      "output": "jfapp",
       "gate": {
-        "policy": "warn",
+        "policy": "reject",
         "minViewport": {
-          "width": 300,
-          "height": 220
+          "width": 320,
+          "height": 240
         },
         "allowScroll": false,
         "allowHorizontalOverflow": false,
@@ -77,12 +82,12 @@
         "shape": "rect"
       },
       "fontProfile": "tiny-plus-symbols",
-      "output": "cpp",
+      "output": "jfapp",
       "gate": {
-        "policy": "warn",
+        "policy": "reject",
         "minViewport": {
           "width": 172,
-          "height": 300
+          "height": 320
         },
         "allowScroll": false,
         "allowHorizontalOverflow": false,
@@ -90,5 +95,9 @@
         "maxErrors": 0
       }
     }
-  }
+  },
+  "requiresFeatures": [
+    "css.flex-grid",
+    "css.modern-paint"
+  ]
 }

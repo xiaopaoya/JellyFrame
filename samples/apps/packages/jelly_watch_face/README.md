@@ -1,6 +1,6 @@
 # Jelly Watch Face
 
-> Last updated: 2026-07-07; Applies to: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
 Analog watch-face sample for the `transform: rotate(...)`,
 `transform-origin`, `border-radius: 50%` and `conic-gradient()` progress-ring
@@ -19,3 +19,9 @@ inspect hand rotation, the `conic-gradient()` ring and rounded antialiasing:
 ```powershell
 .\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_watch_face --frame-script samples\apps\packages\jelly_watch_face\capture_watch_face_30fps.jfcapture
 ```
+
+## Visual role
+
+Uses the wearable palette. Native host support and the acceptance limitations below still apply.
+
+Regression input only; excluded from the recommended showcase set.

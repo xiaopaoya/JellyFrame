@@ -1,6 +1,6 @@
 # Audio Smoke
 
-> Last updated: 2026-07-07; Applies to: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
 Small package used to validate the Win32 host-owned audio path.
 
@@ -24,3 +24,7 @@ host handoff without opening the interactive shell:
 This validates the desktop shell boundary only. `tone.wav` is not a product
 codec acceptance asset. Product audio codecs, I2S and playback tasks remain
 host/port responsibilities.
+
+## Visual role
+
+Uses the wearable palette. Native host support and the acceptance limitations below still apply.

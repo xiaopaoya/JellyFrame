@@ -1,33 +1,3 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Calculator</title>
-  <link rel="stylesheet" href="styles/app.css">
-</head>
-<body>
-  <main class="screen" id="app">
-    <section class="display-panel">
-      <span id="status">QUICK MATH</span>
-      <input id="display" value="0">
-    </section>
-    <section class="keys">
-      <button class="soft" data-op="clear"><span>C</span></button>
-      <button class="soft" data-op="+"><span>+</span></button>
-      <button class="soft" data-op="-"><span>-</span></button>
-      <button class="num" data-key="7"><span>7</span></button>
-      <button class="num" data-key="8"><span>8</span></button>
-      <button class="num" data-key="9"><span>9</span></button>
-      <button class="num" data-key="4"><span>4</span></button>
-      <button class="num" data-key="5"><span>5</span></button>
-      <button class="num" data-key="6"><span>6</span></button>
-      <button class="num" data-key="1"><span>1</span></button>
-      <button class="num" data-key="2"><span>2</span></button>
-      <button class="num" data-key="3"><span>3</span></button>
-      <button class="num wide" data-key="0"><span>0</span></button>
-      <button class="equals" data-op="="><span>=</span></button>
-    </section>
-  </main>
-  <script src="scripts/app.js"></script>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8"><title>Quick math</title><link rel="stylesheet" href="styles/app.css"></head>
+<body><main class="screen" id="app"><section class="display-panel"><p id="status" class="eyebrow">QUICK MATH</p><input id="display" readonly="readonly" value="0" aria-label="Result"></section><section class="keys"><button id="key-7" data-key="7" class="digit">7</button><button id="key-8" data-key="8" class="digit">8</button><button id="key-9" data-key="9" class="digit">9</button><button id="key-plus" data-key="+" class="op">+</button><button id="key-4" data-key="4" class="digit">4</button><button id="key-5" data-key="5" class="digit">5</button><button id="key-6" data-key="6" class="digit">6</button><button id="key-minus" data-key="-" class="op">-</button><button id="key-1" data-key="1" class="digit">1</button><button id="key-2" data-key="2" class="digit">2</button><button id="key-3" data-key="3" class="digit">3</button><button id="key-clear" data-key="C" class="op">C</button><button id="key-0" data-key="0" class="zero">0</button><button id="key-equals" data-key="=" class="equals">=</button></section></main><script src="scripts/app.js"></script></body></html>

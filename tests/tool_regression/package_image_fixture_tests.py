@@ -47,20 +47,21 @@ def assert_weather_icon_pixels(capture: Path) -> None:
     width, height, pixels = read_bmp_pixels(capture)
     if (width, height) != (300, 300):
         raise AssertionError(f"unexpected capture size: {width}x{height}")
-    # The cloud icon sits inside `.weather-art` near the upper-left hero card.
-    # Without package image decode this region is almost entirely teal fallback.
-    x1, y1, x2, y2 = 26, 55, 100, 130
-    unique = set()
-    pale_cloud_pixels = 0
+    # The 64px package icon is in the upper-right hero tile. Require both
+    # cloud cyan and sun amber, so text or the dark card cannot satisfy this.
+    x1, y1, x2, y2 = 194, 60, 274, 140
+    cloud_pixels = 0
+    sun_pixels = 0
     for y in range(y1, y2):
         for x in range(x1, x2):
             color = pixel_at(pixels, width, x, y)
-            unique.add(color)
             r, g, b = color
-            if r >= 180 and g >= 220 and b >= 220:
-                pale_cloud_pixels += 1
-    print(f"icon_region unique_colors={len(unique)} pale_cloud_pixels={pale_cloud_pixels}")
-    if len(unique) < 8 or pale_cloud_pixels < 300:
+            if 70 <= r <= 130 and g >= 190 and b >= 190:
+                cloud_pixels += 1
+            if r >= 220 and 150 <= g <= 220 and 70 <= b <= 160:
+                sun_pixels += 1
+    print(f"icon_region cloud_pixels={cloud_pixels} sun_pixels={sun_pixels}")
+    if cloud_pixels < 300 or sun_pixels < 100:
         raise AssertionError("package BMP icon did not appear in the Win32 capture")
 
 
@@ -75,9 +76,9 @@ def assert_image_diagnostics(report_path: Path) -> None:
         metadata = entry.get("metadata", {})
         if entry.get("targetSupport") != "supported" or entry.get("codec") != "bmp":
             raise AssertionError(f"unexpected image entry support: {entry}")
-        if metadata.get("width") != 72 or metadata.get("height") != 72:
+        if metadata.get("width") != 64 or metadata.get("height") != 64:
             raise AssertionError(f"unexpected image metadata: {metadata}")
-        if metadata.get("bitsPerPixel") != 32 or metadata.get("compression") != 0:
+        if metadata.get("bitsPerPixel") != 24 or metadata.get("compression") != 0:
             raise AssertionError(f"unexpected BMP format metadata: {metadata}")
 
 

@@ -1,46 +1,7 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Watch Weather</title>
-  <link rel="stylesheet" href="styles/app.css">
-</head>
-<body>
-  <main class="screen" id="app">
-    <section class="topbar">
-      <span class="place"><span class="live">LIVE</span> Shanghai</span>
-      <span id="updated" class="meta">Local</span>
-    </section>
-    <section class="hero">
-      <div class="weather-art">
-        <img id="icon" src="assets/cloudy.bmp" alt="Cloudy">
-      </div>
-      <div class="weather-copy">
-        <div class="eyebrow">NOW</div>
-        <div class="label" id="condition">Cloudy</div>
-        <div class="temp"><span id="temp">26</span><span class="unit">deg</span></div>
-        <div class="summary" id="summary">AQI 42 Good</div>
-      </div>
-    </section>
-    <section class="stats">
-      <div><span>WIND</span><strong id="wind">8</strong><small>km/h</small></div>
-      <div><span>RAIN</span><strong id="rain">20</strong><small>% next hour</small></div>
-    </section>
-    <section class="actions">
-      <button class="tile" data-mode="hourly">Hourly</button>
-      <button class="tile selected" data-mode="daily">Daily</button>
-      <button class="tile" data-mode="air">Air</button>
-    </section>
-    <section class="statusline">
-      <span id="net">Offline</span>
-      <span id="visible">Visible</span>
-    </section>
-    <section hidden>
-      <img src="assets/sunny.bmp" alt="">
-      <img src="assets/rain.bmp" alt="">
-      <img src="assets/haze.bmp" alt="">
-    </section>
-  </main>
-  <script src="scripts/app.js"></script>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8"><title>Weather</title><link rel="stylesheet" href="styles/app.css"></head>
+<body><main class="screen" id="app"><p class="eyebrow">SHANGHAI <span id="source">Sample</span></p>
+<section class="weather"><div class="reading"><div class="temperature"><strong id="temp">26</strong><span id="unit">C</span></div><p id="condition">Cloudy</p></div><img id="icon" src="assets/cloudy.bmp" width="64" height="64" alt=""></section>
+<p id="summary" class="summary">High 29 / Low 22</p>
+<section class="facts"><p><span>Wind</span><strong id="wind">8 km/h</strong></p><p><span>Rain</span><strong id="rain">20%</strong></p></section>
+<nav class="tabs"><button id="hourly" data-mode="hourly">Hour</button><button id="daily" data-mode="daily">Day</button><button id="air" data-mode="air">Air</button></nav></main><script src="scripts/app.js"></script></body></html>

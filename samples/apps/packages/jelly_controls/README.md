@@ -1,9 +1,9 @@
-# Jelly Controls
+# jelly_controls
 
-> Last updated: 2026-07-07; Applies to: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
-Small installable package demonstrating the JellyFrame Gel Interface System.
+Reading settings using real text, range and checkbox inputs. Save reports the current session state; it does not imply persistent storage.
 
-- Uses standard HTML controls and tiny JavaScript.
-- Motion stays on `opacity`, `background-color` and `transform`.
-- No canvas, filter, backdrop-filter or layout animation is required.
+```powershell
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app samples/apps/packages/jelly_controls --frame-script samples/apps/packages/jelly_controls/capture_review.jfcapture
+```

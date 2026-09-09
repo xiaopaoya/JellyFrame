@@ -1,6 +1,6 @@
 # Service Status
 
-> 最后更新：2026-07-10；适用版本：0.5.0
+> 最后更新：2026-09-09；适用版本：0.6.0-dev；Render Core 基线：0.6.2
 
 用于验证可选数据、媒体和定位服务边界的小型 runtime 示例。
 
@@ -30,3 +30,7 @@ capture 汇总中应能看到非零 network/location host completion、脚本处
 screen hidden 期间 network 会按 manifest 策略停止，audio 继续允许，sensors/location 会在
 息屏或低功耗帧中被节流。Sensor summary 注入只是 Win32 host-data 验收路径，不代表 app 已有
 JavaScript sensor API。
+
+## 视觉用途
+
+采用可穿戴配色；以下宿主能力和验收限制仍然适用。

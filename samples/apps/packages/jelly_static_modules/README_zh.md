@@ -1,11 +1,5 @@
-# 静态模块
+# jelly_static_modules
 
-> 最后更新：2026-07-10；适用版本：0.5.0
+> 最后更新：2026-09-09；适用版本：0.6.0-dev；Render Core 基线：0.6.2
 
-这个小包证明打包期 ES-module 子集：`index.html` 有一个外部 `type="module"` 入口，
-`scripts/app.js` import 一个 package-local helper。打包会把入口改写成生成的 classic script
-bundle，因此设备 runtime 无需 module loader。
-
-```powershell
-python tools\jellyframe_cli.py preview --root samples\apps\packages\jelly_static_modules --output build\static_modules.bmp --build-dir build\desktop-release\Release
-```
+打包期静态模块合成。缩紧过高卡片和底部按钮，三屏保留 Add 5 min。直接 source capture 会跳过 type=module；正确证据来自 CLI 打包后的 .jfapp，25m→30m→35m 已断言。

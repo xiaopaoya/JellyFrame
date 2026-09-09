@@ -1,21 +1,11 @@
-# Jelly Motion Lab
+# jelly_motion_lab
 
-> Last updated: 2026-07-07; Applies to: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
-Packaged animation fixture for validating watch-style JellyFrame motion. It
-uses standard CSS `@keyframes`, `transform`, `opacity`, transitions and
-`requestAnimationFrame`; no custom motion API is required.
-
-Useful Win32 capture:
+A cyan gradient orb demonstrates requestAnimationFrame, scale, opacity and translation. Breathe and Slide select the mode; Pause cancels the pending animation callback. Existing low-power and soak capture workloads remain unchanged.
 
 ```powershell
-.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_motion_lab --capture-frames out\motion_lab_frames --frame-count 30 --frame-step-ms 33 --viewport-width 300 --viewport-height 300
-```
-
-Preferred deterministic scripted capture:
-
-```powershell
-.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_motion_lab --frame-script samples\apps\packages\jelly_motion_lab\capture_30fps.jfcapture
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app samples/apps/packages/jelly_motion_lab --frame-script samples/apps/packages/jelly_motion_lab/capture_review.jfcapture
 ```
 
 Longer 30fps soak capture for regression review:

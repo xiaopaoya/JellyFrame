@@ -1,106 +1,61 @@
-var temp = document.getElementById("temp");
-var summary = document.getElementById("summary");
-var condition = document.getElementById("condition");
-var icon = document.getElementById("icon");
-var wind = document.getElementById("wind");
-var rain = document.getElementById("rain");
-var updated = document.getElementById("updated");
-var net = document.getElementById("net");
-var visible = document.getElementById("visible");
-var app = document.getElementById("app");
 var modes = {
-  hourly: { temp: "27", condition: "Rain soon", summary: "Next hour 35%", wind: "9", rain: "35", updated: "1h", icon: "rain" },
-  daily: { temp: "26", condition: "Cloudy", summary: "High 29 Low 22", wind: "8", rain: "20", updated: "Today", icon: "cloudy" },
-  air: { temp: "42", condition: "Air", summary: "AQI good", wind: "5", rain: "10", updated: "AQI", icon: "haze" }
+  hourly: {temp: "27", condition: "Rain soon", summary: "Next hour / 35% rain", wind: "9", rain: "35", icon: "rain"},
+  daily: {temp: "26", condition: "Cloudy", summary: "High 29 / Low 22", wind: "8", rain: "20", icon: "cloudy"},
+  air: {temp: "42", condition: "Good air", summary: "Air quality index", wind: "5", rain: "10", icon: "haze"}
 };
 var currentMode = "daily";
-
-function iconPath(name) {
-  if (name == "sunny") {
-    return "assets/sunny.bmp";
-  }
-  if (name == "rain") {
-    return "assets/rain.bmp";
-  }
-  if (name == "haze") {
-    return "assets/haze.bmp";
-  }
-  return "assets/cloudy.bmp";
-}
-
-function hasStorage() {
-  return typeof localStorage != "undefined";
-}
-
-function applyWeather(data, mode) {
-  if (!data) {
-    return;
-  }
-  currentMode = mode || currentMode;
-  temp.textContent = data.temp || temp.textContent;
-  condition.textContent = data.condition || condition.textContent;
-  summary.textContent = data.summary || summary.textContent;
-  wind.textContent = data.wind || wind.textContent;
-  rain.textContent = data.rain || rain.textContent;
-  updated.textContent = data.updated || updated.textContent;
-  icon.setAttribute("src", iconPath(data.icon));
-  if (hasStorage()) {
-    localStorage.setItem("weatherMode", currentMode);
+function renderWeather(mode) {
+  if (!modes[mode]) { mode = "daily"; }
+  currentMode = mode;
+  var data = modes[mode];
+  document.getElementById("temp").textContent = String(data.temp);
+  document.getElementById("unit").textContent = mode == "air" ? "AQI" : "C";
+  document.getElementById("condition").textContent = data.condition;
+  document.getElementById("summary").textContent = data.summary;
+  document.getElementById("wind").textContent = String(data.wind) + " km/h";
+  document.getElementById("rain").textContent = String(data.rain) + "%";
+  var icon = data.icon;
+  if (icon != "sunny" && icon != "rain" && icon != "haze") { icon = "cloudy"; }
+  document.getElementById("icon").setAttribute("src", "assets/" + icon + ".bmp");
+  var tabs = document.querySelectorAll("[data-mode]");
+  for (var i = 0; i < tabs.length; i += 1) {
+    tabs[i].classList.toggle("selected", tabs[i].dataset.mode == mode);
   }
 }
-
-function parseWeatherPayload(text) {
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    return null;
-  }
-}
-
-function refreshSystemState() {
-  net.textContent = navigator.onLine ? "Online" : "Offline";
-  visible.textContent = document.visibilityState;
-}
-
-function fetchWeather() {
-  if (typeof XMLHttpRequest == "undefined") {
-    updated.textContent = "Local";
-    return;
-  }
-  var xhr = new XMLHttpRequest();
-  xhr.open("GET", "/data/weather.json", true);
-  xhr.onload = function () {
-    var payload = parseWeatherPayload(xhr.responseText);
-    if (payload && payload.modes) {
-      modes = payload.modes;
-      applyWeather(modes[currentMode] || modes.daily, currentMode);
-    } else if (payload) {
-      applyWeather(payload, currentMode);
-    }
-  };
-  xhr.onerror = function () {
-    updated.textContent = "Local";
-  };
-  xhr.send();
-}
-
-app.addEventListener("click", function (event) {
+document.getElementById("app").addEventListener("click", function (event) {
   var button = event.target.closest("button");
-  if (!button || !button.dataset.mode) {
-    return;
+  if (button && button.dataset.mode) {
+    renderWeather(button.dataset.mode);
+    saveMode();
   }
-  var buttons = app.querySelectorAll("button");
-  for (var index = 0; index < buttons.length; index += 1) {
-    buttons[index].classList.toggle("selected", buttons[index] === button);
-  }
-  applyWeather(modes[button.dataset.mode], button.dataset.mode);
 });
 
-document.addEventListener("visibilitychange", refreshSystemState);
-
-if (hasStorage() && localStorage.getItem("weatherMode")) {
-  currentMode = localStorage.getItem("weatherMode");
+function saveMode() {
+  if (typeof localStorage != "undefined") {
+    try { localStorage.setItem("weatherMode", currentMode); } catch (error) { /* The view remains usable without storage. */ }
+  }
 }
-applyWeather(modes[currentMode] || modes.daily, currentMode);
-refreshSystemState();
-fetchWeather();
+if (typeof localStorage != "undefined") {
+  try { currentMode = localStorage.getItem("weatherMode") || "daily"; } catch (error) {}
+}
+renderWeather(currentMode);
+function useSample() { document.getElementById("source").textContent = "Sample"; }
+// This data route is supplied by the host; it never loads remote page resources.
+if (typeof XMLHttpRequest != "undefined") {
+  var request = new XMLHttpRequest();
+  request.open("GET", "/data/weather.json", true);
+  request.onload = function () {
+    if (request.status < 200 || request.status >= 300) { useSample(); return; }
+    try {
+      var payload = JSON.parse(request.responseText);
+      var data = payload.modes ? payload.modes[currentMode] : payload;
+      if (!data || data.temp == null || !data.condition || !data.summary || data.wind == null || data.rain == null) { useSample(); return; }
+      modes[currentMode] = data;
+      renderWeather(currentMode);
+      // Desktop host fixtures are demonstration data, not a live weather service.
+      document.getElementById("source").textContent = "Demo";
+    } catch (error) { useSample(); }
+  };
+  request.onerror = useSample;
+  request.send();
+}

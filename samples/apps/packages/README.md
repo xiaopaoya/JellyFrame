@@ -1,6 +1,6 @@
 # App Packages
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
 Complete JellyFrame source-package examples live here. Each app should include
 `jellyframe.app.json`, local HTML/CSS/classic JavaScript and any bounded local
@@ -32,9 +32,14 @@ All four must remain readable, visually reviewed and deterministic under the
 current desktop shell. `doctor --trial` remains free to use focused acceptance
 packages where it needs a particular contract.
 
-Acceptance packages:
+Specialized showcase references: `jelly_canvas_gauges` (optional Canvas service) and
+`jelly_static_modules` (package-time module composition). Together with the four
+showcases above and the weather/clock/timer/calculator templates, these form the
+10 recommended examples. `blank` remains the minimal starting point.
 
-- `jelly_canvas_smoke`: optional Canvas 2D V0.4 trend/bar-chart sample using bounded canvas-to-canvas drawImage scaling, radial highlights and budgeted quadratic/cubic paths.
+Acceptance packages and capability details:
+
+- `jelly_canvas_smoke`: regression input, excluded from visual showcases; optional Canvas 2D V0.4 trend/bar-chart coverage using bounded canvas-to-canvas drawImage scaling, radial highlights and budgeted quadratic/cubic paths.
 - `jelly_canvas_gauges`: optional Canvas 2D gauge/ring sample using `arc`,
   `fill`, `globalAlpha`, Canvas text, linear gradients and bounded path drawing.
 - `jelly_service_status`: optional network/audio/location service-boundary

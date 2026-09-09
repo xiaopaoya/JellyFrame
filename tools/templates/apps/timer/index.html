@@ -1,37 +1,3 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Timer</title>
-  <link rel="stylesheet" href="styles/app.css">
-</head>
-<body>
-  <main class="screen" id="app">
-    <section class="topline">
-      <span class="title">Focus</span>
-      <span id="round" class="meta">1/4</span>
-    </section>
-    <section class="dial">
-      <div class="track">
-        <div class="inside">
-          <span class="eyebrow">SESSION</span>
-          <span id="state">Stopped</span>
-          <strong id="time">00:00</strong>
-        </div>
-      </div>
-    </section>
-    <section class="segments">
-      <div class="seg active"><span></span></div>
-      <div class="seg"><span></span></div>
-      <div class="seg"><span></span></div>
-      <div class="seg"><span></span></div>
-    </section>
-    <section class="actions">
-      <button data-action="tick"><span>+1s</span></button>
-      <button data-action="toggle" id="toggle"><span>Start</span></button>
-      <button data-action="reset"><span>Reset</span></button>
-    </section>
-  </main>
-  <script src="scripts/app.js"></script>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8"><title>Focus timer</title><link rel="stylesheet" href="styles/app.css"></head>
+<body><main class="screen" id="app"><p class="eyebrow">ONE MINUTE / FOCUS</p><section class="timer-face"><div class="timer-ring" id="ring"><div class="timer-core"><p id="state">Ready</p><strong id="time">01:00</strong></div></div></section><div class="actions"><button id="reset">Reset</button><button id="toggle">Start</button></div></main><script src="scripts/app.js"></script></body></html>
