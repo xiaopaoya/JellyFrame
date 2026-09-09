@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.52",
+  "version": "0.4.53",
   "publisher": "jellyframe",
   "icon": "media/jellyframe.png",
   "repository": {
@@ -24,6 +24,7 @@
     "onCommand:jellyframe.debugExternal",
     "onCommand:jellyframe.runFrameScript",
     "onCommand:jellyframe.openCapture",
+    "onCommand:jellyframe.openRenderTrace",
     "onCommand:jellyframe.listBuilds",
     "onCommand:jellyframe.setupDesktopBuild",
     "onCommand:jellyframe.package",
@@ -80,6 +81,11 @@
         "command": "jellyframe.openCapture",
         "title": "%command.openCapture%",
         "icon": "$(open-preview)"
+      },
+      {
+        "command": "jellyframe.openRenderTrace",
+        "title": "%command.openRenderTrace%",
+        "icon": "$(graph-line)"
       },
       {
         "command": "jellyframe.listBuilds",
@@ -256,6 +262,10 @@
         {
           "command": "jellyframe.showReport",
           "group": "report@1"
+        },
+        {
+          "command": "jellyframe.openRenderTrace",
+          "group": "report@0"
         },
         {
           "command": "jellyframe.showOutput",

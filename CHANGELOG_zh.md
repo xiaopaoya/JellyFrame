@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-09-04；适用版本：0.6.0-dev
+> 最后更新：2026-09-09；适用版本：0.6.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -13,6 +13,9 @@ JellyFrame Engine 的重要变更记录在这里。
 - 启动外部开发者试用线：完善构建 profile/模块证据、打包与启动器工作流，并针对能力缺口做有边界的补全。任何新的浏览器兼容承诺都必须同时落入能力矩阵、profile gate 和回归测试。
 
 ### 变更
+
+- VS Code 扩展现在可在 `.jfcapture` 回放时生成 bounded Render Trace，并通过逐帧面板查看
+  桌面壳阶段耗时、脏区指标和可用的绘制命令归因；面板明确标注该数据不代表实机 FPS。
 
 - Runtime 现在锁定带签名的 Render Core `0.6.2` release（ABI `1`、source identity
   `539a8945...8462e3f0`），并在 package-consumer CI 中校验其确定性 archive。

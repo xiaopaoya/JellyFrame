@@ -2,7 +2,7 @@
 
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-09-08; Applies to: 0.6.0-dev; extension version: 0.4.52; compatibility baseline: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; extension version: 0.4.53; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -20,6 +20,9 @@ Palette as entry points.
 - CLI output in a dedicated `JellyFrame` output channel.
 - A `JellyFrame Report` webview that puts CLI `developerAdvice[]` first, then
   summarizes resources, references, warnings and pipeline diagnostics.
+- A `Render Trace` webview for frame-by-frame inspection of desktop-shell JSONL
+  traces, including total time, stage shares, dirty-region metrics and paint
+  command attribution. It labels partial timing and does not present it as device FPS.
 - Inline diagnostics for app-author advice, package warnings and pipeline
   diagnostics.
 - Explorer status view showing the selected app, build, report diagnostics and
@@ -105,6 +108,10 @@ For an independent workspace, reports, captures and temporary package output
 go to `.jellyframe/build` in the App project instead of into the SDK.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
+Use `JellyFrame: Open Render Performance Trace` to select a
+`jellyframe.render.trace.v0` JSONL file and inspect it with the frame scrubber.
+The viewer bounds input size, preserves invalid or non-monotonic frame issues,
+and never silently sorts or fabricates records.
 
 `JellyFrame: Validate App Package` is the fast, package-only gate. It checks the
 manifest, entry point, local resources, references and declared budgets without

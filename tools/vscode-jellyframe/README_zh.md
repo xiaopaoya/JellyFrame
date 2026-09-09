@@ -2,7 +2,7 @@
 
 # JellyFrame VS Code 工具
 
-> 最后更新：2026-09-08；适用版本：0.6.0-dev；扩展版本：0.4.52；兼容基线：0.5.0
+> 最后更新：2026-09-09；适用版本：0.6.0-dev；扩展版本：0.4.53；兼容基线：0.5.0
 
 JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里检查、预览、调试和
 打包 JellyFrame App。安装后可以从左侧 JellyFrame 活动栏、资源管理器/编辑器右键菜单
@@ -18,6 +18,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 - 在专用 `JellyFrame` output channel 中显示 CLI 输出。
 - `JellyFrame Report` webview 会优先展示 CLI 的 `developerAdvice[]`，再汇总
   resources、references、warnings 和管线 diagnostics。
+- `Render Trace` webview 可逐帧查看桌面壳 JSONL trace 的总耗时、阶段占比、dirty 区指标和
+  绘制命令归因；它明确标注部分计时，不把桌面数据解释为设备 FPS。
 - 对 app 作者建议、package warnings 和管线 diagnostics 提供 inline diagnostics。
 - Explorer 中的 JellyFrame 状态视图显示当前 app、构建目录、报告诊断和性能摘要。
 - 首次配置作者环境时选择已安装的 JellyFrame SDK，独立 App 工作区随后可直接使用。
@@ -77,6 +79,9 @@ SDK 安装不会覆盖已有目录；Windows 的短暂权限或文件占用会�
 `.jellyframe/build`，不会污染 SDK。
 
 使用 `JellyFrame: Show Last Report` 可以重新打开最近一次报告面板。
+使用 `JellyFrame: Open Render Performance Trace` 选择 `jellyframe.render.trace.v0` JSONL，
+在逐帧滑块中查看阶段和绘制命令。查看器拒绝过大的文件，并保留非法或非递增帧号问题，
+不会静默排序或伪造数据。
 
 “验证 App 包”是快速的纯包门禁：检查 manifest、入口、资源、引用和声明预算，适合频繁运行，
 不会启动 Render Core，也不会询问分辨率、测量布局、帧时间或真实设备性能。

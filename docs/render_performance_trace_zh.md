@@ -159,12 +159,13 @@ present/DMA 时间和视觉误差。不同库不支持的能力单独标记 `not
 - 单帧 pipeline report、设备 aggregate telemetry、microbench 的明确分层；
 - trace V0 的输入格式和回归测试。
 
-### 第二阶段：进行中
+### 第二阶段：部分交付
 
 - Win32 shell 已在显式选项下产生 bounded frame JSONL；
 - trace report 工具会报告重复、回退或非法 frame number，不静默排序或伪造帧；
 - 每帧补齐阶段 timing、dirty/pipeline counters 和 frame update reason；
-- VS Code 性能面板读取 trace，支持 frame scrubber 和阶段占比；
+- VS Code Render Trace 面板读取 trace，支持 frame scrubber、阶段占比、dirty 指标和 command 归因；
+- `.jfcapture` 回放可显式生成同目录 bounded Render Trace，并在状态视图中保留打开入口；
 - 不提供元素耗时猜测，直到 Layer/DisplayCommand 有稳定 node attribution contract。
 
 ### 第三阶段：设备 profile

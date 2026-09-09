@@ -33,6 +33,7 @@ const {
   fetchLatestSdkRelease,
   sdkInstallName
 } = require("./sdk_download");
+const { parseRenderTrace, renderTraceHtml } = require("./render_trace_viewer");
 const {
   appFiles,
   initialModel,
@@ -43,11 +44,13 @@ const { attributeDiagnostic } = require("./visual_editor_diagnostics");
 
 let outputChannel;
 let reportPanel;
+let tracePanel;
 let capabilityDiagnostics;
 let lastReport;
 let lastReportCommand;
 let lastPackageRoot;
 let lastCapturePath;
+let lastTracePath;
 let lastDeviceDiscovery;
 let lastDeviceInfo;
 let lastDeviceApps;
@@ -2950,6 +2953,7 @@ async function runFrameScript(context, resourceUri) {
   const output = path.join(buildDir(context), "debug", `${outputBase(root)}-frames`);
   fs.mkdirSync(output, { recursive: true });
   const capture = path.join(output, "montage.bmp");
+  const trace = path.join(output, "render-trace.jsonl");
   const report = path.join(buildDir(context), "debug", `${outputBase(root)}-frame-script-report.json`);
   runCliWithOptions(context, [
     "preview",
@@ -2960,12 +2964,19 @@ async function runFrameScript(context, resourceUri) {
     "--report", report,
     "--frame-script", selected[0].fsPath,
     "--frame-output-dir", output,
+    "--render-trace", trace,
     "--font-budget", fontBudget
   ], {
     commandName: "frame-script",
     packageRoot: root,
     reportPath: report,
-    capture
+    capture,
+    onClose: (code) => {
+      if (code === 0 && fs.existsSync(trace)) {
+        lastTracePath = trace;
+        statusProvider?.refresh();
+      }
+    }
   });
 }
 
@@ -2983,6 +2994,35 @@ async function openCapture(context) {
   });
   if (selected && selected[0]) {
     openCaptureFile(selected[0].fsPath);
+  }
+}
+
+async function openRenderTrace(context) {
+  let filePath = lastTracePath && fs.existsSync(lastTracePath) ? lastTracePath : undefined;
+  if (!filePath) {
+    const selected = await vscode.window.showOpenDialog({
+      canSelectFiles: true,
+      canSelectFolders: false,
+      canSelectMany: false,
+      filters: { "JellyFrame render traces": ["jsonl", "trace", "json"] },
+      openLabel: isChinese() ? "打开 Render Trace" : "Open Render Trace"
+    });
+    if (!selected || !selected[0]) {
+      return;
+    }
+    filePath = selected[0].fsPath;
+  }
+  try {
+    const parsed = parseRenderTrace(fs.readFileSync(filePath, "utf8"));
+    lastTracePath = filePath;
+    showRenderTracePanel(context, parsed, filePath);
+    statusProvider?.refresh();
+  } catch (error) {
+    const message = isChinese()
+      ? `无法打开 Render Trace：${error.message}`
+      : `Could not open Render Trace: ${error.message}`;
+    ensureOutputChannel().appendLine(`[error] ${message}`);
+    vscode.window.showErrorMessage(message);
   }
 }
 
@@ -3188,6 +3228,7 @@ class JellyFrameStatusProvider {
       packageResources: "生成资源包",
       openReport: "打开最近报告",
       openCapture: "打开截图或回放文件",
+      openRenderTrace: "打开渲染性能 Trace",
       showOutput: "查看运行日志",
       reportReady: "报告已生成",
       noReport: "尚未生成报告",
@@ -3284,6 +3325,7 @@ class JellyFrameStatusProvider {
       packageResources: "Generate resource package",
       openReport: "Open latest report",
       openCapture: "Open capture or playback file",
+      openRenderTrace: "Open Render Performance Trace",
       showOutput: "View run log",
       reportReady: "Report ready",
       noReport: "No report yet",
@@ -3342,6 +3384,7 @@ class JellyFrameStatusProvider {
       this.group(labels.reports, "report", [
         ...(lastReport ? [this.commandItem(labels.openReport, labels.reportReady, "jellyframe.showReport", "output")] : []),
         ...(lastCapturePath ? [this.commandItem(labels.openCapture, path.basename(lastCapturePath), "jellyframe.openCapture", "open-preview")] : []),
+        ...(lastTracePath ? [this.commandItem(labels.openRenderTrace, path.basename(lastTracePath), "jellyframe.openRenderTrace", "graph-line")] : []),
         this.commandItem(labels.showOutput, chinese ? "打开 JellyFrame 命令与运行日志。" : "Open JellyFrame command and runtime logs.", "jellyframe.showOutput", "output"),
         this.statusItem(chinese ? "管线诊断" : "Pipeline diagnostics", labels.diagnostics, labels.diagnostics, "pulse"),
         this.statusItem(labels.performance, hasRenderData && performance?.rating ? `${labels.measured}: ${performance.rating}` : labels.notMeasured,
@@ -3547,6 +3590,7 @@ function reportLabels() {
     runtimeLog: "运行日志",
     frameOutputDir: "帧目录",
     montage: "蒙太奇",
+    renderTrace: "Render Trace",
     authorAdvice: "作者建议",
     renderingPreflight: "渲染预检",
     rating: "评级",
@@ -3596,6 +3640,7 @@ function reportLabels() {
     runtimeLog: "Runtime log",
     frameOutputDir: "Frame directory",
     montage: "Montage",
+    renderTrace: "Render Trace",
     authorAdvice: "App Author Advice",
     renderingPreflight: "Rendering Preflight",
     rating: "Rating",
@@ -3686,7 +3731,7 @@ function reportHtml() {
     ${isPackageValidation ? `<p class="info"><strong>${escapeHtml(labels.packageValid)}</strong> · ${escapeHtml(labels.packageValidationNote)}</p>` : ""}
     ${programmaticValidation ? `<h2>${escapeHtml(labels.programmaticValidation)}</h2>
       <p>${escapeHtml(labels.status)}: <strong>${escapeHtml(programmaticValidation.status || "unknown")}</strong> · ${escapeHtml(labels.script)}: <code>${escapeHtml(programmaticValidation.frameScript || "")}</code></p>
-      <p class="muted">${escapeHtml(labels.runtimeLog)}: <code>${escapeHtml(programmaticValidation.runtimeLog || "")}</code> · ${escapeHtml(labels.frameOutputDir)}: <code>${escapeHtml(programmaticValidation.frameOutputDir || "")}</code> · ${escapeHtml(labels.montage)}: <code>${escapeHtml(programmaticValidation.montage || "")}</code></p>` : ""}
+      <p class="muted">${escapeHtml(labels.runtimeLog)}: <code>${escapeHtml(programmaticValidation.runtimeLog || "")}</code> · ${escapeHtml(labels.frameOutputDir)}: <code>${escapeHtml(programmaticValidation.frameOutputDir || "")}</code> · ${escapeHtml(labels.montage)}: <code>${escapeHtml(programmaticValidation.montage || "")}</code>${programmaticValidation.renderTrace ? ` · ${escapeHtml(labels.renderTrace)}: <code>${escapeHtml(programmaticValidation.renderTrace)}</code>` : ""}</p>` : ""}
     ${developerAdvice.length ? `<h2>${escapeHtml(labels.authorAdvice)}</h2>
     ${renderList(developerAdvice, (advice) => `<li class="advice"><strong><span class="pill ${escapeHtml(advice.severity || "")}">${escapeHtml(advice.severity || "advice")}</span> ${escapeHtml(advice.title || advice.code || "Review item")}${advice.target ? ` <span class="muted">[${escapeHtml(advice.target)}]</span>` : ""}</strong><span>${escapeHtml(advice.action || advice.explanation || "")}</span>${advice.recipe ? ` <span class="muted">Recipe: <code>${escapeHtml(advice.recipe)}</code></span>` : ""}${advice.text ? ` <span class="muted">Text: <code>${escapeHtml(advice.text)}</code></span>` : ""}${advice.path ? ` <span class="muted">Path: <code>${escapeHtml(advice.path)}</code></span>` : ""}${advice.node ? ` <span class="muted">Node: <code>${escapeHtml(advice.node)}</code></span>` : ""}${advice.metrics ? ` <span class="muted">Metrics: <code>${escapeHtml(JSON.stringify(advice.metrics))}</code></span>` : ""}</li>`, labels.none)}
     ` : ""}
@@ -3749,6 +3794,23 @@ function showReportPanel(context) {
   }
   reportPanel.webview.html = reportHtml();
   reportPanel.reveal(vscode.ViewColumn.Beside);
+}
+
+function showRenderTracePanel(context, parsed, filePath) {
+  if (!tracePanel) {
+    tracePanel = vscode.window.createWebviewPanel(
+      "jellyframeRenderTrace",
+      isChinese() ? "JellyFrame Render Trace" : "JellyFrame Render Trace",
+      vscode.ViewColumn.Beside,
+      { enableScripts: true }
+    );
+    tracePanel.iconPath = vscode.Uri.joinPath(context.extensionUri, "media", "jellyframe.png");
+    tracePanel.onDidDispose(() => {
+      tracePanel = undefined;
+    }, null, context.subscriptions);
+  }
+  tracePanel.webview.html = renderTraceHtml(parsed, isChinese(), path.basename(filePath));
+  tracePanel.reveal(vscode.ViewColumn.Beside);
 }
 
 function templateNames(context) {
@@ -3964,6 +4026,7 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.debugExternal", (resourceUri) => debugExternalApp(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.runFrameScript", (resourceUri) => runFrameScript(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.openCapture", () => openCapture(context)),
+    vscode.commands.registerCommand("jellyframe.openRenderTrace", () => openRenderTrace(context)),
     vscode.commands.registerCommand("jellyframe.listBuilds", () => listBuilds(context)),
     vscode.commands.registerCommand("jellyframe.setupDesktopBuild", () => {
       const root = currentPackageRoot();

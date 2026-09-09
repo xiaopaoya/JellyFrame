@@ -2669,7 +2669,8 @@ def merge_programmatic_validation_report(report_path: Path,
                                          runtime_log: Path,
                                          frame_output_dir: Path,
                                          montage_path: Path,
-                                         status: str) -> None:
+                                         status: str,
+                                         render_trace: Path | None = None) -> None:
     report = load_json_if_exists(report_path)
     if not report:
         report = {"format": "jellyframe.package.report"}
@@ -2682,6 +2683,8 @@ def merge_programmatic_validation_report(report_path: Path,
         "frameOutputDir": str(frame_output_dir),
         "montage": str(montage_path),
     }
+    if render_trace is not None:
+        report["programmaticValidation"]["renderTrace"] = str(render_trace)
     write_json_report(report_path, report)
 
 
@@ -2702,6 +2705,8 @@ def run_programmatic_validation(args: argparse.Namespace,
     montage = Path(montage)
     runtime_log = getattr(args, "runtime_log", None) or report_path.with_suffix(".runtime.log")
     runtime_log = Path(runtime_log)
+    render_trace = getattr(args, "render_trace", None)
+    render_trace = Path(render_trace) if render_trace else None
     width, height = frame_script_viewport(args)
     command = [
         str(desktop_shell),
@@ -2710,6 +2715,8 @@ def run_programmatic_validation(args: argparse.Namespace,
         "--capture-frames", str(frame_output_dir),
         "--capture-montage", str(montage),
     ]
+    if render_trace is not None:
+        command.extend(["--render-trace", str(render_trace)])
     if width:
         command.extend(["--viewport-width", str(width)])
     if height:
@@ -2718,10 +2725,10 @@ def run_programmatic_validation(args: argparse.Namespace,
     if result == 0:
         merge_runtime_capture_report(report_path, runtime_log)
         merge_programmatic_validation_report(
-            report_path, frame_script, runtime_log, frame_output_dir, montage, "passed")
+            report_path, frame_script, runtime_log, frame_output_dir, montage, "passed", render_trace)
     else:
         merge_programmatic_validation_report(
-            report_path, frame_script, runtime_log, frame_output_dir, montage, "failed")
+            report_path, frame_script, runtime_log, frame_output_dir, montage, "failed", render_trace)
     return result
 
 
@@ -3785,6 +3792,8 @@ def add_frame_script_args(parser: argparse.ArgumentParser, *, include_montage: b
                         help="Run a deterministic .jfcapture script after static validation.")
     parser.add_argument("--frame-output-dir", type=Path,
                         help="Directory for captured frames during --frame-script playback.")
+    parser.add_argument("--render-trace", type=Path,
+                        help="Optional bounded Win32 render trace JSONL during --frame-script playback.")
     if include_montage:
         parser.add_argument("--frame-montage", type=Path,
                             help="Optional BMP/PPM montage path for --frame-script playback.")

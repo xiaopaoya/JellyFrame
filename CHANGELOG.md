@@ -1,6 +1,6 @@
 # Changelog
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev
 
 All notable changes to JellyFrame Engine are tracked here.
 
@@ -16,6 +16,11 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   profile gate and regression coverage land together.
 
 ### Changed
+
+- The VS Code extension now generates a bounded Render Trace during `.jfcapture`
+  playback and provides a frame-by-frame panel for desktop-shell stage timing,
+  dirty-region metrics and available paint-command attribution. The panel clearly
+  states that this data is not a real-device FPS measurement.
 
 - Runtime now locks the signed Render Core `0.6.2` release (ABI `1`, source identity
   `539a8945...8462e3f0`) and verifies its deterministic archive in package-consumer CI.
