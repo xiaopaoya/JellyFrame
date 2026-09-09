@@ -53,6 +53,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
@@ -88,6 +89,9 @@ constexpr int kMaxDebugPackageImageHeight = 256;
 constexpr const wchar_t* kWin32AudioAlias = L"jellyframe_audio_smoke";
 constexpr std::size_t kMaxDebugPackageImageDecodedBytes =
     static_cast<std::size_t>(kMaxDebugPackageImageWidth) * kMaxDebugPackageImageHeight * 4U;
+constexpr std::size_t kMaxRenderTraceRecords = 600;
+constexpr std::size_t kMaxRenderTraceBytes = 4U * 1024U * 1024U;
+constexpr std::size_t kMaxRenderTraceLineBytes = 4096;
 
 InteractionInvalidationOptions input_invalidation_options_from_style(const StyleResolver& resolver) {
     const InteractionInvalidationHints hints = resolver.interaction_invalidation_hints();
@@ -527,6 +531,7 @@ struct BrowserOptions {
     std::uint32_t frame_step_ms = 33;
     std::uint64_t frame_start_ms = 1000;
     std::string frame_script_path;
+    std::string render_trace_path;
     std::string frame_montage_path;
     int frame_montage_columns = 0;
     int frame_montage_gap = 6;
@@ -2802,6 +2807,7 @@ void print_win32_browser_usage(std::ostream& output, const std::string& program_
         << "  --script PATH                  Load an extra classic script file.\n"
         << "  --capture PATH                 Render one frame to BMP/PPM by extension.\n"
         << "  --capture-frames DIR           Hidden deterministic frame capture directory.\n"
+        << "  --render-trace PATH            Write bounded JSONL frame trace (capture mode only).\n"
         << "  --vscode-debug                Run the isolated VS Code frame-stream session.\n"
         << "  --vscode-frame-dir DIR        Directory for complete VS Code frame snapshots.\n"
         << "  --force-full-repaint          Disable incremental frame repaint for diagnostics.\n"
@@ -3366,6 +3372,153 @@ FrameBuffer render_page_with_browser_text(const std::string& html_path,
     return render_page_with_browser_text(options);
 }
 
+std::string json_escape_for_trace(const std::string& value) {
+    std::string escaped;
+    escaped.reserve(value.size() + 8);
+    static constexpr char hex[] = "0123456789abcdef";
+    for (const unsigned char byte : value) {
+        switch (byte) {
+        case '"': escaped += "\\\""; break;
+        case '\\': escaped += "\\\\"; break;
+        case '\b': escaped += "\\b"; break;
+        case '\f': escaped += "\\f"; break;
+        case '\n': escaped += "\\n"; break;
+        case '\r': escaped += "\\r"; break;
+        case '\t': escaped += "\\t"; break;
+        default:
+            if (byte < 0x20U) {
+                escaped += "\\u00";
+                escaped.push_back(hex[(byte >> 4U) & 0x0fU]);
+                escaped.push_back(hex[byte & 0x0fU]);
+            } else {
+                escaped.push_back(static_cast<char>(byte));
+            }
+            break;
+        }
+    }
+    return escaped;
+}
+
+class FrameTraceWriter {
+public:
+    bool open(const std::filesystem::path& path,
+              const std::string& app_id,
+              int viewport_width,
+              int viewport_height) {
+        if (path.empty()) {
+            return false;
+        }
+        path_ = path;
+        std::ostringstream session;
+        session << "{\"format\":\"jellyframe.render.trace.v0\",\"type\":\"session\""
+                << ",\"appId\":\"" << json_escape_for_trace(app_id) << '\"'
+                << ",\"viewport\":{\"width\":" << std::max(0, viewport_width)
+                << ",\"height\":" << std::max(0, viewport_height) << '}'
+                << ",\"profile\":\"desktop\",\"runtime\":\"win32\""
+                << ",\"capture\":\"deterministic-frame-script\"}";
+        return write_line(session.str(), false);
+    }
+
+    bool finish() {
+        if (!active_) {
+            return false;
+        }
+        std::error_code error;
+        if (path_.has_parent_path()) {
+            std::filesystem::create_directories(path_.parent_path(), error);
+            if (error) {
+                disable("cannot create trace parent directory: " + error.message());
+                return false;
+            }
+        }
+        std::ofstream stream(path_, std::ios::binary | std::ios::trunc);
+        if (!stream) {
+            disable("cannot open render trace: " + path_.string());
+            return false;
+        }
+        stream.write(buffer_.data(), static_cast<std::streamsize>(buffer_.size()));
+        if (!stream) {
+            disable("render trace write failed");
+            return false;
+        }
+        return true;
+    }
+
+    bool write_frame(int frame,
+                     std::uint64_t total_us,
+                     FrameUpdateAction action,
+                     FrameUpdateReason reason,
+                     DirtyRegionMode dirty_mode,
+                     DirtyRegionFallbackReason dirty_reason,
+                     std::size_t dirty_rect_count,
+                     int dirty_area_percent,
+                     std::size_t dom_nodes,
+                     std::size_t layout_boxes,
+                     std::size_t layers,
+                     std::size_t display_commands,
+                     std::size_t framebuffer_bytes) {
+        if (!active_ || frame_records_ >= kMaxRenderTraceRecords) {
+            return false;
+        }
+        std::ostringstream record;
+        record << "{\"format\":\"jellyframe.render.trace.v0\",\"type\":\"frame\""
+               << ",\"frame\":" << std::max(0, frame)
+               << ",\"totalUs\":" << total_us
+               << ",\"timingComplete\":false"
+               << ",\"action\":\"" << frame_update_action_name(action) << '\"'
+               << ",\"reason\":\"" << frame_update_reason_name(reason) << '\"'
+               << ",\"dirtyMode\":\"" << dirty_region_mode_name(dirty_mode) << '\"'
+               << ",\"dirtyReason\":\"" << dirty_region_fallback_reason_name(dirty_reason) << '\"'
+               << ",\"dirtyRectCount\":" << dirty_rect_count
+               << ",\"dirtyAreaPercent\":" << std::max(0, dirty_area_percent)
+               << ",\"pipeline\":{\"domNodes\":" << dom_nodes
+               << ",\"layoutBoxes\":" << layout_boxes
+               << ",\"layers\":" << layers
+               << ",\"displayCommands\":" << display_commands
+               << ",\"framebufferBytes\":" << framebuffer_bytes << '}'
+               << ",\"stagesUs\":{}}";
+        if (!write_line(record.str(), true)) {
+            return false;
+        }
+        ++frame_records_;
+        return true;
+    }
+
+    bool active() const { return active_; }
+    const std::string& error() const { return error_; }
+
+private:
+    bool write_line(const std::string& line, bool frame) {
+        if (!active_ || line.size() > kMaxRenderTraceLineBytes ||
+            bytes_written_ > kMaxRenderTraceBytes ||
+            line.size() + 1U > kMaxRenderTraceBytes - bytes_written_) {
+            disable(line.size() > kMaxRenderTraceLineBytes
+                        ? "render trace record exceeds line limit"
+                        : "render trace reached size limit");
+            return false;
+        }
+        buffer_.append(line);
+        buffer_.push_back('\n');
+        bytes_written_ += line.size() + 1U;
+        (void)frame;
+        return true;
+    }
+
+    void disable(std::string error) {
+        if (error_.empty()) {
+            error_ = std::move(error);
+        }
+        active_ = false;
+    }
+
+    std::filesystem::path path_;
+    std::string buffer_;
+    std::size_t bytes_written_ = 0;
+    std::size_t frame_records_ = 0;
+    bool active_ = true;
+    std::string error_;
+};
+
 class BrowserApp {
 public:
     explicit BrowserApp(BrowserOptions options)
@@ -3484,7 +3637,8 @@ public:
 
     int capture_frames() {
         if (hwnd_ == nullptr ||
-            (options_.frame_output_dir.empty() && options_.frame_montage_path.empty())) {
+            (options_.frame_output_dir.empty() && options_.frame_montage_path.empty() &&
+             options_.render_trace_path.empty())) {
             return 1;
         }
         if (!options_.frame_output_dir.empty()) {
@@ -3497,9 +3651,23 @@ public:
         int montage_cell_width = 0;
         int montage_cell_height = 0;
         int montage_rows = 0;
+        FrameTraceWriter trace;
+        if (!options_.render_trace_path.empty()) {
+            const std::string trace_app_id = !active_package_manifest_.id.empty()
+                ? active_package_manifest_.id
+                : (!active_app_id_.empty() ? active_app_id_ : "org.jellyframe.desktop.capture");
+            if (!trace.open(options_.render_trace_path,
+                            trace_app_id,
+                            viewport_width_,
+                            viewport_height_) && !trace.error().empty()) {
+                std::cerr << "warning: " << trace.error() << '\n';
+            }
+        }
         scripted_time_enabled_ = true;
         scripted_pointer_down_ = false;
         for (int frame = 0; frame < options_.frame_count; ++frame) {
+            const auto frame_start = std::chrono::steady_clock::now();
+            const std::uint64_t frame_updates_before = frame_update_sequence_;
             scripted_now_ms_ = options_.frame_start_ms +
                 static_cast<std::uint64_t>(frame) * options_.frame_step_ms;
             dispatch_scripted_frame_events(frame);
@@ -3515,6 +3683,40 @@ public:
                 FrameUpdatePlan clean_plan;
                 clean_plan.reason = FrameUpdateReason::CleanCached;
                 record_load_telemetry_sample(clean_plan, nullptr, false);
+            }
+            if (trace.active()) {
+                const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - frame_start);
+                const bool updated = frame_update_sequence_ != frame_updates_before;
+                const FrameUpdateAction action = updated ? last_frame_update_action_ : FrameUpdateAction::None;
+                const FrameUpdateReason reason = updated ? last_frame_update_reason_ : FrameUpdateReason::CleanCached;
+                const DirtyRegionMode dirty_mode = updated ? last_dirty_region_mode_ : DirtyRegionMode::Clean;
+                const DirtyRegionFallbackReason dirty_reason = updated
+                    ? last_dirty_region_reason_
+                    : DirtyRegionFallbackReason::None;
+                const DomStatistics dom_stats = document_ != nullptr
+                    ? compute_dom_statistics(*document_)
+                    : DomStatistics{};
+                const std::size_t layout_boxes = layout_tree_ != nullptr
+                    ? count_layout_boxes(*layout_tree_)
+                    : 0;
+                const std::size_t layers = layer_tree_ != nullptr ? count_layers(*layer_tree_) : 0;
+                const std::size_t display_commands = layer_tree_ != nullptr
+                    ? count_layer_display_commands(*layer_tree_)
+                    : 0;
+                trace.write_frame(frame,
+                                  elapsed.count() < 0 ? 0 : static_cast<std::uint64_t>(elapsed.count()),
+                                  action,
+                                  reason,
+                                  dirty_mode,
+                                  dirty_reason,
+                                  updated ? last_dirty_rect_count_ : 0,
+                                  updated ? last_dirty_area_percent_ : 0,
+                                  dom_stats.node_count,
+                                  layout_boxes,
+                                  layers,
+                                  display_commands,
+                                  frame_buffer_.pixels.size() * sizeof(Color));
             }
             if (!options_.frame_montage_path.empty() && frame == 0) {
                 montage_columns = options_.frame_montage_columns > 0
@@ -3562,6 +3764,11 @@ public:
                 const std::filesystem::path output =
                     std::filesystem::path(options_.frame_output_dir) / name.str();
                 write_image(frame_buffer_, output.string());
+            }
+        }
+        if (!options_.render_trace_path.empty() && trace.active()) {
+            if (!trace.finish() && !trace.error().empty()) {
+                std::cerr << "warning: " << trace.error() << '\n';
             }
         }
         if (montage_enabled) {
@@ -3775,6 +3982,7 @@ public:
 private:
     HWND hwnd_ = nullptr;
     BrowserOptions options_;
+    std::uint64_t frame_update_sequence_ = 0;
     std::uint64_t vscode_frame_sequence_ = 0;
     std::vector<std::filesystem::path> vscode_frame_paths_;
     std::string vscode_input_buffer_;
@@ -6793,6 +7001,7 @@ private:
     }
 
     void record_frame_update(const FrameUpdatePlan& plan, DomDirtyFlags dirty_flags) {
+        ++frame_update_sequence_;
         last_frame_update_action_ = plan.action;
         last_frame_update_reason_ = plan.reason;
         last_frame_repaint_reason_ = plan.reason;
@@ -6855,6 +7064,14 @@ int main(int argc, char** argv) {
                 return 1;
             }
             options.frame_output_dir = argv[++i];
+            continue;
+        }
+        if (arg == "--render-trace") {
+            if (i + 1 >= argc) {
+                std::cerr << "--render-trace requires a JSONL output file path\n";
+                return 1;
+            }
+            options.render_trace_path = argv[++i];
             continue;
         }
         if (arg == "--vscode-debug") {
@@ -7210,8 +7427,13 @@ int main(int argc, char** argv) {
         std::cerr << "--vscode-debug cannot be combined with capture modes\n";
         return 1;
     }
-    if (options.capture_frames && options.frame_output_dir.empty() && options.frame_montage_path.empty()) {
-        std::cerr << "--capture-frames/--frame-script requires an output directory or --capture-montage\n";
+    if (options.capture_frames && options.frame_output_dir.empty() &&
+        options.frame_montage_path.empty() && options.render_trace_path.empty()) {
+        std::cerr << "--capture-frames/--frame-script requires an output directory, --capture-montage, or --render-trace\n";
+        return 1;
+    }
+    if (!options.render_trace_path.empty() && !options.capture_frames) {
+        std::cerr << "--render-trace currently requires --capture-frames or --frame-script\n";
         return 1;
     }
 

@@ -53,6 +53,24 @@ python tools\render_performance_report.py `
 {"format":"jellyframe.render.trace.v0","type":"frame","frame":42,"totalUs":17300,"stagesUs":{"input":120,"script":880,"style":410,"renderTree":620,"layout":2100,"layerTree":530,"dirty":190,"paint":10600,"present":2260},"action":"repaint-existing","reason":"paint-only-dirty","dirtyRectCount":2,"dirtyAreaPercent":3,"pipeline":{"domNodes":31,"layoutBoxes":22,"layers":4,"displayCommands":18,"paintPixels":5170},"commands":[{"type":"BoxShadow","nodeId":"card-1","us":7200,"pixels":3820},{"type":"Text","nodeId":"value","us":610,"pixels":340}]}
 ```
 
+Win32 桌面壳当前可在确定性捕获时生成第一版 trace：
+
+```powershell
+build\Release\jellyframe_desktop_shell.exe `
+  --app tests\fixtures\apps\jelly_scroll_probe `
+  --capture-frames build\trace-frames `
+  --render-trace build\render-trace.jsonl `
+  --frame-count 120
+```
+
+该 producer 只在显式 `--render-trace` 下启用，并且仅接受 `--capture-frames`/帧脚本模式。
+它使用确定性捕获循环的墙钟时间填充 `totalUs`，当前 `stagesUs` 为空且
+`timingComplete` 必须为 `false`；这表示“本帧捕获循环耗时”，不表示已经完成
+input/script/style/layout/paint/present 分项。trace 最多保存 600 条 frame、总计 4 MiB、
+单行 4 KiB；记录超限或写盘失败只停用 trace，不改变渲染结果。捕获结束后一次性写盘，
+避免把文件 I/O 和 flush 放进每帧 render/present 路径。首个捕获帧可能只是初始化阶段已经
+完成后的 `clean-cached` 记录，因此不能把它当作应用启动首帧耗时。
+
 ### 必填与约束
 
 - `format`、`type`、`frame`、`totalUs`、`stagesUs` 必须存在；所有时间为非负整数微秒；
@@ -139,9 +157,10 @@ present/DMA 时间和视觉误差。不同库不支持的能力单独标记 `not
 - 单帧 pipeline report、设备 aggregate telemetry、microbench 的明确分层；
 - trace V0 的输入格式和回归测试。
 
-### 第二阶段：下一项实现
+### 第二阶段：进行中
 
-- Win32 shell 在显式选项下产生 bounded frame JSONL；
+- Win32 shell 已在显式选项下产生 bounded frame JSONL；
+- trace report 工具会报告重复、回退或非法 frame number，不静默排序或伪造帧；
 - 每帧补齐阶段 timing、dirty/pipeline counters 和 frame update reason；
 - VS Code 性能面板读取 trace，支持 frame scrubber 和阶段占比；
 - 不提供元素耗时猜测，直到 Layer/DisplayCommand 有稳定 node attribution contract。

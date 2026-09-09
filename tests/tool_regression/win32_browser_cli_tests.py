@@ -249,6 +249,7 @@ def main() -> int:
     require("--system-survival-smoke" in help_result.stdout, "--help must document system survival smoke")
     require("--vscode-debug" in help_result.stdout, "--help must document isolated VS Code debug mode")
     require("--vscode-frame-dir" in help_result.stdout, "--help must document VS Code frame output")
+    require("--render-trace" in help_result.stdout, "--help must document bounded render trace output")
 
     unknown_option_result = run_case(exe, ["--not-a-real-option"])
     require(unknown_option_result.returncode != 0, "unknown options must fail")
@@ -256,6 +257,10 @@ def main() -> int:
             "unknown options must name the invalid option")
     require("Use --help for usage." in unknown_option_result.stdout,
             "unknown options must point to --help")
+
+    trace_without_capture = run_case(exe, ["--render-trace", "trace.jsonl"])
+    require(trace_without_capture.returncode != 0 and "requires --capture-frames" in trace_without_capture.stdout,
+            "render trace must be restricted to deterministic capture mode")
 
     too_many_positional_result = run_case(exe, ["a.html", "a.css", "172", "320", "extra"])
     require(too_many_positional_result.returncode != 0, "too many positional arguments must fail")
@@ -268,6 +273,7 @@ def main() -> int:
         root = Path(directory)
         app = root / "app"
         frames = root / "frames"
+        trace = root / "trace.jsonl"
         app.mkdir()
         (app / "index.html").write_text(
             "<style>html,body{margin:0;width:160px;height:60px;background:#10151b;}"
@@ -295,6 +301,7 @@ def main() -> int:
             [
                 "--app", str(app),
                 "--capture-frames", str(frames),
+                "--render-trace", str(trace),
                 "--frame-count", "5",
                 "--frame-event", "1:pointer-down:20:20",
                 "--frame-event", "2:pointer-move:130:20",
@@ -309,6 +316,24 @@ def main() -> int:
                 "scripted pointer drag must produce before/after frames")
         require(before_drag.read_bytes() != after_drag.read_bytes(),
                 "pointer-move between pointer-down/up must update a range control")
+        trace_records = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
+        require(len(trace_records) == 6,
+                "render trace must contain one session and one record per frame")
+        require(trace_records[0]["format"] == "jellyframe.render.trace.v0" and
+                trace_records[0]["type"] == "session",
+                "render trace must begin with a session record")
+        frame_records = trace_records[1:]
+        require([record["frame"] for record in frame_records] == list(range(5)),
+                "render trace frame numbers must be strictly increasing")
+        for record in frame_records:
+            require(record["type"] == "frame" and record["totalUs"] >= 0,
+                    "render trace frame records must contain non-negative totalUs")
+            require(record["timingComplete"] is False and record["stagesUs"] == {},
+                    "capture-only trace must not claim complete phase timing")
+            require(record["action"] in {"none", "repaint-existing", "rebuild-pipeline"},
+                    "render trace must use a stable update action")
+            require("pipeline" in record and "domNodes" in record["pipeline"],
+                    "render trace must contain pipeline counters")
 
         semantic_frames = root / "semantic-frames"
         semantic_result = run_case(

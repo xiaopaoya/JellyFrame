@@ -74,6 +74,30 @@ class RenderPerformanceReportTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("no usable performance input", result.stderr)
 
+    def test_trace_rejects_non_monotonic_frame_numbers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace = root / "trace.jsonl"
+            trace.write_text(
+                json.dumps({"format": "jellyframe.render.trace.v0", "type": "session"}) + "\n"
+                + json.dumps({"format": "jellyframe.render.trace.v0", "type": "frame", "frame": 2, "totalUs": 10}) + "\n"
+                + json.dumps({"format": "jellyframe.render.trace.v0", "type": "frame", "frame": 2, "totalUs": 20}) + "\n"
+                + json.dumps({"format": "jellyframe.render.trace.v0", "type": "frame", "frame": 1, "totalUs": 30}) + "\n",
+                encoding="utf-8",
+            )
+            output = root / "report.json"
+            result = subprocess.run(
+                [sys.executable, str(TOOL), "--trace", str(trace), "--output", str(output)],
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(report["summary"]["frameCount"], 1)
+            self.assertTrue(any("not strictly greater" in note for note in report["warnings"]))
+
 
 if __name__ == "__main__":
     unittest.main()

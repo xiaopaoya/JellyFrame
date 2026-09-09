@@ -63,12 +63,13 @@ def normalize_frame(raw: dict[str, Any], source: str, fallback_index: int) -> di
         for key, raw_value in stages.items()
         if (value := number(raw_value)) is not None and str(key) != "total"
     }
-    total = number(raw.get("totalUs"))
+    explicit_total = number(raw.get("totalUs"))
+    total = explicit_total
     if total is None:
         total = number(stages.get("total"))
     if total is None:
         total = sum(float(value) for value in normalized_stages.values())
-    if not normalized_stages and total <= 0:
+    if not normalized_stages and explicit_total is None:
         return None
     result: dict[str, Any] = {
         "source": source,
@@ -76,7 +77,8 @@ def normalize_frame(raw: dict[str, Any], source: str, fallback_index: int) -> di
         "totalUs": round_number(total),
         "stagesUs": normalized_stages,
     }
-    for key in ("action", "reason", "repaint", "dirtyRectCount", "dirtyAreaPercent", "pipeline"):
+    for key in ("action", "reason", "repaint", "dirtyMode", "dirtyReason",
+                "dirtyRectCount", "dirtyAreaPercent", "pipeline", "timingComplete"):
         if key in raw:
             result[key] = raw[key]
     commands = raw.get("commands", raw.get("commandAttribution"))
@@ -113,6 +115,7 @@ def frames_from_trace(path: Path) -> tuple[list[dict[str, Any]], list[str], dict
         lines = path.read_text(encoding="utf-8-sig").splitlines()
     except OSError as error:
         raise SystemExit(f"failed to read trace {path}: {error}") from error
+    previous_frame: int | None = None
     for line_number, line in enumerate(lines, 1):
         if not line.strip():
             continue
@@ -129,11 +132,21 @@ def frames_from_trace(path: Path) -> tuple[list[dict[str, Any]], list[str], dict
             continue
         if value.get("type", "frame") != "frame":
             continue
+        raw_frame = value.get("frame", value.get("frameIndex"))
+        if not isinstance(raw_frame, int) or isinstance(raw_frame, bool) or raw_frame < 0:
+            warnings.append(f"{path}:{line_number}: frame number must be a non-negative integer")
+            continue
+        if previous_frame is not None and raw_frame <= previous_frame:
+            warnings.append(
+                f"{path}:{line_number}: frame number {raw_frame} is not strictly greater than {previous_frame}"
+            )
+            continue
         frame = normalize_frame(value, str(path), len(frames))
         if frame is None:
             warnings.append(f"{path}:{line_number}: frame has no usable timing")
         else:
             frames.append(frame)
+            previous_frame = raw_frame
     return frames, warnings, metadata
 
 
