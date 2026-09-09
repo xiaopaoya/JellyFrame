@@ -93,6 +93,40 @@ constexpr std::size_t kMaxRenderTraceRecords = 600;
 constexpr std::size_t kMaxRenderTraceBytes = 4U * 1024U * 1024U;
 constexpr std::size_t kMaxRenderTraceLineBytes = 4096;
 
+enum class FrameTraceStage {
+    Input,
+    Script,
+    Style,
+    RenderTree,
+    Layout,
+    LayerTree,
+    Dirty,
+    Paint,
+    Present,
+};
+
+constexpr std::array<const char*, 9> kFrameTraceStageNames = {
+    "input", "script", "style", "renderTree", "layout", "layerTree", "dirty", "paint", "present"};
+
+struct FrameTraceTimings {
+    std::array<std::uint64_t, kFrameTraceStageNames.size()> microseconds{};
+
+    void clear() {
+        microseconds.fill(0);
+    }
+
+    void add(FrameTraceStage stage, std::uint64_t elapsed_us) {
+        const std::size_t index = static_cast<std::size_t>(stage);
+        if (index >= microseconds.size()) {
+            return;
+        }
+        const std::uint64_t current = microseconds[index];
+        microseconds[index] = std::numeric_limits<std::uint64_t>::max() - current < elapsed_us
+            ? std::numeric_limits<std::uint64_t>::max()
+            : current + elapsed_us;
+    }
+};
+
 InteractionInvalidationOptions input_invalidation_options_from_style(const StyleResolver& resolver) {
     const InteractionInvalidationHints hints = resolver.interaction_invalidation_hints();
     InteractionInvalidationOptions options;
@@ -3456,7 +3490,8 @@ public:
                      std::size_t layout_boxes,
                      std::size_t layers,
                      std::size_t display_commands,
-                     std::size_t framebuffer_bytes) {
+                     std::size_t framebuffer_bytes,
+                     const FrameTraceTimings& timings) {
         if (!active_ || frame_records_ >= kMaxRenderTraceRecords) {
             return false;
         }
@@ -3476,7 +3511,19 @@ public:
                << ",\"layers\":" << layers
                << ",\"displayCommands\":" << display_commands
                << ",\"framebufferBytes\":" << framebuffer_bytes << '}'
-               << ",\"stagesUs\":{}}";
+               << ",\"stagesUs\":{";
+        bool first_stage = true;
+        for (std::size_t index = 0; index < timings.microseconds.size(); ++index) {
+            if (timings.microseconds[index] == 0) {
+                continue;
+            }
+            if (!first_stage) {
+                record << ',';
+            }
+            record << '\"' << kFrameTraceStageNames[index] << "\":" << timings.microseconds[index];
+            first_stage = false;
+        }
+        record << "}}";
         if (!write_line(record.str(), true)) {
             return false;
         }
@@ -3666,6 +3713,7 @@ public:
         scripted_time_enabled_ = true;
         scripted_pointer_down_ = false;
         for (int frame = 0; frame < options_.frame_count; ++frame) {
+            trace_frame_timings_.clear();
             const auto frame_start = std::chrono::steady_clock::now();
             const std::uint64_t frame_updates_before = frame_update_sequence_;
             scripted_now_ms_ = options_.frame_start_ms +
@@ -3716,7 +3764,8 @@ public:
                                   layout_boxes,
                                   layers,
                                   display_commands,
-                                  frame_buffer_.pixels.size() * sizeof(Color));
+                                  frame_buffer_.pixels.size() * sizeof(Color),
+                                  trace_frame_timings_);
             }
             if (!options_.frame_montage_path.empty() && frame == 0) {
                 montage_columns = options_.frame_montage_columns > 0
@@ -3983,6 +4032,7 @@ private:
     HWND hwnd_ = nullptr;
     BrowserOptions options_;
     std::uint64_t frame_update_sequence_ = 0;
+    FrameTraceTimings trace_frame_timings_;
     std::uint64_t vscode_frame_sequence_ = 0;
     std::vector<std::filesystem::path> vscode_frame_paths_;
     std::string vscode_input_buffer_;
@@ -5727,17 +5777,36 @@ private:
         if (document_ == nullptr || style_resolver_ == nullptr) {
             return;
         }
+        const bool trace_timing_enabled = !options_.render_trace_path.empty();
+        std::chrono::steady_clock::time_point trace_stage_started{};
+        if (trace_timing_enabled) {
+            trace_stage_started = std::chrono::steady_clock::now();
+        }
+        const auto finish_trace_stage = [this, trace_timing_enabled, &trace_stage_started](FrameTraceStage stage) {
+            if (!trace_timing_enabled) {
+                return;
+            }
+            const auto now = std::chrono::steady_clock::now();
+            const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - trace_stage_started);
+            if (elapsed.count() > 0) {
+                trace_frame_timings_.add(stage, static_cast<std::uint64_t>(elapsed.count()));
+            }
+            trace_stage_started = now;
+        };
         drain_host_completions();
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ != nullptr && script_runtime_->take_execution_watchdog_interrupt()) {
+            finish_trace_stage(FrameTraceStage::Input);
             recover_active_app_after_script_watchdog("script host-completion execution budget exceeded");
             return;
         }
 #endif
         drain_system_events();
         if (recover_active_app_after_budget_if_needed("render")) {
+            finish_trace_stage(FrameTraceStage::Input);
             return;
         }
+        finish_trace_stage(FrameTraceStage::Input);
         std::vector<std::pair<const Node*, Style>> previous_styles;
         if ((document_->dirty_flags & DomDirtyStyle) != 0U && render_tree_ != nullptr) {
             collect_transition_candidate_styles(*render_tree_, previous_styles);
@@ -5758,6 +5827,7 @@ private:
         cache_state.content_height = current_content_height;
         const FrameUpdateState update_state = make_frame_update_state(dirty_flags, cache_state);
         FrameUpdatePlan update_plan = plan_frame_update(update_state);
+        finish_trace_stage(FrameTraceStage::Style);
         if (update_plan.action == FrameUpdateAction::None) {
             record_frame_update(update_plan, dirty_flags);
             record_dirty_region(DirtyRegionResult{});
@@ -5822,6 +5892,7 @@ private:
                 ++opacity_layer_reuse_frames_;
             }
             auto next_layer_tree = reused_opacity_layers ? LayerNodePtr{} : layer_builder.build(*layout_tree_);
+            finish_trace_stage(FrameTraceStage::LayerTree);
             const FrameRepaintPlan repaint_plan =
                 current_layout_repaint_plan(update_plan.reason, content_height);
             if (!animation_only_dirty) {
@@ -5842,12 +5913,14 @@ private:
                                         style_overrides_,
                                         content_height,
                                         frame_scratch_.dirty_region);
+            finish_trace_stage(FrameTraceStage::Dirty);
             const DirtyRegionResult& dirty_region = frame_scratch_.dirty_region;
             const std::vector<Rect>& dirty_rects = dirty_region.rects;
             if (next_layer_tree != nullptr) {
                 layer_tree_ = std::move(next_layer_tree);
             }
             evict_unused_image_surfaces();
+            const auto paint_started = std::chrono::steady_clock::now();
             if (!options_.force_full_repaint && !dirty_rects.empty() &&
                 dirty_region_should_repaint_incrementally(dirty_region,
                                                           Rect{0, 0, viewport_width_, content_height},
@@ -5866,6 +5939,13 @@ private:
                 record_frame_repaint(repaint_plan, false);
                 render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
             }
+            if (trace_timing_enabled) {
+                const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - paint_started);
+                trace_frame_timings_.add(FrameTraceStage::Paint,
+                                         elapsed.count() > 0 ? static_cast<std::uint64_t>(elapsed.count()) : 0);
+            }
+            const auto present_started = std::chrono::steady_clock::now();
             rebuild_input_controller(hovered_node, active_node, focused_node);
             capture_script_layout_snapshot();
             update_blit_pixels();
@@ -5873,6 +5953,12 @@ private:
             clear_dirty_flags(*document_);
             clear_finished_animation_overrides();
             record_load_telemetry_sample(update_plan, nullptr);
+            if (trace_timing_enabled) {
+                const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - present_started);
+                trace_frame_timings_.add(FrameTraceStage::Present,
+                                         elapsed.count() > 0 ? static_cast<std::uint64_t>(elapsed.count()) : 0);
+            }
             return;
         }
 
@@ -5898,6 +5984,7 @@ private:
         }
         RenderTreeBuilder sampled_render_builder(*style_resolver_, render_options);
         auto next_render_tree = sampled_render_builder.build(*document_);
+        finish_trace_stage(FrameTraceStage::RenderTree);
         if (update_plan.action == FrameUpdateAction::RebuildPipeline &&
             update_plan.reason == FrameUpdateReason::LayoutDirtyWithPreviousLayout &&
             render_tree_ != nullptr &&
@@ -5926,6 +6013,7 @@ private:
 
             const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
             auto next_layer_tree = layer_builder.build(*layout_tree_);
+            finish_trace_stage(FrameTraceStage::LayerTree);
             const FrameRepaintPlan repaint_plan =
                 current_layout_repaint_plan(update_plan.reason, content_height);
             DirtyRegionOptions dirty_options =
@@ -5944,6 +6032,7 @@ private:
                                         current_repaint_overrides,
                                         content_height,
                                         frame_scratch_.dirty_region);
+            finish_trace_stage(FrameTraceStage::Dirty);
             merge_override_invalidation(*layout_tree_,
                                         previous_style_overrides_,
                                         style_overrides_,
@@ -5954,6 +6043,7 @@ private:
             render_tree_ = std::move(next_render_tree);
             layer_tree_ = std::move(next_layer_tree);
             evict_unused_image_surfaces();
+            const auto paint_started = std::chrono::steady_clock::now();
             if (!options_.force_full_repaint && !dirty_rects.empty() &&
                 dirty_region_should_repaint_incrementally(dirty_region,
                                                           Rect{0, 0, viewport_width_, content_height},
@@ -5972,6 +6062,13 @@ private:
                 record_frame_repaint(repaint_plan, false);
                 render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
             }
+            if (trace_timing_enabled) {
+                const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - paint_started);
+                trace_frame_timings_.add(FrameTraceStage::Paint,
+                                         elapsed.count() > 0 ? static_cast<std::uint64_t>(elapsed.count()) : 0);
+            }
+            const auto present_started = std::chrono::steady_clock::now();
             rebuild_input_controller(hovered_node, active_node, focused_node);
             capture_script_layout_snapshot();
             update_blit_pixels();
@@ -5979,6 +6076,12 @@ private:
             clear_dirty_flags(*document_);
             clear_finished_animation_overrides();
             record_load_telemetry_sample(update_plan, nullptr);
+            if (trace_timing_enabled) {
+                const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - present_started);
+                trace_frame_timings_.add(FrameTraceStage::Present,
+                                         elapsed.count() > 0 ? static_cast<std::uint64_t>(elapsed.count()) : 0);
+            }
             return;
         }
         record_frame_update(update_plan, dirty_flags);
@@ -5987,7 +6090,9 @@ private:
         layout_options.diagnostics = &diagnostics_;
         LayoutEngine layout_engine(*style_resolver_, text_backend.measure, layout_options);
         auto next_layout_tree = layout_engine.layout(*next_render_tree, viewport_width_, viewport_height_);
+        finish_trace_stage(FrameTraceStage::Layout);
         auto next_layer_tree = layer_builder.build(*next_layout_tree);
+        finish_trace_stage(FrameTraceStage::LayerTree);
 
         const int content_height = std::max(viewport_height_, next_layout_tree->rect.height);
         const FrameRepaintPlan repaint_plan = plan_frame_repaint(update_state, update_plan, content_height);
@@ -6016,6 +6121,7 @@ private:
                                         content_height,
                                         dirty_region);
         }
+        finish_trace_stage(FrameTraceStage::Dirty);
         const std::vector<Rect>& dirty_rects = dirty_region.rects;
 
         render_tree_ = std::move(next_render_tree);
@@ -6024,6 +6130,7 @@ private:
         capture_script_layout_snapshot();
         evict_unused_image_surfaces();
 
+        const auto paint_started = std::chrono::steady_clock::now();
         if (!options_.force_full_repaint && can_repaint_incrementally && !dirty_rects.empty() &&
             dirty_region_should_repaint_incrementally(dirty_region,
                                                       Rect{0, 0, viewport_width_, content_height},
@@ -6042,12 +6149,25 @@ private:
             record_frame_repaint(repaint_plan, false);
             render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
         }
+        if (trace_timing_enabled) {
+            const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - paint_started);
+            trace_frame_timings_.add(FrameTraceStage::Paint,
+                                     elapsed.count() > 0 ? static_cast<std::uint64_t>(elapsed.count()) : 0);
+        }
+        const auto present_started = std::chrono::steady_clock::now();
         rebuild_input_controller(hovered_node, active_node, focused_node);
         update_blit_pixels();
         publish_vscode_frame();
         clear_dirty_flags(*document_);
         clear_finished_animation_overrides();
         record_load_telemetry_sample(update_plan, nullptr);
+        if (trace_timing_enabled) {
+            const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - present_started);
+            trace_frame_timings_.add(FrameTraceStage::Present,
+                                     elapsed.count() > 0 ? static_cast<std::uint64_t>(elapsed.count()) : 0);
+        }
     }
 
     void collect_transition_candidate_styles(const RenderObject& object,

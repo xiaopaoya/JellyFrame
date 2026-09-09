@@ -328,12 +328,16 @@ def main() -> int:
         for record in frame_records:
             require(record["type"] == "frame" and record["totalUs"] >= 0,
                     "render trace frame records must contain non-negative totalUs")
-            require(record["timingComplete"] is False and record["stagesUs"] == {},
+            require(record["timingComplete"] is False,
                     "capture-only trace must not claim complete phase timing")
+            require(isinstance(record["stagesUs"], dict),
+                    "render trace phase timing must be an object")
             require(record["action"] in {"none", "repaint-existing", "rebuild-pipeline"},
                     "render trace must use a stable update action")
             require("pipeline" in record and "domNodes" in record["pipeline"],
                     "render trace must contain pipeline counters")
+        require(any(record["stagesUs"] for record in frame_records),
+                "a frame that renders during capture must expose measured phase timing")
 
         semantic_frames = root / "semantic-frames"
         semantic_result = run_case(

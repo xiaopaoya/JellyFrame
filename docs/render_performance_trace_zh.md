@@ -1,7 +1,7 @@
 # Render Core 性能观测与对比方案
 
 > 最后更新：2026-09-09；适用版本：0.6.0-dev
-> 状态：第一阶段工具与 trace 契约
+> 状态：第二阶段进行中；Win32 桌面壳已提供部分阶段计时
 
 ## 1. 为什么需要这项工具
 
@@ -64,9 +64,11 @@ build\Release\jellyframe_desktop_shell.exe `
 ```
 
 该 producer 只在显式 `--render-trace` 下启用，并且仅接受 `--capture-frames`/帧脚本模式。
-它使用确定性捕获循环的墙钟时间填充 `totalUs`，当前 `stagesUs` 为空且
-`timingComplete` 必须为 `false`；这表示“本帧捕获循环耗时”，不表示已经完成
-input/script/style/layout/paint/present 分项。trace 最多保存 600 条 frame、总计 4 MiB、
+它使用确定性捕获循环的墙钟时间填充 `totalUs`，并在渲染路径中记录已覆盖的
+`input`、`style`、`renderTree`、`layout`、`layerTree`、`dirty`、`paint`、`present`
+阶段。`script` 目前没有独立计时，因此可能缺失；`timingComplete` 必须为 `false`，
+阶段之和也不保证等于 `totalUs`。这表示“当前已归因的桌面壳阶段耗时”，不表示已经完成
+所有运行时、主机任务、窗口系统或设备 DMA/panel 分项。trace 最多保存 600 条 frame、总计 4 MiB、
 单行 4 KiB；记录超限或写盘失败只停用 trace，不改变渲染结果。捕获结束后一次性写盘，
 避免把文件 I/O 和 flush 放进每帧 render/present 路径。首个捕获帧可能只是初始化阶段已经
 完成后的 `clean-cached` 记录，因此不能把它当作应用启动首帧耗时。
