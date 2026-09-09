@@ -18,6 +18,7 @@ the render-core and app-runtime C++ unit suites.
 | Template and external-author workflow | `template_trial_tests.py` |
 | Font/resource policy | `font_policy_report_tests.py` |
 | Link-map and build slicing | `render_core_link_map_tests.py` |
+| Source-aware render performance reports | `render_performance_report_tests.py` |
 
 Run one file directly only when narrowing a failure; prefer the named CTest
 test because it supplies the correct build executable and working directory.

@@ -84,6 +84,7 @@
 - [embedded_framebuffer_backend_zh.md](../src/render_core/docs/embedded_framebuffer_backend_zh.md)：调用方持有 framebuffer 的转换和 flush 契约。
 - [text_backend_zh.md](../src/render_core/docs/text_backend_zh.md)：文本测量/绘制 API 和字体工作流。
 - [embedded_optimization_notes_zh.md](embedded_optimization_notes_zh.md)：当前优化选择和基准基线。
+- [render_performance_trace_zh.md](render_performance_trace_zh.md)：Render Core 性能观测、逐帧 trace、VS Code 工具目标和公平对比方案。
 - [porting_work_guide_zh.md](porting_work_guide_zh.md)：分阶段开发板移植指导。
 
 ### 面向开发者的功能契约
