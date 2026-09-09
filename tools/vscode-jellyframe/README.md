@@ -2,7 +2,7 @@
 
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-09-09; Applies to: 0.6.0-dev; extension version: 0.4.53; compatibility baseline: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; extension version: 0.4.54; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -21,8 +21,10 @@ Palette as entry points.
 - A `JellyFrame Report` webview that puts CLI `developerAdvice[]` first, then
   summarizes resources, references, warnings and pipeline diagnostics.
 - A `Render Trace` webview for frame-by-frame inspection of desktop-shell JSONL
-  traces, including total time, stage shares, dirty-region metrics and paint
-  command attribution. It labels partial timing and does not present it as device FPS.
+  traces, including total time, stage shares, dirty-region metrics, paint
+  command attribution and the matching captured frame image when available. It
+  labels partial timing and does not present it as device FPS. Missing images
+  are reported explicitly instead of being inferred as blank frames.
 - Inline diagnostics for app-author advice, package warnings and pipeline
   diagnostics.
 - Explorer status view showing the selected app, build, report diagnostics and

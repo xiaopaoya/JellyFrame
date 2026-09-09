@@ -336,6 +336,8 @@ def main() -> int:
                     "render trace must use a stable update action")
             require("pipeline" in record and "domNodes" in record["pipeline"],
                     "render trace must contain pipeline counters")
+            require(record.get("captureFile") == f"frame_{record['frame']:03d}.bmp",
+                    "render trace must explicitly associate each captured frame with its image")
         require(any(record["stagesUs"] for record in frame_records),
                 "a frame that renders during capture must expose measured phase timing")
 

@@ -14,6 +14,9 @@ JellyFrame Engine 的重要变更记录在这里。
 
 ### 变更
 
+- Render Trace 面板现在会将每帧指标关联到同目录的 BMP/PPM/PNG 截图（存在时），明确提示
+  缺失截图并显示 dirty 覆盖率；新 trace 会写入有界的相对 `captureFile` 字段。
+
 - VS Code 扩展现在可在 `.jfcapture` 回放时生成 bounded Render Trace，并通过逐帧面板查看
   桌面壳阶段耗时、脏区指标和可用的绘制命令归因；面板明确标注该数据不代表实机 FPS。
 

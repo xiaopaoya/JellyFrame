@@ -17,10 +17,16 @@ function main() {
   const parsed = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify(frame)}\n`);
   assert.equal(parsed.frames.length, 1);
   assert.equal(parsed.errors.length, 0);
-  const html = renderTraceHtml(parsed, true, "trace.jsonl");
+  const html = renderTraceHtml(parsed, true, "trace.jsonl", {
+    cspSource: "vscode-resource:",
+    frameImages: { "0": "vscode-resource://frame_000.bmp" }
+  });
   assert(html.includes("frameSlider"));
   assert(html.includes("title"));
   assert(html.includes("timingComplete"));
+  assert(html.includes("vscode-resource://frame_000.bmp"));
+  assert(html.includes("dirtyCoverage"));
+  assert(html.includes("img-src vscode-resource:"));
 
   const invalid = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, frame: 2 })}\n${JSON.stringify({ ...frame, frame: 1 })}\n`);
   assert.equal(invalid.frames.length, 1);

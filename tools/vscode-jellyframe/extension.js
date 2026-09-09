@@ -3809,7 +3809,30 @@ function showRenderTracePanel(context, parsed, filePath) {
       tracePanel = undefined;
     }, null, context.subscriptions);
   }
-  tracePanel.webview.html = renderTraceHtml(parsed, isChinese(), path.basename(filePath));
+  const traceDirectory = path.dirname(filePath);
+  const frameImages = {};
+  for (const frame of parsed.frames || []) {
+    const names = [];
+    if (typeof frame.captureFile === "string" && frame.captureFile.trim()) {
+      names.push(path.basename(frame.captureFile));
+    }
+    const frameName = `frame_${String(frame.frame).padStart(3, "0")}`;
+    names.push(`${frameName}.bmp`, `${frameName}.ppm`, `${frameName}.png`);
+    const captureName = names.find((name) => fs.existsSync(path.join(traceDirectory, name)));
+    if (captureName) {
+      frameImages[String(frame.frame)] = tracePanel.webview.asWebviewUri(
+        vscode.Uri.file(path.join(traceDirectory, captureName))
+      ).toString();
+    }
+  }
+  tracePanel.webview.options = {
+    enableScripts: true,
+    localResourceRoots: [vscode.Uri.file(traceDirectory)]
+  };
+  tracePanel.webview.html = renderTraceHtml(parsed, isChinese(), path.basename(filePath), {
+    cspSource: tracePanel.webview.cspSource,
+    frameImages
+  });
   tracePanel.reveal(vscode.ViewColumn.Beside);
 }
 

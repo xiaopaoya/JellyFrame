@@ -3491,6 +3491,7 @@ public:
                      std::size_t layers,
                      std::size_t display_commands,
                      std::size_t framebuffer_bytes,
+                     const std::string& capture_file,
                      const FrameTraceTimings& timings) {
         if (!active_ || frame_records_ >= kMaxRenderTraceRecords) {
             return false;
@@ -3505,8 +3506,11 @@ public:
                << ",\"dirtyMode\":\"" << dirty_region_mode_name(dirty_mode) << '\"'
                << ",\"dirtyReason\":\"" << dirty_region_fallback_reason_name(dirty_reason) << '\"'
                << ",\"dirtyRectCount\":" << dirty_rect_count
-               << ",\"dirtyAreaPercent\":" << std::max(0, dirty_area_percent)
-               << ",\"pipeline\":{\"domNodes\":" << dom_nodes
+               << ",\"dirtyAreaPercent\":" << std::max(0, dirty_area_percent);
+        if (!capture_file.empty()) {
+            record << ",\"captureFile\":\"" << json_escape_for_trace(capture_file) << '\"';
+        }
+        record << ",\"pipeline\":{\"domNodes\":" << dom_nodes
                << ",\"layoutBoxes\":" << layout_boxes
                << ",\"layers\":" << layers
                << ",\"displayCommands\":" << display_commands
@@ -3714,6 +3718,12 @@ public:
         scripted_pointer_down_ = false;
         for (int frame = 0; frame < options_.frame_count; ++frame) {
             trace_frame_timings_.clear();
+            std::string capture_name;
+            if (!options_.frame_output_dir.empty()) {
+                std::ostringstream capture;
+                capture << "frame_" << std::setw(3) << std::setfill('0') << frame << ".bmp";
+                capture_name = capture.str();
+            }
             const auto frame_start = std::chrono::steady_clock::now();
             const std::uint64_t frame_updates_before = frame_update_sequence_;
             scripted_now_ms_ = options_.frame_start_ms +
@@ -3765,6 +3775,7 @@ public:
                                   layers,
                                   display_commands,
                                   frame_buffer_.pixels.size() * sizeof(Color),
+                                  capture_name,
                                   trace_frame_timings_);
             }
             if (!options_.frame_montage_path.empty() && frame == 0) {
@@ -3808,10 +3819,8 @@ public:
                                   std::max(0, options_.frame_montage_gap));
             }
             if (!options_.frame_output_dir.empty()) {
-                std::ostringstream name;
-                name << "frame_" << std::setw(3) << std::setfill('0') << frame << ".bmp";
                 const std::filesystem::path output =
-                    std::filesystem::path(options_.frame_output_dir) / name.str();
+                    std::filesystem::path(options_.frame_output_dir) / capture_name;
                 write_image(frame_buffer_, output.string());
             }
         }

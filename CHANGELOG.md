@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- The Render Trace panel now links each captured frame to its sibling BMP/PPM/PNG
+  image when available, reports missing captures explicitly, and visualizes dirty
+  coverage. New traces carry a bounded relative `captureFile` field.
+
 - The VS Code extension now generates a bounded Render Trace during `.jfcapture`
   playback and provides a frame-by-frame panel for desktop-shell stage timing,
   dirty-region metrics and available paint-command attribution. The panel clearly

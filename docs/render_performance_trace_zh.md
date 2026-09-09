@@ -53,7 +53,12 @@ python tools\render_performance_report.py `
 {"format":"jellyframe.render.trace.v0","type":"frame","frame":42,"totalUs":17300,"stagesUs":{"input":120,"script":880,"style":410,"renderTree":620,"layout":2100,"layerTree":530,"dirty":190,"paint":10600,"present":2260},"action":"repaint-existing","reason":"paint-only-dirty","dirtyRectCount":2,"dirtyAreaPercent":3,"pipeline":{"domNodes":31,"layoutBoxes":22,"layers":4,"displayCommands":18,"paintPixels":5170},"commands":[{"type":"BoxShadow","nodeId":"card-1","us":7200,"pixels":3820},{"type":"Text","nodeId":"value","us":610,"pixels":340}]}
 ```
 
-Win32 桌面壳当前可在确定性捕获时生成第一版 trace：
+Win32 桌面壳当前可在确定性捕获时生成第一版 trace。启用
+`--capture-frames` 时，每条 frame 记录还会带有相对截图文件名
+`captureFile`（例如 `frame_000.bmp`），使查看器能够把指标与实际画面
+绑定。旧 trace 没有该字段时，查看器会在 trace 同目录按帧号查找
+`frame_*.bmp`、`.ppm` 或 `.png`；找不到时明确显示截图缺失，不将其当作
+空白画面：
 
 ```powershell
 build\Release\jellyframe_desktop_shell.exe `
@@ -164,7 +169,7 @@ present/DMA 时间和视觉误差。不同库不支持的能力单独标记 `not
 - Win32 shell 已在显式选项下产生 bounded frame JSONL；
 - trace report 工具会报告重复、回退或非法 frame number，不静默排序或伪造帧；
 - 每帧补齐阶段 timing、dirty/pipeline counters 和 frame update reason；
-- VS Code Render Trace 面板读取 trace，支持 frame scrubber、阶段占比、dirty 指标和 command 归因；
+- VS Code Render Trace 面板读取 trace，支持 frame scrubber、阶段占比、dirty 覆盖率条、当前帧截图和 command 归因；
 - `.jfcapture` 回放可显式生成同目录 bounded Render Trace，并在状态视图中保留打开入口；
 - 不提供元素耗时猜测，直到 Layer/DisplayCommand 有稳定 node attribution contract。
 
