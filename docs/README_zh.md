@@ -72,6 +72,8 @@
   已安装 classic-script App 的物理触控到 worker、frame 与 panel 验收要求。
 - [ws147_provider_vscode_smoke_20260825_zh.md](ws147_provider_vscode_smoke_20260825_zh.md)：WS147
   provider 与 VS Code 的只读发现、身份读取冒烟验收；不包含安装、刷写或擦除操作。
+- [a2_author_tool_acceptance_plan_zh.md](a2_author_tool_acceptance_plan_zh.md)：A2 作者工具、
+  设备生命周期、真实 App 输入和失败诊断的统一验收方案与关闭标准。
 - [authorized_file_broker_zh.md](../src/app_runtime/docs/authorized_file_broker_zh.md)：面向文件管理器和系统组件的宿主持有授权文件访问边界。
 - [host_optional_services_zh.md](../src/app_runtime/docs/host_optional_services_zh.md)：图片/音频/轻量视频、网络数据和安装式 bundle 的可选宿主服务契约。
 - [../tools/vscode-jellyframe/README_zh.md](../tools/vscode-jellyframe/README_zh.md)：
