@@ -34,6 +34,8 @@ function main() {
   assert(html.includes("dirtyRects"));
   assert(html.includes('"width":64'));
   assert(html.includes("dirtyRectsTruncated"));
+  assert(html.includes("capture-stage"));
+  assert(html.includes("dirty-overlay"));
   assert(!html.includes("invalid,0 10x10"));
   assert(html.includes("img-src vscode-resource:"));
 

@@ -15,7 +15,7 @@ JellyFrame Engine 的重要变更记录在这里。
 ### 变更
 
 - Render Trace 现在会为每个捕获帧写入最多 32 个最终 dirty 矩形，并在超限时显式标记截断；
-  VS Code 查看器会在 dirty 覆盖率和对应截图旁显示这些稳定的整数边界。
+  VS Code 查看器会在对应截图上叠加这些矩形，并在旁边显示稳定的整数边界。
 
 - Render Trace 面板现在会将每帧指标关联到同目录的 BMP/PPM/PNG 截图（存在时），明确提示
   缺失截图并显示 dirty 覆盖率；新 trace 会写入有界的相对 `captureFile` 字段。
