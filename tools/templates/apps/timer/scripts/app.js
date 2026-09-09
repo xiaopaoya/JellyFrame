@@ -1,64 +1,26 @@
-var time = document.getElementById("time");
-var state = document.getElementById("state");
-var toggle = document.getElementById("toggle");
-var round = document.getElementById("round");
-var app = document.getElementById("app");
-var seconds = 0;
+var remaining = 60000;
+var deadline = 0;
 var running = false;
-var intervalId = 0;
-
-function twoDigits(value) {
-  return value < 10 ? "0" + String(value) : String(value);
-}
-
-function setButtonText(button, text) {
-  var label = button.children[0];
-  if (label) {
-    label.textContent = text;
-  } else {
-    button.textContent = text;
-  }
-}
-
+var ticker = 0;
+var state = "Ready";
+function two(value) { return value < 10 ? "0" + String(value) : String(value); }
 function renderTimer() {
-  var minutes = Math.floor(seconds / 60);
-  var rest = seconds - minutes * 60;
-  time.textContent = twoDigits(minutes) + ":" + twoDigits(rest);
-  state.textContent = running ? "Running" : "Stopped";
-  setButtonText(toggle, running ? "Stop" : "Start");
-  round.textContent = String(Math.floor(seconds / 60) + 1) + "/4";
+  if (running) {
+    remaining = Math.max(0, deadline - Date.now());
+    if (remaining == 0) { stop(); state = "Complete"; }
+  }
+  var seconds = Math.ceil(remaining / 1000);
+  document.getElementById("time").textContent = two(Math.floor(seconds / 60)) + ":" + two(seconds % 60);
+  document.getElementById("state").textContent = state;
+  document.getElementById("toggle").textContent = running ? "Pause" : remaining == 0 ? "Again" : "Start";
+  var pct = Math.ceil(remaining / 600);
+  document.getElementById("ring").style.background = "conic-gradient(#67DDED 0% " + pct + "%, #243747 " + pct + "% 100%)";
 }
-
-function stopTimer() {
-  if (intervalId != 0) {
-    clearInterval(intervalId);
-    intervalId = 0;
-  }
-  running = false;
-}
-
-app.addEventListener("click", function (event) {
-  var button = event.target.closest("button");
-  if (!button || !button.dataset.action) {
-    return;
-  }
-  if (button.dataset.action == "tick") {
-    seconds += 1;
-  } else if (button.dataset.action == "toggle") {
-    if (running) {
-      stopTimer();
-    } else {
-      running = true;
-      intervalId = setInterval(function () {
-        seconds += 1;
-        renderTimer();
-      }, 1000);
-    }
-  } else if (button.dataset.action == "reset") {
-    stopTimer();
-    seconds = 0;
-  }
+function stop() { running = false; if (ticker) { clearInterval(ticker); ticker = 0; } }
+document.getElementById("toggle").addEventListener("click", function () {
+  if (running) { remaining = Math.max(0, deadline - Date.now()); stop(); state = remaining ? "Paused" : "Complete"; }
+  else { if (!remaining) { remaining = 60000; } deadline = Date.now() + remaining; running = true; state = "Focusing"; ticker = setInterval(renderTimer, 250); }
   renderTimer();
 });
-
+document.getElementById("reset").addEventListener("click", function () { stop(); remaining = 60000; state = "Ready"; renderTimer(); });
 renderTimer();

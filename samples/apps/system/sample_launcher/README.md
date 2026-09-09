@@ -1,6 +1,6 @@
 # Sample Launcher
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
 This is a JellyFrame app-authored launcher used by the Win32 host for bring-up,
 CI and manual app-manager testing. It is a sample privileged system app, not a
@@ -27,3 +27,7 @@ and persistent launcher UX; ordinary apps receive no installation API.
 Before a new install, it also clears abandoned staging files and bundles that
 are no longer referenced by a current or rollback registry entry. This recovery
 is host-owned and never removes app-private data.
+
+## Visual role
+
+Uses the wearable palette. Native host support and the acceptance limitations below still apply.

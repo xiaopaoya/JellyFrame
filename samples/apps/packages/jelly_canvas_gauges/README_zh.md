@@ -1,6 +1,6 @@
 # Jelly Canvas Gauges
 
-> 最后更新：2026-09-04；适用版本：0.6.0-dev；Render Core 基线：0.6.2
+> 最后更新：2026-09-09；适用版本：0.6.0-dev；Render Core 基线：0.6.2
 
 面向可穿戴仪表盘和紧凑数据图形的 Canvas 2D V0.4 示例。布局、文本和控件仍由 DOM/CSS
 负责；Canvas 只用于环形仪表、标签和很难用盒模型表达的小图表。
@@ -10,3 +10,7 @@
 `rect-172x320`；用 `jellyframe_cli.py doctor --sample jelly_canvas_gauges --strict`
 可以复验这项契约。这是验收 package，不是 app 作者 starter 或门面示例。只有明确绑定 Canvas
 的宿主才能把其视觉输出作为 Canvas 证据。
+
+## 视觉用途
+
+采用可穿戴配色；以下宿主能力和验收限制仍然适用。

@@ -1,68 +1,30 @@
 var display = document.getElementById("display");
 var status = document.getElementById("status");
-var app = document.getElementById("app");
 var pending = 0;
 var operator = "";
 var fresh = true;
-
-function numberValue() {
-  return parseInt(display.value, 10) || 0;
+function clearAll() { pending = 0; operator = ""; fresh = true; display.value = "0"; status.textContent = "QUICK MATH"; }
+function calculate() {
+  if (!operator || fresh) { return true; }
+  var right = parseInt(display.value, 10);
+  var value = operator == "+" ? pending + right : pending - right;
+  if (value > 99999999 || value < -9999999) { clearAll(); status.textContent = "LIMIT / 8 DIGITS"; return false; }
+  display.value = String(value); pending = value; return true;
 }
-
-function setDisplay(value) {
-  display.value = String(value);
-}
-
-function pressDigit(digit) {
-  if (fresh || display.value == "0") {
-    setDisplay(digit);
-    fresh = false;
-    return;
+document.getElementById("app").addEventListener("click", function (event) {
+  var key = event.target.closest("button");
+  if (!key) { return; }
+  var value = key.dataset.key;
+  if (value == "C") { clearAll(); return; }
+  if (value == "+" || value == "-") {
+    if (!calculate()) { return; }
+    pending = parseInt(display.value, 10); operator = value; fresh = true;
+    status.textContent = String(pending) + " " + operator; return;
   }
-  display.value = display.value + digit;
-}
-
-function applyOperator(nextOperator) {
-  pending = numberValue();
-  operator = nextOperator;
-  fresh = true;
-  status.textContent = String(pending) + " " + operator;
-}
-
-function equals() {
-  var right = numberValue();
-  var result = pending;
-  if (operator == "+") {
-    result = pending + right;
-  } else if (operator == "-") {
-    result = pending - right;
+  if (value == "=") {
+    if (!operator || fresh) { return; }
+    if (calculate()) { operator = ""; fresh = true; status.textContent = "RESULT"; } return;
   }
-  setDisplay(result);
-  status.textContent = "RESULT";
-  operator = "";
-  fresh = true;
-}
-
-function clearAll() {
-  pending = 0;
-  operator = "";
-  fresh = true;
-  setDisplay(0);
-  status.textContent = "QUICK MATH";
-}
-
-app.addEventListener("click", function (event) {
-  var button = event.target.closest("button");
-  if (!button) {
-    return;
-  }
-  if (button.dataset.key) {
-    pressDigit(button.dataset.key);
-  } else if (button.dataset.op == "+" || button.dataset.op == "-") {
-    applyOperator(button.dataset.op);
-  } else if (button.dataset.op == "=") {
-    equals();
-  } else if (button.dataset.op == "clear") {
-    clearAll();
-  }
+  if (fresh || display.value == "0") { display.value = value; fresh = false; }
+  else if (display.value.length < 8) { display.value = display.value + value; }
 });

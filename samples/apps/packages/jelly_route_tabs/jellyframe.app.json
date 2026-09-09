@@ -4,32 +4,93 @@
   "formatVersion": 0,
   "id": "org.jellyframe.examples.route_tabs",
   "name": "Route Tabs",
-  "version": {"name": "0.1.0", "code": 1},
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
   "entry": "/index.html",
-  "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "classic"},
-  "viewport": {"designWidth": 300, "designHeight": 300, "shape": "round"},
+  "runtime": {
+    "minJellyFrame": "0.6.0",
+    "minRenderCore": "0.6.2",
+    "script": "classic"
+  },
+  "viewport": {
+    "designWidth": 300,
+    "designHeight": 300,
+    "shape": "round"
+  },
   "budgets": {
     "maxResourceBytes": 24576,
-    "maxDomNodes": 64,
-    "maxCssRules": 32,
+    "maxDomNodes": 128,
+    "maxCssRules": 96,
     "maxDisplayCommands": 96,
     "maxEventListeners": 8
   },
   "targets": {
     "round-300": {
-      "viewport": {"width": 300, "height": 300, "shape": "round"},
+      "viewport": {
+        "width": 300,
+        "height": 300,
+        "shape": "round"
+      },
+      "fontProfile": "tiny-plus-symbols",
       "output": "jfapp",
-      "gate": {"policy": "accept", "minViewport": {"width": 300, "height": 300}}
+      "gate": {
+        "policy": "reject",
+        "minViewport": {
+          "width": 300,
+          "height": 300
+        },
+        "allowScroll": false,
+        "allowHorizontalOverflow": false,
+        "maxWarnings": 0,
+        "maxErrors": 0
+      }
     },
     "rect-320x240": {
-      "viewport": {"width": 320, "height": 240, "shape": "rect"},
+      "viewport": {
+        "width": 320,
+        "height": 240,
+        "shape": "rect"
+      },
+      "fontProfile": "tiny-plus-symbols",
       "output": "jfapp",
-      "gate": {"policy": "accept", "minViewport": {"width": 320, "height": 240}}
+      "gate": {
+        "policy": "reject",
+        "minViewport": {
+          "width": 320,
+          "height": 240
+        },
+        "allowScroll": false,
+        "allowHorizontalOverflow": false,
+        "maxWarnings": 0,
+        "maxErrors": 0
+      }
     },
     "rect-172x320": {
-      "viewport": {"width": 172, "height": 320, "shape": "rect"},
+      "viewport": {
+        "width": 172,
+        "height": 320,
+        "shape": "rect"
+      },
+      "fontProfile": "tiny-plus-symbols",
       "output": "jfapp",
-      "gate": {"policy": "accept", "minViewport": {"width": 172, "height": 320}}
+      "gate": {
+        "policy": "reject",
+        "minViewport": {
+          "width": 172,
+          "height": 320
+        },
+        "allowScroll": false,
+        "allowHorizontalOverflow": false,
+        "maxWarnings": 0,
+        "maxErrors": 0
+      }
     }
-  }
+  },
+  "capabilities": [],
+  "requiresFeatures": [
+    "css.flex-grid",
+    "css.modern-paint"
+  ]
 }

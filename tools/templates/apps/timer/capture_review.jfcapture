@@ -1,0 +1,10 @@
+frames 32
+step-ms 100
+start-ms 1700000000000
+viewport 300 300
+event 1 click-id toggle
+event 8 click-id toggle
+event 14 click-id toggle
+event 19 time-ms 1700000065000
+event 24 click-id toggle
+event 28 click-id reset

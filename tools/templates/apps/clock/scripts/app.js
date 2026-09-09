@@ -1,35 +1,27 @@
-var time = document.getElementById("time");
-var note = document.getElementById("note");
-var phase = document.getElementById("phase");
-var refresh = document.getElementById("refresh");
-var zoneButton = document.getElementById("zoneButton");
-var zone = document.getElementById("zone");
-var steps = document.getElementById("steps");
-var heart = document.getElementById("heart");
-var samples = [
-  ["07:30", "Morning", "Start steady", "6.4k", "72"],
-  ["12:05", "Midday", "Refuel soon", "8.1k", "76"],
-  ["18:40", "Evening", "Walk window", "11k", "88"],
-  ["22:15", "Night", "Wind down", "12k", "64"]
-];
-var index = 0;
-var zones = ["08", "UTC+8", "Trip"];
-var zoneIndex = 0;
-
+var offset = 0;
+var twelveHour = false;
+function two(value) { return value < 10 ? "0" + String(value) : String(value); }
 function renderClock() {
-  var item = samples[index];
-  time.textContent = item[0];
-  phase.textContent = item[1];
-  note.textContent = item[2];
-  steps.textContent = item[3];
-  heart.textContent = item[4];
-  index = (index + 1) % samples.length;
+  var total = Math.floor(Date.now() / 1000) + offset * 3600;
+  var day = ((total % 86400) + 86400) % 86400;
+  var hour = Math.floor(day / 3600);
+  var minute = Math.floor(day / 60) % 60;
+  var second = day % 60;
+  var shown = twelveHour ? (hour % 12 || 12) : hour;
+  document.getElementById("time").textContent = two(shown) + ":" + two(minute);
+  document.getElementById("seconds").textContent = two(second) + " seconds" + (twelveHour ? (hour < 12 ? " / AM" : " / PM") : "");
+  document.getElementById("phase").textContent = hour < 6 ? "Night" : hour < 12 ? "Morning" : hour < 18 ? "Afternoon" : "Evening";
+  document.getElementById("dayfill").style.width = String(Math.floor(day * 100 / 86400)) + "%";
 }
-
-refresh.addEventListener("click", renderClock);
-zoneButton.addEventListener("click", function () {
-  zoneIndex = (zoneIndex + 1) % zones.length;
-  zone.textContent = zones[zoneIndex];
+document.getElementById("zoneButton").addEventListener("click", function () {
+  offset = offset == 0 ? 8 : 0;
+  this.textContent = offset == 0 ? "UTC" : "UTC+8";
+  renderClock();
+});
+document.getElementById("formatButton").addEventListener("click", function () {
+  twelveHour = !twelveHour;
+  this.textContent = twelveHour ? "12 hour" : "24 hour";
+  renderClock();
 });
 renderClock();
 setInterval(renderClock, 1000);

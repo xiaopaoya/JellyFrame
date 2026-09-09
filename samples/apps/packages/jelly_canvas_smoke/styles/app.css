@@ -1,129 +1,155 @@
 html,
 body {
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  background: #07151f;
-  color: #f7fff6;
-  font-family: system-ui;
+  margin:0;
+  width:100%;
+  height:100%;
+  background:#000000;
+  color:#E8F3FA;
+  font-family:system-ui;
 }
 
 .screen {
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
-  padding: 18px;
-  display: grid;
-  gap: 10px;
-  background: linear-gradient(#0f2c3a, #07151f);
-  overflow: hidden;
+  box-sizing:border-box;
+  width:100%;
+  height:100%;
+  padding:18px;
+  display:grid;
+  gap:10px;
+  background:linear-gradient(#121C28, #000000);
+  overflow:hidden;
 }
 
 .hero {
-  padding: 12px 16px;
-  border-radius: 22px;
-  background: linear-gradient(#1d6f82, #123341);
+  padding:12px 16px;
+  border-radius:22px;
+  background:linear-gradient(#1C2C3C, #121C28);
 }
 
 .eyebrow,
 .label {
-  margin: 0;
-  font-size: 13px;
-  color: #b8f2df;
+  margin:0;
+  font-size:13px;
+  color:#E8F3FA;
 }
 
 h1 {
-  margin: 0;
-  font-size: 46px;
-  line-height: 52px;
-  font-weight: 700;
+  margin:0;
+  font-size:46px;
+  line-height:52px;
+  font-weight:700;
 }
 
 .canvas-source {
-  display: none;
+  display:none;
 }
 
 .trend {
-  display: block;
-  width: 100%;
-  height: 96px;
-  margin-left: 0;
-  border-radius: 18px;
-  background: #0b1f2a;
+  display:block;
+  width:100%;
+  height:96px;
+  margin-left:0;
+  border-radius:18px;
+  background:#121C28;
 }
 
 .stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
 }
 
 .stats article {
-  padding: 10px 12px;
-  border-radius: 18px;
-  background: #122735;
+  padding:10px 12px;
+  border-radius:18px;
+  background:#121C28;
 }
 
 .stats strong {
-  display: block;
-  font-size: 24px;
-  line-height: 28px;
+  display:block;
+  font-size:24px;
+  line-height:28px;
 }
 
 .stats span {
-  display: block;
-  font-size: 12px;
-  color: #a9d7cc;
+  display:block;
+  font-size:12px;
+  color:#ADC4D2;
 }
 
 @media (max-height: 260px) {
   .screen {
-    padding: 14px;
-    gap: 8px;
+    padding:14px;
+    gap:8px;
   }
 
   .hero {
-    padding: 9px 13px;
+    padding:9px 13px;
   }
 
   h1 {
-    font-size: 38px;
-    line-height: 42px;
+    font-size:38px;
+    line-height:42px;
   }
 
   .trend {
-    height: 70px;
+    height:70px;
   }
 
   .stats article {
-    padding: 8px 10px;
+    padding:8px 10px;
   }
 }
 
 @media (max-width: 200px) {
   .screen {
-    padding: 14px;
+    padding:14px;
   }
 
   h1 {
-    font-size: 32px;
-    line-height: 36px;
+    font-size:32px;
+    line-height:36px;
   }
 
   .trend {
-    height: 82px;
+    height:82px;
   }
 
   .stats {
-    gap: 7px;
+    gap:7px;
   }
 
   .stats article {
-    padding: 8px 9px;
+    padding:8px 9px;
   }
 
   .stats strong {
-    font-size: 18px;
-    line-height: 22px;
+    font-size:18px;
+    line-height:22px;
   }
 }
+
+/* Isolated visual-review candidate: bounded viewport repair. */
+
+.screen { display:block; height:300px; padding:44px; }
+.hero { padding:0; height:76px; background:transparent; }
+h1 { font-size:34px; line-height:39px; }
+.eyebrow, .label { font-size:11px; line-height:16px; }
+.trend { width:212px; height:76px; border-radius:10px; margin-bottom:8px; }
+.stats { height:52px; gap:8px; }
+.stats article { padding:4px 10px; border-radius:10px; }
+.stats strong { font-size:20px; line-height:24px; }
+.stats span { font-size:11px; line-height:15px; }
+@media (max-height: 260px) { .screen { height:240px; padding:14px 32px; } .trend { width:256px; } }
+@media (max-width: 200px) { .screen { height:320px; padding:20px 12px; } .hero { height:100px; } .trend { width:148px; height:92px; margin-bottom:12px; } .stats article { padding:4px 8px; } }
+
+/* Shared wearable colors from JellyFrame palette v2. Layout remains app-local. */
+html, body { background: #000000; color: #E8F3FA; }
+button:focus { outline-color: #67DDED; }
+ .screen, .hero { background: #000000; } .trend, .stats article { background: #121C28; }
+.eyebrow, .label, .stats span { color: #ADC4D2; }
+
+/* Recover original card character; reclaim outer margin. */
+ .screen { padding: 22px 20px; } .hero { height: 84px; padding: 8px 14px; background: linear-gradient(#1C2C3C, #121C28); border-radius: 20px; margin-bottom: 10px; }
+.trend { width: 260px; height: 96px; margin-bottom: 10px; } .stats { height: 52px; }
+@media (max-height: 260px) { .screen { padding: 12px 16px; } .hero { height: 72px; padding: 2px 14px; margin-bottom: 6px; } .trend { width: 288px; height: 76px; margin-bottom: 8px; } }
+@media (max-width: 200px) { .screen { padding: 18px 10px; } .hero { height: 96px; } .trend { width: 152px; height: 100px; margin-bottom: 12px; } }

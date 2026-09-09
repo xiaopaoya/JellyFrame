@@ -1,6 +1,6 @@
 # Jelly Font Policy
 
-> Last updated: 2026-07-07; Applies to: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
 Small package used to validate the app font policy path:
 
@@ -22,3 +22,7 @@ Small package used to validate the app font policy path:
 The font is deliberately tiny and only exists for deterministic package/tool
 tests. Product apps should generate their own `.jffont` subsets from licensed
 bitmap fonts.
+
+## Visual role
+
+Uses the wearable palette. Native host support and the acceptance limitations below still apply.

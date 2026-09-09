@@ -1,0 +1,8 @@
+frames 24
+step-ms 100
+start-ms 1700000000000
+viewport 300 300
+event 3 click-id focus
+event 8 click-id settings
+event 13 click-id back
+event 18 click-id today

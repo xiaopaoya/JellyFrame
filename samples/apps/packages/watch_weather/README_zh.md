@@ -1,17 +1,9 @@
-# Watch Weather 示例
+# watch_weather
 
-> 最后更新：2026-07-07；适用版本：0.5.0
+> 最后更新：2026-09-09；适用版本：0.6.0-dev；Render Core 基线：0.6.2
 
-一个紧凑的手表天气 source package，用于验证 package 结构、本地资源、包内 BMP 图片、XHR
-数据更新、system-state JS binding、事件委托、小屏 grid 布局，以及 Win32/pseudo-browser
-预览路径的一致性。
-
-该示例保持 local-first，但会通过 JellyFrame `XMLHttpRequest` V0 子集向宿主数据服务请求
-`/data/weather.json`。Win32 debug 壳提供 mock response；硬件 port 应提供自己的有界数据服务。
-renderer 仍不加载远程页面。
-
-Win32 scripting 壳可用 frame script 验证按钮事件、XHR mock、图片 completion 和帧更新统计：
+响应式数据卡、BMP、XHR 数据路由及 KV 降级。原有 Live/Offline 并列易误读，AQI 仍显示温度单位；窄屏按钮组高度预算错误。改为统一深底信息卡、明确 Sample/Demo、AQI 单位随模式切换，恢复选择时同步高亮。天气图标由本地几何生成，4 张 BMP 从 83,160 字节减至 49,368 字节。
 
 ```powershell
-.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\watch_weather --frame-script samples\apps\packages\watch_weather\capture_weather_interaction.jfcapture
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app samples/apps/packages/watch_weather --frame-script samples/apps/packages/watch_weather/capture_review.jfcapture
 ```

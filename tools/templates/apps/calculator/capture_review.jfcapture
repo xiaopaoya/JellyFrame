@@ -1,0 +1,16 @@
+frames 24
+step-ms 100
+start-ms 1700000000000
+viewport 300 300
+event 1 click-id key-7
+event 2 click-id key-plus
+event 3 click-id key-8
+event 4 click-id key-equals
+event 7 click-id key-equals
+event 10 click-id key-minus
+event 11 click-id key-3
+event 12 click-id key-plus
+event 13 click-id key-2
+event 14 click-id key-equals
+event 18 click-id key-clear
+event 20 click-id key-equals

@@ -1,6 +1,6 @@
 # App Packages
 
-> 最后更新：2026-09-04；适用版本：0.6.0-dev；Render Core 基线：0.6.2
+> 最后更新：2026-09-09；适用版本：0.6.0-dev；Render Core 基线：0.6.2
 
 这里保存完整 JellyFrame source-package 示例。每个 app 都应包含
 `jellyframe.app.json`、本地 HTML/CSS/classic JavaScript，以及预览或打包所需的有界本地资源。
@@ -26,9 +26,13 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather 
 四个展示包都必须保持可读、经过目检，并可在当前桌面壳中确定性运行。`doctor --trial`
 仍可在需要特定契约时使用针对性验收包。
 
-## 验收包
+## 专题示例
 
-- `jelly_canvas_smoke`：可选 Canvas 2D V0.4 趋势线和柱状图示例，使用有界 canvas-to-canvas drawImage 缩放、径向高光与有预算的二次/三次 path。
+`jelly_canvas_gauges`（可选 Canvas 服务）与 `jelly_static_modules`（打包期模块合成）可作专题参考。与上面 4 个展示包及 weather/clock/timer/calculator 模板共同组成 10 个推荐示例。blank 继续作为最小起点。
+
+## 验收包与能力说明
+
+- `jelly_canvas_smoke`：退出美术展示，保留绘图回归；可选 Canvas 2D V0.4 趋势线和柱状图示例，使用有界 canvas-to-canvas drawImage 缩放、径向高光与有预算的二次/三次 path。
 - `jelly_canvas_gauges`：可选 Canvas 2D 仪表/圆环示例，覆盖 `arc`、`fill`、
   `globalAlpha`、Canvas 文本、线性渐变和有界 path 绘制。
 - `jelly_service_status`：包含系统事件和本地存储的网络、音频、定位 service 边界示例。
