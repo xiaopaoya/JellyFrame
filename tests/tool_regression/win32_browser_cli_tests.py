@@ -338,6 +338,17 @@ def main() -> int:
                     "render trace must contain pipeline counters")
             require(record.get("captureFile") == f"frame_{record['frame']:03d}.bmp",
                     "render trace must explicitly associate each captured frame with its image")
+            require(isinstance(record.get("dirtyRects"), list),
+                    "render trace must include a bounded dirty rectangle list")
+            require(len(record["dirtyRects"]) <= 32,
+                    "render trace dirty rectangle list must stay bounded")
+            for rect in record["dirtyRects"]:
+                require(set(rect) == {"x", "y", "width", "height"},
+                        "render trace dirty rectangles must use stable coordinate fields")
+                require(all(isinstance(rect[key], int) for key in rect),
+                        "render trace dirty rectangle coordinates must be integers")
+                require(rect["width"] >= 0 and rect["height"] >= 0,
+                        "render trace dirty rectangle dimensions must be non-negative")
         require(any(record["stagesUs"] for record in frame_records),
                 "a frame that renders during capture must expose measured phase timing")
 

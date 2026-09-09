@@ -114,7 +114,9 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     pipeline: "管线计数",
     capture: "当前帧截图",
     noCapture: "没有找到与当前帧关联的截图。请确认 trace 与 frame_*.bmp 位于同一输出目录。",
-    dirtyCoverage: "脏区覆盖"
+    dirtyCoverage: "脏区覆盖",
+    dirtyRects: "脏区矩形",
+    dirtyRectsTruncated: "脏区矩形过多，已截断"
   } : {
     title: "Render Trace",
     frame: "Frame",
@@ -139,7 +141,9 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     pipeline: "Pipeline counters",
     capture: "Frame capture",
     noCapture: "No capture is associated with this frame. Keep the trace and frame_*.bmp files in the same output directory.",
-    dirtyCoverage: "Dirty coverage"
+    dirtyCoverage: "Dirty coverage",
+    dirtyRects: "Dirty rectangles",
+    dirtyRectsTruncated: "Too many dirty rectangles; list truncated"
   };
   const sessionJson = escapeHtml(JSON.stringify(parsed.session || {}));
   const titleText = escapeHtml(title || labels.title);
@@ -147,7 +151,7 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${options.cspSource || "data:"} data:; style-src 'unsafe-inline'; script-src 'nonce-jellyframe-trace';">
 <style>
-body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:16px;line-height:1.4}h1{font-size:18px;margin:0 0 8px}h2{font-size:14px;margin:20px 0 8px}.muted{color:var(--vscode-descriptionForeground)}.notice{border:1px solid var(--vscode-panel-border);padding:8px;margin:10px 0}.error{color:var(--vscode-errorForeground)}.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.controls input{flex:1;min-width:180px}.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:12px}.metric{border:1px solid var(--vscode-panel-border);padding:8px}.metric b{display:block;font-size:16px}.stage{display:grid;grid-template-columns:minmax(90px,1fr) 3fr 80px;gap:8px;align-items:center;margin:5px 0}.bar{height:8px;background:var(--vscode-editorWidget-background);border-radius:2px;overflow:hidden}.bar i{display:block;height:100%;background:var(--vscode-charts-blue)}.capture{border:1px solid var(--vscode-panel-border);padding:8px;margin-top:12px}.capture img{display:block;max-width:100%;max-height:420px;object-fit:contain;background:var(--vscode-editor-background);margin-top:8px}.dirty{display:grid;grid-template-columns:minmax(110px,auto) 1fr auto;gap:8px;align-items:center;margin:8px 0}.dirty .bar i{background:var(--vscode-charts-orange)}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--vscode-panel-border);padding:5px}code{color:var(--vscode-textPreformat-foreground)}ul{margin:5px 0;padding-left:20px}.hidden{display:none}.pill{border:1px solid var(--vscode-panel-border);padding:1px 5px}
+body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:16px;line-height:1.4}h1{font-size:18px;margin:0 0 8px}h2{font-size:14px;margin:20px 0 8px}.muted{color:var(--vscode-descriptionForeground)}.notice{border:1px solid var(--vscode-panel-border);padding:8px;margin:10px 0}.error{color:var(--vscode-errorForeground)}.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.controls input{flex:1;min-width:180px}.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:12px}.metric{border:1px solid var(--vscode-panel-border);padding:8px}.metric b{display:block;font-size:16px}.stage{display:grid;grid-template-columns:minmax(90px,1fr) 3fr 80px;gap:8px;align-items:center;margin:5px 0}.bar{height:8px;background:var(--vscode-editorWidget-background);border-radius:2px;overflow:hidden}.bar i{display:block;height:100%;background:var(--vscode-charts-blue)}.capture{border:1px solid var(--vscode-panel-border);padding:8px;margin-top:12px}.capture img{display:block;max-width:100%;max-height:420px;object-fit:contain;background:var(--vscode-editor-background);margin-top:8px}.dirty{display:grid;grid-template-columns:minmax(110px,auto) 1fr auto;gap:8px;align-items:center;margin:8px 0}.dirty .bar i{background:var(--vscode-charts-orange)}.dirty-rect{display:grid;grid-template-columns:minmax(80px,1fr) auto;gap:8px;align-items:center;margin:4px 0}.dirty-rect .bar i{background:var(--vscode-charts-orange)}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--vscode-panel-border);padding:5px}code{color:var(--vscode-textPreformat-foreground)}ul{margin:5px 0;padding-left:20px}.hidden{display:none}.pill{border:1px solid var(--vscode-panel-border);padding:1px 5px}
 </style></head><body><h1>${titleText}</h1>
 <p class="muted">${labels.timingNote}<br>${labels.sourceNote}</p>
 <div class="controls"><label>${labels.frame} <output id="frameNumber"></output></label><input id="frameSlider" type="range" min="0" max="0" value="0" step="1"></div>
@@ -168,6 +172,8 @@ function render(){
  const sum=stages.reduce((n,[,v])=>n+(Number(v)||0),0); const fps=frame.totalUs>0?(1000000/frame.totalUs).toFixed(1):labels.none;
  const commands=Array.isArray(frame.commands)?frame.commands:[]; const pipeline=frame.pipeline||{};
  const dirtyPercent=Math.max(0,Math.min(100,Number(frame.dirtyAreaPercent)||0));
+ const dirtyRects=Array.isArray(frame.dirtyRects)?frame.dirtyRects.filter((rect)=>rect&&Number.isFinite(Number(rect.x))&&Number.isFinite(Number(rect.y))&&Number.isFinite(Number(rect.width))&&Number.isFinite(Number(rect.height))&&Number(rect.width)>0&&Number(rect.height)>0).slice(0,32):[];
+ const dirtyRectView=dirtyRects.length?'<h2>'+esc(labels.dirtyRects)+'</h2><div>'+dirtyRects.map((rect)=>{const x=Number(rect.x)||0;const y=Number(rect.y)||0;const width=Math.max(0,Number(rect.width)||0);const height=Math.max(0,Number(rect.height)||0);return '<div class="dirty-rect"><span class="bar"><i style="width:'+Math.min(100,Math.max(1,Math.round(width*100/Math.max(1,Number(model.session?.viewport?.width)||width))))+'%"></i></span><code>'+fmt(x)+','+fmt(y)+' '+fmt(width)+'x'+fmt(height)+'</code></div>';}).join('')+(frame.dirtyRectsTruncated?'<p class="muted">'+esc(labels.dirtyRectsTruncated)+'</p>':'')+'</div>':'';
  const capture=model.frameImages?.[String(frame.frame)];
  const captureView=capture?'<section class="capture"><strong>'+esc(labels.capture)+'</strong><img src="'+esc(capture)+'" alt="'+esc(labels.capture)+'"></section>':'<section class="capture muted">'+esc(labels.noCapture)+'</section>';
  view.innerHTML='<div class="metric-grid">'+
@@ -177,6 +183,7 @@ function render(){
  '<div class="metric"><span>'+esc(labels.dirty)+'</span><b>'+fmt(frame.dirtyRectCount)+' / '+fmt(frame.dirtyAreaPercent)+'%</b></div></div>'+
  captureView+
  '<div class="dirty"><span>'+esc(labels.dirtyCoverage)+'</span><span class="bar"><i style="width:'+dirtyPercent+'%"></i></span><span>'+dirtyPercent.toFixed(1)+'%</span></div>'+
+ dirtyRectView+
  '<p><strong>'+esc(labels.reason)+':</strong> '+esc(frame.reason||labels.none)+' <span class="muted">· timingComplete='+esc(frame.timingComplete===true?'true':'false')+'</span></p>'+
  '<h2>'+esc(labels.stages)+'</h2>'+ (stages.length?stages.map(([name,value])=>'<div class="stage"><code>'+esc(name)+'</code><span class="bar"><i style="width:'+Math.min(100,Math.round((Number(value)||0)*100/max))+'%"></i></span><span>'+fmt(value)+' us ('+(sum?((Number(value)||0)*100/sum).toFixed(1):'0.0')+'%)</span></div>').join(''):'<p class="muted">'+esc(labels.none)+'</p>')+
  '<h2>'+esc(labels.pipeline)+'</h2><p class="muted">'+Object.entries(pipeline).map(([key,value])=>'<code>'+esc(key)+'='+esc(value)+'</code>').join(' · ')+'</p>'+ 

@@ -56,7 +56,10 @@ python tools\render_performance_report.py `
 Win32 桌面壳当前可在确定性捕获时生成第一版 trace。启用
 `--capture-frames` 时，每条 frame 记录还会带有相对截图文件名
 `captureFile`（例如 `frame_000.bmp`），使查看器能够把指标与实际画面
-绑定。旧 trace 没有该字段时，查看器会在 trace 同目录按帧号查找
+绑定。每条 frame 同时带可选的 `dirtyRects`：这是最终 dirty region 的最多 32 个
+整数 `{x,y,width,height}` 矩形；超过上限时以 `dirtyRectsTruncated: true` 显式标记。
+它用于解释本帧重绘范围，不含指针、设备地址或内部节点身份。旧 trace 没有这些字段时查看器
+仍可正常打开。旧 trace 没有 `captureFile` 时，查看器会在 trace 同目录按帧号查找
 `frame_*.bmp`、`.ppm` 或 `.png`；找不到时明确显示截图缺失，不将其当作
 空白画面：
 
@@ -169,7 +172,7 @@ present/DMA 时间和视觉误差。不同库不支持的能力单独标记 `not
 - Win32 shell 已在显式选项下产生 bounded frame JSONL；
 - trace report 工具会报告重复、回退或非法 frame number，不静默排序或伪造帧；
 - 每帧补齐阶段 timing、dirty/pipeline counters 和 frame update reason；
-- VS Code Render Trace 面板读取 trace，支持 frame scrubber、阶段占比、dirty 覆盖率条、当前帧截图和 command 归因；
+- VS Code Render Trace 面板读取 trace，支持 frame scrubber、阶段占比、dirty 覆盖率条、最多 32 个 dirty 矩形、当前帧截图和 command 归因；
 - `.jfcapture` 回放可显式生成同目录 bounded Render Trace，并在状态视图中保留打开入口；
 - 不提供元素耗时猜测，直到 Layer/DisplayCommand 有稳定 node attribution contract。
 

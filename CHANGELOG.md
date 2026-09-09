@@ -17,6 +17,10 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 
 ### Changed
 
+- Render Trace now carries up to 32 final dirty rectangles per captured frame,
+  with an explicit truncation marker. The VS Code viewer lists their stable
+  integer bounds alongside dirty coverage and the corresponding frame capture.
+
 - The Render Trace panel now links each captured frame to its sibling BMP/PPM/PNG
   image when available, reports missing captures explicitly, and visualizes dirty
   coverage. New traces carry a bounded relative `captureFile` field.

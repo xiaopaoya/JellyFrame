@@ -12,6 +12,11 @@ function main() {
     stagesUs: { layout: 500, paint: 1000 },
     dirtyRectCount: 1,
     dirtyAreaPercent: 3,
+    dirtyRects: [
+      { x: 8, y: 12, width: 64, height: 28 },
+      { x: "invalid", y: 0, width: 10, height: 10 }
+    ],
+    dirtyRectsTruncated: true,
     commands: [{ type: "Text", nodeId: "title", us: 1000, pixels: 20 }]
   };
   const parsed = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify(frame)}\n`);
@@ -26,6 +31,10 @@ function main() {
   assert(html.includes("timingComplete"));
   assert(html.includes("vscode-resource://frame_000.bmp"));
   assert(html.includes("dirtyCoverage"));
+  assert(html.includes("dirtyRects"));
+  assert(html.includes('"width":64'));
+  assert(html.includes("dirtyRectsTruncated"));
+  assert(!html.includes("invalid,0 10x10"));
   assert(html.includes("img-src vscode-resource:"));
 
   const invalid = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, frame: 2 })}\n${JSON.stringify({ ...frame, frame: 1 })}\n`);

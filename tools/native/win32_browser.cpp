@@ -107,6 +107,7 @@ enum class FrameTraceStage {
 
 constexpr std::array<const char*, 9> kFrameTraceStageNames = {
     "input", "script", "style", "renderTree", "layout", "layerTree", "dirty", "paint", "present"};
+constexpr std::size_t kMaxFrameTraceDirtyRects = 32;
 
 struct FrameTraceTimings {
     std::array<std::uint64_t, kFrameTraceStageNames.size()> microseconds{};
@@ -3492,6 +3493,7 @@ public:
                      std::size_t display_commands,
                      std::size_t framebuffer_bytes,
                      const std::string& capture_file,
+                     const std::vector<Rect>& dirty_rects,
                      const FrameTraceTimings& timings) {
         if (!active_ || frame_records_ >= kMaxRenderTraceRecords) {
             return false;
@@ -3509,6 +3511,22 @@ public:
                << ",\"dirtyAreaPercent\":" << std::max(0, dirty_area_percent);
         if (!capture_file.empty()) {
             record << ",\"captureFile\":\"" << json_escape_for_trace(capture_file) << '\"';
+        }
+        record << ",\"dirtyRects\":[";
+        const std::size_t trace_dirty_count = std::min(dirty_rects.size(), kMaxFrameTraceDirtyRects);
+        for (std::size_t index = 0; index < trace_dirty_count; ++index) {
+            if (index != 0) {
+                record << ',';
+            }
+            const Rect& rect = dirty_rects[index];
+            record << "{\"x\":" << rect.x
+                   << ",\"y\":" << rect.y
+                   << ",\"width\":" << std::max(0, rect.width)
+                   << ",\"height\":" << std::max(0, rect.height) << '}';
+        }
+        record << ']';
+        if (dirty_rects.size() > trace_dirty_count) {
+            record << ",\"dirtyRectsTruncated\":true";
         }
         record << ",\"pipeline\":{\"domNodes\":" << dom_nodes
                << ",\"layoutBoxes\":" << layout_boxes
@@ -3776,6 +3794,7 @@ public:
                                   display_commands,
                                   frame_buffer_.pixels.size() * sizeof(Color),
                                   capture_name,
+                                  updated ? last_dirty_rects_ : std::vector<Rect>{},
                                   trace_frame_timings_);
             }
             if (!options_.frame_montage_path.empty() && frame == 0) {
@@ -4090,6 +4109,7 @@ private:
     FrameUpdateReason last_frame_update_reason_ = FrameUpdateReason::None;
     FrameUpdateReason last_frame_repaint_reason_ = FrameUpdateReason::None;
     std::size_t last_dirty_rect_count_ = 0;
+    std::vector<Rect> last_dirty_rects_;
     int last_dirty_area_percent_ = 0;
     std::size_t last_dirty_attempt_rect_count_ = 0;
     int last_dirty_attempt_area_percent_ = 0;
@@ -7065,6 +7085,9 @@ private:
         last_dirty_rect_count_ = region.rects.size();
         last_dirty_area_percent_ =
             dirty_region_area_percent(region, Rect{0, 0, frame_buffer_.width, frame_buffer_.height});
+        last_dirty_rects_.clear();
+        const std::size_t rect_count = std::min(region.rects.size(), kMaxFrameTraceDirtyRects);
+        last_dirty_rects_.insert(last_dirty_rects_.end(), region.rects.begin(), region.rects.begin() + rect_count);
         if (region.rects.empty()) {
             last_display_invalidation_ = DisplayInvalidationResult{};
         }
