@@ -132,6 +132,9 @@ idf.py -B build-ws147-panel-b -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benc
 
 ### Bounded Device Performance Profile
 
+完整实机执行步骤和通过标准见
+[`docs/device_performance_profile_hardware_acceptance_zh.md`](../../docs/device_performance_profile_hardware_acceptance_zh.md)。
+
 `sdkconfig.ws147_device_performance_profile.defaults` is an explicit diagnostic
 overlay for console-backed retained UI fixtures. It collects 30 warm-up active
 presents followed by one 120-present fixed-histogram window, then emits five
