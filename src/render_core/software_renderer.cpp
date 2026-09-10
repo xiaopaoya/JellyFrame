@@ -329,7 +329,7 @@ void composite_rounded_clip_surface(FrameBuffer& target,
                 }
                 continue;
             }
-            blend_pixel(target, x, y, with_coverage(color, coverage));
+            blend_pixel_unchecked(target, x, y, with_coverage(color, coverage));
             if (statistics != nullptr) {
                 ++statistics->rounded_clip_blended_pixels;
             }
@@ -439,7 +439,7 @@ void fill_opaque_rounded_rect(FrameBuffer& target, Rect rect, Rect clip, Color c
                 if (coverage == 255) {
                     target.pixel(x, y) = color;
                 }
-                else if (coverage > 0) blend_pixel(target, x, y, with_coverage(color, coverage));
+                else if (coverage > 0) blend_pixel_unchecked(target, x, y, with_coverage(color, coverage));
             }
         }
         return;
@@ -487,7 +487,7 @@ void fill_opaque_rounded_rect(FrameBuffer& target, Rect rect, Rect clip, Color c
                 if (coverage == 255) {
                     row[x - visible.x] = color;
                 } else if (coverage > 0) {
-                    blend_pixel(target, x, y, with_coverage(color, coverage));
+                    blend_pixel_unchecked(target, x, y, with_coverage(color, coverage));
                 }
             }
         }
@@ -513,7 +513,7 @@ void fill_rect(FrameBuffer& target, Rect rect, Color color, int border_radius = 
             if (coverage <= 0) {
                 continue;
             }
-            blend_pixel(target, x, y, with_coverage(color, coverage));
+            blend_pixel_unchecked(target, x, y, with_coverage(color, coverage));
         }
     }
 }
@@ -536,7 +536,7 @@ void fill_rect_clipped(FrameBuffer& target, Rect rect, Rect clip, Color color, i
             if (coverage <= 0) {
                 continue;
             }
-            blend_pixel(target, x, y, with_coverage(color, coverage));
+            blend_pixel_unchecked(target, x, y, with_coverage(color, coverage));
         }
     }
 }
@@ -581,7 +581,7 @@ void stroke_rounded_rect(FrameBuffer& target,
                 : rounded_rect_coverage(inner_geometry, x, y);
             const int stroke_coverage = std::max(0, outer_coverage - inner_coverage);
             if (stroke_coverage > 0) {
-                blend_pixel(target, x, y, with_coverage(color, stroke_coverage));
+                blend_pixel_unchecked(target, x, y, with_coverage(color, stroke_coverage));
             }
         }
     };
@@ -1126,10 +1126,10 @@ void composite_transformed_buffer(FrameBuffer& target,
                 const int sy = std::max(0, std::min(source.height - 1, static_cast<int>(source_y)));
                 source_pixel = source.pixel(sx, sy);
             }
-            blend_pixel(target,
-                        copy_rect.x + x,
-                        copy_rect.y + y,
-                        with_opacity(source_pixel, opacity));
+            blend_pixel_unchecked(target,
+                                  copy_rect.x + x,
+                                  copy_rect.y + y,
+                                  with_opacity(source_pixel, opacity));
         }
     }
 }
@@ -1616,11 +1616,11 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
             const int x_end = safe_edge(visible.x, visible.width);
             for (int y = visible.y; y < y_end; ++y) {
                 for (int x = visible.x; x < x_end; ++x) {
-                    blend_pixel(target,
-                                x,
-                                y,
-                                with_coverage(image_buffer.pixel(x - visible.x, y - visible.y),
-                                              rounded_rect_coverage(rounded, x, y)));
+                    blend_pixel_unchecked(target,
+                                          x,
+                                          y,
+                                          with_coverage(image_buffer.pixel(x - visible.x, y - visible.y),
+                                                        rounded_rect_coverage(rounded, x, y)));
                 }
             }
             break;

@@ -80,6 +80,13 @@ inline void blend_pixel(FrameBuffer& target, int x, int y, Color source) {
     blend_color(target.pixel(x, y), source);
 }
 
+// Callers must have intersected the coordinates with the target bounds.
+inline void blend_pixel_unchecked(FrameBuffer& target, int x, int y, Color source) {
+    const std::size_t index = static_cast<std::size_t>(y) *
+        static_cast<std::size_t>(target.width) + static_cast<std::size_t>(x);
+    blend_color(target.pixels[index], source);
+}
+
 // Decode and clamp once per paint command. Rounded coverage is queried per
 // pixel by several raster paths, so repeating this work there is avoidable.
 struct RasterRoundedRect {
