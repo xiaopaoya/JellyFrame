@@ -21,6 +21,8 @@ from typing import Any
 
 TRACE_FORMAT = "jellyframe.render.trace.v0"
 REPORT_FORMAT = "jellyframe.render.performance.report"
+MAX_COMMAND_OWNER_GROUPS = 128
+SAFE_TRACE_OWNER = re.compile(r"^[A-Za-z0-9:_-]{1,64}$")
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -54,6 +56,14 @@ def round_number(value: float) -> int | float:
     return int(rounded) if rounded.is_integer() else rounded
 
 
+def command_owner(command: dict[str, Any]) -> str:
+    raw = command.get("owner")
+    if not isinstance(raw, str):
+        legacy_node_id = command.get("nodeId")
+        raw = f"id:{legacy_node_id}" if isinstance(legacy_node_id, str) else "unattributed"
+    return raw if SAFE_TRACE_OWNER.fullmatch(raw) else "unattributed"
+
+
 def normalize_frame(raw: dict[str, Any], source: str, fallback_index: int) -> dict[str, Any] | None:
     stages = raw.get("stagesUs", raw.get("timingsUs", {}))
     if not isinstance(stages, dict):
@@ -78,7 +88,8 @@ def normalize_frame(raw: dict[str, Any], source: str, fallback_index: int) -> di
         "stagesUs": normalized_stages,
     }
     for key in ("action", "reason", "repaint", "dirtyMode", "dirtyReason",
-                "dirtyRectCount", "dirtyAreaPercent", "pipeline", "timingComplete"):
+                "dirtyRectCount", "dirtyAreaPercent", "pipeline", "timingComplete",
+                "commandsTruncated", "nodesTruncated", "commandInvalidSamples"):
         if key in raw:
             result[key] = raw[key]
     commands = raw.get("commands", raw.get("commandAttribution"))
@@ -207,6 +218,8 @@ def aggregate(frames: list[dict[str, Any]]) -> dict[str, Any]:
         for name, value in sorted(stage_totals.items(), key=lambda entry: entry[1], reverse=True)
     }
     command_totals: dict[str, float] = {}
+    command_owner_totals: dict[tuple[str, str], dict[str, float]] = {}
+    command_owner_truncated = False
     for frame in frames:
         for command in frame.get("commands", []):
             if not isinstance(command, dict):
@@ -215,6 +228,35 @@ def aggregate(frames: list[dict[str, Any]]) -> dict[str, Any]:
             value = number(command.get("us", command.get("microseconds")))
             if value is not None:
                 command_totals[name] = command_totals.get(name, 0.0) + value
+                owner = command_owner(command)
+                key = (owner, name)
+                group = command_owner_totals.get(key)
+                if group is None:
+                    if len(command_owner_totals) >= MAX_COMMAND_OWNER_GROUPS:
+                        command_owner_truncated = True
+                        continue
+                    group = {"us": 0.0, "pixels": 0.0, "samples": 0.0}
+                    command_owner_totals[key] = group
+                group["us"] += value
+                pixels = number(command.get("pixels"))
+                if pixels is not None:
+                    group["pixels"] += pixels
+                samples = number(command.get("samples"))
+                if samples is not None:
+                    group["samples"] += samples
+        command_owner_truncated = command_owner_truncated or bool(frame.get("commandsTruncated"))
+    command_owner_rows = [
+        {
+            "owner": owner,
+            "type": name,
+            "us": round_number(values["us"]),
+            "pixels": round_number(values["pixels"]),
+            "samples": round_number(values["samples"]),
+        }
+        for (owner, name), values in sorted(
+            command_owner_totals.items(), key=lambda entry: entry[1]["us"], reverse=True
+        )
+    ]
     return {
         "frameCount": len(frames),
         "totalUs": {
@@ -226,6 +268,8 @@ def aggregate(frames: list[dict[str, Any]]) -> dict[str, Any]:
         "stageTotalsUs": {name: round_number(value) for name, value in sorted(stage_totals.items(), key=lambda entry: entry[1], reverse=True)},
         "stageSharesPercent": shares,
         "commandAttributionUs": {name: round_number(value) for name, value in sorted(command_totals.items(), key=lambda entry: entry[1], reverse=True)},
+        "commandOwnerAttribution": command_owner_rows,
+        "commandOwnerAttributionTruncated": command_owner_truncated,
     }
 
 
@@ -280,6 +324,18 @@ def render_html(report: dict[str, Any]) -> str:
             f"<td>{html.escape(str(frame.get('action', '')))}</td><td>{html.escape(str(frame.get('reason', '')))}</td>"
             f"<td>{html.escape(str(frame.get('dirtyRectCount', '')))}</td><td>{html.escape(str(frame.get('dirtyAreaPercent', '')))}</td></tr>"
         )
+    command_rows = []
+    for command in summary.get("commandOwnerAttribution", []):
+        if not isinstance(command, dict):
+            continue
+        command_rows.append(
+            f"<tr><td><code>{html.escape(str(command.get('owner', 'unattributed')))}</code></td>"
+            f"<td><code>{html.escape(str(command.get('type', 'unknown')))}</code></td>"
+            f"<td>{html.escape(str(command.get('us', 0)))} us</td>"
+            f"<td>{html.escape(str(command.get('pixels', 0)))}</td>"
+            f"<td>{html.escape(str(command.get('samples', 0)))}</td></tr>"
+        )
+    command_note = " Rows were truncated; ranking is incomplete." if summary.get("commandOwnerAttributionTruncated") else ""
     return """<!doctype html>
 <meta charset="utf-8"><title>JellyFrame Render Performance</title>
 <style>body{{font:14px system-ui,sans-serif;max-width:1100px;margin:28px auto;color:#202124}}table{{border-collapse:collapse;width:100%;margin:12px 0 28px}}th,td{{border-bottom:1px solid #ddd;text-align:left;padding:7px}}meter{{width:180px;height:12px}}code{{font-family:ui-monospace,monospace}}small{{color:#5f6368}}</style>
@@ -289,6 +345,8 @@ def render_html(report: dict[str, Any]) -> str:
 <p>Frames: {frames} · average: {average} us · p50: {p50} us · p95: {p95} us · max: {maximum} us</p>
 <h2>Stage share</h2><table><tr><th>Stage</th><th>Total</th><th>Share</th></tr>{stage_rows}</table>
 <h2>Frames</h2><table><tr><th>Frame</th><th>Total</th><th>Action</th><th>Reason</th><th>Dirty rects</th><th>Dirty area %</th></tr>{frame_rows}</table>
+<h2>Command / owner attribution</h2><p><small>Desktop raster invocation time only.{command_note}</small></p>
+<table><tr><th>Owner</th><th>Command</th><th>Time</th><th>Candidate pixels</th><th>Samples</th></tr>{command_rows}</table>
 <h2>Limits</h2><ul>{limits}</ul>
 """.format(
         frames=html.escape(str(summary.get("frameCount", 0))),
@@ -298,6 +356,8 @@ def render_html(report: dict[str, Any]) -> str:
         maximum=html.escape(str(summary.get("totalUs", {}).get("max", 0))),
         stage_rows="".join(rows) or "<tr><td colspan='3'>No stage timings</td></tr>",
         frame_rows="".join(frame_rows) or "<tr><td colspan='6'>No per-frame trace</td></tr>",
+        command_rows="".join(command_rows) or "<tr><td colspan='5'>No command attribution</td></tr>",
+        command_note=command_note,
         limits="".join(f"<li>{html.escape(item)}</li>" for item in report.get("limitations", [])),
     )
 

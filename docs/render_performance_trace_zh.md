@@ -1,7 +1,7 @@
 # Render Core 性能观测与对比方案
 
-> 最后更新：2026-09-09；适用版本：0.6.0-dev
-> 状态：第二阶段进行中；Win32 桌面壳已提供部分阶段计时
+> 最后更新：2026-09-10；适用版本：0.6.0-dev
+> 状态：第二阶段已交付；Win32 capture 已提供有界 command/owner 归因
 
 ## 1. 为什么需要这项工具
 
@@ -39,7 +39,7 @@ python tools\render_performance_report.py `
 - frame total 的 average、p50、p95、max；
 - parse、style、render tree、layout、layer、flatten、paint、present 等阶段的总耗时和占比；
 - dirty rect 数量、dirty 面积、frame update action/reason 和 pipeline object count；
-- producer 提供时的 display command 类型/元素归因；
+- producer 提供时的 display command 类型与受限 owner 归因排行；
 - 设备 aggregate telemetry 与隔离 microbench 的独立区域；
 - 明确的 warning/limitation，而不是用缺失数据填零后伪造结论。
 
@@ -50,7 +50,7 @@ python tools\render_performance_report.py `
 
 ```json
 {"format":"jellyframe.render.trace.v0","type":"session","appId":"org.example.app","viewport":{"width":172,"height":320},"profile":"rect-172x320","runtime":"desktop"}
-{"format":"jellyframe.render.trace.v0","type":"frame","frame":42,"totalUs":17300,"stagesUs":{"input":120,"script":880,"style":410,"renderTree":620,"layout":2100,"layerTree":530,"dirty":190,"paint":10600,"present":2260},"action":"repaint-existing","reason":"paint-only-dirty","dirtyRectCount":2,"dirtyAreaPercent":3,"pipeline":{"domNodes":31,"layoutBoxes":22,"layers":4,"displayCommands":18,"paintPixels":5170},"commands":[{"type":"BoxShadow","nodeId":"card-1","us":7200,"pixels":3820},{"type":"Text","nodeId":"value","us":610,"pixels":340}]}
+{"format":"jellyframe.render.trace.v0","type":"frame","frame":42,"totalUs":17300,"stagesUs":{"input":120,"script":880,"style":410,"renderTree":620,"layout":2100,"layerTree":530,"dirty":190,"paint":10600,"present":2260},"action":"repaint-existing","reason":"paint-only-dirty","dirtyRectCount":2,"dirtyAreaPercent":3,"pipeline":{"domNodes":31,"layoutBoxes":22,"layers":4,"displayCommands":18,"paintPixels":5170},"commands":[{"type":"BoxShadow","owner":"id:card-1","us":7200,"pixels":3820,"samples":1},{"type":"Text","owner":"n7","us":610,"pixels":340,"samples":2}]}
 ```
 
 Win32 桌面壳当前可在确定性捕获时生成第一版 trace。启用
@@ -79,7 +79,9 @@ build\Release\jellyframe_desktop_shell.exe `
 所有运行时、主机任务、窗口系统或设备 DMA/panel 分项。trace 最多保存 600 条 frame、总计 4 MiB、
 单行 4 KiB；记录超限或写盘失败只停用 trace，不改变渲染结果。捕获结束后一次性写盘，
 避免把文件 I/O 和 flush 放进每帧 render/present 路径。首个捕获帧可能只是初始化阶段已经
-完成后的 `clean-cached` 记录，因此不能把它当作应用启动首帧耗时。
+完成后的 `clean-cached` 记录，因此不能把它当作应用启动首帧耗时。显式 trace capture 的第 0 帧
+会请求一次不改变 DOM 内容或 framebuffer 像素的 paint-only diagnostic repaint，使静态 App 也能
+采集真实 command invocation；该额外工作只属于 profiling capture，不能混入常规性能基线。
 
 ### 必填与约束
 
@@ -87,10 +89,13 @@ build\Release\jellyframe_desktop_shell.exe `
 - `frame` 在同一 session 严格递增；重复、回退或损坏记录必须被工具报告，不能静默排序；
 - `totalUs` 是 producer 测得的 frame wall time；`stagesUs` 可以存在未归因间隙，工具不得
   宣称阶段之和等于 total，除非 producer 明确给出 `timingComplete: true`；
-- `nodeId` 必须是 App/DOM 的稳定公开 ID 或 producer 生成的受限 opaque ID，不得输出裸指针、
-  arena 地址、文件密钥或设备物理地址；
-- `commands` 是可选归因。没有 command/node 归因时，UI 必须显示“无法归因到元素”，不能
+- `commands[].owner` 只能是唯一且受限 ASCII `id:<id>`，或会话内 opaque `n<N>`，也可为
+  `unattributed`；不得输出裸指针、DOM path、文本、arena 地址、文件密钥或设备物理地址；
+- `commands` 是可选归因。每项带 `type`、`owner`、`us`、`pixels`、`samples`；没有可靠归因时，UI 必须显示“无法归因到元素”，不能
   把整层耗时错误归给第一个元素；
+- command 聚合最多 64 项，owner 最多 64 个；出现上限或行预算截断时必须分别输出
+  `commandsTruncated` / `nodesTruncated`。frame 的 `timingComplete` 保持 false，且没有可靠时钟
+  的样本只累计 `commandInvalidSamples`，不能用 0 us 伪装为完整或有效测量；
 - trace 必须有记录数、单行字节数和 session 总大小上限；设备侧默认只保留最近窗口，
   导出到主机后再长期保存。
 
@@ -101,7 +106,7 @@ build\Release\jellyframe_desktop_shell.exe `
 1. 按 frame 的列表，显示 total、FPS 等效值、action/reason、dirty rect 数与面积；
 2. 阶段堆叠条，点击阶段显示其绝对时间、占比和是否来自 desktop/device；
 3. 画布 overlay：dirty rect、paint bounds、clip bounds，切换前后帧；
-4. command/node 排名，显示类型、稳定 ID、覆盖像素和耗时；
+4. command/owner 排名，显示类型、受限 owner、候选像素、调用次数和耗时；
 5. frame scrubber，逐帧查看“重建了什么、复用了什么、哪些区域被清除/重绘”；
 6. p50/p95 与最慢帧固定显示，并允许导出原始 JSONL/HTML；
 7. 缺失 trace、设备只提供 aggregate 或 command 未归因时显示来源和限制。
@@ -175,8 +180,9 @@ present/DMA 时间和视觉误差。不同库不支持的能力单独标记 `not
 - VS Code Render Trace 面板读取 trace，支持 frame scrubber、阶段占比、dirty 覆盖率条、最多 32 个 dirty 矩形、当前帧截图和 command 归因；
 - `.jfcapture` 回放可显式生成同目录 bounded Render Trace，并在状态视图中保留打开入口；
 - 命令/节点归因的 owner-token、边界、截断和正确性门槛已在
-  [专用 RFC](render_trace_command_attribution_rfc_zh.md) 冻结，其中 opt-in Core owner token 和
-  value-only raster command observer 已交付；Win32 聚合/producer 尚未启用，因此不提供元素耗时猜测。
+  [专用 RFC](render_trace_command_attribution_rfc_zh.md) 冻结；opt-in Core owner token、value-only
+  raster observer、Win32 有界聚合/producer 和 VS Code 命令排行均已交付，仍不对未拆分的 composite/
+  transform/host callback 工作作元素耗时猜测。
 
 ### 第三阶段：设备 profile
 

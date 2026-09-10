@@ -21,7 +21,7 @@ class RenderPerformanceReportTests(unittest.TestCase):
             trace.write_text(
                 json.dumps({"format": "jellyframe.render.trace.v0", "type": "session", "viewport": {"width": 172, "height": 320}}) + "\n"
                 + json.dumps({"type": "frame", "frame": 1, "totalUs": 100, "stagesUs": {"layout": 25, "paint": 75}, "dirtyRectCount": 1, "dirtyAreaPercent": 4}) + "\n"
-                + json.dumps({"type": "frame", "frame": 2, "totalUs": 200, "stagesUs": {"layout": 50, "paint": 150}, "commands": [{"type": "BoxShadow", "us": 120}]}) + "\n",
+                + json.dumps({"type": "frame", "frame": 2, "totalUs": 200, "stagesUs": {"layout": 50, "paint": 150}, "commands": [{"type": "BoxShadow", "owner": "id:card-1", "us": 120, "pixels": 320, "samples": 2}, {"type": "BoxShadow", "owner": "not a safe owner", "us": 30, "pixels": 20, "samples": 1}], "commandsTruncated": True}) + "\n",
                 encoding="utf-8",
             )
             output = root / "report.json"
@@ -38,7 +38,16 @@ class RenderPerformanceReportTests(unittest.TestCase):
             self.assertEqual(report["summary"]["frameCount"], 2)
             self.assertEqual(report["summary"]["totalUs"]["p95"], 200)
             self.assertEqual(report["summary"]["stageSharesPercent"]["paint"], 75)
-            self.assertEqual(report["summary"]["commandAttributionUs"]["BoxShadow"], 120)
+            self.assertEqual(report["summary"]["commandAttributionUs"]["BoxShadow"], 150)
+            self.assertEqual(
+                report["summary"]["commandOwnerAttribution"][0],
+                {"owner": "id:card-1", "type": "BoxShadow", "us": 120, "pixels": 320, "samples": 2},
+            )
+            self.assertEqual(
+                report["summary"]["commandOwnerAttribution"][1]["owner"],
+                "unattributed",
+            )
+            self.assertTrue(report["summary"]["commandOwnerAttributionTruncated"])
             self.assertEqual(report["metadata"]["viewport"], {"width": 172, "height": 320})
 
     def test_html_output_is_generated(self):
@@ -56,7 +65,9 @@ class RenderPerformanceReportTests(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("JellyFrame Render Performance", html_output.read_text(encoding="utf-8"))
+            rendered = html_output.read_text(encoding="utf-8")
+            self.assertIn("JellyFrame Render Performance", rendered)
+            self.assertIn("Command / owner attribution", rendered)
 
     def test_invalid_trace_record_is_reported_without_fabricating_a_frame(self):
         with tempfile.TemporaryDirectory() as directory:
