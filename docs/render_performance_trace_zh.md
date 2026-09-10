@@ -174,7 +174,9 @@ present/DMA 时间和视觉误差。不同库不支持的能力单独标记 `not
 - 每帧补齐阶段 timing、dirty/pipeline counters 和 frame update reason；
 - VS Code Render Trace 面板读取 trace，支持 frame scrubber、阶段占比、dirty 覆盖率条、最多 32 个 dirty 矩形、当前帧截图和 command 归因；
 - `.jfcapture` 回放可显式生成同目录 bounded Render Trace，并在状态视图中保留打开入口；
-- 不提供元素耗时猜测，直到 Layer/DisplayCommand 有稳定 node attribution contract。
+- 命令/节点归因的 owner-token、边界、截断和正确性门槛已在
+  [专用 RFC](render_trace_command_attribution_rfc_zh.md) 冻结；producer 尚未启用，
+  因此不提供元素耗时猜测。
 
 ### 第三阶段：设备 profile
 
