@@ -192,6 +192,17 @@ struct ReplayTimingClock {
     std::size_t calls = 0;
 };
 
+struct CommandSampleCollector {
+    std::vector<SoftwareRasterizerCommandSample> samples;
+};
+
+void collect_command_sample(const SoftwareRasterizerCommandSample& sample, void* raw_context) {
+    auto* collector = static_cast<CommandSampleCollector*>(raw_context);
+    if (collector != nullptr) {
+        collector->samples.push_back(sample);
+    }
+}
+
 std::uint64_t replay_timing_clock(void* raw_context) {
     auto* clock = static_cast<ReplayTimingClock*>(raw_context);
     if (clock == nullptr || clock->samples == nullptr || clock->sample_count == 0) {
@@ -1127,6 +1138,57 @@ void rasterizer_records_opt_in_rounded_clip_replay_timing() {
     check(invalid_statistics.rounded_clip_replay_microseconds == 0 &&
               invalid_statistics.rounded_clip_replay_timing_invalid_samples == 1,
           "non-monotonic replay timing samples are rejected without underflow");
+}
+
+void rasterizer_command_observer_is_opt_in_and_reports_clipped_work() {
+    DisplayCommand fill = black_fill(Rect{2, 3, 12, 10});
+    fill.trace_owner_token = 41;
+    FrameBuffer without_observer(20, 20, Color{255, 255, 255, 255});
+    SoftwareRasterizer().rasterize(fill, without_observer, Rect{4, 5, 5, 4});
+
+    const std::uint64_t samples[] = {100, 113};
+    ReplayTimingClock clock{samples, 2, 0};
+    CommandSampleCollector collector;
+    SoftwareRasterizer rasterizer({},
+                                  nullptr,
+                                  {0,
+                                   nullptr,
+                                   {replay_timing_clock, &clock},
+                                   {collect_command_sample, &collector}});
+    FrameBuffer with_observer(20, 20, Color{255, 255, 255, 255});
+    rasterizer.rasterize(fill, with_observer, Rect{4, 5, 5, 4});
+
+    check(with_observer.width == without_observer.width && with_observer.height == without_observer.height &&
+              with_observer.pixels.size() == without_observer.pixels.size(),
+          "command profiling preserves framebuffer shape");
+    for (std::size_t index = 0; index < with_observer.pixels.size(); ++index) {
+        const Color observed = with_observer.pixels[index];
+        const Color baseline = without_observer.pixels[index];
+        check(observed.r == baseline.r && observed.g == baseline.g && observed.b == baseline.b &&
+                  observed.a == baseline.a,
+              "command profiling must not alter rasterized pixels");
+    }
+    check(clock.calls == 2 && collector.samples.size() == 1,
+          "command observer reads the opt-in clock only around one executed command");
+    const SoftwareRasterizerCommandSample& sample = collector.samples.front();
+    check(sample.type == DisplayCommandType::FillRect && sample.trace_owner_token == 41 &&
+              sample.clip.x == 4 && sample.clip.y == 5 && sample.clip.width == 5 && sample.clip.height == 4 &&
+              sample.candidate_pixels == 20 && sample.elapsed_microseconds == 13 && sample.timing_valid,
+          "command observer reports owner, final clip, candidate pixels and elapsed raster time");
+
+    const std::uint64_t invalid_samples[] = {50, 49};
+    ReplayTimingClock invalid_clock{invalid_samples, 2, 0};
+    CommandSampleCollector invalid_collector;
+    SoftwareRasterizer invalid_rasterizer({},
+                                          nullptr,
+                                          {0,
+                                           nullptr,
+                                           {replay_timing_clock, &invalid_clock},
+                                           {collect_command_sample, &invalid_collector}});
+    invalid_rasterizer.rasterize(fill, with_observer, Rect{4, 5, 5, 4});
+    check(invalid_collector.samples.size() == 1 && !invalid_collector.samples.front().timing_valid &&
+              invalid_collector.samples.front().elapsed_microseconds == 0,
+          "command observer rejects non-monotonic timing without underflow");
 }
 
 void rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners() {
@@ -2078,6 +2140,7 @@ int main() {
         rasterizer_tracks_nested_rounded_clip_coverage_work();
         rasterizer_rounded_composite_span_matches_pixel_reference();
         rasterizer_records_opt_in_rounded_clip_replay_timing();
+        rasterizer_command_observer_is_opt_in_and_reports_clipped_work();
         rasterizer_skips_rounded_clip_surface_when_dirty_rect_misses_corners();
         compositor_offsets_rounded_overflow_clip_with_layer_transform();
         compositor_bounds_extreme_manual_transform_coordinates();

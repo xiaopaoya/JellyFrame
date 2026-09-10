@@ -21,8 +21,8 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   now frozen. It prohibits pointers and addresses in DisplayCommand/trace data,
   requires actual raster timing, bounded aggregation, pixel equivalence and
   profiling-overhead disclosure. Core now provides default-off frame-local token
-  stamping; no timing or producer is enabled yet, so the viewer does not guess
-  element costs.
+  stamping and a value-only raster command observer; no bounded aggregation or
+  producer is enabled yet, so the viewer does not guess element costs.
 
 - Render Trace now carries up to 32 final dirty rectangles per captured frame,
   with an explicit truncation marker. The VS Code viewer lists their stable

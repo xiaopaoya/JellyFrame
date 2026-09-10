@@ -115,6 +115,17 @@ void add_saturating(Value& target, Value value) {
     target += value;
 }
 
+std::size_t clipped_rect_pixels(Rect rect) {
+    if (rect.width <= 0 || rect.height <= 0) {
+        return 0;
+    }
+    const std::size_t width = static_cast<std::size_t>(rect.width);
+    const std::size_t height = static_cast<std::size_t>(rect.height);
+    return width > std::numeric_limits<std::size_t>::max() / height
+        ? std::numeric_limits<std::size_t>::max()
+        : width * height;
+}
+
 void record_rounded_clip_replay_candidate_pixels(SoftwareRasterizerStatistics* statistics,
                                                   DisplayCommandType type,
                                                   Rect command_rect,
@@ -1380,6 +1391,11 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
     if (empty_rect(clipped)) {
         return;
     }
+    const bool observe_command = options_.command_observer.observe != nullptr;
+    const bool time_command = observe_command && options_.timing.now_microseconds != nullptr;
+    const std::uint64_t command_begin_microseconds = time_command
+        ? options_.timing.now_microseconds(options_.timing.context)
+        : 0;
 
     switch (command.type) {
     case DisplayCommandType::FillRect:
@@ -1624,6 +1640,21 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
         composite_buffer_clipped(target, image_buffer, visible.x, visible.y, clip, 1.0F);
         break;
     }
+    }
+    if (observe_command) {
+        SoftwareRasterizerCommandSample sample;
+        sample.type = command.type;
+        sample.trace_owner_token = command.trace_owner_token;
+        sample.clip = clipped;
+        sample.candidate_pixels = clipped_rect_pixels(clipped);
+        if (time_command) {
+            const std::uint64_t command_end_microseconds = options_.timing.now_microseconds(options_.timing.context);
+            if (command_end_microseconds >= command_begin_microseconds) {
+                sample.elapsed_microseconds = command_end_microseconds - command_begin_microseconds;
+                sample.timing_valid = true;
+            }
+        }
+        options_.command_observer.observe(sample, options_.command_observer.context);
     }
 }
 
@@ -1902,7 +1933,10 @@ SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, ImagePainter im
     : rasterizer_(text_painter,
                   image_painter,
                   options.diagnostics,
-                  SoftwareRasterizerOptions{options.max_offscreen_pixels, nullptr, {}}),
+                  SoftwareRasterizerOptions{options.max_offscreen_pixels,
+                                            nullptr,
+                                            options.rasterizer_timing,
+                                            options.command_observer}),
       options_(options) {}
 
 FrameBuffer SoftwareCompositor::render(const LayerNode& root,

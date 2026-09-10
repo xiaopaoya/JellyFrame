@@ -1,7 +1,7 @@
 # Render Trace 命令/节点归因 RFC
 
 > 最后更新：2026-09-10；适用版本：0.6.0-dev  
-> 状态：第 1 步已交付；尚未启用计时或 producer
+> 状态：第 1、2 步的 Core 基础已交付；尚未启用桌面 producer
 
 ## 目标
 
@@ -73,9 +73,11 @@ frame record 的可选 `commands` 数组按 `(ownerToken, type)` 聚合：
 1. **Owner token sidecar（已交付）**：`DisplayCommand::trace_owner_token`、opt-in registry、
    命令范围 stamping、flatten 保留和单元测试已经落地；默认 builder 的 token 恒为 `0`，
    同 layer 的不同 box 会保留各自 token。frame codec 不序列化该字段。
-2. **桌面命令计时**：为 `SoftwareRasterizer` 增加可选 observer，在每个真实 invocation 前后读取
-   host clock；rounded grouped replay 仅在能够归属每个 command 时输出细分，否则单独记为
-   `unattributed-rounded-composite`。
+2. **桌面命令计时（Core 基础已交付）**：`SoftwareRasterizer` 已有可选同步 observer；仅在
+   observer 存在时才在每个实际 command invocation 前后读取 host clock，并输出 value-only 的 type、
+   owner token、最终矩形 clip、保守 candidate pixels、耗时和有效性。rounded grouped replay 的每个
+   command 仍会各记一次；surface prepare、rounded coverage composite、offscreen transform 等没有
+   可靠 owner 的工作仍不归属。Win32 有界聚合/JSON producer 尚未接入。
 3. **有界聚合与 UI**：Win32 producer 聚合到 bounded JSONL，查看器显示 type/owner/pixel/sample 排名，
    并清楚显示 timing incomplete、截断和 profiling overhead。
 4. **正确性及开销门槛**：同一 `.jfcapture` 的 profile on/off frame hash 必须相同；Release desktop

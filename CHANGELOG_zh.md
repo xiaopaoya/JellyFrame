@@ -16,7 +16,8 @@ JellyFrame Engine 的重要变更记录在这里。
 
 - 冻结了 Render Trace 命令/节点归因的 opt-in owner-token RFC：它禁止将 `Node*` 或地址写入
   DisplayCommand/trace，要求实际 raster 计时、有界聚合、像素等效和 profiling 开销披露；
-  Core 已提供默认关闭的 frame-local token stamping，当前尚未启用计时或 producer，因此不会伪造元素耗时。
+  Core 已提供默认关闭的 frame-local token stamping 与 value-only raster command observer，当前尚未启用
+  有界聚合或 producer，因此不会伪造元素耗时。
 
 - Render Trace 现在会为每个捕获帧写入最多 32 个最终 dirty 矩形，并在超限时显式标记截断；
   VS Code 查看器会在对应截图上叠加这些矩形，并在旁边显示稳定的整数边界。

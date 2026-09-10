@@ -166,6 +166,26 @@ struct SoftwareRasterizerTiming {
     void* context = nullptr;
 };
 
+// A synchronous sample for one command that reached the rasterizer after the
+// caller's rectangular clip was applied. It deliberately contains values only:
+// no command pointer, DOM node, text, image handle or host address is exposed.
+struct SoftwareRasterizerCommandSample {
+    DisplayCommandType type = DisplayCommandType::FillRect;
+    std::uint32_t trace_owner_token = 0;
+    Rect clip;
+    std::size_t candidate_pixels = 0;
+    std::uint64_t elapsed_microseconds = 0;
+    bool timing_valid = false;
+};
+
+using SoftwareRasterizerCommandObserverCallback = void (*)(const SoftwareRasterizerCommandSample& sample,
+                                                            void* context);
+
+struct SoftwareRasterizerCommandObserver {
+    SoftwareRasterizerCommandObserverCallback observe = nullptr;
+    void* context = nullptr;
+};
+
 struct SoftwareRasterizerOptions {
     // Applies only to clipped text/image temporary surfaces. Zero is unlimited.
     std::size_t max_temporary_pixels = 0;
@@ -174,6 +194,9 @@ struct SoftwareRasterizerOptions {
     // Optional timing for rounded temporary-surface preparation, command
     // replay, and rounded coverage composition. No clock is read by default.
     SoftwareRasterizerTiming timing;
+    // Optional explicit profiling hook. With no observer, the rasterizer does
+    // not read timing and creates no command samples.
+    SoftwareRasterizerCommandObserver command_observer;
 };
 
 class SoftwareRasterizer {
@@ -239,6 +262,8 @@ public:
         std::size_t max_offscreen_pixels = 0;
         DiagnosticSink* diagnostics = nullptr;
         bool smooth_scaled_layers = true;
+        SoftwareRasterizerTiming rasterizer_timing;
+        SoftwareRasterizerCommandObserver command_observer;
     };
 
     struct Scratch {
