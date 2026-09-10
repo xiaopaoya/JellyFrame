@@ -95,9 +95,31 @@ build\Release\jellyframe_desktop_shell.exe `
   把整层耗时错误归给第一个元素；
 - command 聚合最多 64 项，owner 最多 64 个；出现上限或行预算截断时必须分别输出
   `commandsTruncated` / `nodesTruncated`。frame 的 `timingComplete` 保持 false，且没有可靠时钟
-  的样本只累计 `commandInvalidSamples`，不能用 0 us 伪装为完整或有效测量；
+的样本只累计 `commandInvalidSamples`，不能用 0 us 伪装为完整或有效测量；
 - trace 必须有记录数、单行字节数和 session 总大小上限；设备侧默认只保留最近窗口，
   导出到主机后再长期保存。
+
+### Profiling 开销 A/B
+
+使用 `tools/render_trace_profile_ab.py` 对同一 shell、App 与确定性输入执行交替的 baseline/profiled
+capture；工具会拒绝复用已有输出目录，并将每轮 stdout/stderr、所有 BMP、profiled JSONL、shell SHA-256、
+命令、逐帧 hash、p50/p95 写进单一归档。任何一帧 BMP 不同即失败，不输出性能结论。
+
+```powershell
+python tools\render_trace_profile_ab.py `
+  --shell build\render-trace-image-build\Release\jellyframe_desktop_shell.exe `
+  --app tests\fixtures\apps\ws147_touch_drag_latency `
+  --output build\trace-profile-ab-20260910 `
+  --frames 120 --rounds 5 --warmup 1 `
+  --viewport-width 172 --viewport-height 320 `
+  --frame-event 1:pointer-down:20:20 `
+  --frame-event 2:pointer-move:130:20 `
+  --frame-event 3:pointer-up:130:20
+```
+
+`summary.json` 的 `captureProcessUs` 包含 shell 启动、确定性 capture、BMP 写盘，以及 profiled
+侧的 trace 采集/序列化；它适合判断“开启这一诊断是否有可解释额外成本”，不适合声明 Render Core
+单帧、实机 FPS、DMA/panel 或命令总耗时。只允许与相同二进制、输入、机器和电源状态下的归档作比较。
 
 ## 4. VS Code 逐帧工具目标
 

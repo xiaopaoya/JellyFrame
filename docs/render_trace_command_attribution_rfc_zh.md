@@ -36,14 +36,14 @@ layer-tree build 内的短生命周期 opaque value：可以复制、flatten 和
 当 `LayerTreeBuilderOptions::trace_owner_resolver` 明确提供时，builder 在每个 `LayoutBox` 的
 `paint_box_self` / `::before` / `::after` 命令范围完成后，才将 registry 返回的 token 写入新命令。
 未启用 registry 时不写 token，也不创建 owner sidecar。select popup、scroll indicator 等宿主/临时
-overlay 必须分别标为控件 owner 或 `unattributed-overlay`，不能借用邻近元素。
+overlay 必须分别标为控件 owner 或 `unattributed`，不能借用邻近元素。
 
 registry 只在当前 build 中维护 `Node* -> token` 的内部映射；其生成的 trace 表可在同一帧结束前把
 token 解析为以下一个受限描述：
 
 1. 元素具有唯一非空 ASCII `id` 时：`kind: "id"`，`value` 为该 `id`；
 2. 否则：`kind: "opaque"`，`value` 为本 trace session 单调产生的 `n1`、`n2` 等 token；
-3. 没有 DOM owner 的宿主 overlay：`kind: "overlay"`，不附带 DOM 路径。
+3. 没有 DOM owner 的宿主 overlay：`unattributed`，不附带 DOM 路径。
 
 不导出 `dom_node_path()`、tag/class/文本、CSS selector、指针或源文件位置。这样既不把临时结构误作
 稳定 API，也避免 trace 因用户文本或结构细节无界膨胀。
@@ -56,7 +56,7 @@ frame record 的可选 `commands` 数组按 `(ownerToken, type)` 聚合：
 "commands":[
   {"type":"BoxShadow","owner":"id:card-1","us":7200,"pixels":3820,"samples":1},
   {"type":"Text","owner":"n7","us":610,"pixels":340,"samples":2},
-  {"type":"FillRect","owner":"unattributed-overlay","us":90,"pixels":160,"samples":2}
+  {"type":"FillRect","owner":"unattributed","us":90,"pixels":160,"samples":2}
 ]
 ```
 
@@ -78,7 +78,7 @@ frame record 的可选 `commands` 数组按 `(ownerToken, type)` 聚合：
    observer 存在时才在每个实际 command invocation 前后读取 host clock，并输出 value-only 的 type、
    owner token、最终矩形 clip、保守 candidate pixels、耗时和有效性。rounded grouped replay 的每个
    command 仍会各记一次；surface prepare、rounded coverage composite、offscreen transform 等没有
-   可靠 owner 的工作仍不归属。Win32 有界聚合/JSON producer 尚未接入。
+   可靠 owner 的工作仍不归属。
 3. **有界聚合与 UI（已交付 producer）**：Win32 producer 在显式 `--render-trace` capture 时将实际
    raster invocation 按 `(ownerToken, type)` 聚合到 JSONL；每帧最多 64 项、owner 最多 64 个，且 writer
    还会为 4 KiB 行限制预留空间。发生任何一类截断时分别输出 `commandsTruncated` / `nodesTruncated`。
@@ -87,6 +87,9 @@ frame record 的可选 `commands` 数组按 `(ownerToken, type)` 聚合：
    面板属于后续 UI 增量，不能以它尚未显示为由否认 producer 已输出的数据。
 4. **正确性及开销门槛**：同一 `.jfcapture` 的 profile on/off frame hash 必须相同；Release desktop
    baseline 上 profiling p95 额外 CPU 时间应记录且可解释，不设虚假的“零开销”要求。
+   `tools/render_trace_profile_ab.py` 是标准配对 runner：它交替运行 baseline/profiled、校验每帧
+   BMP SHA-256、保存 shell hash/命令/trace，并输出 `summary.json`、`report.md`。其测得的是含启动、
+   截图和 trace I/O 的 desktop capture process wall time，不是 Core microbench 或设备帧时间。
 5. **设备 profile（后续）**：只在独立 Kconfig/profile 开启，先输出 type 聚合和窗口汇总；除非端侧时钟
    与缓冲预算通过实机验收，不输出逐元素时间。
 
