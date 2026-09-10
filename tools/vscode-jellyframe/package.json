@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.55",
+  "version": "0.4.56",
   "publisher": "jellyframe",
   "icon": "media/jellyframe.png",
   "repository": {

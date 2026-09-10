@@ -101,15 +101,20 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     stages: "阶段耗时",
     commands: "绘制命令归因",
     none: "无",
-    noAttribution: "没有 command/node 归因",
+    noAttribution: "当前帧没有可归因的实际 raster 调用",
+    commandTimingNote: "命令时间只覆盖实际 raster 调用；rounded composite、transform 与宿主绘制等未拆分工作仍不归因。",
+    commandsTruncated: "命令聚合已截断，列表不是完整排名。",
+    nodesTruncated: "元素归因已达到上限，其余命令可能显示为 unattributed。",
+    invalidCommandSamples: "有无效命令计时样本",
     timingNote: "阶段计时是桌面壳的部分归因；timingComplete=false，阶段之和不保证等于总耗时。",
     sourceNote: "此视图不代表 MCU、DMA、panel 或真实设备 FPS。",
     session: "会话",
     errors: "数据问题",
     pixels: "像素",
-    node: "节点",
+    owner: "归因对象",
     type: "类型",
     time: "耗时",
+    samples: "调用",
     area: "面积",
     pipeline: "管线计数",
     capture: "当前帧截图",
@@ -129,15 +134,20 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     stages: "Stage timing",
     commands: "Paint command attribution",
     none: "none",
-    noAttribution: "No command/node attribution",
+    noAttribution: "This frame has no attributable raster invocations",
+    commandTimingNote: "Command time covers actual raster invocations only; unsplit rounded composite, transforms and host painting remain unattributed.",
+    commandsTruncated: "Command aggregation was truncated; this is not a complete ranking.",
+    nodesTruncated: "Element attribution reached its limit; remaining commands may be unattributed.",
+    invalidCommandSamples: "Invalid command timing samples",
     timingNote: "Stage timing is partial desktop-shell attribution; timingComplete=false and stages do not necessarily sum to total.",
     sourceNote: "This view is not an MCU, DMA, panel or real-device FPS measurement.",
     session: "Session",
     errors: "Data issues",
     pixels: "Pixels",
-    node: "Node",
+    owner: "Owner",
     type: "Type",
     time: "Time",
+    samples: "Samples",
     area: "Area",
     pipeline: "Pipeline counters",
     capture: "Frame capture",
@@ -172,7 +182,7 @@ function render(){
  number.textContent=fmt(frame.frame)+' / '+fmt(model.frames.length-1);
  const stages=Object.entries(frame.stagesUs||{}); const max=Math.max(1,...stages.map(([,v])=>Number(v)||0));
  const sum=stages.reduce((n,[,v])=>n+(Number(v)||0),0); const fps=frame.totalUs>0?(1000000/frame.totalUs).toFixed(1):labels.none;
- const commands=Array.isArray(frame.commands)?frame.commands:[]; const pipeline=frame.pipeline||{};
+ const commands=(Array.isArray(frame.commands)?frame.commands:[]).filter((item)=>item&&typeof item==='object'&&typeof item.type==='string'&&Number.isSafeInteger(item.us)&&item.us>=0&&Number.isSafeInteger(item.pixels)&&item.pixels>=0&&Number.isSafeInteger(item.samples)&&item.samples>0).slice(0,64).sort((left,right)=>right.us-left.us); const pipeline=frame.pipeline||{};
  const dirtyPercent=Math.max(0,Math.min(100,Number(frame.dirtyAreaPercent)||0));
  const dirtyRects=Array.isArray(frame.dirtyRects)?frame.dirtyRects.filter((rect)=>rect&&Number.isFinite(Number(rect.x))&&Number.isFinite(Number(rect.y))&&Number.isFinite(Number(rect.width))&&Number.isFinite(Number(rect.height))&&Number(rect.width)>0&&Number(rect.height)>0).slice(0,32):[];
  const viewportWidth=Math.max(1,Number(model.session?.viewport?.width)||1); const viewportHeight=Math.max(1,Number(model.session?.viewport?.height)||1);
@@ -191,7 +201,7 @@ function render(){
  '<p><strong>'+esc(labels.reason)+':</strong> '+esc(frame.reason||labels.none)+' <span class="muted">· timingComplete='+esc(frame.timingComplete===true?'true':'false')+'</span></p>'+
  '<h2>'+esc(labels.stages)+'</h2>'+ (stages.length?stages.map(([name,value])=>'<div class="stage"><code>'+esc(name)+'</code><span class="bar"><i style="width:'+Math.min(100,Math.round((Number(value)||0)*100/max))+'%"></i></span><span>'+fmt(value)+' us ('+(sum?((Number(value)||0)*100/sum).toFixed(1):'0.0')+'%)</span></div>').join(''):'<p class="muted">'+esc(labels.none)+'</p>')+
  '<h2>'+esc(labels.pipeline)+'</h2><p class="muted">'+Object.entries(pipeline).map(([key,value])=>'<code>'+esc(key)+'='+esc(value)+'</code>').join(' · ')+'</p>'+ 
- '<h2>'+esc(labels.commands)+'</h2>'+ (commands.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.node)+'</th><th>'+esc(labels.time)+'</th><th>'+esc(labels.pixels)+'</th></tr>'+commands.map((item)=>'<tr><td>'+esc(item.type||labels.none)+'</td><td><code>'+esc(item.nodeId||labels.none)+'</code></td><td>'+fmt(item.us)+' us</td><td>'+fmt(item.pixels)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.noAttribution)+'</p>');
+ '<h2>'+esc(labels.commands)+'</h2><p class="muted">'+esc(labels.commandTimingNote)+'</p>'+ (commands.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.time)+'</th><th>'+esc(labels.pixels)+'</th><th>'+esc(labels.samples)+'</th></tr>'+commands.map((item)=>'<tr><td>'+esc(item.type||labels.none)+'</td><td><code>'+esc(item.owner||item.nodeId||labels.none)+'</code></td><td>'+fmt(item.us)+' us</td><td>'+fmt(item.pixels)+'</td><td>'+fmt(item.samples)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.noAttribution)+'</p>')+(frame.commandsTruncated?'<p class="muted">'+esc(labels.commandsTruncated)+'</p>':'')+(frame.nodesTruncated?'<p class="muted">'+esc(labels.nodesTruncated)+'</p>':'')+(Number.isSafeInteger(frame.commandInvalidSamples)&&frame.commandInvalidSamples>0?'<p class="muted">'+esc(labels.invalidCommandSamples)+': '+fmt(frame.commandInvalidSamples)+'</p>':'');
 }
 slider.max=Math.max(0,model.frames.length-1);slider.disabled=model.frames.length<2;slider.addEventListener('input',render);render();
 </script></body></html>`;

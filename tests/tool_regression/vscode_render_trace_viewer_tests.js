@@ -17,7 +17,14 @@ function main() {
       { x: "invalid", y: 0, width: 10, height: 10 }
     ],
     dirtyRectsTruncated: true,
-    commands: [{ type: "Text", nodeId: "title", us: 1000, pixels: 20 }]
+    commands: [
+      { type: "Text", owner: "id:title", us: 1000, pixels: 20, samples: 2 },
+      { type: "FillRect", owner: "n2", us: 400, pixels: 50, samples: 1 },
+      { type: "Text", owner: "ignored", us: -1, pixels: 1, samples: 1 }
+    ],
+    commandsTruncated: true,
+    nodesTruncated: true,
+    commandInvalidSamples: 1
   };
   const parsed = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify(frame)}\n`);
   assert.equal(parsed.frames.length, 1);
@@ -27,7 +34,7 @@ function main() {
     frameImages: { "0": "vscode-resource://frame_000.bmp" }
   });
   assert(html.includes("frameSlider"));
-  assert(html.includes("title"));
+  assert(html.includes("id:title"));
   assert(html.includes("timingComplete"));
   assert(html.includes("vscode-resource://frame_000.bmp"));
   assert(html.includes("dirtyCoverage"));
@@ -36,6 +43,11 @@ function main() {
   assert(html.includes("dirtyRectsTruncated"));
   assert(html.includes("capture-stage"));
   assert(html.includes("dirty-overlay"));
+  assert(html.includes("commandsTruncated"));
+  assert(html.includes("nodesTruncated"));
+  assert(html.includes("commandInvalidSamples"));
+  assert(html.includes("item.owner||item.nodeId"));
+  assert(!html.includes("ignored</code>"));
   assert(!html.includes("invalid,0 10x10"));
   assert(html.includes("img-src vscode-resource:"));
 
