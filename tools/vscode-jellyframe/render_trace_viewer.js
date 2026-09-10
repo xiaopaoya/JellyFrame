@@ -182,7 +182,7 @@ function render(){
  number.textContent=fmt(frame.frame)+' / '+fmt(model.frames.length-1);
  const stages=Object.entries(frame.stagesUs||{}); const max=Math.max(1,...stages.map(([,v])=>Number(v)||0));
  const sum=stages.reduce((n,[,v])=>n+(Number(v)||0),0); const fps=frame.totalUs>0?(1000000/frame.totalUs).toFixed(1):labels.none;
- const commands=(Array.isArray(frame.commands)?frame.commands:[]).filter((item)=>item&&typeof item==='object'&&typeof item.type==='string'&&Number.isSafeInteger(item.us)&&item.us>=0&&Number.isSafeInteger(item.pixels)&&item.pixels>=0&&Number.isSafeInteger(item.samples)&&item.samples>0).slice(0,64).sort((left,right)=>right.us-left.us); const pipeline=frame.pipeline||{};
+ const commands=(Array.isArray(frame.commands)?frame.commands:[]).map((item)=>{if(!item||typeof item!=='object'||typeof item.type!=='string'||!Number.isSafeInteger(item.us)||item.us<0||!Number.isSafeInteger(item.pixels)||item.pixels<0)return null;const samples=Number.isSafeInteger(item.samples)&&item.samples>0?item.samples:1;return {...item,samples};}).filter(Boolean).slice(0,64).sort((left,right)=>right.us-left.us); const pipeline=frame.pipeline||{};
  const dirtyPercent=Math.max(0,Math.min(100,Number(frame.dirtyAreaPercent)||0));
  const dirtyRects=Array.isArray(frame.dirtyRects)?frame.dirtyRects.filter((rect)=>rect&&Number.isFinite(Number(rect.x))&&Number.isFinite(Number(rect.y))&&Number.isFinite(Number(rect.width))&&Number.isFinite(Number(rect.height))&&Number(rect.width)>0&&Number(rect.height)>0).slice(0,32):[];
  const viewportWidth=Math.max(1,Number(model.session?.viewport?.width)||1); const viewportHeight=Math.max(1,Number(model.session?.viewport?.height)||1);

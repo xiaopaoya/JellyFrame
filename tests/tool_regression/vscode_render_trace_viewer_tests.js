@@ -20,6 +20,7 @@ function main() {
     commands: [
       { type: "Text", owner: "id:title", us: 1000, pixels: 20, samples: 2 },
       { type: "FillRect", owner: "n2", us: 400, pixels: 50, samples: 1 },
+      { type: "BoxShadow", nodeId: "legacy-card", us: 300, pixels: 9 },
       { type: "Text", owner: "ignored", us: -1, pixels: 1, samples: 1 }
     ],
     commandsTruncated: true,
@@ -35,6 +36,7 @@ function main() {
   });
   assert(html.includes("frameSlider"));
   assert(html.includes("id:title"));
+  assert(html.includes("legacy-card"));
   assert(html.includes("timingComplete"));
   assert(html.includes("vscode-resource://frame_000.bmp"));
   assert(html.includes("dirtyCoverage"));
