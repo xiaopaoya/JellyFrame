@@ -69,6 +69,36 @@ class RenderPerformanceReportTests(unittest.TestCase):
             self.assertIn("JellyFrame Render Performance", rendered)
             self.assertIn("Command / owner attribution", rendered)
 
+    def test_html_output_exposes_device_aggregate_without_merging_frames(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            telemetry = root / "device-profile.log"
+            telemetry.write_text(
+                "device_profile format=jellyframe.device.profile.v0 case=drag window=1 frames=120 partial=0\n"
+                "device_profile_timing window=1 frame_us_p95=41700\n"
+                "device_profile_pipeline window=1 pipeline_frames=8 paint_us_p95=16800 present_us_p95=22800\n"
+                "device_profile_present window=1 dma_wait_us_p95=17100\n"
+                "device_profile_counters window=1 present_failures=0\n",
+                encoding="utf-8",
+            )
+            output = root / "report.json"
+            html_output = root / "report.html"
+            result = subprocess.run(
+                [sys.executable, str(TOOL), "--device-telemetry", str(telemetry),
+                 "--output", str(output), "--html-output", str(html_output)],
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            rendered = html_output.read_text(encoding="utf-8")
+
+        self.assertIn("Device aggregate telemetry", rendered)
+        self.assertIn("jellyframe.device.profile.v0", rendered)
+        self.assertIn("41700us", rendered)
+        self.assertIn("No per-frame trace", rendered)
+
     def test_device_profile_telemetry_is_kept_separate_from_desktop_frames(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -287,7 +287,13 @@ def load_device_telemetry(path: Path) -> dict[str, Any]:
                 parsed = None
             if parsed is not None:
                 values[target] = round_number(parsed)
-    return {"source": str(path), "metrics": values}
+    return {
+        "source": str(path),
+        "format": "jellyframe.device.profile.v0"
+        if profile_values is not None
+        else "jellyframe.port.telemetry.metrics.v0",
+        "metrics": values,
+    }
 
 
 def aggregate(frames: list[dict[str, Any]]) -> dict[str, Any]:
@@ -422,6 +428,45 @@ def render_html(report: dict[str, Any]) -> str:
             f"<td>{html.escape(str(command.get('samples', 0)))}</td></tr>"
         )
     command_note = " Rows were truncated; ranking is incomplete." if summary.get("commandOwnerAttributionTruncated") else ""
+    device_rows = []
+    device_metric_columns = (
+        ((("frameP95Us", "us"), ("p95FrameMs", "ms")), "Frame p95"),
+        ((("paintP95Us", "us"), ("paintP95Ms", "ms")), "Paint p95"),
+        ((("presentP95Us", "us"), ("p95PresentMs", "ms")), "Present p95"),
+        ((("dmaWaitP95Us", "us"), ("averageDmaWaitMs", "ms")), "DMA wait"),
+        ((("pipelineFrames", ""),), "Pipeline frames"),
+        ((("partial", ""),), "Partial"),
+        ((("contaminated", ""),), "Contaminated"),
+    )
+    for telemetry in report.get("deviceTelemetry", []):
+        if not isinstance(telemetry, dict):
+            continue
+        metrics = telemetry.get("metrics", {})
+        if not isinstance(metrics, dict):
+            metrics = {}
+        metric_cells = []
+        for alternatives, label in device_metric_columns:
+            rendered = "-"
+            for key, suffix in alternatives:
+                if key in metrics:
+                    rendered = html.escape(str(metrics[key])) + html.escape(suffix)
+                    break
+            metric_cells.append(f"<td title='{html.escape(label)}'>{rendered}</td>")
+        device_rows.append(
+            f"<tr><td><code>{html.escape(str(telemetry.get('format', 'unknown')))}</code></td>"
+            f"<td>{html.escape(str(telemetry.get('source', '')))}</td>{''.join(metric_cells)}</tr>"
+        )
+    device_section = ""
+    if report.get("deviceTelemetry"):
+        device_section = (
+            "<h2>Device aggregate telemetry</h2>"
+            "<p><small>Device windows are reported separately from desktop frames; p95 values are not combined or converted into FPS claims.</small></p>"
+            "<table><tr><th>Format</th><th>Source</th>"
+            + "".join(f"<th>{html.escape(label)}</th>" for _, label in device_metric_columns)
+            + "</tr>"
+            + "".join(device_rows)
+            + "</table>"
+        )
     return """<!doctype html>
 <meta charset="utf-8"><title>JellyFrame Render Performance</title>
 <style>body{{font:14px system-ui,sans-serif;max-width:1100px;margin:28px auto;color:#202124}}table{{border-collapse:collapse;width:100%;margin:12px 0 28px}}th,td{{border-bottom:1px solid #ddd;text-align:left;padding:7px}}meter{{width:180px;height:12px}}code{{font-family:ui-monospace,monospace}}small{{color:#5f6368}}</style>
@@ -433,6 +478,7 @@ def render_html(report: dict[str, Any]) -> str:
 <h2>Frames</h2><table><tr><th>Frame</th><th>Total</th><th>Action</th><th>Reason</th><th>Dirty rects</th><th>Dirty area %</th></tr>{frame_rows}</table>
 <h2>Command / owner attribution</h2><p><small>Desktop raster invocation time only.{command_note}</small></p>
 <table><tr><th>Owner</th><th>Command</th><th>Time</th><th>Candidate pixels</th><th>Samples</th></tr>{command_rows}</table>
+{device_section}
 <h2>Limits</h2><ul>{limits}</ul>
 """.format(
         frames=html.escape(str(summary.get("frameCount", 0))),
@@ -444,6 +490,7 @@ def render_html(report: dict[str, Any]) -> str:
         frame_rows="".join(frame_rows) or "<tr><td colspan='6'>No per-frame trace</td></tr>",
         command_rows="".join(command_rows) or "<tr><td colspan='5'>No command attribution</td></tr>",
         command_note=command_note,
+        device_section=device_section,
         limits="".join(f"<li>{html.escape(item)}</li>" for item in report.get("limitations", [])),
     )
 
