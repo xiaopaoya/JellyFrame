@@ -67,6 +67,16 @@ struct ScrollOffsetResolver {
     void* context = nullptr;
 };
 
+// Explicitly opt-in only. The callback runs while a layer tree is built and
+// returns a frame-local opaque value for commands emitted by one DOM node.
+// It must never return an address-derived value intended for trace export.
+using DisplayCommandTraceOwnerResolveCallback = std::uint32_t (*)(const Node& node, void* context);
+
+struct DisplayCommandTraceOwnerResolver {
+    DisplayCommandTraceOwnerResolveCallback resolve = nullptr;
+    void* context = nullptr;
+};
+
 struct LayerNode {
     LayerType type = LayerType::Paint;
     LayerReasons reasons = LayerReasonNone;
@@ -121,6 +131,7 @@ struct LayerTreeBuilderOptions {
     ImageHandleResolver image_resolver;
     ScrollOffsetResolver scroll_resolver;
     TextMeasureProvider text_measure;
+    DisplayCommandTraceOwnerResolver trace_owner_resolver;
     bool paint_scroll_indicators = false;
 };
 

@@ -34,6 +34,23 @@ bool is_visible_background(Color color) {
     return color.a != 0;
 }
 
+std::uint32_t trace_owner_token_for(const LayoutBox& box, const LayerTreeBuilderOptions& options) {
+    if (box.node == nullptr || options.trace_owner_resolver.resolve == nullptr) {
+        return 0;
+    }
+    return options.trace_owner_resolver.resolve(*box.node, options.trace_owner_resolver.context);
+}
+
+void stamp_trace_owner(DisplayList& display_list, std::size_t begin, std::uint32_t token) {
+    if (token == 0) {
+        return;
+    }
+    begin = std::min(begin, display_list.size());
+    for (std::size_t index = begin; index < display_list.size(); ++index) {
+        display_list[index].trace_owner_token = token;
+    }
+}
+
 Rect union_rect(Rect left, Rect right) {
     if (left.width <= 0 || left.height <= 0) {
         return right;
@@ -1538,14 +1555,17 @@ LayerNodePtr LayerTreeBuilder::build_with_arena(const LayoutBox& root, Monotonic
     root_layer->source_order = 0;
 
     if (!root.style.visibility_hidden) {
+        const std::size_t command_begin = root_layer->display_list.size();
         paint_box_self(root, root_layer->display_list, options_);
+        trim_display_list(root_layer->display_list, command_begin, remaining_commands, display_budget_reported);
+        stamp_trace_owner(root_layer->display_list, command_begin, trace_owner_token_for(root, options_));
     }
-    trim_display_list(root_layer->display_list, 0, remaining_commands, display_budget_reported);
     build_children(root, *root_layer, arena, root.rect, remaining_commands, display_budget_reported);
     if (!root.style.visibility_hidden) {
         const std::size_t command_begin = root_layer->display_list.size();
         paint_generated_inline_content(root, root_layer->display_list, CssPseudoElement::After);
         trim_display_list(root_layer->display_list, command_begin, remaining_commands, display_budget_reported);
+        stamp_trace_owner(root_layer->display_list, command_begin, trace_owner_token_for(root, options_));
     }
     sort_layer_children(*root_layer);
     return root_layer;
@@ -1671,6 +1691,9 @@ void LayerTreeBuilder::build_children(const LayoutBox& box,
                                   command_begin,
                                   remaining_commands,
                                   display_budget_reported);
+                stamp_trace_owner(current_layer.display_list,
+                                  command_begin,
+                                  trace_owner_token_for(*current_box, options_));
             }
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
             if (layer_count < max_layers && current_box->node != nullptr &&
@@ -1699,6 +1722,9 @@ void LayerTreeBuilder::build_children(const LayoutBox& box,
                                       0,
                                       remaining_commands,
                                       display_budget_reported);
+                    stamp_trace_owner(popup_layer->display_list,
+                                      0,
+                                      trace_owner_token_for(*current_box, options_));
                     current_layer.children.push_back(std::move(popup_layer));
                     ++layer_count;
                 }
@@ -1779,6 +1805,9 @@ void LayerTreeBuilder::build_children(const LayoutBox& box,
                               command_begin,
                               remaining_commands,
                               display_budget_reported);
+            stamp_trace_owner(target_layer->display_list,
+                              command_begin,
+                              trace_owner_token_for(*current_box, options_));
         }
         const int child_scroll_y = target_layer == &current_layer
             ? safe_add(current.scroll_y, own_scroll_y)

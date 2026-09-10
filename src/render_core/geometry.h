@@ -255,6 +255,10 @@ struct DisplayCommand {
     ObjectPosition object_position;
     ImageRendering image_rendering = ImageRendering::Auto;
     DisplayCommandTransform transform;
+    // Optional, frame-local profiling attribution. Zero means no reliable
+    // owner. It is a pure value so command copies stay task-safe; frame codecs
+    // intentionally do not serialize it and normal rendering never reads it.
+    std::uint32_t trace_owner_token = 0;
 };
 
 using DisplayList = std::vector<DisplayCommand>;

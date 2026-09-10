@@ -146,6 +146,57 @@ int maximum_scroll_offset(const Node&, int max_scroll_y, void*) {
     return max_scroll_y;
 }
 
+std::uint32_t trace_owner_token_for_test(const Node& node, void*) {
+    if (node.attribute("id") == "first") {
+        return 11;
+    }
+    if (node.attribute("id") == "second") {
+        return 22;
+    }
+    return 0;
+}
+
+void trace_owner_tokens_are_opt_in_and_preserve_box_ownership() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><section id='first'></section><section id='second'></section></body>");
+    Stylesheet stylesheet = css_parser.parse(
+        "#first { width: 20px; height: 20px; background: #ff0000; }"
+        "#second { width: 20px; height: 20px; background: #00ff00; }");
+    StyleResolver resolver(stylesheet);
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 80);
+
+    LayerTreeBuilder default_builder;
+    const DisplayList default_commands = default_builder.flatten(*default_builder.build(*layout_tree));
+    for (const DisplayCommand& command : default_commands) {
+        check(command.trace_owner_token == 0, "default layer tree must not emit profiling owner tokens");
+    }
+
+    LayerTreeBuilderOptions options;
+    options.trace_owner_resolver = DisplayCommandTraceOwnerResolver{trace_owner_token_for_test, nullptr};
+    LayerTreeBuilder traced_builder(options);
+    const DisplayList traced_commands = traced_builder.flatten(*traced_builder.build(*layout_tree));
+    bool first_found = false;
+    bool second_found = false;
+    for (const DisplayCommand& command : traced_commands) {
+        if (command.type != DisplayCommandType::FillRect) {
+            continue;
+        }
+        if (command.color.r == 255 && command.color.g == 0 && command.color.b == 0) {
+            first_found = true;
+            check(command.trace_owner_token == 11, "first box commands keep first owner token");
+        }
+        if (command.color.r == 0 && command.color.g == 255 && command.color.b == 0) {
+            second_found = true;
+            check(command.trace_owner_token == 22, "second box commands keep second owner token");
+        }
+    }
+    check(first_found && second_found, "traced layer tree emits both owned paint commands");
+}
+
 void overflow_hidden_creates_clip_layer() {
     auto pipeline = build_pipeline("<body><section class='clip'><p>Visible</p></section></body>",
                                    ".clip { overflow: hidden; height: 20px; background: #ffffff; }");
@@ -1609,6 +1660,7 @@ void canvas_element_emits_image_display_command_when_surface_resolves() {
 int main() {
     try {
         overflow_hidden_creates_clip_layer();
+        trace_owner_tokens_are_opt_in_and_preserve_box_ownership();
         overflow_y_auto_creates_vertical_scroll_clip_layer();
         extreme_scroll_geometry_remains_scrollable_and_bounded();
         rounded_overflow_clip_keeps_geometry_on_clip_layer();

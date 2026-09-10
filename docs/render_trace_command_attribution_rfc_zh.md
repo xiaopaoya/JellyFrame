@@ -1,7 +1,7 @@
 # Render Trace 命令/节点归因 RFC
 
 > 最后更新：2026-09-10；适用版本：0.6.0-dev  
-> 状态：设计冻结；尚未启用 producer
+> 状态：第 1 步已交付；尚未启用计时或 producer
 
 ## 目标
 
@@ -70,8 +70,9 @@ frame record 的可选 `commands` 数组按 `(ownerToken, type)` 聚合：
 
 ## 实现顺序
 
-1. **Owner token sidecar**：添加 opt-in registry、命令范围 stamping、flatten 保留和单元测试；验证
-   普通 `DisplayList`/frame codec 的像素与字节结果完全不变。
+1. **Owner token sidecar（已交付）**：`DisplayCommand::trace_owner_token`、opt-in registry、
+   命令范围 stamping、flatten 保留和单元测试已经落地；默认 builder 的 token 恒为 `0`，
+   同 layer 的不同 box 会保留各自 token。frame codec 不序列化该字段。
 2. **桌面命令计时**：为 `SoftwareRasterizer` 增加可选 observer，在每个真实 invocation 前后读取
    host clock；rounded grouped replay 仅在能够归属每个 command 时输出细分，否则单独记为
    `unattributed-rounded-composite`。

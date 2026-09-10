@@ -20,8 +20,9 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
 - The opt-in owner-token contract for Render Trace command/node attribution is
   now frozen. It prohibits pointers and addresses in DisplayCommand/trace data,
   requires actual raster timing, bounded aggregation, pixel equivalence and
-  profiling-overhead disclosure. No producer is enabled yet, so the viewer does
-  not guess element costs.
+  profiling-overhead disclosure. Core now provides default-off frame-local token
+  stamping; no timing or producer is enabled yet, so the viewer does not guess
+  element costs.
 
 - Render Trace now carries up to 32 final dirty rectangles per captured frame,
   with an explicit truncation marker. The VS Code viewer lists their stable
