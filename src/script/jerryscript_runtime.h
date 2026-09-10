@@ -124,6 +124,12 @@ private:
     std::uint32_t retired_service_app_instance_id_ = 0;
     std::uint32_t retired_service_client_token_ = 0;
     Node* bound_document_ = nullptr;
+    // DOM budget checks are frequent during a script task. The document root
+    // mutation generation makes this cache precise without requiring every
+    // mutation path in the runtime to update a second counter.
+    mutable const Node* dom_statistics_cached_document_ = nullptr;
+    mutable std::uint64_t dom_statistics_cached_generation_ = 0;
+    mutable DomStatistics dom_statistics_cached_document_stats_;
     Node* active_modal_dialog_ = nullptr;
     ScriptSystemState system_state_;
     std::string route_fragment_;

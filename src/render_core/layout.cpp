@@ -795,7 +795,11 @@ LayoutBoxPtr LayoutEngine::layout(const Node& root, int viewport_width) const {
 }
 
 LayoutBoxPtr LayoutEngine::layout(const Node& root, int viewport_width, int viewport_height) const {
-    RenderTreeBuilder render_tree_builder(style_resolver_);
+    RenderTreeOptions render_options;
+    render_options.diagnostics = options_.diagnostics;
+    render_options.viewport_width = viewport_width;
+    render_options.viewport_height = viewport_height;
+    RenderTreeBuilder render_tree_builder(style_resolver_, render_options);
     auto render_tree = render_tree_builder.build(root);
     return layout(*render_tree, viewport_width, viewport_height);
 }
@@ -805,7 +809,11 @@ LayoutBoxPtr LayoutEngine::layout(const Node& root, int viewport_width, Monotoni
 }
 
 LayoutBoxPtr LayoutEngine::layout(const Node& root, int viewport_width, int viewport_height, MonotonicArena& arena) const {
-    RenderTreeBuilder render_tree_builder(style_resolver_);
+    RenderTreeOptions render_options;
+    render_options.diagnostics = options_.diagnostics;
+    render_options.viewport_width = viewport_width;
+    render_options.viewport_height = viewport_height;
+    RenderTreeBuilder render_tree_builder(style_resolver_, render_options);
     auto render_tree = render_tree_builder.build(root, arena);
     return layout(*render_tree, viewport_width, viewport_height, arena);
 }

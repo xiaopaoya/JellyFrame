@@ -3516,6 +3516,8 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
 
     RenderTreeOptions render_options = render_tree_options_from_budgets(budgets);
     render_options.diagnostics = &diagnostics;
+    render_options.viewport_width = options.viewport_width;
+    render_options.viewport_height = options.viewport_height;
     RenderTreeBuilder render_builder(resolver, render_options);
     auto render_tree = render_builder.build(*page.document);
     LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
@@ -6233,6 +6235,8 @@ private:
         const DomDirtyFlags rebuild_dirty_flags = document_->dirty_flags;
         RenderTreeOptions render_options = render_tree_options_from_budgets(budgets_);
         render_options.diagnostics = &diagnostics_;
+        render_options.viewport_width = viewport_width_;
+        render_options.viewport_height = viewport_height_;
         RenderTreeBuilder render_builder(*style_resolver_, render_options);
         auto target_render_tree = render_builder.build(*document_);
         const std::uint64_t now_ms = current_time_ms();

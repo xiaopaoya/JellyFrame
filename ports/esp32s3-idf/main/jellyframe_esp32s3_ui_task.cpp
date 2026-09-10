@@ -1617,8 +1617,11 @@ bool rebuild_pipeline(TimerUiTaskContext& context) {
     jellyframe::StyleResolver& style_resolver = transient_style_resolver;
 #endif
     update_heap_telemetry(context.telemetry);
-    jellyframe::RenderTreeBuilder render_builder(style_resolver,
-        jellyframe::render_tree_options_from_budgets(context.budgets));
+    jellyframe::RenderTreeOptions render_options =
+        jellyframe::render_tree_options_from_budgets(context.budgets);
+    render_options.viewport_width = context.width;
+    render_options.viewport_height = context.height;
+    jellyframe::RenderTreeBuilder render_builder(style_resolver, render_options);
     const std::uint64_t render_tree_start = esp_timer_get_time();
     context.pipeline.render_tree = render_builder.build(*context.document, context.pipeline.render_arena);
     context.telemetry.render_tree_build_us +=

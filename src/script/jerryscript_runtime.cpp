@@ -6309,6 +6309,7 @@ void JerryScriptRuntime::forget_script_node_binding(ScriptNodeBinding& binding) 
 void JerryScriptRuntime::invalidate_script_node(Node& node) {
     if (bound_document_ == &node) {
         bound_document_ = nullptr;
+        dom_statistics_cached_document_ = nullptr;
         clear_animation_frame_callbacks();
         clear_timers();
     }
@@ -6578,6 +6579,9 @@ void JerryScriptRuntime::bind_document(Node& document) {
         canvas_2d_->clear();
     }
     bound_document_ = &document;
+    dom_statistics_cached_document_ = nullptr;
+    dom_statistics_cached_generation_ = 0;
+    dom_statistics_cached_document_stats_ = {};
     route_fragment_.clear();
     route_history_.clear();
     route_history_index_ = 0;
@@ -7389,7 +7393,13 @@ bool statistics_fit_dom_budget(const DomStatistics& statistics, const ScriptRunt
 DomStatistics JerryScriptRuntime::dom_statistics() const {
     DomStatistics statistics;
     if (bound_document_ != nullptr) {
-        statistics = compute_dom_statistics(*bound_document_);
+        if (dom_statistics_cached_document_ != bound_document_ ||
+            dom_statistics_cached_generation_ != bound_document_->mutation_generation) {
+            dom_statistics_cached_document_ = bound_document_;
+            dom_statistics_cached_generation_ = bound_document_->mutation_generation;
+            dom_statistics_cached_document_stats_ = compute_dom_statistics(*bound_document_);
+        }
+        statistics = dom_statistics_cached_document_stats_;
     }
     const DetachedDomStatistics detached = detached_nodes_.detached_statistics();
     statistics.node_count += detached.aggregate.node_count;

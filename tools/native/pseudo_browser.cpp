@@ -703,6 +703,8 @@ int main(int argc, char** argv) {
 
         RenderTreeOptions render_options = render_tree_options_from_budgets(budgets);
         render_options.diagnostics = &diagnostics;
+        render_options.viewport_width = options.viewport_width;
+        render_options.viewport_height = options.viewport_height;
         RenderTreeBuilder render_tree_builder(resolver, render_options);
         stage_start = Clock::now();
         auto render_tree = render_tree_builder.build(*document);

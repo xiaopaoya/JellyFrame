@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <unordered_map>
+#include <utility>
 
 namespace jellyframe {
 namespace {
@@ -112,22 +113,33 @@ Rect rotated_scaled_bounds(Rect bounds, const Transform2D& transform, int origin
     return Rect{x, y, std::max(1, safe_span(x, right)), std::max(1, safe_span(y, bottom))};
 }
 
-Rect subtree_bounds(const LayoutBox& box, std::vector<const LayoutBox*>& pending) {
-    Rect bounds = box.rect;
-    pending.clear();
-    pending.reserve(box.children.size());
-    for (const auto& child : box.children) {
-        pending.push_back(child.get());
-    }
+using SubtreeBoundsIndex = std::unordered_map<const LayoutBox*, Rect>;
+
+SubtreeBoundsIndex build_subtree_bounds_index(const LayoutBox& root) {
+    SubtreeBoundsIndex index;
+    std::vector<std::pair<const LayoutBox*, bool>> pending;
+    pending.push_back({&root, false});
     while (!pending.empty()) {
-        const LayoutBox* current = pending.back();
+        const auto [box, expanded] = pending.back();
         pending.pop_back();
-        bounds = union_rect(bounds, current->rect);
-        for (const auto& child : current->children) {
-            pending.push_back(child.get());
+        if (!expanded) {
+            pending.push_back({box, true});
+            for (const auto& child : box->children) {
+                pending.push_back({child.get(), false});
+            }
+            continue;
         }
+
+        Rect bounds = box->rect;
+        for (const auto& child : box->children) {
+            const auto found = index.find(child.get());
+            if (found != index.end()) {
+                bounds = union_rect(bounds, found->second);
+            }
+        }
+        index.emplace(box, bounds);
     }
-    return bounds;
+    return index;
 }
 
 using OverrideIndex = std::unordered_map<const Node*, const StyleOverride*>;
@@ -247,7 +259,7 @@ void collect_animation_rects_iterative(const LayoutBox& box,
                                        const OverrideIndex& previous_overrides,
                                        const OverrideIndex& current_overrides,
                                        const AnimationInvalidationOptions& options,
-                                       std::vector<const LayoutBox*>& pending_boxes,
+                                       const SubtreeBoundsIndex& subtree_bounds,
                                        DirtyRegionResult& result) {
     std::vector<const LayoutBox*> pending;
     pending.push_back(&box);
@@ -259,7 +271,11 @@ void collect_animation_rects_iterative(const LayoutBox& box,
             const StyleOverride* current = find_override(current_overrides, current_box.node);
             if ((previous != nullptr && override_affects_paint(*previous)) ||
                 (current != nullptr && override_affects_paint(*current))) {
-                const Rect base_bounds = subtree_bounds(current_box, pending_boxes);
+                const auto bounds = subtree_bounds.find(&current_box);
+                if (bounds == subtree_bounds.end()) {
+                    continue;
+                }
+                const Rect base_bounds = bounds->second;
                 const Transform2D previous_transform = resolved_transform(current_box.style, previous);
                 const Transform2D current_transform = resolved_transform(current_box.style, current);
                 Rect dirty = expand_for_paint_effects(
@@ -302,10 +318,10 @@ void compute_animation_dirty_region_into(const LayoutBox& layout,
     if (empty_rect(options.viewport) || (previous_overrides.empty() && current_overrides.empty())) {
         return;
     }
-    std::vector<const LayoutBox*> pending_boxes;
+    const SubtreeBoundsIndex subtree_bounds = build_subtree_bounds_index(layout);
     const OverrideIndex previous_index = build_override_index(previous_overrides);
     const OverrideIndex current_index = build_override_index(current_overrides);
-    collect_animation_rects_iterative(layout, previous_index, current_index, options, pending_boxes, result);
+    collect_animation_rects_iterative(layout, previous_index, current_index, options, subtree_bounds, result);
     if (!result.rects.empty()) {
         result.mode = DirtyRegionMode::DirtyRects;
     } else {

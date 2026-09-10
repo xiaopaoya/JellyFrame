@@ -513,6 +513,11 @@ using CustomPropertyMap = std::unordered_map<std::string, std::string>;
 
 class StyleResolver;
 
+struct StyleLengthResolutionContext {
+    int viewport_width = 360;
+    int viewport_height = 240;
+};
+
 struct StyleResolveContext {
     // A context caches pointers into one resolver, DOM revision and
     // interaction state. StyleResolver refreshes it when any of those inputs
@@ -521,6 +526,11 @@ struct StyleResolveContext {
     const Node* document_root = nullptr;
     std::uint64_t document_mutation_generation = 0;
     std::uint64_t interaction_state_generation = 0;
+    // Length units that depend on the viewport are resolved while styles are
+    // built, before LayoutBox geometry exists. Keep this per-resolution
+    // context so one resolver can safely serve multiple viewport sizes.
+    int viewport_width = 360;
+    int viewport_height = 240;
     std::unordered_map<const Node*, const CustomPropertyMap*> custom_property_cache;
     std::vector<std::unique_ptr<CustomPropertyMap>> custom_property_scopes;
     std::unordered_map<const Node*, std::vector<const CssRule*>> matched_rule_cache;
@@ -582,7 +592,8 @@ private:
     const std::vector<const CssRule*>& matching_rules_for(const Node& node, StyleResolveContext& context) const;
     Style resolve_with_custom_properties(const Node& node,
                                          const CustomPropertyMap& custom_properties,
-                                         const std::vector<const CssRule*>* matched_rules = nullptr) const;
+                                         const std::vector<const CssRule*>* matched_rules,
+                                         const StyleLengthResolutionContext& length_context) const;
 };
 
 } // namespace jellyframe

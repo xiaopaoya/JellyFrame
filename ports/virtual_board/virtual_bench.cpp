@@ -239,7 +239,9 @@ int run_virtual_bench(int argc, char** argv) {
     const HostBudgets budgets = make_budgets(options);
     const HtmlParserOptions html_options = html_parser_options_from_budgets(budgets);
     const CssParserOptions css_options = css_parser_options_from_budgets(budgets);
-    const RenderTreeOptions render_options = render_tree_options_from_budgets(budgets);
+    RenderTreeOptions render_options = render_tree_options_from_budgets(budgets);
+    render_options.viewport_width = options.width;
+    render_options.viewport_height = options.height;
     const LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
     const LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     const std::string html = make_card_html(options.cards);

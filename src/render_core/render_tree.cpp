@@ -166,6 +166,8 @@ RenderObjectPtr RenderTreeBuilder::build_with_arena(const Node& document, Monoto
     };
 
     StyleResolveContext style_context;
+    style_context.viewport_width = options_.viewport_width;
+    style_context.viewport_height = options_.viewport_height;
     auto view = make_render_object(arena);
     RenderObject* view_raw = view.get();
     view->type = RenderObjectType::View;

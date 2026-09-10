@@ -517,7 +517,10 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     const Stylesheet stylesheet = css_parser.parse(
         kSmokeCss, css_parser_options_from_budgets(budgets, width, height));
     StyleResolver resolver(stylesheet);
-    RenderTreeBuilder render_tree_builder(resolver, render_tree_options_from_budgets(budgets));
+    RenderTreeOptions render_options = render_tree_options_from_budgets(budgets);
+    render_options.viewport_width = width;
+    render_options.viewport_height = height;
+    RenderTreeBuilder render_tree_builder(resolver, render_options);
     MonotonicArena render_arena;
     auto render_tree = render_tree_builder.build(*document, render_arena);
     LayoutEngine layout_engine(resolver, text_measure, layout_engine_options_from_budgets(budgets));
@@ -621,7 +624,9 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     const HtmlParserOptions html_options = html_parser_options_from_budgets(budgets);
     const CssParserOptions css_options =
         css_parser_options_from_budgets(budgets, viewport_width, viewport_height);
-    const RenderTreeOptions render_options = render_tree_options_from_budgets(budgets);
+    RenderTreeOptions render_options = render_tree_options_from_budgets(budgets);
+    render_options.viewport_width = viewport_width;
+    render_options.viewport_height = viewport_height;
     const LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
     const LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
 

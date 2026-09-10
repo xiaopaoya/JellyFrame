@@ -554,6 +554,23 @@ void percentage_width_and_height_use_containing_box() {
     check(cap->rect.width == 320 && cap->rect.height == 120, "max-height clamps percentage height");
 }
 
+void viewport_units_use_actual_layout_viewport() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main id='viewport'></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; width: 100%; height: 100%; }"
+        "#viewport { width: 50vw; height: 50vh; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 172, 320);
+
+    const LayoutBox* viewport = find_first_by_id(*layout_tree, "viewport");
+    check(viewport != nullptr, "viewport unit fixture exists");
+    check(viewport->rect.width == 86, "vw resolves against the actual viewport width");
+    check(viewport->rect.height == 160, "vh resolves against the actual viewport height");
+}
+
 void responsive_layout_matrix_keeps_same_app_inside_three_targets() {
     struct Target {
         int width;
@@ -874,6 +891,7 @@ int main() {
         relative_layout_offsets_visual_box_only();
         border_box_sizing_keeps_declared_width_and_height();
         percentage_width_and_height_use_containing_box();
+        viewport_units_use_actual_layout_viewport();
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         responsive_layout_matrix_keeps_same_app_inside_three_targets();
 #endif

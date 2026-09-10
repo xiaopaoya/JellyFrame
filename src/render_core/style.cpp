@@ -51,12 +51,22 @@ std::string trim(std::string_view value) {
 }
 
 constexpr int kRootFontSizePx = 16;
-constexpr int kDefaultViewportWidthPx = 360;
-constexpr int kDefaultViewportHeightPx = 240;
 constexpr float kMaxTransformTranslationPx = 100000.0F;
 
 std::string lowercase(std::string value);
-bool parse_length_px(const std::string& raw_value, int& output, int em_base = kRootFontSizePx);
+using LengthResolutionContext = StyleLengthResolutionContext;
+
+bool parse_length_px(const std::string& raw_value,
+                    int& output,
+                    int em_base = kRootFontSizePx,
+                    const LengthResolutionContext& context = {});
+
+LengthResolutionContext length_context_for(const StyleResolveContext& context) {
+    return LengthResolutionContext{
+        std::max(1, context.viewport_width),
+        std::max(1, context.viewport_height),
+    };
+}
 
 bool round_finite_float_to_int(float value, int& output) {
     if (!std::isfinite(value)) {
@@ -144,7 +154,10 @@ std::vector<std::string> split_function_arguments(std::string_view body) {
     return args;
 }
 
-bool parse_length_function(const std::string& value, int& output, int em_base) {
+bool parse_length_function(const std::string& value,
+                           int& output,
+                           int em_base,
+                           const LengthResolutionContext& context) {
     const auto function_body = [&](std::string_view name, std::string_view& body) {
         if (value.rfind(name, 0) != 0 || value.size() <= name.size() + 2 ||
             value[name.size()] != '(' || value.back() != ')') {
@@ -163,11 +176,11 @@ bool parse_length_function(const std::string& value, int& output, int em_base) {
         int min_value = 0;
         int preferred_value = 0;
         int max_value = 0;
-        if (!parse_length_px(args[0], min_value, em_base) ||
-            !parse_length_px(args[2], max_value, em_base)) {
+        if (!parse_length_px(args[0], min_value, em_base, context) ||
+            !parse_length_px(args[2], max_value, em_base, context)) {
             return false;
         }
-        if (!parse_length_px(args[1], preferred_value, em_base)) {
+        if (!parse_length_px(args[1], preferred_value, em_base, context)) {
             preferred_value = min_value;
         }
         output = std::max(min_value, std::min(preferred_value, max_value));
@@ -180,7 +193,7 @@ bool parse_length_function(const std::string& value, int& output, int em_base) {
         int result = 0;
         for (const std::string& arg : args) {
             int parsed = 0;
-            if (!parse_length_px(arg, parsed, em_base)) {
+            if (!parse_length_px(arg, parsed, em_base, context)) {
                 continue;
             }
             result = have_value ? (is_min ? std::min(result, parsed) : std::max(result, parsed)) : parsed;
@@ -206,12 +219,12 @@ bool parse_length_function(const std::string& value, int& output, int em_base) {
             }
         }
         if (op == std::string::npos) {
-            return parse_length_px(expr, output, em_base);
+            return parse_length_px(expr, output, em_base, context);
         }
         int left = 0;
         int right = 0;
-        if (!parse_length_px(expr.substr(0, op), left, em_base) ||
-            !parse_length_px(expr.substr(op + 1), right, em_base)) {
+        if (!parse_length_px(expr.substr(0, op), left, em_base, context) ||
+            !parse_length_px(expr.substr(op + 1), right, em_base, context)) {
             return false;
         }
         return op_char == '-'
@@ -285,13 +298,16 @@ bool has_top_level_comma(std::string_view value) {
 }
 #endif
 
-bool parse_length_px(const std::string& raw_value, int& output, int em_base) {
+bool parse_length_px(const std::string& raw_value,
+                     int& output,
+                     int em_base,
+                     const LengthResolutionContext& context) {
     const std::string value = trim(raw_value);
     if (value.empty()) {
         return false;
     }
     const std::string lowered = lowercase(value);
-    if (parse_length_function(lowered, output, em_base)) {
+    if (parse_length_function(lowered, output, em_base, context)) {
         return true;
     }
 
@@ -318,13 +334,13 @@ bool parse_length_px(const std::string& raw_value, int& output, int em_base) {
         pixels = parsed * static_cast<float>(em_base);
         end += 2;
     } else if (std::strncmp(end, "vh", 2) == 0) {
-        pixels = parsed * static_cast<float>(kDefaultViewportHeightPx) / 100.0F;
+        pixels = parsed * static_cast<float>(context.viewport_height) / 100.0F;
         end += 2;
     } else if (std::strncmp(end, "vw", 2) == 0) {
-        pixels = parsed * static_cast<float>(kDefaultViewportWidthPx) / 100.0F;
+        pixels = parsed * static_cast<float>(context.viewport_width) / 100.0F;
         end += 2;
     } else if (*end == '%') {
-        pixels = parsed * static_cast<float>(kDefaultViewportWidthPx) / 100.0F;
+        pixels = parsed * static_cast<float>(context.viewport_width) / 100.0F;
         ++end;
     } else {
         return false;
@@ -598,7 +614,11 @@ bool parse_flex_factor(const std::string& raw_value, int& output) {
     return round_finite_float_to_int(parsed * 1000.0F, output) && output >= 0;
 }
 
-bool parse_position_inset(const std::string& raw_value, int font_size, int& output, bool& specified) {
+bool parse_position_inset(const std::string& raw_value,
+                          int font_size,
+                          int& output,
+                          bool& specified,
+                          const LengthResolutionContext& context = {}) {
     const std::string value = lowercase(trim(raw_value));
     if (value == "auto") {
         output = 0;
@@ -606,7 +626,7 @@ bool parse_position_inset(const std::string& raw_value, int font_size, int& outp
         return true;
     }
     int px = 0;
-    if (!parse_length_px(value, px, font_size)) {
+    if (!parse_length_px(value, px, font_size, context)) {
         return false;
     }
     output = px;
@@ -614,20 +634,24 @@ bool parse_position_inset(const std::string& raw_value, int font_size, int& outp
     return true;
 }
 
-bool parse_flex_basis_value(const std::string& raw_value, int font_size, int& output) {
+bool parse_flex_basis_value(const std::string& raw_value,
+                            int font_size,
+                            int& output,
+                            const LengthResolutionContext& context = {}) {
     const std::string value = lowercase(trim(raw_value));
     if (value == "auto") {
         output = -1;
         return true;
     }
-    return parse_length_px(value, output, font_size);
+    return parse_length_px(value, output, font_size, context);
 }
 
 bool parse_flex_shorthand(const std::string& raw_value,
                           int font_size,
                           int& grow,
                           int& shrink,
-                          int& basis) {
+                          int& basis,
+                          const LengthResolutionContext& context = {}) {
     const std::string value = lowercase(trim(raw_value));
     if (value == "none") {
         grow = 0;
@@ -671,11 +695,11 @@ bool parse_flex_shorthand(const std::string& raw_value,
     int second_factor = 0;
     if (parse_flex_factor(tokens[1], second_factor)) {
         parsed_shrink = second_factor;
-        if (tokens.size() == 3 && !parse_flex_basis_value(tokens[2], font_size, parsed_basis)) {
+        if (tokens.size() == 3 && !parse_flex_basis_value(tokens[2], font_size, parsed_basis, context)) {
             return false;
         }
     } else if (tokens.size() == 2) {
-        if (!parse_flex_basis_value(tokens[1], font_size, parsed_basis)) {
+        if (!parse_flex_basis_value(tokens[1], font_size, parsed_basis, context)) {
             return false;
         }
     } else {
@@ -1194,7 +1218,8 @@ bool parse_transition_longhand(const std::string& property, const std::string& r
 bool parse_simple_grid_template_columns(const std::string& raw_value,
                                         std::array<int, 4>& widths,
                                         int& count,
-                                        int em_base) {
+                                        int em_base,
+                                        const LengthResolutionContext& context = {}) {
     const std::string value = lowercase(trim(raw_value));
     if (value.rfind("repeat(", 0) == 0 && value.back() == ')') {
         const std::size_t comma = value.find(',');
@@ -1209,7 +1234,7 @@ bool parse_simple_grid_template_columns(const std::string& raw_value,
         const std::string track = trim(value.substr(comma + 1, value.size() - comma - 2));
         int width = 0;
         int stored_width = 0;
-        if (parse_length_px(track, width, em_base)) {
+        if (parse_length_px(track, width, em_base, context)) {
             stored_width = std::max(1, width);
         } else if (track.rfind("minmax(", 0) == 0 && track.back() == ')') {
             const std::size_t track_comma = track.find(',');
@@ -1219,7 +1244,7 @@ bool parse_simple_grid_template_columns(const std::string& raw_value,
             const std::string min_track = trim(track.substr(7, track_comma - 7));
             const std::string max_track = trim(track.substr(track_comma + 1, track.size() - track_comma - 2));
             int min_width = 0;
-            if (!parse_length_px(min_track, min_width, em_base)) {
+            if (!parse_length_px(min_track, min_width, em_base, context)) {
                 return false;
             }
             if (max_track == "auto" || max_track == "1fr" ||
@@ -1252,7 +1277,7 @@ bool parse_simple_grid_template_columns(const std::string& raw_value,
             return false;
         }
         int width = 0;
-        if (parse_length_px(token, width, em_base)) {
+        if (parse_length_px(token, width, em_base, context)) {
             parsed[static_cast<std::size_t>(parsed_count)] = std::max(1, width);
         } else if (token == "auto" || token == "1fr" || token == "min-content" || token == "max-content") {
             parsed[static_cast<std::size_t>(parsed_count)] = 0;
@@ -1274,7 +1299,8 @@ bool parse_simple_grid_template_columns(const std::string& raw_value,
 bool parse_simple_grid_template_rows(const std::string& raw_value,
                                      std::array<std::int16_t, 4>& heights,
                                      int& count,
-                                     int em_base) {
+                                     int em_base,
+                                     const LengthResolutionContext& context = {}) {
     const std::string value = lowercase(trim(raw_value));
     std::istringstream stream(value);
     std::string token;
@@ -1285,7 +1311,7 @@ bool parse_simple_grid_template_rows(const std::string& raw_value,
             return false;
         }
         int height = 0;
-        if (parse_length_px(token, height, em_base)) {
+        if (parse_length_px(token, height, em_base, context)) {
             if (height > std::numeric_limits<std::int16_t>::max()) {
                 return false;
             }
@@ -1305,7 +1331,10 @@ bool parse_simple_grid_template_rows(const std::string& raw_value,
     return true;
 }
 
-bool parse_grid_template_columns_min(const std::string& raw_value, int& min_track, int em_base) {
+bool parse_grid_template_columns_min(const std::string& raw_value,
+                                     int& min_track,
+                                     int em_base,
+                                     const LengthResolutionContext& context = {}) {
     const std::string value = lowercase(trim(raw_value));
     const std::size_t minmax = value.find("minmax(");
     if (minmax != std::string::npos) {
@@ -1315,7 +1344,7 @@ bool parse_grid_template_columns_min(const std::string& raw_value, int& min_trac
             return false;
         }
         int px = 0;
-        if (!parse_length_px(value.substr(begin, comma - begin), px, em_base)) {
+        if (!parse_length_px(value.substr(begin, comma - begin), px, em_base, context)) {
             return false;
         }
         min_track = std::max(1, px);
@@ -1326,14 +1355,17 @@ bool parse_grid_template_columns_min(const std::string& raw_value, int& min_trac
         return true;
     }
     int px = 0;
-    if (parse_length_px(value, px, em_base)) {
+    if (parse_length_px(value, px, em_base, context)) {
         min_track = std::max(1, px);
         return true;
     }
     return false;
 }
 
-bool parse_grid_auto_rows_min(const std::string& raw_value, int& min_row, int em_base) {
+bool parse_grid_auto_rows_min(const std::string& raw_value,
+                              int& min_row,
+                              int em_base,
+                              const LengthResolutionContext& context = {}) {
     const std::string value = lowercase(trim(raw_value));
     if (value.rfind("minmax(", 0) == 0) {
         const std::size_t begin = 7;
@@ -1342,21 +1374,24 @@ bool parse_grid_auto_rows_min(const std::string& raw_value, int& min_row, int em
             return false;
         }
         int px = 0;
-        if (!parse_length_px(value.substr(begin, comma - begin), px, em_base)) {
+        if (!parse_length_px(value.substr(begin, comma - begin), px, em_base, context)) {
             return false;
         }
         min_row = std::max(0, px);
         return true;
     }
     int px = 0;
-    if (parse_length_px(value, px, em_base)) {
+    if (parse_length_px(value, px, em_base, context)) {
         min_row = std::max(0, px);
         return true;
     }
     return false;
 }
 
-bool parse_box_edge_px(const std::string& value, EdgeSizes& output, int em_base = kRootFontSizePx) {
+bool parse_box_edge_px(const std::string& value,
+                       EdgeSizes& output,
+                       int em_base = kRootFontSizePx,
+                       const LengthResolutionContext& context = {}) {
     const std::vector<std::string> tokens = split_whitespace_components(value);
     std::array<int, 4> values{0, 0, 0, 0};
     const int count = static_cast<int>(tokens.size());
@@ -1366,7 +1401,8 @@ bool parse_box_edge_px(const std::string& value, EdgeSizes& output, int em_base 
     for (int index = 0; index < count; ++index) {
         if (!parse_length_px(tokens[static_cast<std::size_t>(index)],
                              values[static_cast<std::size_t>(index)],
-                             em_base)) {
+                             em_base,
+                             context)) {
             return false;
         }
     }
@@ -1382,7 +1418,12 @@ bool parse_box_edge_px(const std::string& value, EdgeSizes& output, int em_base 
     return true;
 }
 
-bool parse_margin_edge_px(const std::string& value, EdgeSizes& output, bool& left_auto, bool& right_auto, int em_base) {
+bool parse_margin_edge_px(const std::string& value,
+                          EdgeSizes& output,
+                          bool& left_auto,
+                          bool& right_auto,
+                          int em_base,
+                          const LengthResolutionContext& context = {}) {
     const std::vector<std::string> tokens = split_whitespace_components(value);
     std::array<int, 4> values{0, 0, 0, 0};
     std::array<bool, 4> auto_values{false, false, false, false};
@@ -1394,7 +1435,7 @@ bool parse_margin_edge_px(const std::string& value, EdgeSizes& output, bool& lef
         const std::string& token = tokens[static_cast<std::size_t>(index)];
         if (token == "auto") {
             auto_values[static_cast<std::size_t>(index)] = true;
-        } else if (!parse_length_px(token, values[static_cast<std::size_t>(index)], em_base)) {
+        } else if (!parse_length_px(token, values[static_cast<std::size_t>(index)], em_base, context)) {
             return false;
         }
     }
@@ -1425,14 +1466,18 @@ bool parse_margin_edge_px(const std::string& value, EdgeSizes& output, bool& lef
     return true;
 }
 
-bool parse_margin_side_px(const std::string& raw_value, int& output, bool& is_auto, int em_base) {
+bool parse_margin_side_px(const std::string& raw_value,
+                          int& output,
+                          bool& is_auto,
+                          int em_base,
+                          const LengthResolutionContext& context = {}) {
     const std::string value = lowercase(trim(raw_value));
     if (value == "auto") {
         output = 0;
         is_auto = true;
         return true;
     }
-    if (!parse_length_px(value, output, em_base)) {
+    if (!parse_length_px(value, output, em_base, context)) {
         return false;
     }
     is_auto = false;
@@ -1719,7 +1764,10 @@ bool parse_color(const std::string& raw_value, Color& output) {
 }
 
 #if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
-bool parse_box_shadow_style(const std::string& raw_value, int em_base, BoxShadowStyle& output) {
+bool parse_box_shadow_style(const std::string& raw_value,
+                            int em_base,
+                            BoxShadowStyle& output,
+                            const LengthResolutionContext& context = {}) {
     const std::string value = lowercase(trim(raw_value));
     if (value == "none") {
         output = BoxShadowStyle{};
@@ -1738,7 +1786,7 @@ bool parse_box_shadow_style(const std::string& raw_value, int em_base, BoxShadow
             return false;
         }
         int length = 0;
-        if (length_count < 4 && parse_length_px(token, length, em_base)) {
+        if (length_count < 4 && parse_length_px(token, length, em_base, context)) {
             lengths[length_count++] = length;
             continue;
         }
@@ -1765,7 +1813,10 @@ bool parse_box_shadow_style(const std::string& raw_value, int em_base, BoxShadow
     return true;
 }
 
-bool parse_text_shadow_style(const std::string& raw_value, int em_base, TextShadowStyle& output) {
+bool parse_text_shadow_style(const std::string& raw_value,
+                             int em_base,
+                             TextShadowStyle& output,
+                             const LengthResolutionContext& context = {}) {
     const std::string value = lowercase(trim(raw_value));
     if (value == "none") {
         output = TextShadowStyle{};
@@ -1781,7 +1832,7 @@ bool parse_text_shadow_style(const std::string& raw_value, int em_base, TextShad
     Color color{0, 0, 0, 255};
     for (const std::string& token : tokens) {
         int length = 0;
-        if (length_count < 3 && parse_length_px(token, length, em_base)) {
+        if (length_count < 3 && parse_length_px(token, length, em_base, context)) {
             lengths[length_count++] = length;
             continue;
         }
@@ -1814,7 +1865,9 @@ struct BorderShorthandParseResult {
     bool has_color = false;
 };
 
-BorderShorthandParseResult parse_border_shorthand(const std::string& value, int em_base) {
+BorderShorthandParseResult parse_border_shorthand(const std::string& value,
+                                                  int em_base,
+                                                  const LengthResolutionContext& context = {}) {
     BorderShorthandParseResult result;
     const std::string lowered = lowercase(trim(value));
     if (lowered == "none" || lowered == "0" || lowered == "0px") {
@@ -1824,7 +1877,7 @@ BorderShorthandParseResult parse_border_shorthand(const std::string& value, int 
     }
 
     for (const std::string& token : split_whitespace_components(value)) {
-        if (!token.empty() && !result.has_width && parse_length_px(token, result.width, em_base)) {
+        if (!token.empty() && !result.has_width && parse_length_px(token, result.width, em_base, context)) {
             result.has_width = true;
         } else if (!token.empty() && !result.has_color && parse_color(token, result.color)) {
             result.has_color = true;
@@ -3196,7 +3249,8 @@ enum class DeclarationApplyResult : std::uint8_t {
 DeclarationApplyResult apply_length_or_percent(int& length_px,
                                                int& percent,
                                                const std::string& value,
-                                               int font_size) {
+                                               int font_size,
+                                               const LengthResolutionContext& context) {
     int parsed_percent = -1;
     if (parse_percentage_int(value, parsed_percent)) {
         length_px = -1;
@@ -3205,7 +3259,7 @@ DeclarationApplyResult apply_length_or_percent(int& length_px,
     }
 
     int px = 0;
-    if (!parse_length_px(value, px, font_size)) {
+    if (!parse_length_px(value, px, font_size, context)) {
         return DeclarationApplyResult::Invalid;
     }
     length_px = px;
@@ -3215,14 +3269,15 @@ DeclarationApplyResult apply_length_or_percent(int& length_px,
 
 DeclarationApplyResult apply_sizing_declaration(Style& style,
                                                 const std::string& property,
-                                                const std::string& value) {
+                                                const std::string& value,
+                                                const LengthResolutionContext& context) {
     if (property == "width") {
         if (lowercase(trim(value)) == "auto") {
             style.width = -1;
             style.width_percent = -1;
             return DeclarationApplyResult::Applied;
         }
-        return apply_length_or_percent(style.width, style.width_percent, value, style.font_size);
+        return apply_length_or_percent(style.width, style.width_percent, value, style.font_size, context);
     }
     if (property == "height") {
         if (lowercase(trim(value)) == "auto") {
@@ -3230,19 +3285,19 @@ DeclarationApplyResult apply_sizing_declaration(Style& style,
             style.height_percent = -1;
             return DeclarationApplyResult::Applied;
         }
-        return apply_length_or_percent(style.height, style.height_percent, value, style.font_size);
+        return apply_length_or_percent(style.height, style.height_percent, value, style.font_size, context);
     }
     if (property == "min-width") {
-        return apply_length_or_percent(style.min_width, style.min_width_percent, value, style.font_size);
+        return apply_length_or_percent(style.min_width, style.min_width_percent, value, style.font_size, context);
     }
     if (property == "min-height") {
-        return apply_length_or_percent(style.min_height, style.min_height_percent, value, style.font_size);
+        return apply_length_or_percent(style.min_height, style.min_height_percent, value, style.font_size, context);
     }
     if (property == "max-width") {
-        return apply_length_or_percent(style.max_width, style.max_width_percent, value, style.font_size);
+        return apply_length_or_percent(style.max_width, style.max_width_percent, value, style.font_size, context);
     }
     if (property == "max-height") {
-        return apply_length_or_percent(style.max_height, style.max_height_percent, value, style.font_size);
+        return apply_length_or_percent(style.max_height, style.max_height_percent, value, style.font_size, context);
     }
     if (property == "aspect-ratio") {
         int ratio_width = 0;
@@ -3259,9 +3314,11 @@ DeclarationApplyResult apply_sizing_declaration(Style& style,
 
 DeclarationApplyResult apply_box_model_declaration(Style& style,
                                                    const std::string& property,
-                                                   const std::string& value) {
+                                                   const std::string& value,
+                                                   const LengthResolutionContext& context) {
     if (property == "margin") {
-        return parse_margin_edge_px(value, style.margin, style.margin_left_auto, style.margin_right_auto, style.font_size)
+        return parse_margin_edge_px(value, style.margin, style.margin_left_auto, style.margin_right_auto,
+                                    style.font_size, context)
             ? DeclarationApplyResult::Applied
             : DeclarationApplyResult::Invalid;
     }
@@ -3269,7 +3326,7 @@ DeclarationApplyResult apply_box_model_declaration(Style& style,
         property == "margin-bottom" || property == "margin-left") {
         int px = 0;
         bool is_auto = false;
-        if (!parse_margin_side_px(value, px, is_auto, style.font_size)) {
+        if (!parse_margin_side_px(value, px, is_auto, style.font_size, context)) {
             return DeclarationApplyResult::Invalid;
         }
         if (property == "margin-top") {
@@ -3286,14 +3343,14 @@ DeclarationApplyResult apply_box_model_declaration(Style& style,
         return DeclarationApplyResult::Applied;
     }
     if (property == "padding") {
-        return parse_box_edge_px(value, style.padding, style.font_size)
+        return parse_box_edge_px(value, style.padding, style.font_size, context)
             ? DeclarationApplyResult::Applied
             : DeclarationApplyResult::Invalid;
     }
     if (property == "padding-top" || property == "padding-right" ||
         property == "padding-bottom" || property == "padding-left") {
         int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
+        if (!parse_length_px(value, px, style.font_size, context)) {
             return DeclarationApplyResult::Invalid;
         }
         if (property == "padding-top") {
@@ -3308,14 +3365,14 @@ DeclarationApplyResult apply_box_model_declaration(Style& style,
         return DeclarationApplyResult::Applied;
     }
     if (property == "border-width") {
-        return parse_box_edge_px(value, style.border_width, style.font_size)
+        return parse_box_edge_px(value, style.border_width, style.font_size, context)
             ? DeclarationApplyResult::Applied
             : DeclarationApplyResult::Invalid;
     }
     if (property == "border-top-width" || property == "border-right-width" ||
         property == "border-bottom-width" || property == "border-left-width") {
         int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
+        if (!parse_length_px(value, px, style.font_size, context)) {
             return DeclarationApplyResult::Invalid;
         }
         if (property == "border-top-width") {
@@ -3338,7 +3395,7 @@ DeclarationApplyResult apply_box_model_declaration(Style& style,
         return DeclarationApplyResult::Applied;
     }
     if (property == "border") {
-        const BorderShorthandParseResult parsed = parse_border_shorthand(value, style.font_size);
+        const BorderShorthandParseResult parsed = parse_border_shorthand(value, style.font_size, context);
         if (!parsed.has_width && !parsed.has_color) {
             return DeclarationApplyResult::Invalid;
         }
@@ -3352,7 +3409,7 @@ DeclarationApplyResult apply_box_model_declaration(Style& style,
     }
     if (property == "border-top" || property == "border-right" ||
         property == "border-bottom" || property == "border-left") {
-        const BorderShorthandParseResult parsed = parse_border_shorthand(value, style.font_size);
+        const BorderShorthandParseResult parsed = parse_border_shorthand(value, style.font_size, context);
         if (!parsed.has_width && !parsed.has_color) {
             return DeclarationApplyResult::Invalid;
         }
@@ -3380,7 +3437,7 @@ DeclarationApplyResult apply_box_model_declaration(Style& style,
             return DeclarationApplyResult::Applied;
         }
         EdgeSizes radii;
-        if (!parse_box_edge_px(value, radii, style.font_size)) {
+        if (!parse_box_edge_px(value, radii, style.font_size, context)) {
             return DeclarationApplyResult::Invalid;
         }
         if (radii.top > 127 || radii.right > 127 || radii.bottom > 127 || radii.left > 127 ||
@@ -3397,13 +3454,14 @@ DeclarationApplyResult apply_box_model_declaration(Style& style,
 bool apply_declaration(Style& style,
                        const std::string& property,
                        const std::string& value,
-                       const StyleResolver* resolver = nullptr) {
+                       const StyleResolver* resolver = nullptr,
+                       const LengthResolutionContext& context = {}) {
 #if !JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
     if (is_flex_grid_property(property)) {
         return false;
     }
 #endif
-    const DeclarationApplyResult sizing = apply_sizing_declaration(style, property, value);
+    const DeclarationApplyResult sizing = apply_sizing_declaration(style, property, value, context);
     if (sizing != DeclarationApplyResult::Unhandled) {
         return sizing == DeclarationApplyResult::Applied;
     }
@@ -3524,13 +3582,13 @@ bool apply_declaration(Style& style,
         style.background_overlay_packed = layers.size() == 2 ? pack_background_overlay(parsed_layers[0]) : 0;
         return true;
     }
-    const DeclarationApplyResult box_model = apply_box_model_declaration(style, property, value);
+    const DeclarationApplyResult box_model = apply_box_model_declaration(style, property, value, context);
     if (box_model != DeclarationApplyResult::Unhandled) {
         return box_model == DeclarationApplyResult::Applied;
     }
     if (property == "font-size") {
         int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
+        if (!parse_length_px(value, px, style.font_size, context)) {
             return false;
         }
         style.font_size = px;
@@ -3560,7 +3618,7 @@ bool apply_declaration(Style& style,
                 return false;
             }
             style.line_height = std::max(1, px);
-        } else if (parse_length_px(value, px, style.font_size)) {
+        } else if (parse_length_px(value, px, style.font_size, context)) {
             style.line_height = std::max(1, px);
         } else {
             return false;
@@ -3569,7 +3627,7 @@ bool apply_declaration(Style& style,
         return true;
     } else if (property == "text-indent") {
         int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
+        if (!parse_length_px(value, px, style.font_size, context)) {
             return false;
         }
         style.text_indent = px;
@@ -3593,7 +3651,7 @@ bool apply_declaration(Style& style,
             return false;
         }
         int px = 0;
-        if (!parse_length_px(value, px, style.font_size) ||
+        if (!parse_length_px(value, px, style.font_size, context) ||
             px < -std::max(1, style.font_size / 2) || px > style.font_size * 2) {
             return false;
         }
@@ -3645,7 +3703,7 @@ bool apply_declaration(Style& style,
         return false;
 #else
         TextShadowStyle shadow;
-        if (!parse_text_shadow_style(value, style.font_size, shadow)) {
+        if (!parse_text_shadow_style(value, style.font_size, shadow, context)) {
             return false;
         }
         style.text_shadow = shadow;
@@ -3657,7 +3715,7 @@ bool apply_declaration(Style& style,
         return false;
 #else
         BoxShadowStyle shadow;
-        if (!parse_box_shadow_style(value, style.font_size, shadow)) {
+        if (!parse_box_shadow_style(value, style.font_size, shadow, context)) {
             return false;
         }
         style.box_shadow = shadow;
@@ -3665,7 +3723,7 @@ bool apply_declaration(Style& style,
 #endif
     } else if (property == "outline-width") {
         int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
+        if (!parse_length_px(value, px, style.font_size, context)) {
             return false;
         }
         style.outline_width = std::max(0, px);
@@ -3679,7 +3737,7 @@ bool apply_declaration(Style& style,
         return true;
     } else if (property == "outline-offset") {
         int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
+        if (!parse_length_px(value, px, style.font_size, context)) {
             return false;
         }
         style.outline_offset = px;
@@ -3704,7 +3762,7 @@ bool apply_declaration(Style& style,
                 ++index;
             }
             const std::string token = value.substr(begin, index - begin);
-            if (!token.empty() && !has_width && parse_length_px(token, width, style.font_size)) {
+            if (!token.empty() && !has_width && parse_length_px(token, width, style.font_size, context)) {
                 has_width = true;
             } else if (!token.empty() && !has_color && parse_color(token, color)) {
                 has_color = true;
@@ -3814,7 +3872,7 @@ bool apply_declaration(Style& style,
                property == "bottom" || property == "left") {
         int px = 0;
         bool specified = false;
-        if (!parse_position_inset(value, style.font_size, px, specified)) {
+        if (!parse_position_inset(value, style.font_size, px, specified, context)) {
             return false;
         }
         if (property == "top") {
@@ -3923,7 +3981,7 @@ bool apply_declaration(Style& style,
         int grow = 0;
         int shrink = 0;
         int basis = -1;
-        if (!parse_flex_shorthand(value, style.font_size, grow, shrink, basis)) {
+        if (!parse_flex_shorthand(value, style.font_size, grow, shrink, basis, context)) {
             return false;
         }
         style.flex_grow = grow;
@@ -3946,7 +4004,7 @@ bool apply_declaration(Style& style,
         return true;
     } else if (property == "flex-basis") {
         int basis = -1;
-        if (!parse_flex_basis_value(value, style.font_size, basis)) {
+        if (!parse_flex_basis_value(value, style.font_size, basis, context)) {
             return false;
         }
         style.flex_basis = basis;
@@ -3980,7 +4038,7 @@ bool apply_declaration(Style& style,
         return true;
     } else if (property == "gap") {
         EdgeSizes parsed;
-        if (!parse_box_edge_px(value, parsed, style.font_size)) {
+        if (!parse_box_edge_px(value, parsed, style.font_size, context)) {
             return false;
         }
         style.row_gap = std::max(0, parsed.top);
@@ -3988,14 +4046,14 @@ bool apply_declaration(Style& style,
         return true;
     } else if (property == "column-gap") {
         int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
+        if (!parse_length_px(value, px, style.font_size, context)) {
             return false;
         }
         style.column_gap = std::max(0, px);
         return true;
     } else if (property == "row-gap") {
         int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
+        if (!parse_length_px(value, px, style.font_size, context)) {
             return false;
         }
         style.row_gap = std::max(0, px);
@@ -4003,14 +4061,14 @@ bool apply_declaration(Style& style,
     } else if (property == "grid-template-columns") {
         std::array<int, 4> widths{{0, 0, 0, 0}};
         int count = 0;
-        if (parse_simple_grid_template_columns(value, widths, count, style.font_size)) {
+        if (parse_simple_grid_template_columns(value, widths, count, style.font_size, context)) {
             style.grid_template_column_widths = widths;
             style.grid_template_column_count = count;
             style.grid_min_track_width = -1;
             return true;
         }
         int min_track = 0;
-        if (!parse_grid_template_columns_min(value, min_track, style.font_size)) {
+        if (!parse_grid_template_columns_min(value, min_track, style.font_size, context)) {
             return false;
         }
         style.grid_min_track_width = min_track;
@@ -4019,7 +4077,7 @@ bool apply_declaration(Style& style,
     } else if (property == "grid-template-rows") {
         std::array<std::int16_t, 4> heights{{0, 0, 0, 0}};
         int count = 0;
-        if (!parse_simple_grid_template_rows(value, heights, count, style.font_size)) {
+        if (!parse_simple_grid_template_rows(value, heights, count, style.font_size, context)) {
             return false;
         }
         style.grid_template_row_heights = heights;
@@ -4027,7 +4085,7 @@ bool apply_declaration(Style& style,
         return true;
     } else if (property == "grid-auto-rows") {
         int min_row = 0;
-        if (!parse_grid_auto_rows_min(value, min_row, style.font_size)) {
+        if (!parse_grid_auto_rows_min(value, min_row, style.font_size, context)) {
             return false;
         }
         style.grid_auto_row_min = min_row;
@@ -4329,12 +4387,13 @@ bool apply_edge_shorthand(Style& style,
                           CascadeSlots& slots,
                           const CssDeclaration& declaration,
                           const CssSpecificity& specificity,
-                          std::size_t source_order) {
+                          std::size_t source_order,
+                          const LengthResolutionContext& context) {
     if (declaration.property == "margin") {
         EdgeSizes parsed;
         bool left_auto = false;
         bool right_auto = false;
-        if (!parse_margin_edge_px(declaration.value, parsed, left_auto, right_auto, style.font_size)) {
+        if (!parse_margin_edge_px(declaration.value, parsed, left_auto, right_auto, style.font_size, context)) {
             return true;
         }
         apply_margin_edge_value(style, slots, CascadeProperty::MarginTop, parsed.top, false,
@@ -4349,7 +4408,7 @@ bool apply_edge_shorthand(Style& style,
     }
     if (declaration.property == "padding") {
         EdgeSizes parsed;
-        if (!parse_box_edge_px(declaration.value, parsed, style.font_size)) {
+        if (!parse_box_edge_px(declaration.value, parsed, style.font_size, context)) {
             return true;
         }
         apply_edge_value(slots, CascadeProperty::PaddingTop, style.padding, parsed.top,
@@ -4364,7 +4423,7 @@ bool apply_edge_shorthand(Style& style,
     }
     if (declaration.property == "border-width") {
         EdgeSizes parsed;
-        if (!parse_box_edge_px(declaration.value, parsed, style.font_size)) {
+        if (!parse_box_edge_px(declaration.value, parsed, style.font_size, context)) {
             return true;
         }
         apply_edge_value(slots, CascadeProperty::BorderTopWidth, style.border_width, parsed.top,
@@ -4378,7 +4437,7 @@ bool apply_edge_shorthand(Style& style,
         return true;
     }
     if (declaration.property == "border") {
-        const BorderShorthandParseResult parsed = parse_border_shorthand(declaration.value, style.font_size);
+        const BorderShorthandParseResult parsed = parse_border_shorthand(declaration.value, style.font_size, context);
         if (!parsed.has_width && !parsed.has_color) {
             return true;
         }
@@ -4403,7 +4462,7 @@ bool apply_edge_shorthand(Style& style,
     }
     if (declaration.property == "border-top" || declaration.property == "border-right" ||
         declaration.property == "border-bottom" || declaration.property == "border-left") {
-        const BorderShorthandParseResult parsed = parse_border_shorthand(declaration.value, style.font_size);
+        const BorderShorthandParseResult parsed = parse_border_shorthand(declaration.value, style.font_size, context);
         if (!parsed.has_width && !parsed.has_color) {
             return true;
         }
@@ -4436,11 +4495,12 @@ bool apply_cascaded_declaration(Style& style,
                                 const CssDeclaration& declaration,
                                 const CssSpecificity& specificity,
                                 std::size_t source_order,
-                                const StyleResolver* resolver) {
+                                const StyleResolver* resolver,
+                                const LengthResolutionContext& context) {
     if (!declaration_wins(slot, declaration, specificity, source_order)) {
         return true;
     }
-    if (apply_declaration(style, declaration.property, declaration.value, resolver)) {
+    if (apply_declaration(style, declaration.property, declaration.value, resolver, context)) {
         mark_slot(slot, declaration, specificity, source_order);
         return true;
     }
@@ -4468,7 +4528,8 @@ bool parse_counter_content(const std::string& raw_value, std::string& name, std:
 bool apply_generated_declaration(Style& style,
                                  CssPseudoElement pseudo,
                                  const std::string& property,
-                                 const std::string& value) {
+                                 const std::string& value,
+                                 const LengthResolutionContext& context) {
     GeneratedContentKind& content_kind = pseudo == CssPseudoElement::After
         ? style.after_content_kind
         : style.before_content_kind;
@@ -4536,7 +4597,7 @@ bool apply_generated_declaration(Style& style,
     }
     if (property == "left") {
         int px = 0;
-        if (!parse_length_px(value, px, style.font_size)) {
+        if (!parse_length_px(value, px, style.font_size, context)) {
             return false;
         }
         left = px;
@@ -4551,11 +4612,12 @@ bool apply_cascaded_generated_declaration(Style& style,
                                           CascadeSlot& slot,
                                           const CssDeclaration& declaration,
                                           const CssSpecificity& specificity,
-                                          std::size_t source_order) {
+                                          std::size_t source_order,
+                                          const LengthResolutionContext& context) {
     if (!declaration_wins(slot, declaration, specificity, source_order)) {
         return true;
     }
-    if (apply_generated_declaration(style, pseudo, declaration.property, declaration.value)) {
+    if (apply_generated_declaration(style, pseudo, declaration.property, declaration.value, context)) {
         mark_slot(slot, declaration, specificity, source_order);
         return true;
     }
@@ -4697,7 +4759,8 @@ void apply_declarations(Style& style,
                         const CustomPropertyMap& custom_properties,
                         DiagnosticSink* diagnostics,
                         const StyleResolver* resolver,
-                        std::size_t max_resolved_value_bytes) {
+                        std::size_t max_resolved_value_bytes,
+                        const LengthResolutionContext& context) {
     CssDeclaration resolved_scratch;
     for (const CssDeclaration& declaration : declarations) {
         if (is_custom_property_name(declaration.property)) {
@@ -4730,7 +4793,8 @@ void apply_declarations(Style& style,
                                                           *slot,
                                                           applied_declaration,
                                                           specificity,
-                                                          source_order)) {
+                                                          source_order,
+                                                          context)) {
                     report_diagnostic(diagnostics,
                                       DiagnosticStage::Style,
                                       DiagnosticSeverity::Warning,
@@ -4752,7 +4816,7 @@ void apply_declarations(Style& style,
             }
             continue;
         }
-        if (apply_edge_shorthand(style, slots, applied_declaration, specificity, source_order)) {
+        if (apply_edge_shorthand(style, slots, applied_declaration, specificity, source_order, context)) {
             continue;
         }
         CascadeSlot* slot = cascade_slot_for_property(slots, applied_declaration.property);
@@ -4762,7 +4826,8 @@ void apply_declarations(Style& style,
                                             applied_declaration,
                                             specificity,
                                             source_order,
-                                            resolver)) {
+                                            resolver,
+                                            context)) {
                 const std::string conic_detail =
                     (applied_declaration.property == "background" ||
                      applied_declaration.property == "background-image")
@@ -5584,7 +5649,7 @@ CustomPropertyMap StyleResolver::custom_properties_for(const Node& node) const {
 
 Style StyleResolver::resolve(const Node& node) const {
     const CustomPropertyMap custom_properties = custom_properties_for(node);
-    return resolve_with_custom_properties(node, custom_properties);
+    return resolve_with_custom_properties(node, custom_properties, nullptr, LengthResolutionContext{});
 }
 
 void StyleResolveContext::clear() {
@@ -5666,7 +5731,10 @@ Style StyleResolver::resolve(const Node& node, StyleResolveContext& context) con
     const std::vector<const CssRule*>* matched_rules = has_custom_property_declarations_
         ? &matching_rules_for(node, context)
         : nullptr;
-    return resolve_with_custom_properties(node, custom_properties, matched_rules);
+    return resolve_with_custom_properties(node,
+                                          custom_properties,
+                                          matched_rules,
+                                          length_context_for(context));
 }
 
 const std::vector<const CssRule*>& StyleResolver::matching_rules_for(const Node& node,
@@ -5687,7 +5755,8 @@ const std::vector<const CssRule*>& StyleResolver::matching_rules_for(const Node&
 
 Style StyleResolver::resolve_with_custom_properties(const Node& node,
                                                     const CustomPropertyMap& custom_properties,
-                                                    const std::vector<const CssRule*>* matched_rules) const {
+                                                    const std::vector<const CssRule*>* matched_rules,
+                                                    const LengthResolutionContext& length_context) const {
     Style style = default_style_for(node);
     CascadeSlots slots;
     const SelectorMatchContext context = selector_match_context_from_options(options_);
@@ -5701,7 +5770,7 @@ Style StyleResolver::resolve_with_custom_properties(const Node& node,
         }
         apply_declarations(style, slots, rule->declarations, rule->specificity,
                            rule->source_order, rule->pseudo_element, custom_properties,
-                           options_.diagnostics, this, options_.max_resolved_value_bytes);
+                           options_.diagnostics, this, options_.max_resolved_value_bytes, length_context);
     }
     if (node.type == NodeType::Element) {
         CssSpecificity inline_specificity;
@@ -5715,7 +5784,7 @@ Style StyleResolver::resolve_with_custom_properties(const Node& node,
                                               options_.diagnostics),
                            inline_specificity,
                            static_cast<std::size_t>(-1), CssPseudoElement::None, custom_properties,
-                           options_.diagnostics, this, options_.max_resolved_value_bytes);
+                           options_.diagnostics, this, options_.max_resolved_value_bytes, length_context);
     }
     return style;
 }

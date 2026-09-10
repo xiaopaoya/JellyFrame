@@ -38,6 +38,8 @@ struct RenderTreeOptions {
     std::size_t max_render_objects = 4096;
     DiagnosticSink* diagnostics = nullptr;
     const std::vector<StyleOverride>* style_overrides = nullptr;
+    int viewport_width = 360;
+    int viewport_height = 240;
 };
 
 class RenderTreeBuilder {

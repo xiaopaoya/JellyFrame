@@ -469,7 +469,10 @@ bool ScriptTaskWorkerRuntime::consume_callback_failure() {
 
 bool ScriptTaskWorkerRuntime::rebuild_pipeline() {
     if (!document_owner_.root() || !style_resolver_) return false;
-    RenderTreeBuilder render_builder(*style_resolver_, render_tree_options_from_budgets(options_.budgets));
+    RenderTreeOptions render_options = render_tree_options_from_budgets(options_.budgets);
+    render_options.viewport_width = options_.viewport.width;
+    render_options.viewport_height = options_.viewport.height;
+    RenderTreeBuilder render_builder(*style_resolver_, render_options);
     RenderObjectPtr render_tree = render_builder.build(*document_owner_.root());
     if (!render_tree) return false;
     LayoutEngine layout_engine(*style_resolver_, {}, layout_engine_options_from_budgets(options_.budgets));
