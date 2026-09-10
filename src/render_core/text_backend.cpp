@@ -149,6 +149,47 @@ TextMetrics measure_text(const TextMeasureProvider& provider,
                          int font_size,
                          int font_weight,
                          std::uint32_t font_family_hash) {
+    return measure_text_range(provider,
+                              text.data(),
+                              text.size(),
+                              font_size,
+                              font_weight,
+                              font_family_hash);
+}
+
+TextMetrics measure_text_range(const TextMeasureProvider& provider,
+                               const char* data,
+                               std::size_t length,
+                               int font_size,
+                               int font_weight,
+                               std::uint32_t font_family_hash) {
+    if (data == nullptr && length != 0) {
+        return fallback_text_metrics({}, font_size, font_weight);
+    }
+    if (font_family_hash != 0 && provider.measure_range_family != nullptr) {
+        TextMetrics metrics;
+        if (provider.measure_range_family(data,
+                                          length,
+                                          font_size,
+                                          font_weight,
+                                          font_family_hash,
+                                          &metrics,
+                                          provider.context)) {
+            return sanitize_metrics(metrics, font_size, font_weight);
+        }
+    }
+    if (provider.measure_range != nullptr) {
+        TextMetrics metrics;
+        if (provider.measure_range(data,
+                                   length,
+                                   font_size,
+                                   font_weight,
+                                   &metrics,
+                                   provider.context)) {
+            return sanitize_metrics(metrics, font_size, font_weight);
+        }
+    }
+    const std::string text = length == 0 ? std::string{} : std::string(data, length);
     if (font_family_hash != 0 && provider.measure_family != nullptr) {
         TextMetrics metrics;
         if (provider.measure_family(text, font_size, font_weight, font_family_hash, &metrics, provider.context)) {
@@ -171,7 +212,12 @@ TextMetrics measure_text_with_letter_spacing(const TextMeasureProvider& provider
                                              std::uint32_t font_family_hash,
                                              int letter_spacing) {
     if (letter_spacing == 0 || text.empty()) {
-        return measure_text(provider, std::string(text), font_size, font_weight, font_family_hash);
+        return measure_text_range(provider,
+                                  text.data(),
+                                  text.size(),
+                                  font_size,
+                                  font_weight,
+                                  font_family_hash);
     }
 
     const int bounded_spacing = bounded_letter_spacing(font_size, letter_spacing);
@@ -181,16 +227,19 @@ TextMetrics measure_text_with_letter_spacing(const TextMeasureProvider& provider
     // semantics and avoiding a temporary string on cache hits.
     std::unordered_map<std::uint32_t, TextMetrics> scalar_metrics;
     scalar_metrics.reserve(std::min<std::size_t>(text.size(), 32));
-    std::string scalar_text;
     std::size_t codepoint_count = 0;
     for (std::size_t begin = 0; begin < text.size();) {
         std::size_t end = begin;
         const std::uint32_t codepoint = consume_utf8_codepoint(text, end);
-        scalar_text.assign(text.data() + begin, end - begin);
         const auto cached = scalar_metrics.find(codepoint);
         const TextMetrics scalar = cached != scalar_metrics.end()
             ? cached->second
-            : measure_text(provider, scalar_text, font_size, font_weight, font_family_hash);
+            : measure_text_range(provider,
+                                 text.data() + begin,
+                                 end - begin,
+                                 font_size,
+                                 font_weight,
+                                 font_family_hash);
         if (cached == scalar_metrics.end()) {
             scalar_metrics.emplace(codepoint, scalar);
         }
@@ -228,10 +277,12 @@ std::vector<std::string> wrap_text_anywhere(const TextMeasureProvider& provider,
     const int bounded_spacing = bounded_letter_spacing(font_size, letter_spacing);
     std::string line;
     line.reserve(std::min<std::size_t>(text.size(), 64));
+    std::unordered_map<std::uint32_t, int> scalar_widths;
+    scalar_widths.reserve(std::min<std::size_t>(text.size(), 32));
     int line_width = 0;
     for (std::size_t begin = 0; begin < text.size();) {
         std::size_t end = begin;
-        consume_utf8_codepoint(text, end);
+        const std::uint32_t codepoint = consume_utf8_codepoint(text, end);
         const std::string_view scalar = text.substr(begin, end - begin);
         if (scalar == "\n") {
             lines.push_back(std::move(line));
@@ -240,11 +291,18 @@ std::vector<std::string> wrap_text_anywhere(const TextMeasureProvider& provider,
             begin = end;
             continue;
         }
-        const int scalar_width = measure_text(provider,
-                                              std::string(scalar),
-                                              font_size,
-                                              font_weight,
-                                              font_family_hash).width;
+        const auto cached_width = scalar_widths.find(codepoint);
+        const int scalar_width = cached_width != scalar_widths.end()
+            ? cached_width->second
+            : measure_text_range(provider,
+                                 scalar.data(),
+                                 scalar.size(),
+                                 font_size,
+                                 font_weight,
+                                 font_family_hash).width;
+        if (cached_width == scalar_widths.end()) {
+            scalar_widths.emplace(codepoint, scalar_width);
+        }
         const int candidate_width = line.empty()
             ? scalar_width
             : clamp_nonnegative_int64(static_cast<std::int64_t>(line_width) +
@@ -285,11 +343,12 @@ std::vector<std::string> wrap_text_at_opportunities(const TextMeasureProvider& p
 
     const auto measured_separator_width = [&]() {
         if (separator_width < 0) {
-            separator_width = measure_text(provider,
-                                           " ",
-                                           font_size,
-                                           font_weight,
-                                           font_family_hash).width;
+            separator_width = measure_text_range(provider,
+                                                 " ",
+                                                 1,
+                                                 font_size,
+                                                 font_weight,
+                                                 font_family_hash).width;
         }
         return separator_width;
     };

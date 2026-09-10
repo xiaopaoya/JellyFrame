@@ -75,6 +75,10 @@ public:
                              int font_size,
                              int font_weight,
                              std::uint32_t font_family_hash);
+    TextMetrics measure_text(std::string_view text,
+                             int font_size,
+                             int font_weight,
+                             std::uint32_t font_family_hash);
     bool paint_text(FrameBuffer& target,
                     Rect rect,
                     Color color,

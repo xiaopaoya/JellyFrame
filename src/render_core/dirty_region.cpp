@@ -43,6 +43,14 @@ Rect union_rect(Rect left, Rect right) {
     return Rect{x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
 }
 
+bool contains_rect(Rect outer, Rect inner) {
+    return !empty_rect(inner) &&
+        inner.x >= outer.x &&
+        inner.y >= outer.y &&
+        safe_edge(inner.x, inner.width) <= safe_edge(outer.x, outer.width) &&
+        safe_edge(inner.y, inner.height) <= safe_edge(outer.y, outer.height);
+}
+
 void merge_overlapping_rects(std::vector<Rect>& rects) {
     if (rects.size() > kMaxPairwiseMergeRects) {
         Rect enclosing = rects.front();
@@ -68,6 +76,37 @@ void merge_overlapping_rects(std::vector<Rect>& rects) {
             }
         }
     }
+}
+
+std::vector<Rect> normalize_dirty_rects_impl(const Rect* input,
+                                             std::size_t input_count,
+                                             Rect viewport) {
+    std::vector<Rect> normalized;
+    if (input == nullptr || input_count == 0 || empty_rect(viewport)) {
+        return normalized;
+    }
+    if (input_count > kMaxPairwiseMergeRects) {
+        normalized.push_back(viewport);
+        return normalized;
+    }
+
+    normalized.reserve(input_count);
+    for (std::size_t index = 0; index < input_count; ++index) {
+        const Rect dirty = intersect_rect(input[index], viewport);
+        if (empty_rect(dirty)) {
+            continue;
+        }
+        if (std::any_of(normalized.begin(), normalized.end(),
+                        [dirty](Rect existing) { return contains_rect(existing, dirty); })) {
+            continue;
+        }
+        normalized.erase(std::remove_if(normalized.begin(), normalized.end(),
+                                        [dirty](Rect existing) { return contains_rect(dirty, existing); }),
+                         normalized.end());
+        normalized.push_back(dirty);
+    }
+    merge_overlapping_rects(normalized);
+    return normalized;
 }
 
 std::size_t rect_area(Rect rect) {
@@ -388,6 +427,12 @@ void set_full_frame_result(DirtyRegionResult& result, Rect viewport, DirtyRegion
 }
 
 } // namespace
+
+std::vector<Rect> normalize_dirty_rects(const Rect* input,
+                                        std::size_t input_count,
+                                        Rect viewport) {
+    return normalize_dirty_rects_impl(input, input_count, viewport);
+}
 
 const char* dirty_region_mode_name(DirtyRegionMode mode) {
     switch (mode) {

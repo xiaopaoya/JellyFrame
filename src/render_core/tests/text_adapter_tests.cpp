@@ -40,6 +40,22 @@ bool probe_additive_measurement(int, int, std::uint32_t, void*) {
     return true;
 }
 
+bool probe_measure_range(const char* data,
+                         std::size_t length,
+                         int font_size,
+                         int,
+                         TextMetrics* metrics,
+                         void* context) {
+    auto* probe = static_cast<ProbeTextBackend*>(context);
+    if (probe == nullptr || metrics == nullptr || (data == nullptr && length != 0)) {
+        return false;
+    }
+    ++probe->measure_calls;
+    metrics->width = static_cast<int>(length) * font_size;
+    metrics->line_height = font_size + 2;
+    return true;
+}
+
 bool probe_paint(FrameBuffer& target,
                  Rect rect,
                  Color color,
@@ -117,6 +133,22 @@ void additive_provider_wraps_without_remeasuring_the_current_line() {
           "additive provider measures each token once instead of each growing candidate");
 }
 
+void range_provider_avoids_scalar_string_allocations() {
+    ProbeTextBackend probe;
+    const TextMeasureProvider measure{
+        probe_measure,
+        &probe,
+        nullptr,
+        nullptr,
+        probe_measure_range,
+        nullptr,
+    };
+    const std::vector<std::string> lines = wrap_text_anywhere(
+        measure, "AAAA", 10, 400, 0, 0, 20);
+    check(lines.size() == 2, "range provider preserves anywhere wrapping");
+    check(probe.measure_calls == 1, "range provider caches repeated scalar widths");
+}
+
 void extreme_letter_spacing_uses_one_bounded_value() {
     ProbeTextBackend probe;
     const TextMeasureProvider measure{probe_measure, &probe};
@@ -147,6 +179,7 @@ int main() {
         incomplete_adapter_degrades_to_core_fallbacks();
         letter_spacing_and_utf8_anywhere_wrap_share_scalar_boundaries();
         additive_provider_wraps_without_remeasuring_the_current_line();
+        range_provider_avoids_scalar_string_allocations();
         extreme_letter_spacing_uses_one_bounded_value();
         extreme_fallback_font_sizes_remain_defined();
     } catch (const std::exception& error) {

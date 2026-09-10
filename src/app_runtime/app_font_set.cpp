@@ -32,6 +32,42 @@ bool app_font_set_measure_family_callback(const std::string& text,
     return true;
 }
 
+bool app_font_set_measure_range_callback(const char* data,
+                                         std::size_t length,
+                                         int font_size,
+                                         int font_weight,
+                                         TextMetrics* metrics,
+                                         void* context) {
+    auto* fonts = static_cast<AppFontSet*>(context);
+    if (fonts == nullptr || metrics == nullptr || (data == nullptr && length != 0)) {
+        return false;
+    }
+    *metrics = fonts->measure_text(std::string_view(data != nullptr ? data : "", length),
+                                   font_size,
+                                   font_weight,
+                                   0);
+    return true;
+}
+
+bool app_font_set_measure_range_family_callback(const char* data,
+                                                std::size_t length,
+                                                int font_size,
+                                                int font_weight,
+                                                std::uint32_t font_family_hash,
+                                                TextMetrics* metrics,
+                                                void* context) {
+    auto* fonts = static_cast<AppFontSet*>(context);
+    if (fonts == nullptr || metrics == nullptr || (data == nullptr && length != 0) ||
+        !fonts->has_family(font_family_hash)) {
+        return false;
+    }
+    *metrics = fonts->measure_text(std::string_view(data != nullptr ? data : "", length),
+                                   font_size,
+                                   font_weight,
+                                   font_family_hash);
+    return true;
+}
+
 bool app_font_set_additive_measurement_supported(int,
                                                  int font_weight,
                                                  std::uint32_t font_family_hash,
@@ -200,7 +236,9 @@ TextMeasureProvider AppFontSet::measure_provider() {
     return TextMeasureProvider{app_font_set_measure_callback,
                                this,
                                app_font_set_measure_family_callback,
-                               app_font_set_additive_measurement_supported};
+                               app_font_set_additive_measurement_supported,
+                               app_font_set_measure_range_callback,
+                               app_font_set_measure_range_family_callback};
 }
 
 TextPainter AppFontSet::painter() {
@@ -226,12 +264,19 @@ TextMetrics AppFontSet::measure_text(const std::string& text,
                                      int font_size,
                                      int font_weight,
                                      std::uint32_t font_family_hash) {
+    return measure_text(std::string_view(text), font_size, font_weight, font_family_hash);
+}
+
+TextMetrics AppFontSet::measure_text(std::string_view text,
+                                     int font_size,
+                                     int font_weight,
+                                     std::uint32_t font_family_hash) {
     const BitmapFontFallbackContext* context = context_for_family(font_family_hash);
     if (context == nullptr) {
-        return fallback_text_metrics(text, font_size, font_weight);
+        return fallback_text_metrics(std::string(text), font_size, font_weight);
     }
     const BitmapFontFallbackContext scaled = app_font_context_for_size(*context, font_size);
-    return measure_bitmap_text_with_fallback(scaled, text, font_size, font_weight);
+    return measure_bitmap_text_with_fallback_range(scaled, text, font_size, font_weight);
 }
 
 bool AppFontSet::paint_text(FrameBuffer& target,

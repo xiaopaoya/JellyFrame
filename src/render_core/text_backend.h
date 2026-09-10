@@ -25,6 +25,21 @@ using TextMeasureFamilyCallback = bool (*)(const std::string& text,
                                            TextMetrics* metrics,
                                            void* context);
 
+using TextMeasureRangeCallback = bool (*)(const char* data,
+                                          std::size_t length,
+                                          int font_size,
+                                          int font_weight,
+                                          TextMetrics* metrics,
+                                          void* context);
+
+using TextMeasureRangeFamilyCallback = bool (*)(const char* data,
+                                                std::size_t length,
+                                                int font_size,
+                                                int font_weight,
+                                                std::uint32_t font_family_hash,
+                                                TextMetrics* metrics,
+                                                void* context);
+
 using TextAdditiveMeasurementCallback = bool (*)(int font_size,
                                                  int font_weight,
                                                  std::uint32_t font_family_hash,
@@ -38,6 +53,10 @@ struct TextMeasureProvider {
     // measuring the complete string for these font arguments. Keep it null
     // for shaping/kerning-aware hosts.
     TextAdditiveMeasurementCallback additive_measurement_supported = nullptr;
+    // Optional non-owning range callbacks. Providers can avoid allocating a
+    // temporary std::string when measuring UTF-8 scalar ranges.
+    TextMeasureRangeCallback measure_range = nullptr;
+    TextMeasureRangeFamilyCallback measure_range_family = nullptr;
 };
 
 std::uint32_t normalized_font_family_hash(std::string_view family);
@@ -53,6 +72,12 @@ TextMetrics measure_text(const TextMeasureProvider& provider,
                          int font_size,
                          int font_weight,
                          std::uint32_t font_family_hash);
+TextMetrics measure_text_range(const TextMeasureProvider& provider,
+                               const char* data,
+                               std::size_t length,
+                               int font_size,
+                               int font_weight,
+                               std::uint32_t font_family_hash = 0);
 TextMetrics measure_text_with_letter_spacing(const TextMeasureProvider& provider,
                                              std::string_view text,
                                              int font_size,

@@ -4,6 +4,7 @@
 #include "render_core/modern_paint.h"
 #include "render_core/feature_config.h"
 #include "render_core/raster_primitives.h"
+#include "render_core/dirty_region.h"
 
 #include <algorithm>
 #include <array>
@@ -392,51 +393,6 @@ Rect target_rect(const FrameBuffer& target) {
     return Rect{0, 0, target.width, target.height};
 }
 
-std::vector<Rect> normalize_dirty_rects(const Rect* dirty_rects,
-                                        std::size_t dirty_rect_count,
-                                        Rect target) {
-    std::vector<Rect> normalized;
-    normalized.reserve(dirty_rect_count);
-    for (std::size_t index = 0; index < dirty_rect_count; ++index) {
-        const Rect dirty = intersect_rect(dirty_rects[index], target);
-        if (empty_rect(dirty)) {
-            continue;
-        }
-        bool covered = false;
-        for (const Rect& existing : normalized) {
-            if (contains_rect(existing, dirty)) {
-                covered = true;
-                break;
-            }
-        }
-        if (covered) {
-            continue;
-        }
-        normalized.erase(
-            std::remove_if(normalized.begin(), normalized.end(), [dirty](Rect existing) {
-                return contains_rect(dirty, existing);
-            }),
-            normalized.end());
-        normalized.push_back(dirty);
-    }
-    bool merged = true;
-    while (merged) {
-        merged = false;
-        for (std::size_t left = 0; left + 1 < normalized.size() && !merged; ++left) {
-            for (std::size_t right = left + 1; right < normalized.size(); ++right) {
-                if (empty_rect(intersect_rect(normalized[left], normalized[right]))) {
-                    continue;
-                }
-                normalized[left] = union_rect(normalized[left], normalized[right]);
-                normalized.erase(normalized.begin() + static_cast<std::ptrdiff_t>(right));
-                merged = true;
-                break;
-            }
-        }
-    }
-    return normalized;
-}
-
 std::uint8_t clamp_u8(int value) {
     return raster_clamp_u8(value);
 }
@@ -585,6 +541,99 @@ void fill_rect_clipped(FrameBuffer& target, Rect rect, Rect clip, Color color, i
     }
 }
 
+void stroke_rounded_rect(FrameBuffer& target,
+                         Rect rect,
+                         Rect clip,
+                         Color color,
+                         int stroke_width,
+                         int border_radius) {
+    Rect clipped = clipped_target_rect(target, rect, clip);
+    if (empty_rect(clipped) || color.a == 0 || stroke_width <= 0) {
+        return;
+    }
+    stroke_width = std::min(stroke_width, std::max(1, std::min(rect.width, rect.height) / 2));
+
+    const int twice_stroke = safe_add(stroke_width, stroke_width);
+    const Rect inner{
+        safe_add(rect.x, stroke_width),
+        safe_add(rect.y, stroke_width),
+        std::max(0, safe_add(rect.width, safe_negate(twice_stroke))),
+        std::max(0, safe_add(rect.height, safe_negate(twice_stroke))),
+    };
+    const int inner_radius = expand_corner_radii(border_radius, -stroke_width);
+    const RasterRoundedRect outer = prepare_rounded_rect(rect, border_radius);
+    const RasterRoundedRect inner_geometry = prepare_rounded_rect(inner, inner_radius);
+    const int y_end = safe_edge(clipped.y, clipped.height);
+    const int x_end = safe_edge(clipped.x, clipped.width);
+    const int inner_right = safe_edge(inner.x, inner.width);
+    const int inner_bottom = safe_edge(inner.y, inner.height);
+
+    const auto paint_span = [&](int y, int begin_x, int end_x) {
+        const int first = std::max(clipped.x, begin_x);
+        const int last = std::min(x_end, end_x);
+        for (int x = first; x < last; ++x) {
+            const int outer_coverage = rounded_rect_coverage(outer, x, y);
+            if (outer_coverage <= 0) {
+                continue;
+            }
+            const int inner_coverage = empty_rect(inner)
+                ? 0
+                : rounded_rect_coverage(inner_geometry, x, y);
+            const int stroke_coverage = std::max(0, outer_coverage - inner_coverage);
+            if (stroke_coverage > 0) {
+                blend_pixel(target, x, y, with_coverage(color, stroke_coverage));
+            }
+        }
+    };
+
+    for (int y = clipped.y; y < y_end; ++y) {
+        // The horizontal bands need the full width for their rounded corners
+        // and inner-edge antialiasing. Away from those bands, only the two
+        // vertical border bands can contribute to the stroke.
+        const bool horizontal_band = empty_rect(inner) ||
+            y <= inner.y || y >= inner_bottom - 1;
+        if (horizontal_band) {
+            paint_span(y, clipped.x, x_end);
+        } else {
+            std::array<Rect, 6> spans{};
+            std::size_t span_count = 0;
+            const auto add_span = [&](int begin_x, int end_x) {
+                if (end_x > begin_x && span_count < spans.size()) {
+                    spans[span_count++] = Rect{begin_x, y, safe_span(begin_x, end_x), 1};
+                }
+            };
+            add_span(clipped.x, safe_add(inner.x, 1));
+            add_span(safe_add(inner_right, -1), x_end);
+            if (outer.radii.top_left > 0 && y < safe_add(outer.top, outer.radii.top_left)) {
+                add_span(outer.left, safe_add(outer.left, outer.radii.top_left));
+            }
+            if (outer.radii.top_right > 0 && y < safe_add(outer.top, outer.radii.top_right)) {
+                add_span(safe_add(outer.right, safe_negate(outer.radii.top_right)), outer.right);
+            }
+            if (outer.radii.bottom_left > 0 &&
+                y >= safe_add(outer.bottom, safe_negate(outer.radii.bottom_left))) {
+                add_span(outer.left, safe_add(outer.left, outer.radii.bottom_left));
+            }
+            if (outer.radii.bottom_right > 0 &&
+                y >= safe_add(outer.bottom, safe_negate(outer.radii.bottom_right))) {
+                add_span(safe_add(outer.right, safe_negate(outer.radii.bottom_right)), outer.right);
+            }
+            std::sort(spans.begin(), spans.begin() + static_cast<std::ptrdiff_t>(span_count),
+                      [](const Rect& left, const Rect& right) { return left.x < right.x; });
+            for (std::size_t index = 0; index < span_count;) {
+                int begin_x = spans[index].x;
+                int end_x = safe_edge(spans[index].x, spans[index].width);
+                ++index;
+                while (index < span_count && spans[index].x <= end_x) {
+                    end_x = std::max(end_x, safe_edge(spans[index].x, spans[index].width));
+                    ++index;
+                }
+                paint_span(y, begin_x, end_x);
+            }
+        }
+    }
+}
+
 void stroke_rect(FrameBuffer& target, Rect rect, Color color, int stroke_width, int border_radius = 0) {
     Rect clipped = clipped_target_rect(target, rect);
     if (empty_rect(clipped) || color.a == 0 || stroke_width <= 0) {
@@ -599,32 +648,7 @@ void stroke_rect(FrameBuffer& target, Rect rect, Color color, int stroke_width, 
         return;
     }
 
-    const int twice_stroke = safe_add(stroke_width, stroke_width);
-    const Rect inner{
-        safe_add(rect.x, stroke_width),
-        safe_add(rect.y, stroke_width),
-        std::max(0, safe_add(rect.width, safe_negate(twice_stroke))),
-        std::max(0, safe_add(rect.height, safe_negate(twice_stroke))),
-    };
-    const int inner_radius = expand_corner_radii(border_radius, -stroke_width);
-    const RasterRoundedRect outer = prepare_rounded_rect(rect, border_radius);
-    const RasterRoundedRect inner_geometry = prepare_rounded_rect(inner, inner_radius);
-    const int y_end = safe_edge(clipped.y, clipped.height);
-    const int x_end = safe_edge(clipped.x, clipped.width);
-    for (int y = clipped.y; y < y_end; ++y) {
-        for (int x = clipped.x; x < x_end; ++x) {
-            const int outer_coverage = rounded_rect_coverage(outer, x, y);
-            if (outer_coverage <= 0) {
-                continue;
-            }
-            const int inner_coverage = empty_rect(inner) ? 0 : rounded_rect_coverage(inner_geometry, x, y);
-            const int stroke_coverage = std::max(0, outer_coverage - inner_coverage);
-            if (stroke_coverage <= 0) {
-                continue;
-            }
-            blend_pixel(target, x, y, with_coverage(color, stroke_coverage));
-        }
-    }
+    stroke_rounded_rect(target, rect, target_rect(target), color, stroke_width, border_radius);
 }
 
 void stroke_rect_clipped(FrameBuffer& target, Rect rect, Rect clip, Color color, int stroke_width, int border_radius = 0) {
@@ -641,32 +665,7 @@ void stroke_rect_clipped(FrameBuffer& target, Rect rect, Rect clip, Color color,
         return;
     }
 
-    const int twice_stroke = safe_add(stroke_width, stroke_width);
-    const Rect inner{
-        safe_add(rect.x, stroke_width),
-        safe_add(rect.y, stroke_width),
-        std::max(0, safe_add(rect.width, safe_negate(twice_stroke))),
-        std::max(0, safe_add(rect.height, safe_negate(twice_stroke))),
-    };
-    const int inner_radius = expand_corner_radii(border_radius, -stroke_width);
-    const RasterRoundedRect outer = prepare_rounded_rect(rect, border_radius);
-    const RasterRoundedRect inner_geometry = prepare_rounded_rect(inner, inner_radius);
-    const int y_end = safe_edge(clipped.y, clipped.height);
-    const int x_end = safe_edge(clipped.x, clipped.width);
-    for (int y = clipped.y; y < y_end; ++y) {
-        for (int x = clipped.x; x < x_end; ++x) {
-            const int outer_coverage = rounded_rect_coverage(outer, x, y);
-            if (outer_coverage <= 0) {
-                continue;
-            }
-            const int inner_coverage = empty_rect(inner) ? 0 : rounded_rect_coverage(inner_geometry, x, y);
-            const int stroke_coverage = std::max(0, outer_coverage - inner_coverage);
-            if (stroke_coverage <= 0) {
-                continue;
-            }
-            blend_pixel(target, x, y, with_coverage(color, stroke_coverage));
-        }
-    }
+    stroke_rounded_rect(target, rect, clip, color, stroke_width, border_radius);
 }
 
 #if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
@@ -940,6 +939,39 @@ void draw_text(FrameBuffer& target,
     }
 }
 
+void composite_source_row(Color* destination,
+                          const Color* source,
+                          std::size_t count,
+                          float opacity) {
+    if (destination == nullptr || source == nullptr || count == 0 || opacity <= 0.0F) {
+        return;
+    }
+    if (opacity != 1.0F) {
+        for (std::size_t index = 0; index < count; ++index) {
+            blend_color(destination[index], with_opacity(source[index], opacity));
+        }
+        return;
+    }
+
+    std::size_t index = 0;
+    while (index < count) {
+        if (source[index].a == 0) {
+            ++index;
+            continue;
+        }
+        if (source[index].a != 255) {
+            blend_color(destination[index], source[index]);
+            ++index;
+            continue;
+        }
+        const std::size_t begin = index;
+        do {
+            ++index;
+        } while (index < count && source[index].a == 255);
+        std::copy_n(source + begin, index - begin, destination + begin);
+    }
+}
+
 void composite_buffer_clipped(FrameBuffer& target, const FrameBuffer& source, int dst_x, int dst_y, Rect clip, float opacity) {
     const Rect target_bounds = target_rect(target);
     Rect copy_rect = intersect_rect(Rect{dst_x, dst_y, source.width, source.height}, target_bounds);
@@ -950,12 +982,13 @@ void composite_buffer_clipped(FrameBuffer& target, const FrameBuffer& source, in
     const int src_x = copy_rect.x - dst_x;
     const int src_y = copy_rect.y - dst_y;
     for (int y = 0; y < copy_rect.height; ++y) {
-        for (int x = 0; x < copy_rect.width; ++x) {
-            blend_pixel(target,
-                        copy_rect.x + x,
-                        copy_rect.y + y,
-                        with_opacity(source.pixel(src_x + x, src_y + y), opacity));
-        }
+        Color* destination = target.pixels.data() +
+            static_cast<std::size_t>(copy_rect.y + y) * static_cast<std::size_t>(target.width) +
+            static_cast<std::size_t>(copy_rect.x);
+        const Color* source_row = source.pixels.data() +
+            static_cast<std::size_t>(src_y + y) * static_cast<std::size_t>(source.width) +
+            static_cast<std::size_t>(src_x);
+        composite_source_row(destination, source_row, static_cast<std::size_t>(copy_rect.width), opacity);
     }
 }
 

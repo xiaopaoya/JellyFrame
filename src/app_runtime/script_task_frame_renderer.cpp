@@ -1,6 +1,7 @@
 #include "app_runtime/script_task_frame_renderer.h"
 
 #include "render_core/raster_primitives.h"
+#include "render_core/dirty_region.h"
 
 #include <algorithm>
 #include <cmath>
@@ -63,13 +64,6 @@ Rect expand_rect(Rect rect, int amount) {
     const int x2 = safe_edge(safe_edge(rect.x, rect.width), amount);
     const int y2 = safe_edge(safe_edge(rect.y, rect.height), amount);
     return {x1, y1, safe_span(x1, x2), safe_span(y1, y2)};
-}
-
-bool contains_rect(Rect outer, Rect inner) {
-    return !empty_rect(inner) &&
-        inner.x >= outer.x && inner.y >= outer.y &&
-        safe_edge(inner.x, inner.width) <= safe_edge(outer.x, outer.width) &&
-        safe_edge(inner.y, inner.height) <= safe_edge(outer.y, outer.height);
 }
 
 bool equal_rect(Rect left, Rect right) {
@@ -281,39 +275,6 @@ std::uint64_t framebuffer_bytes(const FrameBuffer& framebuffer) {
         return std::numeric_limits<std::uint64_t>::max();
     }
     return static_cast<std::uint64_t>(pixel_count) * sizeof(Color);
-}
-
-std::vector<Rect> normalize_dirty_rects(const Rect* dirty_rects,
-                                        std::size_t dirty_rect_count,
-                                        Rect target) {
-    std::vector<Rect> normalized;
-    normalized.reserve(dirty_rect_count);
-    for (std::size_t index = 0; index < dirty_rect_count; ++index) {
-        const Rect dirty = intersect_rect(dirty_rects[index], target);
-        if (empty_rect(dirty)) continue;
-        if (std::any_of(normalized.begin(), normalized.end(),
-                        [dirty](Rect existing) { return contains_rect(existing, dirty); })) {
-            continue;
-        }
-        normalized.erase(std::remove_if(normalized.begin(), normalized.end(),
-                                        [dirty](Rect existing) { return contains_rect(dirty, existing); }),
-                         normalized.end());
-        normalized.push_back(dirty);
-    }
-    bool merged = true;
-    while (merged) {
-        merged = false;
-        for (std::size_t left = 0; left + 1 < normalized.size() && !merged; ++left) {
-            for (std::size_t right = left + 1; right < normalized.size(); ++right) {
-                if (empty_rect(intersect_rect(normalized[left], normalized[right]))) continue;
-                normalized[left] = union_rect(normalized[left], normalized[right]);
-                normalized.erase(normalized.begin() + static_cast<std::ptrdiff_t>(right));
-                merged = true;
-                break;
-            }
-        }
-    }
-    return normalized;
 }
 
 void clear_rect(FrameBuffer& target, Rect rect, Color color) {

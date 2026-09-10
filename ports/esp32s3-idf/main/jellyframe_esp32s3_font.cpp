@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <string_view>
 
 namespace jellyframe_esp32s3 {
 namespace {
@@ -153,6 +154,27 @@ bool production_measure_callback(const std::string& text,
     return true;
 }
 
+bool production_measure_range_callback(const char* data,
+                                       std::size_t length,
+                                       int font_size,
+                                       int font_weight,
+                                       jellyframe::TextMetrics* metrics,
+                                       void*) {
+    if (metrics == nullptr || (data == nullptr && length != 0)) {
+        return false;
+    }
+    const auto* face = choose_face(kProductionFontFamily, font_size, font_weight);
+    if (face == nullptr || face->font == nullptr) {
+        return false;
+    }
+    *metrics = jellyframe::measure_bitmap_text_range(
+        jellyframe::BitmapFontContext{face->font, 1},
+        std::string_view(data != nullptr ? data : "", length),
+        font_size,
+        face->weight);
+    return true;
+}
+
 bool production_paint_callback(jellyframe::FrameBuffer& target,
                                jellyframe::Rect rect,
                                jellyframe::Color color,
@@ -190,7 +212,12 @@ const ProductionFontStats& production_font_stats() {
 }
 
 jellyframe::TextMeasureProvider make_production_text_measure_provider() {
-    return jellyframe::TextMeasureProvider{production_measure_callback, nullptr};
+    return jellyframe::TextMeasureProvider{production_measure_callback,
+                                           nullptr,
+                                           nullptr,
+                                           nullptr,
+                                           production_measure_range_callback,
+                                           nullptr};
 }
 
 jellyframe::TextPainter make_production_text_painter() {
@@ -203,6 +230,15 @@ bool app_font_measure_callback(const std::string& text,
                                jellyframe::TextMetrics* metrics,
                                void* context) {
     return production_measure_callback(text, font_size, font_weight, metrics, context);
+}
+
+bool app_font_measure_range_callback(const char* data,
+                                     std::size_t length,
+                                     int font_size,
+                                     int font_weight,
+                                     jellyframe::TextMetrics* metrics,
+                                     void* context) {
+    return production_measure_range_callback(data, length, font_size, font_weight, metrics, context);
 }
 
 bool app_font_paint_callback(jellyframe::FrameBuffer& target,

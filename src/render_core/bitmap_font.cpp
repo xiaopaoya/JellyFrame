@@ -272,9 +272,16 @@ TextMetrics measure_bitmap_text(const BitmapFontContext& context,
                                 const std::string& text,
                                 int font_size,
                                 int font_weight) {
+    return measure_bitmap_text_range(context, std::string_view(text), font_size, font_weight);
+}
+
+TextMetrics measure_bitmap_text_range(const BitmapFontContext& context,
+                                      std::string_view text,
+                                      int font_size,
+                                      int font_weight) {
     (void)font_size;
     if (context.font == nullptr) {
-        return fallback_text_metrics(text, font_size, font_weight);
+        return fallback_text_metrics(std::string(text), font_size, font_weight);
     }
     const BitmapFont& font = *context.font;
     const int scale = context_scale(context);
@@ -296,9 +303,16 @@ TextMetrics measure_bitmap_text_with_fallback(const BitmapFontFallbackContext& c
                                               const std::string& text,
                                               int font_size,
                                               int font_weight) {
+    return measure_bitmap_text_with_fallback_range(context, std::string_view(text), font_size, font_weight);
+}
+
+TextMetrics measure_bitmap_text_with_fallback_range(const BitmapFontFallbackContext& context,
+                                                    std::string_view text,
+                                                    int font_size,
+                                                    int font_weight) {
     const BitmapFont* base_font = fallback_base_font(context);
     if (base_font == nullptr) {
-        return fallback_text_metrics(text, font_size, font_weight);
+        return fallback_text_metrics(std::string(text), font_size, font_weight);
     }
     const int scale = context_scale(context);
     int width = 0;

@@ -2208,7 +2208,11 @@ void run_retained_ui_task(void* raw_context) {
 #endif
     context->font_context = make_app_font_context();
     context->text_measure = jellyframe::TextMeasureProvider{app_font_measure_callback,
-                                                            &context->font_context};
+                                                            &context->font_context,
+                                                            nullptr,
+                                                            nullptr,
+                                                            app_font_measure_range_callback,
+                                                            nullptr};
     context->text_painter = jellyframe::TextPainter{app_font_paint_callback,
                                                     &context->font_context};
     const auto& font_stats = production_font_stats();

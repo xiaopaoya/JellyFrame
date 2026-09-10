@@ -48,6 +48,14 @@ TextMetrics measure_bitmap_text_with_fallback(const BitmapFontFallbackContext& c
                                               const std::string& text,
                                               int font_size,
                                               int font_weight);
+TextMetrics measure_bitmap_text_range(const BitmapFontContext& context,
+                                      std::string_view text,
+                                      int font_size,
+                                      int font_weight);
+TextMetrics measure_bitmap_text_with_fallback_range(const BitmapFontFallbackContext& context,
+                                                    std::string_view text,
+                                                    int font_size,
+                                                    int font_weight);
 
 bool bitmap_font_measure_callback(const std::string& text,
                                   int font_size,

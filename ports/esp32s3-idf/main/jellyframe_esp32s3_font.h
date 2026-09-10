@@ -36,6 +36,13 @@ bool app_font_measure_callback(const std::string& text,
                                jellyframe::TextMetrics* metrics,
                                void* context);
 
+bool app_font_measure_range_callback(const char* data,
+                                     std::size_t length,
+                                     int font_size,
+                                     int font_weight,
+                                     jellyframe::TextMetrics* metrics,
+                                     void* context);
+
 bool app_font_paint_callback(jellyframe::FrameBuffer& target,
                              jellyframe::Rect rect,
                              jellyframe::Color color,

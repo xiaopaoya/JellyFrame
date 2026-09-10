@@ -124,6 +124,12 @@ void coalesce_dirty_rects_into(const Rect* input,
                                std::vector<Rect>& output,
                                DirtyRectCoalescingResult* result = nullptr);
 
+// Clips and merges repaint input for renderers. Inputs above the bounded
+// pairwise threshold conservatively fall back to the viewport.
+std::vector<Rect> normalize_dirty_rects(const Rect* input,
+                                        std::size_t input_count,
+                                        Rect viewport);
+
 DirtyRegionResult compute_dirty_region(const Node& document,
                                        const LayoutBox* previous_layout,
                                        const LayoutBox* current_layout,
