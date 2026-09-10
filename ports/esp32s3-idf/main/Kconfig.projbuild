@@ -292,6 +292,32 @@ config JELLYFRAME_ESP32S3_UI_TASK_TICK_MS
     default 20
     range 1 1000
 
+config JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+    bool "Enable bounded device performance profile"
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_FLEX_GRID_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_FORMS_ADVANCED_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_GRADIENT_FASTPATH_UI_TASK || JELLYFRAME_ESP32S3_RUN_SCROLL_BENCHMARK || JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_RESOURCE_FAILURE || JELLYFRAME_ESP32S3_RUN_IMAGE_ACCEPTANCE || JELLYFRAME_ESP32S3_RUN_APP_RUNTIME_RECOVERY_ACCEPTANCE
+    default n
+    help
+        Collects a fixed, allocation-free window of device UI stage timings.
+        This is opt-in diagnostic instrumentation for retained UI-task paths.
+        It does not yet profile separate script-worker acceptance tasks and
+        never enables per-command or per-element tracing.
+
+config JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_WARMUP_FRAMES
+    int "Device performance profile warmup frames"
+    depends on JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+    default 30
+    range 0 600
+    help
+        Number of active present frames ignored before the measured window.
+
+config JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_WINDOW_FRAMES
+    int "Device performance profile window frames"
+    depends on JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+    default 120
+    range 30 600
+    help
+        Number of active present frames in one bounded profile window.
+
 config JELLYFRAME_ESP32S3_SCRIPT_TASK_STACK_SIZE
     int "JerryScript worker task stack size"
     depends on JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME

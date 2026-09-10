@@ -1,7 +1,7 @@
 # Device Performance Profile V0（提案）
 
 > 状态：提案；最后更新：2026-09-10  
-> 范围：Device OS/port 的实机阶段窗口汇总；不定义桌面 trace、逐元素计时或 JFDP wire 扩展。
+> 范围：带 console 的 port 实机阶段窗口汇总；不定义桌面 trace、逐元素计时或 JFDP wire 扩展。
 
 ## 目标
 
@@ -24,7 +24,9 @@ fixture 的总趋势，但不能可靠回答“一段固定交互中哪一阶段
 
 port 提供一个显式 build/profile 开关，例如
 `JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE`；默认 `n`，不得由 Developer
-Image、普通 launcher 或 App 自动开启。实现可以先采用 Kconfig；profile 名、窗口帧数
+Image、普通 launcher 或 App 自动开启。首个 ESP32-S3 实现只支持带 console 的 retained
+UI-task fixture；Developer Image 的 JFDP `Logs` 响应没有分页 cursor，不能承载一个完整窗口。
+未来必须增加独立 typed JFDP profile payload 和完整性语义，才可对安装 App 导出。实现可以先采用 Kconfig；profile 名、窗口帧数
 和 warm-up 帧数必须记录在输出中。
 
 V0 固定如下边界：
@@ -35,12 +37,20 @@ V0 固定如下边界：
 | 测量窗口 | 默认 120 个实际 present；范围 30–600 |
 | 样本 | 仅 `FrameUpdateAction != None` 且已进入实际 present 路径的帧；失败 present 仍计样本和错误 |
 | 空闲帧 | 单独计数，不进入 latency percentile |
-| 输出频率 | 每个完整窗口最多一条；任务停止前可选择输出一个标记为 `partial=1` 的不足窗口 |
+| 输出频率 | 每个完整窗口最多一组五条短记录；任务停止前可选择输出一个标记为 `partial=1` 的不足窗口 |
 | 内存 | 固定 histogram、固定 counters；不允许为 trace 建动态容器、字符串或每帧日志 |
 | 时钟 | `esp_timer_get_time()` 单调微秒；差值在采样点立即转换为非负 `uint32_t` 微秒 |
 
-窗口只允许在启动和结束时写日志。串口/JTAG 输出、JFDP 查询、截图与 host 文件 I/O
+窗口只允许在启动和结束时写日志。为避开 ESP-IDF 的日志缓冲限制，一个窗口连续输出
+`device_profile`、`device_profile_timing`、`device_profile_pipeline`、`device_profile_present`、
+`device_profile_counters` 五条短记录；五条共同组成一个窗口，host parser 必须合并，且不得把它们视为五个样本。串口/JTAG 输出、JFDP 查询、截图与 host 文件 I/O
 不得落在窗口内；若不能保证，结果必须标为 `contaminated=1`。
+
+V0 host 工具只接受一个完整窗口：五条记录必须都有相同的非负整数 `window`，同一
+record kind 不得重复。任意一条缺失、`window` 缺失或不合法、重复 record，或一个文件
+内包含多个窗口时，工具必须拒绝输入，不能用其他 `port_telemetry` 行、长期累计值或相邻
+窗口补齐。`partial=1` 仍表示一个结构完整但样本不足的窗口，报告必须保留该标记而不能
+把它当作完整 120-frame 结论。
 
 ## 阶段语义
 
@@ -66,35 +76,37 @@ V0 固定如下边界：
 
 ## 机器可读记录
 
-V0 采用单行键值日志，保持既有 `port_telemetry` 解析兼容，并增加稳定标识：
+V0 采用有界键值日志，保持既有 `port_telemetry` 解析兼容，并增加稳定标识：
 
 ```text
-device_profile format=jellyframe.device.profile.v0 case=installed_bundle_ui \
+device_profile format=jellyframe.device.profile.v0 case=scroll_benchmark_cumulative \
 profile=ws147-perf-v0 window=1 warmup_frames=30 frames=120 present_frames=120 \
-full_frames=4 dirty_frames=116 idle_frames=18 timing_complete=0 missing=script_us \
-frame_us_p50=28600 frame_us_p95=41700 frame_us_max=52100 \
-planning_us_p50=180 planning_us_p95=310 pipeline_us_p50=0 pipeline_us_p95=7200 \
-paint_us_p50=10400 paint_us_p95=16800 present_us_p50=15100 present_us_p95=22800 \
-convert_us_p50=2900 convert_us_p95=4800 dma_submit_us_p50=220 dma_submit_us_p95=390 \
-dma_wait_us_p50=11300 dma_wait_us_p95=17100 dirty_rects_avg_x100=135 \
-dirty_pixels_avg=18944 converted_pixels=2273280 packed_bytes=4546560 \
-input_dropped=0 queue_high_water=3 present_failures=0 panel_errors=0 \
-internal_free_min=80399 psram_free_min=4210688 stack_free_words=4280 contaminated=0 partial=0
+full_frames=4 dirty_frames=116 idle_frames=18 pipeline_frames=8 timing_complete=0 missing=script_us contaminated=0 partial=0
+device_profile_timing window=1 frame_us_p50=28600 frame_us_p95=41700 frame_us_max=52100 \
+input_us_p50=180 input_us_p95=310 planning_us_p50=180 planning_us_p95=310 \
+device_profile_pipeline window=1 pipeline_us_p50=0 pipeline_us_p95=7200 \
+paint_us_p50=10400 paint_us_p95=16800 present_us_p50=15100 present_us_p95=22800
+device_profile_present window=1 convert_us_p50=2900 convert_us_p95=4800 \
+dma_submit_us_p50=220 dma_submit_us_p95=390 dma_wait_us_p50=11300 dma_wait_us_p95=17100
+device_profile_counters window=1 dirty_rects_avg_x100=135 dirty_pixels_avg=18944 \
+converted_pixels=2273280 packed_bytes=4546560 present_failures=0 \
+internal_free_min=80399 psram_free_min=4210688 stack_free_words=4280
 ```
 
 要求：
 
 - 所有 `_us` 为整数微秒；percentile 来自固定 bucket histogram，需输出
   `histogram_bucket_us` 与 `histogram_ceiling_us`；上界 bucket 代表“至少该值”，不可当作精确值。
-- `*_p50`、`*_p95`、`*_max` 对同一阶段使用相同样本集合；缺阶段必须省略对应三项，并在
-  `missing` 中列出，不能填零。
+- `*_p50`、`*_p95`、`*_max` 对同一阶段使用相同样本集合；`pipeline_us` 仅在
+  `pipeline_frames` 所示的 rebuild 样本中记录。若该数为 0，必须省略 pipeline percentile，
+  不能将非 rebuild 帧的 0 混入或冒充为快速 rebuild。
 - `dirty_rects_avg_x100` 用整数保存平均值乘 100，避免浮点；`converted_pixels`、
   `packed_bytes` 用累计值。
-- `panel_errors` 包括 panel submit/flush/DMA completion failure；watchdog、panic、brownout、reset
-  不是 UI task 可可靠观测的字段，应由完整 artifact 及 boot log 报告，不能伪报为 0。
+- `present_failures` 包括 UI task 可观察到的 present/flush 失败；watchdog、panic、brownout、reset
+  与不可归因的板级错误应由完整 artifact 及 boot log 报告，不能伪报为 0。
 - record 需要包含 fixture、firmware/Core/Runtime identity、board、viewport、panel bus/pixel format
-  和 profile/Kconfig 身份；若日志行预算不足，应提供配套 JSON summary，不删除 `format`、
-  `case`、窗口和错误字段。
+  和 profile/Kconfig 身份；五条记录的任一条缺失都必须在 artifact 中明确说明，不能由
+  其他窗口或长期累计值补齐。
 
 ## 实现界限
 
@@ -106,8 +118,9 @@ ESP32-S3 的首个实现只复用已有计时点：`render_and_present()` 的 co
 优先顺序：
 
 1. 抽取无分配的 `DeviceProfileWindow`，为已有阶段累计固定 histogram/counter；
-2. 加 Kconfig 默认关闭、窗口边界和单行/JSON summary；
-3. 为 WS147 `Developer Image` 的 static、drag、script animation 三个 workload 接线；
+2. 加 Kconfig 默认关闭、窗口边界和五条有界 summary；
+3. 为 WS147 static、drag/scroll console fixture 接线；Developer Image 需先增加独立 typed
+   JFDP profile payload。script animation 也需要单独的 worker/UI 时钟与统计边界；
 4. 以同一 firmware 的 profile OFF/ON A/B 验证像素、成功/错误计数和 p95 开销；
 5. 再由 provider/VS Code 读取 artifact，而不是让 IDE 高频轮询设备。
 
@@ -115,9 +128,12 @@ ESP32-S3 的首个实现只复用已有计时点：`render_and_present()` 的 co
 
 - profile OFF 与 ON 使用同一输入时，视觉/像素证据、present 成功数、错误和恢复行为一致；
 - ON 的输出仅在窗口边界出现，单个窗口缺失、污染或计时失败必须明确标记；
+- 将截取、拼接和重连后的 console log 交给 host 工具时，缺失、重复或多窗口记录必须
+  被拒绝，不得生成部分或混合报告；
 - 120 个 present 的 profile ON/OFF A/B 报告 p50/p95/max，并记录计时本身的开销；
   开销超过 p95 的 3% 或造成任何队列/内存/稳定性回归时，维持 `experimental` 并先优化；
-- 至少在静态、连续拖动/滚动、脚本驱动动画三个真实 developer-image workload 上通过；
+- 首个实现至少在静态和连续拖动/滚动两个真实 console fixture 上通过；Developer Image 与脚本驱动
+  动画作为下一项独立 profile 验收，未实现前必须标为 `not-tested`；
 - 没有 device trace 时，VS Code 只能展示 aggregate window 和限制，绝不虚构 element/command attribution。
 
 ## 非目标与后续

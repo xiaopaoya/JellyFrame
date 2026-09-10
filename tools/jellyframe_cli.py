@@ -409,6 +409,43 @@ PORT_TELEMETRY_ALIASES = {
     "panel_scroll_recovery_compose_ms_total": "panelScrollRecoveryComposeMsTotal",
     "framebuffer_scroll_blits": "framebufferScrollBlits",
     "framebuffer_scroll_blit_ms_per_step": "framebufferScrollBlitMsPerStep",
+    "frame_us_p50": "frameP50Us",
+    "frame_us_p95": "frameP95Us",
+    "frame_us_max": "frameMaxUs",
+    "input_us_p50": "inputP50Us",
+    "input_us_p95": "inputP95Us",
+    "planning_us_p50": "planningP50Us",
+    "planning_us_p95": "planningP95Us",
+    "pipeline_us_p50": "pipelineP50Us",
+    "pipeline_us_p95": "pipelineP95Us",
+    "paint_us_p50": "paintP50Us",
+    "paint_us_p95": "paintP95Us",
+    "present_us_p50": "presentP50Us",
+    "present_us_p95": "presentP95Us",
+    "convert_us_p50": "convertP50Us",
+    "convert_us_p95": "convertP95Us",
+    "dma_submit_us_p50": "dmaSubmitP50Us",
+    "dma_submit_us_p95": "dmaSubmitP95Us",
+    "dma_wait_us_p50": "dmaWaitP50Us",
+    "dma_wait_us_p95": "dmaWaitP95Us",
+    "window_frames": "windowFrames",
+    "warmup_frames": "warmupFrames",
+    "present_frames": "presentFrames",
+    "full_frames": "fullFrames",
+    "dirty_frames": "dirtyFrames",
+    "idle_frames": "idleFrames",
+    "pipeline_frames": "pipelineFrames",
+    "dirty_rects_avg_x100": "dirtyRectsAvgX100",
+    "dirty_pixels_avg": "dirtyPixelsAvg",
+    "converted_pixels": "convertedPixels",
+    "packed_bytes": "packedBytes",
+    "present_failures": "presentFailures",
+    "internal_free_min": "internalFreeMinBytes",
+    "psram_free_min": "psramFreeMinBytes",
+    "stack_free_words": "stackFreeWords",
+    "timing_complete": "timingComplete",
+    "partial": "partial",
+    "contaminated": "contaminated",
 }
 
 
@@ -423,12 +460,83 @@ def normalize_port_telemetry_values(raw: dict) -> dict:
     return metrics
 
 
+DEVICE_PROFILE_RECORD_KINDS = frozenset((
+    "device_profile",
+    "device_profile_timing",
+    "device_profile_pipeline",
+    "device_profile_present",
+    "device_profile_counters",
+))
+DEVICE_PROFILE_RECORD_PATTERN = re.compile(
+    r"\b(?P<kind>device_profile(?:_timing|_pipeline|_present|_counters)?)\s+(?P<body>.+)$"
+)
+
+
+def parse_key_value_tokens(body: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for token in body.split():
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        if key in values:
+            raise SystemExit(f"duplicate telemetry key '{key}'")
+        values[key] = value
+    return values
+
+
+def complete_device_profile_metrics(lines: list[str], source: str) -> dict | None:
+    """Return the one complete V0 profile in a console log, if present."""
+    windows: dict[int, dict[str, dict[str, str]]] = {}
+    for line_number, line in enumerate(lines, 1):
+        match = DEVICE_PROFILE_RECORD_PATTERN.search(line)
+        if not match:
+            continue
+        kind = match.group("kind")
+        values = parse_key_value_tokens(match.group("body"))
+        raw_window = values.get("window")
+        if raw_window is None or not raw_window.isdecimal():
+            raise SystemExit(
+                f"{source}:{line_number}: {kind} requires window=<nonnegative integer>"
+            )
+        window = int(raw_window)
+        records = windows.setdefault(window, {})
+        if kind in records:
+            raise SystemExit(f"{source}:{line_number}: duplicate {kind} record for device profile window {window}")
+        records[kind] = values
+
+    if not windows:
+        return None
+    if len(windows) != 1:
+        found = ", ".join(str(window) for window in sorted(windows))
+        raise SystemExit(
+            f"{source}: Device Performance Profile V0 accepts exactly one complete window; found windows {found}"
+        )
+    window, records = next(iter(windows.items()))
+    missing = sorted(DEVICE_PROFILE_RECORD_KINDS.difference(records))
+    if missing:
+        raise SystemExit(
+            f"{source}: incomplete Device Performance Profile V0 window {window}; missing "
+            + ", ".join(missing)
+        )
+    raw_metrics: dict[str, str] = {}
+    for kind in (
+        "device_profile",
+        "device_profile_timing",
+        "device_profile_pipeline",
+        "device_profile_present",
+        "device_profile_counters",
+    ):
+        raw_metrics.update(records[kind])
+    return normalize_port_telemetry_values(raw_metrics)
+
+
 def parse_port_telemetry_log(log_path: Path) -> dict:
     if not log_path.is_file():
         raise SystemExit(f"missing port telemetry: {log_path}")
     text = log_path.read_text(encoding="utf-8-sig")
     source = str(log_path)
     json_error = ""
+    telemetry_format = "jellyframe.port.telemetry.metrics.v0"
     try:
         loaded = json.loads(text)
         if not isinstance(loaded, dict):
@@ -438,20 +546,26 @@ def parse_port_telemetry_log(log_path: Path) -> dict:
             raise ValueError("port telemetry metrics must be an object")
         metrics = normalize_port_telemetry_values(raw_metrics)
     except json.JSONDecodeError:
-        metrics = {}
-        for raw_line in text.splitlines():
+        lines = text.splitlines()
+        device_profile_metrics = complete_device_profile_metrics(lines, source)
+        if device_profile_metrics is not None:
+            telemetry_format = "jellyframe.device.profile.v0"
+            metrics = device_profile_metrics
+        else:
+            metrics = {}
+        for raw_line in lines:
+            if device_profile_metrics is not None:
+                break
             line = raw_line.strip()
             if not line or line.startswith("#") or line.startswith("["):
                 continue
-            match = re.search(r"\b(?:port_telemetry|jellyframe_port_telemetry)\s+(?P<body>.+)$", line)
+            match = re.search(
+                r"\b(?P<kind>port_telemetry|jellyframe_port_telemetry|device_profile(?:_timing|_pipeline|_present|_counters)?)\s+(?P<body>.+)$",
+                line,
+            )
             if not match:
                 continue
-            parsed = {}
-            for token in match.group("body").split():
-                if "=" not in token:
-                    continue
-                key, value = token.split("=", 1)
-                parsed[key] = parse_port_metric_value(value)
+            parsed = parse_key_value_tokens(match.group("body"))
             metrics.update(normalize_port_telemetry_values(parsed))
     except ValueError as error:
         json_error = str(error)
@@ -460,10 +574,10 @@ def parse_port_telemetry_log(log_path: Path) -> dict:
         if json_error:
             raise SystemExit(f"invalid port telemetry JSON: {json_error}")
         raise SystemExit(
-            "port telemetry did not contain JSON metrics or a 'port_telemetry key=value ...' line"
+            "port telemetry did not contain JSON metrics or a 'port_telemetry/device_profile key=value ...' line"
         )
     return {
-        "format": "jellyframe.port.telemetry.metrics.v0",
+        "format": telemetry_format,
         "source": source,
         "summary": {
             "case": metric_text(metrics, "case"),

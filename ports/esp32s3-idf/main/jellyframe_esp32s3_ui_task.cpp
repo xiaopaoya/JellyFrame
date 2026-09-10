@@ -66,6 +66,18 @@
 #define CONFIG_JELLYFRAME_ESP32S3_UI_TASK_TICK_MS 20
 #endif
 
+#ifndef CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+#define CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE 0
+#endif
+
+#ifndef CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_WARMUP_FRAMES
+#define CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_WARMUP_FRAMES 30
+#endif
+
+#ifndef CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_WINDOW_FRAMES
+#define CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_WINDOW_FRAMES 120
+#endif
+
 #ifndef CONFIG_JELLYFRAME_ESP32S3_PERSISTENT_STYLE_RESOLVER
 #define CONFIG_JELLYFRAME_ESP32S3_PERSISTENT_STYLE_RESOLVER 1
 #endif
@@ -247,6 +259,100 @@ struct TimingHistogram {
     }
 };
 
+#if CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+struct DevicePerformanceWindow {
+    TimingHistogram frame;
+    TimingHistogram input;
+    TimingHistogram planning;
+    TimingHistogram pipeline;
+    TimingHistogram paint;
+    TimingHistogram present;
+    TimingHistogram convert;
+    TimingHistogram dma_submit;
+    TimingHistogram dma_wait;
+    std::uint32_t warmup_active_frames = 0;
+    std::uint32_t measured_active_frames = 0;
+    std::uint32_t measured_present_frames = 0;
+    std::uint32_t full_frames = 0;
+    std::uint32_t dirty_frames = 0;
+    std::uint32_t idle_frames = 0;
+    std::uint32_t pipeline_frames = 0;
+    std::uint32_t present_failures = 0;
+    std::uint32_t dirty_rects_total = 0;
+    std::uint64_t dirty_pixels_total = 0;
+    std::uint64_t converted_pixels = 0;
+    std::uint64_t packed_bytes = 0;
+    std::uint32_t frame_max_us = 0;
+    bool complete = false;
+    bool reported = false;
+
+    bool warming_up() const {
+        return warmup_active_frames < CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_WARMUP_FRAMES;
+    }
+
+    bool record_active(std::uint32_t frame_us,
+                       std::uint32_t input_us,
+                       std::uint32_t planning_us,
+                       std::uint32_t pipeline_us,
+                       bool rebuilt_pipeline,
+                       std::uint32_t paint_us,
+                       std::uint32_t present_us,
+                       std::uint32_t convert_us,
+                       std::uint32_t dma_submit_us,
+                       std::uint32_t dma_wait_us,
+                       bool presented,
+                       jellyframe::DirtyRegionMode dirty_mode,
+                       std::size_t dirty_rect_count,
+                       std::uint64_t dirty_pixels,
+                       std::uint64_t converted,
+                       std::uint64_t packed) {
+        if (complete) {
+            return true;
+        }
+        if (warming_up()) {
+            ++warmup_active_frames;
+            return false;
+        }
+        frame.record(frame_us);
+        frame_max_us = std::max(frame_max_us, frame_us);
+        input.record(input_us);
+        planning.record(planning_us);
+        if (rebuilt_pipeline) {
+            pipeline.record(pipeline_us);
+            ++pipeline_frames;
+        }
+        paint.record(paint_us);
+        present.record(present_us);
+        convert.record(convert_us);
+        dma_submit.record(dma_submit_us);
+        dma_wait.record(dma_wait_us);
+        ++measured_active_frames;
+        ++measured_present_frames;
+        if (!presented) {
+            ++present_failures;
+        }
+        if (dirty_mode == jellyframe::DirtyRegionMode::DirtyRects) {
+            ++dirty_frames;
+        } else {
+            ++full_frames;
+        }
+        dirty_rects_total += static_cast<std::uint32_t>(std::min<std::size_t>(
+            dirty_rect_count, static_cast<std::size_t>(0xffffffffu)));
+        dirty_pixels_total += dirty_pixels;
+        converted_pixels += converted;
+        packed_bytes += packed;
+        complete = measured_active_frames >= CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_WINDOW_FRAMES;
+        return complete;
+    }
+
+    void record_idle() {
+        if (!warming_up() && !complete) {
+            ++idle_frames;
+        }
+    }
+};
+#endif
+
 struct PortTelemetry {
     std::uint64_t cold_document_load_us = 0;
     std::uint64_t cold_pipeline_build_us = 0;
@@ -306,6 +412,9 @@ struct PortTelemetry {
     std::uint32_t screen_power_failures = 0;
     TimingHistogram frame_histogram;
     TimingHistogram present_histogram;
+#if CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+    DevicePerformanceWindow device_profile;
+#endif
     std::uint32_t min_internal_free = 0;
     std::uint32_t min_spiram_free = 0;
     std::uint32_t initial_internal_free = 0;
@@ -813,6 +922,97 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
              static_cast<unsigned>(context.compositor_scratch.rasterizer.temporary_surface.pixels.capacity() *
                                    sizeof(jellyframe::Color)));
 }
+
+#if CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+std::uint32_t counter_delta_u32(std::uint64_t after, std::uint64_t before) {
+    const std::uint64_t delta = after >= before ? after - before : 0;
+    return static_cast<std::uint32_t>(std::min<std::uint64_t>(delta, 0xffffffffULL));
+}
+
+std::uint64_t dirty_pixel_area(const TimerUiTaskContext& context) {
+    std::uint64_t pixels = 0;
+    for (const jellyframe::Rect& rect : context.frame_scratch.dirty_region.rects) {
+        if (rect.width > 0 && rect.height > 0) {
+            pixels += static_cast<std::uint64_t>(rect.width) * static_cast<std::uint64_t>(rect.height);
+        }
+    }
+    return pixels;
+}
+
+void print_device_profile(const DevicePerformanceWindow& profile,
+                         const TimerUiTaskContext& context,
+                         bool partial) {
+    const std::uint32_t frames = profile.measured_active_frames;
+    const std::uint32_t rect_average_x100 = frames == 0
+        ? 0
+        : static_cast<std::uint32_t>((static_cast<std::uint64_t>(profile.dirty_rects_total) * 100u) / frames);
+    const std::uint64_t dirty_pixels_average = frames == 0 ? 0 : profile.dirty_pixels_total / frames;
+    // Keep each record below conservative ESP-IDF log-buffer limits. The host
+    // parser joins the five records by their contiguous window output.
+    ESP_LOGI(kTag,
+             "device_profile format=jellyframe.device.profile.v0 case=%s profile=ws147-v0 window=1 board=%s window_frames=%u warmup_frames=%u frames=%u full_frames=%u dirty_frames=%u pipeline_frames=%u timing_complete=0 missing=script_us partial=%u contaminated=0",
+             context.telemetry_case,
+             context.board_runtime.profile.name,
+             static_cast<unsigned>(CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_WINDOW_FRAMES),
+             static_cast<unsigned>(CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_WARMUP_FRAMES),
+             static_cast<unsigned>(frames),
+             static_cast<unsigned>(profile.full_frames),
+             static_cast<unsigned>(profile.dirty_frames),
+             static_cast<unsigned>(profile.pipeline_frames),
+             partial ? 1u : 0u);
+    ESP_LOGI(kTag,
+             "device_profile_timing window=1 viewport=%ux%u histogram_bucket_us=%u histogram_ceiling_us=%u frame_us_p50=%u frame_us_p95=%u frame_us_max=%u input_us_p50=%u input_us_p95=%u planning_us_p50=%u planning_us_p95=%u",
+             static_cast<unsigned>(context.width),
+             static_cast<unsigned>(context.height),
+             static_cast<unsigned>(TimingHistogram::kBucketUs),
+             static_cast<unsigned>(TimingHistogram::kBucketCount * TimingHistogram::kBucketUs),
+             static_cast<unsigned>(profile.frame.percentile_us(50)),
+             static_cast<unsigned>(profile.frame.percentile_us(95)),
+             static_cast<unsigned>(profile.frame_max_us),
+             static_cast<unsigned>(profile.input.percentile_us(50)),
+             static_cast<unsigned>(profile.input.percentile_us(95)),
+             static_cast<unsigned>(profile.planning.percentile_us(50)),
+             static_cast<unsigned>(profile.planning.percentile_us(95)));
+    if (profile.pipeline_frames != 0) {
+        ESP_LOGI(kTag,
+                 "device_profile_pipeline window=1 pipeline_us_p50=%u pipeline_us_p95=%u paint_us_p50=%u paint_us_p95=%u present_us_p50=%u present_us_p95=%u",
+                 static_cast<unsigned>(profile.pipeline.percentile_us(50)),
+                 static_cast<unsigned>(profile.pipeline.percentile_us(95)),
+                 static_cast<unsigned>(profile.paint.percentile_us(50)),
+                 static_cast<unsigned>(profile.paint.percentile_us(95)),
+                 static_cast<unsigned>(profile.present.percentile_us(50)),
+                 static_cast<unsigned>(profile.present.percentile_us(95)));
+    } else {
+        ESP_LOGI(kTag,
+                 "device_profile_pipeline window=1 pipeline_frames=0 paint_us_p50=%u paint_us_p95=%u present_us_p50=%u present_us_p95=%u",
+                 static_cast<unsigned>(profile.paint.percentile_us(50)),
+                 static_cast<unsigned>(profile.paint.percentile_us(95)),
+                 static_cast<unsigned>(profile.present.percentile_us(50)),
+                 static_cast<unsigned>(profile.present.percentile_us(95)));
+    }
+    ESP_LOGI(kTag,
+             "device_profile_present window=1 convert_us_p50=%u convert_us_p95=%u dma_submit_us_p50=%u dma_submit_us_p95=%u dma_wait_us_p50=%u dma_wait_us_p95=%u",
+             static_cast<unsigned>(profile.convert.percentile_us(50)),
+             static_cast<unsigned>(profile.convert.percentile_us(95)),
+             static_cast<unsigned>(profile.dma_submit.percentile_us(50)),
+             static_cast<unsigned>(profile.dma_submit.percentile_us(95)),
+             static_cast<unsigned>(profile.dma_wait.percentile_us(50)),
+             static_cast<unsigned>(profile.dma_wait.percentile_us(95)));
+    ESP_LOGI(kTag,
+             "device_profile_counters window=1 idle_frames=%u present_frames=%u dirty_rects_avg_x100=%u dirty_pixels_avg=%llu converted_pixels=%llu packed_bytes=%llu present_failures=%u internal_free_min=%u psram_free_min=%u stack_free_words=%u",
+             static_cast<unsigned>(profile.idle_frames),
+             static_cast<unsigned>(profile.measured_present_frames),
+             static_cast<unsigned>(rect_average_x100),
+             static_cast<unsigned long long>(dirty_pixels_average),
+             static_cast<unsigned long long>(profile.converted_pixels),
+             static_cast<unsigned long long>(profile.packed_bytes),
+             static_cast<unsigned>(profile.present_failures),
+             static_cast<unsigned>(context.telemetry.min_internal_free),
+             static_cast<unsigned>(context.telemetry.min_spiram_free),
+             static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
+}
+
+#endif
 
 bool load_timer_document(TimerUiTaskContext& context) {
     ResourceLoadStats stats;
@@ -2117,6 +2317,15 @@ void run_retained_ui_task(void* raw_context) {
         context->app_scratch.begin_frame();
         const std::uint64_t frame_start = esp_timer_get_time();
         const bool first_frame = force_first_frame;
+#if CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+        const std::uint64_t pipeline_rebuild_before = context->telemetry.pipeline_rebuild_us;
+        const std::uint64_t compose_before = context->telemetry.compose_us;
+        const std::uint64_t convert_before = context->telemetry.framebuffer_convert_us +
+            context->telemetry.scratch_copy_us + context->telemetry.panel_convert_us;
+        const std::uint64_t dma_submit_before = context->telemetry.panel_dma_submit_us;
+        const std::uint64_t dma_wait_before = context->telemetry.panel_dma_wait_us;
+        const std::uint64_t packed_bytes_before = context->telemetry.packed_bytes;
+#endif
 
         if (context->forms_advanced_acceptance && context->forms_replay_cycles < 30 &&
             power_now_us >= context->next_forms_replay_us) {
@@ -2163,8 +2372,13 @@ void run_retained_ui_task(void* raw_context) {
                                   work_plan.input_events_to_dispatch,
                                   observe_scroll_input,
                                   context.get());
-        context->telemetry.input_dispatch_us +=
+        const std::uint64_t input_dispatch_elapsed_us =
             static_cast<std::uint64_t>(esp_timer_get_time() - input_dispatch_start);
+        context->telemetry.input_dispatch_us += input_dispatch_elapsed_us;
+#if CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+        const std::uint32_t input_dispatch_us = static_cast<std::uint32_t>(
+            std::min<std::uint64_t>(input_dispatch_elapsed_us, 0xffffffffULL));
+#endif
         context->telemetry.input_events += input_stats.dispatched;
         observe_forms_default_actions(*context);
 
@@ -2257,8 +2471,13 @@ void run_retained_ui_task(void* raw_context) {
             frame_plan.update.needs_previous_layout = false;
             frame_plan.update.needs_full_framebuffer = false;
         }
-        context->telemetry.frame_planning_us +=
+        const std::uint64_t frame_planning_elapsed_us =
             static_cast<std::uint64_t>(esp_timer_get_time() - frame_planning_start);
+        context->telemetry.frame_planning_us += frame_planning_elapsed_us;
+#if CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+        const std::uint32_t frame_planning_us = static_cast<std::uint32_t>(
+            std::min<std::uint64_t>(frame_planning_elapsed_us, 0xffffffffULL));
+#endif
         if (frame_plan.update.action == jellyframe::FrameUpdateAction::None) {
             ++context->telemetry.idle_frames;
         } else if (frame_plan.update.action == jellyframe::FrameUpdateAction::RebuildPipeline) {
@@ -2283,6 +2502,36 @@ void run_retained_ui_task(void* raw_context) {
         }
 
         const std::uint32_t frame_us = static_cast<std::uint32_t>(esp_timer_get_time() - frame_start);
+#if CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+        if (frame_plan.update.action == jellyframe::FrameUpdateAction::None) {
+            context->telemetry.device_profile.record_idle();
+        } else {
+            const bool profile_complete = context->telemetry.device_profile.record_active(
+                frame_us,
+                input_dispatch_us,
+                frame_planning_us,
+                counter_delta_u32(context->telemetry.pipeline_rebuild_us, pipeline_rebuild_before),
+                frame_plan.update.action == jellyframe::FrameUpdateAction::RebuildPipeline,
+                counter_delta_u32(context->telemetry.compose_us, compose_before),
+                present_us,
+                counter_delta_u32(context->telemetry.framebuffer_convert_us +
+                                      context->telemetry.scratch_copy_us +
+                                      context->telemetry.panel_convert_us,
+                                  convert_before),
+                counter_delta_u32(context->telemetry.panel_dma_submit_us, dma_submit_before),
+                counter_delta_u32(context->telemetry.panel_dma_wait_us, dma_wait_before),
+                presented,
+                context->frame_scratch.dirty_region.mode,
+                context->frame_scratch.dirty_region.rects.size(),
+                dirty_pixel_area(*context),
+                counter_delta_u32(context->telemetry.packed_bytes, packed_bytes_before) / 2u,
+                counter_delta_u32(context->telemetry.packed_bytes, packed_bytes_before));
+            if (profile_complete && !context->telemetry.device_profile.reported) {
+                print_device_profile(context->telemetry.device_profile, *context, false);
+                context->telemetry.device_profile.reported = true;
+            }
+        }
+#endif
         if (first_frame && frame_plan.update.action != jellyframe::FrameUpdateAction::None) {
             context->telemetry.first_frame_us = frame_us;
             context->telemetry.first_present_us = present_us;
@@ -2389,6 +2638,13 @@ void run_retained_ui_task(void* raw_context) {
             vTaskDelay(pdMS_TO_TICKS(CONFIG_JELLYFRAME_ESP32S3_UI_TASK_TICK_MS));
         }
     }
+#if CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+    if (!context->telemetry.device_profile.reported &&
+        context->telemetry.device_profile.measured_active_frames != 0) {
+        print_device_profile(context->telemetry.device_profile, *context, true);
+        context->telemetry.device_profile.reported = true;
+    }
+#endif
     boards::release_board_runtime(context->board_runtime);
     signal_installed_session(*context);
     // Installed app tasks own their Render Core state. Releasing it here is

@@ -1922,6 +1922,61 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(report["performanceSummary"]["measuredPortAverageFrameMs"], 18.25)
         self.assertNotIn("performanceAdvice", report)
 
+    def test_device_profile_log_preserves_profile_format_and_stage_metrics(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-device-profile-") as directory:
+            telemetry_log = Path(directory) / "device-profile.log"
+            telemetry_log.write_text(
+                "I (18245) JellyFrameUi: device_profile format=jellyframe.device.profile.v0 "
+                "case=installed_bundle_ui profile=esp32s3-window-v0 window=1 window_frames=120 "
+                "warmup_frames=30 frames=120 present_frames=120 timing_complete=0 "
+                "partial=0 contaminated=0\n"
+                "I (18245) JellyFrameUi: device_profile_timing window=1 frame_us_p50=28600 "
+                "frame_us_p95=41700 input_us_p95=310\n"
+                "I (18245) JellyFrameUi: device_profile_pipeline window=1 paint_us_p95=16800 "
+                "present_us_p95=22800\n"
+                "I (18245) JellyFrameUi: device_profile_present window=1 convert_us_p95=4800 "
+                "dma_wait_us_p95=17100\n"
+                "I (18245) JellyFrameUi: device_profile_counters window=1 dirty_pixels_avg=18944 "
+                "packed_bytes=4546560 present_failures=0\n",
+                encoding="utf-8",
+            )
+            parsed = jellyframe_cli.parse_port_telemetry_log(telemetry_log)
+
+        self.assertEqual(parsed["format"], "jellyframe.device.profile.v0")
+        self.assertEqual(parsed["summary"]["case"], "installed_bundle_ui")
+        self.assertEqual(parsed["metrics"]["frameP95Us"], 41700)
+        self.assertEqual(parsed["metrics"]["inputP95Us"], 310)
+        self.assertEqual(parsed["metrics"]["paintP95Us"], 16800)
+        self.assertEqual(parsed["metrics"]["presentP95Us"], 22800)
+        self.assertEqual(parsed["metrics"]["dmaWaitP95Us"], 17100)
+        self.assertEqual(parsed["metrics"]["packedBytes"], 4546560)
+        self.assertEqual(parsed["metrics"]["partial"], 0)
+
+    def test_device_profile_log_rejects_incomplete_window(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-device-profile-") as directory:
+            telemetry_log = Path(directory) / "device-profile.log"
+            telemetry_log.write_text(
+                "device_profile window=1 frames=120\n"
+                "device_profile_timing window=1 frame_us_p95=41700\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(SystemExit, "incomplete Device Performance Profile V0 window 1"):
+                jellyframe_cli.parse_port_telemetry_log(telemetry_log)
+
+    def test_device_profile_log_rejects_multiple_windows(self):
+        profile = (
+            "device_profile window=1 frames=120\n"
+            "device_profile_timing window=1 frame_us_p95=41700\n"
+            "device_profile_pipeline window=1 paint_us_p95=16800\n"
+            "device_profile_present window=1 dma_wait_us_p95=17100\n"
+            "device_profile_counters window=1 packed_bytes=4546560\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="jellyframe-device-profile-") as directory:
+            telemetry_log = Path(directory) / "device-profile.log"
+            telemetry_log.write_text(profile + profile.replace("window=1", "window=2"), encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "accepts exactly one complete window; found windows 1, 2"):
+                jellyframe_cli.parse_port_telemetry_log(telemetry_log)
+
     def test_requested_targets_are_explicit_opt_in(self):
         class Args:
             target = "round-300"

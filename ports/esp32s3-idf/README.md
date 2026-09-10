@@ -130,6 +130,31 @@ idf.py -B build-ws147-panel-a -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benc
 idf.py -B build-ws147-panel-b -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_panel_scroll_b.defaults" build
 ```
 
+### Bounded Device Performance Profile
+
+`sdkconfig.ws147_device_performance_profile.defaults` is an explicit diagnostic
+overlay for console-backed retained UI fixtures. It collects 30 warm-up active
+presents followed by one 120-present fixed-histogram window, then emits five
+short `device_profile*` records. It is not enabled by normal defaults, does
+not emit per-frame or per-element data, and must not be used with the Developer
+Image: that image reserves the native USB stream for JFDP and its current Logs
+response cannot transport a complete profile window.
+
+```powershell
+idf.py -B build-ws147-device-profile `
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_device_performance_profile.defaults" build
+idf.py -B build-ws147-device-profile -p COMx flash monitor
+```
+
+Archive all five contiguous records (`device_profile`, `_timing`, `_pipeline`,
+`_present`, `_counters`) with the sdkconfig, firmware identity, input workload
+and visual evidence. `tools/render_performance_report.py --device-telemetry`
+accepts exactly one complete window: all five records must have the same `window`
+value. Missing, duplicated or mixed-window records are rejected rather than
+silently forming a partial report. The tool can retain numeric fields separately
+from desktop traces; it cannot turn
+them into element attribution.
+
 To prove the B path can leave physical-GRAM mapping safely, use the
 acceptance-only one-shot fallback probe with an isolated sdkconfig:
 
