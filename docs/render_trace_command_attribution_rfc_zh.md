@@ -1,7 +1,7 @@
 # Render Trace 命令/节点归因 RFC
 
 > 最后更新：2026-09-10；适用版本：0.6.0-dev  
-> 状态：第 1、2 步的 Core 基础已交付；尚未启用桌面 producer
+> 状态：第 1、2、3 步已交付；命令/元素归因仅在显式 Win32 Render Trace capture 下启用
 
 ## 目标
 
@@ -33,7 +33,7 @@
 layer-tree build 内的短生命周期 opaque value：可以复制、flatten 和跨 task 编码时忽略，但不代表
 持久 DOM identity，也不进入 App API 或包格式。
 
-当 `LayerTreeBuilderOptions::trace_owner_registry` 明确提供时，builder 在每个 `LayoutBox` 的
+当 `LayerTreeBuilderOptions::trace_owner_resolver` 明确提供时，builder 在每个 `LayoutBox` 的
 `paint_box_self` / `::before` / `::after` 命令范围完成后，才将 registry 返回的 token 写入新命令。
 未启用 registry 时不写 token，也不创建 owner sidecar。select popup、scroll indicator 等宿主/临时
 overlay 必须分别标为控件 owner 或 `unattributed-overlay`，不能借用邻近元素。
@@ -66,7 +66,8 @@ frame record 的可选 `commands` 数组按 `(ownerToken, type)` 聚合：
   对比。旧 viewer 保持将它作为 `nodeId`/文本列展示的兼容读取。
 - `commandTimingComplete` 默认 `false`。rounded temporary surface 的 prepare/composite、图层 transform
   和 host text/image callback 的内部工作若不能精确拆分，必须留下未归因间隙。
-- 每条 frame 还可带 `commandAttributionOverheadUs`，用于标记 profiling 自身代价；没有可靠 clock 时省略。
+- 当前 producer 不输出伪精确的 `commandAttributionOverheadUs`：profiling 开销应由相同 capture 的
+  profile on/off 完整 A/B 测量给出，而不是把 observer 记账时间误写为命令执行时间。
 
 ## 实现顺序
 
@@ -78,8 +79,12 @@ frame record 的可选 `commands` 数组按 `(ownerToken, type)` 聚合：
    owner token、最终矩形 clip、保守 candidate pixels、耗时和有效性。rounded grouped replay 的每个
    command 仍会各记一次；surface prepare、rounded coverage composite、offscreen transform 等没有
    可靠 owner 的工作仍不归属。Win32 有界聚合/JSON producer 尚未接入。
-3. **有界聚合与 UI**：Win32 producer 聚合到 bounded JSONL，查看器显示 type/owner/pixel/sample 排名，
-   并清楚显示 timing incomplete、截断和 profiling overhead。
+3. **有界聚合与 UI（已交付 producer）**：Win32 producer 在显式 `--render-trace` capture 时将实际
+   raster invocation 按 `(ownerToken, type)` 聚合到 JSONL；每帧最多 64 项、owner 最多 64 个，且 writer
+   还会为 4 KiB 行限制预留空间。发生任何一类截断时分别输出 `commandsTruncated` / `nodesTruncated`。
+   `commandInvalidSamples` 仅在非零时输出。为采到静态 App 的首帧，capture 的第 0 帧会请求一次不改变
+   DOM 内容或像素输出的 paint-only diagnostic repaint。当前 VS Code 查看器继续兼容读取 trace；命令排名
+   面板属于后续 UI 增量，不能以它尚未显示为由否认 producer 已输出的数据。
 4. **正确性及开销门槛**：同一 `.jfcapture` 的 profile on/off frame hash 必须相同；Release desktop
    baseline 上 profiling p95 额外 CPU 时间应记录且可解释，不设虚假的“零开销”要求。
 5. **设备 profile（后续）**：只在独立 Kconfig/profile 开启，先输出 type 聚合和窗口汇总；除非端侧时钟
@@ -96,5 +101,6 @@ frame record 的可选 `commands` 数组按 `(ownerToken, type)` 聚合：
   Core benchmark 不得出现回归。
 - trace 中不出现裸地址、DOM path、用户文本、文件路径、密钥或设备物理地址。
 
-达到以上门槛后，才可以把 Render Trace 的“可用命令归因”升级为“已交付 command/node attribution”。
-在此之前，面板维持“无 command/node attribution”的诚实状态。
+上述 producer 的边界、Core 单元测试、Win32 JSONL 回归及 profile on/off 像素一致性验证完成后，
+Render Trace 可以如实称为“桌面 capture 可用的 command/node attribution”。它仍不代表设备计时，
+也不代表完整 paint/composite 时间已按元素拆分。

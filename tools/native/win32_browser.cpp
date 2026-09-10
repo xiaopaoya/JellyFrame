@@ -108,6 +108,10 @@ enum class FrameTraceStage {
 constexpr std::array<const char*, 9> kFrameTraceStageNames = {
     "input", "script", "style", "renderTree", "layout", "layerTree", "dirty", "paint", "present"};
 constexpr std::size_t kMaxFrameTraceDirtyRects = 32;
+constexpr std::size_t kMaxFrameTraceCommandGroups = 64;
+constexpr std::size_t kMaxFrameTraceOwners = 64;
+constexpr std::size_t kMaxFrameTraceOwnerLabelBytes = 64;
+constexpr std::size_t kMaxFrameTraceTrackedIds = kMaxFrameTraceOwners;
 
 struct FrameTraceTimings {
     std::array<std::uint64_t, kFrameTraceStageNames.size()> microseconds{};
@@ -127,6 +131,176 @@ struct FrameTraceTimings {
             : current + elapsed_us;
     }
 };
+
+const char* frame_trace_command_type_name(DisplayCommandType type) {
+    switch (type) {
+    case DisplayCommandType::FillRect:
+        return "FillRect";
+    case DisplayCommandType::StrokeRect:
+        return "StrokeRect";
+    case DisplayCommandType::LinearGradient:
+        return "LinearGradient";
+    case DisplayCommandType::ConicGradient:
+        return "ConicGradient";
+    case DisplayCommandType::RadialGradient:
+        return "RadialGradient";
+    case DisplayCommandType::BoxShadow:
+        return "BoxShadow";
+    case DisplayCommandType::Text:
+        return "Text";
+    case DisplayCommandType::Image:
+        return "Image";
+    }
+    return "Unknown";
+}
+
+bool trace_owner_id_is_safe(const std::string& id) {
+    if (id.empty() || id.size() > kMaxFrameTraceOwnerLabelBytes - 3U) {
+        return false;
+    }
+    for (const unsigned char character : id) {
+        if (!(std::isalnum(character) || character == '-' || character == '_')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+struct FrameTraceCommandGroup {
+    DisplayCommandType type = DisplayCommandType::FillRect;
+    std::uint32_t owner_token = 0;
+    std::uint64_t microseconds = 0;
+    std::size_t pixels = 0;
+    std::size_t samples = 0;
+};
+
+class FrameTraceCommandAttribution {
+public:
+    void clear_frame_samples() {
+        command_groups_.clear();
+        commands_truncated_ = false;
+        invalid_samples_ = 0;
+    }
+
+    void prepare_for_tree_build(const Node& root) {
+        token_by_node_.clear();
+        owner_labels_.clear();
+        id_counts_.clear();
+        owners_truncated_ = false;
+        collect_id_counts(root);
+    }
+
+    std::uint32_t resolve_owner(const Node& node) {
+        const auto existing = token_by_node_.find(&node);
+        if (existing != token_by_node_.end()) {
+            return existing->second;
+        }
+        if (owner_labels_.size() >= kMaxFrameTraceOwners) {
+            owners_truncated_ = true;
+            return 0;
+        }
+
+        const std::string& id = node.attribute("id");
+        std::string label;
+        const auto count = id_counts_.find(id);
+        if (trace_owner_id_is_safe(id) && count != id_counts_.end() && count->second == 1U) {
+            label = "id:" + id;
+        } else {
+            label = "n" + std::to_string(owner_labels_.size() + 1U);
+        }
+        const std::uint32_t token = static_cast<std::uint32_t>(owner_labels_.size() + 1U);
+        token_by_node_.emplace(&node, token);
+        owner_labels_.push_back(std::move(label));
+        return token;
+    }
+
+    void observe(const SoftwareRasterizerCommandSample& sample) {
+        if (!sample.timing_valid) {
+            saturating_add(invalid_samples_, static_cast<std::size_t>(1));
+        }
+        FrameTraceCommandGroup* group = nullptr;
+        for (FrameTraceCommandGroup& candidate : command_groups_) {
+            if (candidate.type == sample.type && candidate.owner_token == sample.trace_owner_token) {
+                group = &candidate;
+                break;
+            }
+        }
+        if (group == nullptr) {
+            if (command_groups_.size() >= kMaxFrameTraceCommandGroups) {
+                commands_truncated_ = true;
+                return;
+            }
+            command_groups_.push_back(FrameTraceCommandGroup{sample.type, sample.trace_owner_token});
+            group = &command_groups_.back();
+        }
+        saturating_add(group->samples, static_cast<std::size_t>(1));
+        saturating_add(group->pixels, sample.candidate_pixels);
+        if (sample.timing_valid) {
+            saturating_add(group->microseconds, sample.elapsed_microseconds);
+        }
+    }
+
+    const std::vector<FrameTraceCommandGroup>& command_groups() const { return command_groups_; }
+    bool commands_truncated() const { return commands_truncated_; }
+    bool owners_truncated() const { return owners_truncated_; }
+    std::size_t invalid_samples() const { return invalid_samples_; }
+
+    std::string owner_label(std::uint32_t token) const {
+        if (token == 0 || token > owner_labels_.size()) {
+            return "unattributed";
+        }
+        return owner_labels_[token - 1U];
+    }
+
+private:
+    void collect_id_counts(const Node& node) {
+        const std::string& id = node.attribute("id");
+        if (trace_owner_id_is_safe(id)) {
+            const auto existing = id_counts_.find(id);
+            if (existing != id_counts_.end()) {
+                saturating_add(existing->second, static_cast<std::size_t>(1));
+            } else if (id_counts_.size() < kMaxFrameTraceTrackedIds) {
+                id_counts_.emplace(id, 1U);
+            }
+        }
+        for (const auto& child : node.children) {
+            collect_id_counts(*child);
+        }
+    }
+
+    template <typename Integer>
+    static void saturating_add(Integer& value, Integer increment) {
+        value = std::numeric_limits<Integer>::max() - value < increment
+            ? std::numeric_limits<Integer>::max()
+            : value + increment;
+    }
+
+    std::unordered_map<const Node*, std::uint32_t> token_by_node_;
+    std::unordered_map<std::string, std::size_t> id_counts_;
+    std::vector<std::string> owner_labels_;
+    std::vector<FrameTraceCommandGroup> command_groups_;
+    bool commands_truncated_ = false;
+    bool owners_truncated_ = false;
+    std::size_t invalid_samples_ = 0;
+};
+
+std::uint32_t resolve_frame_trace_owner(const Node& node, void* context) {
+    auto* attribution = static_cast<FrameTraceCommandAttribution*>(context);
+    return attribution != nullptr ? attribution->resolve_owner(node) : 0;
+}
+
+void observe_frame_trace_command(const SoftwareRasterizerCommandSample& sample, void* context) {
+    auto* attribution = static_cast<FrameTraceCommandAttribution*>(context);
+    if (attribution != nullptr) {
+        attribution->observe(sample);
+    }
+}
+
+std::uint64_t steady_clock_microseconds(void*) {
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    const auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(now);
+    return microseconds.count() < 0 ? 0 : static_cast<std::uint64_t>(microseconds.count());
+}
 
 InteractionInvalidationOptions input_invalidation_options_from_style(const StyleResolver& resolver) {
     const InteractionInvalidationHints hints = resolver.interaction_invalidation_hints();
@@ -3494,7 +3668,8 @@ public:
                      std::size_t framebuffer_bytes,
                      const std::string& capture_file,
                      const std::vector<Rect>& dirty_rects,
-                     const FrameTraceTimings& timings) {
+                     const FrameTraceTimings& timings,
+                     const FrameTraceCommandAttribution& command_attribution) {
         if (!active_ || frame_records_ >= kMaxRenderTraceRecords) {
             return false;
         }
@@ -3545,7 +3720,47 @@ public:
             record << '\"' << kFrameTraceStageNames[index] << "\":" << timings.microseconds[index];
             first_stage = false;
         }
-        record << "}}";
+        record << '}';
+        const std::vector<FrameTraceCommandGroup>& command_groups = command_attribution.command_groups();
+        std::string commands_json;
+        bool commands_truncated = command_attribution.commands_truncated();
+        // Reserve room for the closing JSON and every truncation/invalid-sample
+        // marker. A crowded frame must remain a valid, explicitly truncated
+        // trace record instead of disabling the entire capture at 4 KiB.
+        constexpr std::size_t kTraceCommandSuffixReserve = 128;
+        for (const FrameTraceCommandGroup& group : command_groups) {
+            std::ostringstream entry;
+            entry << "{\"type\":\"" << frame_trace_command_type_name(group.type)
+                  << "\",\"owner\":\""
+                  << json_escape_for_trace(command_attribution.owner_label(group.owner_token))
+                  << "\",\"us\":" << group.microseconds
+                  << ",\"pixels\":" << group.pixels
+                  << ",\"samples\":" << group.samples << '}';
+            std::string next = entry.str();
+            if (!commands_json.empty()) {
+                next.insert(next.begin(), ',');
+            }
+            if (record.str().size() + sizeof(",\"commands\":[") - 1U + commands_json.size() + next.size() +
+                    1U + kTraceCommandSuffixReserve >
+                kMaxRenderTraceLineBytes) {
+                commands_truncated = true;
+                break;
+            }
+            commands_json += next;
+        }
+        if (!commands_json.empty()) {
+            record << ",\"commands\":[" << commands_json << ']';
+        }
+        if (commands_truncated) {
+            record << ",\"commandsTruncated\":true";
+        }
+        if (!commands_json.empty() && command_attribution.owners_truncated()) {
+            record << ",\"nodesTruncated\":true";
+        }
+        if (command_attribution.invalid_samples() != 0) {
+            record << ",\"commandInvalidSamples\":" << command_attribution.invalid_samples();
+        }
+        record << '}';
         if (!write_line(record.str(), true)) {
             return false;
         }
@@ -3734,8 +3949,15 @@ public:
         }
         scripted_time_enabled_ = true;
         scripted_pointer_down_ = false;
+        // Startup may have rendered before capture began. Request one
+        // paint-only diagnostic repaint so a static app still yields a real
+        // frame-zero command sample without changing its pixels.
+        if (trace.active() && document_ != nullptr) {
+            mark_dirty(*document_, DomDirtyPaint);
+        }
         for (int frame = 0; frame < options_.frame_count; ++frame) {
             trace_frame_timings_.clear();
+            frame_trace_command_attribution_.clear_frame_samples();
             std::string capture_name;
             if (!options_.frame_output_dir.empty()) {
                 std::ostringstream capture;
@@ -3749,6 +3971,9 @@ public:
             dispatch_scripted_frame_events(frame);
             const std::size_t telemetry_samples_before = load_telemetry_counters_.sampled_frames;
             handle_timer(kScriptTimerId);
+            if (trace.active() && frame == 0) {
+                rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
+            }
             record_frame_policy_sample();
             if (frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
                 render_current(input_ ? input_->hovered_node() : nullptr,
@@ -3795,7 +4020,8 @@ public:
                                   frame_buffer_.pixels.size() * sizeof(Color),
                                   capture_name,
                                   updated ? last_dirty_rects_ : std::vector<Rect>{},
-                                  trace_frame_timings_);
+                                  trace_frame_timings_,
+                                  frame_trace_command_attribution_);
             }
             if (!options_.frame_montage_path.empty() && frame == 0) {
                 montage_columns = options_.frame_montage_columns > 0
@@ -4061,6 +4287,7 @@ private:
     BrowserOptions options_;
     std::uint64_t frame_update_sequence_ = 0;
     FrameTraceTimings trace_frame_timings_;
+    FrameTraceCommandAttribution frame_trace_command_attribution_;
     std::uint64_t vscode_frame_sequence_ = 0;
     std::vector<std::filesystem::path> vscode_frame_paths_;
     std::string vscode_input_buffer_;
@@ -5874,9 +6101,18 @@ private:
         image_resolve_context.style_resolver = style_resolver_.get();
         layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
         layer_options.scroll_resolver = ScrollOffsetResolver{resolve_browser_scroll_y, this};
+        if (trace_timing_enabled) {
+            layer_options.trace_owner_resolver =
+                DisplayCommandTraceOwnerResolver{resolve_frame_trace_owner, &frame_trace_command_attribution_};
+        }
         LayerTreeBuilder layer_builder(layer_options);
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);
         compositor_options.diagnostics = &diagnostics_;
+        if (trace_timing_enabled) {
+            compositor_options.rasterizer_timing = SoftwareRasterizerTiming{steady_clock_microseconds, nullptr};
+            compositor_options.command_observer =
+                SoftwareRasterizerCommandObserver{observe_frame_trace_command, &frame_trace_command_attribution_};
+        }
         SoftwareCompositor compositor(text_backend.painter,
                                       ImagePainter{paint_image_surface, &image_context_},
                                       compositor_options);
@@ -5919,6 +6155,9 @@ private:
                 apply_opacity_overrides_to_layer_tree(*layer_tree_, style_overrides_, layer_override_scratch_);
             if (reused_opacity_layers) {
                 ++opacity_layer_reuse_frames_;
+            }
+            if (!reused_opacity_layers && trace_timing_enabled) {
+                frame_trace_command_attribution_.prepare_for_tree_build(*document_);
             }
             auto next_layer_tree = reused_opacity_layers ? LayerNodePtr{} : layer_builder.build(*layout_tree_);
             finish_trace_stage(FrameTraceStage::LayerTree);
@@ -6041,6 +6280,9 @@ private:
             record_frame_update(update_plan, dirty_flags);
 
             const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
+            if (trace_timing_enabled) {
+                frame_trace_command_attribution_.prepare_for_tree_build(*document_);
+            }
             auto next_layer_tree = layer_builder.build(*layout_tree_);
             finish_trace_stage(FrameTraceStage::LayerTree);
             const FrameRepaintPlan repaint_plan =
@@ -6120,6 +6362,9 @@ private:
         LayoutEngine layout_engine(*style_resolver_, text_backend.measure, layout_options);
         auto next_layout_tree = layout_engine.layout(*next_render_tree, viewport_width_, viewport_height_);
         finish_trace_stage(FrameTraceStage::Layout);
+        if (trace_timing_enabled) {
+            frame_trace_command_attribution_.prepare_for_tree_build(*document_);
+        }
         auto next_layer_tree = layer_builder.build(*next_layout_tree);
         finish_trace_stage(FrameTraceStage::LayerTree);
 

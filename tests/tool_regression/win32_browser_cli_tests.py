@@ -277,7 +277,11 @@ def main() -> int:
         app.mkdir()
         (app / "index.html").write_text(
             "<style>html,body{margin:0;width:160px;height:60px;background:#10151b;}"
-            "input{width:140px;margin:10px;}</style>"
+            "input{width:140px;margin:10px;}"
+            "#first,#second{position:absolute;width:20px;height:8px;}"
+            "#first{left:0;top:45px;background:#e33;}"
+            "#second{left:25px;top:45px;background:#3c6;}</style>"
+            "<div id='first'></div><div id='second'></div>"
             "<input id='drag' type='range' min='0' max='100' value='0'>",
             encoding="utf-8",
         )
@@ -349,8 +353,78 @@ def main() -> int:
                         "render trace dirty rectangle coordinates must be integers")
                 require(rect["width"] >= 0 and rect["height"] >= 0,
                         "render trace dirty rectangle dimensions must be non-negative")
+            commands = record.get("commands", [])
+            require(isinstance(commands, list) and len(commands) <= 64,
+                    "render trace command attribution must stay bounded")
+            for command in commands:
+                require(set(command) == {"type", "owner", "us", "pixels", "samples"},
+                        "render trace command attribution must expose only stable value fields")
+                require(isinstance(command["type"], str) and isinstance(command["owner"], str),
+                        "render trace command type and owner must be strings")
+                require("0x" not in command["owner"] and ">" not in command["owner"],
+                        "render trace command owner must not expose addresses or DOM paths")
+                require(all(isinstance(command[key], int) and command[key] >= 0
+                            for key in ("us", "pixels", "samples")),
+                        "render trace command attribution counters must be non-negative")
+                require(command["samples"] >= 1,
+                        "render trace command attribution must represent real raster invocations")
         require(any(record["stagesUs"] for record in frame_records),
                 "a frame that renders during capture must expose measured phase timing")
+        command_owners = {command["owner"]
+                          for record in frame_records
+                          for command in record.get("commands", [])}
+        require({"id:first", "id:second"}.issubset(command_owners),
+                "render trace must distinguish commands from two uniquely identified elements")
+
+        crowded_app = root / "crowded-trace-app"
+        crowded_frames = root / "crowded-trace-frames"
+        crowded_trace = root / "crowded-trace.jsonl"
+        crowded_app.mkdir()
+        crowded_rules = [
+            f"#owner-{index}{{position:absolute;left:{(index % 40) * 4}px;"
+            f"top:{(index // 40) * 4}px;width:2px;height:2px;background:#e33;}}"
+            for index in range(70)
+        ]
+        crowded_nodes = "".join(f"<div id='owner-{index}'></div>" for index in range(70))
+        (crowded_app / "index.html").write_text(
+            "<style>html,body{margin:0;width:160px;height:60px;}" + "".join(crowded_rules) + "</style>" +
+            crowded_nodes,
+            encoding="utf-8",
+        )
+        (crowded_app / "jellyframe.app.json").write_text(
+            json.dumps({
+                "id": "org.jellyframe.crowded-trace-probe",
+                "name": "Crowded Trace Probe",
+                "role": "app",
+                "versionName": "1.0.0",
+                "versionCode": 1,
+                "entry": "/index.html",
+                "runtime": {
+                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "none"
+                },
+                "viewport": {"designWidth": 160, "designHeight": 60},
+            }),
+            encoding="utf-8",
+        )
+        crowded_result = run_case(
+            exe,
+            [
+                "--app", str(crowded_app),
+                "--capture-frames", str(crowded_frames),
+                "--render-trace", str(crowded_trace),
+                "--frame-count", "1",
+            ],
+        )
+        require(crowded_result.returncode == 0,
+                f"crowded render trace must capture: {crowded_result.stdout}")
+        crowded_lines = crowded_trace.read_text(encoding="utf-8").splitlines()
+        require(all(len(line.encode("utf-8")) <= 4096 for line in crowded_lines),
+                "crowded render trace records must remain within the JSONL line limit")
+        crowded_record = json.loads(crowded_lines[1])
+        require(crowded_record.get("nodesTruncated") is True,
+                "owner registry exhaustion must be explicitly reported")
+        require(crowded_record.get("commandsTruncated") is True,
+                "command aggregation or line-limit truncation must be explicitly reported")
 
         semantic_frames = root / "semantic-frames"
         semantic_result = run_case(
