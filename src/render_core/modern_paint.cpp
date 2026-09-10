@@ -63,6 +63,57 @@ bool modern_paint_fill_opaque_linear_gradient_fast(FrameBuffer& target,
     return true;
 }
 
+template <typename ColorAt>
+void modern_paint_fill_rounded_rows(FrameBuffer& target,
+                                    Rect clipped,
+                                    const RasterRoundedRect& rounded,
+                                    ColorAt&& color_at) {
+    const int clipped_right = safe_edge(clipped.x, clipped.width);
+    const int top = rounded.top;
+    const int bottom = rounded.bottom;
+    const int left = rounded.left;
+    const int right = rounded.right;
+    const CornerRadii& radii = rounded.radii;
+
+    for (int y = clipped.y; y < safe_edge(clipped.y, clipped.height); ++y) {
+        int left_sample_end = left;
+        int right_sample_begin = right;
+        if (y < safe_add(top, radii.top_left)) {
+            left_sample_end = safe_add(left, radii.top_left);
+        } else if (y >= safe_add(bottom, safe_negate(radii.bottom_left))) {
+            left_sample_end = safe_add(left, radii.bottom_left);
+        }
+        if (y < safe_add(top, radii.top_right)) {
+            right_sample_begin = safe_add(right, safe_negate(radii.top_right));
+        } else if (y >= safe_add(bottom, safe_negate(radii.bottom_right))) {
+            right_sample_begin = safe_add(right, safe_negate(radii.bottom_right));
+        }
+
+        const int solid_begin = std::max(clipped.x, left_sample_end);
+        const int solid_end = std::min(clipped_right, right_sample_begin);
+        if (solid_begin < solid_end) {
+            for (int x = solid_begin; x < solid_end; ++x) {
+                blend_color(target.pixel(x, y), color_at(x, y));
+            }
+        }
+
+        const int left_end = std::min(clipped_right, left_sample_end);
+        for (int x = clipped.x; x < left_end; ++x) {
+            const int coverage = rounded_rect_coverage(rounded, x, y);
+            if (coverage > 0) {
+                blend_pixel(target, x, y, with_coverage(color_at(x, y), coverage));
+            }
+        }
+        const int right_begin = std::max(clipped.x, right_sample_begin);
+        for (int x = right_begin; x < clipped_right; ++x) {
+            const int coverage = rounded_rect_coverage(rounded, x, y);
+            if (coverage > 0) {
+                blend_pixel(target, x, y, with_coverage(color_at(x, y), coverage));
+            }
+        }
+    }
+}
+
 void modern_paint_fill_linear_gradient(FrameBuffer& target,
                                        Rect rect,
                                        Rect clip,
@@ -80,50 +131,31 @@ void modern_paint_fill_linear_gradient(FrameBuffer& target,
     const RasterRoundedRect rounded = prepare_rounded_rect(rect, border_radius);
     if (axis == GradientAxis::Vertical) {
         const int denom = std::max(1, safe_add(rect.height, -1));
-        for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
-            const Color row = modern_paint_lerp_color_255(
+        modern_paint_fill_rounded_rows(target, clipped, rounded, [&](int, int y) {
+            return modern_paint_lerp_color_255(
                 first, second, modern_paint_progress_255(y - rect.y, denom));
-            for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
-                const int coverage = rounded_rect_coverage(rounded, x, y);
-                if (coverage > 0) {
-                    blend_pixel(target, x, y, with_coverage(row, coverage));
-                }
-            }
-        }
+        });
         return;
     }
     if (axis == GradientAxis::Horizontal) {
         const int denom = std::max(1, safe_add(rect.width, -1));
-        for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
-            for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
-                const int coverage = rounded_rect_coverage(rounded, x, y);
-                if (coverage > 0) {
-                    const Color color = modern_paint_lerp_color_255(
-                        first, second, modern_paint_progress_255(x - rect.x, denom));
-                    blend_pixel(target, x, y, with_coverage(color, coverage));
-                }
-            }
-        }
+        modern_paint_fill_rounded_rows(target, clipped, rounded, [&](int x, int) {
+            return modern_paint_lerp_color_255(
+                first, second, modern_paint_progress_255(x - rect.x, denom));
+        });
         return;
     }
 
     const int width_denom = std::max(1, safe_add(rect.width, -1));
     const int height_denom = std::max(1, safe_add(rect.height, -1));
-    for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
-        for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
-            const int coverage = rounded_rect_coverage(rounded, x, y);
-            if (coverage <= 0) {
-                continue;
-            }
+    modern_paint_fill_rounded_rows(target, clipped, rounded, [&](int x, int y) {
             const int horizontal = modern_paint_progress_255(x - rect.x, width_denom);
             const int vertical = modern_paint_progress_255(y - rect.y, height_denom);
             const int progress = axis == GradientAxis::DiagonalDownLeft
                 ? ((255 - horizontal) + vertical) / 2
                 : (horizontal + vertical) / 2;
-            blend_pixel(target, x, y,
-                        with_coverage(modern_paint_lerp_color_255(first, second, progress), coverage));
-        }
-    }
+            return modern_paint_lerp_color_255(first, second, progress);
+    });
 }
 
 void modern_paint_fill_conic_gradient_region(FrameBuffer& target,
@@ -140,19 +172,12 @@ void modern_paint_fill_conic_gradient_region(FrameBuffer& target,
     const std::int64_t center_x2 = static_cast<std::int64_t>(rect.x) * 2 + rect.width;
     const std::int64_t center_y2 = static_cast<std::int64_t>(rect.y) * 2 + rect.height;
     const RasterRoundedRect rounded = prepare_rounded_rect(rect, border_radius);
-    for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
-        for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
-            const int coverage = rounded_rect_coverage(rounded, x, y);
-            if (coverage <= 0) {
-                continue;
-            }
+    modern_paint_fill_rounded_rows(target, clipped, rounded, [&](int x, int y) {
             const int dx = static_cast<int>(static_cast<std::int64_t>(x) * 2 + 1 - center_x2);
             const int dy = static_cast<int>(static_cast<std::int64_t>(y) * 2 + 1 - center_y2);
-            const Color color = modern_paint_conic_percent_from_top_clockwise(dx, dy) < stop_percent
+            return modern_paint_conic_percent_from_top_clockwise(dx, dy) < stop_percent
                 ? first : second;
-            blend_pixel(target, x, y, with_coverage(color, coverage));
-        }
-    }
+    });
 }
 
 void modern_paint_fill_radial_gradient_region(FrameBuffer& target,
@@ -179,21 +204,14 @@ void modern_paint_fill_radial_gradient_region(FrameBuffer& target,
     const int radius2 = std::max(1, std::max(rect.width, rect.height));
     const int gradient_scale = (255 << 16) / radius2;
     const RasterRoundedRect rounded = prepare_rounded_rect(rect, border_radius);
-    for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
-        for (int x = clipped.x; x < clipped.x + clipped.width; ++x) {
-            const int coverage = rounded_rect_coverage(rounded, x, y);
-            if (coverage <= 0) {
-                continue;
-            }
+    modern_paint_fill_rounded_rows(target, clipped, rounded, [&](int x, int y) {
             const std::int64_t dx2 = static_cast<std::int64_t>(x) * 2 + 1 - center_x2;
             const std::int64_t dy2 = static_cast<std::int64_t>(y) * 2 + 1 - center_y2;
             const int distance = modern_paint_euclidean_distance_half_px(dx2, dy2);
             const int t = static_cast<int>(std::clamp<std::int64_t>(
                 (static_cast<std::int64_t>(distance) * gradient_scale) >> 16, 0, 255));
-            blend_pixel(target, x, y,
-                        with_coverage(modern_paint_lerp_color_255(center_color, edge_color, t), coverage));
-        }
-    }
+            return modern_paint_lerp_color_255(center_color, edge_color, t);
+    });
 }
 
 void modern_paint_fill_soft_box_shadow(FrameBuffer& target,
