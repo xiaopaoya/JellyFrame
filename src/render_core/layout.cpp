@@ -1085,23 +1085,23 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
     }
     int line_count = 1;
     if (can_wrap && usable_text_width > 0) {
-        const std::vector<std::string> lines = box.style.overflow_wrap_anywhere
-            ? wrap_text_anywhere(text_measure_,
-                                 text,
-                                 box.style.font_size,
-                                 box.style.font_weight,
-                                 box.style.font_family_hash,
-                                 box.style.letter_spacing,
-                                 usable_text_width)
-            : wrap_text_at_opportunities(text_measure_,
-                                         text,
-                                         box.style.font_size,
-                                         box.style.font_weight,
-                                         box.style.font_family_hash,
-                                         box.style.letter_spacing,
-                                         usable_text_width);
+        const std::size_t wrapped_line_count = box.style.overflow_wrap_anywhere
+            ? count_wrapped_lines_anywhere(text_measure_,
+                                           text,
+                                           box.style.font_size,
+                                           box.style.font_weight,
+                                           box.style.font_family_hash,
+                                           box.style.letter_spacing,
+                                           usable_text_width)
+            : count_wrapped_lines_at_opportunities(text_measure_,
+                                                   text,
+                                                   box.style.font_size,
+                                                   box.style.font_weight,
+                                                   box.style.font_family_hash,
+                                                   box.style.letter_spacing,
+                                                   usable_text_width);
         line_count = clamp_layout_value(static_cast<std::int64_t>(std::min<std::size_t>(
-            lines.size(), static_cast<std::size_t>(std::numeric_limits<int>::max()))));
+            wrapped_line_count, static_cast<std::size_t>(std::numeric_limits<int>::max()))));
         line_count = std::max(1, line_count);
     }
     const int fixed_text_height = specified_content_height(box.style, height);

@@ -149,6 +149,18 @@ void range_provider_avoids_scalar_string_allocations() {
     check(probe.measure_calls == 1, "range provider caches repeated scalar widths");
 }
 
+void counting_wrap_matches_materialized_wrap() {
+    ProbeTextBackend probe;
+    const TextMeasureProvider measure{probe_measure, &probe, nullptr, probe_additive_measurement};
+    const std::string text = "A-A A-A\nBBBB";
+    check(count_wrapped_lines_anywhere(measure, text, 10, 400, 0, 0, 20) ==
+              wrap_text_anywhere(measure, text, 10, 400, 0, 0, 20).size(),
+          "anywhere counting matches materialized wrapping");
+    check(count_wrapped_lines_at_opportunities(measure, text, 10, 400, 0, 0, 30) ==
+              wrap_text_at_opportunities(measure, text, 10, 400, 0, 0, 30).size(),
+          "opportunity counting matches materialized wrapping");
+}
+
 void extreme_letter_spacing_uses_one_bounded_value() {
     ProbeTextBackend probe;
     const TextMeasureProvider measure{probe_measure, &probe};
@@ -180,6 +192,7 @@ int main() {
         letter_spacing_and_utf8_anywhere_wrap_share_scalar_boundaries();
         additive_provider_wraps_without_remeasuring_the_current_line();
         range_provider_avoids_scalar_string_allocations();
+        counting_wrap_matches_materialized_wrap();
         extreme_letter_spacing_uses_one_bounded_value();
         extreme_fallback_font_sizes_remain_defined();
     } catch (const std::exception& error) {

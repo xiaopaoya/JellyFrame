@@ -91,6 +91,13 @@ std::vector<std::string> wrap_text_anywhere(const TextMeasureProvider& provider,
                                             std::uint32_t font_family_hash,
                                             int letter_spacing,
                                             int available_width);
+std::size_t count_wrapped_lines_anywhere(const TextMeasureProvider& provider,
+                                         std::string_view text,
+                                         int font_size,
+                                         int font_weight,
+                                         std::uint32_t font_family_hash,
+                                         int letter_spacing,
+                                         int available_width);
 std::vector<std::string> wrap_text_at_opportunities(const TextMeasureProvider& provider,
                                                     std::string_view text,
                                                     int font_size,
@@ -98,5 +105,12 @@ std::vector<std::string> wrap_text_at_opportunities(const TextMeasureProvider& p
                                                     std::uint32_t font_family_hash,
                                                     int letter_spacing,
                                                     int available_width);
+std::size_t count_wrapped_lines_at_opportunities(const TextMeasureProvider& provider,
+                                                 std::string_view text,
+                                                 int font_size,
+                                                 int font_weight,
+                                                 std::uint32_t font_family_hash,
+                                                 int letter_spacing,
+                                                 int available_width);
 
 } // namespace jellyframe

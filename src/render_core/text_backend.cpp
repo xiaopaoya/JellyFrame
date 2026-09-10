@@ -321,6 +321,63 @@ std::vector<std::string> wrap_text_anywhere(const TextMeasureProvider& provider,
     return lines;
 }
 
+std::size_t count_wrapped_lines_anywhere(const TextMeasureProvider& provider,
+                                         std::string_view text,
+                                         int font_size,
+                                         int font_weight,
+                                         std::uint32_t font_family_hash,
+                                         int letter_spacing,
+                                         int available_width) {
+    if (text.empty()) {
+        return 0;
+    }
+
+    const int width_limit = std::max(1, available_width);
+    const int bounded_spacing = bounded_letter_spacing(font_size, letter_spacing);
+    std::unordered_map<std::uint32_t, int> scalar_widths;
+    scalar_widths.reserve(std::min<std::size_t>(text.size(), 32));
+    std::size_t line_count = 0;
+    bool line_empty = true;
+    int line_width = 0;
+    for (std::size_t begin = 0; begin < text.size();) {
+        std::size_t end = begin;
+        const std::uint32_t codepoint = consume_utf8_codepoint(text, end);
+        const std::string_view scalar = text.substr(begin, end - begin);
+        if (scalar == "\n") {
+            ++line_count;
+            line_empty = true;
+            line_width = 0;
+            begin = end;
+            continue;
+        }
+        const auto cached_width = scalar_widths.find(codepoint);
+        const int scalar_width = cached_width != scalar_widths.end()
+            ? cached_width->second
+            : measure_text_range(provider,
+                                 scalar.data(),
+                                 scalar.size(),
+                                 font_size,
+                                 font_weight,
+                                 font_family_hash).width;
+        if (cached_width == scalar_widths.end()) {
+            scalar_widths.emplace(codepoint, scalar_width);
+        }
+        const int candidate_width = line_empty
+            ? scalar_width
+            : clamp_nonnegative_int64(static_cast<std::int64_t>(line_width) +
+                                      bounded_spacing + scalar_width);
+        if (!line_empty && candidate_width > width_limit) {
+            ++line_count;
+            line_width = scalar_width;
+        } else {
+            line_width = candidate_width;
+        }
+        line_empty = false;
+        begin = end;
+    }
+    return line_count + 1;
+}
+
 std::vector<std::string> wrap_text_at_opportunities(const TextMeasureProvider& provider,
                                                     std::string_view text,
                                                     int font_size,
@@ -442,6 +499,126 @@ std::vector<std::string> wrap_text_at_opportunities(const TextMeasureProvider& p
         lines.push_back(std::move(line));
     }
     return lines;
+}
+
+std::size_t count_wrapped_lines_at_opportunities(const TextMeasureProvider& provider,
+                                                 std::string_view text,
+                                                 int font_size,
+                                                 int font_weight,
+                                                 std::uint32_t font_family_hash,
+                                                 int letter_spacing,
+                                                 int available_width) {
+    if (text.empty()) {
+        return 0;
+    }
+
+    const int width_limit = std::max(1, available_width);
+    std::string line;
+    std::string token;
+    bool pending_space = false;
+    std::size_t line_count = 0;
+    int line_width = 0;
+    const int bounded_spacing = bounded_letter_spacing(font_size, letter_spacing);
+    int separator_width = -1;
+
+    const auto measured_separator_width = [&]() {
+        if (separator_width < 0) {
+            separator_width = measure_text_range(provider,
+                                                 " ",
+                                                 1,
+                                                 font_size,
+                                                 font_weight,
+                                                 font_family_hash).width;
+        }
+        return separator_width;
+    };
+
+    const bool additive_measurement = provider.additive_measurement_supported != nullptr &&
+        provider.additive_measurement_supported(font_size,
+                                                 font_weight,
+                                                 font_family_hash,
+                                                 provider.context);
+    const auto append_token = [&]() {
+        if (token.empty()) {
+            return;
+        }
+        if (additive_measurement) {
+            const int token_width = measure_text_with_letter_spacing(provider,
+                                                                      token,
+                                                                      font_size,
+                                                                      font_weight,
+                                                                      font_family_hash,
+                                                                      letter_spacing).width;
+            const bool has_separator = !line.empty() && pending_space;
+            const std::int64_t transition_spacing = line.empty()
+                ? 0
+                : static_cast<std::int64_t>(bounded_spacing) * (has_separator ? 2 : 1);
+            const std::int64_t candidate_width = static_cast<std::int64_t>(line_width) +
+                (has_separator ? measured_separator_width() : 0) +
+                transition_spacing + token_width;
+            if (!line.empty() && clamp_nonnegative_int64(candidate_width) > width_limit) {
+                ++line_count;
+                line = std::move(token);
+                line_width = token_width;
+            } else {
+                if (has_separator) {
+                    line.push_back(' ');
+                }
+                line += token;
+                line_width = clamp_nonnegative_int64(candidate_width);
+            }
+        } else {
+            std::string candidate = line;
+            if (!candidate.empty() && pending_space) {
+                candidate.push_back(' ');
+            }
+            candidate += token;
+            if (!line.empty() && measure_text_with_letter_spacing(provider,
+                                                                  candidate,
+                                                                  font_size,
+                                                                  font_weight,
+                                                                  font_family_hash,
+                                                                  letter_spacing).width > width_limit) {
+                ++line_count;
+                line = std::move(token);
+            } else {
+                line = std::move(candidate);
+            }
+        }
+        token.clear();
+        pending_space = false;
+    };
+
+    for (std::size_t begin = 0; begin < text.size();) {
+        std::size_t end = begin;
+        const std::uint32_t codepoint = consume_utf8_codepoint(text, end);
+        const std::string_view scalar = text.substr(begin, end - begin);
+        if (codepoint == '\n') {
+            append_token();
+            ++line_count;
+            line.clear();
+            line_width = 0;
+            pending_space = false;
+            begin = end;
+            continue;
+        }
+        if (codepoint == ' ' || codepoint == '\t' || codepoint == '\r') {
+            append_token();
+            pending_space = !line.empty();
+            begin = end;
+            continue;
+        }
+
+        token.append(scalar.data(), scalar.size());
+        const bool break_after = is_cjk_codepoint(codepoint) ||
+            codepoint == '-' || codepoint == '/' || codepoint == 0x3001U || codepoint == 0x3002U;
+        if (break_after) {
+            append_token();
+        }
+        begin = end;
+    }
+    append_token();
+    return line_count + (line.empty() && line_count != 0 ? 0 : 1);
 }
 
 } // namespace jellyframe
