@@ -426,6 +426,26 @@ def main() -> int:
         require(crowded_record.get("commandsTruncated") is True,
                 "command aggregation or line-limit truncation must be explicitly reported")
 
+        unprofiled_frames = root / "unprofiled-frames"
+        unprofiled_result = run_case(
+            exe,
+            [
+                "--app", str(app),
+                "--capture-frames", str(unprofiled_frames),
+                "--frame-count", "5",
+                "--frame-event", "1:pointer-down:20:20",
+                "--frame-event", "2:pointer-move:130:20",
+                "--frame-event", "3:pointer-up:130:20",
+            ],
+        )
+        require(unprofiled_result.returncode == 0,
+                f"unprofiled pointer capture must succeed: {unprofiled_result.stdout}")
+        for frame_index in range(5):
+            profiled = frames / f"frame_{frame_index:03d}.bmp"
+            unprofiled = unprofiled_frames / f"frame_{frame_index:03d}.bmp"
+            require(profiled.read_bytes() == unprofiled.read_bytes(),
+                    "render trace profiling must not change captured framebuffer pixels")
+
         semantic_frames = root / "semantic-frames"
         semantic_result = run_case(
             exe,
