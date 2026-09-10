@@ -208,6 +208,10 @@ present/DMA 时间和视觉误差。不同库不支持的能力单独标记 `not
 
 ### 第三阶段：设备 profile
 
-- port 以显式 profiling 配置提供阶段/窗口 trace 或 aggregate；
+- 已冻结 [Device Performance Profile V0](device_performance_profile_rfc_zh.md)：默认关闭，
+  只输出固定窗口的阶段/percentile/counter 汇总；首个 ESP32-S3 接线必须遵守其窗口、
+  时钟、隐私、开销 A/B 和失败标记契约；
+- port 以该显式 profiling 配置提供阶段窗口 aggregate；逐元素、逐 command 或每帧 wire
+  trace 不是第三阶段的前提，也不能由 aggregate 推断；
 - 以真实 developer-image workload 复核 Core/Runtime 优化收益；
 - 完成至少一个 CPU 2D 和一个嵌入式 UI 对照，才给出“快/慢”的定量结论。
