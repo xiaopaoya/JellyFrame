@@ -411,21 +411,26 @@ void flex_column_distributes_grow_space() {
 void flex_order_reorders_in_flow_layout_without_touching_default_path() {
     HtmlParser html_parser;
     CssParser css_parser;
-    auto document = html_parser.parse("<body><main><div id='a'></div><div id='b'></div><div id='c'></div></main></body>");
+    auto document = html_parser.parse(
+        "<body><main><div id='a'></div><div id='badge'></div><div id='b'></div><div id='c'></div></main></body>");
     StyleResolver resolver(css_parser.parse(
         "body { margin: 0; }"
-        "main { display: flex; width: 90px; }"
+        "main { display: flex; position: relative; width: 90px; height: 20px; }"
         "div { width: 20px; height: 10px; }"
-        "#a { order: 2; } #b { order: -1; }"));
+        "#a { order: 1; } #b { order: 1; }"
+        "#badge { position: absolute; order: -10; left: 0; top: 0; }"));
     LayoutEngine layout_engine(resolver);
     auto layout_tree = layout_engine.layout(*document, 100);
 
     const LayoutBox* a = find_first_by_id(*layout_tree, "a");
+    const LayoutBox* badge = find_first_by_id(*layout_tree, "badge");
     const LayoutBox* b = find_first_by_id(*layout_tree, "b");
     const LayoutBox* c = find_first_by_id(*layout_tree, "c");
-    check(a != nullptr && b != nullptr && c != nullptr, "flex order fixture boxes exist");
-    check(b->rect.x == 0 && c->rect.x == 20 && a->rect.x == 40,
+    check(a != nullptr && badge != nullptr && b != nullptr && c != nullptr, "flex order fixture boxes exist");
+    check(c->rect.x == 0 && a->rect.x == 20 && b->rect.x == 40,
           "nonzero order uses stable ascending flex item placement");
+    check(badge->rect.x == 0 && badge->rect.y == 0,
+          "absolute flex child is excluded from ordered in-flow placement");
 }
 
 void flex_column_resolves_percent_height_against_containing_box() {

@@ -12,6 +12,12 @@
 #include <vector>
 
 namespace jellyframe {
+
+#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
+std::vector<const LayoutBox*> ordered_flex_children_for_order(const LayoutBox& box,
+                                                              bool include_out_of_flow);
+#endif
+
 namespace {
 
 int clamp_layout_value(std::int64_t value) {
@@ -407,25 +413,12 @@ int flex_outer_cross_size(const LayoutBox& child, bool row_direction) {
 }
 
 std::vector<LayoutBox*> ordered_flex_children(LayoutBox& box) {
-    if (box.style.display != Display::Flex) {
-        return {};
-    }
-    const bool has_nonzero_order = std::any_of(box.children.begin(), box.children.end(), [](const LayoutBoxPtr& child) {
-        return !is_out_of_flow_positioned(child->style) && child->style.flex_order != 0;
-    });
-    if (!has_nonzero_order) {
-        return {};
-    }
+    const std::vector<const LayoutBox*> ordered_const = ordered_flex_children_for_order(box, false);
     std::vector<LayoutBox*> ordered;
-    ordered.reserve(box.children.size());
-    for (const LayoutBoxPtr& child : box.children) {
-        if (!is_out_of_flow_positioned(child->style)) {
-            ordered.push_back(child.get());
-        }
+    ordered.reserve(ordered_const.size());
+    for (const LayoutBox* child : ordered_const) {
+        ordered.push_back(const_cast<LayoutBox*>(child));
     }
-    std::stable_sort(ordered.begin(), ordered.end(), [](const LayoutBox* left, const LayoutBox* right) {
-        return left->style.flex_order < right->style.flex_order;
-    });
     return ordered;
 }
 

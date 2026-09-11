@@ -1472,11 +1472,15 @@ void fixed_grid_places_description_list_in_columns() {
 
 void flex_order_changes_same_stack_paint_order() {
     auto pipeline = build_pipeline(
-        "<body><main><div class='late'></div><div class='early'></div></main></body>",
+        "<body><main><div class='late'></div><div class='overlay'></div>"
+        "<div class='early'></div><div class='tie'></div><div class='same'></div></main></body>",
         "body { margin: 0; } main { display: flex; }"
         "div { width: 20px; height: 20px; }"
         ".late { order: 2; background: #ff0000; }"
-        ".early { order: -1; background: #0000ff; }");
+        ".overlay { position: absolute; order: 0; background: #00ff00; }"
+        ".early { order: -1; background: #0000ff; }"
+        ".tie { order: 0; background: #ffff00; }"
+        ".same { order: 0; background: #ff00ff; }");
 
     LayerTreeBuilder builder;
     const DisplayList flattened = builder.flatten(*pipeline.layer_tree);
@@ -1486,9 +1490,12 @@ void flex_order_changes_same_stack_paint_order() {
             fills.push_back(command.color);
         }
     }
-    check(fills.size() == 2, "flex order paint fixture emits both child fills");
-    check(fills[0].b == 255 && fills[1].r == 255,
-          "flex order changes same-stack paint order with the layout order");
+    check(fills.size() == 5, "flex order paint fixture emits every child fill");
+    check(fills[0].b == 255, "flex order paint puts the negative-order child first");
+    check(fills[1].r == 255 && fills[1].g == 255, "flex order paint keeps equal-order children stable");
+    check(fills[2].r == 255 && fills[2].b == 255, "flex order paint preserves the second equal-order child");
+    check(fills[3].r == 255 && fills[3].g == 0, "flex order paint puts the highest-order child after in-flow items");
+    check(fills[4].g == 255, "flex order paint includes the absolute child");
 }
 
 void unbreakable_symbol_stays_single_line() {
