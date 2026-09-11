@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <queue>
 
 namespace jellyframe {
 namespace {
@@ -61,20 +62,38 @@ void merge_overlapping_rects(std::vector<Rect>& rects) {
         rects.push_back(enclosing);
         return;
     }
+    std::vector<unsigned char> active(rects.size(), 1);
+    std::size_t active_count = rects.size();
     bool merged = true;
     while (merged) {
         merged = false;
         for (std::size_t left = 0; left + 1 < rects.size() && !merged; ++left) {
+            if (active[left] == 0) {
+                continue;
+            }
             for (std::size_t right = left + 1; right < rects.size(); ++right) {
+                if (active[right] == 0) {
+                    continue;
+                }
                 if (empty_rect(intersect_rect(rects[left], rects[right]))) {
                     continue;
                 }
                 rects[left] = union_rect(rects[left], rects[right]);
-                rects.erase(rects.begin() + static_cast<std::ptrdiff_t>(right));
+                active[right] = 0;
+                --active_count;
                 merged = true;
                 break;
             }
         }
+    }
+    if (active_count != rects.size()) {
+        std::size_t write = 0;
+        for (std::size_t read = 0; read < rects.size(); ++read) {
+            if (active[read] != 0) {
+                rects[write++] = rects[read];
+            }
+        }
+        rects.resize(write);
     }
 }
 
@@ -622,55 +641,139 @@ void coalesce_dirty_rects_into(const Rect* input,
         output.push_back(viewport);
         local_result.forced_merges += previous_count - 1;
     }
-    while (output.size() > 1) {
-        const bool forced = output.size() > max_rects;
-        std::size_t best_left = output.size();
-        std::size_t best_right = output.size();
-        std::size_t best_extra_area = std::numeric_limits<std::size_t>::max();
-        std::size_t best_merged_cost = std::numeric_limits<std::size_t>::max();
-        std::size_t best_savings = 0;
+    struct PairCandidate {
+        std::size_t left;
+        std::size_t right;
+        std::size_t left_generation;
+        std::size_t right_generation;
+        std::size_t extra_area;
+        std::size_t merged_cost;
+        std::size_t savings;
+    };
+    struct PairCandidateCompare {
+        bool forced;
 
-        for (std::size_t left = 0; left + 1 < output.size(); ++left) {
-            for (std::size_t right = left + 1; right < output.size(); ++right) {
-                const Rect merged = union_rect(output[left], output[right]);
-                const std::size_t pair_area = saturating_add(rect_area(output[left]), rect_area(output[right]));
-                const std::size_t merged_area = rect_area(merged);
-                const std::size_t extra_area = merged_area > pair_area ? merged_area - pair_area : 0;
-                const std::size_t pair_cost = saturating_add(
-                    rect_cost(output[left], options.per_rect_overhead_pixels),
-                    rect_cost(output[right], options.per_rect_overhead_pixels));
-                const std::size_t merged_cost = rect_cost(merged, options.per_rect_overhead_pixels);
-                const bool profitable =
-                    extra_area <= percent_of_area(pair_area, max_extra_area_percent) && merged_cost < pair_cost;
-                if (!profitable && !forced) {
-                    continue;
+        bool operator()(const PairCandidate& left, const PairCandidate& right) const {
+            if (forced) {
+                if (left.extra_area != right.extra_area) {
+                    return left.extra_area > right.extra_area;
                 }
-
-                const std::size_t savings = pair_cost > merged_cost ? pair_cost - merged_cost : 0;
-                const bool better = best_left == output.size() ||
-                                    (forced
-                                         ? (extra_area < best_extra_area ||
-                                            (extra_area == best_extra_area && merged_cost < best_merged_cost))
-                                         : (savings > best_savings ||
-                                            (savings == best_savings && extra_area < best_extra_area)));
-                if (better) {
-                    best_left = left;
-                    best_right = right;
-                    best_extra_area = extra_area;
-                    best_merged_cost = merged_cost;
-                    best_savings = savings;
+                if (left.merged_cost != right.merged_cost) {
+                    return left.merged_cost > right.merged_cost;
+                }
+            } else {
+                if (left.savings != right.savings) {
+                    return left.savings < right.savings;
+                }
+                if (left.extra_area != right.extra_area) {
+                    return left.extra_area > right.extra_area;
                 }
             }
+            if (left.left != right.left) {
+                return left.left > right.left;
+            }
+            return left.right > right.right;
         }
-        if (best_left == output.size()) {
+    };
+    using PairQueue = std::priority_queue<PairCandidate,
+                                          std::vector<PairCandidate>,
+                                          PairCandidateCompare>;
+
+    std::vector<unsigned char> active(output.size(), 1);
+    std::vector<std::size_t> generations(output.size(), 0);
+    std::size_t active_count = output.size();
+    const std::size_t candidate_reserve = output.size() * (output.size() - 1) / 2;
+
+    auto make_queue = [&](bool forced) {
+        std::vector<PairCandidate> storage;
+        storage.reserve(candidate_reserve);
+        return PairQueue{PairCandidateCompare{forced}, std::move(storage)};
+    };
+    auto add_candidate = [&](PairQueue& queue, std::size_t left, std::size_t right, bool forced) {
+        if (active[left] == 0 || active[right] == 0) {
+            return;
+        }
+        const Rect merged = union_rect(output[left], output[right]);
+        const std::size_t pair_area = saturating_add(rect_area(output[left]), rect_area(output[right]));
+        const std::size_t merged_area = rect_area(merged);
+        const std::size_t extra_area = merged_area > pair_area ? merged_area - pair_area : 0;
+        const std::size_t pair_cost = saturating_add(
+            rect_cost(output[left], options.per_rect_overhead_pixels),
+            rect_cost(output[right], options.per_rect_overhead_pixels));
+        const std::size_t merged_cost = rect_cost(merged, options.per_rect_overhead_pixels);
+        const bool profitable =
+            extra_area <= percent_of_area(pair_area, max_extra_area_percent) && merged_cost < pair_cost;
+        if (!profitable && !forced) {
+            return;
+        }
+        queue.push(PairCandidate{left,
+                                 right,
+                                 generations[left],
+                                 generations[right],
+                                 extra_area,
+                                 merged_cost,
+                                 pair_cost > merged_cost ? pair_cost - merged_cost : 0});
+    };
+    auto build_queue = [&](bool forced) {
+        PairQueue queue = make_queue(forced);
+        for (std::size_t left = 0; left + 1 < output.size(); ++left) {
+            for (std::size_t right = left + 1; right < output.size(); ++right) {
+                add_candidate(queue, left, right, forced);
+            }
+        }
+        return queue;
+    };
+
+    bool forced = active_count > max_rects;
+    PairQueue queue = build_queue(forced);
+    while (active_count > 1) {
+        PairCandidate candidate{};
+        bool found = false;
+        while (!queue.empty()) {
+            candidate = queue.top();
+            queue.pop();
+            if (active[candidate.left] != 0 && active[candidate.right] != 0 &&
+                generations[candidate.left] == candidate.left_generation &&
+                generations[candidate.right] == candidate.right_generation) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
             break;
         }
 
-        output[best_left] = union_rect(output[best_left], output[best_right]);
-        output.erase(output.begin() + static_cast<std::ptrdiff_t>(best_right));
+        output[candidate.left] = union_rect(output[candidate.left], output[candidate.right]);
+        ++generations[candidate.left];
+        active[candidate.right] = 0;
+        --active_count;
         if (forced) {
             ++local_result.forced_merges;
         }
+
+        for (std::size_t other = 0; other < output.size(); ++other) {
+            if (other == candidate.left || active[other] == 0) {
+                continue;
+            }
+            const std::size_t left = std::min(candidate.left, other);
+            const std::size_t right = std::max(candidate.left, other);
+            add_candidate(queue, left, right, forced);
+        }
+
+        if (forced && active_count <= max_rects) {
+            forced = false;
+            queue = build_queue(false);
+        }
+    }
+
+    if (active_count != output.size()) {
+        std::size_t write = 0;
+        for (std::size_t read = 0; read < output.size(); ++read) {
+            if (active[read] != 0) {
+                output[write++] = output[read];
+            }
+        }
+        output.resize(write);
     }
 
     local_result.output_rect_count = output.size();

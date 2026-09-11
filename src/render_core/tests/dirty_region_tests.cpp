@@ -596,6 +596,7 @@ void dirty_rect_coalescing_respects_extra_area_budget() {
 void dirty_rect_coalescing_forces_deterministic_low_extra_merge() {
     const Rect input[] = {Rect{0, 0, 10, 10}, Rect{12, 0, 10, 10}, Rect{80, 0, 10, 10}};
     std::vector<Rect> output;
+    std::vector<Rect> repeated;
     DirtyRectCoalescingResult result;
     coalesce_dirty_rects_into(input,
                               3,
@@ -603,9 +604,18 @@ void dirty_rect_coalescing_forces_deterministic_low_extra_merge() {
                               DirtyRectCoalescingOptions{2, 0, 0},
                               output,
                               &result);
+    coalesce_dirty_rects_into(input,
+                              3,
+                              Rect{0, 0, 100, 100},
+                              DirtyRectCoalescingOptions{2, 0, 0},
+                              repeated);
     check(output.size() == 2, "max rect count forces a merge");
     check(output.front().x == 0 && output.front().width == 22,
           "forced merge selects least extra-area pair deterministically");
+    check(repeated.size() == output.size() && repeated.front().x == output.front().x &&
+              repeated.front().width == output.front().width && repeated.back().x == output.back().x &&
+              repeated.back().width == output.back().width,
+          "repeated coalescing produces deterministic output");
     check(result.forced_merges == 1, "forced merge is observable to the host");
 }
 
@@ -650,12 +660,41 @@ void dirty_rect_coalescing_bounds_large_pairwise_inputs() {
     check(result.forced_merges == 128, "large coalescing fallback reports forced merges");
 }
 
+void dirty_rect_coalescing_keeps_bounded_pairwise_inputs() {
+    std::vector<Rect> input;
+    input.reserve(128);
+    for (int index = 0; index < 128; ++index) {
+        input.push_back(Rect{index * 2, 0, 1, 1});
+    }
+    std::vector<Rect> output;
+    DirtyRectCoalescingResult result;
+    coalesce_dirty_rects_into(input.data(), 100, Rect{0, 0, 300, 20},
+                              DirtyRectCoalescingOptions{128, 0, 0}, output, &result);
+    check(output.size() == 100 && result.forced_merges == 0,
+          "100 rectangles stay on the bounded pairwise path");
+
+    coalesce_dirty_rects_into(input.data(), input.size(), Rect{0, 0, 300, 20},
+                              DirtyRectCoalescingOptions{128, 0, 0}, output, &result);
+    check(output.size() == 128 && result.output_rect_count == 128 && result.forced_merges == 0,
+          "128 rectangles stay incremental without the conservative fallback");
+}
+
+void dirty_rect_normalization_merges_transitive_overlap_chains() {
+    const Rect input[] = {Rect{0, 0, 10, 10}, Rect{8, 0, 10, 10}, Rect{16, 0, 10, 10}};
+    const std::vector<Rect> output = normalize_dirty_rects(input, 3, Rect{0, 0, 100, 100});
+    check(output.size() == 1 && output.front().x == 0 && output.front().width == 26,
+          "normalization merges transitive overlap chains");
+}
+
 void dirty_rect_normalization_bounds_renderer_inputs() {
     std::vector<Rect> input;
     input.reserve(129);
     for (int index = 0; index < 129; ++index) {
         input.push_back(Rect{index * 2, 0, 1, 1});
     }
+    const std::vector<Rect> boundary_output = normalize_dirty_rects(input.data(), 128, Rect{0, 0, 300, 20});
+    check(boundary_output.size() == 128,
+          "renderer dirty normalization keeps the 128-rectangle boundary pairwise");
     const std::vector<Rect> output = normalize_dirty_rects(input.data(), input.size(), Rect{0, 0, 300, 20});
     check(output.size() == 1 && output.front().x == 0 && output.front().width == 300,
           "renderer dirty normalization falls back to viewport for large input");
@@ -748,6 +787,8 @@ int main() {
         dirty_rect_coalescing_forces_deterministic_low_extra_merge();
         dirty_rect_coalescing_clips_and_handles_large_areas();
         dirty_rect_coalescing_bounds_large_pairwise_inputs();
+        dirty_rect_coalescing_keeps_bounded_pairwise_inputs();
+        dirty_rect_normalization_merges_transitive_overlap_chains();
         dirty_rect_normalization_bounds_renderer_inputs();
         dirty_region_area_handles_extreme_rects_safely();
         dirty_region_expansion_saturates_before_viewport_clipping();
