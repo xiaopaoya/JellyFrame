@@ -1975,6 +1975,15 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(parsed["metrics"]["packedBytes"], 1234)
         self.assertEqual(parsed["metrics"]["partial"], 0)
 
+    def test_panel_scroll_profiles_select_distinct_presentation_sinks(self):
+        port_root = REPO_ROOT / "ports" / "esp32s3-idf"
+        for board in ("ws147", "ws169"):
+            control = (port_root / f"sdkconfig.{board}_panel_scroll_a.defaults").read_text(encoding="utf-8")
+            accelerated = (port_root / f"sdkconfig.{board}_panel_scroll_b.defaults").read_text(encoding="utf-8")
+            self.assertNotIn("CONFIG_JELLYFRAME_ESP32S3_USE_PACKED_RGB565_SINK=y", control)
+            self.assertIn("CONFIG_JELLYFRAME_ESP32S3_USE_PACKED_RGB565_SINK=y", accelerated)
+            self.assertIn(f"CONFIG_JELLYFRAME_{board.upper()}_PANEL_SCROLL_ACCELERATION=y", accelerated)
+
     def test_device_profile_log_rejects_incomplete_window(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-device-profile-") as directory:
             telemetry_log = Path(directory) / "device-profile.log"
