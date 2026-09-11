@@ -878,13 +878,67 @@ void compositor_clips_children_to_rounded_overflow() {
     clip->children.push_back(std::move(child));
     root.children.push_back(std::move(clip));
 
+    const Rect rounded_clip_rect{8, 8, 24, 24};
+    const int rounded_clip_radius = 8;
     const FrameBuffer frame = SoftwareCompositor().render(root, 40, 40, Color{255, 255, 255, 255});
+    FrameBuffer expected(40, 40, Color{255, 255, 255, 255});
+    const RasterRoundedRect rounded = prepare_rounded_rect(rounded_clip_rect, rounded_clip_radius);
+    for (int y = rounded_clip_rect.y; y < safe_edge(rounded_clip_rect.y, rounded_clip_rect.height); ++y) {
+        for (int x = rounded_clip_rect.x; x < safe_edge(rounded_clip_rect.x, rounded_clip_rect.width); ++x) {
+            blend_pixel(expected, x, y, with_coverage(fill.color, rounded_rect_coverage(rounded, x, y)));
+        }
+    }
+    check(frame.pixels.size() == expected.pixels.size(), "rounded overflow clip output dimensions are stable");
+    for (std::size_t index = 0; index < frame.pixels.size(); ++index) {
+        const Color actual = frame.pixels[index];
+        const Color reference = expected.pixels[index];
+        check(actual.r == reference.r && actual.g == reference.g && actual.b == reference.b &&
+                  actual.a == reference.a,
+              "rounded overflow clip preserves every pixel of the antialiased reference");
+    }
     check(frame.pixel(8, 8).r == 255 && frame.pixel(8, 8).g == 255,
           "rounded overflow clip excludes the top-left corner");
     check(frame.pixel(20, 8).b > 200,
           "rounded overflow clip keeps the top edge away from the corner");
     check(frame.pixel(20, 20).b > 200,
           "rounded overflow clip keeps child content in the center");
+}
+
+void built_in_text_fallback_preserves_clipped_pixel_output() {
+    VectorDiagnosticSink diagnostics;
+    SoftwareRasterizer rasterizer(TextPainter{rejecting_text_painter, nullptr}, &diagnostics);
+    DisplayCommand command;
+    command.type = DisplayCommandType::Text;
+    command.rect = Rect{2, 2, 5, 7};
+    command.color = Color{20, 30, 40, 255};
+    command.text = "A";
+    command.font_size = 8;
+    command.text_single_line = true;
+
+    const Color background{231, 236, 244, 255};
+    FrameBuffer frame(8, 8, background);
+    rasterizer.rasterize(command, frame, Rect{0, 0, 8, 8});
+
+    const std::array<std::uint8_t, 7> rows = {
+        0x0e, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11,
+    };
+    for (int y = 0; y < frame.height; ++y) {
+        for (int x = 0; x < frame.width; ++x) {
+            Color expected = background;
+            const int row = y - command.rect.y;
+            const int col = x - command.rect.x;
+            if (row >= 0 && row < 7 && col >= 0 && col < 5 &&
+                (rows[static_cast<std::size_t>(row)] & (1U << (4 - col))) != 0U) {
+                expected = command.color;
+            }
+            const Color actual = frame.pixel(x, y);
+            check(actual.r == expected.r && actual.g == expected.g && actual.b == expected.b &&
+                      actual.a == expected.a,
+                  "built-in text fallback preserves clipped glyph pixels exactly");
+        }
+    }
+    check(has_diagnostic_code(diagnostics, "paint-text-backend-failed"),
+          "pixel-output fallback regression uses the built-in path");
 }
 
 void rasterizer_applies_value_rounded_clip_chain() {
@@ -2149,6 +2203,7 @@ int main() {
         compositor_keeps_non_fill_prefix_side_effects();
         compositor_keeps_rounded_fill_underpaint();
         rasterizer_reports_text_fallback();
+        built_in_text_fallback_preserves_clipped_pixel_output();
         dirty_text_clip_preserves_original_text_geometry();
         rasterizer_scratch_reuses_clipped_command_storage();
         rasterizer_bounds_clipped_temporary_surfaces();

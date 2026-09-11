@@ -844,6 +844,30 @@ char fallback_glyph_for_codepoint(const std::string& text, std::size_t& index) {
     return codepoint < 0x80U ? static_cast<char>(codepoint) : '?';
 }
 
+void paint_fallback_cell(FrameBuffer& target, int x, int y, int size, Color color) {
+    const Rect visible = intersect_rect(Rect{x, y, size, size}, target_rect(target));
+    if (empty_rect(visible)) {
+        return;
+    }
+    const int x_end = safe_edge(visible.x, visible.width);
+    const int y_end = safe_edge(visible.y, visible.height);
+    if (color.a == 255) {
+        for (int row_index = visible.y; row_index < y_end; ++row_index) {
+            Color* row = target.pixels.data() + static_cast<std::size_t>(row_index) *
+                static_cast<std::size_t>(target.width) + static_cast<std::size_t>(visible.x);
+            std::fill(row, row + visible.width, color);
+        }
+        return;
+    }
+    for (int row_index = visible.y; row_index < y_end; ++row_index) {
+        Color* row = target.pixels.data() + static_cast<std::size_t>(row_index) *
+            static_cast<std::size_t>(target.width) + static_cast<std::size_t>(visible.x);
+        for (int column = visible.x; column < x_end; ++column) {
+            blend_color(row[column - visible.x], color);
+        }
+    }
+}
+
 void draw_text(FrameBuffer& target,
                Rect rect,
                Color color,
@@ -928,10 +952,11 @@ void draw_text(FrameBuffer& target,
                     continue;
                 }
                 for (int pass = 0; pass < stroke_passes; ++pass) {
-                    fill_rect(target,
-                              Rect{safe_add(safe_add(cursor_x, col * scale), pass),
-                                   safe_add(baseline_y, row * scale), scale, scale},
-                              color);
+                    paint_fallback_cell(target,
+                                        safe_add(safe_add(cursor_x, col * scale), pass),
+                                        safe_add(baseline_y, row * scale),
+                                        scale,
+                                        color);
                 }
             }
         }
@@ -1001,9 +1026,28 @@ void apply_rounded_clip(FrameBuffer& surface, Rect clip, int border_radius) {
         return;
     }
     const RasterRoundedRect rounded = prepare_rounded_rect(clip, border_radius);
-    for (int y = visible.y; y < safe_edge(visible.y, visible.height); ++y) {
-        for (int x = visible.x; x < safe_edge(visible.x, visible.width); ++x) {
-            surface.pixel(x, y) = with_coverage(surface.pixel(x, y), rounded_rect_coverage(rounded, x, y));
+    const int y_end = safe_edge(visible.y, visible.height);
+    const int x_end = safe_edge(visible.x, visible.width);
+    for (int y = visible.y; y < y_end; ++y) {
+        if (!rounded_clip_affects_row(rounded, y)) {
+            continue;
+        }
+        const Rect known_full = rounded_clip_known_full_row_span(rounded, y);
+        const int full_left = std::max(visible.x, known_full.x);
+        const int full_right = std::min(x_end, safe_edge(known_full.x, known_full.width));
+        Color* surface_row = surface.pixels.data() + static_cast<std::size_t>(y) *
+            static_cast<std::size_t>(surface.width);
+        for (int x = visible.x; x < full_left; ++x) {
+            const int coverage = rounded_rect_coverage(rounded, x, y);
+            if (coverage != 255) {
+                surface_row[x] = with_coverage(surface_row[x], coverage);
+            }
+        }
+        for (int x = full_right; x < x_end; ++x) {
+            const int coverage = rounded_rect_coverage(rounded, x, y);
+            if (coverage != 255) {
+                surface_row[x] = with_coverage(surface_row[x], coverage);
+            }
         }
     }
 }
