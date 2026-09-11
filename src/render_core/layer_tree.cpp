@@ -390,17 +390,73 @@ std::string ellipsize_single_line_text(const std::string& text,
     return prefix;
 }
 
+bool same_text_measure_provider(const TextMeasureProvider& left,
+                                const TextMeasureProvider& right) {
+    return left.measure == right.measure &&
+        left.context == right.context &&
+        left.measure_family == right.measure_family &&
+        left.additive_measurement_supported == right.additive_measurement_supported &&
+        left.measure_range == right.measure_range &&
+        left.measure_range_family == right.measure_range_family;
+}
+
+const TextLayoutCache* valid_text_layout_cache(const LayoutBox& box,
+                                               const LayerTreeBuilderOptions& options) {
+    const TextLayoutCache& cache = box.text_layout_cache;
+    bool ancestor_dirty = false;
+    for (const Node* current = box.node == nullptr ? nullptr : box.node->parent;
+         current != nullptr;
+         current = current->parent) {
+        if ((current->local_dirty_flags & (DomDirtyText | DomDirtyStyle | DomDirtyLayout |
+                                           DomDirtyAttributes | DomDirtyTree)) != 0U) {
+            ancestor_dirty = true;
+            break;
+        }
+    }
+    if (!cache.valid || box.node == nullptr || box.node->type != NodeType::Text ||
+        ancestor_dirty ||
+        (box.node->local_dirty_flags & (DomDirtyText | DomDirtyStyle | DomDirtyLayout |
+                                        DomDirtyAttributes | DomDirtyTree)) != 0U ||
+        cache.source_text != box.node->text ||
+        cache.viewport_width != box.viewport_width ||
+        cache.viewport_height != box.viewport_height ||
+        cache.rect_width != box.rect.width ||
+        cache.rect_height != box.rect.height ||
+        cache.font_size != box.style.font_size ||
+        cache.font_weight != box.style.font_weight ||
+        cache.font_family_hash != box.style.font_family_hash ||
+        cache.line_height != (box.style.line_height > 0
+            ? box.style.line_height
+            : cache.line_height) ||
+        cache.text_indent != box.style.text_indent ||
+        cache.letter_spacing != box.style.letter_spacing ||
+        cache.text_transform != box.style.text_transform ||
+        cache.overflow_wrap_anywhere != box.style.overflow_wrap_anywhere ||
+        cache.white_space_nowrap != box.style.white_space_nowrap ||
+        cache.text_overflow_ellipsis != box.style.text_overflow_ellipsis ||
+        cache.text_align != box.style.text_align ||
+        !same_text_measure_provider(cache.text_measure, options.text_measure)) {
+        return nullptr;
+    }
+    return &cache;
+}
+
 void push_text_with_layout(DisplayList& display_list,
                            Rect rect,
                            Color color,
                            const std::string& text,
                            const Style& style,
                            TextCommandAlign align,
-                           const TextMeasureProvider& text_measure) {
+                           const TextMeasureProvider& text_measure,
+                           const TextLayoutCache* cached_layout = nullptr) {
     if (rect.width <= 0 || rect.height <= 0 || text.empty() || color.a == 0) {
         return;
     }
-    const std::string rendered_text = ellipsize_single_line_text(text, style, rect.width, text_measure);
+    const std::string rendered_text = ellipsize_single_line_text(
+        cached_layout != nullptr ? cached_layout->rendered_text : text,
+        style,
+        rect.width,
+        text_measure);
     const int line_height = style.line_height > 0
         ? style.line_height
         : style.font_size + std::max(6, style.font_size / 3);
@@ -414,7 +470,10 @@ void push_text_with_layout(DisplayList& display_list,
         return;
     }
 
-    const std::vector<std::string> lines = wrap_anywhere
+    const std::vector<std::string> lines = cached_layout != nullptr && !cached_layout->lines.empty() &&
+            !(style.text_overflow_ellipsis && style.white_space_nowrap)
+        ? cached_layout->lines
+        : wrap_anywhere
         ? wrap_text_anywhere(text_measure,
                              rendered_text,
                              style.font_size,
@@ -1171,7 +1230,10 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
     }
 
     if (box.node != nullptr && box.node->type == NodeType::Text) {
-        const std::string text = transformed_render_text(*box.node, box.style.text_transform);
+        const TextLayoutCache* cached_layout = valid_text_layout_cache(box, options);
+        const std::string text = cached_layout != nullptr
+            ? cached_layout->rendered_text
+            : transformed_render_text(*box.node, box.style.text_transform);
         if (has_text_shadow(box.style)) {
             const TextShadowStyle& shadow = box.style.text_shadow;
             Rect shadow_rect = box.rect;
@@ -1183,7 +1245,8 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
                                   text,
                                   box.style,
                                   text_command_align(box.style.text_align),
-                                  options.text_measure);
+                                  options.text_measure,
+                                  cached_layout);
         }
         push_text_with_layout(display_list,
                               box.rect,
@@ -1191,7 +1254,8 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
                               text,
                               box.style,
                               text_command_align(box.style.text_align),
-                              options.text_measure);
+                              options.text_measure,
+                              cached_layout);
         push_text_decorations(display_list, box, box.rect);
     }
 }

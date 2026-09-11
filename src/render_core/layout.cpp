@@ -844,6 +844,8 @@ LayoutBoxPtr LayoutEngine::build_with_arena(const RenderObject& render_tree,
     auto root_box = make_layout_box(arena);
     root_box->node = render_tree.node;
     root_box->style = render_tree.style;
+    root_box->viewport_width = viewport_width;
+    root_box->viewport_height = viewport_height;
     build_layout_tree(render_tree, *root_box, arena);
     root_box->rect.height = layout_box(*root_box, 0, 0, viewport_width, viewport_height, 1);
     return root_box;
@@ -885,6 +887,8 @@ void LayoutEngine::build_layout_tree(const RenderObject& object, LayoutBox& box,
             ++layout_box_count;
             child_box->node = child->node;
             child_box->style = child->style;
+            child_box->viewport_width = box.viewport_width;
+            child_box->viewport_height = box.viewport_height;
             layout_box.children.push_back(std::move(child_box));
             child_work.push_back(PendingObject{child.get(), child_box_raw});
         }
@@ -1053,6 +1057,7 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
                                   int content_width,
                                   int min_width,
                                   int height) const {
+    box.text_layout_cache = TextLayoutCache{};
     const std::string text = transformed_render_text(*box.node, box.style.text_transform);
     const TextMetrics metrics = measure_text_with_letter_spacing(text_measure_,
                                                                  text,
@@ -1083,26 +1088,30 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
                                                content_width,
                                                text_indent));
     }
+    std::vector<std::string> lines;
     int line_count = 1;
     if (can_wrap && usable_text_width > 0) {
-        const std::size_t wrapped_line_count = box.style.overflow_wrap_anywhere
-            ? count_wrapped_lines_anywhere(text_measure_,
-                                           text,
-                                           box.style.font_size,
-                                           box.style.font_weight,
-                                           box.style.font_family_hash,
-                                           box.style.letter_spacing,
-                                           usable_text_width)
-            : count_wrapped_lines_at_opportunities(text_measure_,
-                                                   text,
-                                                   box.style.font_size,
-                                                   box.style.font_weight,
-                                                   box.style.font_family_hash,
-                                                   box.style.letter_spacing,
-                                                   usable_text_width);
+        lines = box.style.overflow_wrap_anywhere
+            ? wrap_text_anywhere(text_measure_,
+                                 text,
+                                 box.style.font_size,
+                                 box.style.font_weight,
+                                 box.style.font_family_hash,
+                                 box.style.letter_spacing,
+                                 usable_text_width)
+            : wrap_text_at_opportunities(text_measure_,
+                                         text,
+                                         box.style.font_size,
+                                         box.style.font_weight,
+                                         box.style.font_family_hash,
+                                         box.style.letter_spacing,
+                                         usable_text_width);
         line_count = clamp_layout_value(static_cast<std::int64_t>(std::min<std::size_t>(
-            wrapped_line_count, static_cast<std::size_t>(std::numeric_limits<int>::max()))));
+            lines.size(), static_cast<std::size_t>(std::numeric_limits<int>::max()))));
         line_count = std::max(1, line_count);
+    }
+    if (lines.empty() && !text.empty()) {
+        lines.push_back(text);
     }
     const int fixed_text_height = specified_content_height(box.style, height);
     int text_height = std::max(specified_content_min_height(box.style, height),
@@ -1122,6 +1131,29 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
                              std::max(0, bounded_subtract(usable_text_width, text_width)));
     }
     box.rect = Rect{text_x, border_box_y, text_width, text_height};
+    TextLayoutCache& cache = box.text_layout_cache;
+    cache.valid = true;
+    cache.source_text = box.node->text;
+    cache.rendered_text = text;
+    cache.lines = std::move(lines);
+    cache.text_measure = text_measure_;
+    cache.available_width = usable_text_width;
+    cache.content_width = content_width;
+    cache.rect_width = box.rect.width;
+    cache.rect_height = box.rect.height;
+    cache.viewport_width = box.viewport_width;
+    cache.viewport_height = box.viewport_height;
+    cache.font_size = box.style.font_size;
+    cache.font_weight = box.style.font_weight;
+    cache.font_family_hash = box.style.font_family_hash;
+    cache.line_height = line_height;
+    cache.text_indent = box.style.text_indent;
+    cache.letter_spacing = box.style.letter_spacing;
+    cache.text_transform = box.style.text_transform;
+    cache.overflow_wrap_anywhere = box.style.overflow_wrap_anywhere;
+    cache.white_space_nowrap = box.style.white_space_nowrap;
+    cache.text_overflow_ellipsis = box.style.text_overflow_ellipsis;
+    cache.text_align = box.style.text_align;
     return text_height;
 }
 

@@ -26,6 +26,22 @@ void check(bool condition, const char* message) {
     }
 }
 
+struct TextCacheMeasureCounter {
+    int calls = 0;
+};
+
+bool count_text_cache_measure(const std::string& text,
+                              int,
+                              int,
+                              TextMetrics* metrics,
+                              void* context) {
+    auto* counter = static_cast<TextCacheMeasureCounter*>(context);
+    ++counter->calls;
+    metrics->width = static_cast<int>(text.size()) * 8;
+    metrics->line_height = 20;
+    return true;
+}
+
 bool has_diagnostic_code(const VectorDiagnosticSink& sink, const std::string& code) {
     for (const Diagnostic& diagnostic : sink.diagnostics()) {
         if (diagnostic.code == code) {
@@ -129,6 +145,18 @@ const LayoutBox* find_first_text_layout(const LayoutBox& box) {
     }
     for (const auto& child : box.children) {
         if (const LayoutBox* found = find_first_text_layout(*child)) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+LayoutBox* find_first_text_layout_mutable(LayoutBox& box) {
+    if (box.node != nullptr && box.node->type == NodeType::Text) {
+        return &box;
+    }
+    for (auto& child : box.children) {
+        if (LayoutBox* found = find_first_text_layout_mutable(*child)) {
             return found;
         }
     }
@@ -456,6 +484,115 @@ void normal_text_wrap_matches_layout_line_breaks() {
     check(text_rects.size() >= 2, "ordinary breakable text emits multiple paint commands");
     check(text_rects[0].y != text_rects[1].y,
           "ordinary breakable text paint lines follow the layout line height");
+}
+
+void text_layout_cache_handoffs_wrapped_and_newline_lines() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><p id='wrapped'>Alpha beta gamma</p><pre id='newline'>AB\nCD</pre></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "p, pre { width: 40px; margin: 0; font-size: 10px; line-height: 12px; }"
+        "p { text-transform: uppercase; }"));
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    TextCacheMeasureCounter counter;
+    const TextMeasureProvider measure{count_text_cache_measure, &counter};
+    LayoutEngine layout_engine(resolver, measure);
+    auto layout_tree = layout_engine.layout(*render_tree, 96, 64);
+    const int calls_after_layout = counter.calls;
+
+    LayerTreeBuilderOptions options;
+    options.text_measure = measure;
+    LayerTreeBuilder builder(options);
+    auto layer_tree = builder.build(*layout_tree);
+    check(counter.calls == calls_after_layout,
+          "layer generation reuses layout wrapping and transformed text");
+
+    const DisplayList commands = builder.flatten(*layer_tree);
+    int wrapped_lines = 0;
+    int newline_lines = 0;
+    for (const DisplayCommand& command : commands) {
+        if (command.type != DisplayCommandType::Text || command.text.empty()) {
+            continue;
+        }
+        if (command.text == "ALPHA" || command.text == "BETA" || command.text == "GAMMA") {
+            ++wrapped_lines;
+        }
+        if (command.text == "AB" || command.text == "CD") {
+            ++newline_lines;
+        }
+    }
+    check(wrapped_lines >= 2, "cached wrapped text emits its layout lines");
+    check(newline_lines == 2, "cached explicit newline emits separate lines");
+}
+
+void text_layout_cache_rejects_dirty_text_and_viewport_changes() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><p id='label'>Original</p></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; } p { width: 80px; margin: 0; overflow-wrap: anywhere; }"));
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    TextCacheMeasureCounter counter;
+    const TextMeasureProvider measure{count_text_cache_measure, &counter};
+    LayoutEngine layout_engine(resolver, measure);
+    auto layout_tree = layout_engine.layout(*render_tree, 123, 77);
+    const int calls_after_layout = counter.calls;
+
+    LayerTreeBuilderOptions options;
+    options.text_measure = measure;
+    LayerTreeBuilder builder(options);
+    auto first_layer_tree = builder.build(*layout_tree);
+    check(counter.calls == calls_after_layout,
+          "non-default viewport cache is accepted for the matching snapshot");
+    (void) first_layer_tree;
+
+    Node* label = find_node_by_id(*document, "label");
+    check(label != nullptr, "dirty cache fixture finds text parent");
+    label->children.front()->set_text("Changed");
+    auto dirty_layer_tree = builder.build(*layout_tree);
+    check(counter.calls > calls_after_layout,
+          "dirty text invalidates the layout-owned text cache");
+    const DisplayList dirty_commands = builder.flatten(*dirty_layer_tree);
+    bool found_changed = false;
+    for (const DisplayCommand& command : dirty_commands) {
+        found_changed = found_changed || command.type == DisplayCommandType::Text &&
+            command.text == "Changed";
+    }
+    check(found_changed, "dirty text takes the updated display-list path");
+
+    const int calls_after_dirty = counter.calls;
+    LayoutBox* text_box = find_first_text_layout_mutable(*layout_tree);
+    check(text_box != nullptr, "viewport cache fixture finds text box");
+    text_box->viewport_width = 124;
+    auto viewport_layer_tree = builder.build(*layout_tree);
+    check(counter.calls > calls_after_dirty,
+          "viewport change invalidates the layout-owned text cache");
+    (void) viewport_layer_tree;
+}
+
+void text_layout_cache_keeps_unwrapped_letter_spaced_text() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse("<body><p id='label'>AB</p></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; } p { width: 80px; margin: 0; letter-spacing: 1px; }"));
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 80, 40);
+
+    LayerTreeBuilder builder;
+    auto layer_tree = builder.build(*layout_tree);
+    const DisplayList commands = builder.flatten(*layer_tree);
+    bool found_text = false;
+    for (const DisplayCommand& command : commands) {
+        found_text = found_text || command.type == DisplayCommandType::Text;
+    }
+    check(found_text, "cached unwrapped letter-spaced text remains paintable");
 }
 
 void scroll_container_offsets_descendant_paint() {
@@ -1672,6 +1809,9 @@ int main() {
         visibility_preserves_layout_and_suppresses_hidden_paint_and_hit_testing();
         text_spacing_and_anywhere_wrap_emit_only_declared_extra_commands();
         normal_text_wrap_matches_layout_line_breaks();
+        text_layout_cache_handoffs_wrapped_and_newline_lines();
+        text_layout_cache_rejects_dirty_text_and_viewport_changes();
+        text_layout_cache_keeps_unwrapped_letter_spaced_text();
         scroll_container_offsets_descendant_paint();
         scroll_container_keeps_absolute_sibling_navigation_fixed();
         scroll_indicator_is_opt_in_overlay();
