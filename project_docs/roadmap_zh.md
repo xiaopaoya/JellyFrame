@@ -28,6 +28,7 @@
 1. **A2 作者工具证据，实机继续：**WS147 Device OS/provider、已安装脚本 App、触摸诊断和 touch-latency 样例已合入主线。干净机器 VS Code 完整生命周期，以及真实已安装 App 的 panel/input 证据仍按独立报告验收，不能由源码 CI 或 provider lifecycle PASS 替代。
 2. **R1 Core-only 维护，首轮审查已归档：**响应式布局、软件栅格器、文本、布局和极值安全审查已完成；Core-only Debug、Release、Sanitizer 构建及 CTest 均通过。统一 dirty/clip/command budget 契约仍是 RFC 待评审事项，长文本换行 benchmark 已加入主线作为诊断基线。详见 `r1_render_core_audit_20260903_zh.md` 和 `render_core_budget_contract_rfc_20260903_zh.md`。不要机会主义地扩张浏览器 CSS 范围或修改 port profile。
    后续审查还关闭了 timer 批次顺序、同帧 rAF 取消和排队 XHR 的 provider payload 清理问题；均已有 Debug 与 scripting MinSizeRel 定向回归，已被 worker 取走的 XHR 仍走迟到 completion 释放路径。
+   2026-09-10 低风险批次又完成了 LayoutBox 文本交接复用、圆角裁剪与 bitmap fallback 热路径、dirty rect 有界候选合并、共享 flex 排序、变换 opacity 采样和 trace 目录快照。剩余项目仅包括明确延后的结构性或语义问题，不重新开启已经关闭的 O1 性能阶段。
 3. **B2 后端准备，受限进行：**保持 configure-time `ScriptRuntime` 边界及其不变量。在具备独立 compatibility/resource RFC 与对等证据前，不引入第二后端，也不改变 JerryScript 默认选择。
 4. **A3 筹备，已经进行中：**试用材料、设备采购、视觉资产与反馈运营可并行，但必须在 A2 的两项证据均通过后才开始外部产品试用。
 5. **A3 作者体验增强，隔离原型进行中：**按 [可视化 App 编辑器计划](visual_app_editor_plan_zh.md) 收束 VS Code 内的受限可视化编辑流程。该工作可改善演示和 App 创作门槛，但不替代 A2 的干净机器、设备生命周期或 panel/input 证据。
