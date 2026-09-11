@@ -186,6 +186,33 @@ struct TextPaintCounter {
     int calls = 0;
 };
 
+struct OpacityTextProbe {
+    std::string text;
+    Color color;
+    int calls = 0;
+};
+
+bool opacity_text_probe_painter(FrameBuffer& target,
+                               Rect rect,
+                               Color color,
+                               const std::string& text,
+                               int,
+                               int,
+                               TextCommandAlign,
+                               bool,
+                               void* raw_context) {
+    auto* probe = static_cast<OpacityTextProbe*>(raw_context);
+    if (probe != nullptr) {
+        probe->text = text;
+        probe->color = color;
+        ++probe->calls;
+    }
+    if (target.contains(rect.x, rect.y)) {
+        target.pixel(rect.x, rect.y) = color;
+    }
+    return true;
+}
+
 struct ReplayTimingClock {
     const std::uint64_t* samples = nullptr;
     std::size_t sample_count = 0;
@@ -1445,6 +1472,64 @@ void compositor_smooths_scaled_layers() {
     check(nearest.pixel(1, 1).r == 0, "nearest scaled layer keeps hard edge");
 }
 
+void compositor_applies_opacity_to_radial_gradient_pixels() {
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 9, 9};
+
+    auto child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    child->type = LayerType::Composited;
+    child->opacity = 0.5F;
+    child->bounds = Rect{0, 0, 9, 9};
+    DisplayCommand radial;
+    radial.type = DisplayCommandType::RadialGradient;
+    radial.rect = child->bounds;
+    radial.color = Color{0, 0, 0, 255};
+    radial.color2 = Color{255, 0, 0, 255};
+    child->display_list.push_back(radial);
+    root.children.push_back(std::move(child));
+
+    const FrameBuffer output =
+        SoftwareCompositor().render(root, 9, 9, Color{255, 255, 255, 255});
+    check(output.pixel(4, 4).r > 120 && output.pixel(4, 4).r < 140,
+          "radial gradient center receives layer opacity");
+    check(output.pixel(4, 4).g > 120 && output.pixel(4, 4).g < 140,
+          "radial gradient center preserves opacity on the second channel");
+}
+
+void opacity_fallback_preserves_text_without_copying_command() {
+    OpacityTextProbe probe;
+    SoftwareCompositor::Options options;
+    options.max_offscreen_pixels = 1;
+    LayerNode root;
+    root.type = LayerType::Root;
+    root.bounds = Rect{0, 0, 2, 1};
+
+    auto child = LayerNodePtr(new LayerNode, LayerNodeDeleter{false});
+    child->type = LayerType::Paint;
+    child->opacity = 0.5F;
+    child->bounds = Rect{0, 0, 2, 1};
+    DisplayCommand text;
+    text.type = DisplayCommandType::Text;
+    text.rect = child->bounds;
+    text.color = Color{20, 30, 40, 255};
+    text.text = "text with preserved fields";
+    child->display_list.push_back(text);
+    root.children.push_back(std::move(child));
+
+    const FrameBuffer output = SoftwareCompositor(
+        TextPainter{opacity_text_probe_painter, &probe}, options).render(
+            root, 2, 1, Color{255, 255, 255, 255});
+    check(probe.calls == 1 && probe.text == text.text,
+          "opacity fallback passes the original text without changing command fields");
+    check(probe.color.a == 127, "opacity fallback passes effective text alpha");
+    check(output.pixel(0, 0).r == 20 && output.pixel(0, 0).a == 127,
+          "opacity fallback paints the effective text color");
+}
+
 void compositor_degrades_oversized_offscreen_layers_without_crashing() {
     LayerNode root;
     root.type = LayerType::Root;
@@ -2210,6 +2295,8 @@ int main() {
         compositor_scratch_reuses_clipped_command_storage();
         rasterizer_scratch_reuses_clipped_image_storage();
         compositor_smooths_scaled_layers();
+        compositor_applies_opacity_to_radial_gradient_pixels();
+        opacity_fallback_preserves_text_without_copying_command();
         compositor_degrades_oversized_offscreen_layers_without_crashing();
         compositor_does_not_bypass_rounded_clip_when_offscreen_budget_is_exceeded();
         compositor_keeps_composited_paint_outside_layout_bounds();
