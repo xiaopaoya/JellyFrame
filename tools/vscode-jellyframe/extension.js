@@ -3810,15 +3810,10 @@ function showRenderTracePanel(context, parsed, filePath) {
     }, null, context.subscriptions);
   }
   const traceDirectory = path.dirname(filePath);
+  const traceNames = traceDirectoryNames(traceDirectory);
   const frameImages = {};
   for (const frame of parsed.frames || []) {
-    const names = [];
-    if (typeof frame.captureFile === "string" && frame.captureFile.trim()) {
-      names.push(path.basename(frame.captureFile));
-    }
-    const frameName = `frame_${String(frame.frame).padStart(3, "0")}`;
-    names.push(`${frameName}.bmp`, `${frameName}.ppm`, `${frameName}.png`);
-    const captureName = names.find((name) => fs.existsSync(path.join(traceDirectory, name)));
+    const captureName = traceFrameImageName(frame, traceNames);
     if (captureName) {
       frameImages[String(frame.frame)] = tracePanel.webview.asWebviewUri(
         vscode.Uri.file(path.join(traceDirectory, captureName))
@@ -3834,6 +3829,24 @@ function showRenderTracePanel(context, parsed, filePath) {
     frameImages
   });
   tracePanel.reveal(vscode.ViewColumn.Beside);
+}
+
+function traceDirectoryNames(traceDirectory, readDirectory = fs.readdirSync) {
+  try {
+    return new Set(readDirectory(traceDirectory));
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function traceFrameImageName(frame, availableNames) {
+  const names = [];
+  if (typeof frame.captureFile === "string" && frame.captureFile.trim()) {
+    names.push(path.basename(frame.captureFile));
+  }
+  const frameName = `frame_${String(frame.frame).padStart(3, "0")}`;
+  names.push(`${frameName}.bmp`, `${frameName}.ppm`, `${frameName}.png`);
+  return names.find((name) => availableNames.has(name));
 }
 
 function templateNames(context) {
@@ -4120,5 +4133,7 @@ function deactivate() {
 
 module.exports = {
   activate,
-  deactivate
+  deactivate,
+  traceDirectoryNames,
+  traceFrameImageName
 };
