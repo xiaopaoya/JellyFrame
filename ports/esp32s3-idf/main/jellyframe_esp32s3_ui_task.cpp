@@ -154,6 +154,10 @@
 #define CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION 0
 #endif
 
+#ifndef CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_VISUAL_ACCEPTED
+#define CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_VISUAL_ACCEPTED 0
+#endif
+
 #ifndef CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_FALLBACK_PROBE
 #define CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_FALLBACK_PROBE 0
 #endif
@@ -532,9 +536,21 @@ const char* ui_task_mode(const TimerUiTaskContext& context) {
     return "interactive";
 }
 
+bool panel_scroll_acceleration_enabled(const TimerUiTaskContext& context) {
+    switch (context.board_runtime.profile.id) {
+    case boards::BoardId::WaveshareEsp32s3TouchLcd147:
+        return CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION &&
+            CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_VISUAL_ACCEPTED;
+    case boards::BoardId::WaveshareEsp32s3TouchLcd169:
+        return CONFIG_JELLYFRAME_WS169_PANEL_SCROLL_ACCELERATION;
+    case boards::BoardId::GenericQemu:
+        return false;
+    }
+    return false;
+}
+
 bool panel_scroll_candidate(const TimerUiTaskContext& context, std::size_t dirty_count) {
-    if (!(CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION ||
-          CONFIG_JELLYFRAME_WS169_PANEL_SCROLL_ACCELERATION) ||
+    if (!panel_scroll_acceleration_enabled(context) ||
         !CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL ||
         !context.scroll_benchmark || context.board_runtime.packed_scroll_flush == nullptr ||
         context.panel.packed_scroll_flush == nullptr || context.panel.reset_scroll == nullptr ||
@@ -793,8 +809,7 @@ void print_telemetry(const PortTelemetry& telemetry, const TimerUiTaskContext& c
              static_cast<unsigned>(telemetry.framebuffer_scroll_blits),
              framebuffer_scroll_blit_ms_per_step,
              scroll_reuse_compose_ms_per_step,
-             (CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION ||
-              CONFIG_JELLYFRAME_WS169_PANEL_SCROLL_ACCELERATION) ? 1 : 0,
+             panel_scroll_acceleration_enabled(context) ? 1 : 0,
              static_cast<unsigned>(telemetry.panel_scroll_steps),
              static_cast<unsigned>(telemetry.panel_scroll_fallbacks),
              static_cast<unsigned>(telemetry.panel_scroll_wraps),

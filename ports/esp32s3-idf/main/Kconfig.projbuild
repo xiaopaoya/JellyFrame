@@ -459,9 +459,21 @@ config JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION
         uncertainty immediately resets the scroll address and falls back to
         the normal framebuffer scroll-blit present path.
 
+config JELLYFRAME_WS147_PANEL_SCROLL_VISUAL_ACCEPTED
+    bool "Acknowledge WS147 physical-GRAM visual acceptance"
+    depends on JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION
+    default n
+    help
+        Safety gate for the WS147 JD9853 physical-GRAM path. The 2026-09-11
+        retest observed eye-visible lower-edge row displacement during upward
+        scrolling, so this gate must remain disabled until a follow-up proves
+        a synchronized VSCSAD/strip update, for example with TE or vblank.
+        This is separate from the experimental acceleration switch so an old
+        A/B defaults file cannot activate an unaccepted path.
+
 config JELLYFRAME_WS147_PANEL_SCROLL_FALLBACK_PROBE
     bool "Inject one WS147 panel-scroll ineligible-frame fallback"
-    depends on JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION
+    depends on JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION && JELLYFRAME_WS147_PANEL_SCROLL_VISUAL_ACCEPTED
     default n
     help
         Acceptance-only probe. After 30 successful panel-scroll steps, forces

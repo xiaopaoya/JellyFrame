@@ -124,11 +124,20 @@ idf.py -B build-ws147-scroll -D SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchm
 # Interactive retained scroll demo. Apply after the benchmark defaults.
 idf.py -B build-ws147-scroll-demo -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_scroll_demo.defaults" build
 
-# Phase D control (A) and experimental physical-GRAM ring path (B).
+# Phase D control (A) and the held WS147 physical-GRAM experiment (B).
 # Both use the same full-screen, opaque, single-scroll-viewport fixture.
 idf.py -B build-ws147-panel-a -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_panel_scroll_a.defaults" build
 idf.py -B build-ws147-panel-b -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_panel_scroll_b.defaults" build
 ```
+
+The WS147 B defaults intentionally keep
+`JELLYFRAME_WS147_PANEL_SCROLL_VISUAL_ACCEPTED` disabled. The 2026-09-11
+hardware retest showed eye-visible lower-edge row displacement during upward
+scroll (`result=fail-visual`), despite passing telemetry and fallback checks.
+Do not release or promote this path until the VSCSAD/strip update is
+synchronized with panel scan (TE or another demonstrated vblank boundary) and
+visual acceptance is repeated. The runtime enforces this gate, so the old B
+defaults cannot activate the physical-GRAM callback by themselves.
 
 ### Bounded Device Performance Profile
 
@@ -160,6 +169,11 @@ them into element attribution.
 
 To prove the B path can leave physical-GRAM mapping safely, use the
 acceptance-only one-shot fallback probe with an isolated sdkconfig:
+
+The probe is currently blocked by the same WS147 visual-acceptance gate as B;
+do not enable that gate until the lower-edge row-displacement defect has been
+fixed and a new visual A/B report passes. The command below is retained as the
+follow-up procedure for that isolated investigation build.
 
 ```powershell
 idf.py -B build-ws147-panel-fallback-probe `

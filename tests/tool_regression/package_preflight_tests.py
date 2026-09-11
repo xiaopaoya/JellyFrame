@@ -1983,6 +1983,8 @@ class PackagePreflightTests(unittest.TestCase):
             self.assertNotIn("CONFIG_JELLYFRAME_ESP32S3_USE_PACKED_RGB565_SINK=y", control)
             self.assertIn("CONFIG_JELLYFRAME_ESP32S3_USE_PACKED_RGB565_SINK=y", accelerated)
             self.assertIn(f"CONFIG_JELLYFRAME_{board.upper()}_PANEL_SCROLL_ACCELERATION=y", accelerated)
+        ws147_b = (port_root / "sdkconfig.ws147_panel_scroll_b.defaults").read_text(encoding="utf-8")
+        self.assertIn("CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_VISUAL_ACCEPTED is not set", ws147_b)
 
     def test_device_profile_log_rejects_incomplete_window(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-device-profile-") as directory:

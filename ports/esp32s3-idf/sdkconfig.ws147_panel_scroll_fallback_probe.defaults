@@ -1,1 +1,4 @@
+# Acceptance-only follow-up probe. The Kconfig visual-acceptance gate must be
+# explicitly enabled in an isolated investigation build after WS147 visual
+# retest passes; this file intentionally does not enable that gate.
 CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_FALLBACK_PROBE=y
