@@ -1950,6 +1950,29 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(parsed["metrics"]["presentP95Us"], 22800)
         self.assertEqual(parsed["metrics"]["dmaWaitP95Us"], 17100)
         self.assertEqual(parsed["metrics"]["packedBytes"], 4546560)
+
+    def test_device_profile_log_strips_serial_ansi_codes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            telemetry_log = Path(directory) / "device-profile-console.log"
+            telemetry_log.write_text(
+                "\x1b[0;32mI (10) JellyFrameUi: device_profile format=jellyframe.device.profile.v0 "
+                "window=1 frames=120 partial=0\x1b[0m\n"
+                "\x1b[0;32mI (11) JellyFrameUi: device_profile_timing window=1 frame_us_p95=7000\x1b[0m\n"
+                "\x1b[0;32mI (12) JellyFrameUi: device_profile_pipeline window=1 "
+                "paint_us_p95=2000 present_us_p95=2000\x1b[0m\n"
+                "\x1b[0;32mI (13) JellyFrameUi: device_profile_present window=1 "
+                "dma_wait_us_p95=1000\x1b[0m\n"
+                "\x1b[0;32mI (14) JellyFrameUi: device_profile_counters window=1 "
+                "packed_bytes=1234 present_failures=0\x1b[0m\n",
+                encoding="utf-8",
+            )
+            parsed = jellyframe_cli.parse_port_telemetry_log(telemetry_log)
+
+        self.assertEqual(parsed["format"], "jellyframe.device.profile.v0")
+        self.assertEqual(parsed["metrics"]["frameP95Us"], 7000)
+        self.assertEqual(parsed["metrics"]["presentP95Us"], 2000)
+        self.assertEqual(parsed["metrics"]["dmaWaitP95Us"], 1000)
+        self.assertEqual(parsed["metrics"]["packedBytes"], 1234)
         self.assertEqual(parsed["metrics"]["partial"], 0)
 
     def test_device_profile_log_rejects_incomplete_window(self):

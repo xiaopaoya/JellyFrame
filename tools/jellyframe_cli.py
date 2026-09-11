@@ -470,6 +470,7 @@ DEVICE_PROFILE_RECORD_KINDS = frozenset((
 DEVICE_PROFILE_RECORD_PATTERN = re.compile(
     r"\b(?P<kind>device_profile(?:_timing|_pipeline|_present|_counters)?)\s+(?P<body>.+)$"
 )
+ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 def parse_key_value_tokens(body: str) -> dict[str, str]:
@@ -487,7 +488,8 @@ def parse_key_value_tokens(body: str) -> dict[str, str]:
 def complete_device_profile_metrics(lines: list[str], source: str) -> dict | None:
     """Return the one complete V0 profile in a console log, if present."""
     windows: dict[int, dict[str, dict[str, str]]] = {}
-    for line_number, line in enumerate(lines, 1):
+    for line_number, raw_line in enumerate(lines, 1):
+        line = ANSI_ESCAPE_PATTERN.sub("", raw_line)
         match = DEVICE_PROFILE_RECORD_PATTERN.search(line)
         if not match:
             continue
@@ -556,7 +558,7 @@ def parse_port_telemetry_log(log_path: Path) -> dict:
         for raw_line in lines:
             if device_profile_metrics is not None:
                 break
-            line = raw_line.strip()
+            line = ANSI_ESCAPE_PATTERN.sub("", raw_line).strip()
             if not line or line.startswith("#") or line.startswith("["):
                 continue
             match = re.search(

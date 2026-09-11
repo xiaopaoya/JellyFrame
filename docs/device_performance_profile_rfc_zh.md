@@ -1,6 +1,6 @@
 # Device Performance Profile V0（提案）
 
-> 状态：提案；最后更新：2026-09-10  
+> 状态：提案；最后更新：2026-09-10；适用版本：0.6.0-dev
 > 范围：带 console 的 port 实机阶段窗口汇总；不定义桌面 trace、逐元素计时或 JFDP wire 扩展。
 
 ## 目标

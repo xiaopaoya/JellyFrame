@@ -33,6 +33,7 @@ DEVICE_PROFILE_RECORD_KINDS = frozenset((
 DEVICE_PROFILE_RECORD_PATTERN = re.compile(
     r"\b(?P<kind>device_profile(?:_timing|_pipeline|_present|_counters)?)\s+(?P<body>.+)$"
 )
+ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -193,7 +194,8 @@ def read_microbench(path: Path) -> list[dict[str, Any]]:
 def device_profile_records(lines: list[str], path: Path) -> dict[str, str] | None:
     """Return the sole complete Device Performance Profile V0 window, if any."""
     windows: dict[int, dict[str, dict[str, str]]] = {}
-    for line_number, line in enumerate(lines, 1):
+    for line_number, raw_line in enumerate(lines, 1):
+        line = ANSI_ESCAPE_PATTERN.sub("", raw_line)
         match = DEVICE_PROFILE_RECORD_PATTERN.search(line)
         if not match:
             continue
@@ -276,7 +278,8 @@ def load_device_telemetry(path: Path) -> dict[str, Any]:
     }
     profile_values = device_profile_records(lines, path)
     value_lines = [" ".join(f"{key}={value}" for key, value in profile_values.items())] if profile_values else lines
-    for line in value_lines:
+    for raw_line in value_lines:
+        line = ANSI_ESCAPE_PATTERN.sub("", raw_line)
         for key, raw_value in re.findall(r"([a-zA-Z][a-zA-Z0-9_]*)=([^\s]+)", line):
             target = aliases.get(key)
             if target is None:

@@ -1,6 +1,6 @@
 # Device Performance Profile V0 实机验收要求
 
-> 状态：移植侧执行稿；最后更新：2026-09-10  
+> 状态：移植侧执行稿；最后更新：2026-09-10；适用版本：0.6.0-dev
 > 适用范围：ESP32-S3 console-backed retained UI fixture  
 > 不适用：Developer Image/JFDP 导出、脚本 worker 动画、逐元素 trace、功耗验收
 
