@@ -113,6 +113,7 @@ private:
     BitmapFontFallbackContext fallback_context_{};
     std::vector<const BitmapFont*> family_fonts_;
     BitmapFontFallbackContext family_context_{};
+    bool contexts_dirty_ = true;
 };
 
 } // namespace jellyframe
