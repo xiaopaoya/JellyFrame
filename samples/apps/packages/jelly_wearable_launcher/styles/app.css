@@ -274,7 +274,7 @@ body {
   }
 
   .top strong {
-    font-size:17px;
+    font-size:12px;
   }
 
   .top span {
@@ -291,7 +291,7 @@ body {
   }
 
   .tile > span:last-child {
-    margin-top:4px;
+    display:none;
   }
 
   .icon {
