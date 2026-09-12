@@ -145,6 +145,45 @@ void bridge_delivers_completion_as_bounded_worker_value_packet() {
            ScriptTaskServicePayloadLeaseStatus::Accepted);
 }
 
+void bridge_preserves_successful_zero_byte_payload_lease() {
+    AppRuntimeHost host = make_host();
+    const AppInstance app = host.launch("org.example.script.empty-response", AppRole::App);
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(app.id);
+    PayloadAdapter adapter{&host, 0, {}};
+    ScriptTaskServiceBridge bridge(host, supervisor, {4, 20, copy_payload, &adapter, release_payload, &adapter});
+
+    const ScriptTaskServiceSubmitResult submitted = bridge.submit(
+        session, 32, HostServiceJobKind::NetworkFetch, 0, 0, 0, 48);
+    assert(submitted.accepted());
+    HostServiceRequest request;
+    assert(host.pop_worker_request(request));
+    const std::uint32_t handle = host.handles().allocate(
+        HostServiceHandleKind::FetchResponse, app.id, 0, nullptr, request.client_token);
+    assert(handle != 0);
+    adapter.expected_handle = handle;
+    assert(host.push_completion(complete(request, handle)));
+
+    AppFrameScratch scratch = make_scratch();
+    const ScriptTaskServiceBridgePumpResult pumped = bridge.pump(scratch);
+    assert(pumped.delivered == 1);
+    assert(adapter.copy_calls == 1 && adapter.release_calls == 1);
+
+    ScriptTaskPacket packet;
+    assert(supervisor.take_worker_packet(session, packet));
+    ScriptTaskServiceCompletion completion;
+    assert(decode_script_task_service_completion(packet.payload, completion));
+    assert(completion.status == HostServiceStatus::Completed);
+    assert(completion.payload_lease_id != 0);
+    assert(completion.byte_count == 0);
+    std::vector<std::uint8_t> copied;
+    assert(supervisor.copy_service_payload(session, completion.payload_lease_id, copied) ==
+           ScriptTaskServicePayloadLeaseStatus::Accepted);
+    assert(copied.empty());
+    assert(supervisor.release_service_payload(session, completion.payload_lease_id) ==
+           ScriptTaskServicePayloadLeaseStatus::Accepted);
+}
+
 void bridge_submits_dedicated_worker_service_packets() {
     AppRuntimeHost host = make_host();
     const AppInstance app = host.launch("org.example.script.worker-request", AppRole::App);
@@ -528,6 +567,13 @@ void bridge_rejects_privileged_services_and_foreign_input_handles() {
     assert(bridge.submit(session, 2, HostServiceJobKind::NetworkFetch, foreign_handle).status ==
            ScriptTaskServiceSubmitStatus::InvalidToken);
     assert(host.handles().release(foreign_handle));
+
+    const std::uint32_t unowned_handle = host.handles().allocate(
+        HostServiceHandleKind::Surface, app.id, 8, nullptr, 0);
+    assert(unowned_handle != 0);
+    assert(bridge.submit(session, 3, HostServiceJobKind::NetworkFetch, unowned_handle, 0, 0, 1).status ==
+           ScriptTaskServiceSubmitStatus::InvalidToken);
+    assert(host.handles().release(unowned_handle));
 }
 
 void bridge_teardown_leaves_late_inflight_work_to_host_stale_cleanup() {
@@ -567,6 +613,7 @@ void bridge_teardown_leaves_late_inflight_work_to_host_stale_cleanup() {
 int script_task_service_bridge_tests_main() {
     completion_payload_round_trips_without_native_data();
     bridge_delivers_completion_as_bounded_worker_value_packet();
+    bridge_preserves_successful_zero_byte_payload_lease();
     bridge_submits_dedicated_worker_service_packets();
     bridge_cancels_a_queued_worker_request();
     bridge_rejects_non_service_or_malformed_packets_without_host_access();

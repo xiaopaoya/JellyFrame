@@ -210,7 +210,8 @@ bool has_valid_clip_parallelism(const ScriptTaskAppFrame& frame) {
 }
 
 bool has_valid_value_frame_shape(const ScriptTaskAppFrame& frame) {
-    return frame.viewport.width > 0 && frame.viewport.height > 0 && has_valid_clip_parallelism(frame);
+    return frame.viewport.width > 0 && frame.viewport.height > 0 &&
+        has_valid_clip_parallelism(frame) && !frame.clip_metadata_overflow;
 }
 
 std::uint16_t display_clip_index_at(const ScriptTaskAppFrame& frame, std::size_t index) {
@@ -291,8 +292,9 @@ bool valid_display_command_type(DisplayCommandType type) {
     return static_cast<std::size_t>(type) < kDisplayCommandTypeCount;
 }
 
-bool equal_paint_skeleton(const ScriptTaskAppFrame& previous, const ScriptTaskAppFrame& current) {
-    const ScriptTaskFrameDiff report = diff_script_task_app_frames(previous, current);
+bool equal_paint_skeleton(const ScriptTaskAppFrame& previous,
+                          const ScriptTaskAppFrame& current,
+                          const ScriptTaskFrameDiff& report) {
     if (!report.paint_structure_equal || previous.display_list.size() != current.display_list.size()) {
         return false;
     }
@@ -580,8 +582,28 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
     } else {
         repaint = normalize_dirty_rects(dirty_rects, dirty_rect_count, target_rect);
     }
-    std::vector<RasterClip> clip_chain;
     std::vector<RasterClip> source_clip_chain;
+    std::vector<std::vector<RasterClip>> cached_clip_chains(frame.clips.size());
+    std::vector<std::uint8_t> cached_clip_states(frame.clips.size(), 0);
+    const auto cached_clip_chain = [&](std::uint32_t clip_index,
+                                       const std::vector<RasterClip>*& output) {
+        output = nullptr;
+        if (clip_index == kScriptTaskNoClip) {
+            return true;
+        }
+        if (clip_index >= frame.clips.size()) {
+            return false;
+        }
+        const std::size_t index = static_cast<std::size_t>(clip_index);
+        if (cached_clip_states[index] == 0) {
+            cached_clip_states[index] = collect_clip_chain(frame, clip_index, cached_clip_chains[index]) ? 1 : 2;
+        }
+        if (cached_clip_states[index] != 1) {
+            return false;
+        }
+        output = &cached_clip_chains[index];
+        return true;
+    };
     SoftwareRasterizerScratch owned_scratch;
     SoftwareRasterizerScratch* working_scratch = scratch != nullptr ? scratch : &owned_scratch;
     const auto rasterize_transformed = [&](const DisplayCommand& command,
@@ -639,7 +661,8 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
                                   safe_negate(command.rect.y),
                                   working_scratch);
         } else {
-            if (!collect_clip_chain(frame, command.transform.source_clip_index, source_clip_chain)) {
+            const std::vector<RasterClip>* cached_source_clip_chain = nullptr;
+            if (!cached_clip_chain(command.transform.source_clip_index, cached_source_clip_chain)) {
                 report_diagnostic(options_.diagnostics,
                                   DiagnosticStage::Paint,
                                   DiagnosticSeverity::Warning,
@@ -648,6 +671,7 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
                                   "clip chain");
                 return false;
             }
+            source_clip_chain = *cached_source_clip_chain;
             for (RasterClip& source_clip : source_clip_chain) {
                 source_clip.rect.x = safe_add(source_clip.rect.x, safe_negate(command.rect.x));
                 source_clip.rect.y = safe_add(source_clip.rect.y, safe_negate(command.rect.y));
@@ -717,7 +741,8 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
                     frame.display_clip_indices[command_end] == clip_index)) {
                 ++command_end;
             }
-            if (!collect_clip_chain(frame, clip_index, clip_chain)) {
+            const std::vector<RasterClip>* clip_chain = nullptr;
+            if (!cached_clip_chain(clip_index, clip_chain)) {
                 if (status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidClipChain;
                 return false;
             }
@@ -726,8 +751,8 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
                 if (frame.display_list[command_index].transform.enabled) {
                     if (!rasterize_transformed(frame.display_list[command_index],
                                                dirty,
-                                               clip_chain.empty() ? nullptr : clip_chain.data(),
-                                               clip_chain.size())) {
+                                               clip_chain == nullptr || clip_chain->empty() ? nullptr : clip_chain->data(),
+                                               clip_chain == nullptr ? 0 : clip_chain->size())) {
                         if (status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
                         return false;
                     }
@@ -744,8 +769,8 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
                                               dirty,
                                               0,
                                               0,
-                                              clip_chain.empty() ? nullptr : clip_chain.data(),
-                                              clip_chain.size(),
+                                              clip_chain == nullptr || clip_chain->empty() ? nullptr : clip_chain->data(),
+                                              clip_chain == nullptr ? 0 : clip_chain->size(),
                                               working_scratch);
             }
             command_begin = command_end;
@@ -797,12 +822,12 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& rend
         fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::PreviousImageDimensions;
         return false;
     }
-    if (!equal_paint_skeleton(*previous_frame_, frame)) {
+    const ScriptTaskFrameDiff report = diff_script_task_app_frames(*previous_frame_, frame);
+    if (!equal_paint_skeleton(*previous_frame_, frame, report)) {
         fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::PaintSkeleton;
         return false;
     }
 
-    const ScriptTaskFrameDiff report = diff_script_task_app_frames(*previous_frame_, frame);
     if (report.changed_command_count == 0 || !report.has_changed_command_bounds) {
         fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::NoChangedCommands;
         return false;
@@ -873,7 +898,7 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& rend
             }
             const Rect expanded_region = union_rect(changed_region, group.rounded_clip_bounds);
             if (!equal_rect(expanded_region, changed_region)) {
-                expanded = expanded || !equal_rect(expanded_region, changed_region);
+                expanded = true;
                 changed_region = expanded_region;
             }
         }

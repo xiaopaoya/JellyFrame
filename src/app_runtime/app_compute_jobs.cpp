@@ -164,7 +164,7 @@ HostServiceCompletion AppComputeJobMock::complete_request(AppRuntimeHost& host,
         return make_cancelled_completion(request);
     }
     HostServiceCompletion completion{request.job_id, HostServiceJobKind::ComputeJob, pending->result.status,
-                                     request.app_instance_id, 0, pending->result.error_code, 0};
+                                     request.app_instance_id, 0, pending->result.error_code, 0, request.client_token};
     if (completion.status == HostServiceStatus::Completed) {
         if (pending->result.output.size() > policy_.max_result_bytes) {
             completion.status = HostServiceStatus::BudgetExceeded;
@@ -175,15 +175,19 @@ HostServiceCompletion AppComputeJobMock::complete_request(AppRuntimeHost& host,
         } else {
             const std::uint32_t bytes = static_cast<std::uint32_t>(pending->result.output.size());
             const std::uint32_t handle = host.handles().allocate(HostServiceHandleKind::ComputeResult,
-                                                                 request.app_instance_id, bytes);
+                                                                 request.app_instance_id, bytes, nullptr,
+                                                                 request.client_token);
             if (handle == 0) {
                 completion.status = HostServiceStatus::BudgetExceeded;
                 completion.error_code = kComputeErrorResultHandleBudget;
             } else {
                 completion.result_handle = handle;
                 completion.byte_count = bytes;
+                // The pending result is consumed immediately after completion; move its
+                // potentially large payload into the handle record instead of copying it.
                 records_.push_back(AppComputeResultRecord{handle, request.app_instance_id,
-                                                           pending->operation, pending->result.output});
+                                                           std::move(pending->operation),
+                                                           std::move(pending->result.output)});
             }
         }
     }

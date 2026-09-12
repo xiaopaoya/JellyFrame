@@ -315,6 +315,27 @@ void renderer_keeps_non_dirty_pixels_and_rejects_bad_chain() {
     assert(status == ScriptTaskFrameRenderStatus::InvalidClipChain);
 }
 
+void renderer_bounds_large_dirty_input_before_normalization() {
+    ScriptTaskFrameRenderer renderer;
+    ScriptTaskAppFrame frame = rounded_frame();
+    FrameBuffer output(40, 40, {90, 90, 90, 255});
+    std::vector<Rect> dirty;
+    dirty.reserve(129);
+    for (int index = 0; index < 129; ++index) {
+        dirty.push_back(Rect{index, 0, 1, 1});
+    }
+    ScriptTaskFrameRenderStatus status = ScriptTaskFrameRenderStatus::InvalidFrame;
+    assert(renderer.render_into(frame,
+                                output,
+                                {255, 255, 255, 255},
+                                dirty.data(),
+                                dirty.size(),
+                                nullptr,
+                                &status));
+    assert(status == ScriptTaskFrameRenderStatus::Accepted);
+    assert(output.pixel(20, 20).b > 200);
+}
+
 void renderer_exposes_rounded_dirty_fast_path_statistics() {
     ScriptTaskAppFrame frame = rounded_frame();
     FrameBuffer output(40, 40, {255, 255, 255, 255});
@@ -1135,6 +1156,7 @@ int script_task_frame_renderer_tests_main() {
     renderer_matches_nested_source_clips_for_transformed_child_content();
     renderer_matches_layer_compositor_for_translucent_clip_run();
     renderer_keeps_non_dirty_pixels_and_rejects_bad_chain();
+    renderer_bounds_large_dirty_input_before_normalization();
     renderer_exposes_rounded_dirty_fast_path_statistics();
     renderer_forwards_opt_in_rounded_replay_timing();
     frame_diff_reports_value_churn_without_granting_reuse();

@@ -176,14 +176,16 @@ HostServiceCompletion AppVideoFrameProviderMock::complete_request(AppRuntimeHost
     }
     const AppVideoFrameFixture& fixture = fixtures_[pending->fixture_index];
     HostServiceCompletion completion{request.job_id, HostServiceJobKind::VideoFrameDecode,
-                                     HostServiceStatus::Completed, request.app_instance_id, 0, 0, 0};
+                                     HostServiceStatus::Completed, request.app_instance_id, 0, 0, 0,
+                                     request.client_token};
     if (!valid_fixture(fixture) || fixture.pixels.size() > std::numeric_limits<std::uint32_t>::max()) {
         completion.status = HostServiceStatus::BudgetExceeded;
         completion.error_code = kVideoErrorFrameBudget;
     } else {
         const std::uint32_t bytes = static_cast<std::uint32_t>(fixture.pixels.size());
         const std::uint32_t handle = host.handles().allocate(HostServiceHandleKind::VideoFrame,
-                                                             request.app_instance_id, bytes);
+                                                             request.app_instance_id, bytes, nullptr,
+                                                             request.client_token);
         if (handle == 0) {
             completion.status = HostServiceStatus::BudgetExceeded;
             completion.error_code = kVideoErrorHandleBudget;

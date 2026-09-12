@@ -74,7 +74,7 @@ bool ScriptTaskServicePayloadWriter::append(const std::uint8_t* bytes, std::size
     if (size == 0) {
         return true;
     }
-    if (bytes == nullptr || size > capacity_ - storage_.size()) {
+    if (bytes == nullptr || storage_.size() > capacity_ || size > capacity_ - storage_.size()) {
         return false;
     }
     storage_.insert(storage_.end(), bytes, bytes + size);
@@ -187,7 +187,7 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSes
         HostHandleInfo input;
         if (!host_.handles().lookup_copy(input_handle, input) ||
             input.app_instance_id != session.app_instance_id ||
-            (input.client_token != 0 && input.client_token != client_token)) {
+            input.client_token != client_token) {
             result.status = ScriptTaskServiceSubmitStatus::InvalidToken;
             return result;
         }
@@ -247,6 +247,7 @@ ScriptTaskServiceSubmitResult ScriptTaskServiceBridge::submit(const ScriptAppSes
         return result;
     }
     records_.push_back({result.token, submitted.job_id, kind, false, false, {}, 0});
+    record_indices_by_job_[submitted.job_id] = records_.size() - 1;
     result.host_job_id = submitted.job_id;
     result.host_status = HostServiceStatus::Completed;
     result.status = ScriptTaskServiceSubmitStatus::Accepted;
@@ -337,6 +338,14 @@ ScriptTaskServiceRequestPumpResult ScriptTaskServiceBridge::pump_service_request
 }
 
 void ScriptTaskServiceBridge::erase_record(std::size_t index) {
+    const std::uint32_t removed_job_id = records_[index].host_job_id;
+    if (removed_job_id != 0) {
+        record_indices_by_job_.erase(removed_job_id);
+    }
+    const std::size_t last = records_.size() - 1;
+    if (index != last && records_[last].host_job_id != 0) {
+        record_indices_by_job_[records_[last].host_job_id] = index;
+    }
     records_[index] = records_.back();
     records_.pop_back();
 }
@@ -349,7 +358,7 @@ bool ScriptTaskServiceBridge::completion_result_handle_is_owned(
     HostHandleInfo info;
     return host_.handles().lookup_copy(completion.result_handle, info) &&
            info.app_instance_id == completion.app_instance_id &&
-           (info.client_token == 0 || info.client_token == completion.client_token);
+           info.client_token == completion.client_token;
 }
 
 bool ScriptTaskServiceBridge::release_completion_payload(const HostServiceCompletion& completion) {
@@ -414,6 +423,9 @@ void ScriptTaskServiceBridge::prepare_completion_payload(Record& record,
         return;
     }
 
+    // Empty results are valid (for example, a successful zero-byte network
+    // response). The nonzero lease ID and byte_count=0 distinguish that value
+    // from a completion that carries no payload lease.
     ScriptTaskLeaseId payload_lease_id = 0;
     const ScriptTaskServicePayloadLeaseStatus lease_status = supervisor_.publish_service_payload(
         record.token.session, payload_scratch_, payload_lease_id);
@@ -531,31 +543,30 @@ ScriptTaskServiceBridgePumpResult ScriptTaskServiceBridge::pump(AppFrameScratch&
     result.host = host_.pump_frame_completions(scratch);
     std::lock_guard<std::mutex> lock(mutex_);
     for (const HostServiceCompletion& completion : scratch.accepted_completions) {
-        const auto found = std::find_if(records_.begin(), records_.end(), [&completion](const Record& record) {
-            return record.host_job_id == completion.job_id;
-        });
-        if (found == records_.end() || found->completion_ready) {
+        const auto indexed = record_indices_by_job_.find(completion.job_id);
+        if (indexed == record_indices_by_job_.end() || records_[indexed->second].completion_ready) {
             if (release_completion_payload(completion)) {
                 ++result.released_completion_sources;
             }
             ++result.discarded_unmatched_completions;
             continue;
         }
-        if (!completion_matches(*found, completion)) {
+        Record& found = records_[indexed->second];
+        if (!completion_matches(found, completion)) {
             if (release_completion_payload(completion)) {
                 ++result.released_completion_sources;
             }
             ++result.discarded_unmatched_completions;
             continue;
         }
-        found->completion = completion;
-        found->completion_ready = true;
-        if (found->cancelled) {
-            if (release_record_completion_payload(*found)) {
+        found.completion = completion;
+        found.completion_ready = true;
+        if (found.cancelled) {
+            if (release_record_completion_payload(found)) {
                 ++result.released_completion_sources;
             }
         } else {
-            prepare_completion_payload(*found, result);
+            prepare_completion_payload(found, result);
         }
         ++result.queued_for_delivery;
     }

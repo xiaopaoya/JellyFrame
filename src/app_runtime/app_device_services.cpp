@@ -320,17 +320,24 @@ bool AppSensorSampleMock::release_sample(AppRuntimeHost& host, std::uint32_t han
 }
 
 std::size_t AppSensorSampleMock::release_app_samples(AppRuntimeHost& host, std::uint32_t app_instance_id) {
-    std::vector<std::uint32_t> handles;
-    handles.reserve(records_.size());
-    for (const AppSensorSampleRecord& record : records_) {
-        if (record.app_instance_id == app_instance_id) {
-            handles.push_back(record.handle);
-        }
-    }
-    for (std::uint32_t handle : handles) {
-        release_sample(host, handle);
-    }
-    return handles.size();
+    std::size_t released = 0;
+    records_.erase(std::remove_if(records_.begin(),
+                                  records_.end(),
+                                  [&host, app_instance_id, &released](const AppSensorSampleRecord& record) {
+                                      if (record.app_instance_id != app_instance_id) {
+                                          return false;
+                                      }
+                                      HostHandleInfo info;
+                                      if (!host.handles().lookup_copy(record.handle, info) ||
+                                          info.kind != HostServiceHandleKind::SensorSample ||
+                                          !host.handles().release(record.handle)) {
+                                          return false;
+                                      }
+                                      ++released;
+                                      return true;
+                                  }),
+                   records_.end());
+    return released;
 }
 
 std::size_t AppSensorSampleMock::collect_released_samples(const AppRuntimeHost& host) {
@@ -516,31 +523,47 @@ std::size_t AppLocationSnapshotMock::release_client_snapshots(AppRuntimeHost& ho
     if (app_instance_id == 0 || client_token == 0) {
         return 0;
     }
-    std::vector<std::uint32_t> handles;
-    handles.reserve(records_.size());
-    for (const AppLocationSnapshotRecord& record : records_) {
-        if (record.app_instance_id == app_instance_id && record.client_token == client_token) {
-            handles.push_back(record.handle);
-        }
-    }
-    for (std::uint32_t handle : handles) {
-        release_snapshot(host, handle);
-    }
-    return handles.size();
+    std::size_t released = 0;
+    records_.erase(std::remove_if(records_.begin(),
+                                  records_.end(),
+                                  [&host, app_instance_id, client_token, &released](
+                                      const AppLocationSnapshotRecord& record) {
+                                      if (record.app_instance_id != app_instance_id ||
+                                          record.client_token != client_token) {
+                                          return false;
+                                      }
+                                      HostHandleInfo info;
+                                      if (!host.handles().lookup_copy(record.handle, info) ||
+                                          info.kind != HostServiceHandleKind::LocationSnapshot ||
+                                          !host.handles().release(record.handle)) {
+                                          return false;
+                                      }
+                                      ++released;
+                                      return true;
+                                  }),
+                   records_.end());
+    return released;
 }
 
 std::size_t AppLocationSnapshotMock::release_app_snapshots(AppRuntimeHost& host, std::uint32_t app_instance_id) {
-    std::vector<std::uint32_t> handles;
-    handles.reserve(records_.size());
-    for (const AppLocationSnapshotRecord& record : records_) {
-        if (record.app_instance_id == app_instance_id) {
-            handles.push_back(record.handle);
-        }
-    }
-    for (std::uint32_t handle : handles) {
-        release_snapshot(host, handle);
-    }
-    return handles.size();
+    std::size_t released = 0;
+    records_.erase(std::remove_if(records_.begin(),
+                                  records_.end(),
+                                  [&host, app_instance_id, &released](const AppLocationSnapshotRecord& record) {
+                                      if (record.app_instance_id != app_instance_id) {
+                                          return false;
+                                      }
+                                      HostHandleInfo info;
+                                      if (!host.handles().lookup_copy(record.handle, info) ||
+                                          info.kind != HostServiceHandleKind::LocationSnapshot ||
+                                          !host.handles().release(record.handle)) {
+                                          return false;
+                                      }
+                                      ++released;
+                                      return true;
+                                  }),
+                   records_.end());
+    return released;
 }
 
 std::size_t AppLocationSnapshotMock::collect_released_snapshots(const AppRuntimeHost& host) {

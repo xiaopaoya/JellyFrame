@@ -93,6 +93,7 @@ enum class AppBudgetRecoveryDiagnosticCode {
     ScriptTimers,
     ScriptEventListeners,
     DetachedDomNodes,
+    Count,
 };
 
 struct AppBudgetRecoveryDiagnostic {
@@ -102,7 +103,8 @@ struct AppBudgetRecoveryDiagnostic {
 };
 
 struct AppBudgetRecoveryReport {
-    static constexpr std::size_t kMaxDiagnostics = 8;
+    static constexpr std::size_t kMaxDiagnostics =
+        static_cast<std::size_t>(AppBudgetRecoveryDiagnosticCode::Count);
 
     AppBudgetRecoveryAction action = AppBudgetRecoveryAction::None;
     AppTeardownReason teardown_reason = AppTeardownReason::None;

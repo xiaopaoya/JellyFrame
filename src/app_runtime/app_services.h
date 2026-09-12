@@ -344,6 +344,8 @@ private:
     AppImageSurfaceCacheOptions options_;
     std::vector<Entry> entries_;
     std::uint32_t use_tick_ = 1;
+    std::size_t ready_surface_count_ = 0;
+    std::size_t ready_byte_count_ = 0;
 };
 
 enum class AudioCommandKind {
@@ -709,6 +711,7 @@ private:
     struct PendingOp {
         std::uint32_t job_id = 0;
         std::uint32_t app_instance_id = 0;
+        std::uint32_t client_token = 0;
         std::string app_id;
         AppPrivateKvOperation operation = AppPrivateKvOperation::Get;
         std::string key;
@@ -723,7 +726,8 @@ private:
     AppServiceSubmitResult submit(AppRuntimeHost& host,
                                   AppPrivateKvOperation operation,
                                   std::string key,
-                                  std::string value = {});
+                                  std::string value = {},
+                                  std::uint32_t client_token = 0);
     HostServiceStatus apply(const PendingOp& op,
                             AppRuntimeHost& host,
                             std::uint32_t& handle,

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <unordered_set>
 
 namespace jellyframe {
 namespace {
@@ -34,20 +35,6 @@ constexpr std::array<std::string_view, 25> kKnownCapabilities = {
     "system.appManager",
 };
 
-bool contains_string_view(const std::vector<std::string>& values, std::string_view needle) {
-    return std::find_if(values.begin(), values.end(), [needle](const std::string& value) {
-        return value == needle;
-    }) != values.end();
-}
-
-bool decision_exists(const std::vector<AppCapabilityDecision>& decisions, const std::string& capability) {
-    return std::find_if(decisions.begin(),
-                        decisions.end(),
-                        [&capability](const AppCapabilityDecision& decision) {
-                            return decision.capability == capability;
-                        }) != decisions.end();
-}
-
 } // namespace
 
 const char* app_capability_decision_status_name(AppCapabilityDecisionStatus status) {
@@ -74,18 +61,25 @@ std::vector<AppCapabilityDecision> evaluate_app_capability_requests(
     AppCapabilityBrokerOptions options) {
     std::vector<AppCapabilityDecision> decisions;
     decisions.reserve(requested_capabilities.size());
+    std::unordered_set<std::string_view> host_supported;
+    host_supported.reserve(host_supported_capabilities.size());
+    for (const std::string& capability : host_supported_capabilities) {
+        host_supported.insert(capability);
+    }
+    std::unordered_set<std::string_view> seen;
+    seen.reserve(requested_capabilities.size());
     for (const std::string& capability : requested_capabilities) {
-        if (capability.empty() || decision_exists(decisions, capability)) {
+        if (capability.empty() || !seen.insert(capability).second) {
             continue;
         }
         const bool known = is_known_app_capability(capability);
-        const bool host_supported = contains_string_view(host_supported_capabilities, capability);
+        const bool supported = host_supported.find(capability) != host_supported.end();
         AppCapabilityDecisionStatus status = AppCapabilityDecisionStatus::UnknownCapability;
         if (known) {
-            status = host_supported
+            status = supported
                 ? AppCapabilityDecisionStatus::Granted
                 : AppCapabilityDecisionStatus::UnsupportedByHost;
-        } else if (host_supported && options.allow_product_specific) {
+        } else if (supported && options.allow_product_specific) {
             status = AppCapabilityDecisionStatus::GrantedProductSpecific;
         }
         decisions.push_back(AppCapabilityDecision{capability, status});

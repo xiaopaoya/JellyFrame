@@ -642,8 +642,19 @@ void stroke_rounded_rect(FrameBuffer& target,
                 y >= safe_add(outer.bottom, safe_negate(outer.radii.bottom_right))) {
                 add_span(safe_add(outer.right, safe_negate(outer.radii.bottom_right)), outer.right);
             }
-            std::sort(spans.begin(), spans.begin() + static_cast<std::ptrdiff_t>(span_count),
-                      [](const Rect& left, const Rect& right) { return left.x < right.x; });
+            // Keep this bounded, allocation-free sort local to the six possible
+            // spans. Some embedded GCC versions diagnose std::sort's fixed
+            // insertion-sort threshold as an out-of-bounds access on the
+            // small backing array even when the iterator range is bounded.
+            for (std::size_t index = 1; index < span_count; ++index) {
+                const Rect value = spans[index];
+                std::size_t position = index;
+                while (position > 0 && spans[position - 1].x > value.x) {
+                    spans[position] = spans[position - 1];
+                    --position;
+                }
+                spans[position] = value;
+            }
             for (std::size_t index = 0; index < span_count;) {
                 int begin_x = spans[index].x;
                 int end_x = safe_edge(spans[index].x, spans[index].width);

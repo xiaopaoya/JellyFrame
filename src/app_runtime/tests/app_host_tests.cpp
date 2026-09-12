@@ -531,6 +531,30 @@ void budget_recovery_distinguishes_frame_throttle_from_app_termination() {
     assert(report.diagnostic_count == 2);
 }
 
+void budget_recovery_reports_all_exhausted_diagnostics() {
+    AppBudgetSnapshot budget;
+    const AppBudgetMeter exhausted{1, 1};
+    budget.service_requests = exhausted;
+    budget.service_completions = exhausted;
+    budget.host_handles = exhausted;
+    budget.host_handle_bytes = exhausted;
+    budget.app_fonts = exhausted;
+    budget.system_events = exhausted;
+    budget.input_events_per_frame = exhausted;
+    budget.timer_callbacks_per_frame = exhausted;
+    budget.animation_callbacks_per_frame = exhausted;
+    budget.active_animations = exhausted;
+    budget.script_timers = exhausted;
+    budget.script_event_listeners = exhausted;
+    budget.detached_dom_nodes = exhausted;
+
+    const AppBudgetRecoveryReport report = app_budget_recovery_for_snapshot(budget);
+    assert(report.action == AppBudgetRecoveryAction::TerminateApp);
+    assert(report.teardown_reason == AppTeardownReason::BudgetExceeded);
+    assert(report.diagnostic_count == AppBudgetRecoveryReport::kMaxDiagnostics);
+    assert(report.diagnostic_count == 13);
+}
+
 void completion_rejects_result_handles_owned_by_another_app_or_client() {
     AppRuntimeHost host = make_host();
     const AppInstance app = host.launch("org.example.completion-owner", AppRole::App);
@@ -704,6 +728,7 @@ int main() {
     budget_snapshot_reports_runtime_usage_and_caps();
     budget_snapshot_detects_exhausted_runtime_budget();
     budget_recovery_distinguishes_frame_throttle_from_app_termination();
+    budget_recovery_reports_all_exhausted_diagnostics();
     completion_rejects_result_handles_owned_by_another_app_or_client();
     bad_app_teardown_leaves_next_app_clean_and_discards_stale_work();
     return 0;

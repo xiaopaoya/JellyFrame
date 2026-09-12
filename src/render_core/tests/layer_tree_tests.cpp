@@ -7,6 +7,8 @@
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
 #include "render_core/render_tree.h"
+#include "render_core/scroll_blit.h"
+#include "render_core/software_renderer.h"
 #include "render_core/text_scan.h"
 
 #include <iostream>
@@ -172,6 +174,19 @@ int fixed_scroll_offset(const Node& node, int max_scroll_y, void*) {
 
 int maximum_scroll_offset(const Node&, int max_scroll_y, void*) {
     return max_scroll_y;
+}
+
+struct DynamicScrollContext {
+    const Node* node = nullptr;
+    int scroll_y = 0;
+};
+
+int dynamic_scroll_offset(const Node& node, int max_scroll_y, void* raw_context) {
+    auto* context = static_cast<DynamicScrollContext*>(raw_context);
+    if (context == nullptr || context->node != &node) {
+        return 0;
+    }
+    return std::max(0, std::min(context->scroll_y, max_scroll_y));
 }
 
 std::uint32_t trace_owner_token_for_test(const Node& node, void*) {
@@ -628,6 +643,90 @@ void scroll_container_offsets_descendant_paint() {
         }
     }
     check(found_shifted_child, "scroll offset moves second row into viewport");
+}
+
+void scroll_reuse_frame_matches_full_repaint_in_both_directions() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><section id='list'><div id='one'></div><div id='two'></div>"
+        "<div id='three'></div><div id='four'></div><div id='five'></div></section></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; background: #ffffff; }"
+        "#list { width: 80px; height: 24px; overflow: scroll; background: #ffffff; }"
+        "#list div { width: 80px; height: 24px; }"
+        "#one { background: #ff0000; } #two { background: #00ff00; }"
+        "#three { background: #0000ff; } #four { background: #ffff00; }"
+        "#five { background: #00ffff; }"));
+    RenderTreeBuilder render_tree_builder(resolver);
+    auto render_tree = render_tree_builder.build(*document);
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*render_tree, 80, 24);
+    check(layout_tree != nullptr, "scroll reuse fixture layout exists");
+
+    Node* list = nullptr;
+    std::vector<Node*> pending{document.get()};
+    while (!pending.empty()) {
+        Node* node = pending.back();
+        pending.pop_back();
+        if (node->attribute("id") == "list") {
+            list = node;
+            break;
+        }
+        for (auto& child : node->children) {
+            pending.push_back(child.get());
+        }
+    }
+    check(list != nullptr, "scroll reuse fixture node exists");
+
+    DynamicScrollContext scroll_context{list, 0};
+    LayerTreeBuilderOptions options;
+    options.scroll_resolver = ScrollOffsetResolver{dynamic_scroll_offset, &scroll_context};
+    LayerTreeBuilder builder(options);
+    auto initial_layers = builder.build(*layout_tree);
+    check(initial_layers != nullptr, "scroll reuse fixture initial layer tree exists");
+
+    constexpr int width = 80;
+    constexpr int height = 24;
+    constexpr int content_height = 120;
+    const Rect viewport{0, 0, width, height};
+    FrameBuffer reused(width, height, Color{255, 255, 255, 255});
+    SoftwareCompositor compositor;
+    compositor.render_into(*initial_layers, reused, Color{255, 255, 255, 255});
+
+    auto assert_step_matches_full = [&](int previous_scroll_y, int next_scroll_y) {
+        const ScrollBlitPlan plan = plan_vertical_scroll_blit(
+            width, height, content_height, previous_scroll_y, next_scroll_y);
+        check(plan.mode == ScrollBlitMode::FastBlit, "scroll reuse fixture uses fast blit");
+        check(apply_vertical_scroll_blit(reused, viewport, plan), "scroll reuse fixture applies fast blit");
+        scroll_context.scroll_y = next_scroll_y;
+        auto current_layers = builder.build(*layout_tree);
+        check(current_layers != nullptr, "scroll reuse fixture current layer tree exists");
+        compositor.render_into(*current_layers,
+                               reused,
+                               Color{255, 255, 255, 255},
+                               &plan.exposed_strip,
+                               1);
+
+        FrameBuffer expected(width, height, Color{255, 255, 255, 255});
+        compositor.render_into(*current_layers, expected, Color{255, 255, 255, 255});
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                const Color actual = reused.pixel(x, y);
+                const Color reference = expected.pixel(x, y);
+                check(actual.r == reference.r && actual.g == reference.g &&
+                          actual.b == reference.b && actual.a == reference.a,
+                      "scroll reuse frame differs from full repaint");
+            }
+        }
+    };
+
+    for (int scroll_y = 1; scroll_y <= 16; ++scroll_y) {
+        assert_step_matches_full(scroll_y - 1, scroll_y);
+    }
+    for (int scroll_y = 15; scroll_y >= 0; --scroll_y) {
+        assert_step_matches_full(scroll_y + 1, scroll_y);
+    }
 }
 
 void scroll_container_keeps_absolute_sibling_navigation_fixed() {
@@ -1820,6 +1919,7 @@ int main() {
         text_layout_cache_rejects_dirty_text_and_viewport_changes();
         text_layout_cache_keeps_unwrapped_letter_spaced_text();
         scroll_container_offsets_descendant_paint();
+        scroll_reuse_frame_matches_full_repaint_in_both_directions();
         scroll_container_keeps_absolute_sibling_navigation_fixed();
         scroll_indicator_is_opt_in_overlay();
         opacity_layer_flattens_alpha();

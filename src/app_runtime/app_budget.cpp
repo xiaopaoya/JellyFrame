@@ -191,6 +191,8 @@ const char* app_budget_recovery_diagnostic_code_name(AppBudgetRecoveryDiagnostic
         return "budget-script-event-listeners";
     case AppBudgetRecoveryDiagnosticCode::DetachedDomNodes:
         return "budget-detached-dom-nodes";
+    case AppBudgetRecoveryDiagnosticCode::Count:
+        break;
     }
     return "budget-unknown";
 }

@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <unordered_map>
 #include <vector>
 
 namespace jellyframe {
@@ -220,6 +221,7 @@ private:
     void* payload_release_user_ = nullptr;
     mutable std::mutex mutex_;
     std::vector<Record> records_;
+    std::unordered_map<std::uint32_t, std::size_t> record_indices_by_job_;
     std::vector<std::uint8_t> payload_scratch_;
 };
 

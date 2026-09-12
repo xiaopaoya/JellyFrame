@@ -200,6 +200,50 @@ void sensor_stale_worker_pending_is_collectable_after_app_switch() {
           "sensor current app submit accepted after cleanup");
 }
 
+void device_batch_release_only_removes_successfully_released_records() {
+    AppRuntimeHost host = make_host();
+    const AppInstance app = host.launch("org.example.batch-release", AppRole::App);
+
+    AppSensorSampleMock sensors(AppSensorSamplePolicy{true, false, false, false, 3});
+    check(sensors.add_fixture(AppSensorSampleFixture{AppSensorKind::Accelerometer, 100}),
+          "batch sensor fixture accepted");
+    std::vector<std::uint32_t> sensor_handles;
+    for (int i = 0; i < 2; ++i) {
+        check(sensors.submit_sample(host, AppSensorKind::Accelerometer).accepted(),
+              "batch sensor submit accepted");
+        check(sensors.complete_next(host), "batch sensor complete");
+        const std::vector<HostServiceCompletion> accepted = pump(host);
+        check(accepted.size() == 1 && accepted.front().result_handle != 0,
+              "batch sensor completion handle");
+        sensor_handles.push_back(accepted.front().result_handle);
+    }
+    check(sensors.release_app_samples(host, app.id) == 2, "batch sensor release count");
+    check(!host.handles().contains(sensor_handles[0]) && !host.handles().contains(sensor_handles[1]),
+          "batch sensor handles released");
+    check(sensors.sample(sensor_handles[0]) == nullptr && sensors.sample(sensor_handles[1]) == nullptr,
+          "batch sensor records removed");
+
+    AppLocationSnapshotMock location(AppLocationSnapshotPolicy{true, 3});
+    check(location.set_fixture(AppLocationSnapshotFixture{200, 30.0, 120.0}),
+          "batch location fixture accepted");
+    std::vector<std::uint32_t> client_handles;
+    for (std::uint32_t token : {7u, 7u, 8u}) {
+        check(location.submit_position(host, 100, token).accepted(), "batch location submit accepted");
+        check(location.complete_next(host), "batch location complete");
+        const std::vector<HostServiceCompletion> accepted = pump(host);
+        check(accepted.size() == 1 && accepted.front().result_handle != 0,
+              "batch location completion handle");
+        client_handles.push_back(accepted.front().result_handle);
+    }
+    check(location.release_client_snapshots(host, app.id, 7) == 2,
+          "batch location client release count");
+    check(location.snapshot(client_handles[0]) == nullptr && location.snapshot(client_handles[1]) == nullptr,
+          "batch location client records removed");
+    check(location.snapshot(client_handles[2]) != nullptr, "batch location other client retained");
+    check(location.release_app_snapshots(host, app.id) == 1, "batch location app release count");
+    check(location.snapshot(client_handles[2]) == nullptr, "batch location app record removed");
+}
+
 void location_snapshot_requires_capability_and_returns_handle() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.map", AppRole::App);
@@ -341,6 +385,7 @@ int main() {
     sensor_sample_reports_missing_data_and_record_budget();
     sensor_samples_follow_app_instance_lifetime();
     sensor_stale_worker_pending_is_collectable_after_app_switch();
+    device_batch_release_only_removes_successfully_released_records();
     location_snapshot_requires_capability_and_returns_handle();
     location_snapshot_reports_missing_data_and_budget();
     location_stale_worker_pending_is_collectable_after_app_switch();

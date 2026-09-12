@@ -738,6 +738,42 @@ int run_render_core_microbench(int argc, char** argv) {
         }
     }));
 
+    // Keep a reproducible cost envelope for fragmented invalidation inputs.
+    // The coalescer intentionally falls back to one viewport rect above its
+    // pairwise threshold, so this also guards the bounded-work contract.
+    for (const std::size_t fragmented_count : {100U, 500U, 1000U}) {
+        std::vector<Rect> fragmented_dirty_rects;
+        fragmented_dirty_rects.reserve(fragmented_count);
+        for (std::size_t index = 0; index < fragmented_count; ++index) {
+            const int x = static_cast<int>((index * 17U) % 172U);
+            const int y = static_cast<int>((index * 29U) % 320U);
+            fragmented_dirty_rects.push_back(Rect{x, y, 2, 2});
+        }
+        const DirtyRectCoalescingOptions fragmented_options{128, 256, 10};
+        print_result(("dirty_rect_coalescing_fragmented_" + std::to_string(fragmented_count)).c_str(),
+                     iterations,
+                     average_microseconds(iterations, [&] {
+                         coalesce_dirty_rects_into(fragmented_dirty_rects.data(),
+                                                   fragmented_dirty_rects.size(),
+                                                   Rect{0, 0, 172, 320},
+                                                   fragmented_options,
+                                                   coalesced_dirty_rects);
+                         if (coalesced_dirty_rects.empty()) {
+                             throw std::runtime_error("fragmented dirty rectangles produced no output");
+                         }
+                     }));
+        DirtyRectCoalescingResult fragmented_result;
+        coalesce_dirty_rects_into(fragmented_dirty_rects.data(),
+                                  fragmented_dirty_rects.size(),
+                                  Rect{0, 0, 172, 320},
+                                  fragmented_options,
+                                  coalesced_dirty_rects,
+                                  &fragmented_result);
+        std::cout << "dirty_rect_coalescing_fragmented_" << fragmented_count
+                  << " output_rects=" << coalesced_dirty_rects.size()
+                  << " forced_merges=" << fragmented_result.forced_merges << '\n';
+    }
+
     print_result("scroll_blit_plan", iterations, average_microseconds(iterations, [&] {
         const ScrollBlitPlan plan = plan_vertical_scroll_blit(320, 240, 720, 96, 112);
         (void)plan;

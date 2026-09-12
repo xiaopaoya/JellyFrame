@@ -560,8 +560,8 @@ HostServiceCompletion NetworkFetchMock::complete_request(AppRuntimeHost& host,
                 handle,
                 request.app_instance_id,
                 pending->fixture.status_code,
-                pending->fixture.content_type,
-                pending->fixture.body,
+                std::move(pending->fixture.content_type),
+                std::move(pending->fixture.body),
                 request.client_token,
             });
         }
@@ -1078,6 +1078,7 @@ HostServiceCompletion ImageDecodeMock::complete_request(AppRuntimeHost& host,
         0,
         pending->error_code,
         0,
+        request.client_token,
     };
     if (pending->status == HostServiceStatus::Completed && pending->fixture_index < fixtures_.size()) {
         const ImageDecodeFixture& fixture = fixtures_[pending->fixture_index];
@@ -1085,7 +1086,9 @@ HostServiceCompletion ImageDecodeMock::complete_request(AppRuntimeHost& host,
             decoded_surface_byte_count(fixture.width, fixture.height, fixture.stride_pixels, fixture.pixel_format);
         const std::uint32_t handle = host.handles().allocate(HostServiceHandleKind::Surface,
                                                             request.app_instance_id,
-                                                            static_cast<std::uint32_t>(decoded_bytes));
+                                                            static_cast<std::uint32_t>(decoded_bytes),
+                                                            nullptr,
+                                                            request.client_token);
         if (handle == 0) {
             completion.status = HostServiceStatus::BudgetExceeded;
             completion.error_code = 507;
@@ -1320,7 +1323,7 @@ bool AudioCommandMock::complete_next(AppRuntimeHost& host) {
 
 HostServiceCompletion AudioCommandMock::complete_request(AppRuntimeHost& host,
                                                          const HostServiceRequest& request) {
-    const auto pending = find_job(pending_, request.job_id);
+    auto pending = find_job(pending_, request.job_id);
     if (pending == pending_.end()) {
         return make_cancelled_completion(request);
     }
@@ -1331,7 +1334,11 @@ HostServiceCompletion AudioCommandMock::complete_request(AppRuntimeHost& host,
     AudioStreamState state = AudioStreamState::Error;
 
     if (status == HostServiceStatus::Completed && pending->command == AudioCommandKind::Open) {
-        handle = host.handles().allocate(HostServiceHandleKind::AudioStream, request.app_instance_id, 0);
+        handle = host.handles().allocate(HostServiceHandleKind::AudioStream,
+                                          request.app_instance_id,
+                                          0,
+                                          nullptr,
+                                          request.client_token);
         if (handle == 0) {
             status = HostServiceStatus::BudgetExceeded;
             error_code = 507;
@@ -1339,7 +1346,7 @@ HostServiceCompletion AudioCommandMock::complete_request(AppRuntimeHost& host,
             streams_.push_back(AudioStreamRecord{
                 handle,
                 request.app_instance_id,
-                pending->url,
+                std::move(pending->url),
                 AudioStreamState::Open,
                 pending->volume,
                 pending->duration_ms,
@@ -1531,24 +1538,16 @@ AppImageSurfaceCache::Entry* AppImageSurfaceCache::find_job(std::uint32_t job_id
 }
 
 std::size_t AppImageSurfaceCache::ready_surface_count() const {
-    return static_cast<std::size_t>(std::count_if(entries_.begin(), entries_.end(), [](const Entry& entry) {
-        return entry.state == AppImageSurfaceState::Ready;
-    }));
+    return ready_surface_count_;
 }
 
 std::size_t AppImageSurfaceCache::ready_byte_count() const {
-    std::size_t total = 0;
-    for (const Entry& entry : entries_) {
-        if (entry.state == AppImageSurfaceState::Ready) {
-            total += entry.decoded_bytes;
-        }
-    }
-    return total;
+    return ready_byte_count_;
 }
 
 bool AppImageSurfaceCache::over_budget() const {
-    return (options_.max_ready_surfaces != 0 && ready_surface_count() > options_.max_ready_surfaces) ||
-           (options_.max_ready_bytes != 0 && ready_byte_count() > options_.max_ready_bytes);
+    return (options_.max_ready_surfaces != 0 && ready_surface_count_ > options_.max_ready_surfaces) ||
+           (options_.max_ready_bytes != 0 && ready_byte_count_ > options_.max_ready_bytes);
 }
 
 AppImageSurfaceCache::Entry* AppImageSurfaceCache::least_recently_used_unprotected(
@@ -1599,6 +1598,8 @@ bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
                 entry->last_used_tick = use_tick_++;
                 return true;
             }
+            --ready_surface_count_;
+            ready_byte_count_ -= entry->decoded_bytes;
             entry->state = AppImageSurfaceState::Missing;
             entry->handle = 0;
             entry->job_id = 0;
@@ -1666,6 +1667,8 @@ bool AppImageSurfaceCache::handle_completion(const HostServiceCompletion& comple
         entry->decoded_bytes = completion.byte_count;
         entry->last_used_tick = use_tick_++;
         entry->state = AppImageSurfaceState::Ready;
+        ++ready_surface_count_;
+        ready_byte_count_ += entry->decoded_bytes;
     } else {
         entry->handle = 0;
         entry->decoded_bytes = 0;
@@ -1689,8 +1692,13 @@ AppImageSurfaceEvictionResult AppImageSurfaceCache::evict_unreferenced_with_resu
         if (handle == 0) {
             entries_.erase(std::remove_if(entries_.begin(),
                                           entries_.end(),
-                                          [](const Entry& entry) {
-                                              return entry.state == AppImageSurfaceState::Ready && entry.handle == 0;
+                                          [this](const Entry& entry) {
+                                              if (entry.state != AppImageSurfaceState::Ready || entry.handle != 0) {
+                                                  return false;
+                                              }
+                                              --ready_surface_count_;
+                                              ready_byte_count_ -= entry.decoded_bytes;
+                                              return true;
                                           }),
                            entries_.end());
             ++result.dropped_stale_entries;
@@ -1704,9 +1712,14 @@ AppImageSurfaceEvictionResult AppImageSurfaceCache::evict_unreferenced_with_resu
             if (decoder.surface(handle) == nullptr) {
                 entries_.erase(std::remove_if(entries_.begin(),
                                               entries_.end(),
-                                              [handle](const Entry& entry) {
-                                                  return entry.state == AppImageSurfaceState::Ready &&
-                                                         entry.handle == handle;
+                                              [this, handle](const Entry& entry) {
+                                                  if (entry.state != AppImageSurfaceState::Ready ||
+                                                      entry.handle != handle) {
+                                                      return false;
+                                                  }
+                                                  --ready_surface_count_;
+                                                  ready_byte_count_ -= entry.decoded_bytes;
+                                                  return true;
                                               }),
                                entries_.end());
                 ++result.dropped_stale_entries;
@@ -1717,8 +1730,14 @@ AppImageSurfaceEvictionResult AppImageSurfaceCache::evict_unreferenced_with_resu
         ++result.released_surfaces;
         entries_.erase(std::remove_if(entries_.begin(),
                                       entries_.end(),
-                                      [handle](const Entry& entry) {
-                                          return entry.state == AppImageSurfaceState::Ready && entry.handle == handle;
+                                      [this, handle](const Entry& entry) {
+                                          if (entry.state != AppImageSurfaceState::Ready ||
+                                              entry.handle != handle) {
+                                              return false;
+                                          }
+                                          --ready_surface_count_;
+                                          ready_byte_count_ -= entry.decoded_bytes;
+                                          return true;
                                       }),
                        entries_.end());
     }
@@ -1741,12 +1760,16 @@ std::size_t AppImageSurfaceCache::release_all(AppRuntimeHost& host, ImageDecodeM
         }
         const std::uint32_t handle = it->handle;
         if (decoder.release_surface(host, handle)) {
+            --ready_surface_count_;
+            ready_byte_count_ -= it->decoded_bytes;
             it = entries_.erase(it);
             ++released;
             continue;
         }
         decoder.collect_released_surfaces(host);
         if (decoder.surface(handle) == nullptr) {
+            --ready_surface_count_;
+            ready_byte_count_ -= it->decoded_bytes;
             it = entries_.erase(it);
             continue;
         }
@@ -1757,6 +1780,8 @@ std::size_t AppImageSurfaceCache::release_all(AppRuntimeHost& host, ImageDecodeM
 
 void AppImageSurfaceCache::clear() {
     entries_.clear();
+    ready_surface_count_ = 0;
+    ready_byte_count_ = 0;
 }
 
 AppImageSurfaceState AppImageSurfaceCache::state_for_url(const std::string& url) const {
@@ -1860,7 +1885,8 @@ bool AppPrivateKvStorageMock::can_store(const AppSpace& space,
 AppServiceSubmitResult AppPrivateKvStorageMock::submit(AppRuntimeHost& host,
                                                        AppPrivateKvOperation operation,
                                                        std::string key,
-                                                       std::string value) {
+                                                       std::string value,
+                                                       std::uint32_t client_token) {
     if (host.current_app_instance_id() == 0) {
         return rejected(AppServiceSubmitStatus::EmptyInstance, HostServiceStatus::Cancelled);
     }
@@ -1876,7 +1902,8 @@ AppServiceSubmitResult AppPrivateKvStorageMock::submit(AppRuntimeHost& host,
                         kServiceErrorPayloadTooLarge);
     }
 
-    const HostServiceSubmitResult submitted = host.submit_current(HostServiceJobKind::StorageKv);
+    const HostServiceSubmitResult submitted =
+        host.submit_current(HostServiceJobKind::StorageKv, 0, 0, 0, client_token);
     AppServiceSubmitResult result = from_submit(submitted);
     if (!result.accepted()) {
         return result;
@@ -1884,6 +1911,7 @@ AppServiceSubmitResult AppPrivateKvStorageMock::submit(AppRuntimeHost& host,
     pending_.push_back(PendingOp{
         result.job_id,
         host.current_app_instance_id(),
+        client_token,
         host.current().app_id,
         operation,
         std::move(key),
@@ -2064,7 +2092,9 @@ HostServiceStatus AppPrivateKvStorageMock::apply(const PendingOp& op,
         }
         handle = host.handles().allocate(HostServiceHandleKind::StorageValue,
                                          op.app_instance_id,
-                                         static_cast<std::uint32_t>(found->second.size()));
+                                         static_cast<std::uint32_t>(found->second.size()),
+                                         nullptr,
+                                         op.client_token);
         if (handle == 0) {
             error_code = kServiceErrorBudgetExceeded;
             return HostServiceStatus::BudgetExceeded;
@@ -2117,6 +2147,7 @@ HostServiceCompletion AppPrivateKvStorageMock::complete_request(AppRuntimeHost& 
         handle,
         error_code,
         byte_count,
+        request.client_token,
     };
     pending_.erase(pending);
     return completion;
