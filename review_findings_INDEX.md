@@ -43,6 +43,44 @@
 
 ---
 
-## 建议的修复顺序
+## 2026-09-12 处置状态
 
-先做模式一里的 `std::move` 改造（`app_compute_jobs.cpp:185-190`；`app_services.cpp:501`、`559-566` 的 `NetworkFetchRecord`、`1095-1104` 的 `AppDecodedSurfaceRecord`、`1339-1346`），改动都在一两行内、无所有权语义变化，收益直接落在最大的缓冲区上。随后处理模式二的三处 `remove_if` 合并，照抄同文件已有写法。模式三需要引入缓存与失效点，改动面较大，放在最后，且应先用现有 benchmark 量化收益。`app_budget.h:105` 的槽位数与 `static_assert` 是一行改动，可以顺手带上。
+以下状态以当前 `master`（`47f97fb5`）源码和本地测试为准。审查报告本身保留为历史发现记录，不把历史严重级别直接当作当前未修复数。
+
+### 已有代码修复，等待 CI/实机证据闭环
+
+| 发现族 | 当前依据 | 处置 |
+| --- | --- | --- |
+| 圆角渐变在内部区域重复做 coverage | `461a96b8` | 已实现圆角行分解；需保留截图/基准对比，确认视觉等价。 |
+| 文本换行只计行数却物化完整行、重复布局结果 | `6fb699b1`、`99bcecf4` | 已提供计数路径并复用布局缓存；需 CI 与长文本基准确认。 |
+| viewport 单位固定使用默认尺寸 | `9dcf1f1a` | 已按 layout context 解析；需矩形、竖屏、圆屏回归。 |
+| dirty rect 无上限/合并工作量过大 | `13264bcd`、`c1111274` | 已加入边界和受控合并；需检查 profile 中的 full-frame fallback 归因。 |
+| 圆角 clip、透明/变换合成和采样的冗余热路径 | `f43c06fe`、`c5d1f17d`、`cccf1928` | 已加入快路径；需设备 Profile OFF/ON 数据确认收益而非只确认正确性。 |
+| flex paint 与 layout 的子项排序不一致 | `c255f0a8` | 已共享排序实现；需保留绝对定位与非零 order 回归。 |
+| trace 查看器逐帧同步文件检查 | `6eae4c38` | 已改为一次性捕获/索引；需 Windows 扩展测试确认。 |
+| app runtime 完成身份、句柄所有权、批量释放、缓存计数 | `e9775ef4` | 已修复并有本地测试；需 Linux sanitizer/Windows scripting CI 闭环。 |
+| script-task 脏区、clip 引用、service bridge 输入边界 | `e9775ef4`、`c557e4c0` | 已修复并有回归测试；设备端 malformed/relaunch 证据仍按验收文档执行。 |
+| 字体上下文状态与字体缓存失效 | `d3cbbf56` | 已纳入 runtime 状态；需长文本/多字体实机观测。 |
+
+### 仍开放，纳入后续工作
+
+这些项目没有被上述提交完整关闭，后续应按收益和风险单独处理：
+
+1. `style_repaint.cpp` 的手工 `Style` 字段比较（报告 H5）：优先补“新增布局字段必须同步比较”的结构化约束或编译期可见的 key 类型，避免静默复用旧布局。
+2. flex 非 wrap 的多次 intrinsic layout（报告 H6）：先用现有 benchmark 定量，确认缓存不会改变 cross-axis 语义后再改。
+3. `Style::position` 的字符串热路径、dirty-region subtree bounds 复算、form 控件重复遍历（报告 M1/M4/M7/M8/M9）：属于后续性能批次，暂不与发布前 correctness 修复混做。
+4. app service 的 fixture/response 仍有少数非必要复制，以及 image cache URL 线性查找（报告 services #5/#7/#8）：需要先明确 mock 的所有权和缓存规模，再作移动或索引化改造。
+5. Low 级可读性条目和未逐条复核的历史条目：不作为当前发布阻断项，修改时必须附局部测试或基准。
+
+### 验证出口
+
+- CI：`47f97fb5` 的运行必须完成，重点查看 sanitizer、Windows scripting、standalone Render Core consumer 和 documentation freshness。
+- 桌面：保持当前 `68/68` CTest 基线，新增性能改动不得降低既有文本、圆角、flex 与 clip 回归覆盖。
+- 设备：panel-scroll 实验文件仍不入主线；只有 TE/vblank 同步、真实 input-to-present 和恢复证据齐备后才重新评估。
+- 任何“已修复”项在缺少对应 CI/设备证据时只能标为“代码已落地，验证待闭环”。
+
+---
+
+## 原始建议的修复顺序（历史记录）
+
+这里保留最初的建议，便于与审查原文对账；其中多数已由 `e9775ef4`、`d3cbbf56` 等提交处理，当前执行顺序以本节上方的处置状态和验证出口为准。
