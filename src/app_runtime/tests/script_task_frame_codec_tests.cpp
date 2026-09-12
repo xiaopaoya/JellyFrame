@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <limits>
 
 using namespace jellyframe;
 
@@ -215,6 +216,34 @@ void frame_codec_rejects_unrepresentable_clip_metadata() {
            ScriptTaskAppFrameCodecStatus::InvalidClip);
 }
 
+void worker_frame_producer_rejects_oversized_generated_clip_table() {
+    LayerNode root;
+    root.type = LayerType::Root;
+    LayerNode* parent = &root;
+    for (std::size_t index = 0; index <= std::numeric_limits<std::uint16_t>::max(); ++index) {
+        LayerNodePtr clipped(new LayerNode(), LayerNodeDeleter{});
+        clipped->type = LayerType::Clip;
+        clipped->has_clip = true;
+        clipped->clip_rect = {-1000000, -1000000, 2000000, 2000000};
+        clipped->transform.translate_x = 1.0F;
+        clipped->has_transform = true;
+        LayerNode* next = clipped.get();
+        parent->children.push_back(std::move(clipped));
+        parent = next;
+    }
+    DisplayCommand fill;
+    fill.type = DisplayCommandType::FillRect;
+    fill.rect = {0, 0, 1, 1};
+    fill.color = {1, 2, 3, 255};
+    parent->display_list.push_back(fill);
+
+    const ScriptTaskAppFrame frame = make_script_task_app_frame(root, {0, 0, 16, 16}, {}, true);
+    assert(frame.clip_metadata_overflow);
+    std::vector<std::uint8_t> bytes;
+    assert(encode_script_task_app_frame(frame, v4_limits(), bytes) ==
+           ScriptTaskAppFrameCodecStatus::InvalidClip);
+}
+
 void sealed_lease_carries_only_serialized_frame_bytes() {
     const ScriptTaskAppFrame frame = fixture();
     ScriptTaskSupervisor supervisor({{2, 24}, {1, 0}, {1, 512, 512}, 0, 0});
@@ -356,6 +385,7 @@ int script_task_frame_codec_tests_main() {
     v3_frame_round_trip_preserves_fixed_point_command_transform();
     v4_frame_round_trip_preserves_transform_source_clip();
     frame_codec_rejects_unrepresentable_clip_metadata();
+    worker_frame_producer_rejects_oversized_generated_clip_table();
     sealed_lease_carries_only_serialized_frame_bytes();
     malformed_frame_releases_its_lease_before_reporting_decode_failure();
     stale_frame_consumer_cannot_take_new_session_frame();

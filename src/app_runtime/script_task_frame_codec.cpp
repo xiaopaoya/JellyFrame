@@ -425,6 +425,12 @@ ScriptTaskAppFrame make_script_task_app_frame(const LayerNode& layer_tree,
     if (include_clip_metadata) {
         FlattenedLayerTree flattened = flattener.flatten_with_clip_metadata(layer_tree);
         frame.display_list = std::move(flattened.display_list);
+        // A transformed layer can reference its source clip even when the
+        // destination display-clip index is kNoFlattenedClip. Preserve an
+        // oversized clip table as an explicit rejection instead of allowing
+        // the 16-bit sentinel to drop that clip.
+        frame.clip_metadata_overflow =
+            flattened.clips.size() > std::numeric_limits<std::uint16_t>::max();
         frame.display_clip_indices.reserve(flattened.display_clip_indices.size());
         for (const std::uint32_t clip_index : flattened.display_clip_indices) {
             if (clip_index != kNoFlattenedClip &&
