@@ -1,5 +1,6 @@
 # WS147 Panel Scroll Synchronization Fix and Port Acceptance
 
+> Last updated: 2026-09-12; Applies to: 0.6.0-dev
 > Status: pending hardware confirmation and device implementation; board: Waveshare ESP32-S3-Touch-LCD-1.47; panel: JD9853; viewport: 172x320
 
 This task is limited to the WS147 experimental physical-GRAM panel-scroll path. It does not change Render Core scrolling and does not treat desktop auto-scroll timing as touch-latency evidence.
