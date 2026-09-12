@@ -1,6 +1,6 @@
 const assert = require("assert");
 const fs = require("fs");
-const { parseRenderTrace, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
+const { parseRenderTrace, aggregateTrace, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
 const vm = require("vm");
 
 function loadTraceHelpers() {
@@ -78,6 +78,7 @@ function main() {
       { type: "Text", owner: "id:title", us: 1000, pixels: 20, samples: 2 },
       { type: "FillRect", owner: "n2", us: 400, pixels: 50, samples: 1 },
       { type: "BoxShadow", nodeId: "legacy-card", us: 300, pixels: 9 },
+      { type: "Image", us: 200, pixels: 4, samples: 1 },
       { type: "Text", owner: "ignored", us: -1, pixels: 1, samples: 1 }
     ],
     commandsTruncated: true,
@@ -87,11 +88,34 @@ function main() {
   const parsed = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify(frame)}\n`);
   assert.equal(parsed.frames.length, 1);
   assert.equal(parsed.errors.length, 0);
+  const aggregate = aggregateTrace({ frames: [
+    frame,
+    { ...frame, frame: 1, totalUs: 3000, stagesUs: { layout: 700, paint: 1200 }, commands: [
+      { type: "Text", owner: "id:title", us: 300, pixels: 20, samples: 3 },
+      { type: "FillRect", us: 600, pixels: 50, samples: 2 },
+      { type: "Image", us: 100, pixels: 4 }
+    ], commandsTruncated: false, nodesTruncated: false, commandInvalidSamples: 0 }
+  ] });
+  assert.equal(aggregate.frameCount, 2);
+  assert.deepEqual(aggregate.command.map((item) => item.name), ["Text", "FillRect", "Image", "BoxShadow"]);
+  assert.equal(aggregate.command.find((item) => item.name === "Text").count, 5);
+  assert.equal(aggregate.command.find((item) => item.name === "Text").totalUs, 1300);
+  assert.equal(aggregate.command.find((item) => item.name === "Text").p95Us, 500);
+  assert.equal(aggregate.stage.find((item) => item.name === "paint").count, 2);
+  assert.equal(aggregate.stage.find((item) => item.name === "paint").totalUs, 2200);
+  assert.equal(aggregate.owner.find((item) => item.name === "unattributed").count, 4);
+  assert.equal(aggregate.missingAttribution.totalUs, 900);
+  assert.equal(aggregate.invalidCommandSamples, 1);
+  assert.equal(aggregate.commandsTruncatedFrames, 1);
   const html = renderTraceHtml(parsed, true, "trace.jsonl", {
     cspSource: "vscode-resource:",
     frameImages: { "0": "vscode-resource://frame_000.bmp" }
   });
   assert(html.includes("frameSlider"));
+  assert(html.includes("slowestFrameButton"));
+  assert(html.includes("allUnattributed"));
+  assert(html.includes("partialAttribution"));
+  assert(html.includes("unattributed"));
   assert(html.includes("id:title"));
   assert(html.includes("legacy-card"));
   assert(html.includes("timingComplete"));
@@ -105,10 +129,19 @@ function main() {
   assert(html.includes("commandsTruncated"));
   assert(html.includes("nodesTruncated"));
   assert(html.includes("commandInvalidSamples"));
-  assert(html.includes("item.owner||item.nodeId"));
+  assert(html.includes("跨帧聚合"));
+  assert(html.includes("aggregateView"));
+  assert(html.includes("missingAttribution"));
+  assert(html.includes("p95Us"));
+  assert(html.includes("owner=typeof item.owner"));
   assert(!html.includes("ignored</code>"));
   assert(!html.includes("invalid,0 10x10"));
   assert(html.includes("img-src vscode-resource:"));
+
+  const commandsPosition = html.indexOf("const commands=");
+  const sortPosition = html.indexOf("sort((left,right)=>right.us-left.us)", commandsPosition);
+  const slicePosition = html.indexOf("slice(0,64)", sortPosition);
+  assert(sortPosition >= 0 && sortPosition < slicePosition, "commands are sorted before top-N truncation");
 
   const invalid = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, frame: 2 })}\n${JSON.stringify({ ...frame, frame: 1 })}\n`);
   assert.equal(invalid.frames.length, 1);
