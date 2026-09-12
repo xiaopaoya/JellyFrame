@@ -9,16 +9,16 @@
 
   var bars = [28, 44, 38, 62, 55, 70, 48, 76, 68, 84, 66, 90];
   sourceCtx.clearRect(0, 0, 110, 48);
-  sourceCtx.fillStyle = "#123040";
+  sourceCtx.fillStyle = "#121C28";
   sourceCtx.fillRect(0, 0, 110, 48);
 
-  sourceCtx.fillStyle = "#2dd4bf";
+  sourceCtx.fillStyle = "#67DDED";
   for (var i = 0; i < bars.length; i += 1) {
     var h = bars[i];
     sourceCtx.fillRect(6 + i * 8, 44 - Math.floor(h / 2), 4, Math.floor(h / 2));
   }
 
-  sourceCtx.strokeStyle = "#f7fff6";
+  sourceCtx.strokeStyle = "#E8F3FA";
   sourceCtx.lineWidth = 1;
   sourceCtx.beginPath();
   sourceCtx.moveTo(6, 40);
@@ -36,15 +36,15 @@
   sourceCtx.stroke();
 
   sourceCtx.translate(3, 2);
-  sourceCtx.fillStyle = "#f7fff6";
+  sourceCtx.fillStyle = "#E8F3FA";
   sourceCtx.fillRect(0, 0, 4, 4);
   sourceCtx.resetTransform();
 
   ctx.clearRect(0, 0, 220, 96);
   var glow = ctx.createRadialGradient(110, 48, 6, 110, 48, 118);
   if (glow) {
-    glow.addColorStop(0, "#1d6f82");
-    glow.addColorStop(1, "#0b1f2a");
+    glow.addColorStop(0, "#1680C7");
+    glow.addColorStop(1, "#121C28");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, 220, 96);
   }

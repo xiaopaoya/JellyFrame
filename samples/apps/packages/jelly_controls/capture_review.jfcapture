@@ -1,0 +1,10 @@
+frames 22
+step-ms 100
+start-ms 1700000000000
+viewport 300 300
+event 2 set-value goal Night%20reading
+event 4 set-value brightness 72
+event 7 set-checked quiet 0
+event 11 click-id save
+event 15 set-checked quiet 1
+event 17 click-id save

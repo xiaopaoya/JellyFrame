@@ -1,0 +1,7 @@
+frames 36
+step-ms 100
+start-ms 1700000000000
+viewport 300 300
+event 8 click-id slide
+event 20 click-id play
+event 30 click-id play

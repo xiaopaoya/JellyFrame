@@ -1,6 +1,6 @@
 # Jelly Canvas Gauges
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
 Canvas 2D V0.4 sample for wearable gauges and compact data graphics. DOM/CSS still
 own layout, text and controls; Canvas is used only for bounded rings and tiny
@@ -14,3 +14,7 @@ jelly_canvas_gauges --strict` to recheck that contract.
 This is an acceptance package, not an app-author starter or gallery example.
 Only a host that explicitly binds Canvas may use its visual output as Canvas
 evidence.
+
+## Visual role
+
+Uses the wearable palette. Native host support and the acceptance limitations below still apply.

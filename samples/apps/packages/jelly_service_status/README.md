@@ -1,6 +1,6 @@
 # Service Status
 
-> Last updated: 2026-07-10; Applies to: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
 Small runtime-service sample for optional data, media and location service
 boundaries.
@@ -38,3 +38,7 @@ and `service_activity` counters. In the bundled script, network activity stops
 while the screen is hidden, audio remains allowed, and sensors/location are
 throttled during screen-off or low-power frames. Sensor summary injection is a
 Win32 host-data validation path, not an app-visible JavaScript sensor API.
+
+## Visual role
+
+Uses the wearable palette. Native host support and the acceptance limitations below still apply.

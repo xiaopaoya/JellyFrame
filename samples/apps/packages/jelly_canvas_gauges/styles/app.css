@@ -1,175 +1,27 @@
-html,
-body {
-  margin: 0;
-  width: 300px;
-  height: 300px;
-  background: #061418;
-  color: #f4fff7;
-  font-family: system-ui;
-}
+* { box-sizing:border-box; }
+html, body { margin:0; background:#121C28; color:#E8F3FA; font-family:sans-serif; }
+p, h1 { margin:0; }
+.screen { position:relative; width:100%; height:300px; }
+.summary { position:absolute; left:44px; top:44px; width:104px; height:104px; padding:12px; border-radius:18px; background:#121C28; }
+.eyebrow, .subtle, .mini span { display:block; font-size:11px; line-height:17px; color:#ADC4D2; }
+h1 { font-size:30px; line-height:40px; }
+.rings { position:absolute; left:156px; top:44px; width:100px; height:100px; border-radius:50%; background:#000000; }
+.mini { position:absolute; left:44px; top:160px; width:212px; height:96px; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.mini article { padding:8px 12px; border-radius:16px; background:#121C28; }
+.mini canvas { display:block; width:64px; height:32px; }
+.mini strong { display:block; font-size:22px; line-height:26px; }
+@media (max-height: 260px) { .screen { height:240px; } .summary { left:32px; top:14px; width:124px; } .rings { left:174px; top:14px; } .mini { left:32px; top:130px; width:256px; } }
+@media (max-width: 200px) { .screen { height:320px; } .summary { left:12px; top:20px; width:148px; height:90px; padding:8px 12px; } .rings { left:44px; top:120px; width:84px; height:84px; } .mini { left:12px; top:218px; width:148px; height:84px; } .mini article { padding:4px 6px; } .mini canvas { width:56px; height:28px; } .mini strong { font-size:18px; line-height:22px; } }
 
-.screen {
-  width: 264px;
-  height: 264px;
-  padding: 18px;
-  display: grid;
-  grid-template-columns: 120px 132px;
-  gap: 10px;
-  background: linear-gradient(#17414a, #061418);
-}
+/* Shared wearable colors from JellyFrame palette v2. Layout remains app-local. */
+html, body { background: #000000; color: #E8F3FA; }
+button:focus { outline-color: #67DDED; }
+ .summary, .mini article { background: #121C28; } .rings { background: #000000; }
+.eyebrow, .subtle, .mini span { color: #ADC4D2; }
 
-.summary {
-  padding: 16px 14px;
-  border-radius: 24px;
-  background: linear-gradient(#256c78, #0f2c34);
-}
-
-.eyebrow,
-.subtle,
-.mini span {
-  margin: 0;
-  font-size: 12px;
-  color: #b7ead9;
-}
-
-h1 {
-  margin: 6px 0 2px;
-  font-size: 34px;
-  line-height: 40px;
-  font-weight: 700;
-}
-
-.rings {
-  display: block;
-  width: 132px;
-  height: 132px;
-  border-radius: 50%;
-  background: #0b2128;
-}
-
-.mini {
-  grid-column: 1 / span 2;
-  width: 264px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.mini article {
-  padding: 10px 12px;
-  border-radius: 22px;
-  background: linear-gradient(#102c36, #0a1d24);
-}
-
-.mini canvas {
-  display: block;
-  width: 74px;
-  height: 44px;
-  margin-bottom: 2px;
-}
-
-.mini strong {
-  display: block;
-  font-size: 24px;
-  line-height: 28px;
-}
-
-@media (max-height: 260px) {
-  html,
-  body {
-    width: 320px;
-    height: 240px;
-  }
-
-  .screen {
-    width: 296px;
-    height: 216px;
-    padding: 12px;
-    grid-template-columns: 170px 92px;
-    gap: 8px;
-  }
-
-  .summary {
-    padding: 10px 12px;
-    border-radius: 18px;
-  }
-
-  h1 {
-    margin-top: 2px;
-    font-size: 30px;
-    line-height: 34px;
-  }
-
-  .rings {
-    width: 92px;
-    height: 92px;
-  }
-
-  .mini {
-    width: 296px;
-    gap: 8px;
-  }
-
-  .mini article {
-    padding: 5px 8px;
-    border-radius: 16px;
-  }
-}
-
-@media (max-width: 220px) {
-  html,
-  body {
-    width: 172px;
-    height: 320px;
-  }
-
-  .screen {
-    width: 152px;
-    height: 300px;
-    padding: 10px;
-    grid-template-columns: 70px 72px;
-    gap: 8px;
-  }
-
-  .summary {
-    padding: 8px;
-    border-radius: 16px;
-  }
-
-  .eyebrow,
-  .subtle,
-  .mini span {
-    font-size: 10px;
-  }
-
-  h1 {
-    margin: 2px 0 0;
-    font-size: 22px;
-    line-height: 26px;
-  }
-
-  .rings {
-    width: 72px;
-    height: 72px;
-  }
-
-  .mini {
-    width: 152px;
-    gap: 8px;
-  }
-
-  .mini article {
-    padding: 5px 6px;
-    border-radius: 14px;
-  }
-
-  .mini canvas {
-    width: 60px;
-    height: 36px;
-  }
-
-  .mini strong {
-    font-size: 18px;
-    line-height: 20px;
-  }
-}
+/* Recover original card character; reclaim outer margin. */
+ .summary { left: 20px; top: 28px; width: 120px; height: 120px; padding: 16px 14px; background: linear-gradient(#1C2C3C, #121C28); }
+.rings { left: 150px; top: 24px; width: 132px; height: 132px; }
+.mini { left: 20px; top: 172px; width: 260px; height: 104px; } .mini article { padding: 10px 14px; } .mini canvas { width: 74px; height: 38px; }
+@media (max-height: 260px) { .summary { left: 16px; top: 14px; width: 136px; height: 100px; padding: 10px 14px; } .rings { left: 186px; top: 8px; width: 108px; height: 108px; } .mini { left: 16px; top: 128px; width: 288px; height: 96px; } }
+@media (max-width: 200px) { .summary { left: 10px; top: 18px; width: 152px; height: 86px; padding: 8px 12px; } .rings { left: 39px; top: 114px; width: 94px; height: 94px; } .mini { left: 10px; top: 220px; width: 152px; height: 84px; } .mini article { padding: 4px 6px; } .mini canvas { width: 56px; height: 28px; } }

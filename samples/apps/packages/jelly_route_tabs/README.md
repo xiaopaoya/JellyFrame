@@ -1,17 +1,9 @@
-# Route Tabs
+# jelly_route_tabs
 
-> Last updated: 2026-07-12; Applies to: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
-A single-package tabbed settings/focus flow using the bounded app-local
-`location.hash` subset. It changes only route state inside the running app:
-there is no URL loading, browser history or navigation stack.
+Daybook cards demonstrate app-local hash routes, active tabs and history.back. Back returns to the previous local route; this does not launch another app.
 
 ```powershell
-python tools\jellyframe_cli.py preview --root samples\apps\packages\jelly_route_tabs --output build\route_tabs.bmp --build-dir build\desktop-release\Release
-```
-
-For a deterministic Win32 interaction capture, run:
-
-```powershell
-.\build\desktop-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_route_tabs --frame-script samples\apps\packages\jelly_route_tabs\capture_route_tabs.jfcapture
+.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app samples/apps/packages/jelly_route_tabs --frame-script samples/apps/packages/jelly_route_tabs/capture_review.jfcapture
 ```

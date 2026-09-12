@@ -1,28 +1,24 @@
 var pages = {
-  today: { title: "Today", summary: "Your next focus block starts at 09:30.", detail: "Morning plan" },
-  focus: { title: "Focus", summary: "One block is ready to start.", detail: "25 minute timer" },
-  settings: { title: "Settings", summary: "Display and notification choices.", detail: "Quiet mode enabled" }
+  today: {title: "Today", detail: "UP NEXT", value: "09:30", summary: "Morning reading"},
+  focus: {title: "Focus", detail: "SESSION LENGTH", value: "25 min", summary: "One thing at a time"},
+  settings: {title: "Settings", detail: "NOTIFICATIONS", value: "Quiet", summary: "Your personal space"}
 };
-
-function currentRoute() {
-  return location.hash ? location.hash.slice(1) : "today";
-}
-
 function renderRoute() {
-  var route = currentRoute();
-  var page = pages[route] || pages.today;
+  var route = location.hash ? location.hash.slice(1) : "today";
+  if (!pages[route]) { route = "today"; }
+  var page = pages[route];
   document.getElementById("title").textContent = page.title;
-  document.getElementById("summary").textContent = page.summary;
   document.getElementById("detail").textContent = page.detail;
-  var buttons = document.querySelectorAll("[data-route]");
-  for (var index = 0; index < buttons.length; ++index) {
-    buttons[index].classList.toggle("active", buttons[index].getAttribute("data-route") === route);
-  }
+  document.getElementById("value").textContent = page.value;
+  document.getElementById("summary").textContent = page.summary;
+  var tabs = document.querySelectorAll("[data-route]");
+  for (var i = 0; i < tabs.length; i += 1) { tabs[i].classList.toggle("active", tabs[i].dataset.route == route); }
 }
-
-var tabs = document.querySelectorAll("[data-route]");
-for (var index = 0; index < tabs.length; ++index) {
-  tabs[index].addEventListener("click", function () { location.hash = this.getAttribute("data-route"); });
-}
+document.getElementById("app").addEventListener("click", function (event) {
+  var button = event.target.closest("button");
+  if (button && button.dataset.route) { location.hash = button.dataset.route; }
+});
+document.getElementById("back").addEventListener("click", function () { history.back(); });
 window.addEventListener("hashchange", renderRoute);
+window.addEventListener("popstate", renderRoute);
 renderRoute();

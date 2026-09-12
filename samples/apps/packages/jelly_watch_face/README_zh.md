@@ -1,6 +1,6 @@
 # Jelly Watch Face
 
-> 最后更新：2026-07-07；适用版本：0.5.0
+> 最后更新：2026-09-09；适用版本：0.6.0-dev；Render Core 基线：0.6.2
 
 用于验收 `transform: rotate(...)`、`transform-origin`、`border-radius: 50%`
 和 `conic-gradient()` 进度环子集的模拟表盘示例。
@@ -18,3 +18,9 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\jelly_watch_fa
 ```powershell
 .\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_watch_face --frame-script samples\apps\packages\jelly_watch_face\capture_watch_face_30fps.jfcapture
 ```
+
+## 视觉用途
+
+采用可穿戴配色；以下宿主能力和验收限制仍然适用。
+
+日期硬编码且时区依赖桌面；真实时钟由 clock 承担，旋转时序保留作 regression fixture。

@@ -1,84 +1,107 @@
 * {
-  box-sizing: border-box;
+  box-sizing:border-box;
 }
 
 body {
-  margin: 0;
-  background: #142632;
-  color: #effaff;
-  font-family: system-ui;
+  margin:0;
+  background:#121C28;
+  color:#E8F3FA;
+  font-family:system-ui;
 }
 
 .screen {
-  width: 300px;
-  height: 300px;
-  padding: 42px 28px;
+  width:300px;
+  height:300px;
+  padding:42px 28px;
 }
 
 .eyebrow {
-  margin: 0 0 14px;
-  color: #8fc9d6;
+  margin:0 0 14px;
+  color:#ADC4D2;
 }
 
 .card {
-  padding: 22px;
-  border-radius: 24px;
-  background: linear-gradient(#2c5f70, #1d3d4b);
+  padding:22px;
+  border-radius:24px;
+  background:linear-gradient(#1C2C3C, #121C28);
 }
 
 .label,
 #status {
-  margin: 0;
-  color: #b9d6df;
+  margin:0;
+  color:#ADC4D2;
 }
 
 #value {
-  display: block;
-  margin: 8px 0;
-  font-size: 42px;
+  display:block;
+  margin:8px 0;
+  font-size:42px;
 }
 
 button {
-  width: 100%;
-  margin-top: 18px;
-  padding: 11px;
-  border: 0;
-  border-radius: 16px;
-  background: #a8e6d1;
-  color: #12352f;
+  width:100%;
+  margin-top:18px;
+  padding:11px;
+  border:0;
+  border-radius:16px;
+  background:#73DEB8;
+  color:#E8F3FA;
 }
 
 @media (max-height: 240px) {
   .screen {
-    height: 240px;
-    padding: 18px 28px;
+    height:240px;
+    padding:18px 28px;
   }
 
   .eyebrow {
-    margin-bottom: 8px;
+    margin-bottom:8px;
   }
 
   .card {
-    padding: 16px 22px;
+    padding:16px 22px;
   }
 
   #value {
-    margin: 4px 0;
-    font-size: 36px;
+    margin:4px 0;
+    font-size:36px;
   }
 
   button {
-    margin-top: 10px;
+    margin-top:10px;
   }
 }
 
 @media (max-width: 200px) {
   .screen {
-    width: 172px;
-    padding: 24px 16px;
+    width:172px;
+    padding:24px 16px;
   }
 
   .card {
-    padding: 20px 16px;
+    padding:20px 16px;
   }
 }
+
+/* Isolated visual-review candidate: bounded viewport repair. */
+
+.screen { width:100%; height:300px; padding:44px; font-size:13px; line-height:18px; }
+.eyebrow { font-size:11px; line-height:16px; margin-bottom:8px; }
+.card { padding:16px; border-radius:18px; }
+#value { font-size:38px; line-height:44px; margin:4px 0; }
+button { height:34px; padding:0; line-height:32px; margin-top:10px; text-align:center; }
+@media (max-height: 260px) { .screen { height:240px; padding:14px 32px; } }
+@media (max-width: 200px) { .screen { height:320px; padding:24px 14px; } .eyebrow { font-size:10px; } .card { padding:16px; } }
+
+/* Shared wearable colors from JellyFrame palette v2. Layout remains app-local. */
+html, body { background: #000000; color: #E8F3FA; }
+button:focus { outline-color: #67DDED; }
+ .card { background: #121C28; } .eyebrow, .label, #status { color: #ADC4D2; }
+button { background: #67DDED; color: #101820; } button:active { background: #26B9DE; }
+
+/* Recover original card character; reclaim outer margin. */
+ .screen { padding: 28px 20px; } .eyebrow { margin-left: 10px; margin-bottom: 12px; }
+.card { padding: 22px; border: 1px solid #344D5D; border-radius: 24px; background: linear-gradient(#243747, #10283F); }
+#value { font-size: 46px; line-height: 56px; margin: 10px 0; } button { height: 38px; line-height: 36px; margin-top: 16px; }
+@media (max-height: 260px) { .screen { padding: 14px 20px; } .card { padding: 12px 22px; } #value { font-size: 38px; line-height: 46px; margin: 4px 0; } button { margin-top: 10px; } }
+@media (max-width: 200px) { .screen { padding: 22px 10px; } .eyebrow { margin-left: 0; } .card { padding: 20px 14px; } #value { font-size: 38px; } }

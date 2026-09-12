@@ -286,11 +286,10 @@ class PackagePreflightTests(unittest.TestCase):
         finally:
             path.unlink(missing_ok=True)
 
-    def test_weather_template_and_sample_stay_intentionally_aligned(self):
+    def test_weather_template_shares_visuals_but_requires_no_host_services(self):
         mirrored_files = (
             "index.html",
             "styles/app.css",
-            "scripts/app.js",
             "assets/cloudy.bmp",
             "assets/haze.bmp",
             "assets/rain.bmp",
@@ -315,8 +314,7 @@ class PackagePreflightTests(unittest.TestCase):
             "runtime",
             "viewport",
             "budgets",
-            "permissions",
-            "capabilities",
+            "targets",
         )
         for field in shared_fields:
             self.assertEqual(
@@ -324,6 +322,14 @@ class PackagePreflightTests(unittest.TestCase):
                 template_manifest.get(field),
                 f"weather template manifest drifted from sample field: {field}",
             )
+        self.assertFalse(template_manifest.get("permissions"))
+        self.assertFalse(template_manifest.get("capabilities"))
+        self.assertIn("network", sample_manifest["permissions"])
+        self.assertIn("network.fetch", sample_manifest["capabilities"])
+        self.assertIn("storage.kv", sample_manifest["capabilities"])
+        template_script = (template_root / "scripts/app.js").read_text(encoding="utf-8")
+        self.assertNotIn("XMLHttpRequest", template_script)
+        self.assertNotIn("localStorage", template_script)
 
     def test_font_preflight_scans_text_resources_and_skips_binary_other(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-tool-regression-") as directory:

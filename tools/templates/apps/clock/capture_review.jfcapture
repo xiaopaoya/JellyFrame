@@ -1,0 +1,7 @@
+frames 18
+step-ms 100
+start-ms 1700000000000
+viewport 300 300
+event 3 click-id zoneButton
+event 8 click-id formatButton
+event 13 click-id zoneButton

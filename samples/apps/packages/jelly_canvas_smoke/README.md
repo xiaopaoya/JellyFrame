@@ -1,6 +1,6 @@
 # Jelly Canvas Smoke
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
 Small Canvas 2D V0.4 sample for trend lines and simple charts. It draws the chart once into a compact source canvas, uses a bounded two-stop concentric `createRadialGradient()` background, and uses canvas-to-canvas `drawImage()` scaling for the visible graph. The page still uses
 ordinary DOM/CSS for structure and text; Canvas is only used for the bounded
@@ -13,3 +13,9 @@ This is an acceptance package, not an app-author starter or gallery example.
 The current Win32 gallery shell does not claim a product Canvas host binding;
 use it to validate the bounded API and target declaration only where the host
 has explicitly enabled Canvas.
+
+## Visual role
+
+Uses the wearable palette. Native host support and the acceptance limitations below still apply.
+
+Regression input only; excluded from the recommended showcase set.

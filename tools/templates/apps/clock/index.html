@@ -1,31 +1,3 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Clock</title>
-  <link rel="stylesheet" href="styles/app.css">
-</head>
-<body>
-  <main class="screen">
-    <section class="topline">
-      <span class="title">Dayline</span>
-      <span id="zone" class="meta">08</span>
-    </section>
-    <section class="time-card">
-      <span class="eyebrow">LOCAL TIME</span>
-      <span id="phase" class="phase">Morning</span>
-      <strong id="time">07:30</strong>
-      <span id="note">Start steady</span>
-    </section>
-    <section class="metrics">
-      <div><span>MOVE</span><strong id="steps">6.4k</strong></div>
-      <div><span>PULSE</span><strong id="heart">72</strong></div>
-    </section>
-    <section class="actions">
-      <button id="refresh"><span>Next</span></button>
-      <button id="zoneButton"><span>Zone</span></button>
-    </section>
-  </main>
-  <script src="scripts/app.js"></script>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8"><title>Dayline</title><link rel="stylesheet" href="styles/app.css"></head>
+<body><main class="screen" id="app"><p class="eyebrow">DAYLINE</p><section class="time-card"><p id="phase" class="phase">Evening</p><strong id="time" class="time">22:13</strong><p id="seconds" class="seconds">20 seconds</p></section><div class="daytrack"><div id="dayfill"></div></div><div class="actions"><button id="zoneButton">UTC</button><button id="formatButton">24 hour</button></div></main><script src="scripts/app.js"></script></body></html>

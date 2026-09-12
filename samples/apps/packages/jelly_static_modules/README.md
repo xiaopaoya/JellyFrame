@@ -1,12 +1,5 @@
-# Static Modules
+# jelly_static_modules
 
-> Last updated: 2026-07-10; Applies to: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
 
-This small package proves the package-time ES-module subset. `index.html` has
-one external `type="module"` entry; `scripts/app.js` imports a package-local
-helper. Packaging rewrites that entry to a generated classic script bundle, so
-the device runtime does not need a module loader.
-
-```powershell
-python tools\jellyframe_cli.py preview --root samples\apps\packages\jelly_static_modules --output build\static_modules.bmp --build-dir build\desktop-release\Release
-```
+A static local module example with a working Add 5 min action (25m to 30m to 35m). Package the source into a .jfapp before native capture: direct source capture skips type=module.

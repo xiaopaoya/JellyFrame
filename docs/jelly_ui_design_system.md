@@ -1,6 +1,6 @@
 # JellyFrame Gel Interface System
 
-> Last updated: 2026-07-14; Applies to: 0.5.0
+> Last updated: 2026-09-09; Applies to: 0.6.0-dev
 
 This document defines JellyFrame's first native visual and motion system. It
 interprets the `Jelly` name through the shared qualities of jellyfish and gel:
@@ -79,7 +79,7 @@ JellyFrame-safe fallback.
 ## Implemented Samples
 
 - `samples/apps/packages/jelly_controls`: installable source package showing
-  gel buttons, input, switch, progress and a small keyframe pulse.
+  native text/range/checkbox settings and session-local save feedback.
 - `samples/apps/packages/jelly_motion_lab`: packaged, deterministic motion
   showcase using paint-safe transforms, opacity and scripted replay.
 - `samples/apps/packages/jelly_wearable_launcher`: icon-grid paint regression

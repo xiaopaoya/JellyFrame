@@ -1,40 +1,12 @@
-var value = 64;
-var enabled = true;
-var fill = document.getElementById("fill");
-var pct = document.getElementById("pct");
-var more = document.getElementById("more");
-var less = document.getElementById("less");
-var toggle = document.getElementById("switch");
+var level = document.getElementById("brightness");
+var quiet = document.getElementById("quiet");
+var goal = document.getElementById("goal");
 var toast = document.getElementById("toast");
-
-function render() {
-  if (value < 0) {
-    value = 0;
-  }
-  if (value > 100) {
-    value = 100;
-  }
-  fill.style.width = String(value) + "%";
-  pct.textContent = String(value);
-  toggle.className = enabled ? "switch is-on" : "switch";
-  toggle.setAttribute("aria-checked", enabled ? "true" : "false");
-  toast.textContent = enabled ? "Motion uses paint-safe CSS only." : "Low power mode keeps UI readable.";
-}
-
-more.addEventListener("click", function () {
-  value += 8;
-  render();
+function edit() { document.getElementById("pct").textContent = level.value + "%"; toast.textContent = "Changes not saved yet."; }
+level.addEventListener("input", edit);
+quiet.addEventListener("change", edit);
+goal.addEventListener("input", edit);
+document.getElementById("save").addEventListener("click", function () {
+  toast.textContent = goal.value.length ? (quiet.checked ? "Saved / Quiet mode on" : "Saved / Quiet mode off") : "Enter a session name.";
 });
-
-less.addEventListener("click", function () {
-  value -= 8;
-  render();
-});
-
-toggle.addEventListener("click", function () {
-  enabled = !enabled;
-  render();
-});
-
-render();
-"jelly controls ready";
+// State stays in this app session; this example makes no hardware or storage claim.

@@ -16,6 +16,7 @@ the render-core and app-runtime C++ unit suites.
 | HTML/CSS audit and profile declarations | `html_support_table_tests.py`, `css_support_table_tests.py`, `render_core_feature_profile_tests.py`, `render_core_feature_registry_tests.py` |
 | Visual diagnostics and layout captures | `pipeline_visual_diagnostics_tests.py`, `flex_grid_capture_tests.py` |
 | Template and external-author workflow | `template_trial_tests.py` |
+| Native showcase interactions and repaint equivalence | `app_showcase_capture_tests.py BUILD_TOOL_DIR OUTPUT_DIR` (scripting-enabled Win32 shell) |
 | Font/resource policy | `font_policy_report_tests.py` |
 | Link-map and build slicing | `render_core_link_map_tests.py` |
 | Source-aware render performance reports | `render_performance_report_tests.py` |
