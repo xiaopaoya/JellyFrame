@@ -36,7 +36,7 @@ status below requires a source check and a regression or device evidence.
 
 | Area | Current assessment | Next action |
 | --- | --- | --- |
-| Dirty-rect invalidation scans | Bounded; benchmark baseline recorded | Render Core microbench (`jellyframe_render_core_microbench 80 2000`) measured 100 fragmented rects at 79.606 us, while 500 and 1000 rect inputs take 5.084 us and 10.511 us because the configured threshold falls back to one viewport rect (`forced_merges=499/999`). No unbounded growth was observed; defer a sweep/tile rewrite until device telemetry shows invalidation is dominant. |
+| Dirty-rect invalidation scans | Bounded; benchmark baseline recorded | Render Core microbench (`jellyframe_render_core_microbench 80 2000`) on the 2026-09-12 Release build measured 100 fragmented rects at 63.807 us, while 500 and 1000 rect inputs take 5.342 us and 10.190 us because the configured threshold falls back to one viewport rect (`forced_merges=499/999`). No unbounded growth was observed; defer a sweep/tile rewrite until device telemetry shows invalidation is dominant. |
 | DOM mutation accounting beyond the document cache | Closed | All current mutation and detached-node paths were reviewed; detached subtrees bypass the document cache, and rebind/destruction invalidate it. A dedicated repeated-mutation benchmark remains optional evidence, not a correctness blocker. |
 | Font fallback context rebuild | Closed | `contexts_dirty_` is set on every font-set/system-font change; family contexts are rebuilt per query and do not retain stale internal pointers. A text-heavy benchmark remains optional evidence. |
 | Physical-port durability policy | Deferred port evidence | The reference contract now documents acknowledged versus durable semantics. Each physical port must publish and power-interruption-test its own policy; this is not an A2 blocker for the existing accepted image. |
@@ -73,6 +73,11 @@ not be confused with the still-open per-layer invalidation scan.
 - Tool regressions: documentation freshness 1/1 and render performance report 10/10 pass.
 - Dirty-region benchmark: 100/500/1000 fragmented input baseline recorded; over-threshold inputs remain one-viewport bounded fallback.
 - `git diff --check` passes.
+
+The same benchmark run measured `text_anywhere_wrap_32/128/512/2048` at
+0.496/1.460/4.581/18.909 us respectively. This remains consistent with the
+bounded incremental-width path; no separate range-measurement API is justified
+without a provider workload that demonstrates a material device cost.
 
 ## Baseline caveats
 
