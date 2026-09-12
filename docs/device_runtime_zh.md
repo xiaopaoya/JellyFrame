@@ -142,6 +142,11 @@ resume/cancel 的 reference-only test hook，不是设备传输选项。endpoint
 lifecycle log 和 recovery record 仅是桌面 reference 证据，不能被当作 panel、触控、wire transport 或设备帧率
 telemetry。该命令刻意命名为 `device-reference`：没有真实 transport 时 Runtime 不提供 `device` 命令；真实 USB、串口或 Wi-Fi transport 由对应 Device OS 工具单独注册，而不是由 core 猜测。
 
+reference staging writer 在字节写入操作系统文件缓冲后确认 chunk；它只在首个 chunk、每个 16 KiB 边界与最后一个
+chunk 同步 staging 文件，每个已确认 chunk 后原子写入 transaction metadata。`commit`、`cancel` 和 recovery
+仍是耐久 phase boundary。这个批量同步策略只是桌面 reference endpoint 的实现策略，不是 JFDP wire 要求；物理
+port 必须明确记录自身的“已确认”与“已持久化”边界，并通过 reboot 或断电中断验证该边界。
+
 ## 官方板卡 Profile
 
 “官方 profile”不只是 port 能编译；它必须发布稳定的 board id、显示/触控配置、能力 profile、存储限制、

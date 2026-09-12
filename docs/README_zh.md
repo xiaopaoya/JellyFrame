@@ -2,7 +2,7 @@
 
 # JellyFrame 文档索引
 
-> 最后更新：2026-09-08；适用版本：0.6.0-dev
+> 最后更新：2026-09-11；适用版本：0.6.0-dev
 
 本目录保存技术文档：模块行为、支持子集、接口和宿主契约，应尽量贴近代码维护。
 
@@ -68,12 +68,12 @@
 - [device_image_manifest_zh.md](device_image_manifest_zh.md)：不可变 Developer Image 的 identity、provenance 与 provider-compatibility 契约。
 - [jfdp_v1_port_acceptance_zh.md](jfdp_v1_port_acceptance_zh.md)：第一条 physical developer transport 的字节流、malformed-frame 与证据 gate。
 - [device_image_lifecycle_port_acceptance_zh.md](device_image_lifecycle_port_acceptance_zh.md)：首个 Developer Image 的持久 staging、registry publication 与 launcher recovery gate。
+- [ws147_panel_scroll_te_acceptance_zh.md](ws147_panel_scroll_te_acceptance_zh.md)：WS147 JD9853 physical-GRAM panel-scroll 的 TE/vblank 同步修复、fallback 与实机放行标准。
 - [ws147_installed_script_touch_input_acceptance_20260827_zh.md](ws147_installed_script_touch_input_acceptance_20260827_zh.md)：
   已安装 classic-script App 的物理触控到 worker、frame 与 panel 验收要求。
-- [ws147_provider_vscode_smoke_20260825_zh.md](ws147_provider_vscode_smoke_20260825_zh.md)：WS147
-  provider 与 VS Code 的只读发现、身份读取冒烟验收；不包含安装、刷写或擦除操作。
-- [a2_author_tool_acceptance_plan_zh.md](a2_author_tool_acceptance_plan_zh.md)：A2 作者工具、
-  设备生命周期、真实 App 输入和失败诊断的统一验收方案与关闭标准。
+- A2 作者工具与 WS147 Provider 的过程性验收方案位于
+  [`../project_docs/a2_author_tool_acceptance_plan_zh.md`](../project_docs/a2_author_tool_acceptance_plan_zh.md)
+  和 [`../project_docs/ws147_provider_vscode_smoke_20260825_zh.md`](../project_docs/ws147_provider_vscode_smoke_20260825_zh.md)。
 - [authorized_file_broker_zh.md](../src/app_runtime/docs/authorized_file_broker_zh.md)：面向文件管理器和系统组件的宿主持有授权文件访问边界。
 - [host_optional_services_zh.md](../src/app_runtime/docs/host_optional_services_zh.md)：图片/音频/轻量视频、网络数据和安装式 bundle 的可选宿主服务契约。
 - [../tools/vscode-jellyframe/README_zh.md](../tools/vscode-jellyframe/README_zh.md)：

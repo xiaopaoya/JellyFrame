@@ -15,7 +15,10 @@ __pycache__/
 *.pyc
 jerryscript-master.zip
 third_party/jerryscript/
-project_docs/
+project_docs/*
+# These documents were moved out of docs/ and must remain versioned.
+!project_docs/a2_author_tool_acceptance_plan_zh.md
+!project_docs/ws147_provider_vscode_smoke_20260825_zh.md
 release_review/
 jellyframe_*_review_*/
 

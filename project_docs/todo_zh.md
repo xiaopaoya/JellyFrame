@@ -1,14 +1,66 @@
 # JellyFrame 活动待办
 
-> 最后更新：2026-09-09；适用版本：0.6.0-dev
+> 最后更新：2026-09-11；适用版本：0.6.0-dev
 >
 > 本清单是 [路线图](roadmap_zh.md) 的近期执行队列，不记录已经关闭的验收、性能微实验或历史移植任务。
 
 ## 现在：更宽范围 A2 产品出口与 B1 边界维护
 
-- [ ] 在干净作者机完成 WS147 VS Code 的只读 smoke：发现、身份读取和已安装 App 列表必须与 manifest/registry 一致。要求见 `../docs/ws147_provider_vscode_smoke_20260825_zh.md`；该项不执行安装或刷写。此前本机 candidate smoke 不可替代此项。
+当前执行顺序固定为：先处理已确认的安全/正确性缺陷，再完成性能观测闭环，
+最后推进设备出口和体验增强。任何性能或编辑器工作都不能替代 A2 的实机证据。
+
+### 本阶段未来四轮对话计划
+
+1. **审查关闭矩阵**：逐条回读两轮审查和新性能审查，记录“已修复、已验证、误报/不成立、
+   延后 RFC、待修复”及对应测试/实机证据；不重复修改已经关闭的项目。
+2. **剩余边界修复**：优先处理仍成立的公共 dirty/clip 上限、跨任务资源身份和资源计费边界；
+   每项同时补正常、拒绝、异常和重复生命周期测试。
+3. **性能缓存与基准**：在稳定 workload 下评估 DOM 统计、字体 fallback context、图像缓存预算、
+   dirty invalidation 的收益；没有 workload 证据的全屏微优化继续延后。
+4. **出口与发布准备**：复跑 Debug/Release/scripting/tool 全套门禁，审查矩阵归档，确认 Core
+   `0.6.2` lock、Developer Image、SDK 和 A2 实机证据一致后，再处理 A3 试用材料。
+
+当前轮次已完成第 1 轮的初步回读和低风险修复；下一轮只进入矩阵中仍标记为“待修复”的项目。
+
+### 1. 审查报告治理（当前最高优先级）
+
+- [ ] 逐条评估两轮审查产生的漏洞/鲁棒性报告：`review_findings_INDEX.md`、
+  `render_core_code_review.md`、`review_findings_render_core_rest.md`、
+  `review_findings_app_runtime_services.md`、`review_findings_app_runtime_lifecycle.md`、
+  `review_findings_app_runtime_script_task.md`。每条标记为修复、误报/不成立、延后 RFC
+  或需要实机证据；不能只按报告标题假定成立。
+- [ ] 优先关闭 P0/P1：特权服务授权、资源/句柄生命周期、dirty/布局预算、viewport 单位、
+  文本测量和跨任务完成语义；每项必须有正向、拒绝/异常和重复生命周期回归。
+- [ ] 对新一轮性能审查中的 P1/P2 逐条回读源码，避免重复修复已经关闭的项目；仅在有稳定
+  workload 或明确正确性收益时修改热路径。
+- [ ] 更新审查索引和项目状态，记录每条发现的证据、提交、测试和剩余风险。
+
+### 2. 渲染性能观测闭环（独立并行主线）
+
+- [x] 完成现有 Render Trace/Performance Profile 的状态核对：桌面逐帧 trace、阶段/command/owner
+  归因与设备 aggregate profile 已交付；设备逐元素 trace 尚未实现，aggregate 数据不得冒充元素耗时。
+- [ ] 用同一 App、输入、构建和机器完成 profile OFF/ON A/B，确认像素 hash、p50/p95、报告开销
+  和 trace I/O 边界；拖动/滚动 fixture 作为当前交互性能重点。
+- [x] VS Code Render Trace 查看器已具备阶段占比、dirty overlay、最慢帧跳转、逐帧正确 Top-64
+  command 排名、缺失截图/阶段/命令状态，以及明确的 `unattributed`/截断提示；不把 aggregate 数据伪装成元素耗时。
+- [x] 已在 VS Code Render Trace 查看器交付跨帧 command 聚合；独立 Device Performance Profile 查看器仍需
+  评估。继续保持静态报告与逐帧 trace 分离，不能把设备 aggregate telemetry 伪装成逐元素数据。
+- [ ] 在真实 developer-image workload 上完成至少一个静态和一个连续拖动/滚动的 Device Profile
+  窗口；设备结论只来自版本化实机报告。
+- [ ] 仅在上述数据稳定后，建立与 Cairo/SDL software renderer、LVGL 等的同分辨率/像素格式对照；
+  在此之前不宣称“比主流图形库快/慢”。
+
+### 3. 近期交互性能与设备出口
+
+- [ ] 完成 [WS147 Panel Scroll 同步修复与移植验收](../docs/ws147_panel_scroll_te_acceptance_zh.md)：先确认 JD9853 实际 TE 能力并修复 VSCSAD/strip 时序；在相同固件/profile 下复核 input-to-DMA-complete p50/p95；
+  当前自动滚动 profile 只能证明 render-to-present 路径，不能证明真实手势延迟。每个真实输入必须关联 sample、
+  dispatch、mutation/frame、paint-end 与 DMA-complete；只有加入 TE/latch 或光学测量后才能声明 input-to-present。
+  若未形成证据，继续处理输入采样、队列合并、脚本更新和重绘范围，而不是凭手感扩展功能。
+
+- [ ] 在干净作者机完成 WS147 VS Code 的只读 smoke：发现、身份读取和已安装 App 列表必须与 manifest/registry 一致。要求见 `ws147_provider_vscode_smoke_20260825_zh.md`；该项不执行安装或刷写。此前本机 candidate smoke 不可替代此项。
 - [ ] 在同一干净作者机完成 VS Code 设备流程：`new -> check -> package -> deploy -> launch -> live log -> update -> rollback -> stop -> remove`。桌面与设备 session 必须保持独立，最终报告必须保留可定位的失败归属。
 - [ ] 通过 provider 流程完成真实已安装 App 的 panel/input 验收。2026-09-08 用户补充观察称实机操作响应正常，但归档中的 `posted=0` 采样不是结构化输入证据。仍需按 App 记录 launch marker、触控/输入响应、panel/present 错误与恢复行为；provider lifecycle PASS 或非结构化观察不等于完成视觉/输入验收。
+- [x] WS147 物理 GRAM panel-scroll 已完成性能与 fallback 复测，但视觉验收失败；已由 `eaa52a67` 增加视觉接受门并从默认可用路径隔离。后续仅调查 TE/vblank 同步，不得重新启用发布配置。
 - [ ] 将 B1 作为持续 release gate 维护。带签名的 Core `v0.6.2` release 是当前 Runtime 依赖，Runtime 锁定 Core `0.6.2`、ABI `1` 和 source identity；以后每次 Core bump 必须下载或以其他方式认证已审阅的 release artifact、校验 archive SHA-256、更新精确 version/ABI/source lock，并通过 standalone、package-consumer 与 source-override tests。
 - [x] 基于已合入的 Runtime Core `0.6.2` lock 构建并验收 WS147 Developer Image `0.6.2-ws147.1`。历史 `0.6.1` manifest 与证据保持不可变；R1-R17、host/provider 与 package-smoke 完整报告为 `core062-developer-image-final-20260905`，物理 Developer Image gate 已关闭。
 - [x] 从 Runtime `ca747011` 发布 App Author SDK `app-sdk-v0.6.0-dev.2`；标准与 scripting 桌面运行时均消费 Core `0.6.2`，release archive SHA-256 为 `c3245edd...7dc8a9f`。

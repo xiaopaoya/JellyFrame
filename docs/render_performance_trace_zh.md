@@ -1,7 +1,7 @@
 # Render Core 性能观测与对比方案
 
-> 最后更新：2026-09-10；适用版本：0.6.0-dev
-> 状态：第二阶段已交付；Win32 capture 已提供有界 command/owner 归因
+> 最后更新：2026-09-11；适用版本：0.6.0-dev
+> 状态：第二阶段已交付；Win32 capture 已提供有界 command/owner 归因与跨帧聚合
 
 ## 1. 为什么需要这项工具
 
@@ -41,6 +41,8 @@ python tools\render_performance_report.py `
 - dirty rect 数量、dirty 面积、frame update action/reason 和 pipeline object count；
 - producer 提供时的 display command 类型与受限 owner 归因排行；
 - 设备 aggregate telemetry 与隔离 microbench 的独立区域；
+- Render Trace 查看器提供跨帧的 command/stage/owner 调用数、累计耗时和单次调用 p95；
+- 截断帧、无效计时与 `unattributed` 单独计数，聚合结果明确标记为已记录样本的下界；
 - 明确的 warning/limitation，而不是用缺失数据填零后伪造结论。
 
 ## 3. 逐帧 trace V0
@@ -129,9 +131,10 @@ python tools\render_trace_profile_ab.py `
 2. 阶段堆叠条，点击阶段显示其绝对时间、占比和是否来自 desktop/device；
 3. 画布 overlay：dirty rect、paint bounds、clip bounds，切换前后帧；
 4. command/owner 排名，显示类型、受限 owner、候选像素、调用次数和耗时；
-5. frame scrubber，逐帧查看“重建了什么、复用了什么、哪些区域被清除/重绘”；
-6. p50/p95 与最慢帧固定显示，并允许导出原始 JSONL/HTML；
-7. 缺失 trace、设备只提供 aggregate 或 command 未归因时显示来源和限制。
+5. 跨帧聚合，按 command、stage 和 owner 汇总调用数、累计耗时与 p95，并显示截断/缺失归因；
+6. frame scrubber，逐帧查看“重建了什么、复用了什么、哪些区域被清除/重绘”；
+7. p50/p95 与最慢帧固定显示，并允许导出原始 JSONL/HTML；
+8. 缺失 trace、设备只提供 aggregate 或 command 未归因时显示来源和限制。
 
 实时模式应采用有界环形缓冲，不阻塞 render/present，也不在 MCU 默认开启逐元素计时。
 设备侧默认只发送阶段计数和窗口汇总；需要逐命令/逐元素 profiling 时，必须显式启用
@@ -199,7 +202,7 @@ present/DMA 时间和视觉误差。不同库不支持的能力单独标记 `not
 - Win32 shell 已在显式选项下产生 bounded frame JSONL；
 - trace report 工具会报告重复、回退或非法 frame number，不静默排序或伪造帧；
 - 每帧补齐阶段 timing、dirty/pipeline counters 和 frame update reason；
-- VS Code Render Trace 面板读取 trace，支持 frame scrubber、阶段占比、dirty 覆盖率条、最多 32 个 dirty 矩形、当前帧截图和 command 归因；
+- VS Code Render Trace 面板读取 trace，支持 frame scrubber、阶段占比、dirty 覆盖率条、最多 32 个 dirty 矩形、当前帧截图、command 归因和跨帧聚合；
 - `.jfcapture` 回放可显式生成同目录 bounded Render Trace，并在状态视图中保留打开入口；
 - 命令/节点归因的 owner-token、边界、截断和正确性门槛已在
   [专用 RFC](render_trace_command_attribution_rfc_zh.md) 冻结；opt-in Core owner token、value-only

@@ -79,12 +79,13 @@ frame record 的可选 `commands` 数组按 `(ownerToken, type)` 聚合：
    owner token、最终矩形 clip、保守 candidate pixels、耗时和有效性。rounded grouped replay 的每个
    command 仍会各记一次；surface prepare、rounded coverage composite、offscreen transform 等没有
    可靠 owner 的工作仍不归属。
-3. **有界聚合与 UI（已交付 producer）**：Win32 producer 在显式 `--render-trace` capture 时将实际
+3. **有界聚合与 UI（已交付）**：Win32 producer 在显式 `--render-trace` capture 时将实际
    raster invocation 按 `(ownerToken, type)` 聚合到 JSONL；每帧最多 64 项、owner 最多 64 个，且 writer
    还会为 4 KiB 行限制预留空间。发生任何一类截断时分别输出 `commandsTruncated` / `nodesTruncated`。
    `commandInvalidSamples` 仅在非零时输出。为采到静态 App 的首帧，capture 的第 0 帧会请求一次不改变
-   DOM 内容或像素输出的 paint-only diagnostic repaint。当前 VS Code 查看器继续兼容读取 trace；命令排名
-   面板属于后续 UI 增量，不能以它尚未显示为由否认 producer 已输出的数据。
+   DOM 内容或像素输出的 paint-only diagnostic repaint。当前 VS Code 查看器继续兼容读取 trace；查看器现已
+   提供逐帧命令排名、最慢帧跳转，以及按 command、stage、owner 的跨帧调用数/累计耗时/p95 聚合。截断、
+   无效样本和 `unattributed` 单独显示，聚合只代表已记录样本，不把缺失数据补成零。
 4. **正确性及开销门槛**：同一 `.jfcapture` 的 profile on/off frame hash 必须相同；Release desktop
    baseline 上 profiling p95 额外 CPU 时间应记录且可解释，不设虚假的“零开销”要求。
    `tools/render_trace_profile_ab.py` 是标准配对 runner：它交替运行 baseline/profiled、校验每帧

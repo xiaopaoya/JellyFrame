@@ -1,6 +1,6 @@
 # JellyFrame 主线路线图
 
-> 最后更新：2026-09-09；适用版本：0.6.0-dev；状态：活动计划的唯一来源
+> 最后更新：2026-09-11；适用版本：0.6.0-dev；状态：活动计划的唯一来源
 
 ## 先决判断
 
@@ -25,13 +25,28 @@
 
 并行工作不得改变更早项目的出口条件。
 
-1. **A2 作者工具证据，实机继续：**WS147 Device OS/provider、已安装脚本 App、触摸诊断和 touch-latency 样例已合入主线。干净机器 VS Code 完整生命周期，以及真实已安装 App 的 panel/input 证据仍按独立报告验收，不能由源码 CI 或 provider lifecycle PASS 替代。
-2. **R1 Core-only 维护，首轮审查已归档：**响应式布局、软件栅格器、文本、布局和极值安全审查已完成；Core-only Debug、Release、Sanitizer 构建及 CTest 均通过。统一 dirty/clip/command budget 契约仍是 RFC 待评审事项，长文本换行 benchmark 已加入主线作为诊断基线。详见 `r1_render_core_audit_20260903_zh.md` 和 `render_core_budget_contract_rfc_20260903_zh.md`。不要机会主义地扩张浏览器 CSS 范围或修改 port profile。
+### 当前阶段四轮执行节奏
+
+1. **关闭矩阵**：逐条对照审查报告、当前源码和测试，将旧报告中的已修复项与真实待修复项
+   分开，避免重复修复或把历史结论误当作当前缺陷。
+2. **边界修复**：优先处理仍成立的 dirty/clip 公共上限、资源身份/计费和跨任务生命周期问题，
+   每项绑定拒绝路径与重复 teardown 回归。
+3. **性能证据**：在固定设备 workload 上测量 DOM 统计、字体 fallback、图像缓存和 invalidation
+   的收益；没有实测收益的全屏 renderer 微优化暂缓。
+4. **出口复核**：复跑两套桌面构建、scripting、工具和设备门禁，归档审查矩阵并核对 Core、
+   SDK、Developer Image 与 A2 实机报告的一致性。
+
+当前已完成第 1 轮初步回读和低风险修复，下一轮从矩阵中仍成立的边界问题开始。
+
+1. **审查缺陷治理：**两轮审查报告已经形成完整索引，但新一轮报告仍处于“待逐条评估”状态。先确认 P0/P1 是否成立、修复或转 RFC，再允许低优先级性能整理进入主线；每条结论都要绑定测试或实机证据。
+2. **渲染性能观测闭环：**桌面 trace producer、bounded command/owner 归因和 Device Profile V0 契约已交付，但“逐帧定位哪个阶段/命令导致卡顿”的开发者工作流仍需完成 A/B、查看器可用性、真实设备窗口和对照基线。设备 aggregate 不得推导逐元素耗时。
+3. **A2 作者工具证据，实机继续：**WS147 Device OS/provider、已安装脚本 App、触摸诊断和 touch-latency 样例已合入主线。干净机器 VS Code 完整生命周期，以及真实已安装 App 的 panel/input 证据仍按独立报告验收，不能由源码 CI 或 provider lifecycle PASS 替代。
+4. **R1 Core-only 维护：**已完成的有界算术、文本交接、dirty/clip 热路径和回调调度修复继续作为门禁；剩余审查项按第 1 项治理，不重新开启无证据的全屏微优化或浏览器兼容扩张。
    后续审查还关闭了 timer 批次顺序、同帧 rAF 取消和排队 XHR 的 provider payload 清理问题；均已有 Debug 与 scripting MinSizeRel 定向回归，已被 worker 取走的 XHR 仍走迟到 completion 释放路径。
    2026-09-10 低风险批次又完成了 LayoutBox 文本交接复用、圆角裁剪与 bitmap fallback 热路径、dirty rect 有界候选合并、共享 flex 排序、变换 opacity 采样和 trace 目录快照。剩余项目仅包括明确延后的结构性或语义问题，不重新开启已经关闭的 O1 性能阶段。
-3. **B2 后端准备，受限进行：**保持 configure-time `ScriptRuntime` 边界及其不变量。在具备独立 compatibility/resource RFC 与对等证据前，不引入第二后端，也不改变 JerryScript 默认选择。
-4. **A3 筹备，已经进行中：**试用材料、设备采购、视觉资产与反馈运营可并行，但必须在 A2 的两项证据均通过后才开始外部产品试用。
-5. **A3 作者体验增强，隔离原型进行中：**按 [可视化 App 编辑器计划](visual_app_editor_plan_zh.md) 收束 VS Code 内的受限可视化编辑流程。该工作可改善演示和 App 创作门槛，但不替代 A2 的干净机器、设备生命周期或 panel/input 证据。
+5. **B2 后端准备，受限进行：**保持 configure-time `ScriptRuntime` 边界及其不变量。在具备独立 compatibility/resource RFC 与对等证据前，不引入第二后端，也不改变 JerryScript 默认选择。
+6. **A3 筹备，已经进行中：**试用材料、设备采购、视觉资产与反馈运营可并行，但必须在 A2 的两项证据均通过后才开始外部产品试用。
+7. **A3 作者体验增强，隔离原型进行中：**按 [可视化 App 编辑器计划](visual_app_editor_plan_zh.md) 收束 VS Code 内的受限可视化编辑流程。当前只推进稳定的 Stage 2/3 一致性与真实桌面壳交接；更大范围的物料扩展等 Core 能力成熟后再做。该工作可改善演示和 App 创作门槛，但不替代 A2 的干净机器、设备生命周期或 panel/input 证据。
 
 ## 已关闭的性能阶段
 
@@ -43,7 +58,7 @@
 - full-frame rounded/gradient fixture 已确认主要时间在 shadow 和 coverage/composite；同类 copy/span 微优化已到达收益边界，最新结果仍约 `340 ms` end-to-end p95。
 - packed RGB565 与双 DMA buffer A/B 没有形成默认路径收益，保持不用。
 
-后续性能工作只能由真实官方 image workload 触发，并必须先取得分相 telemetry。允许的下一类工作是：设备侧真实 dirty workload、文本/图像 host callback，或证明 framebuffer 内存/带宽为主导后的 tile/scanline RFC；不能再以合成全屏 fixture 猜测产品帧率。
+后续性能工作只能由真实官方 image workload 触发，并必须先取得分相 telemetry。当前短期对象是拖动/滚动的 input-to-DMA-complete 延迟和重绘范围；WS147 physical-GRAM 路径的下边缘行错位已单独转入 [TE/vblank 同步移植验收](../docs/ws147_panel_scroll_te_acceptance_zh.md)，在人工视觉验收通过前保持默认关闭。只有增加 TE/latch 或光学测量后才能使用 input-to-present 口径；不能再以合成全屏 fixture 猜测产品帧率。
 
 ## 轨道 A：官方开发板与 Device OS
 

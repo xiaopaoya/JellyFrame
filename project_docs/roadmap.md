@@ -1,6 +1,6 @@
 # JellyFrame Active Roadmap
 
-> Last updated: 2026-09-07; Applies to: 0.6.0-dev; this is the single active plan.
+> Last updated: 2026-09-11; Applies to: 0.6.0-dev; this is the single active plan.
 
 ## Governing Decision
 
@@ -23,13 +23,15 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 
 Parallel work may not change the exit condition of an earlier item.
 
-1. **A2 evidence, active on the author machine:** use the accepted Core `0.6.2` WS147 image and SDK to complete the clean-machine VS Code lifecycle and installed-App panel/input evidence. A 2026-09-08 user-supplemented manual observation reports normal physical interaction response, but the archived `posted=0` sample and missing panel record keep the formal panel/input exit open. The physical Developer Image gate is closed; these author-tool exits remain independent.
-2. **R1 Core-only maintenance, active on main:** the responsive layout foundation is now delivered: the [responsive layout contract](../docs/responsive_layout_contract.md), three-target matrix and Flex cross-axis semantics have regression evidence. The 2026-09-07 focused review closed the demonstrated nested-Flex repeated-layout, service completion token, worker autofocus and layout-budget defects; the `anywhere` letter-spacing path on the current baseline was already linear and is now covered by the review probe. Continue with parser/style ownership, malformed-input budgets and cache invalidation using standalone, sanitizer and deterministic capture regressions. Do not expand browser CSS scope or alter the port profile opportunistically.
+1. **Review-finding governance:** classify the two review rounds and the new performance review item by item before broad fixes. Confirmed P0/P1 findings need a fix, regression evidence or a documented RFC disposition; report headings alone are not proof.
+2. **Render performance observability:** desktop trace production, bounded command/owner attribution, the practical frame-viewer workflow and Device Profile V0 are delivered. Real touch-correlated drag/scroll windows and fair baselines remain open; aggregate device data must not be presented as per-element timing.
+3. **A2 evidence, active on the author machine:** use the accepted Core `0.6.2` WS147 image and SDK to complete the clean-machine VS Code lifecycle and installed-App panel/input evidence. A 2026-09-08 user-supplemented manual observation reports normal physical interaction response, but the archived `posted=0` sample and missing panel record keep the formal panel/input exit open. The physical Developer Image gate is closed; these author-tool exits remain independent.
+4. **R1 Core-only maintenance, active on main:** retain the completed bounded arithmetic, text handoff, dirty/clip hot-path and callback-scheduling fixes as gates. Re-read remaining performance findings before changing hot paths; do not expand browser CSS scope or reopen closed O1 micro-optimisation work without a stable workload.
    The follow-up review also closed timer-batch ordering, same-frame rAF cancellation and queued XHR provider-payload cleanup. These are covered by focused Debug and scripting MinSizeRel regressions; worker-owned XHR requests still use the late-completion release path.
    The 2026-09-10 low-risk batch additionally closed layout-owned text handoff reuse, rounded-clip and bitmap fallback hot paths, bounded dirty-rect candidate coalescing, shared flex ordering, transformed opacity sampling and trace capture directory lookup. Remaining work is limited to explicitly deferred structural or semantic items and must not reopen the closed O1 performance stage.
-3. **B2 backend preparation, bounded:** retain the configure-time `ScriptRuntime` boundary and its invariants. Do not add a second engine or change the JerryScript default before a separate compatibility/resource RFC and parity evidence exist.
-4. **A3 preparation, in progress:** trial material, hardware procurement, visual assets and feedback operations may proceed, but no external product trial begins before both A2 evidence items pass.
-5. **A3 authoring UX, isolated prototype:** advance the constrained VS Code visual workflow under the [Visual App Editor plan](visual_app_editor_plan.md). It may improve demos and lower App authoring cost, but it does not replace clean-machine, device-lifecycle or panel/input evidence.
+5. **B2 backend preparation, bounded:** retain the configure-time `ScriptRuntime` boundary and its invariants. Do not add a second engine or change the JerryScript default before a separate compatibility/resource RFC and parity evidence exist.
+6. **A3 preparation, in progress:** trial material, hardware procurement, visual assets and feedback operations may proceed, but no external product trial begins before both A2 evidence items pass.
+7. **A3 authoring UX, isolated prototype:** advance the constrained VS Code visual workflow under the [Visual App Editor plan](visual_app_editor_plan.md). It may improve demos and lower App authoring cost, but it does not replace clean-machine, device-lifecycle or panel/input evidence.
 
 ## Closed Performance Stage
 
@@ -37,7 +39,7 @@ Parallel work may not change the exit condition of an earlier item.
 
 The constrained WS147 dirty/recovery workload passes but authorises neither retained replay, framebuffer reuse nor a general 30 FPS promise. Full-frame rounded-gradient attribution reached its shadow/coverage/composite boundary; copy/span micro-optimisations no longer produce meaningful gains. Packed RGB565 and double-DMA A/B results are not defaults.
 
-Future performance work needs a real official-image workload and phase telemetry. Tile/scanline work first needs evidence that framebuffer memory or bandwidth is dominant.
+Future performance work needs a real official-image workload and phase telemetry. The WS147 physical-GRAM lower-edge row displacement is tracked by the [TE/vblank synchronization port acceptance](../docs/ws147_panel_scroll_te_acceptance.md) and remains disabled by default until visual acceptance passes. Input-to-present wording requires TE/latch or optical evidence. Tile/scanline work first needs evidence that framebuffer memory or bandwidth is dominant.
 
 ## Track A: Official Board and Device OS
 

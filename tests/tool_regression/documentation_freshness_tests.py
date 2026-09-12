@@ -58,7 +58,13 @@ class DocumentationFreshnessTests(unittest.TestCase):
         for relative in completed.stdout.splitlines():
             if relative.startswith(EXCLUDED_PREFIXES):
                 continue
-            content = (REPO_ROOT / relative).read_text(encoding="utf-8")
+            path = REPO_ROOT / relative
+            # `git ls-files` also reports an unstaged deletion while a
+            # document move is being prepared. There is no content to audit
+            # until the replacement path is indexed.
+            if not path.is_file():
+                continue
+            content = path.read_text(encoding="utf-8")
             if not any(pattern.search(content) for pattern in metadata_patterns):
                 missing.append(relative)
 
