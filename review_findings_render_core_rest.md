@@ -1,5 +1,7 @@
 # render_core Review — Remaining Modules (excluding 12 already-reviewed files)
 
+> Last updated: 2026-09-12; Applies to: 0.6.0-dev
+
 Scope: all `.cpp` under `src/render_core/` except the 12 files already reviewed
 (html_tokenizer, html_tree_builder, dom, style, css_parser, text_backend, text_scan,
 text_layout_reuse, layer_tree, render_tree, software_renderer, raster_primitives.h).

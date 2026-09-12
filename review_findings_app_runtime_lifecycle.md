@@ -1,5 +1,7 @@
 # Code Review — `app_runtime` lifecycle / policy / broker modules
 
+> Last updated: 2026-09-12; Applies to: 0.6.0-dev
+
 Scope: performance, implementation correctness, readability. No security review, no buffer-overflow claims unless they are real logic bugs, no rewrite proposals.
 
 Files reviewed in full: `app_lifecycle.*`, `app_budget.*`, `app_load_telemetry.*`, `app_host_data.*`, `app_frame_policy.*`, `app_storage_lifecycle_policy.*`, `system_events.*`, `app_installed_bundle.*`, `app_capability_broker.*`, `authorized_file_broker.*`, `app_device_services.*`.

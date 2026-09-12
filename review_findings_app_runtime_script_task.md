@@ -1,5 +1,7 @@
 # Code Review — `app_runtime` script-task subsystem
 
+> Last updated: 2026-09-12; Applies to: 0.6.0-dev
+
 Scope: the 10 listed `.cpp`/`.h` pairs under `src/app_runtime/`. Remit: performance, implementation
 correctness, readability. No security review; no rewrites proposed.
 

@@ -1,5 +1,7 @@
 # Code Review — `app_runtime` services / host / worker layer
 
+> Last updated: 2026-09-12; Applies to: 0.6.0-dev
+
 Scope: `app_compute_jobs`, `app_video_frames`, `app_font_set`, `app_services`, `host_services`, `app_host`, `app_service_worker` (`.cpp` / `.h`).
 Focus: performance, implementation correctness, readability. No security review. No rewrites proposed — only minimal, local fixes.
 

@@ -1,5 +1,7 @@
 # render_core 代码审查报告
 
+> 最后更新：2026-09-12；适用版本：0.6.0-dev
+
 审查对象：`jellyframe-render-core-0.6.1`（`build/r1-released-core-0.6.1-1010/jellyframe-render-core-0.6.1`）
 审查范围：光栅化与绘制（paint/raster）、布局与文本（layout/text），以及两者共用的头文件与数据结构
 审查维度：性能、实现正确性、可读性
