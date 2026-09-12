@@ -197,6 +197,7 @@ AppFontLoadResult AppFontSet::add_jffont(std::uint32_t app_instance_id,
     }
     app_instance_id_ = app_instance_id;
     fonts_.push_back(std::move(loaded));
+    contexts_dirty_ = true;
     refresh_context();
     return AppFontLoadResult{AppFontLoadStatus::Loaded, fonts_.size()};
 }
@@ -213,11 +214,13 @@ std::size_t AppFontSet::clear_app_instance(std::uint32_t app_instance_id) {
 void AppFontSet::clear() {
     fonts_.clear();
     app_instance_id_ = 0;
+    contexts_dirty_ = true;
     refresh_context();
 }
 
 void AppFontSet::set_system_font(const BitmapFont* font) {
     system_font_ = font;
+    contexts_dirty_ = true;
     refresh_context();
 }
 
@@ -276,7 +279,10 @@ TextMetrics AppFontSet::measure_text(std::string_view text,
         return fallback_text_metrics(std::string(text), font_size, font_weight);
     }
     const BitmapFontFallbackContext scaled = app_font_context_for_size(*context, font_size);
-    return measure_bitmap_text_with_fallback_range(scaled, text, font_size, font_weight);
+    // Keep the runtime link-compatible with the published 0.6.2 Core package.
+    // The range helper is available in the source tree but was not exported by
+    // that package; the established string API has identical metrics.
+    return measure_bitmap_text_with_fallback(scaled, std::string(text), font_size, font_weight);
 }
 
 bool AppFontSet::paint_text(FrameBuffer& target,
@@ -305,6 +311,9 @@ bool AppFontSet::paint_text(FrameBuffer& target,
 }
 
 void AppFontSet::refresh_context() {
+    if (!contexts_dirty_) {
+        return;
+    }
     fallback_fonts_.clear();
     if (system_font_ != nullptr) {
         fallback_fonts_.push_back(system_font_);
@@ -319,6 +328,7 @@ void AppFontSet::refresh_context() {
     fallback_context_.fonts = fallback_fonts_.empty() ? nullptr : fallback_fonts_.data();
     fallback_context_.font_count = fallback_fonts_.size();
     fallback_context_.scale = 1;
+    contexts_dirty_ = false;
 }
 
 const BitmapFontFallbackContext* AppFontSet::context_for_family(std::uint32_t font_family_hash) {

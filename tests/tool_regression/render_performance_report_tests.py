@@ -2,6 +2,7 @@
 """Regression tests for the source-aware render performance report."""
 
 import json
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -208,9 +209,9 @@ class RenderPerformanceReportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             telemetry = Path(directory) / "legacy-port.log"
             telemetry.write_text("port_telemetry frames=60 frame_ms_p95=41.7 dma_wait_ms_avg=5.2\n", encoding="utf-8")
-            loaded = __import__("importlib").util.spec_from_file_location("render_performance_report", TOOL)
+            loaded = importlib.util.spec_from_file_location("render_performance_report", TOOL)
             assert loaded is not None and loaded.loader is not None
-            module = __import__("importlib").util.module_from_spec(loaded)
+            module = importlib.util.module_from_spec(loaded)
             loaded.loader.exec_module(module)
             report = module.load_device_telemetry(telemetry)
 

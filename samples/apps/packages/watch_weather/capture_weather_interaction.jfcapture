@@ -14,6 +14,6 @@ animation-fps 30
 animation-callbacks 4
 
 # Exercise the bottom segmented buttons without depending on platform input.
-event 10 click 48 228
-event 18 click 150 228
-event 26 click 252 228
+event 10 click 48 278
+event 18 click 150 278
+event 26 click 252 278
