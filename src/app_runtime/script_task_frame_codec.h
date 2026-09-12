@@ -34,6 +34,10 @@ struct ScriptTaskAppFrame {
     // vector is parallel to display_list and contains bounded clip indices.
     std::vector<std::uint16_t> display_clip_indices;
     std::vector<ScriptTaskInputTarget> input_targets;
+    // Set by flattening when a source clip reference cannot be represented by
+    // the value-frame wire format. It prevents the reference from silently
+    // becoming kScriptTaskNoClip.
+    bool clip_metadata_overflow = false;
 };
 
 struct ScriptTaskAppFrameCodecOptions {

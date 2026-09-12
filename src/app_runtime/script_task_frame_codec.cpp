@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <unordered_set>
 
 namespace jellyframe {
 namespace {
@@ -97,31 +98,18 @@ bool checked_total(std::size_t left, std::size_t right, std::size_t& result) {
     return checked_add(left, right, result);
 }
 bool has_duplicate_target_key(const std::vector<ScriptTaskInputTarget>& targets) {
-    for (std::size_t i = 0; i < targets.size(); ++i) {
-        for (std::size_t j = 0; j < i; ++j) if (targets[i].target_key == targets[j].target_key) return true;
+    std::unordered_set<std::uint32_t> keys;
+    keys.reserve(targets.size());
+    for (const ScriptTaskInputTarget& target : targets) {
+        if (!keys.insert(target.target_key).second) {
+            return true;
+        }
     }
     return false;
 }
 
 bool valid_clip_index(std::uint16_t index, std::size_t clip_count) {
     return index == kScriptTaskNoClip || static_cast<std::size_t>(index) < clip_count;
-}
-
-bool validate_clip_chain(const std::vector<ScriptTaskFrameClip>& clips,
-                         std::uint32_t index,
-                         std::size_t max_depth) {
-    std::size_t depth = 0;
-    while (index != kScriptTaskNoParentClip) {
-        if (index >= clips.size() || ++depth > max_depth) {
-            return false;
-        }
-        const std::uint32_t parent = clips[index].parent_clip;
-        if (parent != kScriptTaskNoParentClip && parent >= index) {
-            return false;
-        }
-        index = parent;
-    }
-    return true;
 }
 
 bool point_in_clip_chain(const ScriptTaskAppFrame& frame, std::uint16_t clip_index, int x, int y) {
@@ -172,6 +160,7 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
     if (frame.viewport.width < 0 || frame.viewport.height < 0 || frame.display_list.size() > options.max_commands) {
         return ScriptTaskAppFrameCodecStatus::TooManyCommands;
     }
+    if (frame.clip_metadata_overflow) return ScriptTaskAppFrameCodecStatus::InvalidClip;
     if (frame.input_targets.size() > options.max_input_targets) return ScriptTaskAppFrameCodecStatus::TooManyInputTargets;
     if (frame.clips.size() > options.max_clips || frame.clips.size() > std::numeric_limits<std::uint16_t>::max()) {
         return ScriptTaskAppFrameCodecStatus::TooManyClips;
@@ -180,13 +169,17 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
         return ScriptTaskAppFrameCodecStatus::InvalidClip;
     }
     if (has_duplicate_target_key(frame.input_targets)) return ScriptTaskAppFrameCodecStatus::InvalidValue;
+    std::vector<std::size_t> clip_depths(frame.clips.size(), 0);
     for (std::size_t index = 0; index < frame.clips.size(); ++index) {
         const ScriptTaskFrameClip& clip = frame.clips[index];
         if (!valid_clip(clip)) return ScriptTaskAppFrameCodecStatus::InvalidClip;
         if (clip.parent_clip != kScriptTaskNoParentClip && clip.parent_clip >= index) {
             return ScriptTaskAppFrameCodecStatus::InvalidClip;
         }
-        if (!validate_clip_chain(frame.clips, static_cast<std::uint32_t>(index), options.max_clip_depth)) {
+        clip_depths[index] = clip.parent_clip == kScriptTaskNoParentClip
+            ? 1
+            : clip_depths[clip.parent_clip] + 1;
+        if (clip_depths[index] > options.max_clip_depth) {
             return ScriptTaskAppFrameCodecStatus::TooDeepClipChain;
         }
     }
@@ -335,8 +328,13 @@ ScriptTaskAppFrameCodecStatus decode_script_task_app_frame(const std::vector<std
             decoded.clips.push_back(clip);
             at += kClipBytes;
         }
+        std::vector<std::size_t> clip_depths(decoded.clips.size(), 0);
         for (std::size_t index = 0; index < decoded.clips.size(); ++index) {
-            if (!validate_clip_chain(decoded.clips, static_cast<std::uint32_t>(index), options.max_clip_depth)) {
+            const std::uint32_t parent = decoded.clips[index].parent_clip;
+            clip_depths[index] = parent == kScriptTaskNoParentClip
+                ? 1
+                : clip_depths[parent] + 1;
+            if (clip_depths[index] > options.max_clip_depth) {
                 return ScriptTaskAppFrameCodecStatus::TooDeepClipChain;
             }
         }
@@ -429,6 +427,10 @@ ScriptTaskAppFrame make_script_task_app_frame(const LayerNode& layer_tree,
         frame.display_list = std::move(flattened.display_list);
         frame.display_clip_indices.reserve(flattened.display_clip_indices.size());
         for (const std::uint32_t clip_index : flattened.display_clip_indices) {
+            if (clip_index != kNoFlattenedClip &&
+                clip_index > std::numeric_limits<std::uint16_t>::max()) {
+                frame.clip_metadata_overflow = true;
+            }
             frame.display_clip_indices.push_back(clip_index > std::numeric_limits<std::uint16_t>::max()
                                                      ? kScriptTaskNoClip
                                                      : static_cast<std::uint16_t>(clip_index));
