@@ -207,6 +207,14 @@ void v4_frame_round_trip_preserves_transform_source_clip() {
            ScriptTaskAppFrameCodecStatus::Malformed);
 }
 
+void frame_codec_rejects_unrepresentable_clip_metadata() {
+    ScriptTaskAppFrame frame = fixture();
+    frame.clip_metadata_overflow = true;
+    std::vector<std::uint8_t> bytes;
+    assert(encode_script_task_app_frame(frame, v4_limits(), bytes) ==
+           ScriptTaskAppFrameCodecStatus::InvalidClip);
+}
+
 void sealed_lease_carries_only_serialized_frame_bytes() {
     const ScriptTaskAppFrame frame = fixture();
     ScriptTaskSupervisor supervisor({{2, 24}, {1, 0}, {1, 512, 512}, 0, 0});
@@ -347,6 +355,7 @@ int script_task_frame_codec_tests_main() {
     v2_frame_rejects_invalid_clip_chain_and_v1_clip_downgrade();
     v3_frame_round_trip_preserves_fixed_point_command_transform();
     v4_frame_round_trip_preserves_transform_source_clip();
+    frame_codec_rejects_unrepresentable_clip_metadata();
     sealed_lease_carries_only_serialized_frame_bytes();
     malformed_frame_releases_its_lease_before_reporting_decode_failure();
     stale_frame_consumer_cannot_take_new_session_frame();
