@@ -347,6 +347,39 @@ void multiple_dirty_nodes_are_coalesced_without_full_frame() {
           "multiple dirty nodes do not immediately force full frame");
 }
 
+void nested_dirty_nodes_use_one_conservative_subtree_bound() {
+    auto fixture = build_layout(
+        HtmlParser().parse("<body><main><section><p>Content</p></section></main></body>"),
+        "main { width: 180px; height: 120px; margin: 0; }"
+        "section { width: 150px; height: 90px; margin: 10px; }"
+        "p { width: 100px; height: 20px; margin: 10px; }",
+        240);
+    clear_dirty_flags(*fixture.document);
+
+    Node* main = first_element(*fixture.document, "main");
+    Node* section = first_element(*fixture.document, "section");
+    Node* paragraph = first_element(*fixture.document, "p");
+    check(main != nullptr && section != nullptr && paragraph != nullptr,
+          "nested dirty fixture nodes exist");
+    mark_dirty(*main, DomDirtyPaint);
+    mark_dirty(*section, DomDirtyPaint);
+    mark_dirty(*paragraph, DomDirtyPaint);
+
+    const DirtyRegionResult region = compute_dirty_region(
+        *fixture.document,
+        fixture.layout_tree.get(),
+        fixture.layout_tree.get(),
+        DirtyRegionOptions{Rect{0, 0, 240, 200}, 8, 0});
+
+    check(region.mode == DirtyRegionMode::DirtyRects,
+          "nested dirty nodes remain incremental");
+    check(region.rects.size() == 3,
+          "nested local dirty nodes preserve one subtree bound plus local paint bounds");
+    check(region.rects.front().x == 0 && region.rects.front().y == 0 &&
+              region.rects.front().width == 180 && region.rects.front().height == 120,
+          "nested dirty region uses the complete ancestor subtree bound first");
+}
+
 void clean_document_reports_clean_region() {
     HtmlParser html_parser;
     auto fixture = build_layout(html_parser.parse("<body><p>Clean</p></body>"), "", 240);
@@ -773,6 +806,7 @@ int main() {
 #endif
         repeated_paint_dirty_updates_remain_bounded();
         multiple_dirty_nodes_are_coalesced_without_full_frame();
+        nested_dirty_nodes_use_one_conservative_subtree_bound();
         clean_document_reports_clean_region();
         missing_layout_reports_full_frame_reason();
         tree_dirty_reason_wins_over_missing_layout();

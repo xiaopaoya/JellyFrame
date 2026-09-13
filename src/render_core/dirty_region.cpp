@@ -233,24 +233,6 @@ Rect expand_and_clip_rect(Rect rect, int amount, Rect viewport) {
                 clamp_int64_to_int(clipped_bottom - clipped_top)};
 }
 
-Rect subtree_bounds(const LayoutBox& box) {
-    Rect bounds = box.rect;
-    std::vector<const LayoutBox*> pending;
-    pending.reserve(box.children.size());
-    for (const auto& child : box.children) {
-        pending.push_back(child.get());
-    }
-    while (!pending.empty()) {
-        const LayoutBox* current = pending.back();
-        pending.pop_back();
-        bounds = union_rect(bounds, current->rect);
-        for (const auto& child : current->children) {
-            pending.push_back(child.get());
-        }
-    }
-    return bounds;
-}
-
 constexpr int kMaxDirtyPaintEffectExtent = 128;
 
 Rect expand_for_dirty_paint_effects(Rect bounds, const Style& style) {
@@ -335,22 +317,54 @@ void merge_dirty_bounds(std::vector<DirtyNodeBounds>& output, const Node* node, 
 }
 
 void append_dirty_bounds_from_layout(const LayoutBox& layout, std::vector<DirtyNodeBounds>& output) {
-    std::vector<const LayoutBox*> pending;
-    pending.push_back(&layout);
+    // Accumulate each subtree while unwinding an iterative post-order walk;
+    // this keeps nested local-dirty nodes from rescanning their descendants.
+    // Children are visited in reverse order to preserve the old DFS output order.
+    struct Pending {
+        const LayoutBox* box;
+        std::size_t next_child;
+        Rect bounds;
+        bool suppress_output;
+        bool expand_all_children;
+    };
+
+    const auto make_pending = [](const LayoutBox* box,
+                                 bool suppress_output,
+                                 bool expand_all_children) {
+        return Pending{box, box->children.size(), box->rect, suppress_output, expand_all_children};
+    };
+
+    if (layout.node != nullptr && layout.node->dirty_flags == DomDirtyNone) {
+        return;
+    }
+
+    std::vector<Pending> pending;
+    pending.reserve(8);
+    pending.push_back(make_pending(&layout, false, false));
     while (!pending.empty()) {
-        const LayoutBox* current = pending.back();
-        pending.pop_back();
-        if (current->node != nullptr) {
-            if (current->node->local_dirty_flags != DomDirtyNone) {
-                merge_dirty_bounds(output, current->node, subtree_bounds(*current));
+        Pending& current = pending.back();
+        const bool local_dirty = current.box->node != nullptr &&
+            current.box->node->local_dirty_flags != DomDirtyNone;
+
+        if (current.next_child > 0) {
+            const LayoutBox* child = current.box->children[--current.next_child].get();
+            if (!current.expand_all_children && child->node != nullptr &&
+                child->node->dirty_flags == DomDirtyNone) {
                 continue;
             }
-            if (current->node->dirty_flags == DomDirtyNone) {
-                continue;
-            }
+            pending.push_back(make_pending(child,
+                                           current.suppress_output || local_dirty,
+                                           current.expand_all_children || local_dirty));
+            continue;
         }
-        for (const auto& child : current->children) {
-            pending.push_back(child.get());
+
+        if (local_dirty && !current.suppress_output) {
+            merge_dirty_bounds(output, current.box->node, current.bounds);
+        }
+        const Rect completed_bounds = current.bounds;
+        pending.pop_back();
+        if (!pending.empty()) {
+            pending.back().bounds = union_rect(pending.back().bounds, completed_bounds);
         }
     }
 }
