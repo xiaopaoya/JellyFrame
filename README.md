@@ -1,10 +1,20 @@
-<p><img src="docs/assets/brand/jellyframe-logo-128.png" alt="JellyFrame logo" width="96" height="96"></p>
+<p align="center"><img src="docs/assets/brand/jellyframe-logo-128.png" alt="JellyFrame logo" width="64" height="64"></p>
 
-# JellyFrame
+<h1 align="center">JellyFrame</h1>
 
-> Last updated: 2026-09-08; Applies to: 0.6.0-dev
+<p align="center">
+  <a href="README_zh.md"><img src="https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-1680C7?style=flat-square" alt="中文 README"></a>
+</p>
 
-[![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml"><img src="https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg?style=flat-square" alt="CI status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/xiaopaoya/JellyFrame?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/badge/Runtime-0.6.0--dev-1680C7?style=flat-square" alt="Runtime 0.6.0-dev">
+  <img src="https://img.shields.io/badge/Render%20Core-0.6.2-1680C7?style=flat-square" alt="Render Core 0.6.2">
+  <a href="https://github.com/xiaopaoya/JellyFrame/releases"><img src="https://img.shields.io/github/v/release/xiaopaoya/JellyFrame?display_name=tag&style=flat-square" alt="Latest release"></a>
+</p>
+
+> Last updated: 2026-09-14; Applies to: 0.6.0-dev
 
 JellyFrame is a compact C++ HTML/CSS/JS UI runtime for low-power wearable and
 embedded devices. It keeps the parts of a browser pipeline that are useful for

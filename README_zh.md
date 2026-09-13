@@ -1,10 +1,20 @@
-<p><img src="docs/assets/brand/jellyframe-logo-128.png" alt="JellyFrame 标识" width="96" height="96"></p>
+<p align="center"><img src="docs/assets/brand/jellyframe-logo-128.png" alt="JellyFrame 标识" width="64" height="64"></p>
 
-# JellyFrame
+<h1 align="center">JellyFrame</h1>
 
-> 最后更新：2026-09-08；适用版本：0.6.0-dev
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/Language-English-1680C7?style=flat-square" alt="English README"></a>
+</p>
 
-[![CI](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg)](https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml"><img src="https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg?style=flat-square" alt="CI 状态"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/xiaopaoya/JellyFrame?style=flat-square" alt="许可证"></a>
+  <img src="https://img.shields.io/badge/Runtime-0.6.0--dev-1680C7?style=flat-square" alt="Runtime 0.6.0-dev">
+  <img src="https://img.shields.io/badge/Render%20Core-0.6.2-1680C7?style=flat-square" alt="Render Core 0.6.2">
+  <a href="https://github.com/xiaopaoya/JellyFrame/releases"><img src="https://img.shields.io/github/v/release/xiaopaoya/JellyFrame?display_name=tag&style=flat-square" alt="最新发布"></a>
+</p>
+
+> 最后更新：2026-09-14；适用版本：0.6.0-dev
 
 JellyFrame 是一个面向低功耗可穿戴和嵌入式设备的紧凑 C++ HTML/CSS/JS UI
 运行时。它保留本地 app UI 真正有价值的浏览器管线部分，同时裁掉对小目标设备过重、
