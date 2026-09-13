@@ -635,12 +635,29 @@ bool set_select_popup_open(Node& node, bool open) {
     return true;
 }
 
-int form_control_option_count(const Node& node) {
+void form_control_collect_options(const Node& node, std::vector<const Node*>& options) {
     if (form_control_kind(node) != FormControlKind::Select) {
-        return 0;
+        options.clear();
+        return;
     }
-    OptionList options;
     collect_options(node, options);
+}
+
+std::string form_control_option_text_from_node(const Node& option) {
+    return option_text(option);
+}
+
+bool form_control_option_is_disabled_node(const Node& option) {
+    if (has_attribute(option, "disabled")) {
+        return true;
+    }
+    return option.parent != nullptr && option.parent->tag_name == "optgroup" &&
+        has_attribute(*option.parent, "disabled");
+}
+
+int form_control_option_count(const Node& node) {
+    std::vector<const Node*> options;
+    form_control_collect_options(node, options);
     return option_count(options);
 }
 
@@ -649,7 +666,7 @@ const Node* form_control_option_at(const Node& node, int option_index) {
         return nullptr;
     }
     OptionList options;
-    collect_options(node, options);
+    form_control_collect_options(node, options);
     return option_at(options, option_index);
 }
 
@@ -660,14 +677,7 @@ std::string form_control_option_text(const Node& node, int option_index) {
 
 bool form_control_option_disabled(const Node& node, int option_index) {
     const Node* option = form_control_option_at(node, option_index);
-    if (option == nullptr) {
-        return false;
-    }
-    if (has_attribute(*option, "disabled")) {
-        return true;
-    }
-    return option->parent != nullptr && option->parent->tag_name == "optgroup" &&
-        has_attribute(*option->parent, "disabled");
+    return option != nullptr && form_control_option_is_disabled_node(*option);
 }
 
 SelectPopupGeometry select_popup_geometry(const Rect& select_rect,

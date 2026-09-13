@@ -369,7 +369,9 @@ const Node* InputController::pointer_up(const PointerInput& input) {
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
             if (form_control_kind(*activation_target) == FormControlKind::Select && select_popup_is_open(*activation_target)) {
                 const LayoutBox* select_box = active_box_;
-                const int option_count = form_control_option_count(*activation_target);
+                std::vector<const Node*> options;
+                form_control_collect_options(*activation_target, options);
+                const int option_count = static_cast<int>(options.size());
                 const int row_height = select_box != nullptr
                     ? std::max(20, select_box->style.line_height > 0
                         ? select_box->style.line_height
@@ -382,7 +384,11 @@ const Node* InputController::pointer_up(const PointerInput& input) {
                 if (contains_rect(geometry.rect, input.x, input.y)) {
                     const int option_index = geometry.first_option_index +
                         (input.y - geometry.rect.y) / std::max(1, geometry.row_height);
-                    if (!form_control_option_disabled(*activation_target, option_index) &&
+                    const Node* option = option_index >= 0 &&
+                            static_cast<std::size_t>(option_index) < options.size()
+                        ? options[static_cast<std::size_t>(option_index)]
+                        : nullptr;
+                    if (option != nullptr && !form_control_option_is_disabled_node(*option) &&
                         set_form_control_selected_index(*mutable_node(activation_target), option_index)) {
                         set_select_popup_open(*mutable_node(activation_target), false);
                         dispatch_simple_event(activation_target, "input");

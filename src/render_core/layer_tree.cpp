@@ -1127,7 +1127,9 @@ bool paint_select_popup(const LayoutBox& box,
     if (box.node == nullptr || !select_popup_is_open(*box.node)) {
         return false;
     }
-    const int option_count = form_control_option_count(*box.node);
+    std::vector<const Node*> options_list;
+    form_control_collect_options(*box.node, options_list);
+    const int option_count = static_cast<int>(options_list.size());
     const SelectPopupGeometry geometry = select_popup_geometry(
         box.rect, viewport, option_count, select_popup_row_height(box));
     if (geometry.visible_option_count <= 0 || geometry.rect.width <= 0 || geometry.rect.height <= 0) {
@@ -1159,13 +1161,17 @@ bool paint_select_popup(const LayoutBox& box,
         if (option_index == state.selected_index) {
             push_fill_rect(display_list, row, Color{219, 234, 254, 255}, 0);
         }
-        const Color text_color = form_control_option_disabled(*box.node, option_index)
+        const Node* option = option_index >= 0 &&
+                static_cast<std::size_t>(option_index) < options_list.size()
+            ? options_list[static_cast<std::size_t>(option_index)]
+            : nullptr;
+        const Color text_color = option != nullptr && form_control_option_is_disabled_node(*option)
             ? Color{148, 163, 184, 255}
             : box.style.color;
         push_text_with_layout(display_list,
                               Rect{safe_add(row.x, 5), row.y, std::max(0, safe_add(row.width, -10)), row.height},
                               text_color,
-                              form_control_option_text(*box.node, option_index),
+                              option != nullptr ? form_control_option_text_from_node(*option) : std::string{},
                               box.style,
                               TextCommandAlign::Start,
                               options.text_measure);

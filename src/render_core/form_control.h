@@ -8,6 +8,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace jellyframe {
 
@@ -65,6 +66,9 @@ bool step_select_control(Node& node, int delta);
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
 bool select_popup_is_open(const Node& node);
 bool set_select_popup_open(Node& node, bool open);
+void form_control_collect_options(const Node& node, std::vector<const Node*>& options);
+std::string form_control_option_text_from_node(const Node& option);
+bool form_control_option_is_disabled_node(const Node& option);
 int form_control_option_count(const Node& node);
 const Node* form_control_option_at(const Node& node, int option_index);
 std::string form_control_option_text(const Node& node, int option_index);
