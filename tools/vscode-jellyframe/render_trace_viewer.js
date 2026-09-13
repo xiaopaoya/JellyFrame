@@ -161,6 +161,22 @@ function aggregateTrace(parsed) {
   };
 }
 
+function frameTimingBreakdown(frame) {
+  const totalUs = Number.isSafeInteger(frame?.totalUs) && frame.totalUs >= 0
+    ? frame.totalUs : 0;
+  let recordedStageUs = 0;
+  for (const value of Object.values(frame?.stagesUs || {})) {
+    if (!Number.isSafeInteger(value) || value < 0) continue;
+    recordedStageUs = Math.min(Number.MAX_SAFE_INTEGER, recordedStageUs + value);
+  }
+  return {
+    totalUs,
+    recordedStageUs,
+    unaccountedUs: Math.max(0, totalUs - recordedStageUs),
+    timingComplete: frame?.timingComplete === true
+  };
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -180,7 +196,10 @@ function safeJson(value) {
 
 function renderTraceHtml(parsed, chinese, title, options = {}) {
   const frameImages = options && typeof options.frameImages === "object" ? options.frameImages : {};
-  const data = safeJson({ ...parsed, frameImages, aggregate: aggregateTrace(parsed) });
+  const frameTiming = Object.fromEntries((parsed?.frames || []).map((frame) => [
+    String(frame.frame), frameTimingBreakdown(frame)
+  ]));
+  const data = safeJson({ ...parsed, frameImages, frameTiming, aggregate: aggregateTrace(parsed) });
   const labels = chinese ? {
     title: "Render Trace",
     frame: "帧",
@@ -228,7 +247,8 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     aggregateMissing: "缺失归因",
     aggregateMissingNote: "有效命令没有 owner/nodeId，已计入 unattributed；无效计时样本未纳入聚合。",
     aggregateInvalid: "无效命令样本",
-    aggregateTruncated: "截断帧"
+    aggregateTruncated: "截断帧",
+    unaccounted: "未归因时间"
   } : {
     title: "Render Trace",
     frame: "Frame",
@@ -276,7 +296,8 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     aggregateMissing: "Missing attribution",
     aggregateMissingNote: "Valid commands without owner/nodeId are grouped as unattributed; invalid timing samples are excluded.",
     aggregateInvalid: "Invalid command samples",
-    aggregateTruncated: "Truncated frames"
+    aggregateTruncated: "Truncated frames",
+    unaccounted: "Unaccounted time"
   };
   const sessionJson = escapeHtml(JSON.stringify(parsed.session || {}));
   const titleText = escapeHtml(title || labels.title);
@@ -313,8 +334,8 @@ const slowestFrameIndex=model.frames.length?model.frames.reduce((best,frame,inde
 function render(){
  const frame=model.frames[Number(slider.value)]; if(!frame){view.innerHTML='<p class="muted">'+esc(labels.none)+'</p>';return;}
  number.textContent=fmt(frame.frame)+' / '+fmt(model.frames.length-1);
- const stages=Object.entries(frame.stagesUs||{}); const max=Math.max(1,...stages.map(([,v])=>Number(v)||0));
- const sum=stages.reduce((n,[,v])=>n+(Number(v)||0),0); const fps=frame.totalUs>0?(1000000/frame.totalUs).toFixed(1):labels.none;
+ const stages=Object.entries(frame.stagesUs||{}); const timing=model.frameTiming?.[String(frame.frame)]||{totalUs:0,recordedStageUs:0,unaccountedUs:0}; const sum=timing.recordedStageUs; const total=timing.totalUs; const unaccountedUs=timing.unaccountedUs; const max=Math.max(1,total,...stages.map(([,v])=>Number(v)||0));
+ const fps=total>0?(1000000/total).toFixed(1):labels.none;
  const commands=(Array.isArray(frame.commands)?frame.commands:[]).map((item)=>{if(!item||typeof item!=='object'||typeof item.type!=='string'||!Number.isSafeInteger(item.us)||item.us<0||!Number.isSafeInteger(item.pixels)||item.pixels<0)return null;const samples=Number.isSafeInteger(item.samples)&&item.samples>0?item.samples:1;const owner=typeof item.owner==='string'&&item.owner.trim()?item.owner:(typeof item.nodeId==='string'&&item.nodeId.trim()?item.nodeId:'unattributed');return {...item,owner,samples,attributed:owner!=='unattributed'};}).filter(Boolean).sort((left,right)=>right.us-left.us).slice(0,64); const unattributedCount=commands.filter((item)=>!item.attributed).length; const pipeline=frame.pipeline||{};
  const dirtyPercent=Math.max(0,Math.min(100,Number(frame.dirtyAreaPercent)||0));
  const dirtyRects=Array.isArray(frame.dirtyRects)?frame.dirtyRects.filter((rect)=>rect&&Number.isFinite(Number(rect.x))&&Number.isFinite(Number(rect.y))&&Number.isFinite(Number(rect.width))&&Number.isFinite(Number(rect.height))&&Number(rect.width)>0&&Number(rect.height)>0).slice(0,32):[];
@@ -332,7 +353,7 @@ function render(){
  '<div class="dirty"><span>'+esc(labels.dirtyCoverage)+'</span><span class="bar"><i style="width:'+dirtyPercent+'%"></i></span><span>'+dirtyPercent.toFixed(1)+'%</span></div>'+
  dirtyRectView+
  '<p><strong>'+esc(labels.reason)+':</strong> '+esc(frame.reason||labels.none)+' <span class="muted">· timingComplete='+esc(frame.timingComplete===true?'true':'false')+'</span></p>'+
- '<h2>'+esc(labels.stages)+'</h2>'+ (stages.length?stages.map(([name,value])=>'<div class="stage"><code>'+esc(name)+'</code><span class="bar"><i style="width:'+Math.min(100,Math.round((Number(value)||0)*100/max))+'%"></i></span><span>'+fmt(value)+' us ('+(sum?((Number(value)||0)*100/sum).toFixed(1):'0.0')+'%)</span></div>').join(''):'<p class="muted">'+esc(labels.none)+'</p>')+
+ '<h2>'+esc(labels.stages)+'</h2>'+ (stages.length?stages.map(([name,value])=>'<div class="stage"><code>'+esc(name)+'</code><span class="bar"><i style="width:'+Math.min(100,Math.round((Number(value)||0)*100/max))+'%"></i></span><span>'+fmt(value)+' us ('+(total?((Number(value)||0)*100/total).toFixed(1):'0.0')+'%)</span></div>').join(''):'<p class="muted">'+esc(labels.none)+'</p>')+(unaccountedUs>0?'<div class="stage"><code>'+esc(labels.unaccounted)+'</code><span class="bar"><i style="width:'+Math.min(100,Math.round(unaccountedUs*100/max))+'%"></i></span><span>'+fmt(unaccountedUs)+' us ('+(total?(unaccountedUs*100/total).toFixed(1):'0.0')+'%)</span></div>':'')+
  '<h2>'+esc(labels.pipeline)+'</h2><p class="muted">'+Object.entries(pipeline).map(([key,value])=>'<code>'+esc(key)+'='+esc(value)+'</code>').join(' · ')+'</p>'+ 
  '<h2>'+esc(labels.commands)+'</h2><p class="muted">'+esc(labels.commandTimingNote)+'</p>'+ (commands.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.time)+'</th><th>'+esc(labels.pixels)+'</th><th>'+esc(labels.samples)+'</th></tr>'+commands.map((item)=>'<tr><td>'+esc(item.type||labels.none)+'</td><td><code>'+esc(item.owner)+'</code></td><td>'+fmt(item.us)+' us</td><td>'+fmt(item.pixels)+'</td><td>'+fmt(item.samples)+'</td></tr>').join('')+'</table>'+(unattributedCount===commands.length?'<p class="muted">'+esc(labels.allUnattributed)+'</p>':unattributedCount>0?'<p class="muted">'+esc(labels.partialAttribution)+'</p>':''):'<p class="muted">'+esc(labels.noAttribution)+'</p>')+(frame.commandsTruncated?'<p class="muted">'+esc(labels.commandsTruncated)+'</p>':'')+(frame.nodesTruncated?'<p class="muted">'+esc(labels.nodesTruncated)+'</p>':'')+(Number.isSafeInteger(frame.commandInvalidSamples)&&frame.commandInvalidSamples>0?'<p class="muted">'+esc(labels.invalidCommandSamples)+': '+fmt(frame.commandInvalidSamples)+'</p>':'');
 }
@@ -340,4 +361,4 @@ renderAggregate();slider.max=Math.max(0,model.frames.length-1);slider.disabled=m
 </script></body></html>`;
 }
 
-module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, renderTraceHtml };
+module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, renderTraceHtml };

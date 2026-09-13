@@ -1,6 +1,6 @@
 const assert = require("assert");
 const fs = require("fs");
-const { parseRenderTrace, aggregateTrace, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
+const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
 const vm = require("vm");
 
 function loadTraceHelpers() {
@@ -88,6 +88,18 @@ function main() {
   const parsed = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify(frame)}\n`);
   assert.equal(parsed.frames.length, 1);
   assert.equal(parsed.errors.length, 0);
+  assert.deepEqual(frameTimingBreakdown(frame), {
+    totalUs: 2000,
+    recordedStageUs: 1500,
+    unaccountedUs: 500,
+    timingComplete: false
+  });
+  assert.deepEqual(frameTimingBreakdown({ totalUs: 10, stagesUs: { layout: 20 } }), {
+    totalUs: 10,
+    recordedStageUs: 20,
+    unaccountedUs: 0,
+    timingComplete: false
+  });
   const aggregate = aggregateTrace({ frames: [
     frame,
     { ...frame, frame: 1, totalUs: 3000, stagesUs: { layout: 700, paint: 1200 }, commands: [
@@ -119,6 +131,7 @@ function main() {
   assert(html.includes("id:title"));
   assert(html.includes("legacy-card"));
   assert(html.includes("timingComplete"));
+  assert(html.includes("未归因时间"));
   assert(html.includes("vscode-resource://frame_000.bmp"));
   assert(html.includes("dirtyCoverage"));
   assert(html.includes("dirtyRects"));
