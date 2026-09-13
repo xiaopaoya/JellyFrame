@@ -1,6 +1,6 @@
 const assert = require("assert");
 const fs = require("fs");
-const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameHotspotSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
+const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameHotspotSummary, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
 const vm = require("vm");
 
 function loadTraceHelpers() {
@@ -105,6 +105,12 @@ function main() {
     command: { name: "Text", us: 1000, pixels: 20, samples: 2 },
     owner: { name: "id:title", us: 1000, samples: 2 }
   });
+  assert.deepEqual(frameTimingSummary({ frames: [frame, { ...frame, totalUs: 3000 }] }), {
+    count: 2,
+    p50Us: 2000,
+    p95Us: 3000,
+    maxUs: 3000
+  });
   const aggregate = aggregateTrace({ frames: [
     frame,
     { ...frame, frame: 1, totalUs: 3000, stagesUs: { layout: 700, paint: 1200 }, commands: [
@@ -138,6 +144,8 @@ function main() {
   assert(html.includes("timingComplete"));
   assert(html.includes("未归因时间"));
   assert(html.includes("当前帧热点"));
+  assert(html.includes("跨帧总耗时"));
+  assert(html.includes("frameSummaryView"));
   assert(html.includes("vscode-resource://frame_000.bmp"));
   assert(html.includes("dirtyCoverage"));
   assert(html.includes("dirtyRects"));

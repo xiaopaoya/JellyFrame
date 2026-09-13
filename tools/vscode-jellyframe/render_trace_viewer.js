@@ -207,6 +207,22 @@ function frameHotspotSummary(frame) {
   };
 }
 
+function frameTimingSummary(parsed) {
+  const values = (parsed?.frames || [])
+    .map((frame) => frameTimingBreakdown(frame).totalUs)
+    .filter((value) => Number.isSafeInteger(value) && value >= 0)
+    .sort((left, right) => left - right);
+  const percentile = (fraction) => values.length
+    ? values[Math.min(values.length - 1, Math.max(0, Math.ceil(values.length * fraction) - 1))]
+    : 0;
+  return {
+    count: values.length,
+    p50Us: percentile(0.50),
+    p95Us: percentile(0.95),
+    maxUs: values.length ? values[values.length - 1] : 0
+  };
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -232,7 +248,8 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
   const frameHotspots = Object.fromEntries((parsed?.frames || []).map((frame) => [
     String(frame.frame), frameHotspotSummary(frame)
   ]));
-  const data = safeJson({ ...parsed, frameImages, frameTiming, frameHotspots, aggregate: aggregateTrace(parsed) });
+  const frameSummary = frameTimingSummary(parsed);
+  const data = safeJson({ ...parsed, frameImages, frameTiming, frameHotspots, frameSummary, aggregate: aggregateTrace(parsed) });
   const labels = chinese ? {
     title: "Render Trace",
     frame: "帧",
@@ -286,7 +303,12 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     hottestStage: "最耗时阶段",
     hottestCommand: "最耗时命令",
     hottestOwner: "最高耗时归因",
-    noHotspot: "无有效样本"
+    noHotspot: "无有效样本",
+    frameSummary: "跨帧总耗时",
+    frameCount: "有效帧",
+    p50: "p50",
+    p95: "p95",
+    maximum: "最大值"
   } : {
     title: "Render Trace",
     frame: "Frame",
@@ -340,7 +362,12 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     hottestStage: "Hottest stage",
     hottestCommand: "Hottest command",
     hottestOwner: "Top attributed owner",
-    noHotspot: "No valid samples"
+    noHotspot: "No valid samples",
+    frameSummary: "Cross-frame total timing",
+    frameCount: "Valid frames",
+    p50: "p50",
+    p95: "p95",
+    maximum: "Max"
   };
   const sessionJson = escapeHtml(JSON.stringify(parsed.session || {}));
   const titleText = escapeHtml(title || labels.title);
@@ -352,7 +379,7 @@ body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);paddin
 </style><style>.hotspots{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.hotspot{border-left:3px solid var(--vscode-charts-orange);padding:6px 8px;background:var(--vscode-editorWidget-background)}.hotspot b{display:block}</style></head><body><h1>${titleText}</h1>
 <p class="muted">${labels.timingNote}<br>${labels.sourceNote}</p>
 <div class="controls"><label>${labels.frame} <output id="frameNumber"></output></label><input id="frameSlider" type="range" min="0" max="0" value="0" step="1"><button id="slowestFrameButton" type="button">${labels.slowestFrame}</button></div>
-<section class="aggregate"><h2>${labels.aggregate}</h2><p class="muted">${labels.aggregateNote}</p><div id="aggregateView"></div></section>
+<section class="aggregate"><h2>${labels.aggregate}</h2><p class="muted">${labels.aggregateNote}</p><h3>${labels.frameSummary}</h3><div id="frameSummaryView" class="metric-grid"></div><div id="aggregateView"></div></section>
 <div id="frameView"></div>
 <h2>${labels.session}</h2><pre class="muted">${sessionJson}</pre>${initialError}
 <script nonce="jellyframe-trace">
@@ -363,6 +390,7 @@ const slowestFrameButton=document.getElementById('slowestFrameButton');
 const number=document.getElementById('frameNumber');
 const view=document.getElementById('frameView');
 const aggregateView=document.getElementById('aggregateView');
+const frameSummaryView=document.getElementById('frameSummaryView');
 const esc=(v)=>String(v??'').replace(/[&<>\"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
 const fmt=(v)=>Number(v||0).toLocaleString();
 const aggregateTable=(title,rows)=>'<h3>'+esc(title)+'</h3>'+ (rows.length?'<table><tr><th>'+esc(labels.aggregateCommand)+'</th><th>'+esc(labels.aggregateCount)+'</th><th>'+esc(labels.aggregateTotal)+'</th><th>'+esc(labels.aggregateP95)+'</th></tr>'+rows.slice(0,64).map((row)=>'<tr><td><code>'+esc(row.name)+'</code></td><td>'+fmt(row.count)+'</td><td>'+fmt(row.totalUs)+' us</td><td>'+fmt(row.p95Us)+' us</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>');
@@ -372,6 +400,13 @@ function renderAggregate(){
  '<p class="muted"><strong>'+esc(labels.aggregateMissing)+':</strong> '+fmt(aggregate.missingAttribution.count)+' / '+fmt(aggregate.missingAttribution.totalUs)+' us. '+esc(labels.aggregateMissingNote)+'</p>'+
  (aggregate.invalidCommandSamples?'<p class="muted">'+esc(labels.aggregateInvalid)+': '+fmt(aggregate.invalidCommandSamples)+'</p>':'')+
  ((aggregate.commandsTruncatedFrames||aggregate.nodesTruncatedFrames)?'<p class="muted">'+esc(labels.aggregateTruncated)+': commands='+fmt(aggregate.commandsTruncatedFrames)+', owners='+fmt(aggregate.nodesTruncatedFrames)+'</p>':'');
+}
+function renderFrameSummary(){
+ const summary=model.frameSummary||{count:0,p50Us:0,p95Us:0,maxUs:0};
+ frameSummaryView.innerHTML='<div class="metric"><span>'+esc(labels.frameCount)+'</span><b>'+fmt(summary.count)+'</b></div>'+
+ '<div class="metric"><span>'+esc(labels.p50)+'</span><b>'+fmt(summary.p50Us)+' us</b></div>'+
+ '<div class="metric"><span>'+esc(labels.p95)+'</span><b>'+fmt(summary.p95Us)+' us</b></div>'+
+ '<div class="metric"><span>'+esc(labels.maximum)+'</span><b>'+fmt(summary.maxUs)+' us</b></div>';
 }
 const slowestFrameIndex=model.frames.length?model.frames.reduce((best,frame,index)=>frame.totalUs>model.frames[best].totalUs?index:best,0):0;
 function render(){
@@ -406,8 +441,8 @@ function render(){
  '<h2>'+esc(labels.pipeline)+'</h2><p class="muted">'+Object.entries(pipeline).map(([key,value])=>'<code>'+esc(key)+'='+esc(value)+'</code>').join(' · ')+'</p>'+ 
  '<h2>'+esc(labels.commands)+'</h2><p class="muted">'+esc(labels.commandTimingNote)+'</p>'+ (commands.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.time)+'</th><th>'+esc(labels.pixels)+'</th><th>'+esc(labels.samples)+'</th></tr>'+commands.map((item)=>'<tr><td>'+esc(item.type||labels.none)+'</td><td><code>'+esc(item.owner)+'</code></td><td>'+fmt(item.us)+' us</td><td>'+fmt(item.pixels)+'</td><td>'+fmt(item.samples)+'</td></tr>').join('')+'</table>'+(unattributedCount===commands.length?'<p class="muted">'+esc(labels.allUnattributed)+'</p>':unattributedCount>0?'<p class="muted">'+esc(labels.partialAttribution)+'</p>':''):'<p class="muted">'+esc(labels.noAttribution)+'</p>')+(frame.commandsTruncated?'<p class="muted">'+esc(labels.commandsTruncated)+'</p>':'')+(frame.nodesTruncated?'<p class="muted">'+esc(labels.nodesTruncated)+'</p>':'')+(Number.isSafeInteger(frame.commandInvalidSamples)&&frame.commandInvalidSamples>0?'<p class="muted">'+esc(labels.invalidCommandSamples)+': '+fmt(frame.commandInvalidSamples)+'</p>':'');
 }
-renderAggregate();slider.max=Math.max(0,model.frames.length-1);slider.disabled=model.frames.length<2;slowestFrameButton.disabled=model.frames.length<2;slowestFrameButton.addEventListener('click',()=>{slider.value=String(slowestFrameIndex);render();});slider.addEventListener('input',render);render();
+renderFrameSummary();renderAggregate();slider.max=Math.max(0,model.frames.length-1);slider.disabled=model.frames.length<2;slowestFrameButton.disabled=model.frames.length<2;slowestFrameButton.addEventListener('click',()=>{slider.value=String(slowestFrameIndex);render();});slider.addEventListener('input',render);render();
 </script></body></html>`;
 }
 
-module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameHotspotSummary, renderTraceHtml };
+module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameHotspotSummary, frameTimingSummary, renderTraceHtml };
