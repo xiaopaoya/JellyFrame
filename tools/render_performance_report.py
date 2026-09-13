@@ -173,19 +173,43 @@ def frames_from_trace(path: Path) -> tuple[list[dict[str, Any]], list[str], dict
 
 
 def read_microbench(path: Path) -> list[dict[str, Any]]:
-    pattern = re.compile(r"^(?P<name>[a-zA-Z0-9_]+)\s+iterations=(?P<iterations>\d+)\s+avg_us=(?P<avg>[-+0-9.eE]+)\s*$")
+    average_pattern = re.compile(
+        r"^(?P<name>[a-zA-Z0-9_]+)\s+iterations=(?P<iterations>\d+)\s+"
+        r"avg_us=(?P<avg>[-+0-9.eE]+)\s*$"
+    )
+    stats_pattern = re.compile(
+        r"^(?P<name>[a-zA-Z0-9_]+)\s+samples=(?P<samples>\d+)\s+"
+        r"iterations_per_sample=(?P<iterations>\d+)\s+"
+        r"p50_us=(?P<p50>[-+0-9.eE]+)\s+p95_us=(?P<p95>[-+0-9.eE]+)\s+"
+        r"display_commands=(?P<commands>\d+)\s+"
+        r"peak_surface_bytes=(?P<surface_bytes>\d+)\s*$"
+    )
     results: list[dict[str, Any]] = []
     try:
         lines = path.read_text(encoding="utf-8-sig").splitlines()
     except OSError as error:
         raise SystemExit(f"failed to read microbench output {path}: {error}") from error
     for line in lines:
-        match = pattern.match(line.strip())
+        stripped = line.strip()
+        match = average_pattern.match(stripped)
         if match:
             results.append({
                 "name": match.group("name"),
                 "iterations": int(match.group("iterations")),
                 "avgUs": round_number(float(match.group("avg"))),
+                "source": str(path),
+            })
+            continue
+        match = stats_pattern.match(stripped)
+        if match:
+            results.append({
+                "name": match.group("name"),
+                "samples": int(match.group("samples")),
+                "iterationsPerSample": int(match.group("iterations")),
+                "p50Us": round_number(float(match.group("p50"))),
+                "p95Us": round_number(float(match.group("p95"))),
+                "displayCommands": int(match.group("commands")),
+                "peakSurfaceBytes": int(match.group("surface_bytes")),
                 "source": str(path),
             })
     return results
@@ -431,6 +455,41 @@ def render_html(report: dict[str, Any]) -> str:
             f"<td>{html.escape(str(command.get('samples', 0)))}</td></tr>"
         )
     command_note = " Rows were truncated; ranking is incomplete." if summary.get("commandOwnerAttributionTruncated") else ""
+    microbench_rows = []
+    for probe in report.get("microbenchProbes", []):
+        if not isinstance(probe, dict):
+            continue
+        if "avgUs" in probe:
+            iterations = f"{probe.get('iterations', 0)} iterations"
+            average = f"{probe.get('avgUs', 0)} us"
+            p50 = p95 = "-"
+            shape = "average"
+        else:
+            iterations = f"{probe.get('samples', 0)} x {probe.get('iterationsPerSample', 0)}"
+            average = "-"
+            p50 = f"{probe.get('p50Us', 0)} us"
+            p95 = f"{probe.get('p95Us', 0)} us"
+            shape = (
+                f"commands={probe.get('displayCommands', 0)}, "
+                f"surface={probe.get('peakSurfaceBytes', 0)} bytes"
+            )
+        microbench_rows.append(
+            f"<tr><td><code>{html.escape(str(probe.get('name', 'unknown')))}</code></td>"
+            f"<td>{html.escape(shape)}</td><td>{html.escape(iterations)}</td>"
+            f"<td>{html.escape(average)}</td><td>{html.escape(p50)}</td>"
+            f"<td>{html.escape(p95)}</td><td>{html.escape(str(probe.get('source', '')))}</td></tr>"
+        )
+    microbench_section = ""
+    if report.get("microbenchProbes"):
+        microbench_section = (
+            "<h2>Render Core microbenchmarks</h2>"
+            "<p><small>Isolated desktop probes; these values are not per-element application attribution "
+            "and are not device FPS or DMA measurements.</small></p>"
+            "<table><tr><th>Probe</th><th>Shape</th><th>Iterations</th><th>Average</th>"
+            "<th>p50</th><th>p95</th><th>Source</th></tr>"
+            + "".join(microbench_rows)
+            + "</table>"
+        )
     device_rows = []
     device_metric_columns = (
         ((("frameP95Us", "us"), ("p95FrameMs", "ms")), "Frame p95"),
@@ -481,6 +540,7 @@ def render_html(report: dict[str, Any]) -> str:
 <h2>Frames</h2><table><tr><th>Frame</th><th>Total</th><th>Action</th><th>Reason</th><th>Dirty rects</th><th>Dirty area %</th></tr>{frame_rows}</table>
 <h2>Command / owner attribution</h2><p><small>Desktop raster invocation time only.{command_note}</small></p>
 <table><tr><th>Owner</th><th>Command</th><th>Time</th><th>Candidate pixels</th><th>Samples</th></tr>{command_rows}</table>
+{microbench_section}
 {device_section}
 <h2>Limits</h2><ul>{limits}</ul>
 """.format(
@@ -493,6 +553,7 @@ def render_html(report: dict[str, Any]) -> str:
         frame_rows="".join(frame_rows) or "<tr><td colspan='6'>No per-frame trace</td></tr>",
         command_rows="".join(command_rows) or "<tr><td colspan='5'>No command attribution</td></tr>",
         command_note=command_note,
+        microbench_section=microbench_section,
         device_section=device_section,
         limits="".join(f"<li>{html.escape(item)}</li>" for item in report.get("limitations", [])),
     )

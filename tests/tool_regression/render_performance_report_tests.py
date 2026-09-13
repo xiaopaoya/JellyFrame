@@ -70,6 +70,37 @@ class RenderPerformanceReportTests(unittest.TestCase):
             self.assertIn("JellyFrame Render Performance", rendered)
             self.assertIn("Command / owner attribution", rendered)
 
+    def test_microbench_average_and_stats_probes_are_parsed_and_rendered(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            microbench = root / "microbench.txt"
+            microbench.write_text(
+                "rounded_rect_aa_raster iterations=20 avg_us=1444.1\n"
+                "modern_paint_shadow_stats samples=16 iterations_per_sample=12 "
+                "p50_us=229.25 p95_us=238.417 display_commands=1 peak_surface_bytes=220160\n",
+                encoding="utf-8",
+            )
+            output = root / "report.json"
+            html_output = root / "report.html"
+            result = subprocess.run(
+                [sys.executable, str(TOOL), "--microbench", str(microbench),
+                 "--output", str(output), "--html-output", str(html_output)],
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(output.read_text(encoding="utf-8"))
+            rendered = html_output.read_text(encoding="utf-8")
+
+        self.assertEqual(report["microbenchProbes"][0]["avgUs"], 1444.1)
+        self.assertEqual(report["microbenchProbes"][1]["p95Us"], 238.42)
+        self.assertEqual(report["microbenchProbes"][1]["peakSurfaceBytes"], 220160)
+        self.assertIn("Render Core microbenchmarks", rendered)
+        self.assertIn("modern_paint_shadow_stats", rendered)
+        self.assertIn("238.42 us", rendered)
+
     def test_html_output_exposes_device_aggregate_without_merging_frames(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
