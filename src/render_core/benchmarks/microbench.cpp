@@ -5,6 +5,7 @@
 #include "render_core/dirty_region.h"
 #include "render_core/embedded_framebuffer.h"
 #include "render_core/frame_scratch.h"
+#include "render_core/form_control.h"
 #include "render_core/html_parser.h"
 #include "render_core/layer_tree.h"
 #include "render_core/layout.h"
@@ -122,6 +123,16 @@ std::string make_flex_intrinsic_css() {
            ".intrinsic-item { flex-grow: 1; flex-shrink: 1; min-width: 0; padding: 4px; "
            "background: #ffffff; }"
            ".intrinsic-item span { display: block; }";
+}
+
+std::string make_select_html(int option_count) {
+    std::ostringstream html;
+    html << "<!doctype html><html><body><select id='benchmark-select'>";
+    for (int index = 0; index < option_count; ++index) {
+        html << "<option value='value-" << index << "'>Option " << index << "</option>";
+    }
+    html << "</select></body></html>";
+    return html.str();
 }
 
 std::string make_single_level_nested_css() {
@@ -427,6 +438,19 @@ int run_render_core_microbench(int argc, char** argv) {
     std::cout << "flex_nonwrap_intrinsic_layout text_measure_calls_per_layout="
               << flex_intrinsic_measure_calls << " layout_boxes="
               << count_layout_boxes(*flex_intrinsic_probe_tree) << '\n';
+
+    auto select_document = html_parser.parse(make_select_html(256));
+    Node* benchmark_select = find_first_element_by_id(*select_document, "benchmark-select");
+    if (benchmark_select == nullptr) {
+        throw std::runtime_error("select benchmark fixture was not parsed");
+    }
+    const int benchmark_select_options = form_control_option_count(*benchmark_select);
+    int benchmark_select_index = 0;
+    print_result("form_select_set_index", iterations, average_microseconds(iterations, [&] {
+        set_form_control_selected_index(*benchmark_select,
+                                        benchmark_select_index++ % benchmark_select_options);
+    }));
+    std::cout << "form_select_set_index options=" << benchmark_select_options << '\n';
 
     print_result("render_tree", iterations, average_microseconds(iterations, [&] {
         StyleResolver resolver(stylesheet);

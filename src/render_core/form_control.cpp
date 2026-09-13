@@ -106,59 +106,64 @@ void append_descendant_text(const Node& node, std::string& output) {
     }
 }
 
-const Node* option_at(const Node& node, int wanted_index, int& current_index) {
+using OptionList = std::vector<const Node*>;
+
+void collect_options(const Node& node, OptionList& options) {
+    options.clear();
     std::vector<const Node*> pending;
     pending.push_back(&node);
     while (!pending.empty()) {
         const Node* current = pending.back();
         pending.pop_back();
         if (current->type == NodeType::Element && current->tag_name == "option") {
-            if (current_index == wanted_index) {
-                return current;
-            }
-            ++current_index;
+            options.push_back(current);
         }
         for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
             pending.push_back(it->get());
         }
     }
-    return nullptr;
 }
 
-int count_options(const Node& node) {
-    int count = 0;
-    std::vector<const Node*> pending;
-    pending.push_back(&node);
-    while (!pending.empty()) {
-        const Node* current = pending.back();
-        pending.pop_back();
-        if (current->type == NodeType::Element && current->tag_name == "option") {
-            ++count;
-        }
-        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
-            pending.push_back(it->get());
-        }
-    }
-    return count;
+const Node* option_at(const OptionList& options, int index) {
+    return index >= 0 && static_cast<std::size_t>(index) < options.size()
+        ? options[static_cast<std::size_t>(index)]
+        : nullptr;
 }
 
-int first_selected_option_index(const Node& node, int& current_index) {
-    std::vector<const Node*> pending;
-    pending.push_back(&node);
-    while (!pending.empty()) {
-        const Node* current = pending.back();
-        pending.pop_back();
-        if (current->type == NodeType::Element && current->tag_name == "option") {
-            if (has_attribute(*current, "selected")) {
-                return current_index;
-            }
-            ++current_index;
-        }
-        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
-            pending.push_back(it->get());
+int first_selected_option_index(const OptionList& options) {
+    for (std::size_t index = 0; index < options.size(); ++index) {
+        if (has_attribute(*options[index], "selected")) {
+            return static_cast<int>(index);
         }
     }
     return -1;
+}
+
+std::string option_value(const Node& option);
+
+bool set_selected_index_with_options(Node& node, int selected_index, const OptionList& options) {
+    if (options.empty()) {
+        selected_index = -1;
+    } else {
+        selected_index = std::max(0, std::min(selected_index,
+                                              static_cast<int>(options.size() - 1)));
+    }
+
+    FormControlState& state = ensure_form_control_state(node);
+    if (state.selected_index == selected_index) {
+        return false;
+    }
+    state.selected_index = selected_index;
+    const Node* option = option_at(options, selected_index);
+    state.value = option != nullptr ? option_value(*option) : std::string{};
+    state.dirty = true;
+    mark_dirty(node, DomDirtyPaint);
+    return true;
+}
+
+int option_count(const OptionList& options) {
+    return static_cast<int>(std::min<std::size_t>(options.size(),
+                                                  static_cast<std::size_t>(std::numeric_limits<int>::max())));
 }
 
 std::string option_text(const Node& option) {
@@ -170,6 +175,15 @@ std::string option_text(const Node& option) {
 std::string option_value(const Node& option) {
     const std::string& value = option.attribute("value");
     return has_attribute(option, "value") ? value : option_text(option);
+}
+
+int option_index_by_value(const OptionList& options, const std::string& value) {
+    for (std::size_t index = 0; index < options.size(); ++index) {
+        if (option_value(*options[index]) == value) {
+            return static_cast<int>(index);
+        }
+    }
+    return -1;
 }
 
 const Node* root_of(const Node& node) {
@@ -229,25 +243,6 @@ bool first_datalist_option_value(const Node& node, const std::string& prefix, st
     return false;
 }
 
-int option_index_by_value(const Node& node, const std::string& value, int& current_index) {
-    std::vector<const Node*> pending;
-    pending.push_back(&node);
-    while (!pending.empty()) {
-        const Node* current = pending.back();
-        pending.pop_back();
-        if (current->type == NodeType::Element && current->tag_name == "option") {
-            if (option_value(*current) == value) {
-                return current_index;
-            }
-            ++current_index;
-        }
-        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
-            pending.push_back(it->get());
-        }
-    }
-    return -1;
-}
-
 FormControlState make_initial_state(const Node& node) {
     FormControlState state;
     state.kind = form_control_kind(node);
@@ -274,13 +269,13 @@ FormControlState make_initial_state(const Node& node) {
         append_descendant_text(node, state.value);
         break;
     case FormControlKind::Select: {
-        int current_index = 0;
-        state.selected_index = first_selected_option_index(node, current_index);
-        if (state.selected_index < 0 && current_index > 0) {
+        OptionList options;
+        collect_options(node, options);
+        state.selected_index = first_selected_option_index(options);
+        if (state.selected_index < 0 && !options.empty()) {
             state.selected_index = 0;
         }
-        int option_index = 0;
-        const Node* option = option_at(node, state.selected_index, option_index);
+        const Node* option = option_at(options, state.selected_index);
         state.value = option != nullptr ? option_value(*option) : std::string{};
         break;
     }
@@ -384,17 +379,17 @@ std::string form_control_display_text(const Node& node) {
     const FormControlKind kind = form_control_kind(node);
     if (kind == FormControlKind::Select) {
         int selected = 0;
+        OptionList options;
+        collect_options(node, options);
         if (node.form_control_state) {
             selected = node.form_control_state->selected_index;
         } else {
-            int current_index = 0;
-            selected = first_selected_option_index(node, current_index);
+            selected = first_selected_option_index(options);
             if (selected < 0) {
                 selected = 0;
             }
         }
-        int current_index = 0;
-        const Node* option = option_at(node, selected, current_index);
+        const Node* option = option_at(options, selected);
         return option != nullptr ? option_text(*option) : std::string{};
     }
     if (kind == FormControlKind::TextArea) {
@@ -486,14 +481,16 @@ bool activate_form_control(Node& node) {
         return true;
     }
     if (state.kind == FormControlKind::Select) {
-        const int option_count = count_options(node);
-        if (option_count <= 0) {
+        OptionList options;
+        collect_options(node, options);
+        const int options_count = option_count(options);
+        if (options_count <= 0) {
             return false;
         }
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
         return set_select_popup_open(node, !state.select_popup_open);
 #else
-        return set_form_control_selected_index(node, (state.selected_index + 1) % option_count);
+        return set_selected_index_with_options(node, (state.selected_index + 1) % options_count, options);
 #endif
     }
     return false;
@@ -530,8 +527,9 @@ std::string form_control_value(const Node& node) {
     }
     if (form_control_kind(node) == FormControlKind::Select) {
         const int selected = form_control_selected_index(node);
-        int current_index = 0;
-        const Node* option = option_at(node, selected, current_index);
+        OptionList options;
+        collect_options(node, options);
+        const Node* option = option_at(options, selected);
         return option != nullptr ? option_value(*option) : std::string{};
     }
     return ensure_form_control_state(node).value;
@@ -542,10 +540,11 @@ bool set_form_control_value(Node& node, std::string value) {
         return false;
     }
     if (form_control_kind(node) == FormControlKind::Select) {
-        int current_index = 0;
-        const int index = option_index_by_value(node, value, current_index);
+        OptionList options;
+        collect_options(node, options);
+        const int index = option_index_by_value(options, value);
         if (index >= 0) {
-            return set_form_control_selected_index(node, index);
+            return set_selected_index_with_options(node, index, options);
         }
     }
     FormControlState& state = ensure_form_control_state(node);
@@ -595,37 +594,24 @@ bool set_form_control_selected_index(Node& node, int selected_index) {
     if (is_disabled_form_control(node) || form_control_kind(node) != FormControlKind::Select) {
         return false;
     }
-    const int option_count = count_options(node);
-    if (option_count <= 0) {
-        selected_index = -1;
-    } else {
-        selected_index = std::max(0, std::min(selected_index, option_count - 1));
-    }
-
-    FormControlState& state = ensure_form_control_state(node);
-    if (state.selected_index == selected_index) {
-        return false;
-    }
-    state.selected_index = selected_index;
-    int current_index = 0;
-    const Node* option = option_at(node, selected_index, current_index);
-    state.value = option != nullptr ? option_value(*option) : std::string{};
-    state.dirty = true;
-    mark_dirty(node, DomDirtyPaint);
-    return true;
+    OptionList options;
+    collect_options(node, options);
+    return set_selected_index_with_options(node, selected_index, options);
 }
 
 bool step_select_control(Node& node, int delta) {
     if (is_disabled_form_control(node) || form_control_kind(node) != FormControlKind::Select || delta == 0) {
         return false;
     }
-    const int option_count = count_options(node);
-    if (option_count <= 0) {
+    OptionList options;
+    collect_options(node, options);
+    const int options_count = option_count(options);
+    if (options_count <= 0) {
         return false;
     }
     const int current = std::max(0, form_control_selected_index(node));
-    const int next = std::max(0, std::min(option_count - 1, current + delta));
-    return set_form_control_selected_index(node, next);
+    const int next = std::max(0, std::min(options_count - 1, current + delta));
+    return set_selected_index_with_options(node, next, options);
 }
 
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
@@ -650,15 +636,21 @@ bool set_select_popup_open(Node& node, bool open) {
 }
 
 int form_control_option_count(const Node& node) {
-    return form_control_kind(node) == FormControlKind::Select ? count_options(node) : 0;
+    if (form_control_kind(node) != FormControlKind::Select) {
+        return 0;
+    }
+    OptionList options;
+    collect_options(node, options);
+    return option_count(options);
 }
 
 const Node* form_control_option_at(const Node& node, int option_index) {
     if (option_index < 0 || form_control_kind(node) != FormControlKind::Select) {
         return nullptr;
     }
-    int current_index = 0;
-    return option_at(node, option_index, current_index);
+    OptionList options;
+    collect_options(node, options);
+    return option_at(options, option_index);
 }
 
 std::string form_control_option_text(const Node& node, int option_index) {

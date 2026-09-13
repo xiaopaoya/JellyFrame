@@ -83,6 +83,10 @@ Retained repaint probes:
   visible while evaluating any intrinsic-size cache. It is a baseline only;
   do not skip a pass unless percentage descendants and cross-axis semantics
   are covered by regression tests.
+- `form_select_set_index` measures repeated selected-index updates on a
+  256-option select. It covers the common interaction path where option count
+  and selected option are needed together; the result is a desktop baseline,
+  not a device throughput target.
 
 These probes quantify the remaining cost after text/style layout reuse. They do
 not imply display-list diffing or subtree replay.
