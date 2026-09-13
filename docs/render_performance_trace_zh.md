@@ -30,6 +30,7 @@ python tools\render_performance_report.py `
   --report build\app.package.report.json `
   --device-telemetry build\port.log `
   --microbench build\render-core-microbench.txt `
+  --microbench-baseline build\render-core-microbench-baseline.txt `
   --output build\render-performance.json `
   --html-output build\render-performance.html
 ```
@@ -44,6 +45,8 @@ python tools\render_performance_report.py `
 - Render Trace 查看器提供跨帧的 command/stage/owner 调用数、累计耗时和单次调用 p95；
 - HTML 报告会展示普通 microbench 的平均耗时，以及统计型 probe 的 p50/p95、display command 数和峰值 surface
   字节数；孤立 probe 不被解释为 App 元素耗时或设备性能；
+- 传入 `--microbench-baseline` 后，报告会按同名且同形状的 probe 展示当前值相对基线的变化百分比；
+  不匹配的 probe 会跳过，不会被强行比较；
 - 当前帧视图额外显示最耗时阶段、最耗时绘制命令和累计耗时最高的归因对象；归因缺失时保留
   `unattributed`，不会将未归因的墙钟时间错误分配给任意元素；
 - 查看器固定显示有效 frame 的总耗时 p50、p95 和最大值，作为当前 trace 的桌面基线；这些数值

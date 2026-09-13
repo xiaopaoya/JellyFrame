@@ -215,6 +215,52 @@ def read_microbench(path: Path) -> list[dict[str, Any]]:
     return results
 
 
+def compare_microbench(current: list[dict[str, Any]], baseline: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Compare same-shaped probes without treating different workloads as comparable."""
+    baseline_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    for probe in baseline:
+        if "avgUs" in probe:
+            kind = "average"
+        elif "p50Us" in probe and "p95Us" in probe:
+            kind = "stats"
+        else:
+            continue
+        baseline_by_key[(str(probe.get("name", "")), kind)] = probe
+
+    comparisons: list[dict[str, Any]] = []
+    for probe in current:
+        if "avgUs" in probe:
+            kind = "average"
+            metrics = (("avgUs", "average"),)
+        elif "p50Us" in probe and "p95Us" in probe:
+            kind = "stats"
+            metrics = (("p50Us", "p50"), ("p95Us", "p95"))
+        else:
+            continue
+        previous = baseline_by_key.get((str(probe.get("name", "")), kind))
+        if previous is None:
+            continue
+        for field, metric in metrics:
+            old = previous.get(field)
+            new = probe.get(field)
+            if not isinstance(old, (int, float)) or isinstance(old, bool) or old < 0:
+                continue
+            if not isinstance(new, (int, float)) or isinstance(new, bool) or new < 0:
+                continue
+            delta = None if old == 0 else round_number((new - old) * 100.0 / old)
+            comparisons.append({
+                "name": probe.get("name", ""),
+                "kind": kind,
+                "metric": metric,
+                "baseline": round_number(float(old)),
+                "current": round_number(float(new)),
+                "deltaPercent": delta,
+                "baselineSource": previous.get("source", ""),
+                "currentSource": probe.get("source", ""),
+            })
+    return comparisons
+
+
 def device_profile_records(lines: list[str], path: Path) -> dict[str, str] | None:
     """Return the sole complete Device Performance Profile V0 window, if any."""
     windows: dict[int, dict[str, dict[str, str]]] = {}
@@ -392,7 +438,13 @@ def aggregate(frames: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def build_report(report_paths: list[Path], trace_paths: list[Path], telemetry_paths: list[Path], microbench_paths: list[Path]) -> dict[str, Any]:
+def build_report(
+    report_paths: list[Path],
+    trace_paths: list[Path],
+    telemetry_paths: list[Path],
+    microbench_paths: list[Path],
+    microbench_baseline_paths: list[Path] | None = None,
+) -> dict[str, Any]:
     frames: list[dict[str, Any]] = []
     warnings: list[str] = []
     metadata: dict[str, Any] = {}
@@ -408,6 +460,9 @@ def build_report(report_paths: list[Path], trace_paths: list[Path], telemetry_pa
         metadata.update(extra)
     device = [load_device_telemetry(path) for path in telemetry_paths]
     microbench = [entry for path in microbench_paths for entry in read_microbench(path)]
+    baseline = [
+        entry for path in (microbench_baseline_paths or []) for entry in read_microbench(path)
+    ]
     if not frames and not device and not microbench:
         raise SystemExit("no usable performance input was found")
     limitations = [
@@ -423,8 +478,11 @@ def build_report(report_paths: list[Path], trace_paths: list[Path], telemetry_pa
         "frames": frames,
         "deviceTelemetry": device,
         "microbenchProbes": microbench,
+        "microbenchComparisons": compare_microbench(microbench, baseline),
         "warnings": warnings,
-        "limitations": limitations,
+        "limitations": limitations + ([
+            "Microbench comparisons only match the same named probe and measurement shape; they do not compare different libraries or devices.",
+        ] if baseline else []),
     }
 
 
@@ -490,6 +548,28 @@ def render_html(report: dict[str, Any]) -> str:
             + "".join(microbench_rows)
             + "</table>"
         )
+    comparison_rows = []
+    for comparison in report.get("microbenchComparisons", []):
+        if not isinstance(comparison, dict):
+            continue
+        delta = comparison.get("deltaPercent")
+        delta_text = "-" if delta is None else f"{float(delta):+.2f}%"
+        comparison_rows.append(
+            f"<tr><td><code>{html.escape(str(comparison.get('name', 'unknown')))}</code></td>"
+            f"<td>{html.escape(str(comparison.get('metric', 'unknown')))}</td>"
+            f"<td>{html.escape(str(comparison.get('baseline', 0)))} us</td>"
+            f"<td>{html.escape(str(comparison.get('current', 0)))} us</td>"
+            f"<td>{html.escape(delta_text)}</td></tr>"
+        )
+    comparison_section = ""
+    if report.get("microbenchComparisons"):
+        comparison_section = (
+            "<h2>Microbench baseline comparison</h2>"
+            "<p><small>Negative change means the current probe is faster. Only matching probe names and shapes are compared.</small></p>"
+            "<table><tr><th>Probe</th><th>Metric</th><th>Baseline</th><th>Current</th><th>Change</th></tr>"
+            + "".join(comparison_rows)
+            + "</table>"
+        )
     device_rows = []
     device_metric_columns = (
         ((("frameP95Us", "us"), ("p95FrameMs", "ms")), "Frame p95"),
@@ -541,6 +621,7 @@ def render_html(report: dict[str, Any]) -> str:
 <h2>Command / owner attribution</h2><p><small>Desktop raster invocation time only.{command_note}</small></p>
 <table><tr><th>Owner</th><th>Command</th><th>Time</th><th>Candidate pixels</th><th>Samples</th></tr>{command_rows}</table>
 {microbench_section}
+{comparison_section}
 {device_section}
 <h2>Limits</h2><ul>{limits}</ul>
 """.format(
@@ -554,6 +635,7 @@ def render_html(report: dict[str, Any]) -> str:
         command_rows="".join(command_rows) or "<tr><td colspan='5'>No command attribution</td></tr>",
         command_note=command_note,
         microbench_section=microbench_section,
+        comparison_section=comparison_section,
         device_section=device_section,
         limits="".join(f"<li>{html.escape(item)}</li>" for item in report.get("limitations", [])),
     )
@@ -565,10 +647,11 @@ def main() -> int:
     parser.add_argument("--trace", action="append", type=Path, default=[], help=f"Versioned JSONL frame trace ({TRACE_FORMAT}); may be repeated.")
     parser.add_argument("--device-telemetry", action="append", type=Path, default=[], help="Device aggregate telemetry log; may be repeated.")
     parser.add_argument("--microbench", action="append", type=Path, default=[], help="Render Core microbench stdout; may be repeated.")
+    parser.add_argument("--microbench-baseline", action="append", type=Path, default=[], help="Baseline Render Core microbench stdout for same-shape comparison; may be repeated.")
     parser.add_argument("--output", type=Path, required=True, help="Output JSON report.")
     parser.add_argument("--html-output", type=Path, help="Optional self-contained HTML summary.")
     args = parser.parse_args()
-    result = build_report(args.report, args.trace, args.device_telemetry, args.microbench)
+    result = build_report(args.report, args.trace, args.device_telemetry, args.microbench, args.microbench_baseline)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if args.html_output:

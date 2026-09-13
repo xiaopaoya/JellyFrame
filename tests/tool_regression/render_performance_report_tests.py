@@ -80,10 +80,18 @@ class RenderPerformanceReportTests(unittest.TestCase):
                 "p50_us=229.25 p95_us=238.417 display_commands=1 peak_surface_bytes=220160\n",
                 encoding="utf-8",
             )
+            baseline = root / "microbench-baseline.txt"
+            baseline.write_text(
+                "rounded_rect_aa_raster iterations=20 avg_us=1600\n"
+                "modern_paint_shadow_stats samples=16 iterations_per_sample=12 "
+                "p50_us=240 p95_us=250 display_commands=1 peak_surface_bytes=220160\n",
+                encoding="utf-8",
+            )
             output = root / "report.json"
             html_output = root / "report.html"
             result = subprocess.run(
                 [sys.executable, str(TOOL), "--microbench", str(microbench),
+                 "--microbench-baseline", str(baseline),
                  "--output", str(output), "--html-output", str(html_output)],
                 cwd=ROOT,
                 check=False,
@@ -97,9 +105,16 @@ class RenderPerformanceReportTests(unittest.TestCase):
         self.assertEqual(report["microbenchProbes"][0]["avgUs"], 1444.1)
         self.assertEqual(report["microbenchProbes"][1]["p95Us"], 238.42)
         self.assertEqual(report["microbenchProbes"][1]["peakSurfaceBytes"], 220160)
+        self.assertEqual(len(report["microbenchComparisons"]), 3)
+        average_comparison = next(
+            item for item in report["microbenchComparisons"] if item["metric"] == "average"
+        )
+        self.assertEqual(average_comparison["deltaPercent"], -9.74)
         self.assertIn("Render Core microbenchmarks", rendered)
         self.assertIn("modern_paint_shadow_stats", rendered)
         self.assertIn("238.42 us", rendered)
+        self.assertIn("Microbench baseline comparison", rendered)
+        self.assertIn("-9.74%", rendered)
 
     def test_html_output_exposes_device_aggregate_without_merging_frames(self):
         with tempfile.TemporaryDirectory() as directory:
