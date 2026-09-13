@@ -43,9 +43,9 @@
 
 ---
 
-## 2026-09-12 处置状态
+## 2026-09-13 处置状态
 
-以下状态以当前 `master`（`47f97fb5`）源码和本地测试为准。审查报告本身保留为历史发现记录，不把历史严重级别直接当作当前未修复数。
+以下状态以当前 `master`（`958b3b19`）源码和本地测试为准。审查报告本身保留为历史发现记录，不把历史严重级别直接当作当前未修复数。
 
 ### 已有代码修复，等待 CI/实机证据闭环
 
@@ -61,22 +61,27 @@
 | app runtime 完成身份、句柄所有权、批量释放、缓存计数 | `e9775ef4` | 已修复并有本地测试；需 Linux sanitizer/Windows scripting CI 闭环。 |
 | script-task 脏区、clip 引用、service bridge 输入边界 | `e9775ef4`、`c557e4c0` | 已修复并有回归测试；设备端 malformed/relaunch 证据仍按验收文档执行。 |
 | 字体上下文状态与字体缓存失效 | `d3cbbf56` | 已纳入 runtime 状态；需长文本/多字体实机观测。 |
+| dirty-region 子树边界重复扫描 | `75a550a6` | 已改为单次迭代后序遍历，并保留嵌套脏节点回归测试；当前 Release 全套 50 项 CTest 通过，需随主线 CI 闭环。 |
+| style-repaint 布局字段覆盖 | 当前 `style_repaint.cpp` | 已逐字段核对，`layout.cpp` 使用的布局字段均已比较；无需额外代码改动。 |
 
 ### 仍开放，纳入后续工作
 
 这些项目没有被上述提交完整关闭，后续应按收益和风险单独处理：
 
-1. `style_repaint.cpp` 的手工 `Style` 字段比较（报告 H5）：优先补“新增布局字段必须同步比较”的结构化约束或编译期可见的 key 类型，避免静默复用旧布局。
-2. flex 非 wrap 的多次 intrinsic layout（报告 H6）：先用现有 benchmark 定量，确认缓存不会改变 cross-axis 语义后再改。
-3. `Style::position` 的字符串热路径、dirty-region subtree bounds 复算、form 控件重复遍历（报告 M1/M4/M7/M8/M9）：属于后续性能批次，暂不与发布前 correctness 修复混做。
-4. app service 的 fixture/response 仍有少数非必要复制，以及 image cache URL 线性查找（报告 services #5/#7/#8）：需要先明确 mock 的所有权和缓存规模，再作移动或索引化改造。
-5. Low 级可读性条目和未逐条复核的历史条目：不作为当前发布阻断项，修改时必须附局部测试或基准。
+1. flex 非 wrap 的多次 intrinsic layout（报告 H6）：先用现有 benchmark 定量，确认缓存不会改变 cross-axis 语义后再改。
+2. `Style::position` 的字符串热路径、form 控件重复遍历（报告 M1/M7/M8/M9）：属于后续性能批次，暂不与发布前 correctness 修复混做。
+3. app service 的 fixture/response 仍有少数非必要复制，以及 image cache URL 线性查找（报告 services #5/#7/#8）：需要先明确 mock 的所有权和缓存规模，再作移动或索引化改造。
+4. Low 级可读性条目和未逐条复核的历史条目：不作为当前发布阻断项，修改时必须附局部测试或基准。
+
+### 2026-09-13 WS147 归档
+
+`test_artifacts/ws147_panel_scroll_fix_review_20260913` 已完成 SHA-256 和选择性 patch 核对。普通 framebuffer scroll-blit 配置（`panel_scroll_mode=0`）在 WS147/JD9853/ESP32-S3 上通过实机视觉验收，未观察到底部错行，串口无 panic、watchdog、reset、DMA、SPI、panel 或 present 错误。GRAM fallback probe 仅为旧 SDK 构建的辅助行为证据；由于没有 TE/vblank 或等效扫描同步证据，也没有 GRAM 视觉验收，因此 `productionPanelScrollAccepted=false`，该实验路径不进入主线生产默认配置。
 
 ### 验证出口
 
-- CI：`47f97fb5` 的运行必须完成，重点查看 sanitizer、Windows scripting、standalone Render Core consumer 和 documentation freshness。
-- 桌面：保持当前 `68/68` CTest 基线，新增性能改动不得降低既有文本、圆角、flex 与 clip 回归覆盖。
-- 设备：panel-scroll 实验文件仍不入主线；只有 TE/vblank 同步、真实 input-to-present 和恢复证据齐备后才重新评估。
+- CI：`75a550a6` 的运行必须完成，重点查看 sanitizer、Windows scripting、standalone Render Core consumer 和 documentation freshness。
+- 桌面：当前本地 Release 全套 `50/50` CTest 通过；新增性能改动不得降低既有文本、圆角、flex 与 clip 回归覆盖。
+- 设备：panel-scroll 实验文件仍不入主线；只有 TE/vblank 同步、真实 input-to-present 和恢复证据齐备后才重新评估。普通 framebuffer scroll-blit 归档可作为当前安全路径证据。
 - 任何“已修复”项在缺少对应 CI/设备证据时只能标为“代码已落地，验证待闭环”。
 
 ---
