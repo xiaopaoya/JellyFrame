@@ -1,6 +1,6 @@
 # jellyframe 0.6.1 代码审查 — 汇总与交叉核对
 
-> 最后更新：2026-09-12；适用版本：0.6.0-dev
+> 最后更新：2026-09-13；适用版本：0.6.0-dev
 
 审查范围：`render_core`（`src/render_core/`，42 个 `.cpp`）与 `app_runtime`（`src/app_runtime/`）。
 审查口径：性能、实现正确性、可读性。**不含安全审查**（按用户说明，这些是善意代码）；不提出重写方案，只给最小、局部的修复。
@@ -64,13 +64,14 @@
 | 字体上下文状态与字体缓存失效 | `d3cbbf56` | 已纳入 runtime 状态；需长文本/多字体实机观测。 |
 | dirty-region 子树边界重复扫描 | `75a550a6` | 已改为单次迭代后序遍历，并保留嵌套脏节点回归测试；当前 Release 全套 50 项 CTest 通过，需随主线 CI 闭环。 |
 | style-repaint 布局字段覆盖 | 当前 `style_repaint.cpp` | 已逐字段核对，`layout.cpp` 使用的布局字段均已比较；无需额外代码改动。 |
+| `Style::position` 字符串热路径 | `6c58cab3` | 保留原字符串用于兼容/诊断，解析时同步生成 `PositionType`；布局、flex 排序、layer 和 relative/fixed 判定改用枚举，并增加解析回归。需随主线 CI 闭环。 |
 
 ### 仍开放，纳入后续工作
 
 这些项目没有被上述提交完整关闭，后续应按收益和风险单独处理：
 
-1. flex 非 wrap 的多次 intrinsic layout（报告 H6）：先用现有 benchmark 定量，确认缓存不会改变 cross-axis 语义后再改。
-2. `Style::position` 的字符串热路径、form 控件重复遍历（报告 M1/M7/M8/M9）：属于后续性能批次，暂不与发布前 correctness 修复混做。
+1. flex 非 wrap 的多次 intrinsic layout（报告 H6）：已补 `flex_nonwrap_intrinsic_layout` 基准；8/32/80 个柔性文本子项桌面 Release 约为 20/66/192 us，测量次数受探测/最终/拉伸分支影响。暂不做全局缓存，后续仅评估纯叶子文本等可证明安全的快路径。
+2. form 控件重复遍历（报告 M7/M8/M9）：属于后续性能批次，需先补 select/radio 大规模基准，再做一次性 scratch 收集或索引。
 3. app service 的 fixture/response 仍有少数非必要复制（报告 services #5/#7）：需要先明确 mock 的所有权和缓存规模，再作移动改造。
 4. Low 级可读性条目和未逐条复核的历史条目：不作为当前发布阻断项，修改时必须附局部测试或基准。
 
