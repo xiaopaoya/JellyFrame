@@ -498,7 +498,7 @@ AppServiceSubmitResult NetworkFetchMock::submit_fetch(AppRuntimeHost& host,
         pending.error_code = kServiceErrorPayloadTooLarge;
     } else {
         pending.status = HostServiceStatus::Completed;
-        pending.fixture = *found;
+        pending.fixture_index = static_cast<std::size_t>(found - fixtures_.begin());
     }
     pending_.push_back(std::move(pending));
     return result;
@@ -544,10 +544,13 @@ HostServiceCompletion NetworkFetchMock::complete_request(AppRuntimeHost& host,
         0,
         request.client_token,
     };
-    if (pending->status == HostServiceStatus::Completed) {
+    const NetworkFetchFixture* fixture = pending->fixture_index < fixtures_.size()
+        ? &fixtures_[pending->fixture_index]
+        : nullptr;
+    if (pending->status == HostServiceStatus::Completed && fixture != nullptr) {
         const std::uint32_t handle = host.handles().allocate(HostServiceHandleKind::FetchResponse,
                                                             request.app_instance_id,
-                                                            static_cast<std::uint32_t>(pending->fixture.body.size()),
+                                                            static_cast<std::uint32_t>(fixture->body.size()),
                                                             nullptr,
                                                             request.client_token);
         if (handle == 0) {
@@ -555,16 +558,19 @@ HostServiceCompletion NetworkFetchMock::complete_request(AppRuntimeHost& host,
             completion.error_code = kServiceErrorBudgetExceeded;
         } else {
             completion.result_handle = handle;
-            completion.byte_count = static_cast<std::uint32_t>(pending->fixture.body.size());
+            completion.byte_count = static_cast<std::uint32_t>(fixture->body.size());
             records_.push_back(NetworkFetchRecord{
                 handle,
                 request.app_instance_id,
-                pending->fixture.status_code,
-                std::move(pending->fixture.content_type),
-                std::move(pending->fixture.body),
+                fixture->status_code,
+                fixture->content_type,
+                fixture->body,
                 request.client_token,
             });
         }
+    } else if (pending->status == HostServiceStatus::Completed) {
+        completion.status = HostServiceStatus::Failed;
+        completion.error_code = kServiceErrorNotFound;
     }
     pending_.erase(pending);
     return completion;

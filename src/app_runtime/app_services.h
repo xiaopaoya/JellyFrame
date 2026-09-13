@@ -91,8 +91,8 @@ public:
                                          const std::string& url,
                                          std::uint32_t timeout_ms = 0,
                                          std::uint32_t client_token = 0);
-    // Cancels a request that is still in the host queue and drops its copied
-    // fixture. A worker-owned request remains available for late completion.
+    // Cancels a request that is still in the host queue and drops its fixture
+    // reference. A worker-owned request remains available for late completion.
     bool cancel_pending_fetch(AppRuntimeHost& host, std::uint32_t job_id);
     std::size_t pending_count() const;
     // Converts a worker-popped request into a completion and allocates the
@@ -115,7 +115,7 @@ private:
         std::uint32_t app_instance_id = 0;
         HostServiceStatus status = HostServiceStatus::Failed;
         std::uint32_t error_code = 0;
-        NetworkFetchFixture fixture;
+        std::size_t fixture_index = 0;
         std::uint32_t client_token = 0;
     };
 
