@@ -94,6 +94,7 @@ private:
         std::uint32_t job_id = 0;
         std::uint32_t app_instance_id = 0;
         std::size_t fixture_index = 0;
+        std::string source;
     };
 
     bool codec_allowed(AppVideoFrameCodec codec) const;

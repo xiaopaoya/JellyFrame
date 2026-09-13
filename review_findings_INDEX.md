@@ -69,6 +69,7 @@
 | radio group 校验重复遍历 | `845645e5` | `validate_form` 在首次遇到 required radio 时惰性收集已选 group；普通 form 不增加预扫描，required radio 从每控件重扫降为一次 group 扫描。Render Core 全测试通过。需随主线 CI 闭环。 |
 | select option 重复遍历 | `51279fd4`、`b1e6c287` | 状态更新路径复用一次 option 快照；高级 popup 的绘制与命中路径也改为一次收集后按指针访问，旧的按索引 API 保留兼容。256-option 基准与 Render Core 全测试通过，需随主线 CI 闭环。 |
 | NetworkFetch pending 响应重复复制 | `7e671eba` | pending 请求改存 fixture 索引，完成时只复制一次 response body/content-type；保留 fixture 可复用语义，并通过 App Runtime 全测试。需随主线 CI 闭环。 |
+| Video pending fixture 生命周期假设 | 当前 `app_video_frames.cpp` | `PendingFrame` 保存请求源字符串，`source_pending()` 不再通过 pending fixture index 反查可变 fixture 数组，消除清理/重排场景下的越界假设；保持单 source 单 in-flight 语义。App Runtime 测试通过。 |
 | 文本规范化的 layout→paint 重复路径 | 当前 `TextLayoutCache` 与既有回归 | 已核对：正常 layout→paint 路径使用布局阶段生成的 transformed text/lines，layer cache 校验通过后不再重新规范化或测量；脏文本复用判断必须针对新文本重新计算，不能复用旧缓存。当前不新增 Node 级缓存，保留既有测试覆盖。 |
 
 ### 仍开放，纳入后续工作
@@ -76,7 +77,7 @@
 这些项目没有被上述提交完整关闭，后续应按收益和风险单独处理：
 
 1. flex 非 wrap 的多次 intrinsic layout（报告 H6）：已补 `flex_nonwrap_intrinsic_layout` 基准；8/32/80 个柔性文本子项桌面 Release 约为 20/66/192 us，测量次数受探测/最终/拉伸分支影响。暂不做全局缓存，后续仅评估纯叶子文本等可证明安全的快路径。
-2. app service 的 fixture/response 仍有少数非必要复制（报告 services #5/#7）：NetworkFetch 已由 `7e671eba` 处理；视频帧、解码 surface、compute result、audio record 仍需分别确认所有权后再做移动或共享改造。
+2. app service 的 fixture/response 仍有少数非必要复制（报告 services #5/#7）：NetworkFetch 已由 `7e671eba` 处理；compute result 和 audio URL 已确认完成路径使用移动语义，不需要新增改动。视频帧、解码 surface 仍保留整洁的公开 `std::vector` 记录接口，因此像素载荷的共享/零拷贝需要单独的 API 设计，不在本轮以破坏兼容性的方式处理。
 3. 文本规范化报告 M9 已完成评估，当前不需要新增代码；后续仅在文本缓存失效模型扩展时重新验证。
 4. Low 级可读性条目和未逐条复核的历史条目：不作为当前发布阻断项，修改时必须附局部测试或基准。
 

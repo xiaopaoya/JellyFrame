@@ -127,8 +127,8 @@ bool AppVideoFrameProviderMock::add_fixture(AppVideoFrameFixture fixture) {
 }
 
 bool AppVideoFrameProviderMock::source_pending(std::uint32_t app_instance_id, const std::string& source) const {
-    return std::any_of(pending_.begin(), pending_.end(), [app_instance_id, &source, this](const PendingFrame& pending) {
-        return pending.app_instance_id == app_instance_id && fixtures_[pending.fixture_index].source == source;
+    return std::any_of(pending_.begin(), pending_.end(), [app_instance_id, &source](const PendingFrame& pending) {
+        return pending.app_instance_id == app_instance_id && pending.source == source;
     });
 }
 
@@ -161,7 +161,8 @@ AppServiceSubmitResult AppVideoFrameProviderMock::request_next_frame(AppRuntimeH
     AppServiceSubmitResult result = from_submit(submitted);
     if (result.accepted()) {
         pending_.push_back(PendingFrame{submitted.job_id, instance,
-                                        static_cast<std::size_t>(fixture - fixtures_.begin())});
+                                        static_cast<std::size_t>(fixture - fixtures_.begin()),
+                                        std::move(request.source)});
     }
     return result;
 }
