@@ -42,6 +42,8 @@ python tools\render_performance_report.py `
 - producer 提供时的 display command 类型与受限 owner 归因排行；
 - 设备 aggregate telemetry 与隔离 microbench 的独立区域；
 - Render Trace 查看器提供跨帧的 command/stage/owner 调用数、累计耗时和单次调用 p95；
+- 当前帧视图额外显示最耗时阶段、最耗时绘制命令和累计耗时最高的归因对象；归因缺失时保留
+  `unattributed`，不会将未归因的墙钟时间错误分配给任意元素；
 - 截断帧、无效计时与 `unattributed` 单独计数，聚合结果明确标记为已记录样本的下界；
 - 明确的 warning/limitation，而不是用缺失数据填零后伪造结论。
 

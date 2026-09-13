@@ -1,6 +1,6 @@
 const assert = require("assert");
 const fs = require("fs");
-const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
+const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameHotspotSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
 const vm = require("vm");
 
 function loadTraceHelpers() {
@@ -100,6 +100,11 @@ function main() {
     unaccountedUs: 0,
     timingComplete: false
   });
+  assert.deepEqual(frameHotspotSummary(frame), {
+    stage: { name: "paint", us: 1000 },
+    command: { name: "Text", us: 1000, pixels: 20, samples: 2 },
+    owner: { name: "id:title", us: 1000, samples: 2 }
+  });
   const aggregate = aggregateTrace({ frames: [
     frame,
     { ...frame, frame: 1, totalUs: 3000, stagesUs: { layout: 700, paint: 1200 }, commands: [
@@ -132,6 +137,7 @@ function main() {
   assert(html.includes("legacy-card"));
   assert(html.includes("timingComplete"));
   assert(html.includes("未归因时间"));
+  assert(html.includes("当前帧热点"));
   assert(html.includes("vscode-resource://frame_000.bmp"));
   assert(html.includes("dirtyCoverage"));
   assert(html.includes("dirtyRects"));

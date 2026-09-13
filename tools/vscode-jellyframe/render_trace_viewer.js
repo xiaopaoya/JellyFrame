@@ -177,6 +177,36 @@ function frameTimingBreakdown(frame) {
   };
 }
 
+function frameHotspotSummary(frame) {
+  const stages = Object.entries(frame?.stagesUs || {})
+    .filter(([, value]) => Number.isSafeInteger(value) && value >= 0)
+    .map(([name, us]) => ({ name, us }));
+  const stage = stages.reduce((best, item) => !best || item.us > best.us ? item : best, null);
+  const commandTotals = new Map();
+  const ownerTotals = new Map();
+  for (const item of Array.isArray(frame?.commands) ? frame.commands : []) {
+    const sample = normalizeCommandSample(item);
+    if (!sample) continue;
+    const command = commandTotals.get(sample.command) || { name: sample.command, us: 0, pixels: 0, samples: 0 };
+    command.us = Math.min(Number.MAX_SAFE_INTEGER, command.us + sample.us);
+    command.pixels = Math.min(Number.MAX_SAFE_INTEGER, command.pixels + sample.pixels);
+    command.samples = Math.min(Number.MAX_SAFE_INTEGER, command.samples + sample.samples);
+    commandTotals.set(sample.command, command);
+    const owner = ownerTotals.get(sample.owner) || { name: sample.owner, us: 0, samples: 0 };
+    owner.us = Math.min(Number.MAX_SAFE_INTEGER, owner.us + sample.us);
+    owner.samples = Math.min(Number.MAX_SAFE_INTEGER, owner.samples + sample.samples);
+    ownerTotals.set(sample.owner, owner);
+  }
+  const largest = (map) => Array.from(map.values()).reduce(
+    (best, item) => !best || item.us > best.us ? item : best, null
+  );
+  return {
+    stage,
+    command: largest(commandTotals),
+    owner: largest(ownerTotals)
+  };
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -199,7 +229,10 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
   const frameTiming = Object.fromEntries((parsed?.frames || []).map((frame) => [
     String(frame.frame), frameTimingBreakdown(frame)
   ]));
-  const data = safeJson({ ...parsed, frameImages, frameTiming, aggregate: aggregateTrace(parsed) });
+  const frameHotspots = Object.fromEntries((parsed?.frames || []).map((frame) => [
+    String(frame.frame), frameHotspotSummary(frame)
+  ]));
+  const data = safeJson({ ...parsed, frameImages, frameTiming, frameHotspots, aggregate: aggregateTrace(parsed) });
   const labels = chinese ? {
     title: "Render Trace",
     frame: "帧",
@@ -248,7 +281,12 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     aggregateMissingNote: "有效命令没有 owner/nodeId，已计入 unattributed；无效计时样本未纳入聚合。",
     aggregateInvalid: "无效命令样本",
     aggregateTruncated: "截断帧",
-    unaccounted: "未归因时间"
+    unaccounted: "未归因时间",
+    hotspots: "当前帧热点",
+    hottestStage: "最耗时阶段",
+    hottestCommand: "最耗时命令",
+    hottestOwner: "最高耗时归因",
+    noHotspot: "无有效样本"
   } : {
     title: "Render Trace",
     frame: "Frame",
@@ -297,7 +335,12 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     aggregateMissingNote: "Valid commands without owner/nodeId are grouped as unattributed; invalid timing samples are excluded.",
     aggregateInvalid: "Invalid command samples",
     aggregateTruncated: "Truncated frames",
-    unaccounted: "Unaccounted time"
+    unaccounted: "Unaccounted time",
+    hotspots: "Frame hotspots",
+    hottestStage: "Hottest stage",
+    hottestCommand: "Hottest command",
+    hottestOwner: "Top attributed owner",
+    noHotspot: "No valid samples"
   };
   const sessionJson = escapeHtml(JSON.stringify(parsed.session || {}));
   const titleText = escapeHtml(title || labels.title);
@@ -306,7 +349,7 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
 <html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${options.cspSource || "data:"} data:; style-src 'unsafe-inline'; script-src 'nonce-jellyframe-trace';">
 <style>
 body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:16px;line-height:1.4}h1{font-size:18px;margin:0 0 8px}h2{font-size:14px;margin:20px 0 8px}.muted{color:var(--vscode-descriptionForeground)}.notice{border:1px solid var(--vscode-panel-border);padding:8px;margin:10px 0}.error{color:var(--vscode-errorForeground)}.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.controls input{flex:1;min-width:180px}.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:12px}.metric{border:1px solid var(--vscode-panel-border);padding:8px}.metric b{display:block;font-size:16px}.stage{display:grid;grid-template-columns:minmax(90px,1fr) 3fr 80px;gap:8px;align-items:center;margin:5px 0}.bar{height:8px;background:var(--vscode-editorWidget-background);border-radius:2px;overflow:hidden}.bar i{display:block;height:100%;background:var(--vscode-charts-blue)}.capture{border:1px solid var(--vscode-panel-border);padding:8px;margin-top:12px}.capture-stage{position:relative;display:inline-block;max-width:100%;margin-top:8px}.capture-stage img{display:block;max-width:100%;max-height:420px;object-fit:contain;background:var(--vscode-editor-background)}.dirty-overlay{position:absolute;border:1px solid var(--vscode-charts-orange);background:var(--vscode-editorWarning-foreground);opacity:.25;box-sizing:border-box;pointer-events:none}.dirty-overlay-label{font-size:11px;margin:8px 0 0}.dirty{display:grid;grid-template-columns:minmax(110px,auto) 1fr auto;gap:8px;align-items:center;margin:8px 0}.dirty .bar i{background:var(--vscode-charts-orange)}.dirty-rect{display:grid;grid-template-columns:minmax(80px,1fr) auto;gap:8px;align-items:center;margin:4px 0}.dirty-rect .bar i{background:var(--vscode-charts-orange)}.aggregate{border:1px solid var(--vscode-panel-border);padding:8px;margin-top:16px}.aggregate table{margin-top:8px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--vscode-panel-border);padding:5px}code{color:var(--vscode-textPreformat-foreground)}ul{margin:5px 0;padding-left:20px}.hidden{display:none}.pill{border:1px solid var(--vscode-panel-border);padding:1px 5px}
-</style></head><body><h1>${titleText}</h1>
+</style><style>.hotspots{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.hotspot{border-left:3px solid var(--vscode-charts-orange);padding:6px 8px;background:var(--vscode-editorWidget-background)}.hotspot b{display:block}</style></head><body><h1>${titleText}</h1>
 <p class="muted">${labels.timingNote}<br>${labels.sourceNote}</p>
 <div class="controls"><label>${labels.frame} <output id="frameNumber"></output></label><input id="frameSlider" type="range" min="0" max="0" value="0" step="1"><button id="slowestFrameButton" type="button">${labels.slowestFrame}</button></div>
 <section class="aggregate"><h2>${labels.aggregate}</h2><p class="muted">${labels.aggregateNote}</p><div id="aggregateView"></div></section>
@@ -334,7 +377,7 @@ const slowestFrameIndex=model.frames.length?model.frames.reduce((best,frame,inde
 function render(){
  const frame=model.frames[Number(slider.value)]; if(!frame){view.innerHTML='<p class="muted">'+esc(labels.none)+'</p>';return;}
  number.textContent=fmt(frame.frame)+' / '+fmt(model.frames.length-1);
- const stages=Object.entries(frame.stagesUs||{}); const timing=model.frameTiming?.[String(frame.frame)]||{totalUs:0,recordedStageUs:0,unaccountedUs:0}; const sum=timing.recordedStageUs; const total=timing.totalUs; const unaccountedUs=timing.unaccountedUs; const max=Math.max(1,total,...stages.map(([,v])=>Number(v)||0));
+ const stages=Object.entries(frame.stagesUs||{}); const timing=model.frameTiming?.[String(frame.frame)]||{totalUs:0,recordedStageUs:0,unaccountedUs:0}; const hotspots=model.frameHotspots?.[String(frame.frame)]||{}; const sum=timing.recordedStageUs; const total=timing.totalUs; const unaccountedUs=timing.unaccountedUs; const max=Math.max(1,total,...stages.map(([,v])=>Number(v)||0));
  const fps=total>0?(1000000/total).toFixed(1):labels.none;
  const commands=(Array.isArray(frame.commands)?frame.commands:[]).map((item)=>{if(!item||typeof item!=='object'||typeof item.type!=='string'||!Number.isSafeInteger(item.us)||item.us<0||!Number.isSafeInteger(item.pixels)||item.pixels<0)return null;const samples=Number.isSafeInteger(item.samples)&&item.samples>0?item.samples:1;const owner=typeof item.owner==='string'&&item.owner.trim()?item.owner:(typeof item.nodeId==='string'&&item.nodeId.trim()?item.nodeId:'unattributed');return {...item,owner,samples,attributed:owner!=='unattributed'};}).filter(Boolean).sort((left,right)=>right.us-left.us).slice(0,64); const unattributedCount=commands.filter((item)=>!item.attributed).length; const pipeline=frame.pipeline||{};
  const dirtyPercent=Math.max(0,Math.min(100,Number(frame.dirtyAreaPercent)||0));
@@ -344,12 +387,18 @@ function render(){
  const capture=model.frameImages?.[String(frame.frame)];
  const dirtyOverlay=dirtyRects.length?'<p class="muted dirty-overlay-label">'+esc(labels.dirtyOverlay)+'</p><div class="capture-stage">'+dirtyRects.map((rect)=>{const x=Number(rect.x)||0;const y=Number(rect.y)||0;const width=Math.max(0,Number(rect.width)||0);const height=Math.max(0,Number(rect.height)||0);return '<i class="dirty-overlay" style="left:'+Math.max(0,Math.min(100,x*100/viewportWidth))+'%;top:'+Math.max(0,Math.min(100,y*100/viewportHeight))+'%;width:'+Math.max(0,Math.min(100,width*100/viewportWidth))+'%;height:'+Math.max(0,Math.min(100,height*100/viewportHeight))+'%"></i>';}).join('')+'<img src="'+esc(capture||'')+'" alt="'+esc(labels.capture)+'"></div>':'';
  const captureView=capture?'<section class="capture"><strong>'+esc(labels.capture)+'</strong>'+(dirtyRects.length?dirtyOverlay:'<img src="'+esc(capture)+'" alt="'+esc(labels.capture)+'">')+'</section>':'<section class="capture muted">'+esc(labels.noCapture)+'</section>';
+ const hotspotValue=(item)=>item?'<b>'+esc(item.name)+'</b><span>'+fmt(item.us)+' us</span>':'<span class="muted">'+esc(labels.noHotspot)+'</span>';
+ const hotspotView='<h2>'+esc(labels.hotspots)+'</h2><div class="hotspots">'+
+ '<div class="hotspot"><span>'+esc(labels.hottestStage)+'</span>'+hotspotValue(hotspots.stage)+'</div>'+
+ '<div class="hotspot"><span>'+esc(labels.hottestCommand)+'</span>'+hotspotValue(hotspots.command)+'</div>'+
+ '<div class="hotspot"><span>'+esc(labels.hottestOwner)+'</span>'+hotspotValue(hotspots.owner)+'</div></div>';
  view.innerHTML='<div class="metric-grid">'+
  '<div class="metric"><span>'+esc(labels.total)+'</span><b>'+fmt(frame.totalUs)+' us</b></div>'+
  '<div class="metric"><span>'+esc(labels.fps)+'</span><b>'+esc(fps)+'</b></div>'+
  '<div class="metric"><span>'+esc(labels.action)+'</span><b>'+esc(frame.action||labels.none)+'</b></div>'+
  '<div class="metric"><span>'+esc(labels.dirty)+'</span><b>'+fmt(frame.dirtyRectCount)+' / '+fmt(frame.dirtyAreaPercent)+'%</b></div></div>'+
  captureView+
+ hotspotView+
  '<div class="dirty"><span>'+esc(labels.dirtyCoverage)+'</span><span class="bar"><i style="width:'+dirtyPercent+'%"></i></span><span>'+dirtyPercent.toFixed(1)+'%</span></div>'+
  dirtyRectView+
  '<p><strong>'+esc(labels.reason)+':</strong> '+esc(frame.reason||labels.none)+' <span class="muted">· timingComplete='+esc(frame.timingComplete===true?'true':'false')+'</span></p>'+
@@ -361,4 +410,4 @@ renderAggregate();slider.max=Math.max(0,model.frames.length-1);slider.disabled=m
 </script></body></html>`;
 }
 
-module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, renderTraceHtml };
+module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameHotspotSummary, renderTraceHtml };
