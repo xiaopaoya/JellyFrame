@@ -373,6 +373,8 @@ void image_surface_cache_requests_resolves_and_releases_surfaces() {
     std::vector<HostServiceCompletion> accepted = pump(host);
     check(accepted.size() == 1, "image cache completion accepted");
     check(cache.handle_completion(accepted.front()), "image cache handles completion");
+    check(cache.url_for_job(accepted.front().job_id) == "/icon",
+          "image cache resolves completion job URL through index");
     check(cache.state_for_url("/icon") == AppImageSurfaceState::Ready, "image cache ready state");
     check(cache.resolve_or_request(host, images, "/icon", &handle), "image cache resolves ready surface");
     check(handle == accepted.front().result_handle, "image cache returns surface handle");

@@ -337,12 +337,14 @@ private:
     Entry* find_url(const std::string& url);
     const Entry* find_url(const std::string& url) const;
     Entry* find_job(std::uint32_t job_id);
+    void rebuild_job_url_index();
     bool over_budget() const;
     Entry* least_recently_used_unprotected(const std::uint32_t* protected_handles,
                                            std::size_t protected_handle_count);
 
     AppImageSurfaceCacheOptions options_;
     std::vector<Entry> entries_;
+    std::unordered_map<std::uint32_t, std::string> job_urls_;
     std::uint32_t use_tick_ = 1;
     std::size_t ready_surface_count_ = 0;
     std::size_t ready_byte_count_ = 0;

@@ -1537,6 +1537,16 @@ AppImageSurfaceCache::Entry* AppImageSurfaceCache::find_job(std::uint32_t job_id
     return found == entries_.end() ? nullptr : &*found;
 }
 
+void AppImageSurfaceCache::rebuild_job_url_index() {
+    job_urls_.clear();
+    job_urls_.reserve(entries_.size());
+    for (const Entry& entry : entries_) {
+        if (entry.job_id != 0) {
+            job_urls_[entry.job_id] = entry.url;
+        }
+    }
+}
+
 std::size_t AppImageSurfaceCache::ready_surface_count() const {
     return ready_surface_count_;
 }
@@ -1600,6 +1610,7 @@ bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
             }
             --ready_surface_count_;
             ready_byte_count_ -= entry->decoded_bytes;
+            job_urls_.erase(entry->job_id);
             entry->state = AppImageSurfaceState::Missing;
             entry->handle = 0;
             entry->job_id = 0;
@@ -1637,6 +1648,7 @@ bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
         entry = &entries_.back();
     }
     entry->app_instance_id = host.current_app_instance_id();
+    job_urls_.erase(entry->job_id);
     entry->job_id = submitted.job_id;
     entry->handle = 0;
     entry->decoded_bytes = 0;
@@ -1644,6 +1656,7 @@ bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
     entry->status = HostServiceStatus::Failed;
     entry->error_code = 0;
     entry->state = AppImageSurfaceState::Pending;
+    job_urls_[entry->job_id] = entry->url;
     return false;
 }
 
@@ -1701,6 +1714,7 @@ AppImageSurfaceEvictionResult AppImageSurfaceCache::evict_unreferenced_with_resu
                                               return true;
                                           }),
                            entries_.end());
+            rebuild_job_url_index();
             ++result.dropped_stale_entries;
             continue;
         }
@@ -1722,6 +1736,7 @@ AppImageSurfaceEvictionResult AppImageSurfaceCache::evict_unreferenced_with_resu
                                                   return true;
                                               }),
                                entries_.end());
+                rebuild_job_url_index();
                 ++result.dropped_stale_entries;
                 continue;
             }
@@ -1740,6 +1755,7 @@ AppImageSurfaceEvictionResult AppImageSurfaceCache::evict_unreferenced_with_resu
                                           return true;
                                       }),
                        entries_.end());
+        rebuild_job_url_index();
     }
     return result;
 }
@@ -1775,11 +1791,13 @@ std::size_t AppImageSurfaceCache::release_all(AppRuntimeHost& host, ImageDecodeM
         }
         ++it;
     }
+    rebuild_job_url_index();
     return released;
 }
 
 void AppImageSurfaceCache::clear() {
     entries_.clear();
+    job_urls_.clear();
     ready_surface_count_ = 0;
     ready_byte_count_ = 0;
 }
@@ -1790,10 +1808,8 @@ AppImageSurfaceState AppImageSurfaceCache::state_for_url(const std::string& url)
 }
 
 std::string AppImageSurfaceCache::url_for_job(std::uint32_t job_id) const {
-    const auto found = std::find_if(entries_.begin(), entries_.end(), [job_id](const Entry& entry) {
-        return entry.job_id == job_id;
-    });
-    return found == entries_.end() ? std::string{} : found->url;
+    const auto found = job_urls_.find(job_id);
+    return found == job_urls_.end() ? std::string{} : found->second;
 }
 
 AppServiceSubmitStatus AppImageSurfaceCache::last_submit_status_for_url(const std::string& url) const {
