@@ -57,6 +57,24 @@ ScriptTaskAppFrame fixture() {
     return frame;
 }
 
+void destroy_deep_layer_chain(LayerNode& root) {
+    if (root.children.empty()) {
+        return;
+    }
+    LayerNodePtr current = std::move(root.children.front());
+    root.children.clear();
+    while (current != nullptr) {
+        LayerNode& node = *current;
+        LayerNodePtr next;
+        if (!node.children.empty()) {
+            next = std::move(node.children.front());
+            node.children.clear();
+        }
+        current.reset();
+        current = std::move(next);
+    }
+}
+
 void frame_round_trip_preserves_render_values_and_target_order() {
     const ScriptTaskAppFrame expected = fixture();
     std::vector<std::uint8_t> bytes;
@@ -242,6 +260,9 @@ void worker_frame_producer_rejects_oversized_generated_clip_table() {
     std::vector<std::uint8_t> bytes;
     assert(encode_script_task_app_frame(frame, v4_limits(), bytes) ==
            ScriptTaskAppFrameCodecStatus::InvalidClip);
+    // The deliberately deep fixture must be dismantled iteratively; default
+    // unique_ptr destruction would recurse once per clip node on small stacks.
+    destroy_deep_layer_chain(root);
 }
 
 void sealed_lease_carries_only_serialized_frame_bytes() {

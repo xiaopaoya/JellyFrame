@@ -445,21 +445,22 @@ std::vector<std::string> wrap_text_at_opportunities(const TextMeasureProvider& p
                 line_width = clamp_nonnegative_int64(candidate_width);
             }
         } else {
-            std::string candidate = line;
-            if (!candidate.empty() && pending_space) {
-                candidate.push_back(' ');
+            const std::size_t previous_size = line.size();
+            if (!line.empty() && pending_space) {
+                line.push_back(' ');
             }
-            candidate += token;
-            if (!line.empty() && measure_text_with_letter_spacing(provider,
-                                                                  candidate,
+            line += token;
+            const bool over_limit = previous_size != 0 &&
+                measure_text_with_letter_spacing(provider,
+                                                                  std::string_view(line),
                                                                   font_size,
                                                                   font_weight,
                                                                   font_family_hash,
-                                                                  letter_spacing).width > width_limit) {
+                                                                  letter_spacing).width > width_limit;
+            if (over_limit) {
+                line.resize(previous_size);
                 lines.push_back(std::move(line));
                 line = std::move(token);
-            } else {
-                line = std::move(candidate);
             }
         }
         token.clear();
@@ -568,21 +569,22 @@ std::size_t count_wrapped_lines_at_opportunities(const TextMeasureProvider& prov
                 line_width = clamp_nonnegative_int64(candidate_width);
             }
         } else {
-            std::string candidate = line;
-            if (!candidate.empty() && pending_space) {
-                candidate.push_back(' ');
+            const std::size_t previous_size = line.size();
+            if (!line.empty() && pending_space) {
+                line.push_back(' ');
             }
-            candidate += token;
-            if (!line.empty() && measure_text_with_letter_spacing(provider,
-                                                                  candidate,
+            line += token;
+            const bool over_limit = previous_size != 0 &&
+                measure_text_with_letter_spacing(provider,
+                                                                  std::string_view(line),
                                                                   font_size,
                                                                   font_weight,
                                                                   font_family_hash,
-                                                                  letter_spacing).width > width_limit) {
+                                                                  letter_spacing).width > width_limit;
+            if (over_limit) {
+                line.resize(previous_size);
                 ++line_count;
                 line = std::move(token);
-            } else {
-                line = std::move(candidate);
             }
         }
         token.clear();
