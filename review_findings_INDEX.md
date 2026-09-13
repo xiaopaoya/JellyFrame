@@ -67,13 +67,14 @@
 | `Style::position` 字符串热路径 | `6c58cab3` | 保留原字符串用于兼容/诊断，解析时同步生成 `PositionType`；布局、flex 排序、layer 和 relative/fixed 判定改用枚举，并增加解析回归。需随主线 CI 闭环。 |
 | `form_control_kind` 类型字符串规范化 | `f998c5be` | 类型关键字改为无分配 ASCII 大小写比较，保留默认类型及大小写不敏感语义；Render Core 全测试通过。需随主线 CI 闭环。 |
 | radio group 校验重复遍历 | `845645e5` | `validate_form` 在首次遇到 required radio 时惰性收集已选 group；普通 form 不增加预扫描，required radio 从每控件重扫降为一次 group 扫描。Render Core 全测试通过。需随主线 CI 闭环。 |
+| select option 重复遍历 | `51279fd4`、`b1e6c287` | 状态更新路径复用一次 option 快照；高级 popup 的绘制与命中路径也改为一次收集后按指针访问，旧的按索引 API 保留兼容。256-option 基准与 Render Core 全测试通过，需随主线 CI 闭环。 |
 
 ### 仍开放，纳入后续工作
 
 这些项目没有被上述提交完整关闭，后续应按收益和风险单独处理：
 
 1. flex 非 wrap 的多次 intrinsic layout（报告 H6）：已补 `flex_nonwrap_intrinsic_layout` 基准；8/32/80 个柔性文本子项桌面 Release 约为 20/66/192 us，测量次数受探测/最终/拉伸分支影响。暂不做全局缓存，后续仅评估纯叶子文本等可证明安全的快路径。
-2. form 控件重复遍历（报告 M7/M8/M9）：`form_control_kind` 的字符串分配已由 `f998c5be` 处理，radio group 校验已由 `845645e5` 处理；`51279fd4` 已让 select 初始化、显示值、选中项更新和 step 路径复用一次 option 快照，并加入 256-option 基准（`form_select_set_index` 约 2.45 us/次，桌面 Release）。高级 popup 的逐行 option API 仍可能重复收集，需后续提供 popup 级快照接口。
+2. 文本规范化重复工作（报告 M9）：layout 与 paint 仍可能重复规范化文本，且保留空白判定会沿父链查询；需要先结合现有 `TextLayoutCache` 做失效边界设计，再统一缓存。
 3. app service 的 fixture/response 仍有少数非必要复制（报告 services #5/#7）：需要先明确 mock 的所有权和缓存规模，再作移动改造。
 4. Low 级可读性条目和未逐条复核的历史条目：不作为当前发布阻断项，修改时必须附局部测试或基准。
 
