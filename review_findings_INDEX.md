@@ -59,6 +59,7 @@
 | flex paint 与 layout 的子项排序不一致 | `c255f0a8` | 已共享排序实现；需保留绝对定位与非零 order 回归。 |
 | trace 查看器逐帧同步文件检查 | `6eae4c38` | 已改为一次性捕获/索引；需 Windows 扩展测试确认。 |
 | app runtime 完成身份、句柄所有权、批量释放、缓存计数 | `e9775ef4` | 已修复并有本地测试；需 Linux sanitizer/Windows scripting CI 闭环。 |
+| image cache completion URL 线性查找 | `ed3f4e64` | 已使用 job URL 索引替代逐条扫描，并在条目淘汰/释放时同步维护；App Runtime 测试通过，需 CI 闭环。 |
 | script-task 脏区、clip 引用、service bridge 输入边界 | `e9775ef4`、`c557e4c0` | 已修复并有回归测试；设备端 malformed/relaunch 证据仍按验收文档执行。 |
 | 字体上下文状态与字体缓存失效 | `d3cbbf56` | 已纳入 runtime 状态；需长文本/多字体实机观测。 |
 | dirty-region 子树边界重复扫描 | `75a550a6` | 已改为单次迭代后序遍历，并保留嵌套脏节点回归测试；当前 Release 全套 50 项 CTest 通过，需随主线 CI 闭环。 |
@@ -70,7 +71,7 @@
 
 1. flex 非 wrap 的多次 intrinsic layout（报告 H6）：先用现有 benchmark 定量，确认缓存不会改变 cross-axis 语义后再改。
 2. `Style::position` 的字符串热路径、form 控件重复遍历（报告 M1/M7/M8/M9）：属于后续性能批次，暂不与发布前 correctness 修复混做。
-3. app service 的 fixture/response 仍有少数非必要复制，以及 image cache URL 线性查找（报告 services #5/#7/#8）：需要先明确 mock 的所有权和缓存规模，再作移动或索引化改造。
+3. app service 的 fixture/response 仍有少数非必要复制（报告 services #5/#7）：需要先明确 mock 的所有权和缓存规模，再作移动改造。
 4. Low 级可读性条目和未逐条复核的历史条目：不作为当前发布阻断项，修改时必须附局部测试或基准。
 
 ### 2026-09-13 WS147 归档
