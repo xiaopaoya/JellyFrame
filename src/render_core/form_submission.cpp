@@ -8,6 +8,7 @@
 #include <cctype>
 #include <charconv>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -80,6 +81,24 @@ bool already_reported_radio_group(const std::vector<std::string>& groups, const 
     return std::find(groups.begin(), groups.end(), name) != groups.end();
 }
 
+using RadioGroupState = std::unordered_map<std::string, bool>;
+
+void collect_radio_group_state(const Node& form, RadioGroupState& groups) {
+    std::vector<const Node*> pending;
+    pending.push_back(&form);
+    while (!pending.empty()) {
+        const Node* current = pending.back();
+        pending.pop_back();
+        if (current != &form && form_control_kind(*current) == FormControlKind::Radio &&
+            form_control_checked(*current)) {
+            groups[current->attribute("name")] = true;
+        }
+        for (auto it = current->children.rbegin(); it != current->children.rend(); ++it) {
+            pending.push_back(it->get());
+        }
+    }
+}
+
 bool ascii_equals_ignore_case(std::string_view left, std::string_view right) {
     if (left.size() != right.size()) {
         return false;
@@ -145,7 +164,8 @@ bool form_control_will_validate(const Node& node) {
     return kind != FormControlKind::Button && kind != FormControlKind::File;
 }
 
-FormControlValidationResult validate_form_control(const Node& node) {
+FormControlValidationResult validate_form_control_internal(const Node& node,
+                                                           const RadioGroupState* radio_groups) {
     FormControlValidationResult result;
     if (!form_control_will_validate(node)) {
         return result;
@@ -164,9 +184,13 @@ FormControlValidationResult validate_form_control(const Node& node) {
             result.value_missing = !form_control_checked(node);
         } else if (kind == FormControlKind::Radio) {
             const Node* owner = form_owner(node);
-            result.value_missing = owner != nullptr
-                ? !radio_group_checked(*owner, node.attribute("name"))
-                : !form_control_checked(node);
+            if (radio_groups != nullptr && owner != nullptr) {
+                result.value_missing = radio_groups->find(node.attribute("name")) == radio_groups->end();
+            } else {
+                result.value_missing = owner != nullptr
+                    ? !radio_group_checked(*owner, node.attribute("name"))
+                    : !form_control_checked(node);
+            }
         } else {
             result.value_missing = value.empty();
         }
@@ -179,6 +203,10 @@ FormControlValidationResult validate_form_control(const Node& node) {
         result.too_long = !result.too_short && max_length >= 0 && length > static_cast<std::size_t>(max_length);
     }
     return result;
+}
+
+FormControlValidationResult validate_form_control(const Node& node) {
+    return validate_form_control_internal(node, nullptr);
 }
 
 bool check_form_control_validity(Node& node) {
@@ -232,13 +260,24 @@ FormValidationResult validate_form(const Node& form) {
 
     std::vector<const Node*> pending;
     std::vector<std::string> reported_radio_groups;
+    RadioGroupState radio_groups;
+    bool radio_groups_ready = false;
     pending.push_back(&form);
     while (!pending.empty()) {
         const Node* current = pending.back();
         pending.pop_back();
         if (current != &form && form_control_will_validate(*current)) {
-            const FormControlValidationResult validation = validate_form_control(*current);
             const FormControlKind kind = form_control_kind(*current);
+            const RadioGroupState* radio_groups_for_validation = nullptr;
+            if (kind == FormControlKind::Radio && has_attribute(*current, "required")) {
+                if (!radio_groups_ready) {
+                    collect_radio_group_state(form, radio_groups);
+                    radio_groups_ready = true;
+                }
+                radio_groups_for_validation = &radio_groups;
+            }
+            const FormControlValidationResult validation = validate_form_control_internal(
+                *current, radio_groups_for_validation);
             if (validation.value_missing && kind == FormControlKind::Radio) {
                 const std::string& name = current->attribute("name");
                 if (!already_reported_radio_group(reported_radio_groups, name)) {
