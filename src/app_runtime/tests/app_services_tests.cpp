@@ -287,7 +287,19 @@ void image_decode_requires_capability_and_returns_surface_handle() {
     check(surface->stride_pixels == 16, "image surface stride");
     check(surface->pixel_format == HostPixelFormat::Rgb565, "image surface format");
     check(surface->pixels.size() == pixels.size(), "image surface pixels carried");
+    check(surface->pixels == pixels, "image surface pixels match fixture");
     check(images.release_surface(host, accepted.front().result_handle), "image surface release");
+
+    const AppServiceSubmitResult second_submit = images.submit_decode(host, "/icon.raw", 1000);
+    check(second_submit.accepted(), "image fixture can be decoded again after release");
+    check(images.complete_next(host), "image fixture second decode completes");
+    const std::vector<HostServiceCompletion> second = pump(host);
+    check(second.size() == 1 && second.front().status == HostServiceStatus::Completed,
+          "second image decode completion accepted");
+    const AppDecodedSurfaceRecord* second_surface = images.surface(second.front().result_handle);
+    check(second_surface != nullptr && second_surface->pixels == pixels,
+          "reused image fixture preserves pixel payload");
+    check(images.release_surface(host, second.front().result_handle), "second image surface release");
 }
 
 void image_decode_enforces_surface_budgets() {

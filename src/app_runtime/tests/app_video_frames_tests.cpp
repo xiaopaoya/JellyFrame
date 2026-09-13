@@ -75,6 +75,7 @@ void video_frame_returns_latest_surface_and_drops_old_one() {
     const AppVideoFrameRecord* old_frame = provider.frame(old_handle);
     check(old_frame != nullptr && old_frame->pts_ms == 100 && !old_frame->dropped_previous,
           "first frame record is bounded");
+    const std::vector<std::uint8_t> old_pixels = old_frame->pixels;
 
     check(provider.request_next_frame(host, {"/preview.mjpg", AppVideoFrameCodec::Mjpeg}).accepted(),
           "second frame request accepted");
@@ -86,6 +87,7 @@ void video_frame_returns_latest_surface_and_drops_old_one() {
     const AppVideoFrameRecord* latest = provider.frame(second[0].result_handle);
     check(latest != nullptr && latest->dropped_previous && provider.latest_frame_handle("/preview.mjpg") == second[0].result_handle,
           "latest frame replaces stale frame");
+    check(latest->pixels == old_pixels, "reused video fixture preserves pixel payload");
     check(provider.release_frame(host, second[0].result_handle), "latest frame explicitly released");
 }
 
