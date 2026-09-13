@@ -86,7 +86,7 @@ bool has_scrollable_overflow(const Style& style) {
 }
 
 bool is_positioned(const Style& style) {
-    return !style.position.empty();
+    return style.position_type != PositionType::Static;
 }
 
 bool has_transform(const Style& style) {

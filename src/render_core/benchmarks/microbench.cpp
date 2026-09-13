@@ -104,6 +104,26 @@ std::string make_flex_order_css() {
            ".rank-0 { order: 1; } .rank-1 { order: -1; } .rank-2 { order: 0; }";
 }
 
+std::string make_flex_intrinsic_html(int count) {
+    std::ostringstream html;
+    html << "<!doctype html><html><body><main class='intrinsic-row'>";
+    for (int index = 0; index < count; ++index) {
+        html << "<article class='intrinsic-item'><span>Metric " << index
+             << " value</span></article>";
+    }
+    html << "</main></body></html>";
+    return html.str();
+}
+
+std::string make_flex_intrinsic_css() {
+    return "body { margin: 0; }"
+           ".intrinsic-row { display: flex; flex-wrap: nowrap; align-items: stretch; "
+           "width: 320px; gap: 4px; }"
+           ".intrinsic-item { flex-grow: 1; flex-shrink: 1; min-width: 0; padding: 4px; "
+           "background: #ffffff; }"
+           ".intrinsic-item span { display: block; }";
+}
+
 std::string make_single_level_nested_css() {
     return ".card { color: #102030; padding: 8px; "
            "&:hover { color: hsl(210 70% 45%); } "
@@ -210,6 +230,27 @@ bool fixed_measure(const std::string& text,
                    int,
                    TextMetrics* metrics,
                    void*) {
+    if (metrics == nullptr) {
+        return false;
+    }
+    metrics->width = static_cast<int>(text.size()) * 8;
+    metrics->line_height = 12;
+    return true;
+}
+
+struct TextMeasureCounter {
+    std::size_t calls = 0;
+};
+
+bool counting_fixed_measure(const std::string& text,
+                            int,
+                            int,
+                            TextMetrics* metrics,
+                            void* context) {
+    auto* counter = static_cast<TextMeasureCounter*>(context);
+    if (counter != nullptr) {
+        ++counter->calls;
+    }
     if (metrics == nullptr) {
         return false;
     }
@@ -359,6 +400,33 @@ int run_render_core_microbench(int argc, char** argv) {
         auto flex_order_layout_tree = flex_order_layout.layout(*flex_order_render_tree, 360, flex_order_layout_arena);
         (void)flex_order_layout_tree;
     }));
+
+    auto flex_intrinsic_document = html_parser.parse(make_flex_intrinsic_html(card_count));
+    auto flex_intrinsic_stylesheet = css_parser.parse(make_flex_intrinsic_css());
+    StyleResolver flex_intrinsic_resolver(flex_intrinsic_stylesheet);
+    RenderTreeBuilder flex_intrinsic_builder(flex_intrinsic_resolver);
+    MonotonicArena flex_intrinsic_render_arena;
+    auto flex_intrinsic_render_tree = flex_intrinsic_builder.build(
+        *flex_intrinsic_document, flex_intrinsic_render_arena);
+    TextMeasureCounter flex_intrinsic_measure_counter;
+    TextMeasureProvider flex_intrinsic_measure{
+        counting_fixed_measure, &flex_intrinsic_measure_counter};
+    LayoutEngine flex_intrinsic_layout_engine(flex_intrinsic_resolver, flex_intrinsic_measure);
+    MonotonicArena flex_intrinsic_probe_arena;
+    auto flex_intrinsic_probe_tree = flex_intrinsic_layout_engine.layout(
+        *flex_intrinsic_render_tree, 320, flex_intrinsic_probe_arena);
+    (void)flex_intrinsic_probe_tree;
+    const std::size_t flex_intrinsic_measure_calls = flex_intrinsic_measure_counter.calls;
+    print_result("flex_nonwrap_intrinsic_layout", iterations, average_microseconds(iterations, [&] {
+        flex_intrinsic_measure_counter.calls = 0;
+        LayoutEngine layout(flex_intrinsic_resolver, flex_intrinsic_measure);
+        MonotonicArena layout_arena;
+        auto layout_tree = layout.layout(*flex_intrinsic_render_tree, 320, layout_arena);
+        (void)layout_tree;
+    }));
+    std::cout << "flex_nonwrap_intrinsic_layout text_measure_calls_per_layout="
+              << flex_intrinsic_measure_calls << " layout_boxes="
+              << count_layout_boxes(*flex_intrinsic_probe_tree) << '\n';
 
     print_result("render_tree", iterations, average_microseconds(iterations, [&] {
         StyleResolver resolver(stylesheet);

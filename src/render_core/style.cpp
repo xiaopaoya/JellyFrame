@@ -3867,6 +3867,17 @@ bool apply_declaration(Style& style,
             return false;
         }
         style.position = lowered == "static" ? std::string{} : lowered;
+        if (lowered == "relative") {
+            style.position_type = PositionType::Relative;
+        } else if (lowered == "absolute") {
+            style.position_type = PositionType::Absolute;
+        } else if (lowered == "fixed") {
+            style.position_type = PositionType::Fixed;
+        } else if (lowered == "sticky") {
+            style.position_type = PositionType::Sticky;
+        } else {
+            style.position_type = PositionType::Static;
+        }
         return true;
     } else if (property == "top" || property == "right" ||
                property == "bottom" || property == "left") {

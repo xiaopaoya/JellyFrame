@@ -200,7 +200,8 @@ bool has_aspect_ratio(const Style& style) {
 }
 
 bool is_out_of_flow_positioned(const Style& style) {
-    return style.position == "absolute" || style.position == "fixed";
+    return style.position_type == PositionType::Absolute ||
+        style.position_type == PositionType::Fixed;
 }
 
 void shift_box(LayoutBox& box, int dx, int dy);
@@ -230,7 +231,7 @@ int vertical_position_offset(const Style& style, int area_height, int box_height
 }
 
 void apply_relative_position_offset(LayoutBox& box) {
-    if (box.style.position != "relative") {
+    if (box.style.position_type != PositionType::Relative) {
         return;
     }
     int dx = 0;
@@ -1227,7 +1228,7 @@ void LayoutEngine::layout_positioned_children(LayoutBox& box,
             continue;
         }
 
-        const bool fixed = child->style.position == "fixed";
+        const bool fixed = child->style.position_type == PositionType::Fixed;
         const int area_x = fixed ? 0 : content_x;
         const int area_y = fixed ? 0 : content_y;
         const int area_width = std::max(1, fixed ? viewport_width : content_width);

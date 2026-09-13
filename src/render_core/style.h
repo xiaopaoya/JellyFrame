@@ -53,6 +53,14 @@ enum class FlexDirection : std::uint8_t {
     Column,
 };
 
+enum class PositionType : std::uint8_t {
+    Static,
+    Relative,
+    Absolute,
+    Fixed,
+    Sticky,
+};
+
 enum class ListStyleType : std::uint8_t {
     None,
     Disc,
@@ -324,7 +332,10 @@ struct Style {
     std::string transform;
     int transform_origin_x_percent = 50;
     int transform_origin_y_percent = 50;
+    // Keep the spelling for diagnostics/compatibility; hot layout predicates
+    // use the parsed enum below instead of comparing this string repeatedly.
     std::string position;
+    PositionType position_type = PositionType::Static;
     int inset_top = 0;
     int inset_right = 0;
     int inset_bottom = 0;

@@ -58,7 +58,7 @@ bool layout_fields_equal(const Style& left, const Style& right) {
         left.white_space_specified == right.white_space_specified &&
         left.text_overflow_ellipsis == right.text_overflow_ellipsis &&
         left.text_overflow_specified == right.text_overflow_specified &&
-        left.position == right.position &&
+        left.position_type == right.position_type &&
         left.overflow_wrap_anywhere == right.overflow_wrap_anywhere &&
         left.overflow_wrap_specified == right.overflow_wrap_specified &&
         left.inset_top == right.inset_top &&

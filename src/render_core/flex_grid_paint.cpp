@@ -12,7 +12,8 @@ std::vector<const LayoutBox*> ordered_flex_children_for_order(const LayoutBox& b
         return {};
     }
     const auto is_ordered_child = [include_out_of_flow](const LayoutBoxPtr& child) {
-        const bool out_of_flow = child->style.position == "absolute" || child->style.position == "fixed";
+        const bool out_of_flow = child->style.position_type == PositionType::Absolute ||
+            child->style.position_type == PositionType::Fixed;
         return (include_out_of_flow || !out_of_flow) && child->style.flex_order != 0;
     };
     const bool has_nonzero_order = std::any_of(box.children.begin(), box.children.end(), is_ordered_child);
@@ -22,7 +23,8 @@ std::vector<const LayoutBox*> ordered_flex_children_for_order(const LayoutBox& b
     std::vector<const LayoutBox*> ordered;
     ordered.reserve(box.children.size());
     for (const LayoutBoxPtr& child : box.children) {
-        const bool out_of_flow = child->style.position == "absolute" || child->style.position == "fixed";
+        const bool out_of_flow = child->style.position_type == PositionType::Absolute ||
+            child->style.position_type == PositionType::Fixed;
         if (include_out_of_flow || !out_of_flow) {
             ordered.push_back(child.get());
         }

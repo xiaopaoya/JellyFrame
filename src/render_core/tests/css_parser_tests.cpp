@@ -1469,6 +1469,7 @@ void positioned_offsets_apply() {
 
     const Style style = resolver.resolve(*panel);
     check(style.position == "absolute", "position absolute parsed");
+    check(style.position_type == PositionType::Absolute, "position absolute semantic type parsed");
     check(style.inset_top_specified && style.inset_top == 8, "top offset parsed");
     check(style.inset_right_specified && style.inset_right == 12, "right offset parsed");
     check(!style.inset_bottom_specified, "bottom auto clears offset");

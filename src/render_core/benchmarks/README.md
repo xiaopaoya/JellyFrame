@@ -77,6 +77,12 @@ Retained repaint probes:
   keep the candidate on one line to expose the worst candidate-string
   measurement shape. These results are a baseline, not a performance target,
   and do not authorize a semantic change to font-run measurement.
+- `flex_nonwrap_intrinsic_layout` measures a non-wrapping row whose flexible
+  children contain text and are stretched on the cross axis. It reports the
+  text-measure count for one layout so probe/final/stretch passes remain
+  visible while evaluating any intrinsic-size cache. It is a baseline only;
+  do not skip a pass unless percentage descendants and cross-axis semantics
+  are covered by regression tests.
 
 These probes quantify the remaining cost after text/style layout reuse. They do
 not imply display-list diffing or subtree replay.
