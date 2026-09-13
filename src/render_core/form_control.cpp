@@ -18,12 +18,18 @@ bool has_attribute(const Node& node, const std::string& name) {
     return node.attributes.find(name) != node.attributes.end();
 }
 
-std::string ascii_lowercase(std::string_view value) {
-    std::string output(value);
-    for (char& character : output) {
-        character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+bool ascii_equals_ignore_case(std::string_view value, std::string_view expected) {
+    if (value.size() != expected.size()) {
+        return false;
     }
-    return output;
+    for (std::size_t index = 0; index < value.size(); ++index) {
+        const unsigned char actual = static_cast<unsigned char>(value[index]);
+        const unsigned char wanted = static_cast<unsigned char>(expected[index]);
+        if (std::tolower(actual) != std::tolower(wanted)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 int parse_int_attribute(const Node& node, const std::string& name, int fallback) {
@@ -310,29 +316,33 @@ FormControlKind form_control_kind(const Node& node) {
     if (node.tag_name != "input") {
         return FormControlKind::None;
     }
-    const std::string type = ascii_lowercase(node.attribute("type"));
-    if (type == "checkbox") {
+    const std::string_view type = node.attribute("type");
+    if (ascii_equals_ignore_case(type, "checkbox")) {
         return FormControlKind::Checkbox;
     }
-    if (type == "radio") {
+    if (ascii_equals_ignore_case(type, "radio")) {
         return FormControlKind::Radio;
     }
-    if (type == "range") {
+    if (ascii_equals_ignore_case(type, "range")) {
         return FormControlKind::Range;
     }
-    if (type == "date" || type == "datetime-local") {
+    if (ascii_equals_ignore_case(type, "date") ||
+        ascii_equals_ignore_case(type, "datetime-local")) {
         return FormControlKind::Date;
     }
-    if (type == "time") {
+    if (ascii_equals_ignore_case(type, "time")) {
         return FormControlKind::Time;
     }
-    if (type == "color") {
+    if (ascii_equals_ignore_case(type, "color")) {
         return FormControlKind::Color;
     }
-    if (type == "file") {
+    if (ascii_equals_ignore_case(type, "file")) {
         return FormControlKind::File;
     }
-    if (type == "button" || type == "image" || type == "reset" || type == "submit") {
+    if (ascii_equals_ignore_case(type, "button") ||
+        ascii_equals_ignore_case(type, "image") ||
+        ascii_equals_ignore_case(type, "reset") ||
+        ascii_equals_ignore_case(type, "submit")) {
         return FormControlKind::Button;
     }
     return FormControlKind::Text;
