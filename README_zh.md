@@ -8,10 +8,8 @@
 
 <p align="center">
   <a href="https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml"><img src="https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg?style=flat-square" alt="CI 状态"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/xiaopaoya/JellyFrame?style=flat-square" alt="许可证"></a>
   <img src="https://img.shields.io/badge/Runtime-0.6.0--dev-1680C7?style=flat-square" alt="Runtime 0.6.0-dev">
   <img src="https://img.shields.io/badge/Render%20Core-0.6.2-1680C7?style=flat-square" alt="Render Core 0.6.2">
-  <a href="https://github.com/xiaopaoya/JellyFrame/releases"><img src="https://img.shields.io/github/v/release/xiaopaoya/JellyFrame?display_name=tag&style=flat-square" alt="最新发布"></a>
 </p>
 
 > 最后更新：2026-09-14；适用版本：0.6.0-dev
