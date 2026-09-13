@@ -73,7 +73,7 @@
 这些项目没有被上述提交完整关闭，后续应按收益和风险单独处理：
 
 1. flex 非 wrap 的多次 intrinsic layout（报告 H6）：已补 `flex_nonwrap_intrinsic_layout` 基准；8/32/80 个柔性文本子项桌面 Release 约为 20/66/192 us，测量次数受探测/最终/拉伸分支影响。暂不做全局缓存，后续仅评估纯叶子文本等可证明安全的快路径。
-2. form 控件重复遍历（报告 M7/M8/M9）：`form_control_kind` 的字符串分配已由 `f998c5be` 处理，radio group 校验已由 `845645e5` 处理；select option 的重复遍历仍需补大规模基准，再做一次性 scratch 收集或索引。
+2. form 控件重复遍历（报告 M7/M8/M9）：`form_control_kind` 的字符串分配已由 `f998c5be` 处理，radio group 校验已由 `845645e5` 处理；`51279fd4` 已让 select 初始化、显示值、选中项更新和 step 路径复用一次 option 快照，并加入 256-option 基准（`form_select_set_index` 约 2.45 us/次，桌面 Release）。高级 popup 的逐行 option API 仍可能重复收集，需后续提供 popup 级快照接口。
 3. app service 的 fixture/response 仍有少数非必要复制（报告 services #5/#7）：需要先明确 mock 的所有权和缓存规模，再作移动改造。
 4. Low 级可读性条目和未逐条复核的历史条目：不作为当前发布阻断项，修改时必须附局部测试或基准。
 
