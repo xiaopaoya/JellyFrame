@@ -66,13 +66,14 @@
 | style-repaint 布局字段覆盖 | 当前 `style_repaint.cpp` | 已逐字段核对，`layout.cpp` 使用的布局字段均已比较；无需额外代码改动。 |
 | `Style::position` 字符串热路径 | `6c58cab3` | 保留原字符串用于兼容/诊断，解析时同步生成 `PositionType`；布局、flex 排序、layer 和 relative/fixed 判定改用枚举，并增加解析回归。需随主线 CI 闭环。 |
 | `form_control_kind` 类型字符串规范化 | `f998c5be` | 类型关键字改为无分配 ASCII 大小写比较，保留默认类型及大小写不敏感语义；Render Core 全测试通过。需随主线 CI 闭环。 |
+| radio group 校验重复遍历 | `845645e5` | `validate_form` 在首次遇到 required radio 时惰性收集已选 group；普通 form 不增加预扫描，required radio 从每控件重扫降为一次 group 扫描。Render Core 全测试通过。需随主线 CI 闭环。 |
 
 ### 仍开放，纳入后续工作
 
 这些项目没有被上述提交完整关闭，后续应按收益和风险单独处理：
 
 1. flex 非 wrap 的多次 intrinsic layout（报告 H6）：已补 `flex_nonwrap_intrinsic_layout` 基准；8/32/80 个柔性文本子项桌面 Release 约为 20/66/192 us，测量次数受探测/最终/拉伸分支影响。暂不做全局缓存，后续仅评估纯叶子文本等可证明安全的快路径。
-2. form 控件重复遍历（报告 M7/M8/M9）：`form_control_kind` 的字符串分配已由 `f998c5be` 处理；仍需补 select/radio 大规模基准，再做一次性 scratch 收集或索引。
+2. form 控件重复遍历（报告 M7/M8/M9）：`form_control_kind` 的字符串分配已由 `f998c5be` 处理，radio group 校验已由 `845645e5` 处理；select option 的重复遍历仍需补大规模基准，再做一次性 scratch 收集或索引。
 3. app service 的 fixture/response 仍有少数非必要复制（报告 services #5/#7）：需要先明确 mock 的所有权和缓存规模，再作移动改造。
 4. Low 级可读性条目和未逐条复核的历史条目：不作为当前发布阻断项，修改时必须附局部测试或基准。
 
