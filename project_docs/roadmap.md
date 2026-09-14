@@ -1,6 +1,6 @@
 # JellyFrame Active Roadmap
 
-> Last updated: 2026-09-11; Applies to: 0.6.0-dev; this is the single active plan.
+> Last updated: 2026-09-14; Applies to: 0.6.0-dev; this is the single active plan.
 
 ## Governing Decision
 
@@ -23,8 +23,8 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 
 Parallel work may not change the exit condition of an earlier item.
 
-1. **Review-finding governance:** classify the two review rounds and the new performance review item by item before broad fixes. Confirmed P0/P1 findings need a fix, regression evidence or a documented RFC disposition; report headings alone are not proof.
-2. **Render performance observability:** desktop trace production, bounded command/owner attribution, the practical frame-viewer workflow and Device Profile V0 are delivered. Real touch-correlated drag/scroll windows and fair baselines remain open; aggregate device data must not be presented as per-element timing.
+1. **Review-finding governance:** the two review rounds and the new performance review have an initial item-by-item disposition in the review index and closure matrix. Continue only with residual evidence, targeted work or explicit RFC items; confirmed P0/P1 findings need a fix and regression evidence, and report headings alone are not proof.
+2. **Render performance observability:** desktop trace production, bounded command/owner attribution, the practical frame-viewer workflow and Device Profile V0 are delivered. The WS147 `13264bcd` candidate now has a quantitative four-workload OFF/ON matrix with three repetitions per side; fixed-time visual evidence, real touch-correlated drag/scroll windows and fair library baselines remain open. Aggregate device data must not be presented as per-element timing.
 3. **A2 evidence, active on the author machine:** use the accepted Core `0.6.2` WS147 image and SDK to complete the clean-machine VS Code lifecycle and installed-App panel/input evidence. A 2026-09-08 user-supplemented manual observation reports normal physical interaction response, but the archived `posted=0` sample and missing panel record keep the formal panel/input exit open. The physical Developer Image gate is closed; these author-tool exits remain independent.
 4. **R1 Core-only maintenance, active on main:** retain the completed bounded arithmetic, text handoff, dirty/clip hot-path and callback-scheduling fixes as gates. Re-read remaining performance findings before changing hot paths; do not expand browser CSS scope or reopen closed O1 micro-optimisation work without a stable workload.
    The follow-up review also closed timer-batch ordering, same-frame rAF cancellation and queued XHR provider-payload cleanup. These are covered by focused Debug and scripting MinSizeRel regressions; worker-owned XHR requests still use the late-completion release path.
@@ -40,6 +40,8 @@ Parallel work may not change the exit condition of an earlier item.
 The constrained WS147 dirty/recovery workload passes but authorises neither retained replay, framebuffer reuse nor a general 30 FPS promise. Full-frame rounded-gradient attribution reached its shadow/coverage/composite boundary; copy/span micro-optimisations no longer produce meaningful gains. Packed RGB565 and double-DMA A/B results are not defaults.
 
 Future performance work needs a real official-image workload and phase telemetry. The WS147 physical-GRAM lower-edge row displacement is tracked by the [TE/vblank synchronization port acceptance](../docs/ws147_panel_scroll_te_acceptance.md) and remains disabled by default until visual acceptance passes. Input-to-present wording requires TE/latch or optical evidence. Tile/scanline work first needs evidence that framebuffer memory or bandwidth is dominant.
+
+The 2026-09-14 matrix reports measurable frame/paint reductions for static, text and full repaint workloads, no change for the synthetic drag workload, and no error or present-failure regression. It remains `PARTIAL` until the fixed-angle visual checklist is reviewed; the synthetic drag fixture is not a gesture-latency result.
 
 ## Track A: Official Board and Device OS
 

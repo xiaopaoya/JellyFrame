@@ -1,6 +1,6 @@
 # jellyframe 0.6.1 代码审查 — 汇总与交叉核对
 
-> 最后更新：2026-09-13；适用版本：0.6.0-dev
+> 最后更新：2026-09-14；适用版本：0.6.0-dev
 
 审查范围：`render_core`（`src/render_core/`，42 个 `.cpp`）与 `app_runtime`（`src/app_runtime/`）。
 审查口径：性能、实现正确性、可读性。**不含安全审查**（按用户说明，这些是善意代码）；不提出重写方案，只给最小、局部的修复。
@@ -43,9 +43,9 @@
 
 ---
 
-## 2026-09-13 处置状态
+## 2026-09-14 处置状态
 
-以下状态以当前 `master`（`41b565e4`）源码和本地测试为准。审查报告本身保留为历史发现记录，不把历史严重级别直接当作当前未修复数。
+以下状态以当前 `master`（`2037f74e`）源码和本地测试为准。审查报告本身保留为历史发现记录，不把历史严重级别直接当作当前未修复数。
 
 ### 已有代码修复，等待 CI/实机证据闭环
 
@@ -84,6 +84,12 @@
 ### 2026-09-13 WS147 归档
 
 `test_artifacts/ws147_panel_scroll_fix_review_20260913` 已完成 SHA-256 和选择性 patch 核对。普通 framebuffer scroll-blit 配置（`panel_scroll_mode=0`）在 WS147/JD9853/ESP32-S3 上通过实机视觉验收，未观察到底部错行，串口无 panic、watchdog、reset、DMA、SPI、panel 或 present 错误。GRAM fallback probe 仅为旧 SDK 构建的辅助行为证据；由于没有 TE/vblank 或等效扫描同步证据，也没有 GRAM 视觉验收，因此 `productionPanelScrollAccepted=false`，该实验路径不进入主线生产默认配置。
+
+### 2026-09-14 WS147 Render Performance A/B
+
+`D:\JellyFramePerf\comparison-13264-de0c541d\matrix` 已完成四个 workload 的定量矩阵：`static-local-repaint`、`text-layout-update`、`drag-scroll` 和 `full-repaint` 均完成 3 次 baseline/candidate、Profile ON 与 OFF 采集。基线为 `a58f89ff`，候选为 `de0c541d`（包含主线 `13264bcd` 及 ESP32-S3 GCC 13.2 有界排序修复）；四组均为 0 error signature、0 present failure。候选 frame p95 在四组分别为 `-35.71%`、`-36.36%`、`0%`、`-31.18%`，`full-repaint` 的 present p95 为 `+2.94%`。
+
+该矩阵当前仍为 `PARTIAL`：固定角度/亮度的 initial、mid、final 人工照片尚未补齐。`drag-scroll` 是用于可重复比较的合成双向拖动，不等同于真实触摸 input-to-present 延迟；不得据此关闭 A2 panel/input 出口或宣布候选已通过视觉验收。
 
 ### 验证出口
 

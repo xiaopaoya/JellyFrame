@@ -1,6 +1,6 @@
 # JellyFrame Active TODO
 
-> Last updated: 2026-09-11; Applies to: 0.6.0-dev
+> Last updated: 2026-09-14; Applies to: 0.6.0-dev
 >
 > This is the near-term execution queue for the [active roadmap](roadmap.md). It does not repeat closed acceptance, performance micro-experiments or historical port work.
 
@@ -12,20 +12,20 @@ performance tooling nor editor work substitutes for A2 hardware evidence.
 
 ### 1. Review finding governance (highest priority)
 
-- [ ] Re-read and classify every finding from both review rounds in
+- [x] Re-read and classify every finding from both review rounds in
   `review_findings_INDEX.md`, `render_core_code_review.md`,
   `review_findings_render_core_rest.md`, `review_findings_app_runtime_services.md`,
   `review_findings_app_runtime_lifecycle.md` and
   `review_findings_app_runtime_script_task.md` as fixed, disproven, deferred by RFC
   or requiring hardware evidence. Do not infer validity from report headings.
-- [ ] Close confirmed P0/P1 items first: privileged-service authorization,
+- [x] Close confirmed P0/P1 items first: privileged-service authorization,
   resource/handle lifetime, dirty/layout budgets, viewport units, text measurement
   and cross-task completion semantics. Each fix needs positive, refusal/fault and
   repeated-lifecycle coverage.
-- [ ] Re-read the new performance review's P1/P2 items before changing code, to
+- [x] Re-read the new performance review's P1/P2 items before changing code, to
   avoid reopening already-closed work. Modify hot paths only with a stable workload
   or a demonstrated correctness benefit.
-- [ ] Update the review index and project status with evidence, commits, tests and
+- [x] Update the review index and project status with evidence, commits, tests and
   residual risk for each finding.
 
 ### 2. Render performance-observability loop
@@ -33,9 +33,11 @@ performance tooling nor editor work substitutes for A2 hardware evidence.
 - [x] Reconcile the current Render Trace/Performance Profile status: desktop per-frame
   trace, stage/command/owner attribution and device aggregate profile are delivered;
   per-element device trace is not implemented and aggregate data is never element timing.
-- [ ] Run profile OFF/ON A/B with the same App, input, build and machine; verify
-  pixel hashes, p50/p95, profiling overhead and trace-I/O boundaries. Drag/scroll
-  remains the current interaction-performance fixture.
+- [x] Run profile OFF/ON A/B with the same App, input, build and machine; verify
+  p50/p95, profiling overhead and trace-I/O boundaries. The versioned WS147 matrix
+  has four workloads and three baseline/candidate repeats per side; it reports zero
+  error signatures and zero present failures. Pixel-equivalence still requires the
+  separate fixed-time visual checklist.
 - [x] The VS Code Render Trace viewer provides stage proportions, dirty overlay,
   slowest-frame navigation, correct per-frame Top-64 command ranking, missing
   capture/stage/command states and explicit `unattributed`/truncation handling.
@@ -43,8 +45,13 @@ performance tooling nor editor work substitutes for A2 hardware evidence.
   in-VS-Code Device Performance Profile viewer remains to be evaluated. Keep static
   reports separate from frame traces and never present aggregate device telemetry as
   per-element data.
-- [ ] Run Device Profile windows on one static and one continuous drag/scroll
-  developer-image workload; hardware claims must come from versioned reports.
+- [x] Run Device Profile windows on static, text, synthetic drag/scroll and full
+  repaint developer-image workloads; hardware claims are recorded in the versioned
+  `comparison-13264-de0c541d/matrix` report. The synthetic drag fixture is not a
+  real gesture-latency measurement.
+- [ ] Complete the fixed-angle/fixed-brightness initial, mid-run and final visual
+  checklist for all four matrix workloads; do not promote `PARTIAL` to visual PASS
+  without human review.
 - [ ] Only after those measurements stabilize, compare aligned workloads with Cairo/
   SDL software rendering and LVGL. Do not claim a general “faster/slower” result
   beforehand.

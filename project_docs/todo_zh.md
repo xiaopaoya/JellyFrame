@@ -1,6 +1,6 @@
 # JellyFrame 活动待办
 
-> 最后更新：2026-09-11；适用版本：0.6.0-dev
+> 最后更新：2026-09-14；适用版本：0.6.0-dev
 >
 > 本清单是 [路线图](roadmap_zh.md) 的近期执行队列，不记录已经关闭的验收、性能微实验或历史移植任务。
 
@@ -20,33 +20,37 @@
 4. **出口与发布准备**：复跑 Debug/Release/scripting/tool 全套门禁，审查矩阵归档，确认 Core
    `0.6.2` lock、Developer Image、SDK 和 A2 实机证据一致后，再处理 A3 试用材料。
 
-当前轮次已完成第 1 轮的初步回读和低风险修复；下一轮只进入矩阵中仍标记为“待修复”的项目。
+当前轮次已完成审查矩阵的初步回读、低风险修复和 WS147 定量 Profile OFF/ON 矩阵；下一轮只进入矩阵中仍标记为“待修复”或“待证据”的项目。视觉清单仍由用户补齐，不能提前标记性能候选为 PASS。
 
 ### 1. 审查报告治理（当前最高优先级）
 
-- [ ] 逐条评估两轮审查产生的漏洞/鲁棒性报告：`review_findings_INDEX.md`、
+- [x] 逐条评估两轮审查产生的漏洞/鲁棒性报告：`review_findings_INDEX.md`、
   `render_core_code_review.md`、`review_findings_render_core_rest.md`、
   `review_findings_app_runtime_services.md`、`review_findings_app_runtime_lifecycle.md`、
   `review_findings_app_runtime_script_task.md`。每条标记为修复、误报/不成立、延后 RFC
   或需要实机证据；不能只按报告标题假定成立。
-- [ ] 优先关闭 P0/P1：特权服务授权、资源/句柄生命周期、dirty/布局预算、viewport 单位、
+- [x] 优先关闭 P0/P1：特权服务授权、资源/句柄生命周期、dirty/布局预算、viewport 单位、
   文本测量和跨任务完成语义；每项必须有正向、拒绝/异常和重复生命周期回归。
-- [ ] 对新一轮性能审查中的 P1/P2 逐条回读源码，避免重复修复已经关闭的项目；仅在有稳定
+- [x] 对新一轮性能审查中的 P1/P2 逐条回读源码，避免重复修复已经关闭的项目；仅在有稳定
   workload 或明确正确性收益时修改热路径。
-- [ ] 更新审查索引和项目状态，记录每条发现的证据、提交、测试和剩余风险。
+- [x] 更新审查索引和项目状态，记录每条发现的证据、提交、测试和剩余风险。
 
 ### 2. 渲染性能观测闭环（独立并行主线）
 
 - [x] 完成现有 Render Trace/Performance Profile 的状态核对：桌面逐帧 trace、阶段/command/owner
   归因与设备 aggregate profile 已交付；设备逐元素 trace 尚未实现，aggregate 数据不得冒充元素耗时。
-- [ ] 用同一 App、输入、构建和机器完成 profile OFF/ON A/B，确认像素 hash、p50/p95、报告开销
-  和 trace I/O 边界；拖动/滚动 fixture 作为当前交互性能重点。
+- [x] 用同一 App、输入、构建和机器完成 profile OFF/ON A/B，确认 p50/p95、报告开销
+  和 trace I/O 边界。版本化 WS147 矩阵包含四个 workload、每侧三次重复，错误签名与
+  present failure 均为零；像素等价仍需独立的固定时刻视觉清单。
 - [x] VS Code Render Trace 查看器已具备阶段占比、dirty overlay、最慢帧跳转、逐帧正确 Top-64
   command 排名、缺失截图/阶段/命令状态，以及明确的 `unattributed`/截断提示；不把 aggregate 数据伪装成元素耗时。
 - [x] 已在 VS Code Render Trace 查看器交付跨帧 command 聚合；独立 Device Performance Profile 查看器仍需
   评估。继续保持静态报告与逐帧 trace 分离，不能把设备 aggregate telemetry 伪装成逐元素数据。
-- [ ] 在真实 developer-image workload 上完成至少一个静态和一个连续拖动/滚动的 Device Profile
-  窗口；设备结论只来自版本化实机报告。
+- [x] 在真实 developer-image workload 上完成静态、文本、合成拖动/滚动和全帧四类 Device Profile
+  窗口；设备结论记录于版本化 `comparison-13264-de0c541d/matrix` 报告。合成拖动不等同于
+  真实手势延迟测量。
+- [ ] 完成四个 workload 的固定角度/固定亮度 initial、mid、final 视觉清单；在人工复核前不将
+  `PARTIAL` 候选提升为视觉 PASS。
 - [ ] 仅在上述数据稳定后，建立与 Cairo/SDL software renderer、LVGL 等的同分辨率/像素格式对照；
   在此之前不宣称“比主流图形库快/慢”。
 
