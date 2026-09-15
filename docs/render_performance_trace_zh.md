@@ -42,7 +42,9 @@ python tools\render_performance_report.py `
 - dirty rect 数量、dirty 面积、frame update action/reason 和 pipeline object count；
 - producer 提供时的 display command 类型与受限 owner 归因排行；
 - 设备 aggregate telemetry 与隔离 microbench 的独立区域；
-- Render Trace 查看器提供跨帧的 command/stage/owner 调用数、累计耗时和单次调用 p95；
+- Render Trace 查看器提供跨帧的 command/stage/owner 调用数、累计耗时和单次调用 p95；新 trace
+  还会按 `type + owner + stage` 聚合真实 `commandSpans`，显示 raster invocation 的调用数、累计耗时、p95
+  和候选像素；
 - HTML 报告会展示普通 microbench 的平均耗时，以及统计型 probe 的 p50/p95、display command 数和峰值 surface
   字节数；孤立 probe 不被解释为 App 元素耗时或设备性能；
 - 传入 `--microbench-baseline` 后，报告会按同名且同形状的 probe 展示当前值相对基线的变化百分比；
@@ -121,7 +123,8 @@ build\Release\jellyframe_desktop_shell.exe `
   的累计构成，不能推断阶段开始/结束时间；span 之间的空白必须保留为未归因间隙；
 - `commandSpans` 是可选的有界命令事件数组；达到数量或行预算上限时必须输出
   `commandSpansTruncated: true`。它不能替代 `commands` 的跨帧聚合，也不能将未采集的
-  composite 或 host 工作分配给某个元素；
+  composite 或 host 工作分配给某个元素。存在 `stageSpans` 时，查看器按时间重叠将每个命令
+  关联到占比最大的阶段；没有重叠时显示为 `unattributed`，这不是 producer 对嵌套关系的声明；
 - `commands[].owner` 只能是唯一且受限 ASCII `id:<id>`，或会话内 opaque `n<N>`，也可为
   `unattributed`；不得输出裸指针、DOM path、文本、arena 地址、文件密钥或设备物理地址；
 - `commands` 是可选归因。每项带 `type`、`owner`、`us`、`pixels`、`samples`；没有可靠归因时，UI 必须显示“无法归因到元素”，不能
@@ -162,7 +165,8 @@ python tools\render_trace_profile_ab.py `
 2. 阶段构成条和实际 span 时间线，点击阶段显示其绝对时间、占比、开始偏移和 producer runtime 来源；
    没有 `stageSpans` 的旧 trace 回退到累计耗时构成；
 3. 画布 overlay：dirty rect、paint bounds、clip bounds，切换前后帧；
-4. command/owner 排名，显示类型、受限 owner、候选像素、调用次数和耗时；
+4. command/owner 排名，显示类型、受限 owner、候选像素、调用次数和耗时；有真实 span 时额外显示
+   `type + owner + stage` 的跨帧聚合；
 5. 跨帧聚合，按 command、stage 和 owner 汇总调用数、累计耗时与 p95，并显示截断/缺失归因；
 6. frame scrubber，逐帧查看“重建了什么、复用了什么、哪些区域被清除/重绘”；
 7. p50/p95 与最慢帧固定显示，并允许导出原始 JSONL/HTML；
@@ -234,7 +238,7 @@ present/DMA 时间和视觉误差。不同库不支持的能力单独标记 `not
 - Win32 shell 已在显式选项下产生 bounded frame JSONL；
 - trace report 工具会报告重复、回退或非法 frame number，不静默排序或伪造帧；
 - 每帧补齐阶段 timing、dirty/pipeline counters 和 frame update reason；
-- VS Code Render Trace 面板读取 trace，支持 frame scrubber、阶段占比、dirty 覆盖率条、最多 32 个 dirty 矩形、当前帧截图、command 归因和跨帧聚合；
+- VS Code Render Trace 面板读取 trace，支持 frame scrubber、阶段占比、dirty 覆盖率条、最多 32 个 dirty 矩形、当前帧截图、command 归因和跨帧聚合；新 trace 还显示 command span 的阶段关联和跨帧 p95，截断仍明确标注为下界；
 - `.jfcapture` 回放可显式生成同目录 bounded Render Trace，并在状态视图中保留打开入口；
 - 命令/节点归因的 owner-token、边界、截断和正确性门槛已在
   [专用 RFC](render_trace_command_attribution_rfc_zh.md) 冻结；opt-in Core owner token、value-only

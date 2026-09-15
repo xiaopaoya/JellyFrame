@@ -163,6 +163,22 @@ function main() {
       { name: "Text · id:title", type: "Text", owner: "id:title", pixels: 24, kind: "command", startUs: 3310, durationUs: 90, leftPercent: 3310 * 100 / 3400, widthPercent: 90 * 100 / 3400 }
     ]
   });
+  const linkedCommandFrame = {
+    ...spanFrame,
+    frame: 2,
+    stagesUs: {},
+    commands: [],
+    commandInvalidSamples: 0,
+    commandsTruncated: false,
+    nodesTruncated: false,
+    commandSpans: [
+      { type: "Text", owner: "id:title", startUs: 150, durationUs: 20, pixels: 24 }
+    ]
+  };
+  const linkedTimeline = frameCommandTimeline(linkedCommandFrame);
+  const linkedSegment = linkedTimeline.segments.find((segment) => segment.kind === "command");
+  assert.equal(linkedSegment.stageName, "paint");
+  assert.equal(linkedSegment.stageOverlapUs, 20);
   assert.deepEqual(frameHotspotSummary(frame), {
     stage: { name: "paint", us: 1000 },
     command: { name: "Text", us: 1000, pixels: 20, samples: 2 },
@@ -175,14 +191,15 @@ function main() {
     maxUs: 3000
   });
   const aggregate = aggregateTrace({ frames: [
-    frame,
+    { ...frame, commandSpans: [] },
+    linkedCommandFrame,
     { ...frame, frame: 1, totalUs: 3000, stagesUs: { layout: 700, paint: 1200 }, commands: [
       { type: "Text", owner: "id:title", us: 300, pixels: 20, samples: 3 },
       { type: "FillRect", us: 600, pixels: 50, samples: 2 },
       { type: "Image", us: 100, pixels: 4 }
     ], commandsTruncated: false, nodesTruncated: false, commandInvalidSamples: 0 }
   ] });
-  assert.equal(aggregate.frameCount, 2);
+  assert.equal(aggregate.frameCount, 3);
   assert.deepEqual(aggregate.command.map((item) => item.name), ["Text", "FillRect", "Image", "BoxShadow"]);
   assert.equal(aggregate.command.find((item) => item.name === "Text").count, 5);
   assert.equal(aggregate.command.find((item) => item.name === "Text").totalUs, 1300);
@@ -191,6 +208,16 @@ function main() {
   assert.equal(aggregate.stage.find((item) => item.name === "paint").totalUs, 2200);
   assert.equal(aggregate.owner.find((item) => item.name === "unattributed").count, 4);
   assert.equal(aggregate.missingAttribution.totalUs, 900);
+  assert.deepEqual(aggregate.commandSpan, [{
+    name: "Text · id:title",
+    type: "Text",
+    owner: "id:title",
+    stage: "paint",
+    count: 1,
+    totalUs: 20,
+    p95Us: 20,
+    totalPixels: 24
+  }]);
   assert.equal(aggregate.invalidCommandSamples, 1);
   assert.equal(aggregate.commandsTruncatedFrames, 1);
   const html = renderTraceHtml(parsed, true, "trace.jsonl", {
@@ -237,6 +264,9 @@ function main() {
   assert(html.includes("aggregateView"));
   assert(html.includes("missingAttribution"));
   assert(html.includes("p95Us"));
+  assert(html.includes("实际命令 · 元素"));
+  assert(html.includes("commandSpan"));
+  assert(html.includes("commandSpansTruncatedFrames"));
   assert(html.includes("owner=typeof item.owner"));
   assert(!html.includes("ignored</code>"));
   assert(!html.includes("invalid,0 10x10"));
@@ -254,6 +284,8 @@ function main() {
   assert(invalidSpans.errors.some((error) => error.includes("stage spans")));
   const invalidCommandSpans = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, commandSpans: [{ type: "Text", owner: "id:x", startUs: 0, durationUs: 1, pixels: -1 }] })}\n`);
   assert(invalidCommandSpans.errors.some((error) => error.includes("command spans")));
+  const overflowSpan = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, commandSpans: [{ type: "Text", owner: "id:x", startUs: Number.MAX_SAFE_INTEGER, durationUs: 1, pixels: 1 }] })}\n`);
+  assert(overflowSpan.errors.some((error) => error.includes("command spans")));
 }
 
 main();

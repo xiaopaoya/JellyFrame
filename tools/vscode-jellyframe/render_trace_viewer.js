@@ -69,7 +69,8 @@ function parseRenderTrace(text) {
       const invalidSpan = record.stageSpans.some((span) =>
         !span || typeof span !== "object" || typeof span.name !== "string" || !span.name.trim() ||
         !Number.isSafeInteger(span.startUs) || span.startUs < 0 ||
-        !Number.isSafeInteger(span.durationUs) || span.durationUs < 0
+        !Number.isSafeInteger(span.durationUs) || span.durationUs < 0 ||
+        span.startUs + span.durationUs > Number.MAX_SAFE_INTEGER
       );
       if (invalidSpan) {
         errors.push(`line ${index + 1}: stage spans must have non-negative startUs and durationUs`);
@@ -86,7 +87,8 @@ function parseRenderTrace(text) {
         typeof span.owner !== "string" || !span.owner.trim() ||
         !Number.isSafeInteger(span.startUs) || span.startUs < 0 ||
         !Number.isSafeInteger(span.durationUs) || span.durationUs < 0 ||
-        !Number.isSafeInteger(span.pixels) || span.pixels < 0
+        !Number.isSafeInteger(span.pixels) || span.pixels < 0 ||
+        span.startUs + span.durationUs > Number.MAX_SAFE_INTEGER
       );
       if (invalidCommandSpan) {
         errors.push(`line ${index + 1}: command spans must have stable non-negative fields`);
@@ -116,6 +118,46 @@ function normalizeCommandSample(item) {
   return { command, owner, samples, us: item.us, pixels: item.pixels };
 }
 
+function normalizeCommandSpan(item) {
+  if (!item || typeof item !== "object" || typeof item.type !== "string" || !item.type.trim() ||
+      typeof item.owner !== "string" || !item.owner.trim() ||
+      !Number.isSafeInteger(item.startUs) || item.startUs < 0 ||
+      !Number.isSafeInteger(item.durationUs) || item.durationUs < 0 ||
+      !Number.isSafeInteger(item.pixels) || item.pixels < 0) {
+    return null;
+  }
+  return {
+    type: item.type.trim(),
+    owner: item.owner.trim(),
+    startUs: item.startUs,
+    durationUs: item.durationUs,
+    pixels: item.pixels
+  };
+}
+
+function spanEndUs(startUs, durationUs) {
+  return startUs + durationUs;
+}
+
+function commandSpanStage(commandSpan, stageSpans) {
+  const commandStartUs = commandSpan.startUs;
+  const commandEndUs = spanEndUs(commandStartUs, commandSpan.durationUs);
+  let best = null;
+  for (const stage of stageSpans) {
+    if (!stage || typeof stage.name !== "string" || !stage.name.trim() ||
+        !Number.isSafeInteger(stage.startUs) || stage.startUs < 0 ||
+        !Number.isSafeInteger(stage.durationUs) || stage.durationUs < 0) {
+      continue;
+    }
+    const overlapUs = Math.max(0, Math.min(commandEndUs, spanEndUs(stage.startUs, stage.durationUs)) -
+      Math.max(commandStartUs, stage.startUs));
+    if (overlapUs > 0 && (!best || overlapUs > best.overlapUs)) {
+      best = { name: stage.name.trim(), overlapUs };
+    }
+  }
+  return best;
+}
+
 function addAggregateSample(map, name, totalUs, count, sampleUs) {
   let entry = map.get(name);
   if (!entry) {
@@ -125,6 +167,29 @@ function addAggregateSample(map, name, totalUs, count, sampleUs) {
   entry.count = Math.min(Number.MAX_SAFE_INTEGER, entry.count + count);
   entry.totalUs = Math.min(Number.MAX_SAFE_INTEGER, entry.totalUs + totalUs);
   entry.distribution.push({ count, us: sampleUs });
+}
+
+function addCommandSpanAggregate(map, span, stageName) {
+  const name = span.type + " · " + span.owner;
+  const key = name + "\u0000" + (stageName || "");
+  let entry = map.get(key);
+  if (!entry) {
+    entry = {
+      name,
+      type: span.type,
+      owner: span.owner,
+      stage: stageName || "unattributed",
+      count: 0,
+      totalUs: 0,
+      totalPixels: 0,
+      distribution: []
+    };
+    map.set(key, entry);
+  }
+  entry.count = Math.min(Number.MAX_SAFE_INTEGER, entry.count + 1);
+  entry.totalUs = Math.min(Number.MAX_SAFE_INTEGER, entry.totalUs + span.durationUs);
+  entry.totalPixels = Math.min(Number.MAX_SAFE_INTEGER, entry.totalPixels + span.pixels);
+  entry.distribution.push({ count: 1, us: span.durationUs });
 }
 
 function finalizeAggregates(map) {
@@ -149,16 +214,45 @@ function finalizeAggregates(map) {
   }).sort((left, right) => right.totalUs - left.totalUs || right.count - left.count || left.name.localeCompare(right.name));
 }
 
+function finalizeCommandSpanAggregates(map) {
+  return Array.from(map.values()).map((entry) => {
+    const distribution = entry.distribution.slice().sort((left, right) => left.us - right.us);
+    const target = Math.max(1, Math.ceil(entry.count * 0.95));
+    let seen = 0;
+    let p95Us = 0;
+    for (const sample of distribution) {
+      seen += sample.count;
+      if (seen >= target) {
+        p95Us = sample.us;
+        break;
+      }
+    }
+    return {
+      name: entry.name,
+      type: entry.type,
+      owner: entry.owner,
+      stage: entry.stage,
+      count: entry.count,
+      totalUs: entry.totalUs,
+      p95Us: Math.round(p95Us),
+      totalPixels: entry.totalPixels
+    };
+  }).sort((left, right) => right.totalUs - left.totalUs || right.count - left.count || left.name.localeCompare(right.name));
+}
+
 function aggregateTrace(parsed) {
   const command = new Map();
+  const commandSpan = new Map();
   const stage = new Map();
   const owner = new Map();
   let invalidCommandSamples = 0;
   let commandsTruncatedFrames = 0;
   let nodesTruncatedFrames = 0;
+  let commandSpansTruncatedFrames = 0;
   for (const frame of parsed?.frames || []) {
     if (frame.commandsTruncated === true) commandsTruncatedFrames += 1;
     if (frame.nodesTruncated === true) nodesTruncatedFrames += 1;
+    if (frame.commandSpansTruncated === true) commandSpansTruncatedFrames += 1;
     for (const [name, value] of Object.entries(frame.stagesUs || {})) {
       addAggregateSample(stage, name, value, 1, value);
     }
@@ -173,6 +267,13 @@ function aggregateTrace(parsed) {
       addAggregateSample(command, sample.command, sample.us, sample.samples, perCallUs);
       addAggregateSample(owner, sample.owner, sample.us, sample.samples, perCallUs);
     }
+    const stageSpans = Array.isArray(frame.stageSpans) ? frame.stageSpans : [];
+    for (const item of Array.isArray(frame.commandSpans) ? frame.commandSpans : []) {
+      const span = normalizeCommandSpan(item);
+      if (!span) continue;
+      const stage = commandSpanStage(span, stageSpans);
+      addCommandSpanAggregate(commandSpan, span, stage?.name);
+    }
     const declaredInvalid = Number.isSafeInteger(frame.commandInvalidSamples) && frame.commandInvalidSamples > 0
       ? frame.commandInvalidSamples : 0;
     invalidCommandSamples += Math.max(invalidCommandsInFrame, declaredInvalid);
@@ -184,12 +285,14 @@ function aggregateTrace(parsed) {
   return {
     frameCount: (parsed?.frames || []).length,
     command: finalizeAggregates(command),
+    commandSpan: finalizeCommandSpanAggregates(commandSpan),
     stage: finalizeAggregates(stage),
     owner: owners,
     missingAttribution: unattributed,
     invalidCommandSamples,
     commandsTruncatedFrames,
-    nodesTruncatedFrames
+    nodesTruncatedFrames,
+    commandSpansTruncatedFrames
   };
 }
 
@@ -247,11 +350,12 @@ function frameStageTimeline(frame) {
     Number.isSafeInteger(span.startUs) && span.startUs >= 0 &&
     Number.isSafeInteger(span.durationUs) && span.durationUs >= 0
   );
-  const maxEndUs = spans.reduce((maxEnd, span) => Math.max(maxEnd, span.startUs + span.durationUs), timing.totalUs);
+  const maxEndUs = spans.reduce((maxEnd, span) => Math.max(maxEnd, spanEndUs(span.startUs, span.durationUs)), timing.totalUs);
   const denominatorUs = Math.max(1, maxEndUs);
   const segments = [];
   let cursorUs = 0;
   for (const span of spans) {
+    const endUs = spanEndUs(span.startUs, span.durationUs);
     if (span.startUs > cursorUs) {
       segments.push({
         name: "unaccounted",
@@ -270,7 +374,7 @@ function frameStageTimeline(frame) {
       leftPercent: span.startUs * 100 / denominatorUs,
       widthPercent: span.durationUs * 100 / denominatorUs
     });
-    cursorUs = Math.max(cursorUs, span.startUs + span.durationUs);
+    cursorUs = Math.max(cursorUs, endUs);
   }
   if (cursorUs < timing.totalUs) {
     segments.push({
@@ -296,14 +400,9 @@ function frameCommandTimeline(frame) {
     return { available: false, totalUs: frameTimingBreakdown(frame).totalUs, segments: [] };
   }
   const timing = frameTimingBreakdown(frame);
-  const spans = frame.commandSpans.filter((span) =>
-    span && typeof span.type === "string" && span.type.trim() &&
-    typeof span.owner === "string" && span.owner.trim() &&
-    Number.isSafeInteger(span.startUs) && span.startUs >= 0 &&
-    Number.isSafeInteger(span.durationUs) && span.durationUs >= 0 &&
-    Number.isSafeInteger(span.pixels) && span.pixels >= 0
-  );
-  const maxEndUs = spans.reduce((maxEnd, span) => Math.max(maxEnd, span.startUs + span.durationUs), timing.totalUs);
+  const spans = frame.commandSpans.map(normalizeCommandSpan).filter(Boolean);
+  const maxEndUs = spans.reduce((maxEnd, span) => Math.max(maxEnd, spanEndUs(span.startUs, span.durationUs)), timing.totalUs);
+  const stageSpans = Array.isArray(frame.stageSpans) ? frame.stageSpans : [];
   const denominatorUs = Math.max(1, maxEndUs);
   const segments = [];
   let cursorUs = 0;
@@ -318,18 +417,20 @@ function frameCommandTimeline(frame) {
         widthPercent: (span.startUs - cursorUs) * 100 / denominatorUs
       });
     }
+    const stage = commandSpanStage(span, stageSpans);
     segments.push({
       name: span.type + " · " + span.owner,
       type: span.type,
       owner: span.owner,
       pixels: span.pixels,
+      ...(stage ? { stageName: stage.name, stageOverlapUs: stage.overlapUs } : {}),
       kind: "command",
       startUs: span.startUs,
       durationUs: span.durationUs,
       leftPercent: span.startUs * 100 / denominatorUs,
       widthPercent: span.durationUs * 100 / denominatorUs
     });
-    cursorUs = Math.max(cursorUs, span.startUs + span.durationUs);
+    cursorUs = Math.max(cursorUs, spanEndUs(span.startUs, span.durationUs));
   }
   if (cursorUs < timing.totalUs) {
     segments.push({
@@ -483,6 +584,8 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     aggregate: "跨帧聚合",
     aggregateNote: "按有效 trace 样本累计；p95 是单次调用耗时的第 95 百分位。被截断的帧只代表已记录的下界。",
     aggregateCommand: "命令",
+    aggregateCommandSpan: "实际命令 · 元素",
+    aggregatePixels: "候选像素",
     aggregateStage: "阶段",
     aggregateOwner: "归因对象",
     aggregateCount: "调用数",
@@ -554,6 +657,8 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     aggregate: "Cross-frame aggregation",
     aggregateNote: "Totals include valid trace samples; p95 is the 95th percentile of per-call time. Truncated frames are lower bounds.",
     aggregateCommand: "Command",
+    aggregateCommandSpan: "Raster command · owner",
+    aggregatePixels: "Candidate pixels",
     aggregateStage: "Stage",
     aggregateOwner: "Owner",
     aggregateCount: "Count",
@@ -600,12 +705,13 @@ const frameSummaryView=document.getElementById('frameSummaryView');
 const esc=(v)=>String(v??'').replace(/[&<>\"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
 const fmt=(v)=>Number(v||0).toLocaleString();
 const aggregateTable=(title,rows)=>'<h3>'+esc(title)+'</h3>'+ (rows.length?'<table><tr><th>'+esc(labels.aggregateCommand)+'</th><th>'+esc(labels.aggregateCount)+'</th><th>'+esc(labels.aggregateTotal)+'</th><th>'+esc(labels.aggregateP95)+'</th></tr>'+rows.slice(0,64).map((row)=>'<tr><td><code>'+esc(row.name)+'</code></td><td>'+fmt(row.count)+'</td><td>'+fmt(row.totalUs)+' us</td><td>'+fmt(row.p95Us)+' us</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>');
+const aggregateCommandSpanTable=(rows)=>'<h3>'+esc(labels.aggregateCommandSpan)+'</h3>'+ (rows.length?'<table><tr><th>'+esc(labels.aggregateCommandSpan)+'</th><th>'+esc(labels.aggregateStage)+'</th><th>'+esc(labels.aggregateCount)+'</th><th>'+esc(labels.aggregateTotal)+'</th><th>'+esc(labels.aggregateP95)+'</th><th>'+esc(labels.aggregatePixels)+'</th></tr>'+rows.slice(0,64).map((row)=>'<tr><td><code>'+esc(row.name)+'</code></td><td>'+esc(row.stage)+'</td><td>'+fmt(row.count)+'</td><td>'+fmt(row.totalUs)+' us</td><td>'+fmt(row.p95Us)+' us</td><td>'+fmt(row.totalPixels)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>');
 function renderAggregate(){
- const aggregate=model.aggregate||{command:[],stage:[],owner:[],missingAttribution:{count:0,totalUs:0,p95Us:0},invalidCommandSamples:0,commandsTruncatedFrames:0,nodesTruncatedFrames:0};
- aggregateView.innerHTML=aggregateTable(labels.aggregateCommand,aggregate.command)+aggregateTable(labels.aggregateStage,aggregate.stage)+aggregateTable(labels.aggregateOwner,aggregate.owner)+
+ const aggregate=model.aggregate||{command:[],commandSpan:[],stage:[],owner:[],missingAttribution:{count:0,totalUs:0,p95Us:0},invalidCommandSamples:0,commandsTruncatedFrames:0,nodesTruncatedFrames:0,commandSpansTruncatedFrames:0};
+ aggregateView.innerHTML=aggregateTable(labels.aggregateCommand,aggregate.command)+aggregateCommandSpanTable(aggregate.commandSpan||[])+aggregateTable(labels.aggregateStage,aggregate.stage)+aggregateTable(labels.aggregateOwner,aggregate.owner)+
  '<p class="muted"><strong>'+esc(labels.aggregateMissing)+':</strong> '+fmt(aggregate.missingAttribution.count)+' / '+fmt(aggregate.missingAttribution.totalUs)+' us. '+esc(labels.aggregateMissingNote)+'</p>'+
  (aggregate.invalidCommandSamples?'<p class="muted">'+esc(labels.aggregateInvalid)+': '+fmt(aggregate.invalidCommandSamples)+'</p>':'')+
- ((aggregate.commandsTruncatedFrames||aggregate.nodesTruncatedFrames)?'<p class="muted">'+esc(labels.aggregateTruncated)+': commands='+fmt(aggregate.commandsTruncatedFrames)+', owners='+fmt(aggregate.nodesTruncatedFrames)+'</p>':'');
+ ((aggregate.commandsTruncatedFrames||aggregate.nodesTruncatedFrames||aggregate.commandSpansTruncatedFrames)?'<p class="muted">'+esc(labels.aggregateTruncated)+': commands='+fmt(aggregate.commandsTruncatedFrames)+', spans='+fmt(aggregate.commandSpansTruncatedFrames)+', owners='+fmt(aggregate.nodesTruncatedFrames)+'</p>':'');
 }
 function renderFrameSummary(){
  const summary=model.frameSummary||{count:0,p50Us:0,p95Us:0,maxUs:0};
@@ -660,7 +766,7 @@ function render(){
  const timelineDetail=document.getElementById('timelineDetail');
  if(timelineDetail){view.querySelectorAll('[data-timeline-index]').forEach((button)=>button.addEventListener('click',()=>{const segment=timeline.segments[Number(button.dataset.timelineIndex)];if(!segment)return;const name=segment.kind==='gap'?labels.timelineGap:segment.name;timelineDetail.innerHTML='<strong>'+esc(name)+'</strong>: '+fmt(segment.durationUs)+' us (start '+fmt(segment.startUs)+' us) · '+esc(labels.stageSource)+': '+esc(runtimeSource);}));}
  const commandTimelineDetail=document.getElementById('commandTimelineDetail');
- if(commandTimelineDetail){view.querySelectorAll('[data-command-timeline-index]').forEach((button)=>button.addEventListener('click',()=>{const segment=commandTimeline.segments[Number(button.dataset.commandTimelineIndex)];if(!segment)return;const name=segment.kind==='gap'?labels.timelineGap:segment.name;const pixels=segment.kind==='gap'?'':' · '+fmt(segment.pixels)+' '+esc(labels.pixels);commandTimelineDetail.innerHTML='<strong>'+esc(name)+'</strong>: '+fmt(segment.durationUs)+' us (start '+fmt(segment.startUs)+' us)'+pixels+' · '+esc(labels.stageSource)+': '+esc(runtimeSource);}));}
+ if(commandTimelineDetail){view.querySelectorAll('[data-command-timeline-index]').forEach((button)=>button.addEventListener('click',()=>{const segment=commandTimeline.segments[Number(button.dataset.commandTimelineIndex)];if(!segment)return;const name=segment.kind==='gap'?labels.timelineGap:segment.name;const pixels=segment.kind==='gap'?'':' · '+fmt(segment.pixels)+' '+esc(labels.pixels);const stage=segment.stageName?' · '+esc(labels.aggregateStage)+': '+esc(segment.stageName):'';commandTimelineDetail.innerHTML='<strong>'+esc(name)+'</strong>: '+fmt(segment.durationUs)+' us (start '+fmt(segment.startUs)+' us)'+pixels+stage+' · '+esc(labels.stageSource)+': '+esc(runtimeSource);}));}
 }
 renderFrameSummary();renderAggregate();slider.max=Math.max(0,model.frames.length-1);slider.disabled=model.frames.length<2;slowestFrameButton.disabled=model.frames.length<2;slowestFrameButton.addEventListener('click',()=>{slider.value=String(slowestFrameIndex);render();});slider.addEventListener('input',render);render();
 </script></body></html>`;

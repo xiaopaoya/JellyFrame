@@ -28,7 +28,9 @@ Palette as entry points.
   explicit. The frame view also provides a clickable stage-composition bar and
   span timeline with absolute time, frame share, start offset and producer
   runtime source when spans are available, plus a bounded paint-command span
-  timeline; older traces fall back to accumulated stage cost. It does not
+  timeline. Command spans are associated with the stage having the greatest
+  time overlap and are aggregated across frames by type, owner and stage with
+  count, total time, p95 and candidate pixels; older traces fall back to accumulated stage cost. It does not
   present desktop timing as device FPS. Missing images are reported explicitly
   instead of being inferred as blank frames.
 - Inline diagnostics for app-author advice, package warnings and pipeline
