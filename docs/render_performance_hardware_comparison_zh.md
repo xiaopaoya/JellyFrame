@@ -1,6 +1,6 @@
 # Render Core 性能硬件对照测试要求
 
-> 最后更新：2026-09-13；适用版本：0.6.0-dev
+> 最后更新：2026-09-15；适用版本：0.6.0-dev
 > 状态：主线 3 硬件执行稿；适用 ESP32-S3 retained UI port
 
 本文用于比较 Render Core 或 Runtime 优化前后的真实设备表现。它补充
@@ -105,6 +105,41 @@ python tools\render_performance_report.py `
   --device-telemetry candidate\console.log `
   --output candidate\result.json `
   --html-output candidate\result.html
+```
+
+对已经生成的重复 profile 报告，使用设备专用比较器汇总两侧结果。两侧 manifest 的
+`conditions` 必须完全相同；`identity` 和报告路径可以不同。`reports` 按重复顺序列出，
+路径相对于各自 manifest。比较器对每轮报告中的 `frameP95Us` 等窗口聚合值计算中位数、
+最小值和最大值，不把这些值伪装成逐帧样本。
+
+```powershell
+python tools\device_performance_compare.py `
+  --baseline baseline\manifest.json `
+  --candidate candidate\manifest.json `
+  --output comparison.json `
+  --html-output comparison.html
+```
+
+manifest 最小形状如下；`visualEvidence.status` 为 `exact-readback` 才可能得到 `PASS`，
+照片或目检应填 `visual-equivalent-only`，结果会保守标记为 `PARTIAL`：
+
+```json
+{
+  "format": "jellyframe.device.performance.run.v0",
+  "workload": "drag-scroll",
+  "identity": {"commit": "candidate", "firmwareSha256": "..."},
+  "conditions": {
+    "board": "Waveshare ESP32-S3-Touch-LCD-1.47",
+    "viewport": "172x320",
+    "pixelFormat": "RGB565",
+    "warmupFrames": 30,
+    "measuredFrames": 120
+  },
+  "visualEvidence": {"status": "exact-readback"},
+  "stability": {"status": "pass"},
+  "acceptance": {"targetMetric": "frameP95Us"},
+  "reports": ["repeat-01/result.json", "repeat-02/result.json", "repeat-03/result.json"]
+}
 ```
 
 `metadata.json` 和 `comparison.json` 必须同时保留机器可读的原始路径、固件 hash、
