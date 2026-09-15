@@ -709,6 +709,70 @@ function frameAnomalySummary(parsed) {
   };
 }
 
+function frameAnomalyAttribution(frame, previousFrame, thresholds = {}) {
+  if (!frame) return { available: false, anomalous: false, reasons: [], limitations: ["missing-frame"] };
+  const timing = frameTimingBreakdown(frame);
+  const totalUsP95 = Number.isFinite(Number(thresholds.totalUsP95)) ? Number(thresholds.totalUsP95) : 0;
+  const paintUsP95 = Number.isFinite(Number(thresholds.paintUsP95)) ? Number(thresholds.paintUsP95) : 0;
+  const dirtyAreaPercentP95 = Number.isFinite(Number(thresholds.dirtyAreaPercentP95)) ? Number(thresholds.dirtyAreaPercentP95) : 0;
+  const paintUs = Number.isSafeInteger(frame.stagesUs?.paint) ? frame.stagesUs.paint : 0;
+  const dirtyAreaPercent = Number.isFinite(Number(frame.dirtyAreaPercent)) ? Number(frame.dirtyAreaPercent) : 0;
+  const reasons = [];
+  if (timing.totalUs > totalUsP95 && totalUsP95 > 0) reasons.push("total");
+  if (paintUs > paintUsP95 && paintUsP95 > 0) reasons.push("paint");
+  if (dirtyAreaPercent > dirtyAreaPercentP95 && dirtyAreaPercentP95 > 0) reasons.push("dirty");
+
+  const commandCosts = frameCommandCostMap(frame);
+  const commands = Array.from(commandCosts.map.values()).sort((left, right) =>
+    right.us - left.us || left.name.localeCompare(right.name)
+  );
+  const hottestCommand = commands[0] || null;
+  const stages = Object.entries(frame.stagesUs || {})
+    .filter(([, value]) => Number.isSafeInteger(value) && value >= 0)
+    .map(([name, us]) => ({ name, us }))
+    .sort((left, right) => right.us - left.us || left.name.localeCompare(right.name));
+
+  const dirtyEvidence = frameDirtyRepaintEvidence(frame);
+  const dirtyOwners = new Map();
+  for (const entry of dirtyEvidence.entries) {
+    const current = dirtyOwners.get(entry.owner) || { name: entry.owner, us: 0, overlapPixels: 0, hits: 0 };
+    current.us = Math.min(Number.MAX_SAFE_INTEGER, current.us + entry.durationUs);
+    current.overlapPixels = Math.min(Number.MAX_SAFE_INTEGER, current.overlapPixels + entry.overlapPixels);
+    current.hits += entry.dirtyRectIndexes.length;
+    dirtyOwners.set(entry.owner, current);
+  }
+  const dirtyOwner = Array.from(dirtyOwners.values()).sort((left, right) =>
+    right.us - left.us || left.name.localeCompare(right.name)
+  )[0] || null;
+
+  const delta = previousFrame ? frameDeltaSummary(frame, previousFrame) : { available: false };
+  const largestCommandIncrease = delta.commandComparable
+    ? (delta.commands || []).filter((item) => item.deltaUs > 0)[0] || null
+    : null;
+  const limitations = [];
+  if (!commandCosts.map.size) limitations.push("no-command-timing");
+  if (commandCosts.truncated) limitations.push("command-data-truncated");
+  if (!dirtyEvidence.available) limitations.push("dirty-evidence-unavailable");
+  else if (frame.dirtyRectsTruncated || frame.commandSpansTruncated) limitations.push("dirty-evidence-truncated");
+  if (!delta.available) limitations.push("no-previous-frame");
+  else if (!delta.commandComparable) limitations.push("command-delta-unavailable");
+  if (frame.timingComplete !== true) limitations.push("partial-frame-timing");
+  return {
+    available: true,
+    anomalous: reasons.length > 0,
+    frame: frame.frame,
+    reasons,
+    thresholds: { totalUsP95, paintUsP95, dirtyAreaPercentP95 },
+    values: { totalUs: timing.totalUs, paintUs, dirtyAreaPercent },
+    hottestStage: stages[0] || null,
+    hottestCommand,
+    dirtyOwner,
+    largestCommandIncrease,
+    commandSource: commandCosts.source,
+    limitations
+  };
+}
+
 function frameTimingSummary(parsed) {
   const values = (parsed?.frames || [])
     .map((frame) => frameTimingBreakdown(frame).totalUs)
@@ -767,7 +831,10 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
   ]));
   const frameSummary = frameTimingSummary(parsed);
   const frameAnomalies = frameAnomalySummary(parsed);
-  const data = safeJson({ ...parsed, frameImages, frameTiming, frameComposition, frameTimelines, frameCommandTimelines, frameDirtyEvidence, frameDeltas, frameHotspots, frameSummary, frameAnomalies, aggregate: aggregateTrace(parsed) });
+  const frameAnomalyAttributions = Object.fromEntries((parsed?.frames || []).map((frame, index) => [
+    String(frame.frame), frameAnomalyAttribution(frame, index > 0 ? parsed.frames[index - 1] : null, frameAnomalies.thresholds)
+  ]));
+  const data = safeJson({ ...parsed, frameImages, frameTiming, frameComposition, frameTimelines, frameCommandTimelines, frameDirtyEvidence, frameDeltas, frameHotspots, frameSummary, frameAnomalies, frameAnomalyAttributions, aggregate: aggregateTrace(parsed) });
   const labels = chinese ? {
     title: "Render Trace",
     frame: "帧",
@@ -863,7 +930,20 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
      anomalyCount: "异常帧",
      reasonTotal: "总帧耗时",
      reasonPaint: "paint 耗时",
-     reasonDirty: "dirty 面积"
+     reasonDirty: "dirty 面积",
+     anomalyAttribution: "异常帧归因",
+     anomalyAttributionNote: "以下是性能相关性和空间重叠证据，不是 DOM 变更根因。缺失、截断或部分计时会在限制中标出。",
+     triggeredBy: "触发条件",
+     threshold: "阈值",
+     observed: "当前值",
+     hottestStage: "最耗时阶段",
+     hottestCommandDetail: "最耗时命令",
+     dirtyOwnerDetail: "脏区证据中耗时最高的对象",
+     largestCommandIncrease: "相对上一帧增长最大的命令",
+     noEvidence: "没有可用证据",
+     limitation: "限制",
+     attributionUnavailable: "当前帧不是异常帧，或没有足够数据生成归因详情",
+     reasonValue: "总帧耗时 / paint / dirty 面积"
   } : {
     title: "Render Trace",
     frame: "Frame",
@@ -959,7 +1039,20 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
      anomalyCount: "Anomalous frames",
      reasonTotal: "total frame time",
      reasonPaint: "paint time",
-     reasonDirty: "dirty area"
+     reasonDirty: "dirty area",
+     anomalyAttribution: "Anomaly attribution",
+     anomalyAttributionNote: "These are performance-correlation and spatial-overlap signals, not the DOM mutation cause. Missing, truncated, or partial timing is listed as a limitation.",
+     triggeredBy: "Triggered by",
+     threshold: "Threshold",
+     observed: "Observed",
+     hottestStage: "Hottest stage",
+     hottestCommandDetail: "Hottest command",
+     dirtyOwnerDetail: "Highest-cost owner in dirty evidence",
+     largestCommandIncrease: "Largest command increase from previous frame",
+     noEvidence: "No usable evidence",
+     limitation: "Limitations",
+     attributionUnavailable: "This frame is not anomalous or lacks enough data for attribution details",
+     reasonValue: "total frame time / paint / dirty area"
   };
   const sessionJson = escapeHtml(JSON.stringify(parsed.session || {}));
   const titleText = escapeHtml(title || labels.title);
@@ -1050,6 +1143,18 @@ function render(){
  '<div class="hotspot"><span>'+esc(labels.hottestStage)+'</span>'+hotspotValue(hotspots.stage)+'</div>'+
  '<div class="hotspot"><span>'+esc(labels.hottestCommand)+'</span>'+hotspotValue(hotspots.command)+'</div>'+
  '<div class="hotspot"><span>'+esc(labels.hottestOwner)+'</span>'+hotspotValue(hotspots.owner)+'</div></div>';
+ const attribution=model.frameAnomalyAttributions?.[String(frame.frame)]||{available:false,anomalous:false,reasons:[],limitations:[]};
+ const reasonName=(reason)=>reason==='total'?labels.reasonTotal:reason==='paint'?labels.reasonPaint:labels.reasonDirty;
+ const attributionValue=(item, value=item?.us)=>item?'<b>'+esc(item.name)+'</b><span>'+fmt(value)+' us</span>':'<span class="muted">'+esc(labels.noEvidence)+'</span>';
+ const attributionView=attribution.anomalous?'<section class="anomaly-attribution"><h2>'+esc(labels.anomalyAttribution)+'</h2><p class="muted">'+esc(labels.anomalyAttributionNote)+'</p>'+
+  '<p><strong>'+esc(labels.triggeredBy)+':</strong> '+attribution.reasons.map(reasonName).map(esc).join(', ')+'</p>'+
+  '<table><tr><th>'+esc(labels.reason)+'</th><th>'+esc(labels.threshold)+'</th><th>'+esc(labels.observed)+'</th></tr>'+attribution.reasons.map((reason)=>{const threshold=reason==='total'?attribution.thresholds.totalUsP95:reason==='paint'?attribution.thresholds.paintUsP95:attribution.thresholds.dirtyAreaPercentP95;const observed=reason==='total'?attribution.values.totalUs:reason==='paint'?attribution.values.paintUs:attribution.values.dirtyAreaPercent;return '<tr><td>'+esc(reasonName(reason))+'</td><td>'+fmt(threshold)+(reason==='dirty'?'%':' us')+'</td><td>'+fmt(observed)+(reason==='dirty'?'%':' us')+'</td></tr>';}).join('')+'</table>'+
+  '<div class="hotspots attribution-hotspots">'+
+  '<div class="hotspot"><span>'+esc(labels.hottestStage)+'</span>'+attributionValue(attribution.hottestStage)+'</div>'+
+  '<div class="hotspot"><span>'+esc(labels.hottestCommandDetail)+'</span>'+attributionValue(attribution.hottestCommand)+'</div>'+
+  '<div class="hotspot"><span>'+esc(labels.dirtyOwnerDetail)+'</span>'+attributionValue(attribution.dirtyOwner)+'</div>'+
+  '<div class="hotspot"><span>'+esc(labels.largestCommandIncrease)+'</span>'+attributionValue(attribution.largestCommandIncrease, attribution.largestCommandIncrease?.deltaUs)+'</div></div>'+
+  (attribution.limitations.length?'<p class="muted"><strong>'+esc(labels.limitation)+':</strong> '+attribution.limitations.map(esc).join(', ')+'</p>':'')+'</section>':'';
  const deltaNumber=(value)=>{const number=Number(value)||0;return (number>0?'+':'')+fmt(number);};
  const deltaStageRows=delta.stages?.length?'<table><tr><th>'+esc(labels.aggregateStage)+'</th><th>'+esc(labels.delta)+'</th></tr>'+delta.stages.map((item)=>'<tr><td><code>'+esc(item.name)+'</code></td><td>'+deltaNumber(item.deltaUs)+' us</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>';
  const deltaCommandRows=delta.commandComparable?(delta.commands?.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.previousValue)+'</th><th>'+esc(labels.currentValue)+'</th><th>'+esc(labels.delta)+'</th></tr>'+delta.commands.map((item)=>'<tr><td>'+esc(item.type)+'</td><td><code>'+esc(item.owner)+'</code></td><td>'+fmt(item.previousUs)+' us</td><td>'+fmt(item.currentUs)+' us</td><td>'+deltaNumber(item.deltaUs)+' us</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>'): '<p class="muted">'+esc(labels.commandDeltaUnavailable)+'</p>';
@@ -1067,6 +1172,7 @@ function render(){
  '<div class="metric"><span>'+esc(labels.dirty)+'</span><b>'+fmt(frame.dirtyRectCount)+' / '+fmt(frame.dirtyAreaPercent)+'%</b></div></div>'+
  captureView+
  hotspotView+
+ attributionView+
  frameDeltaView+
  stageTimelineView+
  commandTimelineView+
@@ -1089,4 +1195,4 @@ function render(){
 </script></body></html>`;
 }
 
-module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameCommandCostMap, frameDeltaSummary, frameAnomalySummary, frameTimingSummary, renderTraceHtml };
+module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameCommandCostMap, frameDeltaSummary, frameAnomalySummary, frameAnomalyAttribution, frameTimingSummary, renderTraceHtml };

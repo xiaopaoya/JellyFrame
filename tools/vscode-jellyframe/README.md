@@ -40,6 +40,11 @@ Palette as entry points.
   disabled when adjacent frames use different measurement sources.
   The aggregate area also provides p95-based anomaly filtering and a bounded
   timing trend; clicking a trend entry jumps to its frame.
+  Selecting an anomalous frame also shows the thresholds and observed values
+  that triggered it, the hottest stage and command, the highest-cost owner in
+  dirty repaint evidence, and the largest command increase from the previous
+  frame. These are correlation and spatial-overlap signals, not a claimed DOM
+  mutation cause; missing, truncated, or partial data is listed as a limitation.
 - Inline diagnostics for app-author advice, package warnings and pipeline
   diagnostics.
 - Explorer status view showing the selected app, build, report diagnostics and

@@ -1,6 +1,6 @@
 const assert = require("assert");
 const fs = require("fs");
-const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameDeltaSummary, frameAnomalySummary, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
+const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameDeltaSummary, frameAnomalySummary, frameAnomalyAttribution, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
 const vm = require("vm");
 
 function loadTraceHelpers() {
@@ -224,6 +224,55 @@ function main() {
   const anomalies = frameAnomalySummary({ frames: anomalyFrames });
   assert.deepEqual(anomalies.anomalies, [19]);
   assert.deepEqual(anomalies.frames[19].reasons, ["total", "paint", "dirty"]);
+  const normalAttribution = frameAnomalyAttribution(
+    { frame: 0, totalUs: 100, stagesUs: { paint: 20 }, dirtyAreaPercent: 1 },
+    null,
+    { totalUsP95: 100, paintUsP95: 20, dirtyAreaPercentP95: 1 }
+  );
+  assert.equal(normalAttribution.anomalous, false);
+  assert.deepEqual(normalAttribution.reasons, []);
+  const anomalousAttribution = frameAnomalyAttribution({
+    frame: 20,
+    totalUs: 1000,
+    timingComplete: true,
+    stagesUs: { layout: 100, paint: 80 },
+    dirtyAreaPercent: 50,
+    dirtyRects: [{ x: 0, y: 0, width: 20, height: 20 }],
+    commandSpans: [
+      { type: "FillRect", owner: "id:card", startUs: 100, durationUs: 70, pixels: 400, rect: { x: 0, y: 0, width: 20, height: 20 } },
+      { type: "Text", owner: "id:title", startUs: 180, durationUs: 90, pixels: 40 }
+    ],
+    commandSpansTruncated: false,
+    dirtyRectsTruncated: false
+  }, {
+    frame: 19,
+    totalUs: 900,
+    stagesUs: { layout: 100, paint: 60 },
+    dirtyAreaPercent: 40,
+    commandSpans: [
+      { type: "FillRect", owner: "id:card", startUs: 100, durationUs: 60, pixels: 400, rect: { x: 0, y: 0, width: 20, height: 20 } },
+      { type: "Text", owner: "id:title", startUs: 180, durationUs: 10, pixels: 40 }
+    ]
+  }, { totalUsP95: 800, paintUsP95: 70, dirtyAreaPercentP95: 45 });
+  assert.deepEqual(anomalousAttribution.reasons, ["total", "paint", "dirty"]);
+  assert.deepEqual(anomalousAttribution.hottestStage, { name: "layout", us: 100 });
+  assert.equal(anomalousAttribution.hottestCommand.name, "Text · id:title");
+  assert.deepEqual(anomalousAttribution.dirtyOwner, {
+    name: "id:card", us: 70, overlapPixels: 400, hits: 1
+  });
+  assert.equal(anomalousAttribution.largestCommandIncrease.name, "Text · id:title");
+  assert.equal(anomalousAttribution.largestCommandIncrease.deltaUs, 80);
+  assert.deepEqual(anomalousAttribution.limitations, []);
+  const limitedAttribution = frameAnomalyAttribution({
+    frame: 21, totalUs: 1000, stagesUs: { paint: 80 }, dirtyAreaPercent: 50,
+    commandSpans: [], commandSpansTruncated: true, dirtyRectsTruncated: true,
+    timingComplete: false
+  }, null, { totalUsP95: 800, paintUsP95: 70, dirtyAreaPercentP95: 45 });
+  assert.equal(limitedAttribution.anomalous, true);
+  assert.deepEqual(limitedAttribution.limitations, [
+    "no-command-timing", "command-data-truncated", "dirty-evidence-unavailable",
+    "no-previous-frame", "partial-frame-timing"
+  ]);
   assert.deepEqual(frameTimingSummary({ frames: [frame, { ...frame, totalUs: 3000 }] }), {
     count: 2,
     p50Us: 2000,
@@ -304,6 +353,8 @@ function main() {
   assert(html.includes("vscode-resource://frame_000.bmp"));
   assert(html.includes("dirtyCoverage"));
   assert(html.includes("dirtyRects"));
+  assert(html.includes("frameAnomalyAttributions"));
+  assert(html.includes("anomalyAttribution"));
   assert(html.includes("脏区内的实际重绘证据"));
   assert(html.includes("frameDirtyEvidence"));
   assert(html.includes("相邻帧变化"));
