@@ -228,6 +228,12 @@ profile、SDKCONFIG、温度/电源条件和输入脚本；硬件结论只使用
 校验规则。报告至少包括：frame p50/p95、MPix/s、dirty pixels/frame、峰值内存、CPU 时间、
 present/DMA 时间和视觉误差。不同库不支持的能力单独标记 `not-comparable`。
 
+仓库提供 `tools/benchmark_compare.py` 作为统一比较入口。Cairo、SDL、LVGL 或其他适配器只负责输出
+`jellyframe.benchmark.run.v0` JSON；工具会检查 workload、viewport、pixel format、抗锯齿、
+full/dirty mode、运行环境、warm-up，以及输出验证方法/基准/容差。任一条件不一致或任一侧视觉验证
+未通过时，整组结果标记为 `not-comparable`。只有成对的 pixels 与正耗时样本才派生 MPix/s，
+不会从平均像素数猜测吞吐率。
+
 当前基于代码和已有 telemetry 可以提出、但尚不能宣称为 benchmark 事实的工作假设是：
 
 - JellyFrame 可能在有界 CSS 子集、跨平台同一 DOM/布局语义、可裁剪 feature profile 和

@@ -8,6 +8,7 @@ App 作者通常从 `tools/jellyframe_cli.py` 或 VS Code 扩展开始。
 | 目标 | 入口 |
 | --- | --- |
 | 检查桌面性能回归 | `benchmark_guard.py` |
+| 比较固定条件的基准运行结果 | `../tools/benchmark_compare.py` |
 | 检查 Render Core profile 和 link map | `check_render_core_link_map.py` |
 | 查看或维护 Render Core 能力目录 | `render_core_feature_registry.py` |
 | 打包 App 作者 SDK | `package_app_author_sdk.py` |

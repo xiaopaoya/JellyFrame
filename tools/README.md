@@ -1,6 +1,6 @@
 # Tools
 
-> Last updated: 2026-08-18; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-09-15; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Desktop developer tools for packaging, validation and editor integration.
 
@@ -13,6 +13,7 @@ Choose by task before opening the directory:
 | Validate installed apps and launcher recovery | `jellyframe_cli.py`, `app_registry.py`, `schemas/` | Host/runtime developer |
 | Exercise desktop JFDP/1 control semantics without a board | `jellyframe_cli.py device-reference` | Runtime/transport developer |
 | Check build slicing, link ownership or desktop speed | `../project_tools/render_core_feature_registry.py`, `../project_tools/check_render_core_link_map.py`, `../project_tools/benchmark_guard.py` | Render Core maintainer |
+| Compare compatible CPU or embedded benchmark runs | `benchmark_compare.py` | Performance reviewer |
 | Refresh HTML/CSS audit tables | `../project_tools/generate_html_support_table.py`, `../project_tools/generate_css_support_table.py`, `../project_tools/import_css_support_crosswork.py` | Compatibility maintainer |
 | Work in VS Code | `vscode-jellyframe/README.md` | App author, extension maintainer |
 | Validate a board | `ports/<port>/README.md` and `docs/porting_work_guide.md` | Port maintainer |
@@ -53,6 +54,9 @@ and real font-backend claims remain port-owned.
   link-map-visible family ownership; it does not measure firmware performance.
 - `../project_tools/benchmark_guard.py`: broad desktop regression guard for catastrophic changes,
   not an MCU release baseline.
+- `benchmark_compare.py`: fixed-condition JSON/HTML comparison for adapters that
+  already measured equivalent CPU or embedded workloads. It rejects mismatched
+  rendering conditions and failed output validation.
 
 ### Compatibility And Editor Data
 

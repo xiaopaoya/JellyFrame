@@ -9,6 +9,7 @@ HTML/CSS compatibility tables. App authors normally start with
 | Goal | Entry point |
 | --- | --- |
 | Check desktop benchmark regressions | `benchmark_guard.py` |
+| Compare fixed-condition benchmark runs | `../tools/benchmark_compare.py` |
 | Verify a generated Render Core profile and link map | `check_render_core_link_map.py` |
 | Inspect or regenerate the Render Core feature catalog | `render_core_feature_registry.py` |
 | Package the App Author SDK | `package_app_author_sdk.py` |
