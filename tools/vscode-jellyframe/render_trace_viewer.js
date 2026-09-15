@@ -598,6 +598,86 @@ function frameHotspotSummary(frame) {
   };
 }
 
+function frameCommandCostMap(frame) {
+  const map = new Map();
+  const spans = Array.isArray(frame?.commandSpans) ? frame.commandSpans.map(normalizeCommandSpan).filter(Boolean) : null;
+  if (spans !== null) {
+    for (const span of spans) {
+      const key = span.type + "\u0000" + span.owner;
+      const entry = map.get(key) || { name: span.type + " · " + span.owner, type: span.type, owner: span.owner, us: 0, pixels: 0, count: 0 };
+      entry.us = Math.min(Number.MAX_SAFE_INTEGER, entry.us + span.durationUs);
+      entry.pixels = Math.min(Number.MAX_SAFE_INTEGER, entry.pixels + span.pixels);
+      entry.count = Math.min(Number.MAX_SAFE_INTEGER, entry.count + 1);
+      map.set(key, entry);
+    }
+    return { source: "spans", map, truncated: frame?.commandSpansTruncated === true };
+  }
+  for (const item of Array.isArray(frame?.commands) ? frame.commands : []) {
+    const sample = normalizeCommandSample(item);
+    if (!sample) continue;
+    const key = sample.command + "\u0000" + sample.owner;
+    const entry = map.get(key) || { name: sample.command + " · " + sample.owner, type: sample.command, owner: sample.owner, us: 0, pixels: 0, count: 0 };
+    entry.us = Math.min(Number.MAX_SAFE_INTEGER, entry.us + sample.us);
+    entry.pixels = Math.min(Number.MAX_SAFE_INTEGER, entry.pixels + sample.pixels);
+    entry.count = Math.min(Number.MAX_SAFE_INTEGER, entry.count + sample.samples);
+    map.set(key, entry);
+  }
+  return { source: "aggregate", map, truncated: frame?.commandsTruncated === true };
+}
+
+function frameDeltaSummary(frame, previousFrame) {
+  if (!frame || !previousFrame) return { available: false };
+  const currentTiming = frameTimingBreakdown(frame);
+  const previousTiming = frameTimingBreakdown(previousFrame);
+  const stageNames = new Set([
+    ...Object.keys(frame.stagesUs || {}),
+    ...Object.keys(previousFrame.stagesUs || {})
+  ]);
+  const stages = Array.from(stageNames).map((name) => ({
+    name,
+    deltaUs: (Number.isSafeInteger(frame.stagesUs?.[name]) ? frame.stagesUs[name] : 0) -
+      (Number.isSafeInteger(previousFrame.stagesUs?.[name]) ? previousFrame.stagesUs[name] : 0)
+  })).filter((item) => item.deltaUs !== 0).sort((left, right) => right.deltaUs - left.deltaUs || left.name.localeCompare(right.name));
+  const currentCommands = frameCommandCostMap(frame);
+  const previousCommands = frameCommandCostMap(previousFrame);
+  const commandComparable = currentCommands.source === previousCommands.source;
+  const commands = [];
+  if (commandComparable) {
+    const commandKeys = new Set([...currentCommands.map.keys(), ...previousCommands.map.keys()]);
+    for (const key of commandKeys) {
+      const current = currentCommands.map.get(key);
+      const previous = previousCommands.map.get(key);
+      const deltaUs = (current?.us || 0) - (previous?.us || 0);
+      if (deltaUs !== 0) {
+        commands.push({
+          name: current?.name || previous.name,
+          type: current?.type || previous.type,
+          owner: current?.owner || previous.owner,
+          deltaUs,
+          currentUs: current?.us || 0,
+          previousUs: previous?.us || 0
+        });
+      }
+    }
+    commands.sort((left, right) => right.deltaUs - left.deltaUs || left.name.localeCompare(right.name));
+  }
+  return {
+    available: true,
+    frame: frame.frame,
+    previousFrame: previousFrame.frame,
+    totalDeltaUs: currentTiming.totalUs - previousTiming.totalUs,
+    dirtyRectCountDelta: (Number.isSafeInteger(frame.dirtyRectCount) ? frame.dirtyRectCount : 0) -
+      (Number.isSafeInteger(previousFrame.dirtyRectCount) ? previousFrame.dirtyRectCount : 0),
+    dirtyAreaPercentDelta: (Number.isFinite(Number(frame.dirtyAreaPercent)) ? Number(frame.dirtyAreaPercent) : 0) -
+      (Number.isFinite(Number(previousFrame.dirtyAreaPercent)) ? Number(previousFrame.dirtyAreaPercent) : 0),
+    stages,
+    commandComparable,
+    commandSource: currentCommands.source,
+    commandDataTruncated: currentCommands.truncated || previousCommands.truncated,
+    commands: commands.slice(0, 16)
+  };
+}
+
 function frameTimingSummary(parsed) {
   const values = (parsed?.frames || [])
     .map((frame) => frameTimingBreakdown(frame).totalUs)
@@ -648,11 +728,14 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
   const frameDirtyEvidence = Object.fromEntries((parsed?.frames || []).map((frame) => [
     String(frame.frame), frameDirtyRepaintEvidence(frame)
   ]));
+  const frameDeltas = Object.fromEntries((parsed?.frames || []).map((frame, index) => [
+    String(frame.frame), frameDeltaSummary(frame, index > 0 ? parsed.frames[index - 1] : null)
+  ]));
   const frameHotspots = Object.fromEntries((parsed?.frames || []).map((frame) => [
     String(frame.frame), frameHotspotSummary(frame)
   ]));
   const frameSummary = frameTimingSummary(parsed);
-  const data = safeJson({ ...parsed, frameImages, frameTiming, frameComposition, frameTimelines, frameCommandTimelines, frameDirtyEvidence, frameHotspots, frameSummary, aggregate: aggregateTrace(parsed) });
+  const data = safeJson({ ...parsed, frameImages, frameTiming, frameComposition, frameTimelines, frameCommandTimelines, frameDirtyEvidence, frameDeltas, frameHotspots, frameSummary, aggregate: aggregateTrace(parsed) });
   const labels = chinese ? {
     title: "Render Trace",
     frame: "帧",
@@ -721,7 +804,14 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     aggregateMissing: "缺失归因",
     aggregateMissingNote: "有效命令没有 owner/nodeId，已计入 unattributed；无效计时样本未纳入聚合。",
     aggregateInvalid: "无效命令样本",
-    aggregateTruncated: "截断帧",
+     aggregateTruncated: "截断帧",
+     frameDelta: "相邻帧变化",
+     frameDeltaNote: "与上一条有效 frame 记录对比；命令变化仅在两帧使用相同数据源时显示。正值表示增加，负值表示减少。",
+     noPreviousFrame: "没有上一条有效 frame 记录",
+     commandDeltaUnavailable: "相邻帧命令数据源不同，无法进行命令耗时对比。",
+     delta: "变化",
+     currentValue: "当前",
+     previousValue: "上一帧",
     unaccounted: "未归因时间",
     hotspots: "当前帧热点",
     hottestStage: "最耗时阶段",
@@ -801,7 +891,14 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     aggregateMissing: "Missing attribution",
     aggregateMissingNote: "Valid commands without owner/nodeId are grouped as unattributed; invalid timing samples are excluded.",
     aggregateInvalid: "Invalid command samples",
-    aggregateTruncated: "Truncated frames",
+     aggregateTruncated: "Truncated frames",
+     frameDelta: "Adjacent-frame change",
+     frameDeltaNote: "Compared with the previous valid frame record; command deltas are shown only when both frames use the same data source. Positive values increased, negative values decreased.",
+     noPreviousFrame: "No previous valid frame record",
+     commandDeltaUnavailable: "Adjacent frames use different command data sources; command timing cannot be compared.",
+     delta: "Delta",
+     currentValue: "Current",
+     previousValue: "Previous",
     unaccounted: "Unaccounted time",
     hotspots: "Frame hotspots",
     hottestStage: "Hottest stage",
@@ -859,7 +956,7 @@ const slowestFrameIndex=model.frames.length?model.frames.reduce((best,frame,inde
 function render(){
  const frame=model.frames[Number(slider.value)]; if(!frame){view.innerHTML='<p class="muted">'+esc(labels.none)+'</p>';return;}
  number.textContent=fmt(frame.frame)+' / '+fmt(model.frames.length-1);
- const stages=Object.entries(frame.stagesUs||{}); const timing=model.frameTiming?.[String(frame.frame)]||{totalUs:0,recordedStageUs:0,unaccountedUs:0}; const composition=model.frameComposition?.[String(frame.frame)]||{segments:[],overrunUs:0}; const timeline=model.frameTimelines?.[String(frame.frame)]||{available:false,segments:[],overrunUs:0}; const commandTimeline=model.frameCommandTimelines?.[String(frame.frame)]||{available:false,segments:[],overrunUs:0}; const hotspots=model.frameHotspots?.[String(frame.frame)]||{}; const total=timing.totalUs; const unaccountedUs=timing.unaccountedUs; const max=Math.max(1,total,...stages.map(([,v])=>Number(v)||0));
+ const stages=Object.entries(frame.stagesUs||{}); const timing=model.frameTiming?.[String(frame.frame)]||{totalUs:0,recordedStageUs:0,unaccountedUs:0}; const composition=model.frameComposition?.[String(frame.frame)]||{segments:[],overrunUs:0}; const timeline=model.frameTimelines?.[String(frame.frame)]||{available:false,segments:[],overrunUs:0}; const commandTimeline=model.frameCommandTimelines?.[String(frame.frame)]||{available:false,segments:[],overrunUs:0}; const hotspots=model.frameHotspots?.[String(frame.frame)]||{}; const delta=model.frameDeltas?.[String(frame.frame)]||{available:false,stages:[],commands:[]}; const total=timing.totalUs; const unaccountedUs=timing.unaccountedUs; const max=Math.max(1,total,...stages.map(([,v])=>Number(v)||0));
  const fps=total>0?(1000000/total).toFixed(1):labels.none;
  const commands=(Array.isArray(frame.commands)?frame.commands:[]).map((item)=>{if(!item||typeof item!=='object'||typeof item.type!=='string'||!Number.isSafeInteger(item.us)||item.us<0||!Number.isSafeInteger(item.pixels)||item.pixels<0)return null;const samples=Number.isSafeInteger(item.samples)&&item.samples>0?item.samples:1;const owner=typeof item.owner==='string'&&item.owner.trim()?item.owner:(typeof item.nodeId==='string'&&item.nodeId.trim()?item.nodeId:'unattributed');return {...item,owner,samples,attributed:owner!=='unattributed'};}).filter(Boolean).sort((left,right)=>right.us-left.us).slice(0,64); const unattributedCount=commands.filter((item)=>!item.attributed).length; const pipeline=frame.pipeline||{};
  const dirtyPercent=Math.max(0,Math.min(100,Number(frame.dirtyAreaPercent)||0));
@@ -876,6 +973,10 @@ function render(){
  '<div class="hotspot"><span>'+esc(labels.hottestStage)+'</span>'+hotspotValue(hotspots.stage)+'</div>'+
  '<div class="hotspot"><span>'+esc(labels.hottestCommand)+'</span>'+hotspotValue(hotspots.command)+'</div>'+
  '<div class="hotspot"><span>'+esc(labels.hottestOwner)+'</span>'+hotspotValue(hotspots.owner)+'</div></div>';
+ const deltaNumber=(value)=>{const number=Number(value)||0;return (number>0?'+':'')+fmt(number);};
+ const deltaStageRows=delta.stages?.length?'<table><tr><th>'+esc(labels.aggregateStage)+'</th><th>'+esc(labels.delta)+'</th></tr>'+delta.stages.map((item)=>'<tr><td><code>'+esc(item.name)+'</code></td><td>'+deltaNumber(item.deltaUs)+' us</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>';
+ const deltaCommandRows=delta.commandComparable?(delta.commands?.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.previousValue)+'</th><th>'+esc(labels.currentValue)+'</th><th>'+esc(labels.delta)+'</th></tr>'+delta.commands.map((item)=>'<tr><td>'+esc(item.type)+'</td><td><code>'+esc(item.owner)+'</code></td><td>'+fmt(item.previousUs)+' us</td><td>'+fmt(item.currentUs)+' us</td><td>'+deltaNumber(item.deltaUs)+' us</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>'): '<p class="muted">'+esc(labels.commandDeltaUnavailable)+'</p>';
+ const frameDeltaView=delta.available?'<h2>'+esc(labels.frameDelta)+'</h2><p class="muted">'+esc(labels.frameDeltaNote)+' ('+esc(labels.previousValue)+' #'+fmt(delta.previousFrame)+')</p><div class="metric-grid"><div class="metric"><span>'+esc(labels.total)+'</span><b>'+deltaNumber(delta.totalDeltaUs)+' us</b></div><div class="metric"><span>'+esc(labels.dirtyRects)+'</span><b>'+deltaNumber(delta.dirtyRectCountDelta)+'</b></div><div class="metric"><span>'+esc(labels.dirtyCoverage)+'</span><b>'+deltaNumber(delta.dirtyAreaPercentDelta)+'%</b></div></div><h3>'+esc(labels.stages)+'</h3>'+deltaStageRows+'<h3>'+esc(labels.commands)+'</h3>'+deltaCommandRows+(delta.commandDataTruncated?'<p class="muted">'+esc(labels.commandsTruncated)+'</p>':''):'<p class="muted">'+esc(labels.noPreviousFrame)+'</p>';
  const runtimeSource=typeof model.session?.runtime==='string'&&model.session.runtime.trim()?model.session.runtime.trim():labels.sourceUnspecified;
  const stageTimelineView=timeline.available?'<h2>'+esc(labels.stageTimeline)+'</h2><p class="muted">'+esc(labels.stageTimelineNote)+'</p><div class="stage-timeline">'+timeline.segments.map((segment,index)=>{const name=segment.kind==='gap'?labels.timelineGap:segment.name;const detail=name+': '+fmt(segment.durationUs)+' us (start '+fmt(segment.startUs)+' us)';return '<button type="button" class="timeline-segment '+(segment.kind==='gap'?'gap':'')+'" data-timeline-index="'+index+'" style="left:'+Math.max(0,Number(segment.leftPercent)||0)+'%;width:'+Math.max(0,Number(segment.widthPercent)||0)+'%" title="'+esc(detail)+'" aria-label="'+esc(detail)+'"></button>';}).join('')+'</div><div id="timelineDetail" class="stage-detail muted">'+esc(labels.stageDetail)+': '+esc(labels.none)+'</div>'+(timeline.overrunUs>0?'<p class="notice error">'+esc(labels.stageOverrun)+' ('+fmt(timeline.overrunUs)+' us)</p>':''):'<p class="muted">'+esc(labels.stageTimelineUnavailable)+'</p>';
  const commandTimelineView=commandTimeline.available?'<h2>'+esc(labels.commandTimeline)+'</h2><p class="muted">'+esc(labels.commandTimelineNote)+'</p><div class="stage-timeline">'+commandTimeline.segments.map((segment,index)=>{const name=segment.kind==='gap'?labels.timelineGap:segment.name;const detail=name+': '+fmt(segment.durationUs)+' us (start '+fmt(segment.startUs)+' us)';return '<button type="button" class="timeline-segment '+(segment.kind==='gap'?'gap':'')+'" data-command-timeline-index="'+index+'" style="left:'+Math.max(0,Number(segment.leftPercent)||0)+'%;width:'+Math.max(0,Number(segment.widthPercent)||0)+'%" title="'+esc(detail)+'" aria-label="'+esc(detail)+'"></button>';}).join('')+'</div><div id="commandTimelineDetail" class="stage-detail muted">'+esc(labels.stageDetail)+': '+esc(labels.none)+'</div>'+(commandTimeline.overrunUs>0?'<p class="notice error">'+esc(labels.stageOverrun)+' ('+fmt(commandTimeline.overrunUs)+' us)</p>':''):'';
@@ -889,6 +990,7 @@ function render(){
  '<div class="metric"><span>'+esc(labels.dirty)+'</span><b>'+fmt(frame.dirtyRectCount)+' / '+fmt(frame.dirtyAreaPercent)+'%</b></div></div>'+
  captureView+
  hotspotView+
+ frameDeltaView+
  stageTimelineView+
  commandTimelineView+
  stageCompositionView+
@@ -910,4 +1012,4 @@ renderFrameSummary();renderAggregate();slider.max=Math.max(0,model.frames.length
 </script></body></html>`;
 }
 
-module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameTimingSummary, renderTraceHtml };
+module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameCommandCostMap, frameDeltaSummary, frameTimingSummary, renderTraceHtml };

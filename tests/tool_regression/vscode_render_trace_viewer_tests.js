@@ -1,6 +1,6 @@
 const assert = require("assert");
 const fs = require("fs");
-const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
+const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameDeltaSummary, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
 const vm = require("vm");
 
 function loadTraceHelpers() {
@@ -196,6 +196,25 @@ function main() {
     command: { name: "Text", us: 1000, pixels: 20, samples: 2 },
     owner: { name: "id:title", us: 1000, samples: 2 }
   });
+  const delta = frameDeltaSummary(frame, {
+    frame: 99,
+    totalUs: 1500,
+    stagesUs: { layout: 600, paint: 800 },
+    dirtyRectCount: 2,
+    dirtyAreaPercent: 1,
+    commands: [{ type: "Text", owner: "id:title", us: 800, pixels: 20, samples: 1 }]
+  });
+  assert.equal(delta.available, true);
+  assert.equal(delta.totalDeltaUs, 500);
+  assert.equal(delta.dirtyRectCountDelta, -1);
+  assert.equal(delta.dirtyAreaPercentDelta, 2);
+  assert.deepEqual(delta.stages, [
+    { name: "paint", deltaUs: 200 },
+    { name: "layout", deltaUs: -100 }
+  ]);
+  assert.equal(delta.commandComparable, true);
+  assert.equal(delta.commands.find((item) => item.name === "Text · id:title").deltaUs, 200);
+  assert.equal(delta.commands.find((item) => item.name === "FillRect · n2").deltaUs, 400);
   assert.deepEqual(frameTimingSummary({ frames: [frame, { ...frame, totalUs: 3000 }] }), {
     count: 2,
     p50Us: 2000,
@@ -278,6 +297,8 @@ function main() {
   assert(html.includes("dirtyRects"));
   assert(html.includes("脏区内的实际重绘证据"));
   assert(html.includes("frameDirtyEvidence"));
+  assert(html.includes("相邻帧变化"));
+  assert(html.includes("frameDeltas"));
   assert(html.includes('"width":64'));
   assert(html.includes("dirtyRectsTruncated"));
   assert(html.includes("capture-stage"));
