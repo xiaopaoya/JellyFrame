@@ -174,6 +174,7 @@ struct SoftwareRasterizerCommandSample {
     std::uint32_t trace_owner_token = 0;
     Rect clip;
     std::size_t candidate_pixels = 0;
+    std::uint64_t begin_microseconds = 0;
     std::uint64_t elapsed_microseconds = 0;
     bool timing_valid = false;
 };

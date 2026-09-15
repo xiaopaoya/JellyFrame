@@ -1,6 +1,6 @@
 const assert = require("assert");
 const fs = require("fs");
-const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameHotspotSummary, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
+const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameHotspotSummary, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
 const vm = require("vm");
 
 function loadTraceHelpers() {
@@ -100,6 +100,69 @@ function main() {
     unaccountedUs: 0,
     timingComplete: false
   });
+  assert.deepEqual(frameStageComposition(frame), {
+    totalUs: 2000,
+    recordedStageUs: 1500,
+    unaccountedUs: 500,
+    timingComplete: false,
+    denominatorUs: 2000,
+    overrunUs: 0,
+    segments: [
+      { name: "layout", us: 500, kind: "stage", widthPercent: 25, frameSharePercent: 25 },
+      { name: "paint", us: 1000, kind: "stage", widthPercent: 50, frameSharePercent: 50 },
+      { name: "unaccounted", us: 500, kind: "unaccounted", widthPercent: 25, frameSharePercent: 25 }
+    ]
+  });
+  assert.deepEqual(frameStageComposition({ totalUs: 10, stagesUs: { layout: 20 } }), {
+    totalUs: 10,
+    recordedStageUs: 20,
+    unaccountedUs: 0,
+    timingComplete: false,
+    denominatorUs: 20,
+    overrunUs: 10,
+    segments: [
+      { name: "layout", us: 20, kind: "stage", widthPercent: 100, frameSharePercent: 200 }
+    ]
+  });
+  const spanFrame = {
+    ...frame,
+    frame: 1,
+    stageSpans: [
+      { name: "input", startUs: 0, durationUs: 100 },
+      { name: "paint", startUs: 140, durationUs: 300 }
+    ]
+  };
+  assert.deepEqual(frameStageTimeline(spanFrame), {
+    available: true,
+    totalUs: 2000,
+    denominatorUs: 2000,
+    overrunUs: 0,
+    segments: [
+      { name: "input", kind: "stage", startUs: 0, durationUs: 100, leftPercent: 0, widthPercent: 5 },
+      { name: "unaccounted", kind: "gap", startUs: 100, durationUs: 40, leftPercent: 5, widthPercent: 2 },
+      { name: "paint", kind: "stage", startUs: 140, durationUs: 300, leftPercent: 7, widthPercent: 15 },
+      { name: "unaccounted", kind: "gap", startUs: 440, durationUs: 1560, leftPercent: 22, widthPercent: 78 }
+    ]
+  });
+  const commandFrame = {
+    ...spanFrame,
+    commandSpans: [
+      { type: "FillRect", owner: "id:card", startUs: 3200, durationUs: 70, pixels: 100 },
+      { type: "Text", owner: "id:title", startUs: 3310, durationUs: 90, pixels: 24 }
+    ]
+  };
+  assert.deepEqual(frameCommandTimeline(commandFrame), {
+    available: true,
+    totalUs: 2000,
+    denominatorUs: 3400,
+    overrunUs: 1400,
+    segments: [
+      { name: "unaccounted", kind: "gap", startUs: 0, durationUs: 3200, leftPercent: 0, widthPercent: 3200 * 100 / 3400 },
+      { name: "FillRect · id:card", type: "FillRect", owner: "id:card", pixels: 100, kind: "command", startUs: 3200, durationUs: 70, leftPercent: 3200 * 100 / 3400, widthPercent: 70 * 100 / 3400 },
+      { name: "unaccounted", kind: "gap", startUs: 3270, durationUs: 40, leftPercent: 3270 * 100 / 3400, widthPercent: 40 * 100 / 3400 },
+      { name: "Text · id:title", type: "Text", owner: "id:title", pixels: 24, kind: "command", startUs: 3310, durationUs: 90, leftPercent: 3310 * 100 / 3400, widthPercent: 90 * 100 / 3400 }
+    ]
+  });
   assert.deepEqual(frameHotspotSummary(frame), {
     stage: { name: "paint", us: 1000 },
     command: { name: "Text", us: 1000, pixels: 20, samples: 2 },
@@ -143,6 +206,20 @@ function main() {
   assert(html.includes("legacy-card"));
   assert(html.includes("timingComplete"));
   assert(html.includes("未归因时间"));
+  assert(html.includes("单帧阶段构成"));
+  assert(html.includes("stage-composition"));
+  assert(html.includes("data-stage-index"));
+  assert(html.includes("frameComposition"));
+  assert(html.includes("trace producer（未声明 runtime）"));
+  const spanHtml = renderTraceHtml(parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify(spanFrame)}\n`), true, "span-trace.jsonl");
+  assert(spanHtml.includes("单帧实际时间线"));
+  assert(spanHtml.includes("stage-timeline"));
+  assert(spanHtml.includes("data-timeline-index"));
+  assert(spanHtml.includes("stageSpans"));
+  const commandHtml = renderTraceHtml(parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify(commandFrame)}\n`), true, "command-trace.jsonl");
+  assert(commandHtml.includes("绘制命令实际时间线"));
+  assert(commandHtml.includes("data-command-timeline-index"));
+  assert(commandHtml.includes("commandSpans"));
   assert(html.includes("当前帧热点"));
   assert(html.includes("跨帧总耗时"));
   assert(html.includes("frameSummaryView"));
@@ -173,6 +250,10 @@ function main() {
   const invalid = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, frame: 2 })}\n${JSON.stringify({ ...frame, frame: 1 })}\n`);
   assert.equal(invalid.frames.length, 1);
   assert(invalid.errors.some((error) => error.includes("strictly increasing")));
+  const invalidSpans = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, stageSpans: [{ name: "paint", startUs: -1, durationUs: 1 }] })}\n`);
+  assert(invalidSpans.errors.some((error) => error.includes("stage spans")));
+  const invalidCommandSpans = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, commandSpans: [{ type: "Text", owner: "id:x", startUs: 0, durationUs: 1, pixels: -1 }] })}\n`);
+  assert(invalidCommandSpans.errors.some((error) => error.includes("command spans")));
 }
 
 main();

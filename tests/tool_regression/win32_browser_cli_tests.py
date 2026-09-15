@@ -336,6 +336,29 @@ def main() -> int:
                     "capture-only trace must not claim complete phase timing")
             require(isinstance(record["stagesUs"], dict),
                     "render trace phase timing must be an object")
+            stage_spans = record.get("stageSpans", [])
+            require(isinstance(stage_spans, list) and len(stage_spans) <= 32,
+                    "render trace stage spans must stay bounded")
+            for span in stage_spans:
+                require(set(span) == {"name", "startUs", "durationUs"},
+                        "render trace stage spans must use stable fields")
+                require(isinstance(span["name"], str) and span["name"],
+                        "render trace stage span names must be non-empty")
+                require(all(isinstance(span[key], int) and span[key] >= 0
+                            for key in ("startUs", "durationUs")),
+                        "render trace stage span times must be non-negative")
+            command_spans = record.get("commandSpans", [])
+            require(isinstance(command_spans, list) and len(command_spans) <= 16,
+                    "render trace command spans must stay bounded")
+            for span in command_spans:
+                require(set(span) == {"type", "owner", "startUs", "durationUs", "pixels"},
+                        "render trace command spans must use stable fields")
+                require(isinstance(span["type"], str) and span["type"] and
+                        isinstance(span["owner"], str) and span["owner"],
+                        "render trace command spans must identify type and owner")
+                require(all(isinstance(span[key], int) and span[key] >= 0
+                            for key in ("startUs", "durationUs", "pixels")),
+                        "render trace command span values must be non-negative")
             require(record["action"] in {"none", "repaint-existing", "rebuild-pipeline"},
                     "render trace must use a stable update action")
             require("pipeline" in record and "domNodes" in record["pipeline"],
@@ -370,6 +393,10 @@ def main() -> int:
                         "render trace command attribution must represent real raster invocations")
         require(any(record["stagesUs"] for record in frame_records),
                 "a frame that renders during capture must expose measured phase timing")
+        require(any(record.get("stageSpans") for record in frame_records),
+                "a frame that renders during capture must expose stage spans")
+        require(any(record.get("commandSpans") for record in frame_records),
+                "a frame that renders during capture must expose command spans")
         command_owners = {command["owner"]
                           for record in frame_records
                           for command in record.get("commands", [])}

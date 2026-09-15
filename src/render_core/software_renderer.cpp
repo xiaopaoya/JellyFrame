@@ -1772,6 +1772,7 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
         sample.trace_owner_token = command.trace_owner_token;
         sample.clip = clipped;
         sample.candidate_pixels = clipped_rect_pixels(clipped);
+        sample.begin_microseconds = command_begin_microseconds;
         if (time_command) {
             const std::uint64_t command_end_microseconds = options_.timing.now_microseconds(options_.timing.context);
             if (command_end_microseconds >= command_begin_microseconds) {

@@ -2,7 +2,7 @@
 
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-09-10; Applies to: 0.6.0-dev; extension version: 0.4.57; compatibility baseline: 0.5.0
+> Last updated: 2026-09-15; Applies to: 0.6.0-dev; extension version: 0.4.57; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -25,8 +25,12 @@ Palette as entry points.
   dirty-rectangle overlays, ranked paint-command attribution and the matching
   captured frame image when available. Command rows expose owner, raster time,
   candidate pixels and samples, while truncation and incomplete timing remain
-  explicit. It does not present desktop timing as device FPS. Missing images are
-  reported explicitly instead of being inferred as blank frames.
+  explicit. The frame view also provides a clickable stage-composition bar and
+  span timeline with absolute time, frame share, start offset and producer
+  runtime source when spans are available, plus a bounded paint-command span
+  timeline; older traces fall back to accumulated stage cost. It does not
+  present desktop timing as device FPS. Missing images are reported explicitly
+  instead of being inferred as blank frames.
 - Inline diagnostics for app-author advice, package warnings and pipeline
   diagnostics.
 - Explorer status view showing the selected app, build, report diagnostics and
@@ -113,7 +117,10 @@ go to `.jellyframe/build` in the App project instead of into the SDK.
 
 Use `JellyFrame: Show Last Report` to reopen the latest report panel.
 Use `JellyFrame: Open Render Performance Trace` to select a
-`jellyframe.render.trace.v0` JSONL file and inspect it with the frame scrubber.
+`jellyframe.render.trace.v0` JSONL file and inspect stage composition, span
+timeline, paint commands, dirty regions and frame captures with the frame
+scrubber. Click a stage or command segment to see its absolute time, frame
+share, start offset and producer source.
 The viewer bounds input size, preserves invalid or non-monotonic frame issues,
 and never silently sorts or fabricates records.
 

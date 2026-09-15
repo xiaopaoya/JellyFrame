@@ -2,7 +2,7 @@
 
 # JellyFrame VS Code 工具
 
-> 最后更新：2026-09-10；适用版本：0.6.0-dev；扩展版本：0.4.57；兼容基线：0.5.0
+> 最后更新：2026-09-15；适用版本：0.6.0-dev；扩展版本：0.4.57；兼容基线：0.5.0
 
 JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里检查、预览、调试和
 打包 JellyFrame App。安装后可以从左侧 JellyFrame 活动栏、资源管理器/编辑器右键菜单
@@ -21,7 +21,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 - `Render Trace` webview 可逐帧查看桌面壳 JSONL trace 的总耗时、阶段占比、dirty 区指标、
   有界 dirty 矩形截图叠加、当前帧截图和按耗时排名的绘制命令归因。命令行显示归因对象、raster
   耗时、候选像素和调用次数，并明确标注截断与不完整计时；它不把桌面数据解释为设备 FPS。截图缺失
-  时会明确提示，不将其当作空白画面。
+  时会明确提示，不将其当作空白画面。单帧视图还提供可点击的阶段构成条和实际 span 时间线；
+  新 trace 显示开始偏移与未归因间隙，并可查看有界的绘制命令实际时间线；旧 trace 回退为累计阶段耗时。
 - 对 app 作者建议、package warnings 和管线 diagnostics 提供 inline diagnostics。
 - Explorer 中的 JellyFrame 状态视图显示当前 app、构建目录、报告诊断和性能摘要。
 - 首次配置作者环境时选择已安装的 JellyFrame SDK，独立 App 工作区随后可直接使用。
@@ -82,7 +83,9 @@ SDK 安装不会覆盖已有目录；Windows 的短暂权限或文件占用会�
 
 使用 `JellyFrame: Show Last Report` 可以重新打开最近一次报告面板。
 使用 `JellyFrame: Open Render Performance Trace` 选择 `jellyframe.render.trace.v0` JSONL，
-在逐帧滑块中查看阶段和绘制命令。查看器拒绝过大的文件，并保留非法或非递增帧号问题，
+在逐帧滑块中查看阶段构成、实际 span 时间线、绘制命令时间线、dirty 区和帧截图；点击
+阶段或命令段可查看绝对耗时、占比、开始偏移和来源。
+查看器拒绝过大的文件，并保留非法或非递增帧号问题，
 不会静默排序或伪造数据。
 
 “验证 App 包”是快速的纯包门禁：检查 manifest、入口、资源、引用和声明预算，适合频繁运行，

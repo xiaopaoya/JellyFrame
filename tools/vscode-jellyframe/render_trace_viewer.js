@@ -61,6 +61,38 @@ function parseRenderTrace(text) {
       errors.push(`line ${index + 1}: stage times must be non-negative integers`);
       continue;
     }
+    if (record.stageSpans !== undefined) {
+      if (!Array.isArray(record.stageSpans)) {
+        errors.push(`line ${index + 1}: stageSpans must be an array`);
+        continue;
+      }
+      const invalidSpan = record.stageSpans.some((span) =>
+        !span || typeof span !== "object" || typeof span.name !== "string" || !span.name.trim() ||
+        !Number.isSafeInteger(span.startUs) || span.startUs < 0 ||
+        !Number.isSafeInteger(span.durationUs) || span.durationUs < 0
+      );
+      if (invalidSpan) {
+        errors.push(`line ${index + 1}: stage spans must have non-negative startUs and durationUs`);
+        continue;
+      }
+    }
+    if (record.commandSpans !== undefined) {
+      if (!Array.isArray(record.commandSpans)) {
+        errors.push(`line ${index + 1}: commandSpans must be an array`);
+        continue;
+      }
+      const invalidCommandSpan = record.commandSpans.some((span) =>
+        !span || typeof span !== "object" || typeof span.type !== "string" || !span.type.trim() ||
+        typeof span.owner !== "string" || !span.owner.trim() ||
+        !Number.isSafeInteger(span.startUs) || span.startUs < 0 ||
+        !Number.isSafeInteger(span.durationUs) || span.durationUs < 0 ||
+        !Number.isSafeInteger(span.pixels) || span.pixels < 0
+      );
+      if (invalidCommandSpan) {
+        errors.push(`line ${index + 1}: command spans must have stable non-negative fields`);
+        continue;
+      }
+    }
     frames.push(record);
     previousFrame = record.frame;
   }
@@ -177,6 +209,147 @@ function frameTimingBreakdown(frame) {
   };
 }
 
+function frameStageComposition(frame) {
+  const timing = frameTimingBreakdown(frame);
+  const stages = Object.entries(frame?.stagesUs || {})
+    .filter(([, value]) => Number.isSafeInteger(value) && value > 0)
+    .map(([name, us]) => ({ name, us, kind: "stage" }));
+  const denominatorUs = Math.max(1, timing.totalUs, timing.recordedStageUs);
+  const segments = stages.map((stage) => ({
+    ...stage,
+    widthPercent: stage.us * 100 / denominatorUs,
+    frameSharePercent: timing.totalUs > 0 ? stage.us * 100 / timing.totalUs : 0
+  }));
+  if (timing.unaccountedUs > 0) {
+    segments.push({
+      name: "unaccounted",
+      us: timing.unaccountedUs,
+      kind: "unaccounted",
+      widthPercent: timing.unaccountedUs * 100 / denominatorUs,
+      frameSharePercent: timing.totalUs > 0 ? timing.unaccountedUs * 100 / timing.totalUs : 0
+    });
+  }
+  return {
+    ...timing,
+    denominatorUs,
+    overrunUs: Math.max(0, timing.recordedStageUs - timing.totalUs),
+    segments
+  };
+}
+
+function frameStageTimeline(frame) {
+  if (!Array.isArray(frame?.stageSpans)) {
+    return { available: false, totalUs: frameTimingBreakdown(frame).totalUs, segments: [] };
+  }
+  const timing = frameTimingBreakdown(frame);
+  const spans = frame.stageSpans.filter((span) =>
+    span && typeof span.name === "string" && span.name.trim() &&
+    Number.isSafeInteger(span.startUs) && span.startUs >= 0 &&
+    Number.isSafeInteger(span.durationUs) && span.durationUs >= 0
+  );
+  const maxEndUs = spans.reduce((maxEnd, span) => Math.max(maxEnd, span.startUs + span.durationUs), timing.totalUs);
+  const denominatorUs = Math.max(1, maxEndUs);
+  const segments = [];
+  let cursorUs = 0;
+  for (const span of spans) {
+    if (span.startUs > cursorUs) {
+      segments.push({
+        name: "unaccounted",
+        kind: "gap",
+        startUs: cursorUs,
+        durationUs: span.startUs - cursorUs,
+        leftPercent: cursorUs * 100 / denominatorUs,
+        widthPercent: (span.startUs - cursorUs) * 100 / denominatorUs
+      });
+    }
+    segments.push({
+      name: span.name.trim(),
+      kind: "stage",
+      startUs: span.startUs,
+      durationUs: span.durationUs,
+      leftPercent: span.startUs * 100 / denominatorUs,
+      widthPercent: span.durationUs * 100 / denominatorUs
+    });
+    cursorUs = Math.max(cursorUs, span.startUs + span.durationUs);
+  }
+  if (cursorUs < timing.totalUs) {
+    segments.push({
+      name: "unaccounted",
+      kind: "gap",
+      startUs: cursorUs,
+      durationUs: timing.totalUs - cursorUs,
+      leftPercent: cursorUs * 100 / denominatorUs,
+      widthPercent: (timing.totalUs - cursorUs) * 100 / denominatorUs
+    });
+  }
+  return {
+    available: true,
+    totalUs: timing.totalUs,
+    denominatorUs,
+    overrunUs: Math.max(0, maxEndUs - timing.totalUs),
+    segments
+  };
+}
+
+function frameCommandTimeline(frame) {
+  if (!Array.isArray(frame?.commandSpans)) {
+    return { available: false, totalUs: frameTimingBreakdown(frame).totalUs, segments: [] };
+  }
+  const timing = frameTimingBreakdown(frame);
+  const spans = frame.commandSpans.filter((span) =>
+    span && typeof span.type === "string" && span.type.trim() &&
+    typeof span.owner === "string" && span.owner.trim() &&
+    Number.isSafeInteger(span.startUs) && span.startUs >= 0 &&
+    Number.isSafeInteger(span.durationUs) && span.durationUs >= 0 &&
+    Number.isSafeInteger(span.pixels) && span.pixels >= 0
+  );
+  const maxEndUs = spans.reduce((maxEnd, span) => Math.max(maxEnd, span.startUs + span.durationUs), timing.totalUs);
+  const denominatorUs = Math.max(1, maxEndUs);
+  const segments = [];
+  let cursorUs = 0;
+  for (const span of spans) {
+    if (span.startUs > cursorUs) {
+      segments.push({
+        name: "unaccounted",
+        kind: "gap",
+        startUs: cursorUs,
+        durationUs: span.startUs - cursorUs,
+        leftPercent: cursorUs * 100 / denominatorUs,
+        widthPercent: (span.startUs - cursorUs) * 100 / denominatorUs
+      });
+    }
+    segments.push({
+      name: span.type + " · " + span.owner,
+      type: span.type,
+      owner: span.owner,
+      pixels: span.pixels,
+      kind: "command",
+      startUs: span.startUs,
+      durationUs: span.durationUs,
+      leftPercent: span.startUs * 100 / denominatorUs,
+      widthPercent: span.durationUs * 100 / denominatorUs
+    });
+    cursorUs = Math.max(cursorUs, span.startUs + span.durationUs);
+  }
+  if (cursorUs < timing.totalUs) {
+    segments.push({
+      name: "unaccounted",
+      kind: "gap",
+      startUs: cursorUs,
+      durationUs: timing.totalUs - cursorUs,
+      leftPercent: cursorUs * 100 / denominatorUs,
+      widthPercent: (timing.totalUs - cursorUs) * 100 / denominatorUs
+    });
+  }
+  return {
+    available: true,
+    totalUs: timing.totalUs,
+    denominatorUs,
+    overrunUs: Math.max(0, maxEndUs - timing.totalUs),
+    segments
+  };
+}
+
 function frameHotspotSummary(frame) {
   const stages = Object.entries(frame?.stagesUs || {})
     .filter(([, value]) => Number.isSafeInteger(value) && value >= 0)
@@ -245,11 +418,20 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
   const frameTiming = Object.fromEntries((parsed?.frames || []).map((frame) => [
     String(frame.frame), frameTimingBreakdown(frame)
   ]));
+  const frameComposition = Object.fromEntries((parsed?.frames || []).map((frame) => [
+    String(frame.frame), frameStageComposition(frame)
+  ]));
+  const frameTimelines = Object.fromEntries((parsed?.frames || []).map((frame) => [
+    String(frame.frame), frameStageTimeline(frame)
+  ]));
+  const frameCommandTimelines = Object.fromEntries((parsed?.frames || []).map((frame) => [
+    String(frame.frame), frameCommandTimeline(frame)
+  ]));
   const frameHotspots = Object.fromEntries((parsed?.frames || []).map((frame) => [
     String(frame.frame), frameHotspotSummary(frame)
   ]));
   const frameSummary = frameTimingSummary(parsed);
-  const data = safeJson({ ...parsed, frameImages, frameTiming, frameHotspots, frameSummary, aggregate: aggregateTrace(parsed) });
+  const data = safeJson({ ...parsed, frameImages, frameTiming, frameComposition, frameTimelines, frameCommandTimelines, frameHotspots, frameSummary, aggregate: aggregateTrace(parsed) });
   const labels = chinese ? {
     title: "Render Trace",
     frame: "帧",
@@ -259,6 +441,18 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     reason: "原因",
     dirty: "脏区",
     stages: "阶段耗时",
+    stageComposition: "单帧阶段构成",
+    stageCompositionNote: "各段按 producer 输出顺序展示累计耗时占比，不代表真实开始/结束时刻；未归因时间可能出现在帧内任意位置。",
+    stageOverrun: "已记录阶段之和超过 frame wall time，构成条已按阶段总和归一化；请检查重叠计时或时钟来源。",
+    stageDetail: "阶段详情",
+    stageSource: "数据来源",
+    sourceUnspecified: "trace producer（未声明 runtime）",
+    stageTimeline: "单帧实际时间线",
+    stageTimelineNote: "仅由 trace 提供的 stageSpans 绘制；空白段表示已采集 span 之间的未归因间隙。",
+    stageTimelineUnavailable: "此 trace 没有实际 span 数据，已显示累计阶段构成。",
+    timelineGap: "未归因间隙",
+    commandTimeline: "绘制命令实际时间线",
+    commandTimelineNote: "仅覆盖带有效时钟的 raster invocation；rounded composite、transform 和宿主绘制仍可能未归因。",
     commands: "绘制命令归因",
     none: "无",
     noAttribution: "当前帧没有可归因的实际 raster 调用",
@@ -318,6 +512,18 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     reason: "Reason",
     dirty: "Dirty region",
     stages: "Stage timing",
+    stageComposition: "Frame stage composition",
+    stageCompositionNote: "Segments show accumulated duration shares in producer order, not true start/end spans. Unaccounted time may occur anywhere in the frame.",
+    stageOverrun: "Recorded stages exceed frame wall time. The composition is normalized to the stage total; inspect overlapping timers or clock sources.",
+    stageDetail: "Stage detail",
+    stageSource: "Source",
+    sourceUnspecified: "trace producer (runtime unspecified)",
+    stageTimeline: "Frame span timeline",
+    stageTimelineNote: "Rendered only from stageSpans supplied by the trace; blank segments are unaccounted gaps between recorded spans.",
+    stageTimelineUnavailable: "This trace has no span data; accumulated stage composition is shown instead.",
+    timelineGap: "Unaccounted gap",
+    commandTimeline: "Paint command span timeline",
+    commandTimelineNote: "Covers only raster invocations with valid clocks; rounded composites, transforms and host painting may remain unattributed.",
     commands: "Paint command attribution",
     none: "none",
     noAttribution: "This frame has no attributable raster invocations",
@@ -375,8 +581,8 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${options.cspSource || "data:"} data:; style-src 'unsafe-inline'; script-src 'nonce-jellyframe-trace';">
 <style>
-body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:16px;line-height:1.4}h1{font-size:18px;margin:0 0 8px}h2{font-size:14px;margin:20px 0 8px}.muted{color:var(--vscode-descriptionForeground)}.notice{border:1px solid var(--vscode-panel-border);padding:8px;margin:10px 0}.error{color:var(--vscode-errorForeground)}.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.controls input{flex:1;min-width:180px}.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:12px}.metric{border:1px solid var(--vscode-panel-border);padding:8px}.metric b{display:block;font-size:16px}.stage{display:grid;grid-template-columns:minmax(90px,1fr) 3fr 80px;gap:8px;align-items:center;margin:5px 0}.bar{height:8px;background:var(--vscode-editorWidget-background);border-radius:2px;overflow:hidden}.bar i{display:block;height:100%;background:var(--vscode-charts-blue)}.capture{border:1px solid var(--vscode-panel-border);padding:8px;margin-top:12px}.capture-stage{position:relative;display:inline-block;max-width:100%;margin-top:8px}.capture-stage img{display:block;max-width:100%;max-height:420px;object-fit:contain;background:var(--vscode-editor-background)}.dirty-overlay{position:absolute;border:1px solid var(--vscode-charts-orange);background:var(--vscode-editorWarning-foreground);opacity:.25;box-sizing:border-box;pointer-events:none}.dirty-overlay-label{font-size:11px;margin:8px 0 0}.dirty{display:grid;grid-template-columns:minmax(110px,auto) 1fr auto;gap:8px;align-items:center;margin:8px 0}.dirty .bar i{background:var(--vscode-charts-orange)}.dirty-rect{display:grid;grid-template-columns:minmax(80px,1fr) auto;gap:8px;align-items:center;margin:4px 0}.dirty-rect .bar i{background:var(--vscode-charts-orange)}.aggregate{border:1px solid var(--vscode-panel-border);padding:8px;margin-top:16px}.aggregate table{margin-top:8px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--vscode-panel-border);padding:5px}code{color:var(--vscode-textPreformat-foreground)}ul{margin:5px 0;padding-left:20px}.hidden{display:none}.pill{border:1px solid var(--vscode-panel-border);padding:1px 5px}
-</style><style>.hotspots{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.hotspot{border-left:3px solid var(--vscode-charts-orange);padding:6px 8px;background:var(--vscode-editorWidget-background)}.hotspot b{display:block}</style></head><body><h1>${titleText}</h1>
+body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:16px;line-height:1.4}h1{font-size:18px;margin:0 0 8px}h2{font-size:14px;margin:20px 0 8px}.muted{color:var(--vscode-descriptionForeground)}.notice{border:1px solid var(--vscode-panel-border);padding:8px;margin:10px 0}.error{color:var(--vscode-errorForeground)}.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.controls input{flex:1;min-width:180px}.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:12px}.metric{border:1px solid var(--vscode-panel-border);padding:8px}.metric b{display:block;font-size:16px}.stage-composition{display:flex;width:100%;height:24px;border:1px solid var(--vscode-panel-border);background:var(--vscode-editorWidget-background);overflow:hidden;box-sizing:border-box}.stage-segment{min-width:2px;height:100%;padding:0;border:0;border-right:1px solid var(--vscode-editor-background);background:var(--vscode-charts-blue);cursor:pointer}.stage-segment:nth-child(4n+2){background:var(--vscode-charts-green)}.stage-segment:nth-child(4n+3){background:var(--vscode-charts-orange)}.stage-segment:nth-child(4n+4){background:var(--vscode-charts-purple)}.stage-segment.unaccounted{background:var(--vscode-descriptionForeground)}.stage-segment:focus{outline:2px solid var(--vscode-focusBorder);outline-offset:-2px}.stage-detail{border-left:3px solid var(--vscode-charts-blue);padding:6px 8px;margin:8px 0;background:var(--vscode-editorWidget-background)}.stage{display:grid;grid-template-columns:minmax(90px,1fr) 3fr 80px;gap:8px;align-items:center;margin:5px 0}.bar{height:8px;background:var(--vscode-editorWidget-background);border-radius:2px;overflow:hidden}.bar i{display:block;height:100%;background:var(--vscode-charts-blue)}.capture{border:1px solid var(--vscode-panel-border);padding:8px;margin-top:12px}.capture-stage{position:relative;display:inline-block;max-width:100%;margin-top:8px}.capture-stage img{display:block;max-width:100%;max-height:420px;object-fit:contain;background:var(--vscode-editor-background)}.dirty-overlay{position:absolute;border:1px solid var(--vscode-charts-orange);background:var(--vscode-editorWarning-foreground);opacity:.25;box-sizing:border-box;pointer-events:none}.dirty-overlay-label{font-size:11px;margin:8px 0 0}.dirty{display:grid;grid-template-columns:minmax(110px,auto) 1fr auto;gap:8px;align-items:center;margin:8px 0}.dirty .bar i{background:var(--vscode-charts-orange)}.dirty-rect{display:grid;grid-template-columns:minmax(80px,1fr) auto;gap:8px;align-items:center;margin:4px 0}.dirty-rect .bar i{background:var(--vscode-charts-orange)}.aggregate{border:1px solid var(--vscode-panel-border);padding:8px;margin-top:16px}.aggregate table{margin-top:8px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--vscode-panel-border);padding:5px}code{color:var(--vscode-textPreformat-foreground)}ul{margin:5px 0;padding-left:20px}.hidden{display:none}.pill{border:1px solid var(--vscode-panel-border);padding:1px 5px}
+</style><style>.hotspots{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.hotspot{border-left:3px solid var(--vscode-charts-orange);padding:6px 8px;background:var(--vscode-editorWidget-background)}.hotspot b{display:block}.stage-timeline{position:relative;width:100%;height:28px;border:1px solid var(--vscode-panel-border);background:var(--vscode-editorWidget-background);overflow:hidden;box-sizing:border-box}.timeline-segment{position:absolute;top:0;height:100%;padding:0;border:0;border-right:1px solid var(--vscode-editor-background);background:var(--vscode-charts-blue);cursor:pointer}.timeline-segment:nth-child(4n+2){background:var(--vscode-charts-green)}.timeline-segment:nth-child(4n+3){background:var(--vscode-charts-orange)}.timeline-segment:nth-child(4n+4){background:var(--vscode-charts-purple)}.timeline-segment.gap{background:var(--vscode-descriptionForeground);cursor:pointer}.timeline-segment:focus{outline:2px solid var(--vscode-focusBorder);outline-offset:-2px}</style></head><body><h1>${titleText}</h1>
 <p class="muted">${labels.timingNote}<br>${labels.sourceNote}</p>
 <div class="controls"><label>${labels.frame} <output id="frameNumber"></output></label><input id="frameSlider" type="range" min="0" max="0" value="0" step="1"><button id="slowestFrameButton" type="button">${labels.slowestFrame}</button></div>
 <section class="aggregate"><h2>${labels.aggregate}</h2><p class="muted">${labels.aggregateNote}</p><h3>${labels.frameSummary}</h3><div id="frameSummaryView" class="metric-grid"></div><div id="aggregateView"></div></section>
@@ -412,7 +618,7 @@ const slowestFrameIndex=model.frames.length?model.frames.reduce((best,frame,inde
 function render(){
  const frame=model.frames[Number(slider.value)]; if(!frame){view.innerHTML='<p class="muted">'+esc(labels.none)+'</p>';return;}
  number.textContent=fmt(frame.frame)+' / '+fmt(model.frames.length-1);
- const stages=Object.entries(frame.stagesUs||{}); const timing=model.frameTiming?.[String(frame.frame)]||{totalUs:0,recordedStageUs:0,unaccountedUs:0}; const hotspots=model.frameHotspots?.[String(frame.frame)]||{}; const sum=timing.recordedStageUs; const total=timing.totalUs; const unaccountedUs=timing.unaccountedUs; const max=Math.max(1,total,...stages.map(([,v])=>Number(v)||0));
+ const stages=Object.entries(frame.stagesUs||{}); const timing=model.frameTiming?.[String(frame.frame)]||{totalUs:0,recordedStageUs:0,unaccountedUs:0}; const composition=model.frameComposition?.[String(frame.frame)]||{segments:[],overrunUs:0}; const timeline=model.frameTimelines?.[String(frame.frame)]||{available:false,segments:[],overrunUs:0}; const commandTimeline=model.frameCommandTimelines?.[String(frame.frame)]||{available:false,segments:[],overrunUs:0}; const hotspots=model.frameHotspots?.[String(frame.frame)]||{}; const total=timing.totalUs; const unaccountedUs=timing.unaccountedUs; const max=Math.max(1,total,...stages.map(([,v])=>Number(v)||0));
  const fps=total>0?(1000000/total).toFixed(1):labels.none;
  const commands=(Array.isArray(frame.commands)?frame.commands:[]).map((item)=>{if(!item||typeof item!=='object'||typeof item.type!=='string'||!Number.isSafeInteger(item.us)||item.us<0||!Number.isSafeInteger(item.pixels)||item.pixels<0)return null;const samples=Number.isSafeInteger(item.samples)&&item.samples>0?item.samples:1;const owner=typeof item.owner==='string'&&item.owner.trim()?item.owner:(typeof item.nodeId==='string'&&item.nodeId.trim()?item.nodeId:'unattributed');return {...item,owner,samples,attributed:owner!=='unattributed'};}).filter(Boolean).sort((left,right)=>right.us-left.us).slice(0,64); const unattributedCount=commands.filter((item)=>!item.attributed).length; const pipeline=frame.pipeline||{};
  const dirtyPercent=Math.max(0,Math.min(100,Number(frame.dirtyAreaPercent)||0));
@@ -427,6 +633,12 @@ function render(){
  '<div class="hotspot"><span>'+esc(labels.hottestStage)+'</span>'+hotspotValue(hotspots.stage)+'</div>'+
  '<div class="hotspot"><span>'+esc(labels.hottestCommand)+'</span>'+hotspotValue(hotspots.command)+'</div>'+
  '<div class="hotspot"><span>'+esc(labels.hottestOwner)+'</span>'+hotspotValue(hotspots.owner)+'</div></div>';
+ const runtimeSource=typeof model.session?.runtime==='string'&&model.session.runtime.trim()?model.session.runtime.trim():labels.sourceUnspecified;
+ const stageTimelineView=timeline.available?'<h2>'+esc(labels.stageTimeline)+'</h2><p class="muted">'+esc(labels.stageTimelineNote)+'</p><div class="stage-timeline">'+timeline.segments.map((segment,index)=>{const name=segment.kind==='gap'?labels.timelineGap:segment.name;const detail=name+': '+fmt(segment.durationUs)+' us (start '+fmt(segment.startUs)+' us)';return '<button type="button" class="timeline-segment '+(segment.kind==='gap'?'gap':'')+'" data-timeline-index="'+index+'" style="left:'+Math.max(0,Number(segment.leftPercent)||0)+'%;width:'+Math.max(0,Number(segment.widthPercent)||0)+'%" title="'+esc(detail)+'" aria-label="'+esc(detail)+'"></button>';}).join('')+'</div><div id="timelineDetail" class="stage-detail muted">'+esc(labels.stageDetail)+': '+esc(labels.none)+'</div>'+(timeline.overrunUs>0?'<p class="notice error">'+esc(labels.stageOverrun)+' ('+fmt(timeline.overrunUs)+' us)</p>':''):'<p class="muted">'+esc(labels.stageTimelineUnavailable)+'</p>';
+ const commandTimelineView=commandTimeline.available?'<h2>'+esc(labels.commandTimeline)+'</h2><p class="muted">'+esc(labels.commandTimelineNote)+'</p><div class="stage-timeline">'+commandTimeline.segments.map((segment,index)=>{const name=segment.kind==='gap'?labels.timelineGap:segment.name;const detail=name+': '+fmt(segment.durationUs)+' us (start '+fmt(segment.startUs)+' us)';return '<button type="button" class="timeline-segment '+(segment.kind==='gap'?'gap':'')+'" data-command-timeline-index="'+index+'" style="left:'+Math.max(0,Number(segment.leftPercent)||0)+'%;width:'+Math.max(0,Number(segment.widthPercent)||0)+'%" title="'+esc(detail)+'" aria-label="'+esc(detail)+'"></button>';}).join('')+'</div><div id="commandTimelineDetail" class="stage-detail muted">'+esc(labels.stageDetail)+': '+esc(labels.none)+'</div>'+(commandTimeline.overrunUs>0?'<p class="notice error">'+esc(labels.stageOverrun)+' ('+fmt(commandTimeline.overrunUs)+' us)</p>':''):'';
+ const stageCompositionView='<h2>'+esc(labels.stageComposition)+'</h2><p class="muted">'+esc(labels.stageCompositionNote)+'</p>'+
+ (composition.segments.length?'<div class="stage-composition">'+composition.segments.map((segment,index)=>{const name=segment.kind==='unaccounted'?labels.unaccounted:segment.name;const detail=name+': '+fmt(segment.us)+' us ('+Number(segment.frameSharePercent||0).toFixed(1)+'%)';return '<button type="button" class="stage-segment '+(segment.kind==='unaccounted'?'unaccounted':'')+'" data-stage-index="'+index+'" style="width:'+Math.max(0,Number(segment.widthPercent)||0)+'%" title="'+esc(detail)+'" aria-label="'+esc(detail)+'"></button>';}).join('')+'</div><div id="stageDetail" class="stage-detail muted">'+esc(labels.stageDetail)+': '+esc(labels.none)+'</div>':'<p class="muted">'+esc(labels.none)+'</p>')+
+ (composition.overrunUs>0?'<p class="notice error">'+esc(labels.stageOverrun)+' ('+fmt(composition.overrunUs)+' us)</p>':'');
  view.innerHTML='<div class="metric-grid">'+
  '<div class="metric"><span>'+esc(labels.total)+'</span><b>'+fmt(frame.totalUs)+' us</b></div>'+
  '<div class="metric"><span>'+esc(labels.fps)+'</span><b>'+esc(fps)+'</b></div>'+
@@ -434,15 +646,24 @@ function render(){
  '<div class="metric"><span>'+esc(labels.dirty)+'</span><b>'+fmt(frame.dirtyRectCount)+' / '+fmt(frame.dirtyAreaPercent)+'%</b></div></div>'+
  captureView+
  hotspotView+
+ stageTimelineView+
+ commandTimelineView+
+ stageCompositionView+
  '<div class="dirty"><span>'+esc(labels.dirtyCoverage)+'</span><span class="bar"><i style="width:'+dirtyPercent+'%"></i></span><span>'+dirtyPercent.toFixed(1)+'%</span></div>'+
  dirtyRectView+
  '<p><strong>'+esc(labels.reason)+':</strong> '+esc(frame.reason||labels.none)+' <span class="muted">· timingComplete='+esc(frame.timingComplete===true?'true':'false')+'</span></p>'+
  '<h2>'+esc(labels.stages)+'</h2>'+ (stages.length?stages.map(([name,value])=>'<div class="stage"><code>'+esc(name)+'</code><span class="bar"><i style="width:'+Math.min(100,Math.round((Number(value)||0)*100/max))+'%"></i></span><span>'+fmt(value)+' us ('+(total?((Number(value)||0)*100/total).toFixed(1):'0.0')+'%)</span></div>').join(''):'<p class="muted">'+esc(labels.none)+'</p>')+(unaccountedUs>0?'<div class="stage"><code>'+esc(labels.unaccounted)+'</code><span class="bar"><i style="width:'+Math.min(100,Math.round(unaccountedUs*100/max))+'%"></i></span><span>'+fmt(unaccountedUs)+' us ('+(total?(unaccountedUs*100/total).toFixed(1):'0.0')+'%)</span></div>':'')+
  '<h2>'+esc(labels.pipeline)+'</h2><p class="muted">'+Object.entries(pipeline).map(([key,value])=>'<code>'+esc(key)+'='+esc(value)+'</code>').join(' · ')+'</p>'+ 
  '<h2>'+esc(labels.commands)+'</h2><p class="muted">'+esc(labels.commandTimingNote)+'</p>'+ (commands.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.time)+'</th><th>'+esc(labels.pixels)+'</th><th>'+esc(labels.samples)+'</th></tr>'+commands.map((item)=>'<tr><td>'+esc(item.type||labels.none)+'</td><td><code>'+esc(item.owner)+'</code></td><td>'+fmt(item.us)+' us</td><td>'+fmt(item.pixels)+'</td><td>'+fmt(item.samples)+'</td></tr>').join('')+'</table>'+(unattributedCount===commands.length?'<p class="muted">'+esc(labels.allUnattributed)+'</p>':unattributedCount>0?'<p class="muted">'+esc(labels.partialAttribution)+'</p>':''):'<p class="muted">'+esc(labels.noAttribution)+'</p>')+(frame.commandsTruncated?'<p class="muted">'+esc(labels.commandsTruncated)+'</p>':'')+(frame.nodesTruncated?'<p class="muted">'+esc(labels.nodesTruncated)+'</p>':'')+(Number.isSafeInteger(frame.commandInvalidSamples)&&frame.commandInvalidSamples>0?'<p class="muted">'+esc(labels.invalidCommandSamples)+': '+fmt(frame.commandInvalidSamples)+'</p>':'');
+ const stageDetail=document.getElementById('stageDetail');
+ if(stageDetail){view.querySelectorAll('[data-stage-index]').forEach((button)=>button.addEventListener('click',()=>{const segment=composition.segments[Number(button.dataset.stageIndex)];if(!segment)return;const name=segment.kind==='unaccounted'?labels.unaccounted:segment.name;stageDetail.innerHTML='<strong>'+esc(name)+'</strong>: '+fmt(segment.us)+' us ('+Number(segment.frameSharePercent||0).toFixed(1)+'%) · '+esc(labels.stageSource)+': '+esc(runtimeSource);}));}
+ const timelineDetail=document.getElementById('timelineDetail');
+ if(timelineDetail){view.querySelectorAll('[data-timeline-index]').forEach((button)=>button.addEventListener('click',()=>{const segment=timeline.segments[Number(button.dataset.timelineIndex)];if(!segment)return;const name=segment.kind==='gap'?labels.timelineGap:segment.name;timelineDetail.innerHTML='<strong>'+esc(name)+'</strong>: '+fmt(segment.durationUs)+' us (start '+fmt(segment.startUs)+' us) · '+esc(labels.stageSource)+': '+esc(runtimeSource);}));}
+ const commandTimelineDetail=document.getElementById('commandTimelineDetail');
+ if(commandTimelineDetail){view.querySelectorAll('[data-command-timeline-index]').forEach((button)=>button.addEventListener('click',()=>{const segment=commandTimeline.segments[Number(button.dataset.commandTimelineIndex)];if(!segment)return;const name=segment.kind==='gap'?labels.timelineGap:segment.name;const pixels=segment.kind==='gap'?'':' · '+fmt(segment.pixels)+' '+esc(labels.pixels);commandTimelineDetail.innerHTML='<strong>'+esc(name)+'</strong>: '+fmt(segment.durationUs)+' us (start '+fmt(segment.startUs)+' us)'+pixels+' · '+esc(labels.stageSource)+': '+esc(runtimeSource);}));}
 }
 renderFrameSummary();renderAggregate();slider.max=Math.max(0,model.frames.length-1);slider.disabled=model.frames.length<2;slowestFrameButton.disabled=model.frames.length<2;slowestFrameButton.addEventListener('click',()=>{slider.value=String(slowestFrameIndex);render();});slider.addEventListener('input',render);render();
 </script></body></html>`;
 }
 
-module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameHotspotSummary, frameTimingSummary, renderTraceHtml };
+module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameHotspotSummary, frameTimingSummary, renderTraceHtml };

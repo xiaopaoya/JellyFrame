@@ -109,18 +109,28 @@ constexpr std::array<const char*, 9> kFrameTraceStageNames = {
     "input", "script", "style", "renderTree", "layout", "layerTree", "dirty", "paint", "present"};
 constexpr std::size_t kMaxFrameTraceDirtyRects = 32;
 constexpr std::size_t kMaxFrameTraceCommandGroups = 64;
+constexpr std::size_t kMaxFrameTraceCommandSpans = 16;
 constexpr std::size_t kMaxFrameTraceOwners = 64;
 constexpr std::size_t kMaxFrameTraceOwnerLabelBytes = 64;
 constexpr std::size_t kMaxFrameTraceTrackedIds = kMaxFrameTraceOwners;
+constexpr std::size_t kMaxFrameTraceSpans = 32;
+
+struct FrameTraceSpan {
+    FrameTraceStage stage;
+    std::uint64_t start_us = 0;
+    std::uint64_t duration_us = 0;
+};
 
 struct FrameTraceTimings {
     std::array<std::uint64_t, kFrameTraceStageNames.size()> microseconds{};
+    std::vector<FrameTraceSpan> spans;
 
     void clear() {
         microseconds.fill(0);
+        spans.clear();
     }
 
-    void add(FrameTraceStage stage, std::uint64_t elapsed_us) {
+    void add_span(FrameTraceStage stage, std::uint64_t start_us, std::uint64_t elapsed_us) {
         const std::size_t index = static_cast<std::size_t>(stage);
         if (index >= microseconds.size()) {
             return;
@@ -129,6 +139,9 @@ struct FrameTraceTimings {
         microseconds[index] = std::numeric_limits<std::uint64_t>::max() - current < elapsed_us
             ? std::numeric_limits<std::uint64_t>::max()
             : current + elapsed_us;
+        if (spans.size() < kMaxFrameTraceSpans) {
+            spans.push_back(FrameTraceSpan{stage, start_us, elapsed_us});
+        }
     }
 };
 
@@ -174,12 +187,27 @@ struct FrameTraceCommandGroup {
     std::size_t samples = 0;
 };
 
+struct FrameTraceCommandSpan {
+    DisplayCommandType type = DisplayCommandType::FillRect;
+    std::uint32_t owner_token = 0;
+    std::uint64_t start_us = 0;
+    std::uint64_t duration_us = 0;
+    std::size_t pixels = 0;
+};
+
 class FrameTraceCommandAttribution {
 public:
     void clear_frame_samples() {
         command_groups_.clear();
+        command_spans_.clear();
         commands_truncated_ = false;
+        command_spans_truncated_ = false;
         invalid_samples_ = 0;
+        frame_start_microseconds_ = 0;
+    }
+
+    void begin_frame(std::uint64_t frame_start_microseconds) {
+        frame_start_microseconds_ = frame_start_microseconds;
     }
 
     void prepare_for_tree_build(const Node& root) {
@@ -237,11 +265,26 @@ public:
         saturating_add(group->pixels, sample.candidate_pixels);
         if (sample.timing_valid) {
             saturating_add(group->microseconds, sample.elapsed_microseconds);
+            if (frame_start_microseconds_ != 0 &&
+                sample.begin_microseconds >= frame_start_microseconds_) {
+                if (command_spans_.size() >= kMaxFrameTraceCommandSpans) {
+                    command_spans_truncated_ = true;
+                } else {
+                    command_spans_.push_back(FrameTraceCommandSpan{
+                        sample.type,
+                        sample.trace_owner_token,
+                        sample.begin_microseconds - frame_start_microseconds_,
+                        sample.elapsed_microseconds,
+                        sample.candidate_pixels});
+                }
+            }
         }
     }
 
     const std::vector<FrameTraceCommandGroup>& command_groups() const { return command_groups_; }
+    const std::vector<FrameTraceCommandSpan>& command_spans() const { return command_spans_; }
     bool commands_truncated() const { return commands_truncated_; }
+    bool command_spans_truncated() const { return command_spans_truncated_; }
     bool owners_truncated() const { return owners_truncated_; }
     std::size_t invalid_samples() const { return invalid_samples_; }
 
@@ -279,9 +322,12 @@ private:
     std::unordered_map<std::string, std::size_t> id_counts_;
     std::vector<std::string> owner_labels_;
     std::vector<FrameTraceCommandGroup> command_groups_;
+    std::vector<FrameTraceCommandSpan> command_spans_;
     bool commands_truncated_ = false;
+    bool command_spans_truncated_ = false;
     bool owners_truncated_ = false;
     std::size_t invalid_samples_ = 0;
+    std::uint64_t frame_start_microseconds_ = 0;
 };
 
 std::uint32_t resolve_frame_trace_owner(const Node& node, void* context) {
@@ -299,6 +345,11 @@ void observe_frame_trace_command(const SoftwareRasterizerCommandSample& sample, 
 std::uint64_t steady_clock_microseconds(void*) {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     const auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(now);
+    return microseconds.count() < 0 ? 0 : static_cast<std::uint64_t>(microseconds.count());
+}
+
+std::uint64_t steady_clock_timepoint_microseconds(std::chrono::steady_clock::time_point time) {
+    const auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(time.time_since_epoch());
     return microseconds.count() < 0 ? 0 : static_cast<std::uint64_t>(microseconds.count());
 }
 
@@ -3723,7 +3774,52 @@ public:
             first_stage = false;
         }
         record << '}';
+        if (!timings.spans.empty()) {
+            record << ",\"stageSpans\":[";
+            for (std::size_t index = 0; index < timings.spans.size(); ++index) {
+                if (index != 0) {
+                    record << ',';
+                }
+                const FrameTraceSpan& span = timings.spans[index];
+                const std::size_t stage_index = static_cast<std::size_t>(span.stage);
+                record << "{\"name\":\""
+                       << (stage_index < kFrameTraceStageNames.size() ? kFrameTraceStageNames[stage_index] : "unknown")
+                       << "\",\"startUs\":" << span.start_us
+                       << ",\"durationUs\":" << span.duration_us << '}';
+            }
+            record << ']';
+        }
         const std::vector<FrameTraceCommandGroup>& command_groups = command_attribution.command_groups();
+        const std::vector<FrameTraceCommandSpan>& command_spans = command_attribution.command_spans();
+        std::string command_spans_json;
+        bool command_spans_truncated = command_attribution.command_spans_truncated();
+        constexpr std::size_t kTraceCommandSpanSuffixReserve = 128;
+        for (const FrameTraceCommandSpan& span : command_spans) {
+            std::ostringstream entry;
+            entry << "{\"type\":\"" << frame_trace_command_type_name(span.type)
+                  << "\",\"owner\":\""
+                  << json_escape_for_trace(command_attribution.owner_label(span.owner_token))
+                  << "\",\"startUs\":" << span.start_us
+                  << ",\"durationUs\":" << span.duration_us
+                  << ",\"pixels\":" << span.pixels << '}';
+            std::string next = entry.str();
+            if (!command_spans_json.empty()) {
+                next.insert(next.begin(), ',');
+            }
+            if (record.str().size() + sizeof(",\"commandSpans\":[") - 1U + command_spans_json.size() +
+                    next.size() + 1U + kTraceCommandSpanSuffixReserve >
+                kMaxRenderTraceLineBytes) {
+                command_spans_truncated = true;
+                break;
+            }
+            command_spans_json += next;
+        }
+        if (!command_spans_json.empty()) {
+            record << ",\"commandSpans\":[" << command_spans_json << ']';
+        }
+        if (command_spans_truncated) {
+            record << ",\"commandSpansTruncated\":true";
+        }
         std::string commands_json;
         bool commands_truncated = command_attribution.commands_truncated();
         // Reserve room for the closing JSON and every truncation/invalid-sample
@@ -6036,19 +6132,37 @@ private:
             return;
         }
         const bool trace_timing_enabled = !options_.render_trace_path.empty();
+        std::chrono::steady_clock::time_point trace_frame_started{};
         std::chrono::steady_clock::time_point trace_stage_started{};
         if (trace_timing_enabled) {
-            trace_stage_started = std::chrono::steady_clock::now();
+            trace_frame_started = std::chrono::steady_clock::now();
+            trace_stage_started = trace_frame_started;
         }
-        const auto finish_trace_stage = [this, trace_timing_enabled, &trace_stage_started](FrameTraceStage stage) {
+        const auto record_trace_span = [this, trace_timing_enabled, trace_frame_started](
+                                           FrameTraceStage stage,
+                                           std::chrono::steady_clock::time_point started,
+                                           std::chrono::steady_clock::time_point ended) {
+            if (!trace_timing_enabled) {
+                return;
+            }
+            const auto offset = std::chrono::duration_cast<std::chrono::microseconds>(started - trace_frame_started);
+            const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(ended - started);
+            if (offset.count() >= 0 && elapsed.count() > 0) {
+                trace_frame_timings_.add_span(stage,
+                                              static_cast<std::uint64_t>(offset.count()),
+                                              static_cast<std::uint64_t>(elapsed.count()));
+            }
+        };
+        if (trace_timing_enabled) {
+            frame_trace_command_attribution_.begin_frame(
+                steady_clock_timepoint_microseconds(trace_frame_started));
+        }
+        const auto finish_trace_stage = [trace_timing_enabled, &trace_stage_started, record_trace_span](FrameTraceStage stage) {
             if (!trace_timing_enabled) {
                 return;
             }
             const auto now = std::chrono::steady_clock::now();
-            const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - trace_stage_started);
-            if (elapsed.count() > 0) {
-                trace_frame_timings_.add(stage, static_cast<std::uint64_t>(elapsed.count()));
-            }
+            record_trace_span(stage, trace_stage_started, now);
             trace_stage_started = now;
         };
         drain_host_completions();
@@ -6210,10 +6324,7 @@ private:
                 render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
             }
             if (trace_timing_enabled) {
-                const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-                    std::chrono::steady_clock::now() - paint_started);
-                trace_frame_timings_.add(FrameTraceStage::Paint,
-                                         elapsed.count() > 0 ? static_cast<std::uint64_t>(elapsed.count()) : 0);
+                record_trace_span(FrameTraceStage::Paint, paint_started, std::chrono::steady_clock::now());
             }
             const auto present_started = std::chrono::steady_clock::now();
             rebuild_input_controller(hovered_node, active_node, focused_node);
@@ -6224,10 +6335,7 @@ private:
             clear_finished_animation_overrides();
             record_load_telemetry_sample(update_plan, nullptr);
             if (trace_timing_enabled) {
-                const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-                    std::chrono::steady_clock::now() - present_started);
-                trace_frame_timings_.add(FrameTraceStage::Present,
-                                         elapsed.count() > 0 ? static_cast<std::uint64_t>(elapsed.count()) : 0);
+                record_trace_span(FrameTraceStage::Present, present_started, std::chrono::steady_clock::now());
             }
             return;
         }
@@ -6338,10 +6446,7 @@ private:
                 render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
             }
             if (trace_timing_enabled) {
-                const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-                    std::chrono::steady_clock::now() - paint_started);
-                trace_frame_timings_.add(FrameTraceStage::Paint,
-                                         elapsed.count() > 0 ? static_cast<std::uint64_t>(elapsed.count()) : 0);
+                record_trace_span(FrameTraceStage::Paint, paint_started, std::chrono::steady_clock::now());
             }
             const auto present_started = std::chrono::steady_clock::now();
             rebuild_input_controller(hovered_node, active_node, focused_node);
@@ -6352,10 +6457,7 @@ private:
             clear_finished_animation_overrides();
             record_load_telemetry_sample(update_plan, nullptr);
             if (trace_timing_enabled) {
-                const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-                    std::chrono::steady_clock::now() - present_started);
-                trace_frame_timings_.add(FrameTraceStage::Present,
-                                         elapsed.count() > 0 ? static_cast<std::uint64_t>(elapsed.count()) : 0);
+                record_trace_span(FrameTraceStage::Present, present_started, std::chrono::steady_clock::now());
             }
             return;
         }
@@ -6428,10 +6530,7 @@ private:
             render_full_frame(compositor, dirty_region, dirty_rects.empty(), content_height);
         }
         if (trace_timing_enabled) {
-            const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::steady_clock::now() - paint_started);
-            trace_frame_timings_.add(FrameTraceStage::Paint,
-                                     elapsed.count() > 0 ? static_cast<std::uint64_t>(elapsed.count()) : 0);
+            record_trace_span(FrameTraceStage::Paint, paint_started, std::chrono::steady_clock::now());
         }
         const auto present_started = std::chrono::steady_clock::now();
         rebuild_input_controller(hovered_node, active_node, focused_node);
@@ -6441,10 +6540,7 @@ private:
         clear_finished_animation_overrides();
         record_load_telemetry_sample(update_plan, nullptr);
         if (trace_timing_enabled) {
-            const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::steady_clock::now() - present_started);
-            trace_frame_timings_.add(FrameTraceStage::Present,
-                                     elapsed.count() > 0 ? static_cast<std::uint64_t>(elapsed.count()) : 0);
+            record_trace_span(FrameTraceStage::Present, present_started, std::chrono::steady_clock::now());
         }
     }
 

@@ -1,7 +1,7 @@
 # Render Core 性能观测与对比方案
 
-> 最后更新：2026-09-11；适用版本：0.6.0-dev
-> 状态：第二阶段已交付；Win32 capture 已提供有界 command/owner 归因与跨帧聚合
+> 最后更新：2026-09-15；适用版本：0.6.0-dev
+> 状态：第二阶段已交付；Win32 capture 已提供有界 command/owner 归因、跨帧聚合和阶段 span 时间线
 
 ## 1. 为什么需要这项工具
 
@@ -49,6 +49,9 @@ python tools\render_performance_report.py `
   不匹配的 probe 会跳过，不会被强行比较；
 - 当前帧视图额外显示最耗时阶段、最耗时绘制命令和累计耗时最高的归因对象；归因缺失时保留
   `unattributed`，不会将未归因的墙钟时间错误分配给任意元素；
+- 当前帧视图提供可点击的阶段构成条，显示各阶段累计耗时、frame wall time 占比和 producer
+  声明的 runtime 来源。该构成条按 producer 字段顺序排列，但不伪装成真实开始/结束 span；
+  `stagesUs` 尚不足以表达阶段间空隙或嵌套关系；
 - 查看器固定显示有效 frame 的总耗时 p50、p95 和最大值，作为当前 trace 的桌面基线；这些数值
   不代表设备 FPS 或 DMA/panel 时序；
 - 截断帧、无效计时与 `unattributed` 单独计数，聚合结果明确标记为已记录样本的下界；
@@ -63,6 +66,19 @@ python tools\render_performance_report.py `
 {"format":"jellyframe.render.trace.v0","type":"session","appId":"org.example.app","viewport":{"width":172,"height":320},"profile":"rect-172x320","runtime":"desktop"}
 {"format":"jellyframe.render.trace.v0","type":"frame","frame":42,"totalUs":17300,"stagesUs":{"input":120,"script":880,"style":410,"renderTree":620,"layout":2100,"layerTree":530,"dirty":190,"paint":10600,"present":2260},"action":"repaint-existing","reason":"paint-only-dirty","dirtyRectCount":2,"dirtyAreaPercent":3,"pipeline":{"domNodes":31,"layoutBoxes":22,"layers":4,"displayCommands":18,"paintPixels":5170},"commands":[{"type":"BoxShadow","owner":"id:card-1","us":7200,"pixels":3820,"samples":1},{"type":"Text","owner":"n7","us":610,"pixels":340,"samples":2}]}
 ```
+
+当 producer 能提供真实 span 时，frame 还会附带可选的 `stageSpans`，例如：
+
+```json
+"stageSpans":[{"name":"input","startUs":0,"durationUs":120},{"name":"style","startUs":140,"durationUs":410},{"name":"paint","startUs":3260,"durationUs":10600}]
+```
+
+`stagesUs` 继续作为兼容的累计聚合字段；查看器只有在存在 `stageSpans` 时才绘制实际位置和
+阶段间隙，否则仅显示累计阶段构成。
+
+桌面 capture 还可提供有界的 `commandSpans`，每项包含 `type`、`owner`、相对于 frame
+trace 起点的 `startUs`、`durationUs` 和候选 `pixels`。它只覆盖实际 raster invocation；
+rounded composite、transform 和宿主绘制等没有独立命令时钟的工作仍保持未归因。
 
 Win32 桌面壳当前可在确定性捕获时生成第一版 trace。启用
 `--capture-frames` 时，每条 frame 记录还会带有相对截图文件名
@@ -100,6 +116,12 @@ build\Release\jellyframe_desktop_shell.exe `
 - `frame` 在同一 session 严格递增；重复、回退或损坏记录必须被工具报告，不能静默排序；
 - `totalUs` 是 producer 测得的 frame wall time；`stagesUs` 可以存在未归因间隙，工具不得
   宣称阶段之和等于 total，除非 producer 明确给出 `timingComplete: true`；
+- `stageSpans` 是可选的真实阶段 span 数组，每项包含 `name`、相对于 frame trace 起点的
+  `startUs` 和 `durationUs`。它用于绘制实际时间线；缺少该字段时，工具只能展示 `stagesUs`
+  的累计构成，不能推断阶段开始/结束时间；span 之间的空白必须保留为未归因间隙；
+- `commandSpans` 是可选的有界命令事件数组；达到数量或行预算上限时必须输出
+  `commandSpansTruncated: true`。它不能替代 `commands` 的跨帧聚合，也不能将未采集的
+  composite 或 host 工作分配给某个元素；
 - `commands[].owner` 只能是唯一且受限 ASCII `id:<id>`，或会话内 opaque `n<N>`，也可为
   `unattributed`；不得输出裸指针、DOM path、文本、arena 地址、文件密钥或设备物理地址；
 - `commands` 是可选归因。每项带 `type`、`owner`、`us`、`pixels`、`samples`；没有可靠归因时，UI 必须显示“无法归因到元素”，不能
@@ -137,7 +159,8 @@ python tools\render_trace_profile_ab.py `
 第一阶段界面应提供：
 
 1. 按 frame 的列表，显示 total、FPS 等效值、action/reason、dirty rect 数与面积；
-2. 阶段堆叠条，点击阶段显示其绝对时间、占比和是否来自 desktop/device；
+2. 阶段构成条和实际 span 时间线，点击阶段显示其绝对时间、占比、开始偏移和 producer runtime 来源；
+   没有 `stageSpans` 的旧 trace 回退到累计耗时构成；
 3. 画布 overlay：dirty rect、paint bounds、clip bounds，切换前后帧；
 4. command/owner 排名，显示类型、受限 owner、候选像素、调用次数和耗时；
 5. 跨帧聚合，按 command、stage 和 owner 汇总调用数、累计耗时与 p95，并显示截断/缺失归因；

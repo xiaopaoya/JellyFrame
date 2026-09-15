@@ -1254,7 +1254,8 @@ void rasterizer_command_observer_is_opt_in_and_reports_clipped_work() {
     const SoftwareRasterizerCommandSample& sample = collector.samples.front();
     check(sample.type == DisplayCommandType::FillRect && sample.trace_owner_token == 41 &&
               sample.clip.x == 4 && sample.clip.y == 5 && sample.clip.width == 5 && sample.clip.height == 4 &&
-              sample.candidate_pixels == 20 && sample.elapsed_microseconds == 13 && sample.timing_valid,
+              sample.candidate_pixels == 20 && sample.begin_microseconds == 100 &&
+              sample.elapsed_microseconds == 13 && sample.timing_valid,
           "command observer reports owner, final clip, candidate pixels and elapsed raster time");
 
     const std::uint64_t invalid_samples[] = {50, 49};
