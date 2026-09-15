@@ -8,6 +8,14 @@ display-list flattening and software rendering.
 
 Executable: `jellyframe_render_core_microbench`.
 
+On Windows, `jellyframe_cpu2d_compare` runs the first fixed-condition CPU 2D
+comparison workload. It paints one opaque 172x320 RGB frame through JellyFrame
+and a memory-DIB GDI `FillRect` in the same process, performs 30 warm-up calls,
+records equal sample counts, and rejects output whose normalized RGB digest
+differs. It writes `jellyframe.json` and `gdi.json` manifests for
+`tools/benchmark_compare.py`. This probe compares only opaque full-frame fill;
+it is not a complete UI, text, GPU, or device benchmark.
+
 Retained repaint probes:
 
 - `retained_layout_display_pipeline` measures full-page layer rebuild plus

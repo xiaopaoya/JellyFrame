@@ -244,6 +244,12 @@ full/dirty mode、运行环境、warm-up，以及输出验证方法/基准/容�
 - 若 present/DMA 占主导，继续优化 Core paint 不会改善实机帧率；若 layout/script 占主导，
   应优先减少重建或 App 更新范围，而不是改 rasterizer。
 
+当前第一个 CPU 2D 基础对照已由 Windows-only `jellyframe_cpu2d_compare` 落地：它在同一进程中对
+JellyFrame 与 memory-DIB GDI 执行 172x320 不透明全屏 RGB fill，固定 30 次 warm-up、相同样本数，
+并要求归一化 RGB digest 完全一致后才输出可比较 manifest。该 workload 只覆盖 opaque fill primitive；
+本机数字不得写成完整 UI、跨平台或设备性能排名。圆角、渐变、文本以及 LVGL 实机对照仍需分别建立
+等价 workload 和输出质量门禁。
+
 ## 7. 阶段出口
 
 ### 第一阶段：已交付
@@ -272,4 +278,6 @@ full/dirty mode、运行环境、warm-up，以及输出验证方法/基准/容�
 - port 以该显式 profiling 配置提供阶段窗口 aggregate；逐元素、逐 command 或每帧 wire
   trace 不是第三阶段的前提，也不能由 aggregate 推断；
 - 以真实 developer-image workload 复核 Core/Runtime 优化收益；
-- 完成至少一个 CPU 2D 和一个嵌入式 UI 对照，才给出“快/慢”的定量结论。
+- CPU 2D 的首个 opaque-fill/GDI 基础对照 runner 已交付，但尚不足以代表完整库；
+- 仍需完成至少一个嵌入式 UI 对照，并扩展圆角、渐变和文本等价 workload，才给出“快/慢”的
+  总体定量结论。

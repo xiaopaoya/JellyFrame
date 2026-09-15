@@ -22,6 +22,11 @@ cmake --build build/desktop-release --config Release
 The generated executables are `jellyframe_render_core_microbench` and
 `jellyframe_app_runtime_microbench`.
 
+Windows builds also produce `jellyframe_cpu2d_compare`. This first reference
+runner compares the same opaque full-frame RGB fill against a memory-DIB GDI
+operation and refuses to accept different normalized output. It deliberately
+does not claim whole-library or UI performance.
+
 Cross-library comparisons use the fixed-condition manifest consumed by
 `../tools/benchmark_compare.py`. Each adapter must provide the same workload,
 viewport, pixel format, antialiasing and repaint mode before p50/p95 or MPix/s

@@ -300,6 +300,12 @@ endif()
 if(JELLYFRAME_BUILD_BENCHMARKS)
     add_jellyframe_tool(jellyframe_render_core_microbench src/render_core/benchmarks/microbench.cpp)
     jellyframe_enable_render_core_link_map(jellyframe_render_core_microbench)
+    if(WIN32)
+        add_jellyframe_tool(jellyframe_cpu2d_compare src/render_core/benchmarks/cpu2d_compare_win32.cpp)
+        target_link_libraries(jellyframe_cpu2d_compare PRIVATE gdi32)
+        target_compile_definitions(jellyframe_cpu2d_compare PRIVATE
+            JELLYFRAME_CPU2D_CORE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
+    endif()
     if(JELLYFRAME_BUILD_APP_RUNTIME)
         add_executable(jellyframe_app_runtime_microbench src/app_runtime/benchmarks/app_runtime_bench.cpp)
         target_link_libraries(jellyframe_app_runtime_microbench PRIVATE jellyframe_app_runtime)
@@ -313,6 +319,12 @@ endif()
 
 if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
+    if(WIN32 AND TARGET jellyframe_cpu2d_compare)
+        add_test(NAME jellyframe_cpu2d_compare_output_smoke
+                 COMMAND jellyframe_cpu2d_compare
+                         "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_smoke"
+                         3)
+    endif()
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(JELLYFRAME_BUILD_RENDER_CORE_TESTS)
         include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_tests.cmake")
