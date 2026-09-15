@@ -49,9 +49,11 @@ performance tooling nor editor work substitutes for A2 hardware evidence.
   repaint developer-image workloads; hardware claims are recorded in the versioned
   `comparison-13264-de0c541d/matrix` report. The synthetic drag fixture is not a
   real gesture-latency measurement.
-- [ ] Complete the fixed-angle/fixed-brightness initial, mid-run and final visual
-  checklist for all four matrix workloads; do not promote `PARTIAL` to visual PASS
-  without human review.
+- [x] Archive and hash-verify the operator visual review for all four matrix workloads.
+  Twelve photos support `visual-equivalent-only` and no candidate-specific regression;
+  missing side/phase classification and varying capture conditions do not establish
+  strict fixed-time or pixel-level equivalence. Shared drag-fixture green-text clipping
+  remains a separate limitation.
 - [ ] Only after those measurements stabilize, compare aligned workloads with Cairo/
   SDL software rendering and LVGL. Do not claim a general “faster/slower” result
   beforehand.

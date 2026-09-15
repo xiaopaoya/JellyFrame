@@ -20,7 +20,7 @@
 4. **出口与发布准备**：复跑 Debug/Release/scripting/tool 全套门禁，审查矩阵归档，确认 Core
    `0.6.2` lock、Developer Image、SDK 和 A2 实机证据一致后，再处理 A3 试用材料。
 
-当前轮次已完成审查矩阵的初步回读、低风险修复和 WS147 定量 Profile OFF/ON 矩阵；下一轮只进入矩阵中仍标记为“待修复”或“待证据”的项目。视觉清单仍由用户补齐，不能提前标记性能候选为 PASS。
+当前轮次已完成审查矩阵的初步回读、低风险修复、WS147 定量 Profile OFF/ON 矩阵和受限人工视觉复核；下一轮只进入矩阵中仍标记为“待修复”或“待证据”的项目。现有照片只能支持 `visual-equivalent-only`，不能升级为严格固定时刻等价。
 
 ### 1. 审查报告治理（当前最高优先级）
 
@@ -49,8 +49,9 @@
 - [x] 在真实 developer-image workload 上完成静态、文本、合成拖动/滚动和全帧四类 Device Profile
   窗口；设备结论记录于版本化 `comparison-13264-de0c541d/matrix` 报告。合成拖动不等同于
   真实手势延迟测量。
-- [ ] 完成四个 workload 的固定角度/固定亮度 initial、mid、final 视觉清单；在人工复核前不将
-  `PARTIAL` 候选提升为视觉 PASS。
+- [x] 归档并校验四个 workload 的操作者视觉复核。12 张照片的 SHA-256 全部匹配，支持
+  `visual-equivalent-only` 且未报告候选特有回归；照片缺少 side/phase 分类且拍摄条件不同，
+  不构成严格固定时刻或像素级等价。拖动 fixture 两侧共同存在绿色文字下沿裁剪，继续单列限制。
 - [ ] 仅在上述数据稳定后，建立与 Cairo/SDL software renderer、LVGL 等的同分辨率/像素格式对照；
   在此之前不宣称“比主流图形库快/慢”。
 

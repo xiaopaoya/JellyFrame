@@ -89,7 +89,7 @@
 
 `D:\JellyFramePerf\comparison-13264-de0c541d\matrix` 已完成四个 workload 的定量矩阵：`static-local-repaint`、`text-layout-update`、`drag-scroll` 和 `full-repaint` 均完成 3 次 baseline/candidate、Profile ON 与 OFF 采集。基线为 `a58f89ff`，候选为 `de0c541d`（包含主线 `13264bcd` 及 ESP32-S3 GCC 13.2 有界排序修复）；四组均为 0 error signature、0 present failure。候选 frame p95 在四组分别为 `-35.71%`、`-36.36%`、`0%`、`-31.18%`，`full-repaint` 的 present p95 为 `+2.94%`。
 
-该矩阵当前仍为 `PARTIAL`：固定角度/亮度的 initial、mid、final 人工照片尚未补齐。`drag-scroll` 是用于可重复比较的合成双向拖动，不等同于真实触摸 input-to-present 延迟；不得据此关闭 A2 panel/input 出口或宣布候选已通过视觉验收。
+该矩阵当前仍为 `PARTIAL`。操作者已补充 12 张照片，归档清单中的 SHA-256 全部匹配，人工结论为四组 `visual-equivalent-only`；未观察到候选新增视觉回归。照片缺少 EXIF 时间和 baseline/candidate/phase 映射，且拍摄角度与光照不同，因此不能升级为固定时刻或像素级视觉等价证据。`drag-scroll` 两侧共同存在绿色文字下沿裁剪，属于共享 fixture 限制，且该 workload 是合成双向拖动，不等同于真实触摸 input-to-present 延迟；不得据此关闭 A2 panel/input 出口。
 
 ### 验证出口
 
