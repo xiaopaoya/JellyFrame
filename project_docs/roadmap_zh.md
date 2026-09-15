@@ -1,6 +1,6 @@
 # JellyFrame 主线路线图
 
-> 最后更新：2026-09-14；适用版本：0.6.0-dev；状态：活动计划的唯一来源
+> 最后更新：2026-09-15；适用版本：0.6.0-dev；状态：活动计划的唯一来源
 
 ## 先决判断
 
@@ -39,7 +39,7 @@
 当前已完成第 1 轮初步回读和低风险修复，下一轮从矩阵中仍成立的边界问题开始。
 
 1. **审查缺陷治理：**两轮审查和新一轮性能审查已经在审查索引与关闭矩阵中完成初步逐条处置。后续只处理仍需证据、目标修复或明确 RFC 的项目；确认成立的 P0/P1 必须绑定修复与回归证据，不能以报告标题代替结论。
-2. **渲染性能观测闭环：**桌面 trace producer、bounded command/owner 归因和 Device Profile V0 契约已交付。WS147 `13264bcd` 候选已完成四个 workload、每侧三次重复的 Profile OFF/ON 定量矩阵，并归档经哈希校验、支持 `visual-equivalent-only` 的操作者照片；严格固定时刻等价、真实触摸拖动/滚动窗口和公平库对照仍未关闭。设备 aggregate 不得推导逐元素耗时。
+2. **渲染性能观测闭环：**桌面 trace producer、bounded command/owner 归因和 Device Profile V0 契约已交付。WS147 `13264bcd` 候选已通过四个 workload、每侧三次重复的 Profile OFF/ON 定量矩阵和人工视觉等价验收；因缺少 display-readback 治具，本候选豁免逐像素比较。真实触摸拖动/滚动窗口和公平库对照仍未关闭。设备 aggregate 不得推导逐元素耗时。
 3. **A2 作者工具证据，实机继续：**WS147 Device OS/provider、已安装脚本 App、触摸诊断和 touch-latency 样例已合入主线。干净机器 VS Code 完整生命周期，以及真实已安装 App 的 panel/input 证据仍按独立报告验收，不能由源码 CI 或 provider lifecycle PASS 替代。
 4. **R1 Core-only 维护：**已完成的有界算术、文本交接、dirty/clip 热路径和回调调度修复继续作为门禁；剩余审查项按第 1 项治理，不重新开启无证据的全屏微优化或浏览器兼容扩张。
    后续审查还关闭了 timer 批次顺序、同帧 rAF 取消和排队 XHR 的 provider payload 清理问题；均已有 Debug 与 scripting MinSizeRel 定向回归，已被 worker 取走的 XHR 仍走迟到 completion 释放路径。
@@ -60,7 +60,7 @@
 
 后续性能工作只能由真实官方 image workload 触发，并必须先取得分相 telemetry。当前短期对象是拖动/滚动的 input-to-DMA-complete 延迟和重绘范围；WS147 physical-GRAM 路径的下边缘行错位已单独转入 [TE/vblank 同步移植验收](../docs/ws147_panel_scroll_te_acceptance_zh.md)，在人工视觉验收通过前保持默认关闭。只有增加 TE/latch 或光学测量后才能使用 input-to-present 口径；不能再以合成全屏 fixture 猜测产品帧率。
 
-2026-09-14 矩阵显示静态、文本和全帧 workload 的 frame/paint p95 有改善，合成拖动 workload 无变化，四组均无错误签名或 present failure。12 张操作者照片支持“候选未引入新增视觉回归”，但照片缺少 side/phase 分类且拍摄条件不同，只能标为 `visual-equivalent-only`，不能声明严格固定时刻等价。拖动 fixture 两侧共同存在绿色文字下沿裁剪；合成拖动不等同于真实手势延迟。
+该矩阵于 2026-09-15 以人工视觉等价结论通过：静态、文本和全帧 workload 的 frame/paint p95 有改善，合成拖动无变化，四组均无错误签名或 present failure，12 张哈希校验照片未见候选特有异常。逐像素比较豁免仅适用于本候选，不建立自动像素等价门禁。拖动 fixture 两侧共同存在绿色文字下沿裁剪；合成拖动不等同于真实手势延迟。
 
 ## 轨道 A：官方开发板与 Device OS
 

@@ -1,6 +1,6 @@
 # JellyFrame Active TODO
 
-> Last updated: 2026-09-14; Applies to: 0.6.0-dev
+> Last updated: 2026-09-15; Applies to: 0.6.0-dev
 >
 > This is the near-term execution queue for the [active roadmap](roadmap.md). It does not repeat closed acceptance, performance micro-experiments or historical port work.
 
@@ -50,10 +50,10 @@ performance tooling nor editor work substitutes for A2 hardware evidence.
   `comparison-13264-de0c541d/matrix` report. The synthetic drag fixture is not a
   real gesture-latency measurement.
 - [x] Archive and hash-verify the operator visual review for all four matrix workloads.
-  Twelve photos support `visual-equivalent-only` and no candidate-specific regression;
-  missing side/phase classification and varying capture conditions do not establish
-  strict fixed-time or pixel-level equivalence. Shared drag-fixture green-text clipping
-  remains a separate limitation.
+  The candidate passed by human visual-equivalence on 2026-09-15 with no candidate-specific
+  regression. Pixel comparison is waived only for this candidate because no display-readback
+  fixture exists; this does not establish an automated pixel gate. Shared drag-fixture
+  green-text clipping remains a separate limitation.
 - [ ] Only after those measurements stabilize, compare aligned workloads with Cairo/
   SDL software rendering and LVGL. Do not claim a general “faster/slower” result
   beforehand.

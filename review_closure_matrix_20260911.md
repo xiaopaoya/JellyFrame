@@ -1,6 +1,6 @@
 # Review Closure Matrix
 
-> Last updated: 2026-09-14; Applies to: 0.6.0-dev
+> Last updated: 2026-09-15; Applies to: 0.6.0-dev
 
 This matrix reconciles the review reports with the current source tree. A
 finding is not considered closed merely because a similar change exists: the
@@ -31,13 +31,13 @@ status below requires a source check and a regression or device evidence.
 | Script-task payload-writer subtraction | Closed | The writer rejects a storage state already beyond its declared capacity before subtracting, preventing an unchecked `size_t` underflow; scripting regression passes. |
 | Script-task retained-replay duplicate frame diff | Closed | `eligible()` computes one `ScriptTaskFrameDiff` and reuses it for paint-skeleton and changed-region decisions; scripting CTest passes. |
 | Script-task clip-chain rebuild per repaint | Closed for one render call | `render_into()` lazily caches each clip chain by clip index and reuses it across repaint rectangles; transformed source clips retain a local translated copy. Script-task renderer regression passes. |
+| WS147 `13264bcd` bounded-repaint candidate | Closed by quantitative A/B and human visual-equivalence | Four workloads have three baseline/candidate repeats with Profile ON/OFF captures, zero error signatures and zero present failures. Twelve hash-verified operator photos found no candidate-specific visual regression; pixel comparison is waived for this candidate because no display-readback fixture is available. The bounded-sort implementation is already on mainline through `e9775ef4`. |
 
 ## Still Needs Evidence or Targeted Work
 
 | Area | Current assessment | Next action |
 | --- | --- | --- |
 | Dirty-rect invalidation scans | Bounded; benchmark baseline recorded | Render Core microbench (`jellyframe_render_core_microbench 80 2000`) on the 2026-09-12 Release build measured 100 fragmented rects at 63.807 us, while 500 and 1000 rect inputs take 5.342 us and 10.190 us because the configured threshold falls back to one viewport rect (`forced_merges=499/999`). No unbounded growth was observed; defer a sweep/tile rewrite until device telemetry shows invalidation is dominant. |
-| WS147 `13264bcd` bounded-repaint candidate | Quantitative A/B complete; supporting visual review complete with limitations | `D:\JellyFramePerf\comparison-13264-de0c541d\matrix` contains four workloads, three baseline/candidate repeats, Profile ON/OFF captures, zero error signatures and zero present failures. Twelve hash-verified operator photos support `visual-equivalent-only`, with no candidate-specific regression reported; absent EXIF/side/phase classification and varying capture conditions prevent fixed-time or pixel-level equivalence. Drag-scroll green-text clipping is shared by both sides. Candidate `de0c541d` remains a validation branch, not a mainline promotion decision. |
 | DOM mutation accounting beyond the document cache | Closed | All current mutation and detached-node paths were reviewed; detached subtrees bypass the document cache, and rebind/destruction invalidate it. A dedicated repeated-mutation benchmark remains optional evidence, not a correctness blocker. |
 | Font fallback context rebuild | Closed | `contexts_dirty_` is set on every font-set/system-font change; family contexts are rebuilt per query and do not retain stale internal pointers. A text-heavy benchmark remains optional evidence. |
 | Physical-port durability policy | Deferred port evidence | The reference contract now documents acknowledged versus durable semantics. Each physical port must publish and power-interruption-test its own policy; this is not an A2 blocker for the existing accepted image. |

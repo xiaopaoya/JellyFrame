@@ -1,6 +1,6 @@
 # jellyframe 0.6.1 代码审查 — 汇总与交叉核对
 
-> 最后更新：2026-09-14；适用版本：0.6.0-dev
+> 最后更新：2026-09-15；适用版本：0.6.0-dev
 
 审查范围：`render_core`（`src/render_core/`，42 个 `.cpp`）与 `app_runtime`（`src/app_runtime/`）。
 审查口径：性能、实现正确性、可读性。**不含安全审查**（按用户说明，这些是善意代码）；不提出重写方案，只给最小、局部的修复。
@@ -54,7 +54,7 @@
 | 圆角渐变在内部区域重复做 coverage | `461a96b8` | 已实现圆角行分解；需保留截图/基准对比，确认视觉等价。 |
 | 文本换行只计行数却物化完整行、重复布局结果 | `6fb699b1`、`99bcecf4` | 已提供计数路径并复用布局缓存；需 CI 与长文本基准确认。 |
 | viewport 单位固定使用默认尺寸 | `9dcf1f1a` | 已按 layout context 解析；需矩形、竖屏、圆屏回归。 |
-| dirty rect 无上限/合并工作量过大 | `13264bcd`、`c1111274` | 已加入边界和受控合并；需检查 profile 中的 full-frame fallback 归因。 |
+| dirty rect 无上限/合并工作量过大 | `13264bcd`、`c1111274` | 已加入边界和受控合并；WS147 四 workload Profile OFF/ON、零错误/零 present failure，并于 2026-09-15 完成人工视觉等价验收。逐像素比较因缺少治具豁免，仅适用于本候选。 |
 | 圆角 clip、透明/变换合成和采样的冗余热路径 | `f43c06fe`、`c5d1f17d`、`cccf1928` | 已加入快路径；需设备 Profile OFF/ON 数据确认收益而非只确认正确性。 |
 | flex paint 与 layout 的子项排序不一致 | `c255f0a8` | 已共享排序实现；需保留绝对定位与非零 order 回归。 |
 | trace 查看器逐帧同步文件检查 | `6eae4c38` | 已改为一次性捕获/索引；需 Windows 扩展测试确认。 |
@@ -89,7 +89,7 @@
 
 `D:\JellyFramePerf\comparison-13264-de0c541d\matrix` 已完成四个 workload 的定量矩阵：`static-local-repaint`、`text-layout-update`、`drag-scroll` 和 `full-repaint` 均完成 3 次 baseline/candidate、Profile ON 与 OFF 采集。基线为 `a58f89ff`，候选为 `de0c541d`（包含主线 `13264bcd` 及 ESP32-S3 GCC 13.2 有界排序修复）；四组均为 0 error signature、0 present failure。候选 frame p95 在四组分别为 `-35.71%`、`-36.36%`、`0%`、`-31.18%`，`full-repaint` 的 present p95 为 `+2.94%`。
 
-该矩阵当前仍为 `PARTIAL`。操作者已补充 12 张照片，归档清单中的 SHA-256 全部匹配，人工结论为四组 `visual-equivalent-only`；未观察到候选新增视觉回归。照片缺少 EXIF 时间和 baseline/candidate/phase 映射，且拍摄角度与光照不同，因此不能升级为固定时刻或像素级视觉等价证据。`drag-scroll` 两侧共同存在绿色文字下沿裁剪，属于共享 fixture 限制，且该 workload 是合成双向拖动，不等同于真实触摸 input-to-present 延迟；不得据此关闭 A2 panel/input 出口。
+该矩阵于 2026-09-15 获准 `PASS (human visual-equivalence)`。操作者补充的 12 张照片与归档 SHA-256 全部匹配，目检和照片比对未发现候选新增视觉回归。由于缺少 display-readback 仪器或治具，本候选明确豁免逐像素比较；该豁免仅适用于 `comparison-13264-de0c541d`，不建立自动像素等价能力。`drag-scroll` 两侧共同存在绿色文字下沿裁剪，仍作为共享 fixture 限制单列；合成双向拖动也不等同于真实触摸 input-to-present 延迟，不关闭 A2 panel/input 出口。
 
 ### 验证出口
 
