@@ -193,6 +193,7 @@ struct FrameTraceCommandSpan {
     std::uint64_t start_us = 0;
     std::uint64_t duration_us = 0;
     std::size_t pixels = 0;
+    Rect clip;
 };
 
 class FrameTraceCommandAttribution {
@@ -275,7 +276,8 @@ public:
                         sample.trace_owner_token,
                         sample.begin_microseconds - frame_start_microseconds_,
                         sample.elapsed_microseconds,
-                        sample.candidate_pixels});
+                        sample.candidate_pixels,
+                        sample.clip});
                 }
             }
         }
@@ -3801,7 +3803,11 @@ public:
                   << json_escape_for_trace(command_attribution.owner_label(span.owner_token))
                   << "\",\"startUs\":" << span.start_us
                   << ",\"durationUs\":" << span.duration_us
-                  << ",\"pixels\":" << span.pixels << '}';
+                  << ",\"pixels\":" << span.pixels
+                  << ",\"rect\":{\"x\":" << span.clip.x
+                  << ",\"y\":" << span.clip.y
+                  << ",\"width\":" << std::max(0, span.clip.width)
+                  << ",\"height\":" << std::max(0, span.clip.height) << "}}";
             std::string next = entry.str();
             if (!command_spans_json.empty()) {
                 next.insert(next.begin(), ',');

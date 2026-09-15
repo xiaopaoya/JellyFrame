@@ -1,6 +1,6 @@
 const assert = require("assert");
 const fs = require("fs");
-const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameHotspotSummary, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
+const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
 const vm = require("vm");
 
 function loadTraceHelpers() {
@@ -147,7 +147,7 @@ function main() {
   const commandFrame = {
     ...spanFrame,
     commandSpans: [
-      { type: "FillRect", owner: "id:card", startUs: 3200, durationUs: 70, pixels: 100 },
+      { type: "FillRect", owner: "id:card", startUs: 3200, durationUs: 70, pixels: 100, rect: { x: 8, y: 12, width: 64, height: 28 } },
       { type: "Text", owner: "id:title", startUs: 3310, durationUs: 90, pixels: 24 }
     ]
   };
@@ -162,6 +162,18 @@ function main() {
       { name: "unaccounted", kind: "gap", startUs: 3270, durationUs: 40, leftPercent: 3270 * 100 / 3400, widthPercent: 40 * 100 / 3400 },
       { name: "Text · id:title", type: "Text", owner: "id:title", pixels: 24, kind: "command", startUs: 3310, durationUs: 90, leftPercent: 3310 * 100 / 3400, widthPercent: 90 * 100 / 3400 }
     ]
+  });
+  assert.deepEqual(frameDirtyRepaintEvidence(commandFrame), {
+    available: true,
+    entries: [{
+      name: "FillRect · id:card",
+      type: "FillRect",
+      owner: "id:card",
+      durationUs: 70,
+      pixels: 100,
+      dirtyRectIndexes: [0],
+      overlapPixels: 1792
+    }]
   });
   const linkedCommandFrame = {
     ...spanFrame,
@@ -253,6 +265,8 @@ function main() {
   assert(html.includes("vscode-resource://frame_000.bmp"));
   assert(html.includes("dirtyCoverage"));
   assert(html.includes("dirtyRects"));
+  assert(html.includes("脏区内的实际重绘证据"));
+  assert(html.includes("frameDirtyEvidence"));
   assert(html.includes('"width":64'));
   assert(html.includes("dirtyRectsTruncated"));
   assert(html.includes("capture-stage"));
@@ -286,6 +300,8 @@ function main() {
   assert(invalidCommandSpans.errors.some((error) => error.includes("command spans")));
   const overflowSpan = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, commandSpans: [{ type: "Text", owner: "id:x", startUs: Number.MAX_SAFE_INTEGER, durationUs: 1, pixels: 1 }] })}\n`);
   assert(overflowSpan.errors.some((error) => error.includes("command spans")));
+  const invalidRect = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, commandSpans: [{ type: "Text", owner: "id:x", startUs: 0, durationUs: 1, pixels: 1, rect: { x: 0, y: 0, width: -1, height: 1 } }] })}\n`);
+  assert(invalidRect.errors.some((error) => error.includes("command spans")));
 }
 
 main();

@@ -351,7 +351,7 @@ def main() -> int:
             require(isinstance(command_spans, list) and len(command_spans) <= 16,
                     "render trace command spans must stay bounded")
             for span in command_spans:
-                require(set(span) == {"type", "owner", "startUs", "durationUs", "pixels"},
+                require(set(span) == {"type", "owner", "startUs", "durationUs", "pixels", "rect"},
                         "render trace command spans must use stable fields")
                 require(isinstance(span["type"], str) and span["type"] and
                         isinstance(span["owner"], str) and span["owner"],
@@ -359,6 +359,12 @@ def main() -> int:
                 require(all(isinstance(span[key], int) and span[key] >= 0
                             for key in ("startUs", "durationUs", "pixels")),
                         "render trace command span values must be non-negative")
+                rect = span["rect"]
+                require(isinstance(rect, dict) and set(rect) == {"x", "y", "width", "height"},
+                        "render trace command span rects must use stable fields")
+                require(all(isinstance(rect[key], int) for key in ("x", "y", "width", "height")) and
+                        rect["width"] >= 0 and rect["height"] >= 0,
+                        "render trace command span rects must have valid integer geometry")
             require(record["action"] in {"none", "repaint-existing", "rebuild-pipeline"},
                     "render trace must use a stable update action")
             require("pipeline" in record and "domNodes" in record["pipeline"],

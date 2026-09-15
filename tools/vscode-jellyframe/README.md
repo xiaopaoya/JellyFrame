@@ -32,7 +32,9 @@ Palette as entry points.
   time overlap and are aggregated across frames by type, owner and stage with
   count, total time, p95 and candidate pixels; older traces fall back to accumulated stage cost. It does not
   present desktop timing as device FPS. Missing images are reported explicitly
-  instead of being inferred as blank frames.
+  instead of being inferred as blank frames. When final raster rectangles are
+  available, it also lists observed command/dirty-rectangle spatial overlap;
+  this is evidence of repaint coverage, not a DOM mutation cause.
 - Inline diagnostics for app-author advice, package warnings and pipeline
   diagnostics.
 - Explorer status view showing the selected app, build, report diagnostics and

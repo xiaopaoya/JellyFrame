@@ -24,7 +24,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
   时会明确提示，不将其当作空白画面。单帧视图还提供可点击的阶段构成条和实际 span 时间线；
   新 trace 显示开始偏移与未归因间隙，并可查看有界的绘制命令实际时间线；命令段会按时间重叠提示所属
   阶段，并在跨帧聚合中显示 `type + owner + stage` 的调用数、累计耗时、p95 和候选像素；旧 trace
-  回退为累计阶段耗时。
+  回退为累计阶段耗时。若 producer 提供最终 raster 矩形，面板还会列出与 dirty rect 空间重叠的实际
+  重绘证据，但不会将空间重叠误报为 DOM 变更原因。
 - 对 app 作者建议、package warnings 和管线 diagnostics 提供 inline diagnostics。
 - Explorer 中的 JellyFrame 状态视图显示当前 app、构建目录、报告诊断和性能摘要。
 - 首次配置作者环境时选择已安装的 JellyFrame SDK，独立 App 工作区随后可直接使用。

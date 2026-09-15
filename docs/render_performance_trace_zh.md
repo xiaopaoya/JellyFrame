@@ -79,8 +79,8 @@ python tools\render_performance_report.py `
 阶段间隙，否则仅显示累计阶段构成。
 
 桌面 capture 还可提供有界的 `commandSpans`，每项包含 `type`、`owner`、相对于 frame
-trace 起点的 `startUs`、`durationUs` 和候选 `pixels`。它只覆盖实际 raster invocation；
-rounded composite、transform 和宿主绘制等没有独立命令时钟的工作仍保持未归因。
+ trace 起点的 `startUs`、`durationUs`、候选 `pixels` 和最终 raster clip 的 `rect`。它只覆盖实际 raster invocation；
+ rounded composite、transform 和宿主绘制等没有独立命令时钟的工作仍保持未归因。
 
 Win32 桌面壳当前可在确定性捕获时生成第一版 trace。启用
 `--capture-frames` 时，每条 frame 记录还会带有相对截图文件名
@@ -124,7 +124,9 @@ build\Release\jellyframe_desktop_shell.exe `
 - `commandSpans` 是可选的有界命令事件数组；达到数量或行预算上限时必须输出
   `commandSpansTruncated: true`。它不能替代 `commands` 的跨帧聚合，也不能将未采集的
   composite 或 host 工作分配给某个元素。存在 `stageSpans` 时，查看器按时间重叠将每个命令
-  关联到占比最大的阶段；没有重叠时显示为 `unattributed`，这不是 producer 对嵌套关系的声明；
+  关联到占比最大的阶段；没有重叠时显示为 `unattributed`，这不是 producer 对嵌套关系的声明。
+  `rect` 是命令完成 raster 后的有界整数矩形；查看器只有在它与最终 `dirtyRects` 相交时才显示
+  “脏区内的实际重绘证据”，这代表空间重叠，不代表 DOM mutation 根因；
 - `commands[].owner` 只能是唯一且受限 ASCII `id:<id>`，或会话内 opaque `n<N>`，也可为
   `unattributed`；不得输出裸指针、DOM path、文本、arena 地址、文件密钥或设备物理地址；
 - `commands` 是可选归因。每项带 `type`、`owner`、`us`、`pixels`、`samples`；没有可靠归因时，UI 必须显示“无法归因到元素”，不能

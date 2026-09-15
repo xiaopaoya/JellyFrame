@@ -88,7 +88,11 @@ function parseRenderTrace(text) {
         !Number.isSafeInteger(span.startUs) || span.startUs < 0 ||
         !Number.isSafeInteger(span.durationUs) || span.durationUs < 0 ||
         !Number.isSafeInteger(span.pixels) || span.pixels < 0 ||
-        span.startUs + span.durationUs > Number.MAX_SAFE_INTEGER
+        span.startUs + span.durationUs > Number.MAX_SAFE_INTEGER ||
+        (span.rect !== undefined && (!span.rect || typeof span.rect !== "object" ||
+          !Number.isSafeInteger(span.rect.x) || !Number.isSafeInteger(span.rect.y) ||
+          !Number.isSafeInteger(span.rect.width) || span.rect.width < 0 ||
+          !Number.isSafeInteger(span.rect.height) || span.rect.height < 0))
       );
       if (invalidCommandSpan) {
         errors.push(`line ${index + 1}: command spans must have stable non-negative fields`);
@@ -126,13 +130,69 @@ function normalizeCommandSpan(item) {
       !Number.isSafeInteger(item.pixels) || item.pixels < 0) {
     return null;
   }
+  const rect = item.rect;
+  if (rect !== undefined && (!rect || typeof rect !== "object" ||
+      !Number.isSafeInteger(rect.x) || !Number.isSafeInteger(rect.y) ||
+      !Number.isSafeInteger(rect.width) || rect.width < 0 ||
+      !Number.isSafeInteger(rect.height) || rect.height < 0)) {
+    return null;
+  }
   return {
     type: item.type.trim(),
     owner: item.owner.trim(),
     startUs: item.startUs,
     durationUs: item.durationUs,
-    pixels: item.pixels
+    pixels: item.pixels,
+    ...(rect !== undefined ? { rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } } : {})
   };
+}
+
+function rectIntersectionArea(left, right) {
+  if (!left || !right) return 0;
+  const x = Math.max(left.x, right.x);
+  const y = Math.max(left.y, right.y);
+  const rightEdge = Math.min(left.x + left.width, right.x + right.width);
+  const bottomEdge = Math.min(left.y + left.height, right.y + right.height);
+  return rightEdge > x && bottomEdge > y ? (rightEdge - x) * (bottomEdge - y) : 0;
+}
+
+function normalizeDirtyRect(rect) {
+  if (!rect || typeof rect !== "object" ||
+      !Number.isSafeInteger(rect.x) || !Number.isSafeInteger(rect.y) ||
+      !Number.isSafeInteger(rect.width) || rect.width <= 0 ||
+      !Number.isSafeInteger(rect.height) || rect.height <= 0) {
+    return null;
+  }
+  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+}
+
+function frameDirtyRepaintEvidence(frame) {
+  if (!Array.isArray(frame?.dirtyRects) || !Array.isArray(frame?.commandSpans)) {
+    return { available: false, entries: [] };
+  }
+  const dirtyRects = frame.dirtyRects.map(normalizeDirtyRect).filter(Boolean).slice(0, 32);
+  const entries = [];
+  for (const rawSpan of frame.commandSpans) {
+    const span = normalizeCommandSpan(rawSpan);
+    if (!span?.rect) continue;
+    const overlaps = [];
+    for (let index = 0; index < dirtyRects.length; index += 1) {
+      const area = rectIntersectionArea(span.rect, dirtyRects[index]);
+      if (area > 0) overlaps.push({ index, area });
+    }
+    if (overlaps.length) {
+      entries.push({
+        name: span.type + " · " + span.owner,
+        type: span.type,
+        owner: span.owner,
+        durationUs: span.durationUs,
+        pixels: span.pixels,
+        dirtyRectIndexes: overlaps.map((item) => item.index),
+        overlapPixels: overlaps.reduce((sum, item) => sum + item.area, 0)
+      });
+    }
+  }
+  return { available: true, entries };
 }
 
 function spanEndUs(startUs, durationUs) {
@@ -528,11 +588,14 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
   const frameCommandTimelines = Object.fromEntries((parsed?.frames || []).map((frame) => [
     String(frame.frame), frameCommandTimeline(frame)
   ]));
+  const frameDirtyEvidence = Object.fromEntries((parsed?.frames || []).map((frame) => [
+    String(frame.frame), frameDirtyRepaintEvidence(frame)
+  ]));
   const frameHotspots = Object.fromEntries((parsed?.frames || []).map((frame) => [
     String(frame.frame), frameHotspotSummary(frame)
   ]));
   const frameSummary = frameTimingSummary(parsed);
-  const data = safeJson({ ...parsed, frameImages, frameTiming, frameComposition, frameTimelines, frameCommandTimelines, frameHotspots, frameSummary, aggregate: aggregateTrace(parsed) });
+  const data = safeJson({ ...parsed, frameImages, frameTiming, frameComposition, frameTimelines, frameCommandTimelines, frameDirtyEvidence, frameHotspots, frameSummary, aggregate: aggregateTrace(parsed) });
   const labels = chinese ? {
     title: "Render Trace",
     frame: "帧",
@@ -580,7 +643,11 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     dirtyCoverage: "脏区覆盖",
     dirtyRects: "脏区矩形",
     dirtyRectsTruncated: "脏区矩形过多，已截断",
-    dirtyOverlay: "截图中的脏区",
+     dirtyOverlay: "截图中的脏区",
+     dirtyEvidence: "脏区内的实际重绘证据",
+     dirtyEvidenceNote: "仅表示带有最终 raster 矩形的命令与已记录 dirty rect 发生空间重叠，不是 DOM 变更根因；未命中的命令或截断数据不会显示。",
+     dirtyRectIndexes: "脏区编号",
+     overlapPixels: "重叠像素",
     aggregate: "跨帧聚合",
     aggregateNote: "按有效 trace 样本累计；p95 是单次调用耗时的第 95 百分位。被截断的帧只代表已记录的下界。",
     aggregateCommand: "命令",
@@ -653,7 +720,11 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     dirtyCoverage: "Dirty coverage",
     dirtyRects: "Dirty rectangles",
     dirtyRectsTruncated: "Too many dirty rectangles; list truncated",
-    dirtyOverlay: "Dirty regions in capture",
+     dirtyOverlay: "Dirty regions in capture",
+     dirtyEvidence: "Observed repaint inside dirty regions",
+     dirtyEvidenceNote: "Shows only spatial overlap between commands with final raster rectangles and recorded dirty rectangles; it is not the DOM mutation cause. Unmatched or truncated work is omitted.",
+     dirtyRectIndexes: "Dirty rects",
+     overlapPixels: "Overlap pixels",
     aggregate: "Cross-frame aggregation",
     aggregateNote: "Totals include valid trace samples; p95 is the 95th percentile of per-call time. Truncated frames are lower bounds.",
     aggregateCommand: "Command",
@@ -728,9 +799,11 @@ function render(){
  const fps=total>0?(1000000/total).toFixed(1):labels.none;
  const commands=(Array.isArray(frame.commands)?frame.commands:[]).map((item)=>{if(!item||typeof item!=='object'||typeof item.type!=='string'||!Number.isSafeInteger(item.us)||item.us<0||!Number.isSafeInteger(item.pixels)||item.pixels<0)return null;const samples=Number.isSafeInteger(item.samples)&&item.samples>0?item.samples:1;const owner=typeof item.owner==='string'&&item.owner.trim()?item.owner:(typeof item.nodeId==='string'&&item.nodeId.trim()?item.nodeId:'unattributed');return {...item,owner,samples,attributed:owner!=='unattributed'};}).filter(Boolean).sort((left,right)=>right.us-left.us).slice(0,64); const unattributedCount=commands.filter((item)=>!item.attributed).length; const pipeline=frame.pipeline||{};
  const dirtyPercent=Math.max(0,Math.min(100,Number(frame.dirtyAreaPercent)||0));
+ const dirtyEvidence=model.frameDirtyEvidence?.[String(frame.frame)]||{available:false,entries:[]};
  const dirtyRects=Array.isArray(frame.dirtyRects)?frame.dirtyRects.filter((rect)=>rect&&Number.isFinite(Number(rect.x))&&Number.isFinite(Number(rect.y))&&Number.isFinite(Number(rect.width))&&Number.isFinite(Number(rect.height))&&Number(rect.width)>0&&Number(rect.height)>0).slice(0,32):[];
  const viewportWidth=Math.max(1,Number(model.session?.viewport?.width)||1); const viewportHeight=Math.max(1,Number(model.session?.viewport?.height)||1);
- const dirtyRectView=dirtyRects.length?'<h2>'+esc(labels.dirtyRects)+'</h2><div>'+dirtyRects.map((rect)=>{const x=Number(rect.x)||0;const y=Number(rect.y)||0;const width=Math.max(0,Number(rect.width)||0);const height=Math.max(0,Number(rect.height)||0);return '<div class="dirty-rect"><span class="bar"><i style="width:'+Math.min(100,Math.max(1,Math.round(width*100/viewportWidth)))+'%"></i></span><code>'+fmt(x)+','+fmt(y)+' '+fmt(width)+'x'+fmt(height)+'</code></div>';}).join('')+(frame.dirtyRectsTruncated?'<p class="muted">'+esc(labels.dirtyRectsTruncated)+'</p>':'')+'</div>':'';
+ const dirtyRectView=dirtyRects.length?'<h2>'+esc(labels.dirtyRects)+'</h2><div>'+dirtyRects.map((rect,index)=>{const x=Number(rect.x)||0;const y=Number(rect.y)||0;const width=Math.max(0,Number(rect.width)||0);const height=Math.max(0,Number(rect.height)||0);return '<div class="dirty-rect"><span class="bar"><i style="width:'+Math.min(100,Math.max(1,Math.round(width*100/viewportWidth)))+'%"></i></span><code>#'+fmt(index)+' '+fmt(x)+','+fmt(y)+' '+fmt(width)+'x'+fmt(height)+'</code></div>';}).join('')+(frame.dirtyRectsTruncated?'<p class="muted">'+esc(labels.dirtyRectsTruncated)+'</p>':'')+'</div>':'';
+ const dirtyEvidenceView=dirtyEvidence.available?'<h2>'+esc(labels.dirtyEvidence)+'</h2><p class="muted">'+esc(labels.dirtyEvidenceNote)+'</p>'+(dirtyEvidence.entries.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.time)+'</th><th>'+esc(labels.dirtyRectIndexes)+'</th><th>'+esc(labels.overlapPixels)+'</th></tr>'+dirtyEvidence.entries.map((entry)=>'<tr><td>'+esc(entry.type)+'</td><td><code>'+esc(entry.owner)+'</code></td><td>'+fmt(entry.durationUs)+' us</td><td>'+entry.dirtyRectIndexes.map((index)=>'#'+fmt(index)).join(', ')+'</td><td>'+fmt(entry.overlapPixels)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>'):'';
  const capture=model.frameImages?.[String(frame.frame)];
  const dirtyOverlay=dirtyRects.length?'<p class="muted dirty-overlay-label">'+esc(labels.dirtyOverlay)+'</p><div class="capture-stage">'+dirtyRects.map((rect)=>{const x=Number(rect.x)||0;const y=Number(rect.y)||0;const width=Math.max(0,Number(rect.width)||0);const height=Math.max(0,Number(rect.height)||0);return '<i class="dirty-overlay" style="left:'+Math.max(0,Math.min(100,x*100/viewportWidth))+'%;top:'+Math.max(0,Math.min(100,y*100/viewportHeight))+'%;width:'+Math.max(0,Math.min(100,width*100/viewportWidth))+'%;height:'+Math.max(0,Math.min(100,height*100/viewportHeight))+'%"></i>';}).join('')+'<img src="'+esc(capture||'')+'" alt="'+esc(labels.capture)+'"></div>':'';
  const captureView=capture?'<section class="capture"><strong>'+esc(labels.capture)+'</strong>'+(dirtyRects.length?dirtyOverlay:'<img src="'+esc(capture)+'" alt="'+esc(labels.capture)+'">')+'</section>':'<section class="capture muted">'+esc(labels.noCapture)+'</section>';
@@ -757,6 +830,7 @@ function render(){
  stageCompositionView+
  '<div class="dirty"><span>'+esc(labels.dirtyCoverage)+'</span><span class="bar"><i style="width:'+dirtyPercent+'%"></i></span><span>'+dirtyPercent.toFixed(1)+'%</span></div>'+
  dirtyRectView+
+ dirtyEvidenceView+
  '<p><strong>'+esc(labels.reason)+':</strong> '+esc(frame.reason||labels.none)+' <span class="muted">· timingComplete='+esc(frame.timingComplete===true?'true':'false')+'</span></p>'+
  '<h2>'+esc(labels.stages)+'</h2>'+ (stages.length?stages.map(([name,value])=>'<div class="stage"><code>'+esc(name)+'</code><span class="bar"><i style="width:'+Math.min(100,Math.round((Number(value)||0)*100/max))+'%"></i></span><span>'+fmt(value)+' us ('+(total?((Number(value)||0)*100/total).toFixed(1):'0.0')+'%)</span></div>').join(''):'<p class="muted">'+esc(labels.none)+'</p>')+(unaccountedUs>0?'<div class="stage"><code>'+esc(labels.unaccounted)+'</code><span class="bar"><i style="width:'+Math.min(100,Math.round(unaccountedUs*100/max))+'%"></i></span><span>'+fmt(unaccountedUs)+' us ('+(total?(unaccountedUs*100/total).toFixed(1):'0.0')+'%)</span></div>':'')+
  '<h2>'+esc(labels.pipeline)+'</h2><p class="muted">'+Object.entries(pipeline).map(([key,value])=>'<code>'+esc(key)+'='+esc(value)+'</code>').join(' · ')+'</p>'+ 
@@ -772,4 +846,4 @@ renderFrameSummary();renderAggregate();slider.max=Math.max(0,model.frames.length
 </script></body></html>`;
 }
 
-module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameHotspotSummary, frameTimingSummary, renderTraceHtml };
+module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameTimingSummary, renderTraceHtml };
