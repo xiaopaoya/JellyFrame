@@ -45,6 +45,8 @@ python tools\render_performance_report.py `
 - Render Trace 查看器提供跨帧的 command/stage/owner 调用数、累计耗时和单次调用 p95；新 trace
   还会按 `type + owner + stage` 聚合真实 `commandSpans`，显示 raster invocation 的调用数、累计耗时、p95
   和候选像素；
+- 新 trace 还会按 `type + owner` 聚合命令与 dirty rect 的空间重叠证据，显示命中次数、累计重绘耗时、
+  p95、命中 dirty rect 数和重叠像素；这用于定位反复参与局部重绘的元素，不代表其触发了 DOM mutation；
 - HTML 报告会展示普通 microbench 的平均耗时，以及统计型 probe 的 p50/p95、display command 数和峰值 surface
   字节数；孤立 probe 不被解释为 App 元素耗时或设备性能；
 - 传入 `--microbench-baseline` 后，报告会按同名且同形状的 probe 展示当前值相对基线的变化百分比；
@@ -169,7 +171,8 @@ python tools\render_trace_profile_ab.py `
 3. 画布 overlay：dirty rect、paint bounds、clip bounds，切换前后帧；
 4. command/owner 排名，显示类型、受限 owner、候选像素、调用次数和耗时；有真实 span 时额外显示
    `type + owner + stage` 的跨帧聚合；
-5. 跨帧聚合，按 command、stage 和 owner 汇总调用数、累计耗时与 p95，并显示截断/缺失归因；
+5. 跨帧聚合，按 command、stage 和 owner 汇总调用数、累计耗时与 p95，并显示截断/缺失归因；同时展示
+   dirty rect 空间重叠证据聚合；
 6. frame scrubber，逐帧查看“重建了什么、复用了什么、哪些区域被清除/重绘”；
 7. p50/p95 与最慢帧固定显示，并允许导出原始 JSONL/HTML；
 8. 缺失 trace、设备只提供 aggregate 或 command 未归因时显示来源和限制。

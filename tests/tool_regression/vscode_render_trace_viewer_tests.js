@@ -230,6 +230,17 @@ function main() {
     p95Us: 20,
     totalPixels: 24
   }]);
+  const dirtyAggregate = aggregateTrace({ frames: [commandFrame] });
+  assert.deepEqual(dirtyAggregate.dirtyEvidence, [{
+    name: "FillRect · id:card",
+    type: "FillRect",
+    owner: "id:card",
+    count: 1,
+    totalUs: 70,
+    p95Us: 70,
+    totalOverlapPixels: 1792,
+    dirtyRectHits: 1
+  }]);
   assert.equal(aggregate.invalidCommandSamples, 1);
   assert.equal(aggregate.commandsTruncatedFrames, 1);
   const html = renderTraceHtml(parsed, true, "trace.jsonl", {
@@ -281,6 +292,7 @@ function main() {
   assert(html.includes("实际命令 · 元素"));
   assert(html.includes("commandSpan"));
   assert(html.includes("commandSpansTruncatedFrames"));
+  assert(html.includes("脏区重绘证据 · 元素"));
   assert(html.includes("owner=typeof item.owner"));
   assert(!html.includes("ignored</code>"));
   assert(!html.includes("invalid,0 10x10"));

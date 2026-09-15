@@ -34,7 +34,8 @@ Palette as entry points.
   present desktop timing as device FPS. Missing images are reported explicitly
   instead of being inferred as blank frames. When final raster rectangles are
   available, it also lists observed command/dirty-rectangle spatial overlap;
-  this is evidence of repaint coverage, not a DOM mutation cause.
+  the evidence is aggregated across frames as well; this is evidence of repaint
+  coverage, not a DOM mutation cause.
 - Inline diagnostics for app-author advice, package warnings and pipeline
   diagnostics.
 - Explorer status view showing the selected app, build, report diagnostics and

@@ -252,6 +252,29 @@ function addCommandSpanAggregate(map, span, stageName) {
   entry.distribution.push({ count: 1, us: span.durationUs });
 }
 
+function addDirtyEvidenceAggregate(map, entry) {
+  const key = entry.type + "\u0000" + entry.owner;
+  let aggregate = map.get(key);
+  if (!aggregate) {
+    aggregate = {
+      name: entry.name,
+      type: entry.type,
+      owner: entry.owner,
+      count: 0,
+      totalUs: 0,
+      totalOverlapPixels: 0,
+      dirtyRectHits: 0,
+      distribution: []
+    };
+    map.set(key, aggregate);
+  }
+  aggregate.count = Math.min(Number.MAX_SAFE_INTEGER, aggregate.count + 1);
+  aggregate.totalUs = Math.min(Number.MAX_SAFE_INTEGER, aggregate.totalUs + entry.durationUs);
+  aggregate.totalOverlapPixels = Math.min(Number.MAX_SAFE_INTEGER, aggregate.totalOverlapPixels + entry.overlapPixels);
+  aggregate.dirtyRectHits = Math.min(Number.MAX_SAFE_INTEGER, aggregate.dirtyRectHits + entry.dirtyRectIndexes.length);
+  aggregate.distribution.push({ count: 1, us: entry.durationUs });
+}
+
 function finalizeAggregates(map) {
   return Array.from(map.values()).map((entry) => {
     const distribution = entry.distribution.slice().sort((left, right) => left.us - right.us);
@@ -300,19 +323,48 @@ function finalizeCommandSpanAggregates(map) {
   }).sort((left, right) => right.totalUs - left.totalUs || right.count - left.count || left.name.localeCompare(right.name));
 }
 
+function finalizeDirtyEvidenceAggregates(map) {
+  return Array.from(map.values()).map((entry) => {
+    const distribution = entry.distribution.slice().sort((left, right) => left.us - right.us);
+    const target = Math.max(1, Math.ceil(entry.count * 0.95));
+    let seen = 0;
+    let p95Us = 0;
+    for (const sample of distribution) {
+      seen += sample.count;
+      if (seen >= target) {
+        p95Us = sample.us;
+        break;
+      }
+    }
+    return {
+      name: entry.name,
+      type: entry.type,
+      owner: entry.owner,
+      count: entry.count,
+      totalUs: entry.totalUs,
+      p95Us: Math.round(p95Us),
+      totalOverlapPixels: entry.totalOverlapPixels,
+      dirtyRectHits: entry.dirtyRectHits
+    };
+  }).sort((left, right) => right.totalUs - left.totalUs || right.count - left.count || left.name.localeCompare(right.name));
+}
+
 function aggregateTrace(parsed) {
   const command = new Map();
   const commandSpan = new Map();
+  const dirtyEvidence = new Map();
   const stage = new Map();
   const owner = new Map();
   let invalidCommandSamples = 0;
   let commandsTruncatedFrames = 0;
   let nodesTruncatedFrames = 0;
   let commandSpansTruncatedFrames = 0;
+  let dirtyRectsTruncatedFrames = 0;
   for (const frame of parsed?.frames || []) {
     if (frame.commandsTruncated === true) commandsTruncatedFrames += 1;
     if (frame.nodesTruncated === true) nodesTruncatedFrames += 1;
     if (frame.commandSpansTruncated === true) commandSpansTruncatedFrames += 1;
+    if (frame.dirtyRectsTruncated === true) dirtyRectsTruncatedFrames += 1;
     for (const [name, value] of Object.entries(frame.stagesUs || {})) {
       addAggregateSample(stage, name, value, 1, value);
     }
@@ -334,6 +386,9 @@ function aggregateTrace(parsed) {
       const stage = commandSpanStage(span, stageSpans);
       addCommandSpanAggregate(commandSpan, span, stage?.name);
     }
+    for (const entry of frameDirtyRepaintEvidence(frame).entries) {
+      addDirtyEvidenceAggregate(dirtyEvidence, entry);
+    }
     const declaredInvalid = Number.isSafeInteger(frame.commandInvalidSamples) && frame.commandInvalidSamples > 0
       ? frame.commandInvalidSamples : 0;
     invalidCommandSamples += Math.max(invalidCommandsInFrame, declaredInvalid);
@@ -346,13 +401,15 @@ function aggregateTrace(parsed) {
     frameCount: (parsed?.frames || []).length,
     command: finalizeAggregates(command),
     commandSpan: finalizeCommandSpanAggregates(commandSpan),
+    dirtyEvidence: finalizeDirtyEvidenceAggregates(dirtyEvidence),
     stage: finalizeAggregates(stage),
     owner: owners,
     missingAttribution: unattributed,
     invalidCommandSamples,
     commandsTruncatedFrames,
     nodesTruncatedFrames,
-    commandSpansTruncatedFrames
+    commandSpansTruncatedFrames,
+    dirtyRectsTruncatedFrames
   };
 }
 
@@ -651,8 +708,11 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     aggregate: "跨帧聚合",
     aggregateNote: "按有效 trace 样本累计；p95 是单次调用耗时的第 95 百分位。被截断的帧只代表已记录的下界。",
     aggregateCommand: "命令",
-    aggregateCommandSpan: "实际命令 · 元素",
-    aggregatePixels: "候选像素",
+     aggregateCommandSpan: "实际命令 · 元素",
+     aggregatePixels: "候选像素",
+     aggregateDirtyEvidence: "脏区重绘证据 · 元素",
+     aggregateDirtyHits: "命中脏区",
+     aggregateOverlapPixels: "重叠像素",
     aggregateStage: "阶段",
     aggregateOwner: "归因对象",
     aggregateCount: "调用数",
@@ -728,8 +788,11 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     aggregate: "Cross-frame aggregation",
     aggregateNote: "Totals include valid trace samples; p95 is the 95th percentile of per-call time. Truncated frames are lower bounds.",
     aggregateCommand: "Command",
-    aggregateCommandSpan: "Raster command · owner",
-    aggregatePixels: "Candidate pixels",
+     aggregateCommandSpan: "Raster command · owner",
+     aggregatePixels: "Candidate pixels",
+     aggregateDirtyEvidence: "Dirty repaint evidence · owner",
+     aggregateDirtyHits: "Dirty hits",
+     aggregateOverlapPixels: "Overlap pixels",
     aggregateStage: "Stage",
     aggregateOwner: "Owner",
     aggregateCount: "Count",
@@ -777,12 +840,13 @@ const esc=(v)=>String(v??'').replace(/[&<>\"]/g,(c)=>({'&':'&amp;','<':'&lt;','>
 const fmt=(v)=>Number(v||0).toLocaleString();
 const aggregateTable=(title,rows)=>'<h3>'+esc(title)+'</h3>'+ (rows.length?'<table><tr><th>'+esc(labels.aggregateCommand)+'</th><th>'+esc(labels.aggregateCount)+'</th><th>'+esc(labels.aggregateTotal)+'</th><th>'+esc(labels.aggregateP95)+'</th></tr>'+rows.slice(0,64).map((row)=>'<tr><td><code>'+esc(row.name)+'</code></td><td>'+fmt(row.count)+'</td><td>'+fmt(row.totalUs)+' us</td><td>'+fmt(row.p95Us)+' us</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>');
 const aggregateCommandSpanTable=(rows)=>'<h3>'+esc(labels.aggregateCommandSpan)+'</h3>'+ (rows.length?'<table><tr><th>'+esc(labels.aggregateCommandSpan)+'</th><th>'+esc(labels.aggregateStage)+'</th><th>'+esc(labels.aggregateCount)+'</th><th>'+esc(labels.aggregateTotal)+'</th><th>'+esc(labels.aggregateP95)+'</th><th>'+esc(labels.aggregatePixels)+'</th></tr>'+rows.slice(0,64).map((row)=>'<tr><td><code>'+esc(row.name)+'</code></td><td>'+esc(row.stage)+'</td><td>'+fmt(row.count)+'</td><td>'+fmt(row.totalUs)+' us</td><td>'+fmt(row.p95Us)+' us</td><td>'+fmt(row.totalPixels)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>');
+const aggregateDirtyEvidenceTable=(rows)=>'<h3>'+esc(labels.aggregateDirtyEvidence)+'</h3>'+ (rows.length?'<table><tr><th>'+esc(labels.aggregateDirtyEvidence)+'</th><th>'+esc(labels.aggregateCount)+'</th><th>'+esc(labels.aggregateTotal)+'</th><th>'+esc(labels.aggregateP95)+'</th><th>'+esc(labels.aggregateDirtyHits)+'</th><th>'+esc(labels.aggregateOverlapPixels)+'</th></tr>'+rows.slice(0,64).map((row)=>'<tr><td><code>'+esc(row.name)+'</code></td><td>'+fmt(row.count)+'</td><td>'+fmt(row.totalUs)+' us</td><td>'+fmt(row.p95Us)+' us</td><td>'+fmt(row.dirtyRectHits)+'</td><td>'+fmt(row.totalOverlapPixels)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>');
 function renderAggregate(){
- const aggregate=model.aggregate||{command:[],commandSpan:[],stage:[],owner:[],missingAttribution:{count:0,totalUs:0,p95Us:0},invalidCommandSamples:0,commandsTruncatedFrames:0,nodesTruncatedFrames:0,commandSpansTruncatedFrames:0};
- aggregateView.innerHTML=aggregateTable(labels.aggregateCommand,aggregate.command)+aggregateCommandSpanTable(aggregate.commandSpan||[])+aggregateTable(labels.aggregateStage,aggregate.stage)+aggregateTable(labels.aggregateOwner,aggregate.owner)+
+ const aggregate=model.aggregate||{command:[],commandSpan:[],dirtyEvidence:[],stage:[],owner:[],missingAttribution:{count:0,totalUs:0,p95Us:0},invalidCommandSamples:0,commandsTruncatedFrames:0,nodesTruncatedFrames:0,commandSpansTruncatedFrames:0,dirtyRectsTruncatedFrames:0};
+ aggregateView.innerHTML=aggregateTable(labels.aggregateCommand,aggregate.command)+aggregateCommandSpanTable(aggregate.commandSpan||[])+aggregateDirtyEvidenceTable(aggregate.dirtyEvidence||[])+aggregateTable(labels.aggregateStage,aggregate.stage)+aggregateTable(labels.aggregateOwner,aggregate.owner)+
  '<p class="muted"><strong>'+esc(labels.aggregateMissing)+':</strong> '+fmt(aggregate.missingAttribution.count)+' / '+fmt(aggregate.missingAttribution.totalUs)+' us. '+esc(labels.aggregateMissingNote)+'</p>'+
  (aggregate.invalidCommandSamples?'<p class="muted">'+esc(labels.aggregateInvalid)+': '+fmt(aggregate.invalidCommandSamples)+'</p>':'')+
- ((aggregate.commandsTruncatedFrames||aggregate.nodesTruncatedFrames||aggregate.commandSpansTruncatedFrames)?'<p class="muted">'+esc(labels.aggregateTruncated)+': commands='+fmt(aggregate.commandsTruncatedFrames)+', spans='+fmt(aggregate.commandSpansTruncatedFrames)+', owners='+fmt(aggregate.nodesTruncatedFrames)+'</p>':'');
+ ((aggregate.commandsTruncatedFrames||aggregate.nodesTruncatedFrames||aggregate.commandSpansTruncatedFrames||aggregate.dirtyRectsTruncatedFrames)?'<p class="muted">'+esc(labels.aggregateTruncated)+': commands='+fmt(aggregate.commandsTruncatedFrames)+', spans='+fmt(aggregate.commandSpansTruncatedFrames)+', dirtyRects='+fmt(aggregate.dirtyRectsTruncatedFrames)+', owners='+fmt(aggregate.nodesTruncatedFrames)+'</p>':'');
 }
 function renderFrameSummary(){
  const summary=model.frameSummary||{count:0,p50Us:0,p95Us:0,maxUs:0};
