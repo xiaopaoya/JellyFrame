@@ -1,6 +1,6 @@
 # Render Core Benchmarks
 
-> Last updated: 2026-09-03; Applies to: 0.6.0-dev
+> Last updated: 2026-09-15; Applies to: 0.6.0-dev
 
 Microbenchmarks in this directory measure the platform-neutral render pipeline:
 HTML parsing, CSS parsing, style resolution, render tree, layout, layer tree,
@@ -8,13 +8,27 @@ display-list flattening and software rendering.
 
 Executable: `jellyframe_render_core_microbench`.
 
-On Windows, `jellyframe_cpu2d_compare` runs the first fixed-condition CPU 2D
-comparison workload. It paints one opaque 172x320 RGB frame through JellyFrame
-and a memory-DIB GDI `FillRect` in the same process, performs 30 warm-up calls,
-records equal sample counts, and rejects output whose normalized RGB digest
-differs. It writes `jellyframe.json` and `gdi.json` manifests for
-`tools/benchmark_compare.py`. This probe compares only opaque full-frame fill;
-it is not a complete UI, text, GPU, or device benchmark.
+On Windows, `jellyframe_cpu2d_compare` runs fixed-condition CPU 2D comparison
+workloads through JellyFrame and a memory-DIB GDI operation in the same process.
+Both use a 172x320 RGB surface, 30 warm-up calls and equal sample counts. The
+default `opaque-fill` workload requires exact normalized RGB output. The
+`horizontal-gradient` workload compares the opaque horizontal gradient against
+GDI `GradientFill` and requires normalized RGB RMSE <= 1.0; the implementations'
+integer endpoint conventions differ by at most one channel value in the current
+fixture. The runner writes `jellyframe.json` and `gdi.json` manifests for
+`tools/benchmark_compare.py`.
+
+```powershell
+jellyframe_cpu2d_compare <output-directory> 100 opaque-fill
+jellyframe_cpu2d_compare <output-directory> 100 horizontal-gradient
+```
+
+On the development Windows machine, reusing the first clipped horizontal row
+reduced the 100-sample JellyFrame gradient p95 from 437.7 us to 4.3 us while
+preserving its `177877a38d09ae83` output digest; GDI measured approximately
+4.4 us p95. These values apply only to this opaque 172x320 horizontal-gradient
+primitive. They do not describe complete UI, device FPS, rounded/translucent
+gradients, text, or GPU performance.
 
 Retained repaint probes:
 

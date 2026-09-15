@@ -438,6 +438,21 @@ void opaque_linear_gradient_fast_path_preserves_all_axis_interpolation() {
     check(horizontal_target.pixel(4, 4).r == 162 && horizontal_target.pixel(4, 4).g == 109 &&
               horizontal_target.pixel(4, 4).b == 19,
           "opaque horizontal gradient keeps later interpolation in a dirty clip");
+    for (int y = 0; y < horizontal_target.height; ++y) {
+        for (int x = 0; x < horizontal_target.width; ++x) {
+            const Color pixel = horizontal_target.pixel(x, y);
+            const bool inside_dirty_clip = x >= 2 && x < 5 && y >= 2 && y < 5;
+            if (!inside_dirty_clip) {
+                check(pixel.r == 255 && pixel.g == 255 && pixel.b == 255 && pixel.a == 255,
+                      "opaque horizontal gradient preserves every pixel outside its dirty clip");
+                continue;
+            }
+            const Color first_dirty_row_pixel = horizontal_target.pixel(x, 2);
+            check(pixel.r == first_dirty_row_pixel.r && pixel.g == first_dirty_row_pixel.g &&
+                      pixel.b == first_dirty_row_pixel.b && pixel.a == first_dirty_row_pixel.a,
+                  "opaque horizontal gradient produces identical rows inside its dirty clip");
+        }
+    }
 
     DisplayCommand diagonal = horizontal;
     diagonal.gradient_axis = GradientAxis::DiagonalDownRight;

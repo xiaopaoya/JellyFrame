@@ -35,13 +35,16 @@ bool modern_paint_fill_opaque_linear_gradient_fast(FrameBuffer& target,
 
     if (axis == GradientAxis::Horizontal) {
         const int denom = std::max(1, safe_add(rect.width, -1));
-        for (int y = clipped.y; y < clipped.y + clipped.height; ++y) {
+        Color* first_row = target.pixels.data() + static_cast<std::size_t>(clipped.y) *
+            static_cast<std::size_t>(target.width) + static_cast<std::size_t>(clipped.x);
+        for (int x = 0; x < clipped.width; ++x) {
+            first_row[x] = modern_paint_lerp_color_255(
+                first, second, modern_paint_progress_255(clipped.x + x - rect.x, denom));
+        }
+        for (int y = clipped.y + 1; y < clipped.y + clipped.height; ++y) {
             Color* destination = target.pixels.data() + static_cast<std::size_t>(y) *
                 static_cast<std::size_t>(target.width) + static_cast<std::size_t>(clipped.x);
-            for (int x = 0; x < clipped.width; ++x) {
-                destination[x] = modern_paint_lerp_color_255(
-                    first, second, modern_paint_progress_255(clipped.x + x - rect.x, denom));
-            }
+            std::copy_n(first_row, clipped.width, destination);
         }
         return true;
     }

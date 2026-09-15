@@ -1,10 +1,12 @@
 #include "render_core/software_renderer.h"
 
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <windows.h>
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -24,6 +26,20 @@ constexpr int kWidth = 172;
 constexpr int kHeight = 320;
 constexpr int kWarmupIterations = 30;
 constexpr Color kFillColor{22, 71, 87, 255};
+constexpr Color kGradientFirst{22, 71, 87, 255};
+constexpr Color kGradientSecond{6, 22, 31, 255};
+
+enum class Workload {
+    OpaqueFill,
+    HorizontalGradient,
+};
+
+struct OutputComparison {
+    std::string jellyframe_digest;
+    std::string gdi_digest;
+    double rmse = 0.0;
+    int max_channel_error = 0;
+};
 
 #ifndef JELLYFRAME_CPU2D_CORE_VERSION
 #define JELLYFRAME_CPU2D_CORE_VERSION "unknown"
@@ -98,6 +114,29 @@ struct GdiSurface {
             throw std::runtime_error("GDI flush failed");
         }
     }
+
+    void horizontal_gradient() const {
+        TRIVERTEX vertices[2]{};
+        vertices[0].x = 0;
+        vertices[0].y = 0;
+        vertices[0].Red = static_cast<COLOR16>(kGradientFirst.r << 8U);
+        vertices[0].Green = static_cast<COLOR16>(kGradientFirst.g << 8U);
+        vertices[0].Blue = static_cast<COLOR16>(kGradientFirst.b << 8U);
+        vertices[0].Alpha = 0xffffU;
+        vertices[1].x = kWidth;
+        vertices[1].y = kHeight;
+        vertices[1].Red = static_cast<COLOR16>(kGradientSecond.r << 8U);
+        vertices[1].Green = static_cast<COLOR16>(kGradientSecond.g << 8U);
+        vertices[1].Blue = static_cast<COLOR16>(kGradientSecond.b << 8U);
+        vertices[1].Alpha = 0xffffU;
+        GRADIENT_RECT rectangle{0, 1};
+        if (GradientFill(dc, vertices, 2, &rectangle, 1, GRADIENT_FILL_RECT_H) == 0) {
+            throw std::runtime_error("GDI GradientFill failed");
+        }
+        if (GdiFlush() == 0) {
+            throw std::runtime_error("GDI gradient flush failed");
+        }
+    }
 };
 
 int positive_int(const char* raw, const char* name) {
@@ -107,6 +146,19 @@ int positive_int(const char* raw, const char* name) {
     } catch (...) {
     }
     throw std::runtime_error(std::string(name) + " must be a positive integer");
+}
+
+Workload parse_workload(const char* raw) {
+    const std::string name(raw);
+    if (name == "opaque-fill") return Workload::OpaqueFill;
+    if (name == "horizontal-gradient") return Workload::HorizontalGradient;
+    throw std::runtime_error("workload must be opaque-fill or horizontal-gradient");
+}
+
+const char* workload_id(Workload workload) {
+    return workload == Workload::OpaqueFill
+        ? "opaque-fill-rgb-v1"
+        : "horizontal-gradient-rgb-v1";
 }
 
 std::uint64_t hash_byte(std::uint64_t hash, std::uint8_t value) {
@@ -137,6 +189,29 @@ std::string rgb_hash(const GdiSurface& surface) {
     std::ostringstream text;
     text << std::hex << std::setw(16) << std::setfill('0') << hash;
     return text.str();
+}
+
+OutputComparison compare_output(const FrameBuffer& frame, const GdiSurface& surface) {
+    OutputComparison comparison;
+    comparison.jellyframe_digest = rgb_hash(frame);
+    comparison.gdi_digest = rgb_hash(surface);
+    double squared_error = 0.0;
+    const std::size_t pixel_count = static_cast<std::size_t>(kWidth) * kHeight;
+    for (std::size_t index = 0; index < pixel_count; ++index) {
+        const Color actual = frame.pixels[index];
+        const std::uint8_t* expected_bgra = surface.pixels + index * 4U;
+        const int errors[3]{
+            std::abs(static_cast<int>(actual.r) - expected_bgra[2]),
+            std::abs(static_cast<int>(actual.g) - expected_bgra[1]),
+            std::abs(static_cast<int>(actual.b) - expected_bgra[0]),
+        };
+        for (const int error : errors) {
+            comparison.max_channel_error = std::max(comparison.max_channel_error, error);
+            squared_error += static_cast<double>(error * error);
+        }
+    }
+    comparison.rmse = std::sqrt(squared_error / static_cast<double>(pixel_count * 3U));
+    return comparison;
 }
 
 template <typename Fn>
@@ -178,8 +253,11 @@ std::string repeated_pixels(int samples) {
 void write_manifest(const std::filesystem::path& path,
                     const char* library,
                     const char* version,
+                    Workload workload,
                     const std::vector<double>& samples,
                     const std::string& digest,
+                    const OutputComparison& comparison,
+                    double tolerance,
                     bool output_matches) {
     std::filesystem::create_directories(path.parent_path());
     std::ofstream output(path, std::ios::binary);
@@ -200,7 +278,7 @@ void write_manifest(const std::filesystem::path& path,
            << "  \"format\": \"jellyframe.benchmark.run.v0\",\n"
            << "  \"library\": \"" << library << "\",\n"
            << "  \"version\": \"" << version << "\",\n"
-           << "  \"workload\": \"opaque-fill-rgb-v1\",\n"
+           << "  \"workload\": \"" << workload_id(workload) << "\",\n"
            << "  \"viewport\": {\"width\": " << kWidth << ", \"height\": " << kHeight << "},\n"
            << "  \"pixelFormat\": \"rgb888\",\n"
            << "  \"antialiasing\": false,\n"
@@ -209,8 +287,12 @@ void write_manifest(const std::filesystem::path& path,
            << "\", \"process\": \"same\", \"buildType\": \"" << build_type << "\"},\n"
            << "  \"warmupIterations\": " << kWarmupIterations << ",\n"
            << "  \"outputValidation\": {\"status\": \"" << (output_matches ? "pass" : "fail")
-           << "\", \"method\": \"normalized-rgb-fnv1a64\", \"reference\": \"opaque-fill-rgb-v1\", \"digest\": \""
-           << digest << "\"},\n"
+           << "\", \"method\": \"" << (tolerance == 0.0 ? "normalized-rgb-exact" : "normalized-rgb-rmse")
+           << "\", \"reference\": \"" << workload_id(workload) << "\", \"tolerance\": "
+           << std::fixed << std::setprecision(3) << tolerance
+           << ", \"observedRmse\": " << comparison.rmse
+           << ", \"maxChannelError\": " << comparison.max_channel_error
+           << ", \"digest\": \"" << digest << "\"},\n"
            << "  \"measurements\": {\"paint_us\": " << json_array(samples)
            << ", \"pixels\": " << repeated_pixels(static_cast<int>(samples.size())) << "}\n"
            << "}\n";
@@ -220,36 +302,50 @@ void write_manifest(const std::filesystem::path& path,
 
 int main(int argc, char** argv) {
     try {
-        if (argc < 2 || argc > 3) {
-            std::cout << "usage: jellyframe_cpu2d_compare <output-directory> [samples=100]\n";
+        if (argc < 2 || argc > 4) {
+            std::cout << "usage: jellyframe_cpu2d_compare <output-directory> [samples=100] [workload=opaque-fill]\n";
             return argc < 2 ? 2 : 0;
         }
-        const int samples = argc == 3 ? positive_int(argv[2], "samples") : 100;
+        const int samples = argc >= 3 ? positive_int(argv[2], "samples") : 100;
+        const Workload workload = argc == 4 ? parse_workload(argv[3]) : Workload::OpaqueFill;
         const std::filesystem::path output_directory(argv[1]);
 
         FrameBuffer jellyframe_surface(kWidth, kHeight, Color{0, 0, 0, 255});
         DisplayCommand command;
-        command.type = DisplayCommandType::FillRect;
+        command.type = workload == Workload::OpaqueFill
+            ? DisplayCommandType::FillRect
+            : DisplayCommandType::LinearGradient;
         command.rect = Rect{0, 0, kWidth, kHeight};
-        command.color = kFillColor;
+        command.color = workload == Workload::OpaqueFill ? kFillColor : kGradientFirst;
+        command.color2 = kGradientSecond;
+        command.gradient_axis = GradientAxis::Horizontal;
         SoftwareRasterizer rasterizer;
         const auto jellyframe_samples = measure(samples, [&] {
             rasterizer.rasterize(command, jellyframe_surface, Rect{0, 0, kWidth, kHeight});
         });
 
         GdiSurface gdi_surface;
-        const auto gdi_samples = measure(samples, [&] { gdi_surface.fill(); });
-        const std::string jellyframe_digest = rgb_hash(jellyframe_surface);
-        const std::string gdi_digest = rgb_hash(gdi_surface);
-        const bool output_matches = jellyframe_digest == gdi_digest;
+        const auto gdi_samples = measure(samples, [&] {
+            if (workload == Workload::OpaqueFill) gdi_surface.fill();
+            else gdi_surface.horizontal_gradient();
+        });
+        const OutputComparison comparison = compare_output(jellyframe_surface, gdi_surface);
+        const double tolerance = workload == Workload::OpaqueFill ? 0.0 : 1.0;
+        const bool output_matches = comparison.rmse <= tolerance;
         write_manifest(output_directory / "jellyframe.json", "jellyframe-render-core", JELLYFRAME_CPU2D_CORE_VERSION,
-                       jellyframe_samples, jellyframe_digest, output_matches);
+                       workload, jellyframe_samples, comparison.jellyframe_digest,
+                       comparison, tolerance, output_matches);
         write_manifest(output_directory / "gdi.json", "windows-gdi", "system",
-                       gdi_samples, gdi_digest, output_matches);
+                       workload, gdi_samples, comparison.gdi_digest,
+                       comparison, tolerance, output_matches);
         std::cout << "output=" << output_directory.string()
                   << " samples=" << samples
-                  << " normalized_rgb_match=" << (output_matches ? "true" : "false")
-                  << " digest=" << jellyframe_digest << '\n';
+                  << " workload=" << workload_id(workload)
+                  << " output_validation=" << (output_matches ? "pass" : "fail")
+                  << " rmse=" << comparison.rmse
+                  << " max_channel_error=" << comparison.max_channel_error
+                  << " jellyframe_digest=" << comparison.jellyframe_digest
+                  << " gdi_digest=" << comparison.gdi_digest << '\n';
         return output_matches ? 0 : 1;
     } catch (const std::exception& error) {
         std::cerr << "jellyframe_cpu2d_compare failed: " << error.what() << '\n';

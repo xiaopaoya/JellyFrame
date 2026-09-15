@@ -244,11 +244,18 @@ full/dirty mode、运行环境、warm-up，以及输出验证方法/基准/容�
 - 若 present/DMA 占主导，继续优化 Core paint 不会改善实机帧率；若 layout/script 占主导，
   应优先减少重建或 App 更新范围，而不是改 rasterizer。
 
-当前第一个 CPU 2D 基础对照已由 Windows-only `jellyframe_cpu2d_compare` 落地：它在同一进程中对
-JellyFrame 与 memory-DIB GDI 执行 172x320 不透明全屏 RGB fill，固定 30 次 warm-up、相同样本数，
-并要求归一化 RGB digest 完全一致后才输出可比较 manifest。该 workload 只覆盖 opaque fill primitive；
-本机数字不得写成完整 UI、跨平台或设备性能排名。圆角、渐变、文本以及 LVGL 实机对照仍需分别建立
-等价 workload 和输出质量门禁。
+当前 Windows-only `jellyframe_cpu2d_compare` 已提供两个 CPU 2D primitive 对照。两者均在同一进程中
+使用 JellyFrame 与 memory-DIB GDI、172x320 RGB surface、固定 30 次 warm-up 和相同样本数：
+
+- `opaque-fill` 对照不透明全屏填充，要求归一化 RGB 完全一致；
+- `horizontal-gradient` 对照不透明横向渐变与 GDI `GradientFill`，要求归一化 RGB RMSE 不超过 1.0。
+  当前 fixture 的最大通道误差为 1，这是两套整数端点插值约定的已量化差异，不允许以该容差掩盖
+  更大视觉误差。
+
+在本开发机的 100 样本 A/B 中，复用首个 clipped row 后 JellyFrame 横向渐变 p95 从 437.7 us 降至
+4.3 us，输出 digest 保持 `177877a38d09ae83`；同轮 GDI 约为 4.4 us p95。该数字只证明 172x320、
+不透明、横向、矩形渐变 primitive 的改动有效，不能外推到完整 UI、设备 FPS、圆角/透明渐变、文本、
+GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立等价 workload 和输出质量门禁。
 
 ## 7. 阶段出口
 
@@ -278,6 +285,6 @@ JellyFrame 与 memory-DIB GDI 执行 172x320 不透明全屏 RGB fill，固定 3
 - port 以该显式 profiling 配置提供阶段窗口 aggregate；逐元素、逐 command 或每帧 wire
   trace 不是第三阶段的前提，也不能由 aggregate 推断；
 - 以真实 developer-image workload 复核 Core/Runtime 优化收益；
-- CPU 2D 的首个 opaque-fill/GDI 基础对照 runner 已交付，但尚不足以代表完整库；
-- 仍需完成至少一个嵌入式 UI 对照，并扩展圆角、渐变和文本等价 workload，才给出“快/慢”的
+- CPU 2D 的 opaque-fill 与 horizontal-gradient GDI 基础对照已交付，但尚不足以代表完整库；
+- 仍需完成至少一个嵌入式 UI 对照，并扩展圆角和文本等价 workload，才给出“快/慢”的
   总体定量结论。
