@@ -1,6 +1,6 @@
 # Project Tools
 
-> Last updated: 2026-08-28; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-09-15; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Project-maintainer tools for CI, Render Core slicing, performance guards and
 HTML/CSS compatibility tables. App authors normally start with
@@ -21,6 +21,11 @@ HTML/CSS compatibility tables. App authors normally start with
 These tools are not runtime dependencies. Their reports belong in ignored
 build or review-artifact directories unless a report is explicitly promoted
 to project documentation.
+
+`benchmark_guard.py` keeps both legacy average probes and statistical Render
+Core probes in its JSON report. Statistical entries retain `p50_us`, `p95_us`,
+`display_commands` and `peak_surface_bytes`; the broad CI thresholds remain
+smoke guards and are not release or device-performance claims.
 
 `package_app_author_sdk.py` is a release-maintainer tool. It produces a
 versioned ZIP from validated desktop Release builds, optionally including a

@@ -21,6 +21,14 @@ from typing import Iterable
 RESULT_RE = re.compile(
     r"^(?P<name>[A-Za-z0-9_]+)\s+iterations=(?P<iterations>\d+)\s+avg_us=(?P<avg_us>[0-9]+(?:\.[0-9]+)?)$"
 )
+STATS_RESULT_RE = re.compile(
+    r"^(?P<name>[A-Za-z0-9_]+)\s+samples=(?P<samples>\d+)\s+"
+    r"iterations_per_sample=(?P<iterations_per_sample>\d+)\s+"
+    r"p50_us=(?P<p50_us>[0-9]+(?:\.[0-9]+)?)\s+"
+    r"p95_us=(?P<p95_us>[0-9]+(?:\.[0-9]+)?)\s+"
+    r"display_commands=(?P<display_commands>\d+)\s+"
+    r"peak_surface_bytes=(?P<peak_surface_bytes>\d+)$"
+)
 
 
 @dataclass(frozen=True)
@@ -86,13 +94,26 @@ def find_executable(build_dir: Path, executable: str) -> Path:
 def parse_results(output: str) -> dict[str, dict[str, float | int]]:
     results: dict[str, dict[str, float | int]] = {}
     for line in output.splitlines():
-        match = RESULT_RE.match(line.strip())
-        if not match:
+        stripped = line.strip()
+        match = RESULT_RE.match(stripped)
+        if match:
+            results[match.group("name")] = {
+                "kind": "average",
+                "iterations": int(match.group("iterations")),
+                "avg_us": float(match.group("avg_us")),
+            }
             continue
-        results[match.group("name")] = {
-            "iterations": int(match.group("iterations")),
-            "avg_us": float(match.group("avg_us")),
-        }
+        match = STATS_RESULT_RE.match(stripped)
+        if match:
+            results[match.group("name")] = {
+                "kind": "statistics",
+                "samples": int(match.group("samples")),
+                "iterations_per_sample": int(match.group("iterations_per_sample")),
+                "p50_us": float(match.group("p50_us")),
+                "p95_us": float(match.group("p95_us")),
+                "display_commands": int(match.group("display_commands")),
+                "peak_surface_bytes": int(match.group("peak_surface_bytes")),
+            }
     return results
 
 
@@ -131,6 +152,7 @@ def run_suite(name: str, config: SuiteConfig, build_dir: Path) -> dict[str, obje
     return {
         "suite": name,
         "command": command,
+        "measurements": results,
         "checks": checks,
         "failures": failures,
     }
