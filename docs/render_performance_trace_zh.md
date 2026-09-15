@@ -58,6 +58,8 @@ python tools\render_performance_report.py `
   `stagesUs` 尚不足以表达阶段间空隙或嵌套关系；
 - 当前帧视图还会与上一条有效 frame 记录对比总耗时、dirty 数量/面积、阶段耗时和命令/owner
   耗时增量。命令比较只在相邻帧使用相同数据源时启用；真实 span 与旧聚合不会混比；
+- 聚合区提供有界帧耗时趋势和“仅显示异常帧”筛选。异常以当前 trace 的总耗时、paint 耗时或 dirty
+  面积 p95 为阈值，仅标记严格超过阈值的帧；它用于快速筛选，不替代基于 workload 的性能结论；
 - 查看器固定显示有效 frame 的总耗时 p50、p95 和最大值，作为当前 trace 的桌面基线；这些数值
   不代表设备 FPS 或 DMA/panel 时序；
 - 截断帧、无效计时与 `unattributed` 单独计数，聚合结果明确标记为已记录样本的下界；
@@ -177,7 +179,8 @@ python tools\render_trace_profile_ab.py `
    dirty rect 空间重叠证据聚合；
 6. frame scrubber，逐帧查看“重建了什么、复用了什么、哪些区域被清除/重绘”，并对比相邻帧的耗时变化；
 7. p50/p95 与最慢帧固定显示，并允许导出原始 JSONL/HTML；
-8. 缺失 trace、设备只提供 aggregate 或 command 未归因时显示来源和限制。
+8. 异常帧筛选和历史趋势，点击趋势条可跳转到对应 frame；
+9. 缺失 trace、设备只提供 aggregate 或 command 未归因时显示来源和限制。
 
 实时模式应采用有界环形缓冲，不阻塞 render/present，也不在 MCU 默认开启逐元素计时。
 设备侧默认只发送阶段计数和窗口汇总；需要逐命令/逐元素 profiling 时，必须显式启用

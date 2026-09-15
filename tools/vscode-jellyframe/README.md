@@ -38,6 +38,8 @@ Palette as entry points.
   coverage, not a DOM mutation cause. The frame view also compares adjacent
   frames for total, stage, dirty-region and command deltas; command deltas are
   disabled when adjacent frames use different measurement sources.
+  The aggregate area also provides p95-based anomaly filtering and a bounded
+  timing trend; clicking a trend entry jumps to its frame.
 - Inline diagnostics for app-author advice, package warnings and pipeline
   diagnostics.
 - Explorer status view showing the selected app, build, report diagnostics and

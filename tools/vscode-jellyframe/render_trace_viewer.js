@@ -678,6 +678,37 @@ function frameDeltaSummary(frame, previousFrame) {
   };
 }
 
+function frameAnomalySummary(parsed) {
+  const frames = parsed?.frames || [];
+  const percentile = (values, fraction) => {
+    const sorted = values.slice().sort((left, right) => left - right);
+    return sorted.length ? sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * fraction) - 1))] : 0;
+  };
+  const totalValues = frames.map((frame) => frameTimingBreakdown(frame).totalUs);
+  const paintValues = frames.map((frame) => Number.isSafeInteger(frame.stagesUs?.paint) ? frame.stagesUs.paint : 0);
+  const dirtyValues = frames.map((frame) => Number.isFinite(Number(frame.dirtyAreaPercent)) ? Number(frame.dirtyAreaPercent) : 0);
+  const thresholds = {
+    totalUsP95: percentile(totalValues, 0.95),
+    paintUsP95: percentile(paintValues, 0.95),
+    dirtyAreaPercentP95: percentile(dirtyValues, 0.95)
+  };
+  const trend = frames.map((frame, index) => {
+    const totalUs = totalValues[index];
+    const paintUs = paintValues[index];
+    const dirtyAreaPercent = dirtyValues[index];
+    const reasons = [];
+    if (totalUs > thresholds.totalUsP95 && thresholds.totalUsP95 > 0) reasons.push("total");
+    if (paintUs > thresholds.paintUsP95 && thresholds.paintUsP95 > 0) reasons.push("paint");
+    if (dirtyAreaPercent > thresholds.dirtyAreaPercentP95 && thresholds.dirtyAreaPercentP95 > 0) reasons.push("dirty");
+    return { index, frame: frame.frame, totalUs, paintUs, dirtyAreaPercent, anomaly: reasons.length > 0, reasons };
+  });
+  return {
+    thresholds,
+    frames: trend,
+    anomalies: trend.filter((item) => item.anomaly).map((item) => item.index)
+  };
+}
+
 function frameTimingSummary(parsed) {
   const values = (parsed?.frames || [])
     .map((frame) => frameTimingBreakdown(frame).totalUs)
@@ -735,7 +766,8 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     String(frame.frame), frameHotspotSummary(frame)
   ]));
   const frameSummary = frameTimingSummary(parsed);
-  const data = safeJson({ ...parsed, frameImages, frameTiming, frameComposition, frameTimelines, frameCommandTimelines, frameDirtyEvidence, frameDeltas, frameHotspots, frameSummary, aggregate: aggregateTrace(parsed) });
+  const frameAnomalies = frameAnomalySummary(parsed);
+  const data = safeJson({ ...parsed, frameImages, frameTiming, frameComposition, frameTimelines, frameCommandTimelines, frameDirtyEvidence, frameDeltas, frameHotspots, frameSummary, frameAnomalies, aggregate: aggregateTrace(parsed) });
   const labels = chinese ? {
     title: "Render Trace",
     frame: "帧",
@@ -822,7 +854,16 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     frameCount: "有效帧",
     p50: "p50",
     p95: "p95",
-    maximum: "最大值"
+     maximum: "最大值",
+     anomalyOnly: "仅显示异常帧",
+     trend: "帧耗时趋势",
+     trendNote: "异常按当前 trace 的 p95 判定；点击条目跳转到对应帧。",
+     anomaly: "异常",
+     anomalyReasons: "异常原因",
+     anomalyCount: "异常帧",
+     reasonTotal: "总帧耗时",
+     reasonPaint: "paint 耗时",
+     reasonDirty: "dirty 面积"
   } : {
     title: "Render Trace",
     frame: "Frame",
@@ -909,7 +950,16 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
     frameCount: "Valid frames",
     p50: "p50",
     p95: "p95",
-    maximum: "Max"
+     maximum: "Max",
+     anomalyOnly: "Show anomalous frames only",
+     trend: "Frame timing trend",
+     trendNote: "Anomalies use p95 thresholds from this trace; click an entry to jump to its frame.",
+     anomaly: "Anomaly",
+     anomalyReasons: "Reasons",
+     anomalyCount: "Anomalous frames",
+     reasonTotal: "total frame time",
+     reasonPaint: "paint time",
+     reasonDirty: "dirty area"
   };
   const sessionJson = escapeHtml(JSON.stringify(parsed.session || {}));
   const titleText = escapeHtml(title || labels.title);
@@ -919,9 +969,10 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
 <style>
 body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:16px;line-height:1.4}h1{font-size:18px;margin:0 0 8px}h2{font-size:14px;margin:20px 0 8px}.muted{color:var(--vscode-descriptionForeground)}.notice{border:1px solid var(--vscode-panel-border);padding:8px;margin:10px 0}.error{color:var(--vscode-errorForeground)}.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.controls input{flex:1;min-width:180px}.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:12px}.metric{border:1px solid var(--vscode-panel-border);padding:8px}.metric b{display:block;font-size:16px}.stage-composition{display:flex;width:100%;height:24px;border:1px solid var(--vscode-panel-border);background:var(--vscode-editorWidget-background);overflow:hidden;box-sizing:border-box}.stage-segment{min-width:2px;height:100%;padding:0;border:0;border-right:1px solid var(--vscode-editor-background);background:var(--vscode-charts-blue);cursor:pointer}.stage-segment:nth-child(4n+2){background:var(--vscode-charts-green)}.stage-segment:nth-child(4n+3){background:var(--vscode-charts-orange)}.stage-segment:nth-child(4n+4){background:var(--vscode-charts-purple)}.stage-segment.unaccounted{background:var(--vscode-descriptionForeground)}.stage-segment:focus{outline:2px solid var(--vscode-focusBorder);outline-offset:-2px}.stage-detail{border-left:3px solid var(--vscode-charts-blue);padding:6px 8px;margin:8px 0;background:var(--vscode-editorWidget-background)}.stage{display:grid;grid-template-columns:minmax(90px,1fr) 3fr 80px;gap:8px;align-items:center;margin:5px 0}.bar{height:8px;background:var(--vscode-editorWidget-background);border-radius:2px;overflow:hidden}.bar i{display:block;height:100%;background:var(--vscode-charts-blue)}.capture{border:1px solid var(--vscode-panel-border);padding:8px;margin-top:12px}.capture-stage{position:relative;display:inline-block;max-width:100%;margin-top:8px}.capture-stage img{display:block;max-width:100%;max-height:420px;object-fit:contain;background:var(--vscode-editor-background)}.dirty-overlay{position:absolute;border:1px solid var(--vscode-charts-orange);background:var(--vscode-editorWarning-foreground);opacity:.25;box-sizing:border-box;pointer-events:none}.dirty-overlay-label{font-size:11px;margin:8px 0 0}.dirty{display:grid;grid-template-columns:minmax(110px,auto) 1fr auto;gap:8px;align-items:center;margin:8px 0}.dirty .bar i{background:var(--vscode-charts-orange)}.dirty-rect{display:grid;grid-template-columns:minmax(80px,1fr) auto;gap:8px;align-items:center;margin:4px 0}.dirty-rect .bar i{background:var(--vscode-charts-orange)}.aggregate{border:1px solid var(--vscode-panel-border);padding:8px;margin-top:16px}.aggregate table{margin-top:8px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--vscode-panel-border);padding:5px}code{color:var(--vscode-textPreformat-foreground)}ul{margin:5px 0;padding-left:20px}.hidden{display:none}.pill{border:1px solid var(--vscode-panel-border);padding:1px 5px}
 </style><style>.hotspots{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.hotspot{border-left:3px solid var(--vscode-charts-orange);padding:6px 8px;background:var(--vscode-editorWidget-background)}.hotspot b{display:block}.stage-timeline{position:relative;width:100%;height:28px;border:1px solid var(--vscode-panel-border);background:var(--vscode-editorWidget-background);overflow:hidden;box-sizing:border-box}.timeline-segment{position:absolute;top:0;height:100%;padding:0;border:0;border-right:1px solid var(--vscode-editor-background);background:var(--vscode-charts-blue);cursor:pointer}.timeline-segment:nth-child(4n+2){background:var(--vscode-charts-green)}.timeline-segment:nth-child(4n+3){background:var(--vscode-charts-orange)}.timeline-segment:nth-child(4n+4){background:var(--vscode-charts-purple)}.timeline-segment.gap{background:var(--vscode-descriptionForeground);cursor:pointer}.timeline-segment:focus{outline:2px solid var(--vscode-focusBorder);outline-offset:-2px}</style></head><body><h1>${titleText}</h1>
+<style>.trend{margin:8px 0}.trend-row{display:grid;grid-template-columns:50px 1fr 90px;gap:8px;align-items:center;margin:4px 0}.trend-row button{display:block;width:100%;height:10px;padding:0;border:0;background:var(--vscode-editorWidget-background);cursor:pointer}.trend-row button i{display:block;height:100%;background:var(--vscode-charts-blue)}.trend-row.anomaly button i{background:var(--vscode-charts-orange)}.trend-row button:focus{outline:2px solid var(--vscode-focusBorder);outline-offset:1px}</style>
 <p class="muted">${labels.timingNote}<br>${labels.sourceNote}</p>
-<div class="controls"><label>${labels.frame} <output id="frameNumber"></output></label><input id="frameSlider" type="range" min="0" max="0" value="0" step="1"><button id="slowestFrameButton" type="button">${labels.slowestFrame}</button></div>
-<section class="aggregate"><h2>${labels.aggregate}</h2><p class="muted">${labels.aggregateNote}</p><h3>${labels.frameSummary}</h3><div id="frameSummaryView" class="metric-grid"></div><div id="aggregateView"></div></section>
+<div class="controls"><label>${labels.frame} <output id="frameNumber"></output></label><input id="frameSlider" type="range" min="0" max="0" value="0" step="1"><button id="slowestFrameButton" type="button">${labels.slowestFrame}</button><label><input id="anomalyOnly" type="checkbox"> ${labels.anomalyOnly}</label></div>
+<section class="aggregate"><h2>${labels.aggregate}</h2><p class="muted">${labels.aggregateNote}</p><h3>${labels.frameSummary}</h3><div id="frameSummaryView" class="metric-grid"></div><div id="frameTrendView"></div><div id="aggregateView"></div></section>
 <div id="frameView"></div>
 <h2>${labels.session}</h2><pre class="muted">${sessionJson}</pre>${initialError}
 <script nonce="jellyframe-trace">
@@ -933,6 +984,8 @@ const number=document.getElementById('frameNumber');
 const view=document.getElementById('frameView');
 const aggregateView=document.getElementById('aggregateView');
 const frameSummaryView=document.getElementById('frameSummaryView');
+const frameTrendView=document.getElementById('frameTrendView');
+const anomalyOnly=document.getElementById('anomalyOnly');
 const esc=(v)=>String(v??'').replace(/[&<>\"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
 const fmt=(v)=>Number(v||0).toLocaleString();
 const aggregateTable=(title,rows)=>'<h3>'+esc(title)+'</h3>'+ (rows.length?'<table><tr><th>'+esc(labels.aggregateCommand)+'</th><th>'+esc(labels.aggregateCount)+'</th><th>'+esc(labels.aggregateTotal)+'</th><th>'+esc(labels.aggregateP95)+'</th></tr>'+rows.slice(0,64).map((row)=>'<tr><td><code>'+esc(row.name)+'</code></td><td>'+fmt(row.count)+'</td><td>'+fmt(row.totalUs)+' us</td><td>'+fmt(row.p95Us)+' us</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>');
@@ -946,15 +999,39 @@ function renderAggregate(){
  ((aggregate.commandsTruncatedFrames||aggregate.nodesTruncatedFrames||aggregate.commandSpansTruncatedFrames||aggregate.dirtyRectsTruncatedFrames)?'<p class="muted">'+esc(labels.aggregateTruncated)+': commands='+fmt(aggregate.commandsTruncatedFrames)+', spans='+fmt(aggregate.commandSpansTruncatedFrames)+', dirtyRects='+fmt(aggregate.dirtyRectsTruncatedFrames)+', owners='+fmt(aggregate.nodesTruncatedFrames)+'</p>':'');
 }
 function renderFrameSummary(){
- const summary=model.frameSummary||{count:0,p50Us:0,p95Us:0,maxUs:0};
- frameSummaryView.innerHTML='<div class="metric"><span>'+esc(labels.frameCount)+'</span><b>'+fmt(summary.count)+'</b></div>'+
- '<div class="metric"><span>'+esc(labels.p50)+'</span><b>'+fmt(summary.p50Us)+' us</b></div>'+
- '<div class="metric"><span>'+esc(labels.p95)+'</span><b>'+fmt(summary.p95Us)+' us</b></div>'+
- '<div class="metric"><span>'+esc(labels.maximum)+'</span><b>'+fmt(summary.maxUs)+' us</b></div>';
+  const summary=model.frameSummary||{count:0,p50Us:0,p95Us:0,maxUs:0};
+ const anomalies=model.frameAnomalies?.anomalies||[];
+  frameSummaryView.innerHTML='<div class="metric"><span>'+esc(labels.frameCount)+'</span><b>'+fmt(summary.count)+'</b></div>'+
+  '<div class="metric"><span>'+esc(labels.p50)+'</span><b>'+fmt(summary.p50Us)+' us</b></div>'+
+  '<div class="metric"><span>'+esc(labels.p95)+'</span><b>'+fmt(summary.p95Us)+' us</b></div>'+
+  '<div class="metric"><span>'+esc(labels.maximum)+'</span><b>'+fmt(summary.maxUs)+' us</b></div>'+
+  '<div class="metric"><span>'+esc(labels.anomalyCount)+'</span><b>'+fmt(anomalies.length)+'</b></div>';
+}
+function renderFrameTrend(){
+ const summary=model.frameAnomalies||{frames:[],thresholds:{}};
+ const rows=summary.frames.slice(-200);
+ const max=Math.max(1,...summary.frames.map((item)=>item.totalUs));
+ const reasonName=(reason)=>reason==='total'?labels.reasonTotal:reason==='paint'?labels.reasonPaint:labels.reasonDirty;
+ frameTrendView.innerHTML='<h3>'+esc(labels.trend)+'</h3><p class="muted">'+esc(labels.trendNote)+'</p><div class="trend">'+rows.map((item)=>'<div class="trend-row '+(item.anomaly?'anomaly':'')+'"><code>#'+fmt(item.frame)+'</code><button type="button" data-trend-index="'+item.index+'" title="'+esc((item.anomaly?labels.anomaly+': ':'')+item.totalUs+' us')+'" aria-label="'+esc('#'+item.frame+' '+item.totalUs+' us')+'"><i style="width:'+Math.max(1,item.totalUs*100/max)+'%"></i></button><span>'+fmt(item.totalUs)+' us'+(item.anomaly?' · '+esc(item.reasons.map(reasonName).join(', ')):'')+'</span></div>').join('')+'</div>'+(summary.frames.length>rows.length?'<p class="muted">'+esc(labels.commandsTruncated)+'</p>':'');
+ frameTrendView.querySelectorAll('[data-trend-index]').forEach((button)=>button.addEventListener('click',()=>{selectedFrameIndex=Number(button.dataset.trendIndex);if(!visibleFrameIndexes().includes(selectedFrameIndex))anomalyOnly.checked=false;updateFrameSelector();render();}));
 }
 const slowestFrameIndex=model.frames.length?model.frames.reduce((best,frame,index)=>frame.totalUs>model.frames[best].totalUs?index:best,0):0;
+let selectedFrameIndex=0;
+function visibleFrameIndexes(){
+ const anomalies=new Set(model.frameAnomalies?.anomalies||[]);
+ return anomalyOnly.checked?model.frames.map((_,index)=>index).filter((index)=>anomalies.has(index)):model.frames.map((_,index)=>index);
+}
+function updateFrameSelector(){
+ const indexes=visibleFrameIndexes();
+ if(!indexes.includes(selectedFrameIndex))selectedFrameIndex=indexes[0]??0;
+ const position=indexes.indexOf(selectedFrameIndex);
+ slider.max=Math.max(0,indexes.length-1);slider.disabled=indexes.length<2;slider.value=String(Math.max(0,position));
+}
 function render(){
- const frame=model.frames[Number(slider.value)]; if(!frame){view.innerHTML='<p class="muted">'+esc(labels.none)+'</p>';return;}
+ const indexes=visibleFrameIndexes();
+ const frameIndex=indexes[Number(slider.value)];
+ const frame=model.frames[frameIndex]; if(!frame){view.innerHTML='<p class="muted">'+esc(labels.none)+'</p>';return;}
+ selectedFrameIndex=frameIndex;
  number.textContent=fmt(frame.frame)+' / '+fmt(model.frames.length-1);
  const stages=Object.entries(frame.stagesUs||{}); const timing=model.frameTiming?.[String(frame.frame)]||{totalUs:0,recordedStageUs:0,unaccountedUs:0}; const composition=model.frameComposition?.[String(frame.frame)]||{segments:[],overrunUs:0}; const timeline=model.frameTimelines?.[String(frame.frame)]||{available:false,segments:[],overrunUs:0}; const commandTimeline=model.frameCommandTimelines?.[String(frame.frame)]||{available:false,segments:[],overrunUs:0}; const hotspots=model.frameHotspots?.[String(frame.frame)]||{}; const delta=model.frameDeltas?.[String(frame.frame)]||{available:false,stages:[],commands:[]}; const total=timing.totalUs; const unaccountedUs=timing.unaccountedUs; const max=Math.max(1,total,...stages.map(([,v])=>Number(v)||0));
  const fps=total>0?(1000000/total).toFixed(1):labels.none;
@@ -1008,8 +1085,8 @@ function render(){
  const commandTimelineDetail=document.getElementById('commandTimelineDetail');
  if(commandTimelineDetail){view.querySelectorAll('[data-command-timeline-index]').forEach((button)=>button.addEventListener('click',()=>{const segment=commandTimeline.segments[Number(button.dataset.commandTimelineIndex)];if(!segment)return;const name=segment.kind==='gap'?labels.timelineGap:segment.name;const pixels=segment.kind==='gap'?'':' · '+fmt(segment.pixels)+' '+esc(labels.pixels);const stage=segment.stageName?' · '+esc(labels.aggregateStage)+': '+esc(segment.stageName):'';commandTimelineDetail.innerHTML='<strong>'+esc(name)+'</strong>: '+fmt(segment.durationUs)+' us (start '+fmt(segment.startUs)+' us)'+pixels+stage+' · '+esc(labels.stageSource)+': '+esc(runtimeSource);}));}
 }
-renderFrameSummary();renderAggregate();slider.max=Math.max(0,model.frames.length-1);slider.disabled=model.frames.length<2;slowestFrameButton.disabled=model.frames.length<2;slowestFrameButton.addEventListener('click',()=>{slider.value=String(slowestFrameIndex);render();});slider.addEventListener('input',render);render();
+ renderFrameSummary();renderFrameTrend();renderAggregate();updateFrameSelector();slowestFrameButton.disabled=model.frames.length<1;slowestFrameButton.addEventListener('click',()=>{selectedFrameIndex=slowestFrameIndex;if(!visibleFrameIndexes().includes(selectedFrameIndex))anomalyOnly.checked=false;updateFrameSelector();render();});anomalyOnly.addEventListener('change',()=>{updateFrameSelector();render();});slider.addEventListener('input',render);render();
 </script></body></html>`;
 }
 
-module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameCommandCostMap, frameDeltaSummary, frameTimingSummary, renderTraceHtml };
+module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameCommandCostMap, frameDeltaSummary, frameAnomalySummary, frameTimingSummary, renderTraceHtml };

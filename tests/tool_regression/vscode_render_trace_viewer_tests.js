@@ -1,6 +1,6 @@
 const assert = require("assert");
 const fs = require("fs");
-const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameDeltaSummary, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
+const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameDeltaSummary, frameAnomalySummary, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
 const vm = require("vm");
 
 function loadTraceHelpers() {
@@ -215,6 +215,15 @@ function main() {
   assert.equal(delta.commandComparable, true);
   assert.equal(delta.commands.find((item) => item.name === "Text · id:title").deltaUs, 200);
   assert.equal(delta.commands.find((item) => item.name === "FillRect · n2").deltaUs, 400);
+  const anomalyFrames = Array.from({ length: 20 }, (_, index) => ({
+    frame: index,
+    totalUs: index === 19 ? 1000 : 100,
+    stagesUs: { paint: index === 19 ? 80 : 20 },
+    dirtyAreaPercent: index === 19 ? 50 : 1
+  }));
+  const anomalies = frameAnomalySummary({ frames: anomalyFrames });
+  assert.deepEqual(anomalies.anomalies, [19]);
+  assert.deepEqual(anomalies.frames[19].reasons, ["total", "paint", "dirty"]);
   assert.deepEqual(frameTimingSummary({ frames: [frame, { ...frame, totalUs: 3000 }] }), {
     count: 2,
     p50Us: 2000,
@@ -299,6 +308,9 @@ function main() {
   assert(html.includes("frameDirtyEvidence"));
   assert(html.includes("相邻帧变化"));
   assert(html.includes("frameDeltas"));
+  assert(html.includes("仅显示异常帧"));
+  assert(html.includes("帧耗时趋势"));
+  assert(html.includes("data-trend-index"));
   assert(html.includes('"width":64'));
   assert(html.includes("dirtyRectsTruncated"));
   assert(html.includes("capture-stage"));

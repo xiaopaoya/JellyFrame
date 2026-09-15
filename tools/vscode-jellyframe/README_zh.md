@@ -27,6 +27,7 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
   回退为累计阶段耗时。若 producer 提供最终 raster 矩形，面板还会列出与 dirty rect 空间重叠的实际
   重绘证据，并提供跨帧命中聚合，但不会将空间重叠误报为 DOM 变更原因。
   当前帧还会显示相对上一帧的总耗时、阶段、dirty 区和命令增量；当两帧统计来源不同，命令增量会明确不可用。
+  聚合区提供基于当前 trace p95 的异常帧筛选和耗时趋势，点击趋势条可跳转到对应帧。
 - 对 app 作者建议、package warnings 和管线 diagnostics 提供 inline diagnostics。
 - Explorer 中的 JellyFrame 状态视图显示当前 app、构建目录、报告诊断和性能摘要。
 - 首次配置作者环境时选择已安装的 JellyFrame SDK，独立 App 工作区随后可直接使用。
