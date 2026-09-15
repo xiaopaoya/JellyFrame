@@ -329,6 +329,11 @@ if(JELLYFRAME_BUILD_TESTS)
                          "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_gradient_smoke"
                          3
                          horizontal-gradient)
+        add_test(NAME jellyframe_cpu2d_compare_vertical_gradient_output_smoke
+                 COMMAND jellyframe_cpu2d_compare
+                         "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_vertical_gradient_smoke"
+                         3
+                         vertical-gradient)
     endif()
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(JELLYFRAME_BUILD_RENDER_CORE_TESTS)

@@ -12,15 +12,17 @@ On Windows, `jellyframe_cpu2d_compare` runs fixed-condition CPU 2D comparison
 workloads through JellyFrame and a memory-DIB GDI operation in the same process.
 Both use a 172x320 RGB surface, 30 warm-up calls and equal sample counts. The
 default `opaque-fill` workload requires exact normalized RGB output. The
-`horizontal-gradient` workload compares the opaque horizontal gradient against
-GDI `GradientFill` and requires normalized RGB RMSE <= 1.0; the implementations'
-integer endpoint conventions differ by at most one channel value in the current
-fixture. The runner writes `jellyframe.json` and `gdi.json` manifests for
+`horizontal-gradient` and `vertical-gradient` workloads compare opaque
+gradients against the corresponding GDI `GradientFill` mode and require
+normalized RGB RMSE <= 1.0; the implementations' integer endpoint conventions
+differ by at most one channel value in the current fixture. The runner writes
+`jellyframe.json` and `gdi.json` manifests for
 `tools/benchmark_compare.py`.
 
 ```powershell
 jellyframe_cpu2d_compare <output-directory> 100 opaque-fill
 jellyframe_cpu2d_compare <output-directory> 100 horizontal-gradient
+jellyframe_cpu2d_compare <output-directory> 100 vertical-gradient
 ```
 
 On the development Windows machine, reusing the first clipped horizontal row

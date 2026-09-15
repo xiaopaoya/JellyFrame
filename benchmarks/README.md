@@ -25,14 +25,16 @@ The generated executables are `jellyframe_render_core_microbench` and
 Windows builds also produce `jellyframe_cpu2d_compare`. Its `opaque-fill`
 workload compares the same opaque full-frame RGB fill against a memory-DIB GDI
 operation and requires exact normalized RGB output. Its `horizontal-gradient`
-workload compares opaque horizontal gradients against GDI `GradientFill` and
-requires normalized RGB RMSE <= 1.0. Both are 172x320 primitive probes and do
+and `vertical-gradient` workloads compare opaque gradients against the
+corresponding GDI `GradientFill` mode and require normalized RGB RMSE <= 1.0.
+These are 172x320 primitive probes and do
 not claim whole-library, complete UI, device, rounded-gradient, text, or GPU
 performance.
 
 ```powershell
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-fill 100 opaque-fill
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-gradient 100 horizontal-gradient
+build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-vertical-gradient 100 vertical-gradient
 ```
 
 Cross-library comparisons use the fixed-condition manifest consumed by

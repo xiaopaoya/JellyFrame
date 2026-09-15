@@ -32,6 +32,7 @@ constexpr Color kGradientSecond{6, 22, 31, 255};
 enum class Workload {
     OpaqueFill,
     HorizontalGradient,
+    VerticalGradient,
 };
 
 struct OutputComparison {
@@ -115,7 +116,7 @@ struct GdiSurface {
         }
     }
 
-    void horizontal_gradient() const {
+    void gradient(ULONG mode) const {
         TRIVERTEX vertices[2]{};
         vertices[0].x = 0;
         vertices[0].y = 0;
@@ -130,13 +131,16 @@ struct GdiSurface {
         vertices[1].Blue = static_cast<COLOR16>(kGradientSecond.b << 8U);
         vertices[1].Alpha = 0xffffU;
         GRADIENT_RECT rectangle{0, 1};
-        if (GradientFill(dc, vertices, 2, &rectangle, 1, GRADIENT_FILL_RECT_H) == 0) {
+        if (GradientFill(dc, vertices, 2, &rectangle, 1, mode) == 0) {
             throw std::runtime_error("GDI GradientFill failed");
         }
         if (GdiFlush() == 0) {
             throw std::runtime_error("GDI gradient flush failed");
         }
     }
+
+    void horizontal_gradient() const { gradient(GRADIENT_FILL_RECT_H); }
+    void vertical_gradient() const { gradient(GRADIENT_FILL_RECT_V); }
 };
 
 int positive_int(const char* raw, const char* name) {
@@ -152,13 +156,17 @@ Workload parse_workload(const char* raw) {
     const std::string name(raw);
     if (name == "opaque-fill") return Workload::OpaqueFill;
     if (name == "horizontal-gradient") return Workload::HorizontalGradient;
-    throw std::runtime_error("workload must be opaque-fill or horizontal-gradient");
+    if (name == "vertical-gradient") return Workload::VerticalGradient;
+    throw std::runtime_error("workload must be opaque-fill, horizontal-gradient, or vertical-gradient");
 }
 
 const char* workload_id(Workload workload) {
-    return workload == Workload::OpaqueFill
-        ? "opaque-fill-rgb-v1"
-        : "horizontal-gradient-rgb-v1";
+    switch (workload) {
+    case Workload::OpaqueFill: return "opaque-fill-rgb-v1";
+    case Workload::HorizontalGradient: return "horizontal-gradient-rgb-v1";
+    case Workload::VerticalGradient: return "vertical-gradient-rgb-v1";
+    }
+    return "unknown";
 }
 
 std::uint64_t hash_byte(std::uint64_t hash, std::uint8_t value) {
@@ -318,7 +326,9 @@ int main(int argc, char** argv) {
         command.rect = Rect{0, 0, kWidth, kHeight};
         command.color = workload == Workload::OpaqueFill ? kFillColor : kGradientFirst;
         command.color2 = kGradientSecond;
-        command.gradient_axis = GradientAxis::Horizontal;
+        command.gradient_axis = workload == Workload::VerticalGradient
+            ? GradientAxis::Vertical
+            : GradientAxis::Horizontal;
         SoftwareRasterizer rasterizer;
         const auto jellyframe_samples = measure(samples, [&] {
             rasterizer.rasterize(command, jellyframe_surface, Rect{0, 0, kWidth, kHeight});
@@ -327,7 +337,8 @@ int main(int argc, char** argv) {
         GdiSurface gdi_surface;
         const auto gdi_samples = measure(samples, [&] {
             if (workload == Workload::OpaqueFill) gdi_surface.fill();
-            else gdi_surface.horizontal_gradient();
+            else if (workload == Workload::HorizontalGradient) gdi_surface.horizontal_gradient();
+            else gdi_surface.vertical_gradient();
         });
         const OutputComparison comparison = compare_output(jellyframe_surface, gdi_surface);
         const double tolerance = workload == Workload::OpaqueFill ? 0.0 : 1.0;
