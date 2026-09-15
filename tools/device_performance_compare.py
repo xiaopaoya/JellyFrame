@@ -22,6 +22,7 @@ COMPARISON_FORMAT = "jellyframe.device.performance.comparison.v0"
 PROFILE_FORMAT = "jellyframe.device.profile.v0"
 MIN_REPEATS = 3
 VISUAL_STATUSES = {"exact-readback", "visual-equivalent-only", "missing", "fail"}
+ACCEPTANCE_MODES = {"target-improvement", "non-regression"}
 METRIC_UNITS = {
     "frameP50Us": "us",
     "frameP95Us": "us",
@@ -186,6 +187,9 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
     acceptance = base_manifest.get("acceptance", {})
     if not isinstance(acceptance, dict):
         acceptance = {}
+    mode = acceptance.get("mode", "target-improvement")
+    if mode not in ACCEPTANCE_MODES:
+        mode = "target-improvement"
     target = acceptance.get("targetMetric", "frameP95Us")
     minimum_improvement = float(acceptance.get("minimumImprovementPercent", 5))
     max_frame_regression = float(acceptance.get("maxFrameRegressionPercent", 3))
@@ -194,15 +198,24 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
     target_row = next((row for row in metrics if row["name"] == target), None)
     if target_row and target_row.get("status") == "comparable":
         target_delta = float(target_row["deltaPercent"]) if target_row["deltaPercent"] is not None else None
-        checks.append({
-            "name": "targetImprovement",
+        check = {
+            "name": "targetImprovement" if mode == "target-improvement" else "targetNonRegression",
             "metric": target,
-            "requiredDeltaPercent": rounded(-minimum_improvement),
             "actualDeltaPercent": target_delta,
-            "pass": target_delta is not None and target_delta <= -minimum_improvement,
-        })
+            "pass": target_delta is not None and target_delta <= (-minimum_improvement if mode == "target-improvement" else max_frame_regression),
+        }
+        if mode == "target-improvement":
+            check["requiredImprovementPercent"] = rounded(minimum_improvement)
+        else:
+            check["maximumDeltaPercent"] = rounded(max_frame_regression)
+        checks.append(check)
     else:
-        checks.append({"name": "targetImprovement", "metric": target, "pass": False, "reason": "target-metric-unavailable"})
+        checks.append({
+            "name": "targetImprovement" if mode == "target-improvement" else "targetNonRegression",
+            "metric": target,
+            "pass": False,
+            "reason": "target-metric-unavailable",
+        })
 
     frame_row = next((row for row in metrics if row["name"] == "frameP95Us"), None)
     if frame_row and frame_row.get("status") == "comparable":
@@ -275,6 +288,7 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
             "summary": candidate["summary"],
         },
         "acceptance": {
+            "mode": mode,
             "targetMetric": target,
             "minimumImprovementPercent": minimum_improvement,
             "maxFrameRegressionPercent": max_frame_regression,

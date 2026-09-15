@@ -19,7 +19,7 @@ the render-core and app-runtime C++ unit suites.
 | Native showcase interactions and repaint equivalence | `app_showcase_capture_tests.py BUILD_TOOL_DIR OUTPUT_DIR` (scripting-enabled Win32 shell) |
 | Font/resource policy | `font_policy_report_tests.py` |
 | Link-map and build slicing | `render_core_link_map_tests.py` |
-| Source-aware render performance reports | `render_performance_report_tests.py`, `device_performance_compare_tests.py` |
+| Source-aware render performance reports | `render_performance_report_tests.py`, `device_performance_manifest_tests.py`, `device_performance_compare_tests.py` |
 
 Run one file directly only when narrowing a failure; prefer the named CTest
 test because it supplies the correct build executable and working directory.

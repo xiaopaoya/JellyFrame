@@ -113,6 +113,16 @@ python tools\render_performance_report.py `
 最小值和最大值，不把这些值伪装成逐帧样本。
 
 ```powershell
+python tools\device_performance_manifest.py `
+  --root D:\JellyFramePerf\comparison-...\matrix `
+  --workload drag-scroll `
+  --side baseline `
+  --output D:\JellyFramePerf\comparison-...\matrix\manifests\baseline.json `
+  --conditions-json D:\JellyFramePerf\comparison-...\matrix\conditions.json `
+  --commit <baseline-commit> `
+  --visual-status visual-equivalent-only `
+  --stability-status pass
+
 python tools\device_performance_compare.py `
   --baseline baseline\manifest.json `
   --candidate candidate\manifest.json `
@@ -137,10 +147,14 @@ manifest 最小形状如下；`visualEvidence.status` 为 `exact-readback` 才�
   },
   "visualEvidence": {"status": "exact-readback"},
   "stability": {"status": "pass"},
-  "acceptance": {"targetMetric": "frameP95Us"},
+  "acceptance": {"mode": "target-improvement", "targetMetric": "frameP95Us"},
   "reports": ["repeat-01/result.json", "repeat-02/result.json", "repeat-03/result.json"]
 }
 ```
+
+非目标 workload（例如本轮只用于观察端到端滚动是否回归的 `drag-scroll`）可将
+`acceptance.mode` 设为 `non-regression`。此时目标指标允许保持不变，但仍受 frame p95
+和内存门槛约束；不得用该模式掩盖目标优化本身未达标的结果。
 
 `metadata.json` 和 `comparison.json` 必须同时保留机器可读的原始路径、固件 hash、
 profile window、有效 frames、各阶段 p50/p95/max、错误计数和内存 low-water。

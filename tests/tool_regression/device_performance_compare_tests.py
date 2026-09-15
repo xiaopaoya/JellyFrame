@@ -25,7 +25,7 @@ class DevicePerformanceCompareTests(unittest.TestCase):
     def setUp(self):
         self.module = load_module()
 
-    def write_side(self, root: Path, name: str, frame_values: list[int], *, visual: str = "exact-readback", conditions: dict | None = None, failures: int = 0, stability: str = "pass") -> Path:
+    def write_side(self, root: Path, name: str, frame_values: list[int], *, visual: str = "exact-readback", conditions: dict | None = None, failures: int = 0, stability: str = "pass", acceptance_mode: str = "target-improvement") -> Path:
         side = root / name
         side.mkdir()
         reports = []
@@ -64,7 +64,7 @@ class DevicePerformanceCompareTests(unittest.TestCase):
             },
             "visualEvidence": {"status": visual},
             "stability": {"status": stability},
-            "acceptance": {"targetMetric": "frameP95Us"},
+            "acceptance": {"mode": acceptance_mode, "targetMetric": "frameP95Us"},
             "reports": reports,
         }), encoding="utf-8")
         return manifest
@@ -123,6 +123,14 @@ class DevicePerformanceCompareTests(unittest.TestCase):
             result = self.module.compare_sides(self.module.load_side(baseline), self.module.load_side(candidate))
             self.assertEqual(result["status"], "FAIL")
             self.assertTrue(any("stability" in reason for reason in result["statusReasons"]))
+
+    def test_non_regression_mode_accepts_unchanged_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            baseline = self.write_side(root, "baseline", [1000, 1000, 1000], acceptance_mode="non-regression")
+            candidate = self.write_side(root, "candidate", [1000, 1000, 1000])
+            result = self.module.compare_sides(self.module.load_side(baseline), self.module.load_side(candidate))
+            self.assertEqual(result["status"], "PASS")
 
 
 if __name__ == "__main__":
