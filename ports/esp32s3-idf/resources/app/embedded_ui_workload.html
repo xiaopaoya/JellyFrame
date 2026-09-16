@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <link rel="stylesheet" href="styles/embedded_ui_workload.css">
+</head>
+<body>
+  <main id="screen" class="screen" data-screen="base">
+    <header class="topbar">
+      <div><strong>Control</strong><span>Daily status</span></div>
+      <b>08:42</b>
+    </header>
+    <section id="status-card" class="status-card">
+      <div><span class="eyebrow">SYSTEM STATUS</span><strong>System ready</strong></div>
+      <div class="status-side"><span id="status-text" class="status-text">PAUSE</span><input id="status-level" class="status-meter" type="range" min="0" max="100" value="25"></div>
+    </section>
+    <section id="settings-panel" class="settings-panel">
+      <div class="section-title"><strong>Settings</strong><span>4 active rows</span></div>
+      <div id="setting-row-1" class="setting-row"><span>Focus mode</span><b id="setting-toggle">ON</b></div>
+      <div id="setting-row-2" class="setting-row"><span>Quiet hours</span><b id="setting-toggle-2">22:00</b></div>
+      <div id="setting-row-3" class="setting-row"><span>Touch feedback</span><b>ON</b></div>
+      <div id="setting-row-4" class="setting-row"><span>Sync interval</span><b>15 min</b></div>
+      <div class="setting-row detail-row"><span>Battery saver</span><b>OFF</b></div>
+      <div class="setting-row detail-row"><span>Connection</span><b>LOCAL</b></div>
+      <div class="setting-row detail-row"><span>Last update</span><b>08:40</b></div>
+      <div class="setting-row detail-row"><span>Profile</span><b>BASE</b></div>
+    </section>
+    <nav class="bottom-nav">
+      <span class="selected">Overview</span><span>Activity</span><span>Settings</span>
+    </nav>
+  </main>
+</body>
+</html>

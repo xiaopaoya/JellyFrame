@@ -879,6 +879,12 @@ extern "C" void app_main(void) {
     } else {
         ESP_LOGI(tag, "scroll benchmark task started");
     }
+#elif CONFIG_JELLYFRAME_ESP32S3_RUN_EMBEDDED_UI_WORKLOAD
+    if (!jellyframe_esp32s3::start_embedded_ui_workload_task()) {
+        ESP_LOGE(tag, "failed to start embedded UI workload task");
+    } else {
+        ESP_LOGI(tag, "embedded UI workload task started");
+    }
 #elif CONFIG_JELLYFRAME_ESP32S3_RUN_POWER_ACCEPTANCE
     if (!jellyframe_esp32s3::start_power_acceptance_task()) {
         ESP_LOGE(tag, "failed to start panel power acceptance task");

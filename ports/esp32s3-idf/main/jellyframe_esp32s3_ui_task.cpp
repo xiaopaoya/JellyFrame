@@ -78,6 +78,10 @@
 #define CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_WINDOW_FRAMES 120
 #endif
 
+#ifndef CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_START_DELAY_MS
+#define CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_START_DELAY_MS 0
+#endif
+
 #ifndef CONFIG_JELLYFRAME_ESP32S3_PERSISTENT_STYLE_RESOLVER
 #define CONFIG_JELLYFRAME_ESP32S3_PERSISTENT_STYLE_RESOLVER 1
 #endif
@@ -197,6 +201,7 @@ constexpr std::string_view kScrollBenchBackgroundUrl = "/scroll_bench_background
 constexpr std::string_view kScrollBenchClearUrl = "/scroll_bench_clear.html";
 constexpr std::string_view kScrollBenchPanelUrl = "/scroll_bench_panel.html";
 constexpr std::string_view kScrollBenchGramProbeUrl = "/scroll_bench_gram_probe.html";
+constexpr std::string_view kEmbeddedUiWorkloadUrl = "/embedded_ui_workload.html";
 constexpr jellyframe::Color kBackground{248, 250, 252, 255};
 constexpr int kScrollIndicatorRepaintWidth = 8;
 constexpr std::uint32_t kBandAutorouteTransitionCount = 30;
@@ -235,6 +240,18 @@ const char* scroll_benchmark_workload() {
     return "panel";
 #else
     return "full";
+#endif
+}
+
+const char* embedded_ui_workload_name() {
+#if CONFIG_JELLYFRAME_ESP32S3_EMBEDDED_UI_WORKLOAD_LOCAL_UPDATE
+    return "embedded-ui-local-update";
+#elif CONFIG_JELLYFRAME_ESP32S3_EMBEDDED_UI_WORKLOAD_SCROLL
+    return "embedded-ui-scroll";
+#elif CONFIG_JELLYFRAME_ESP32S3_EMBEDDED_UI_WORKLOAD_FULL_REPAINT
+    return "embedded-ui-full-repaint";
+#else
+    return "embedded-ui-static";
 #endif
 }
 
@@ -489,6 +506,10 @@ struct TimerUiTaskContext {
     bool gradient_fastpath_benchmark = false;
     bool scroll_benchmark = false;
     bool scroll_autorun = false;
+    bool embedded_ui_workload = false;
+    std::uint32_t embedded_ui_phase = 0;
+    std::uint32_t embedded_ui_scroll_script_step = 0;
+    std::uint64_t device_profile_ready_at_us = 0;
     bool layer_tree_has_gradients = false;
     struct ScrollOffsetSlot {
         const jellyframe::Node* node = nullptr;
@@ -524,6 +545,9 @@ const char* ui_task_kind(const TimerUiTaskContext& context) {
     if (context.installed_bundle_app) {
         return "installed-bundle";
     }
+    if (context.embedded_ui_workload) {
+        return "embedded-ui";
+    }
     if (context.scroll_benchmark) {
         return "scroll";
     }
@@ -542,6 +566,9 @@ const char* ui_task_kind(const TimerUiTaskContext& context) {
 const char* ui_task_mode(const TimerUiTaskContext& context) {
     if (context.gradient_fastpath_benchmark) {
         return "fixed-30hz";
+    }
+    if (context.embedded_ui_workload) {
+        return embedded_ui_workload_name();
     }
     if (context.scroll_benchmark) {
         return context.scroll_autorun ? "autorun" : "interactive";
@@ -1179,10 +1206,10 @@ jellyframe::LayerTreeBuilderOptions make_layer_tree_options(const TimerUiTaskCon
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     options.image_resolver = make_bmp_image_resolver(const_cast<BmpImageAdapter&>(context.image_adapter));
 #endif
-    if (context.scroll_benchmark || context.installed_bundle_app) {
+    if (context.scroll_benchmark || context.installed_bundle_app || context.embedded_ui_workload) {
         options.scroll_resolver = jellyframe::ScrollOffsetResolver{resolve_scroll_y,
                                                                     const_cast<TimerUiTaskContext*>(&context)};
-        options.paint_scroll_indicators = context.scroll_benchmark &&
+        options.paint_scroll_indicators = (context.scroll_benchmark || context.embedded_ui_workload) &&
             !CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL;
     }
     return options;
@@ -1278,7 +1305,8 @@ const jellyframe::LayerNode* current_scroll_layer(TimerUiTaskContext& context) {
         return nullptr;
     }
     if (context.scroll_node == nullptr) {
-        context.scroll_node = find_by_id(*context.document, "feed");
+        context.scroll_node = find_by_id(*context.document,
+                                         context.embedded_ui_workload ? "settings-panel" : "feed");
     }
     return context.scroll_node != nullptr
         ? find_layer_for_node(*context.pipeline.layer_tree, context.scroll_node)
@@ -1339,6 +1367,36 @@ bool schedule_scroll_step(TimerUiTaskContext& context) {
         context.scroll_direction = 1;
     }
     return schedule_scroll_offset(context, next);
+}
+
+void enqueue_embedded_ui_scroll_script_step(TimerUiTaskContext& context) {
+    constexpr int kX = 86;
+    constexpr int kBottomY = 248;
+    constexpr int kTopY = 128;
+    constexpr int kStepY = 20;
+    const std::uint32_t phase = context.embedded_ui_scroll_script_step++ % 16U;
+    BoardInputEvent event;
+    event.x = kX;
+    if (phase == 0U) {
+        event.kind = BoardInputKind::PointerDown;
+        event.y = kBottomY;
+    } else if (phase < 7U) {
+        event.kind = BoardInputKind::PointerMove;
+        event.y = kBottomY - static_cast<int>(phase) * kStepY;
+    } else if (phase == 7U) {
+        event.kind = BoardInputKind::PointerUp;
+        event.y = kTopY;
+    } else if (phase == 8U) {
+        event.kind = BoardInputKind::PointerDown;
+        event.y = kTopY;
+    } else if (phase < 15U) {
+        event.kind = BoardInputKind::PointerMove;
+        event.y = kTopY + static_cast<int>(phase - 8U) * kStepY;
+    } else {
+        event.kind = BoardInputKind::PointerUp;
+        event.y = kBottomY;
+    }
+    context.input_queue.enqueue(event);
 }
 
 bool point_in_rect(int x, int y, const jellyframe::Rect& rect) {
@@ -2301,6 +2359,8 @@ void run_retained_ui_task(void* raw_context) {
     }
     context->telemetry.cold_document_load_us =
         static_cast<std::uint64_t>(esp_timer_get_time() - cold_document_load_start);
+    context->device_profile_ready_at_us = esp_timer_get_time() +
+        static_cast<std::uint64_t>(CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_START_DELAY_MS) * 1000ULL;
     context->timer_running = !context->scroll_benchmark && !context->band_shell && !context->gradient_fastpath_benchmark &&
         CONFIG_JELLYFRAME_ESP32S3_TIMER_UI_AUTOSTART;
     if (context->band_shell) {
@@ -2371,12 +2431,18 @@ void run_retained_ui_task(void* raw_context) {
             enqueue_forms_replay(*context);
             context->next_forms_replay_us = power_now_us + 250000ULL;
         }
+        if (context->embedded_ui_workload && context->scroll_benchmark &&
+            power_now_us >= next_tick_us) {
+            enqueue_embedded_ui_scroll_script_step(*context);
+            next_tick_us = power_now_us + 33333ULL;
+        }
         jellyframe::FrameLoopPendingWork pending;
         pending.pending_input_events = context->input_queue.size();
         const bool band_autoroute_due = context->band_shell &&
             CONFIG_JELLYFRAME_ESP32S3_BAND_SHELL_AUTOROUTE &&
             context->telemetry.band_route_transitions < kBandAutorouteTransitionCount;
         const bool timer_due = ((!context->scroll_benchmark && !context->band_shell && !context->gradient_fastpath_benchmark) ||
+                                context->embedded_ui_workload ||
                                 context->scroll_autorun || context->gradient_fastpath_benchmark ||
                                 band_autoroute_due) &&
             esp_timer_get_time() >= next_tick_us;
@@ -2454,6 +2520,28 @@ void run_retained_ui_task(void* raw_context) {
                              static_cast<unsigned>(context->image_acceptance_cycles));
                 }
                 next_tick_us = esp_timer_get_time() + 500000ULL;
+            } else if (context->embedded_ui_workload) {
+                if (!force_first_frame) {
+                    ++context->embedded_ui_phase;
+                    const bool active = (context->embedded_ui_phase & 1U) != 0;
+                    if (jellyframe::Node* meter = find_by_id(*context->document, "status-level")) {
+                        jellyframe::set_form_control_value(*meter, active ? "75" : "25");
+                    }
+#if CONFIG_JELLYFRAME_ESP32S3_EMBEDDED_UI_WORKLOAD_LOCAL_UPDATE
+                    if (jellyframe::Node* toggle = find_by_id(*context->document, "setting-toggle")) {
+                        toggle->set_text_content(active ? "ON" : "OFF");
+                    }
+                    if (jellyframe::Node* quiet_hours = find_by_id(*context->document, "setting-toggle-2")) {
+                        quiet_hours->set_text_content(active ? "21:30" : "22:00");
+                    }
+                    if (jellyframe::Node* status = find_by_id(*context->document, "status-text")) {
+                        status->set_text_content(active ? "READY" : "PAUSE");
+                    }
+#elif CONFIG_JELLYFRAME_ESP32S3_EMBEDDED_UI_WORKLOAD_FULL_REPAINT
+                    context->document->set_attribute("data-screen", active ? "alt" : "base");
+#endif
+                }
+                next_tick_us = esp_timer_get_time() + 33333ULL;
             } else if (!context->band_shell && !context->gradient_fastpath_benchmark && !context->forms_advanced_acceptance) {
                 if (!force_first_frame && context->timer_running) {
                     ++context->elapsed_seconds;
@@ -2488,6 +2576,14 @@ void run_retained_ui_task(void* raw_context) {
             frame_plan.update.needs_previous_layout = false;
             frame_plan.update.needs_full_framebuffer = false;
         }
+#if CONFIG_JELLYFRAME_ESP32S3_EMBEDDED_UI_WORKLOAD_FULL_REPAINT
+        if (context->embedded_ui_workload && work_plan.timer_callbacks_to_pump > 0) {
+            frame_plan.update.dirty_rect_mode = jellyframe::FrameDirtyRectMode::FullFrame;
+            frame_plan.update.can_reuse_render_and_layout = false;
+            frame_plan.update.needs_previous_layout = false;
+            frame_plan.update.needs_full_framebuffer = true;
+        }
+#endif
         if (scroll_changed) {
             frame_plan.update.action = jellyframe::FrameUpdateAction::RepaintExisting;
             frame_plan.update.dirty_rect_mode = jellyframe::FrameDirtyRectMode::CurrentLayout;
@@ -2542,10 +2638,11 @@ void run_retained_ui_task(void* raw_context) {
 
         const std::uint32_t frame_us = static_cast<std::uint32_t>(esp_timer_get_time() - frame_start);
 #if CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
-        if (frame_plan.update.action == jellyframe::FrameUpdateAction::None) {
-            context->telemetry.device_profile.record_idle();
-        } else {
-            const bool profile_complete = context->telemetry.device_profile.record_active(
+        if (esp_timer_get_time() >= context->device_profile_ready_at_us) {
+            if (frame_plan.update.action == jellyframe::FrameUpdateAction::None) {
+                context->telemetry.device_profile.record_idle();
+            } else {
+                const bool profile_complete = context->telemetry.device_profile.record_active(
                 frame_us,
                 input_dispatch_us,
                 frame_planning_us,
@@ -2565,9 +2662,10 @@ void run_retained_ui_task(void* raw_context) {
                 dirty_pixel_area(*context),
                 counter_delta_u32(context->telemetry.packed_bytes, packed_bytes_before) / 2u,
                 counter_delta_u32(context->telemetry.packed_bytes, packed_bytes_before));
-            if (profile_complete && !context->telemetry.device_profile.reported) {
-                print_device_profile(context->telemetry.device_profile, *context, false);
-                context->telemetry.device_profile.reported = true;
+                if (profile_complete && !context->telemetry.device_profile.reported) {
+                    print_device_profile(context->telemetry.device_profile, *context, false);
+                    context->telemetry.device_profile.reported = true;
+                }
             }
         }
 #endif
@@ -2802,6 +2900,26 @@ bool start_scroll_benchmark_task() {
              CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_DIRECTION_DIAGNOSTICS ? 1 : 0);
 #endif
     return start_ui_task(context, "jellyframe_scroll");
+}
+
+bool start_embedded_ui_workload_task() {
+    auto* context = new (std::nothrow) TimerUiTaskContext();
+    if (context == nullptr) {
+        ESP_LOGE(kTag, "embedded UI workload task context allocation failed");
+        return false;
+    }
+    context->document_url = kEmbeddedUiWorkloadUrl;
+    context->telemetry_case = embedded_ui_workload_name();
+    context->telemetry_app_id = "org.jellyframe.acceptance.embedded-ui";
+    context->embedded_ui_workload = true;
+#if CONFIG_JELLYFRAME_ESP32S3_EMBEDDED_UI_WORKLOAD_SCROLL
+    // Replay a fixed pointer path through the normal retained-scroll input
+    // path, while the document and telemetry remain this workload.
+    context->scroll_benchmark = true;
+    context->scroll_autorun = false;
+    context->scroll_workload = "embedded-ui-scroll";
+#endif
+    return start_ui_task(context, "jellyframe_embedded_ui");
 }
 
 bool start_power_acceptance_task() {

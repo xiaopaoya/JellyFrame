@@ -1,0 +1,24 @@
+{
+  "format": "jellyframe.ws147.embedded-ui-workload.metadata.v1",
+  "viewport": "172x320",
+  "pixelFormat": "RGB565",
+  "document": "/embedded_ui_workload.html",
+  "resources": ["/embedded_ui_workload.html", "/styles/embedded_ui_workload.css"],
+  "domNodeCountInvariant": true,
+  "fontSet": "port production default",
+  "initialState": {
+    "screen": "base",
+    "statusLevel": 25,
+    "statusTitle": "System ready",
+    "statusText": "PAUSE",
+    "focusMode": "ON",
+    "quietHours": "22:00",
+    "profile": "BASE",
+    "quietHours": "22:00",
+    "touchFeedback": "ON",
+    "syncInterval": "15 min",
+    "scrollY": 0
+  },
+  "controls": ["status-card", "setting-row-1", "setting-row-2", "setting-row-3", "setting-row-4"],
+  "colors": {"background": "#08131d", "card": "#102d3d", "row": "#143647", "accent": "#8fd3a8"}
+}

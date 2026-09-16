@@ -17,6 +17,7 @@ bool start_flex_grid_acceptance_task();
 bool start_forms_advanced_acceptance_task();
 bool start_gradient_fastpath_ui_task();
 bool start_scroll_benchmark_task();
+bool start_embedded_ui_workload_task();
 bool start_power_acceptance_task();
 bool start_soc_power_acceptance_task();
 bool start_resource_failure_task();

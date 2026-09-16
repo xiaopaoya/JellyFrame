@@ -68,7 +68,8 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
             "${JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_H}"
         COMMAND "${Python3_EXECUTABLE}" "${JELLYFRAME_ESP32S3_FONT_GENERATOR}"
             --output-dir "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}"
-            --sizes 16,20,24
+            --sizes 8,9,10,11,12,14,16,20,24
+            --compact-ascii-sizes 8,9,10,11,12,14
             --bits-per-pixel 1
         DEPENDS
             "${JELLYFRAME_ESP32S3_FONT_GENERATOR}"
