@@ -11,6 +11,8 @@ const {
   discoverPerformanceArtifacts,
   finalizePerformanceSession,
   historyFiles,
+  comparePerformanceProfiles,
+  performanceProfile,
   performanceInputsFromPaths,
   readPerformanceHistory
 } = require("../../tools/vscode-jellyframe/performance_sessions");
@@ -84,6 +86,96 @@ function main() {
     const completed = finalizePerformanceSession(first, { success: true });
     assert.equal(completed.status, "complete");
     assert(historyFiles(build, completed).html.endsWith("report.html"));
+
+    const baselineReport = {
+      format: "jellyframe.render.performance.report",
+      summary: { frameCount: 0 },
+      deviceTelemetry: [{
+        identity: { case: "embedded-ui-scroll", profile: "ws147-v0", board: "ws147", viewport: "172x320" },
+        metrics: { frameP95Us: 10000, paintP95Us: 6000, presentP95Us: 3000 }
+      }]
+    };
+    const candidateReport = JSON.parse(JSON.stringify(baselineReport));
+    candidateReport.deviceTelemetry[0].metrics.frameP95Us = 10500;
+    assert.equal(comparePerformanceProfiles(
+      performanceProfile(candidateReport), performanceProfile(baselineReport)
+    ).status, "regressed");
+
+    const baselineSession = createPerformanceSession({
+      buildRoot: build,
+      appRoot: app,
+      inputs: [{ kind: "deviceTelemetry", path: outside }],
+      sourceCommit: "baseline-commit",
+      runtimeIdentity: { renderCoreVersion: "0.6.2", renderCoreAbi: 1 },
+      now: new Date("2026-09-17T13:00:00.000Z")
+    });
+    write(baselineSession.output, JSON.stringify(baselineReport));
+    write(baselineSession.htmlOutput, "<!doctype html>");
+    const baselineEntry = finalizePerformanceSession(baselineSession, { success: true });
+    assert.equal(baselineEntry.comparison, undefined);
+
+    const candidateSession = createPerformanceSession({
+      buildRoot: build,
+      appRoot: app,
+      inputs: [{ kind: "deviceTelemetry", path: outside }],
+      sourceCommit: "candidate-commit",
+      runtimeIdentity: { renderCoreVersion: "0.6.2", renderCoreAbi: 1 },
+      now: new Date("2026-09-17T14:00:00.000Z")
+    });
+    write(candidateSession.output, JSON.stringify(candidateReport));
+    write(candidateSession.htmlOutput, "<!doctype html>");
+    const candidateEntry = finalizePerformanceSession(candidateSession, { success: true });
+    assert.equal(candidateEntry.comparison.status, "regressed");
+    assert.equal(candidateEntry.comparison.baselineSessionId, baselineEntry.id);
+    assert.equal(candidateEntry.comparison.metrics[0].deltaPercent, 5);
+    assert.equal(JSON.parse(fs.readFileSync(candidateSession.manifestPath, "utf8")).comparison.status, "regressed");
+
+    const runtimeCandidate = createPerformanceSession({
+      buildRoot: build,
+      appRoot: app,
+      inputs: [{ kind: "deviceTelemetry", path: outside }],
+      sourceCommit: "candidate-commit",
+      runtimeIdentity: { runtimeVersion: "0.6.0-dev", renderCoreVersion: "0.6.3", renderCoreAbi: 1 },
+      now: new Date("2026-09-17T15:00:00.000Z")
+    });
+    write(runtimeCandidate.output, JSON.stringify(baselineReport));
+    write(runtimeCandidate.htmlOutput, "<!doctype html>");
+    const runtimeEntry = finalizePerformanceSession(runtimeCandidate, { success: true });
+    assert(runtimeEntry.comparison, "a Runtime/Core version change is comparable even when the App commit is unchanged");
+
+    const incompatibleAbi = createPerformanceSession({
+      buildRoot: build,
+      appRoot: app,
+      inputs: [{ kind: "deviceTelemetry", path: outside }],
+      sourceCommit: "abi-break",
+      runtimeIdentity: { renderCoreAbi: 2 },
+      now: new Date("2026-09-17T16:00:00.000Z")
+    });
+    write(incompatibleAbi.output, JSON.stringify(candidateReport));
+    write(incompatibleAbi.htmlOutput, "<!doctype html>");
+    assert.equal(finalizePerformanceSession(incompatibleAbi, { success: true }).comparison, undefined,
+      "different Render Core ABIs are never compared");
+
+    const mismatched = JSON.parse(JSON.stringify(candidateReport));
+    mismatched.deviceTelemetry[0].identity.case = "embedded-ui-static";
+    assert.equal(comparePerformanceProfiles(
+      performanceProfile(mismatched), performanceProfile(baselineReport)
+    ), undefined, "different workloads are never compared");
+
+    const desktopBaseline = {
+      format: "jellyframe.render.performance.report",
+      metadata: { appId: "org.example.app", profile: "scroll", viewport: { width: 172, height: 320 } },
+      summary: { frameCount: 120, totalUs: { p95: 20000 } },
+      deviceTelemetry: []
+    };
+    const desktopCandidate = JSON.parse(JSON.stringify(desktopBaseline));
+    desktopCandidate.summary.totalUs.p95 = 18000;
+    assert.equal(comparePerformanceProfiles(
+      performanceProfile(desktopCandidate), performanceProfile(desktopBaseline)
+    ).status, "improved");
+    delete desktopCandidate.metadata.appId;
+    assert.equal(performanceProfile(desktopCandidate).sources.length, 0,
+      "desktop traces without complete workload identity are not compared");
 
     for (let index = 0; index < HISTORY_LIMIT + 3; ++index) {
       const session = createPerformanceSession({

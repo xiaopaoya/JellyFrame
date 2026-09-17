@@ -293,7 +293,7 @@ GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立�
 - 下一项固定 workload 已定义为 [嵌入式 UI 对照 workload V0](render_performance_embedded_ui_workload_zh.md)，
   覆盖黑底可穿戴页面、设置行、状态卡、底部导航、文本更新、滚动和全屏重绘。四套 profile
   已使用同一 30 帧 warm-up、120 帧测量窗口和 15 秒启动延迟，并由工具回归锁定资源、状态节点与
-  profile 对称性；设备矩阵仍待执行。
+  profile 对称性；四组 fixture qualification 已通过，正式 baseline/candidate 设备矩阵仍待执行。
 
 ### 第四阶段：面向 App 作者的闭环
 
@@ -304,5 +304,6 @@ GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立�
 - 增加低开销、有界的实时 trace 环形缓冲，桌面默认可用，设备仍默认只采集 aggregate；
 - 建立“输入/脚本更新 -> mutation -> invalidation -> layer/command -> dirty 区”的可靠
   关联，仅在 producer 确实提供证据时展示元素根因；
-- 项目级有界历史和身份记录已交付；同 workload 的自动版本回归判定、设备趋势图仍待完成；
+- 项目级有界历史和身份记录已交付；同 workload、同来源、同 board/viewport 且 ABI 兼容时的自动
+  版本回归判定已交付，身份不足或不一致时拒绝比较；多会话设备趋势图仍待完成；
 - 完成嵌入式 UI、圆角、文本和滚动对照后，再冻结对外的性能比较结论。

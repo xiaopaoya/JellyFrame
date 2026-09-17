@@ -7,6 +7,9 @@ const HISTORY_FORMAT = "jellyframe.performance.history";
 const HISTORY_LIMIT = 20;
 const MAX_INPUT_BYTES = 64 * 1024 * 1024;
 const MAX_SESSION_INPUT_BYTES = 128 * 1024 * 1024;
+const REGRESSION_PERCENT = 3;
+const IMPROVEMENT_PERCENT = -5;
+const MAX_COMPARISON_METRICS = 32;
 const INPUT_KINDS = new Set([
   "packageReport",
   "trace",
@@ -190,6 +193,145 @@ function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
+function finiteMetric(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+function sourceKey(parts) {
+  return parts.map((value) => String(value || "").trim()).join("|");
+}
+
+function performanceProfile(report) {
+  if (report?.format !== "jellyframe.render.performance.report") return { sources: [] };
+  const sources = [];
+  const frameCount = finiteMetric(report.summary?.frameCount);
+  const desktopAppId = String(report.metadata?.appId || "").trim();
+  const desktopProfile = String(report.metadata?.profile || "").trim();
+  const viewport = report.metadata?.viewport;
+  const viewportKey = viewport && typeof viewport === "object" && viewport.width && viewport.height
+    ? `${viewport.width}x${viewport.height}`
+    : "";
+  if (frameCount > 0 && desktopAppId && desktopProfile && viewportKey) {
+    const p95 = finiteMetric(report.summary?.totalUs?.p95);
+    if (p95 !== undefined) {
+      sources.push({
+        kind: "desktopTrace",
+        key: sourceKey(["desktop", desktopAppId, desktopProfile, viewportKey]),
+        label: desktopProfile,
+        metrics: { totalP95Us: p95 }
+      });
+    }
+  }
+  for (const telemetry of report.deviceTelemetry || []) {
+    const identity = telemetry?.identity || {};
+    if (![identity.case, identity.profile, identity.board, identity.viewport]
+      .every((value) => String(value || "").trim())) {
+      continue;
+    }
+    const metrics = {};
+    for (const field of ["frameP95Us", "paintP95Us", "presentP95Us", "dmaWaitP95Us"]) {
+      const value = finiteMetric(telemetry.metrics?.[field]);
+      if (value !== undefined) metrics[field] = value;
+    }
+    if (Object.keys(metrics).length) {
+      sources.push({
+        kind: "deviceTelemetry",
+        key: sourceKey(["device", identity.case, identity.profile, identity.board, identity.viewport]),
+        label: identity.case,
+        metrics
+      });
+    }
+  }
+  return { sources };
+}
+
+function comparePerformanceProfiles(current, baseline) {
+  const previous = new Map((baseline?.sources || []).map((source) => [`${source.kind}:${source.key}`, source]));
+  const metrics = [];
+  for (const source of current?.sources || []) {
+    const matched = previous.get(`${source.kind}:${source.key}`);
+    if (!matched) continue;
+    for (const [name, currentValue] of Object.entries(source.metrics || {})) {
+      const baselineValue = finiteMetric(matched.metrics?.[name]);
+      if (baselineValue === undefined || baselineValue === 0 || finiteMetric(currentValue) === undefined) continue;
+      const deltaPercent = Math.round(((currentValue - baselineValue) * 10000) / baselineValue) / 100;
+      metrics.push({
+        source: source.kind,
+        workload: source.label,
+        metric: name,
+        baseline: baselineValue,
+        current: currentValue,
+        deltaPercent,
+        status: deltaPercent > REGRESSION_PERCENT
+          ? "regressed"
+          : (deltaPercent <= IMPROVEMENT_PERCENT ? "improved" : "stable")
+      });
+      if (metrics.length >= MAX_COMPARISON_METRICS) break;
+    }
+    if (metrics.length >= MAX_COMPARISON_METRICS) break;
+  }
+  if (!metrics.length) return undefined;
+  const status = metrics.some((metric) => metric.status === "regressed")
+    ? "regressed"
+    : (metrics.some((metric) => metric.status === "improved") ? "improved" : "stable");
+  return { status, metrics };
+}
+
+function readPerformanceProfile(reportPath) {
+  try {
+    return performanceProfile(JSON.parse(fs.readFileSync(reportPath, "utf8")));
+  } catch (_) {
+    return { sources: [] };
+  }
+}
+
+function compatibleRuntime(current, baseline) {
+  const currentAbi = current?.renderCoreAbi;
+  const baselineAbi = baseline?.renderCoreAbi;
+  return currentAbi === undefined || baselineAbi === undefined || String(currentAbi) === String(baselineAbi);
+}
+
+function versionIdentityChanged(current, baseline) {
+  const pairs = [
+    [current.source?.commit, baseline.source?.commit],
+    [current.runtime?.runtimeVersion, baseline.runtime?.runtimeVersion],
+    [current.runtime?.renderCoreVersion, baseline.runtime?.renderCoreVersion],
+    [current.runtime?.sdkRelease, baseline.runtime?.sdkRelease]
+  ];
+  return pairs.some(([left, right]) => left && right && String(left) !== String(right));
+}
+
+function previousVersionComparison(session, history, profile) {
+  if (!profile.sources.length) return undefined;
+  for (const entry of history.sessions || []) {
+    if (entry.status !== "complete" || entry.app?.key !== session.manifest.app?.key
+        || !versionIdentityChanged(session.manifest, entry)
+        || !compatibleRuntime(session.manifest.runtime, entry.runtime)) {
+      continue;
+    }
+    let baselineProfile = entry.performanceProfile;
+    if (!Array.isArray(baselineProfile?.sources)) {
+      const reportPath = historyFiles(path.dirname(session.performanceRoot), entry).report;
+      if (!reportPath) continue;
+      baselineProfile = readPerformanceProfile(reportPath);
+    }
+    const compared = comparePerformanceProfiles(profile, baselineProfile);
+    if (compared) {
+      return {
+        ...compared,
+        baselineSessionId: entry.id,
+        ...(entry.source?.commit ? { baselineCommit: entry.source.commit } : {}),
+        baselineRuntime: entry.runtime || {},
+        limitations: [
+          "Only identical source type and workload identity are compared.",
+          "This local history trend is not a cross-device or cross-library benchmark claim."
+        ]
+      };
+    }
+  }
+  return undefined;
+}
+
 function createPerformanceSession({
   buildRoot,
   appRoot,
@@ -304,16 +446,22 @@ function readPerformanceHistory(buildRoot) {
 
 function finalizePerformanceSession(session, { success, error } = {}) {
   const finishedAt = new Date().toISOString();
+  const history = readPerformanceHistory(path.dirname(session.performanceRoot));
+  const profile = success && fs.existsSync(session.output)
+    ? readPerformanceProfile(session.output)
+    : { sources: [] };
+  const comparison = success ? previousVersionComparison(session, history, profile) : undefined;
   const manifest = {
     ...session.manifest,
     status: success ? "complete" : "failed",
     finishedAt,
+    ...(profile.sources.length ? { performanceProfile: profile } : {}),
+    ...(comparison ? { comparison } : {}),
     ...(success ? {} : { error: String(error || "performance report generation failed").slice(0, 500) })
   };
   writeJson(session.manifestPath, manifest);
   session.manifest = manifest;
 
-  const history = readPerformanceHistory(path.dirname(session.performanceRoot));
   const relative = (filePath) => path.relative(session.performanceRoot, filePath).replace(/\\/g, "/");
   const entry = {
     id: manifest.id,
@@ -324,6 +472,8 @@ function finalizePerformanceSession(session, { success, error } = {}) {
     source: manifest.source,
     runtime: manifest.runtime,
     manifest: relative(session.manifestPath),
+    ...(manifest.performanceProfile ? { performanceProfile: manifest.performanceProfile } : {}),
+    ...(manifest.comparison ? { comparison: manifest.comparison } : {}),
     ...(success && fs.existsSync(session.output) ? { report: relative(session.output) } : {}),
     ...(success && fs.existsSync(session.htmlOutput) ? { html: relative(session.htmlOutput) } : {})
   };
@@ -360,5 +510,7 @@ module.exports = {
   finalizePerformanceSession,
   historyFiles,
   performanceInputsFromPaths,
+  performanceProfile,
+  comparePerformanceProfiles,
   readPerformanceHistory
 };

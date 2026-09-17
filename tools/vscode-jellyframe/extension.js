@@ -2091,6 +2091,35 @@ function performanceInputLabel(kind, chinese) {
   return labels[kind] || kind;
 }
 
+function performanceComparisonPresentation(comparison, chinese) {
+  if (!comparison?.status || !Array.isArray(comparison.metrics) || !comparison.metrics.length) return undefined;
+  const metric = comparison.metrics.find((item) => item.status === "regressed") || comparison.metrics[0];
+  const metricLabels = chinese ? {
+    totalP95Us: "桌面帧 p95",
+    frameP95Us: "设备帧 p95",
+    paintP95Us: "绘制 p95",
+    presentP95Us: "提交 p95",
+    dmaWaitP95Us: "DMA 等待 p95"
+  } : {
+    totalP95Us: "Desktop frame p95",
+    frameP95Us: "Device frame p95",
+    paintP95Us: "Paint p95",
+    presentP95Us: "Present p95",
+    dmaWaitP95Us: "DMA wait p95"
+  };
+  const statusLabels = chinese
+    ? { regressed: "回归", improved: "改善", stable: "稳定" }
+    : { regressed: "regressed", improved: "improved", stable: "stable" };
+  const icon = comparison.status === "regressed"
+    ? "warning"
+    : (comparison.status === "improved" ? "arrow-down" : "pass");
+  const delta = `${metric.deltaPercent > 0 ? "+" : ""}${metric.deltaPercent}%`;
+  return {
+    icon,
+    text: `${statusLabels[comparison.status]} · ${metricLabels[metric.metric] || metric.metric} ${delta}`
+  };
+}
+
 async function choosePerformanceInputs(root, outputDirectory) {
   const chinese = isChinese();
   const artifacts = discoverPerformanceArtifacts({ buildRoot: outputDirectory, lastTracePath });
@@ -2214,14 +2243,20 @@ async function openPerformanceHistory(context, resourceUri) {
       : "This App has no performance session history yet.");
     return;
   }
-  const selected = await vscode.window.showQuickPick(sessions.map((entry) => ({
-    label: `${entry.status === "complete" ? "$(pass)" : "$(error)"} ${new Date(entry.createdAt).toLocaleString()}`,
-    description: entry.source?.commit ? entry.source.commit.slice(0, 12) : (isChinese() ? "无源码提交身份" : "No source commit identity"),
-    detail: [entry.runtime?.runtimeVersion && `Runtime ${entry.runtime.runtimeVersion}`,
-      entry.runtime?.renderCoreVersion && `Core ${entry.runtime.renderCoreVersion}`,
-      entry.status].filter(Boolean).join(" · "),
-    entry
-  })), {
+  const chinese = isChinese();
+  const selected = await vscode.window.showQuickPick(sessions.map((entry) => {
+    const comparison = performanceComparisonPresentation(entry.comparison, chinese);
+    const icon = entry.status !== "complete" ? "error" : (comparison?.icon || "pass");
+    return {
+      label: `$(${icon}) ${new Date(entry.createdAt).toLocaleString()}`,
+      description: entry.source?.commit ? entry.source.commit.slice(0, 12) : (chinese ? "无源码提交身份" : "No source commit identity"),
+      detail: [comparison?.text,
+        entry.runtime?.runtimeVersion && `Runtime ${entry.runtime.runtimeVersion}`,
+        entry.runtime?.renderCoreVersion && `Core ${entry.runtime.renderCoreVersion}`,
+        entry.status].filter(Boolean).join(" · "),
+      entry
+    };
+  }), {
     placeHolder: isChinese() ? "选择要打开的性能会话" : "Choose a performance session to open",
     ignoreFocusOut: true
   });

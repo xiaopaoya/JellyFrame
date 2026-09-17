@@ -143,6 +143,7 @@ class RenderPerformanceReportTests(unittest.TestCase):
 
         self.assertIn("Device aggregate telemetry", rendered)
         self.assertIn("jellyframe.device.profile.v0", rendered)
+        self.assertIn("drag", rendered)
         self.assertIn("41700us", rendered)
         self.assertIn("No per-frame trace", rendered)
 
@@ -151,9 +152,10 @@ class RenderPerformanceReportTests(unittest.TestCase):
             root = Path(directory)
             telemetry = root / "device-profile.log"
             telemetry.write_text(
-                "device_profile format=jellyframe.device.profile.v0 case=drag "
+                "device_profile format=jellyframe.device.profile.v0 case=drag profile=ws147-v0 "
+                "board=waveshare-esp32-s3-touch-lcd-1.47 "
                 "window=1 frame_us_p50=28600 frame_us_p95=41700 frames=120 pipeline_frames=8 partial=0\n"
-                "device_profile_timing window=1 input_us_p95=310\n"
+                "device_profile_timing window=1 viewport=172x320 input_us_p95=310\n"
                 "device_profile_pipeline window=1 paint_us_p95=16800 present_us_p95=22800\n"
                 "device_profile_present window=1 dma_wait_us_p95=17100\n"
                 "device_profile_counters window=1 dirty_pixels_avg=18944 packed_bytes=4546560 "
@@ -172,6 +174,12 @@ class RenderPerformanceReportTests(unittest.TestCase):
             report = json.loads(output.read_text(encoding="utf-8"))
 
         self.assertEqual(report["summary"]["frameCount"], 0)
+        self.assertEqual(report["deviceTelemetry"][0]["identity"], {
+            "case": "drag",
+            "profile": "ws147-v0",
+            "board": "waveshare-esp32-s3-touch-lcd-1.47",
+            "viewport": "172x320",
+        })
         self.assertEqual(report["deviceTelemetry"][0]["metrics"]["frameP95Us"], 41700)
         self.assertEqual(report["deviceTelemetry"][0]["metrics"]["paintP95Us"], 16800)
         self.assertEqual(report["deviceTelemetry"][0]["metrics"]["dmaWaitP95Us"], 17100)

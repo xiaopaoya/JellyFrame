@@ -360,11 +360,24 @@ def load_device_telemetry(path: Path) -> dict[str, Any]:
                 parsed = None
             if parsed is not None:
                 values[target] = round_number(parsed)
+    identity = {}
+    if profile_values is not None:
+        identity = {
+            target: profile_values[source]
+            for source, target in (
+                ("case", "case"),
+                ("profile", "profile"),
+                ("board", "board"),
+                ("viewport", "viewport"),
+            )
+            if profile_values.get(source)
+        }
     return {
         "source": str(path),
         "format": "jellyframe.device.profile.v0"
         if profile_values is not None
         else "jellyframe.port.telemetry.metrics.v0",
+        "identity": identity,
         "metrics": values,
     }
 
@@ -586,6 +599,13 @@ def render_html(report: dict[str, Any]) -> str:
         metrics = telemetry.get("metrics", {})
         if not isinstance(metrics, dict):
             metrics = {}
+        identity = telemetry.get("identity", {})
+        if not isinstance(identity, dict):
+            identity = {}
+        identity_text = " · ".join(
+            str(identity[key]) for key in ("case", "profile", "board", "viewport")
+            if identity.get(key)
+        ) or "-"
         metric_cells = []
         for alternatives, label in device_metric_columns:
             rendered = "-"
@@ -596,6 +616,7 @@ def render_html(report: dict[str, Any]) -> str:
             metric_cells.append(f"<td title='{html.escape(label)}'>{rendered}</td>")
         device_rows.append(
             f"<tr><td><code>{html.escape(str(telemetry.get('format', 'unknown')))}</code></td>"
+            f"<td>{html.escape(identity_text)}</td>"
             f"<td>{html.escape(str(telemetry.get('source', '')))}</td>{''.join(metric_cells)}</tr>"
         )
     device_section = ""
@@ -603,7 +624,7 @@ def render_html(report: dict[str, Any]) -> str:
         device_section = (
             "<h2>Device aggregate telemetry</h2>"
             "<p><small>Device windows are reported separately from desktop frames; p95 values are not combined or converted into FPS claims.</small></p>"
-            "<table><tr><th>Format</th><th>Source</th>"
+            "<table><tr><th>Format</th><th>Identity</th><th>Source</th>"
             + "".join(f"<th>{html.escape(label)}</th>" for _, label in device_metric_columns)
             + "</tr>"
             + "".join(device_rows)

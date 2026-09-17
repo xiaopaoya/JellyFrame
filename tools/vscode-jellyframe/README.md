@@ -2,7 +2,7 @@
 
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-09-17; Applies to: 0.6.0-dev; extension version: 0.4.62; compatibility baseline: 0.5.0
+> Last updated: 2026-09-18; Applies to: 0.6.0-dev; extension version: 0.4.63; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -56,6 +56,11 @@ Palette as entry points.
   128 MiB per session.
   **Open Performance History** reopens one of the latest 20 complete or failed
   sessions together with its Runtime, Render Core and source-commit identity.
+  When the source, Runtime, Core, or SDK version changes, sessions with the same
+  source kind, workload, board, viewport, and compatible Core ABI are compared
+  against the latest comparable session. Stage p95 changes are marked improved,
+  stable, or regressed. Missing or mismatched identity produces no verdict; this
+  is a local project trend, not a cross-device or cross-library benchmark.
 - Explorer status view showing the selected app, build, report diagnostics and
   measured performance summary.
 - A one-time author-environment setup that selects an installed JellyFrame SDK
