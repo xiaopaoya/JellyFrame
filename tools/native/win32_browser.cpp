@@ -3245,9 +3245,11 @@ std::string build_launcher_app_list_html(const jellyframe_example::AppManagerSta
         html << "<section class='empty'><p class='empty-title'>No apps installed</p>"
              << "<p class='empty-copy'>Verified installs appear here after the host approves them.</p></section>";
     }
-    for (const jellyframe_example::AppManagerAppState& app_state : state.apps) {
+    for (std::size_t app_index = 0; app_index < state.apps.size(); ++app_index) {
+        const jellyframe_example::AppManagerAppState& app_state = state.apps[app_index];
         const jellyframe_example::InstalledAppEntry& app = app_state.app;
         const std::string escaped_id = html_escape_text(app.id);
+        const std::string control_suffix = "-" + std::to_string(app_index);
         html << "<article class='app app-" << launcher_app_state_class(app_state) << "'>"
              << "<div class='app-heading'><span class='state-label state-" << launcher_app_state_class(app_state) << "'>"
              << launcher_app_state_label(app_state) << "</span><div class='app-identity'><h2 class='name'>"
@@ -3262,9 +3264,12 @@ std::string build_launcher_app_list_html(const jellyframe_example::AppManagerSta
              << "<button class='secondary' data-action='" << (app.enabled ? "disable" : "enable")
              << "' data-app-id='" << escaped_id << "'>" << (app.enabled ? "Pause" : "Enable") << "</button>"
              << (app_state.rollback_ready ? "<button class='utility' data-action='rollback' data-app-id='" + escaped_id + "'>Rollback</button>" : "")
-             << "<button class='utility' data-action='clear-data' data-app-id='" << escaped_id << "'>Clear data</button>"
-             << "<button class='utility' data-action='remove-keep-data' data-app-id='" << escaped_id << "'>Remove</button>"
-             << "<button class='danger' data-action='remove-delete-data' data-app-id='" << escaped_id << "'>Remove data</button>"
+             << "<button id='launcher-clear-data" << control_suffix
+             << "' class='utility' data-action='clear-data' data-app-id='" << escaped_id << "'>Clear data</button>"
+             << "<button id='launcher-remove-keep-data" << control_suffix
+             << "' class='utility' data-action='remove-keep-data' data-app-id='" << escaped_id << "'>Remove</button>"
+             << "<button id='launcher-remove-delete-data" << control_suffix
+             << "' class='danger' data-action='remove-delete-data' data-app-id='" << escaped_id << "'>Remove data</button>"
              << "</div></article>";
     }
     return html.str();
@@ -3314,8 +3319,9 @@ std::string build_launcher_confirmation_html(const jellyframe_example::AppManage
     }
     return "<section class='confirmation'><p class='confirmation-title'>" + title + "</p>"
         "<p class='confirmation-copy'>" + copy + "</p><div class='confirmation-actions'>"
-        "<button class='danger' data-action='confirm-destructive' data-app-id='" + html_escape_text(std::string(app_id)) + "'>" +
-        confirm_label + "</button><button class='utility' data-action='cancel-confirmation' data-app-id='" +
+        "<button id='launcher-confirm-destructive' class='danger' data-action='confirm-destructive' data-app-id='" +
+        html_escape_text(std::string(app_id)) + "'>" + confirm_label +
+        "</button><button id='launcher-cancel-confirmation' class='utility' data-action='cancel-confirmation' data-app-id='" +
         html_escape_text(std::string(app_id)) + "'>Cancel</button></div></section>";
 }
 

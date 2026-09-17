@@ -962,7 +962,7 @@ def main() -> int:
                 "--launcher-app", "samples/apps/system/sample_launcher",
                 "--capture-frames", str(frames),
                 "--frame-count", "2",
-                "--frame-event", "1:click:270:300",
+                "--frame-event", "1:click-id:launcher-remove-keep-data-0",
             ],
         )
         require(confirmation_result.returncode == 0, "launcher destructive-action confirmation must capture")
@@ -979,8 +979,8 @@ def main() -> int:
                 "--launcher-app", "samples/apps/system/sample_launcher",
                 "--capture-frames", str(frames),
                 "--frame-count", "3",
-                "--frame-event", "1:click:270:300",
-                "--frame-event", "2:click:270:227",
+                "--frame-event", "1:click-id:launcher-remove-keep-data-0",
+                "--frame-event", "2:click-id:launcher-cancel-confirmation",
             ],
         )
         require(cancel_result.returncode == 0, "launcher destructive-action cancellation must capture")
@@ -995,8 +995,8 @@ def main() -> int:
                 "--launcher-app", "samples/apps/system/sample_launcher",
                 "--capture-frames", str(frames),
                 "--frame-count", "3",
-                "--frame-event", "1:click:270:300",
-                "--frame-event", "2:click:100:227",
+                "--frame-event", "1:click-id:launcher-remove-keep-data-0",
+                "--frame-event", "2:click-id:launcher-confirm-destructive",
             ],
         )
         require(action_result.returncode == 0, "launcher confirmed remove-keep-data action must capture")

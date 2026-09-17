@@ -275,9 +275,9 @@ def run_launcher_keep_data_flow(exe: Path, root: Path, bundle: Path, steps: list
             "--frame-count",
             "3",
             "--frame-event",
-            "1:click:270:300",
+            "1:click-id:launcher-remove-keep-data-0",
             "--frame-event",
-            "2:click:100:227",
+            "2:click-id:launcher-confirm-destructive",
         ],
         logs / "launcher-remove-keep-data.log",
     )
