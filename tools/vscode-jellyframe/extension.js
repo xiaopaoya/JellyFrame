@@ -36,6 +36,16 @@ const {
 } = require("./sdk_download");
 const { parseRenderTrace, renderTraceHtml } = require("./render_trace_viewer");
 const {
+  appKeyForRoot,
+  createPerformanceSession,
+  defaultArtifactPaths,
+  discoverPerformanceArtifacts,
+  finalizePerformanceSession,
+  historyFiles,
+  performanceInputsFromPaths,
+  readPerformanceHistory
+} = require("./performance_sessions");
+const {
   appFiles,
   initialModel,
   isVisualEditorEligible,
@@ -2054,27 +2064,78 @@ async function runPackageCommand(context, commandName, resourceUri) {
   runCliWithOptions(context, args, options);
 }
 
-async function selectOptionalPerformanceFile(root, filters, label) {
-  const chinese = isChinese();
-  const choice = await vscode.window.showQuickPick([
-    { label: chinese ? "跳过" : "Skip", value: undefined },
-    { label: chinese ? "选择文件" : "Choose a file", value: "choose" }
-  ], {
-    placeHolder: label,
-    ignoreFocusOut: true
-  });
-  if (!choice || !choice.value) {
+function projectSourceCommit(root) {
+  try {
+    return childProcess.execFileSync("git", ["-C", root, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      windowsHide: true
+    }).trim() || undefined;
+  } catch (_) {
     return undefined;
   }
-  const selected = await vscode.window.showOpenDialog({
-    defaultUri: vscode.Uri.file(root),
-    canSelectFiles: true,
-    canSelectFolders: false,
-    canSelectMany: false,
-    filters,
-    openLabel: chinese ? "选择性能数据文件" : "Select performance data file"
+}
+
+function performanceInputLabel(kind, chinese) {
+  const labels = chinese ? {
+    packageReport: "App 报告",
+    trace: "Render Trace",
+    deviceTelemetry: "设备 telemetry",
+    microbench: "Microbench"
+  } : {
+    packageReport: "App report",
+    trace: "Render Trace",
+    deviceTelemetry: "Device telemetry",
+    microbench: "Microbench"
+  };
+  return labels[kind] || kind;
+}
+
+async function choosePerformanceInputs(root, outputDirectory) {
+  const chinese = isChinese();
+  const artifacts = discoverPerformanceArtifacts({ buildRoot: outputDirectory, lastTracePath });
+  const defaults = new Set(defaultArtifactPaths(artifacts));
+  const browseValue = Symbol("browse");
+  const items = artifacts.map((artifact) => ({
+    label: `$(file) ${performanceInputLabel(artifact.kind, chinese)} · ${artifact.name}`,
+    description: new Date(artifact.mtimeMs).toLocaleString(),
+    detail: artifact.path,
+    value: artifact.path,
+    picked: defaults.has(artifact.path)
+  }));
+  items.push({
+    label: chinese ? "$(folder-opened) 添加其他性能数据文件..." : "$(folder-opened) Add other performance files...",
+    description: chinese ? "所选文件将复制到项目会话，manifest 不记录外部绝对路径" : "Selected files are copied into the project session; the manifest does not retain external absolute paths",
+    value: browseValue
   });
-  return selected && selected[0] ? selected[0].fsPath : undefined;
+  const selected = await vscode.window.showQuickPick(items, {
+    canPickMany: true,
+    placeHolder: chinese
+      ? "选择本次性能会话的输入；每种来源默认选择最新一项"
+      : "Select inputs for this performance session; the latest of each source is selected by default",
+    ignoreFocusOut: true
+  });
+  if (!selected) return undefined;
+  const paths = selected.filter((item) => item.value !== browseValue).map((item) => item.value);
+  if (selected.some((item) => item.value === browseValue)) {
+    const additional = await vscode.window.showOpenDialog({
+      defaultUri: vscode.Uri.file(root),
+      canSelectFiles: true,
+      canSelectFolders: false,
+      canSelectMany: true,
+      filters: { "Performance data": ["json", "jsonl", "trace", "log", "txt"] },
+      openLabel: chinese ? "添加到性能会话" : "Add to performance session"
+    });
+    for (const uri of additional || []) paths.push(uri.fsPath);
+  }
+  const inputs = performanceInputsFromPaths([...new Set(paths)]);
+  if (!inputs.length) {
+    vscode.window.showWarningMessage(chinese
+      ? "未选择可识别的 App 报告、Render Trace、设备 telemetry 或 microbench。"
+      : "No recognized App report, Render Trace, device telemetry, or microbench was selected.");
+    return undefined;
+  }
+  return inputs;
 }
 
 async function generatePerformanceReport(context, resourceUri) {
@@ -2092,72 +2153,86 @@ async function generatePerformanceReport(context, resourceUri) {
       : `Missing Render performance report tool: ${tool}`);
     return;
   }
-  const base = outputBase(root);
   const outputDirectory = buildDir(context);
   ensureBuildDir(context);
-  const reportCandidates = fs.readdirSync(outputDirectory)
-    .filter((name) => name.startsWith(`vscode-${base}-`) && name.endsWith("-report.json"))
-    .map((name) => path.join(outputDirectory, name))
-    .filter((file) => fs.statSync(file).isFile())
-    .sort((left, right) => fs.statSync(right).mtimeMs - fs.statSync(left).mtimeMs);
-  let packageReport;
-  if (reportCandidates.length === 1) {
-    packageReport = reportCandidates[0];
-  } else if (reportCandidates.length > 1) {
-    const choice = await vscode.window.showQuickPick(reportCandidates.map((file) => ({
-      label: path.basename(file),
-      description: new Date(fs.statSync(file).mtimeMs).toLocaleString(),
-      value: file
-    })), {
-      placeHolder: isChinese() ? "选择要合并的 App 报告" : "Choose the App report to merge",
-      ignoreFocusOut: true
+  const inputs = await choosePerformanceInputs(root, outputDirectory);
+  if (!inputs) return;
+  let session;
+  try {
+    const sdk = readSdkMetadata(resolvedAuthorSdk(context));
+    session = createPerformanceSession({
+      buildRoot: outputDirectory,
+      appRoot: root,
+      inputs,
+      sourceCommit: projectSourceCommit(root),
+      runtimeIdentity: sdk ? {
+        runtimeVersion: sdk.runtimeVersion,
+        renderCoreVersion: sdk.renderCoreVersion,
+        renderCoreAbi: sdk.renderCoreAbi,
+        sdkRelease: sdk.releaseTag
+      } : {}
     });
-    packageReport = choice?.value;
+  } catch (error) {
+    vscode.window.showErrorMessage(isChinese()
+      ? `无法创建性能会话：${error.message}`
+      : `Could not create performance session: ${error.message}`);
+    return;
   }
-  if (!packageReport) {
-    const selected = await vscode.window.showOpenDialog({
-      defaultUri: vscode.Uri.file(root),
-      canSelectFiles: true,
-      canSelectFolders: false,
-      canSelectMany: false,
-      filters: { "JellyFrame reports": ["json"] },
-      openLabel: isChinese() ? "选择 App 报告" : "Select App report"
-    });
-    packageReport = selected && selected[0] ? selected[0].fsPath : undefined;
-  }
-  const trace = lastTracePath && fs.existsSync(lastTracePath)
-    ? lastTracePath
-    : await selectOptionalPerformanceFile(root, { "Render traces": ["jsonl", "trace", "json"] },
-      isChinese() ? "选择 Render Trace（可选）" : "Choose a Render Trace (optional)");
-  const deviceTelemetry = await selectOptionalPerformanceFile(root, { "Device telemetry": ["log", "txt", "json"] },
-    isChinese() ? "选择设备 telemetry（可选）" : "Choose device telemetry (optional)");
-  const microbench = await selectOptionalPerformanceFile(root, { "Microbench output": ["txt", "log", "json"] },
-    isChinese() ? "选择 Render Core microbench（可选）" : "Choose Render Core microbench (optional)");
-  const microbenchBaseline = microbench
-    ? await selectOptionalPerformanceFile(root, { "Microbench output": ["txt", "log", "json"] },
-      isChinese() ? "选择 microbench baseline（可选）" : "Choose a microbench baseline (optional)")
-    : undefined;
-  const output = path.join(outputDirectory, `vscode-${base}-performance.json`);
-  const htmlOutput = path.join(outputDirectory, `vscode-${base}-performance.html`);
-  const args = ["--output", output, "--html-output", htmlOutput];
-  if (packageReport) args.unshift("--report", packageReport);
-  if (trace) args.push("--trace", trace);
-  if (deviceTelemetry) args.push("--device-telemetry", deviceTelemetry);
-  if (microbench) args.push("--microbench", microbench);
-  if (microbenchBaseline) args.push("--microbench-baseline", microbenchBaseline);
+  const args = ["--output", session.output, "--html-output", session.htmlOutput];
+  if (session.inputPaths.packageReport) args.unshift("--report", session.inputPaths.packageReport);
+  if (session.inputPaths.trace) args.push("--trace", session.inputPaths.trace);
+  if (session.inputPaths.deviceTelemetry) args.push("--device-telemetry", session.inputPaths.deviceTelemetry);
+  if (session.inputPaths.microbench) args.push("--microbench", session.inputPaths.microbench);
+  if (session.inputPaths.microbenchBaseline) args.push("--microbench-baseline", session.inputPaths.microbenchBaseline);
   runDetachedPython(context, tool, args, {
     wait: true,
     failureLabel: isChinese() ? "生成 Render 性能报告" : "Generate Render performance report",
-    onClose: (code) => {
-      if (code !== 0 || !fs.existsSync(htmlOutput)) {
+    onClose: (code, outcome) => {
+      const success = code === 0 && fs.existsSync(session.output) && fs.existsSync(session.htmlOutput);
+      finalizePerformanceSession(session, { success, error: outcome?.stderr });
+      if (!success) {
         return;
       }
-      loadReport(output, "performance");
+      loadReport(session.output, "performance");
       updateReportDiagnostics(root);
       statusProvider?.refresh();
-      vscode.commands.executeCommand("vscode.open", vscode.Uri.file(htmlOutput));
+      vscode.commands.executeCommand("vscode.open", vscode.Uri.file(session.htmlOutput));
     }
   });
+}
+
+async function openPerformanceHistory(context, resourceUri) {
+  const root = await packageRoot(resourceUri);
+  if (!root) return;
+  const build = buildDir(context);
+  const history = readPerformanceHistory(build);
+  const appKey = appKeyForRoot(root);
+  const sessions = history.sessions.filter((entry) => entry.app?.key === appKey);
+  if (!sessions.length) {
+    vscode.window.showInformationMessage(isChinese()
+      ? "当前 App 尚无性能会话历史。"
+      : "This App has no performance session history yet.");
+    return;
+  }
+  const selected = await vscode.window.showQuickPick(sessions.map((entry) => ({
+    label: `${entry.status === "complete" ? "$(pass)" : "$(error)"} ${new Date(entry.createdAt).toLocaleString()}`,
+    description: entry.source?.commit ? entry.source.commit.slice(0, 12) : (isChinese() ? "无源码提交身份" : "No source commit identity"),
+    detail: [entry.runtime?.runtimeVersion && `Runtime ${entry.runtime.runtimeVersion}`,
+      entry.runtime?.renderCoreVersion && `Core ${entry.runtime.renderCoreVersion}`,
+      entry.status].filter(Boolean).join(" · "),
+    entry
+  })), {
+    placeHolder: isChinese() ? "选择要打开的性能会话" : "Choose a performance session to open",
+    ignoreFocusOut: true
+  });
+  if (!selected) return;
+  const files = historyFiles(build, selected.entry);
+  if (files.report) loadReport(files.report, "performance");
+  const target = files.html || files.manifest;
+  if (target) {
+    statusProvider?.refresh();
+    await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(target));
+  }
 }
 
 async function previewPackage(context, resourceUri) {
@@ -3601,6 +3676,7 @@ class JellyFrameStatusProvider {
       openCapture: "打开截图或回放文件",
       openRenderTrace: "打开渲染性能 Trace",
       performanceReport: "生成性能报告",
+      performanceHistory: "打开性能历史",
       showOutput: "查看运行日志",
       reportReady: "报告已生成",
       noReport: "尚未生成报告",
@@ -3704,6 +3780,7 @@ class JellyFrameStatusProvider {
       openCapture: "Open capture or playback file",
       openRenderTrace: "Open Render Performance Trace",
       performanceReport: "Generate Performance Report",
+      performanceHistory: "Open Performance History",
       showOutput: "View run log",
       reportReady: "Report ready",
       noReport: "No report yet",
@@ -3772,6 +3849,7 @@ class JellyFrameStatusProvider {
         ...(lastCapturePath ? [this.commandItem(labels.openCapture, path.basename(lastCapturePath), "jellyframe.openCapture", "open-preview")] : []),
         ...(lastTracePath ? [this.commandItem(labels.openRenderTrace, path.basename(lastTracePath), "jellyframe.openRenderTrace", "graph-line")] : []),
         ...(hasPackage ? [this.commandItem(labels.performanceReport, labels.performanceReport, "jellyframe.performanceReport", "dashboard")] : []),
+        ...(hasPackage ? [this.commandItem(labels.performanceHistory, labels.performanceHistory, "jellyframe.performanceHistory", "history")] : []),
         this.commandItem(labels.showOutput, chinese ? "打开 JellyFrame 命令与运行日志。" : "Open JellyFrame command and runtime logs.", "jellyframe.showOutput", "output"),
         this.statusItem(chinese ? "管线诊断" : "Pipeline diagnostics", labels.diagnostics, labels.diagnostics, "pulse"),
         this.statusItem(labels.performance, hasRenderData && performance?.rating ? `${labels.measured}: ${performance.rating}` : labels.notMeasured,
@@ -4451,6 +4529,7 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.openCapture", () => openCapture(context)),
     vscode.commands.registerCommand("jellyframe.openRenderTrace", () => openRenderTrace(context)),
     vscode.commands.registerCommand("jellyframe.performanceReport", (resourceUri) => generatePerformanceReport(context, resourceUri)),
+    vscode.commands.registerCommand("jellyframe.performanceHistory", (resourceUri) => openPerformanceHistory(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.listBuilds", () => listBuilds(context)),
     vscode.commands.registerCommand("jellyframe.setupDesktopBuild", () => {
       const root = currentPackageRoot();

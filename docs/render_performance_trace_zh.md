@@ -297,10 +297,12 @@ GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立�
 
 ### 第四阶段：面向 App 作者的闭环
 
-- 将 package report、`.jfcapture`、Render Trace 和设备 telemetry 的选择与合并接入 VS Code
-  一键入口；
+- package report、Render Trace、设备 telemetry 和 microbench 已接入 VS Code 项目级性能会话：
+  自动发现最新输入，一次多选后将来源快照、SHA-256、源码提交与 Runtime/Core 身份写入
+  `.jellyframe/build/performance/<session-id>/`，并维护最近 20 次成功或失败历史。各来源仍独立
+  展示，不进行桌面/设备耗时混算；`.jfcapture` 仍通过其生成的 report/trace 间接进入会话；
 - 增加低开销、有界的实时 trace 环形缓冲，桌面默认可用，设备仍默认只采集 aggregate；
 - 建立“输入/脚本更新 -> mutation -> invalidation -> layer/command -> dirty 区”的可靠
   关联，仅在 producer 确实提供证据时展示元素根因；
-- 增加项目级历史报告、版本回归和设备/workload 趋势；
+- 项目级有界历史和身份记录已交付；同 workload 的自动版本回归判定、设备趋势图仍待完成；
 - 完成嵌入式 UI、圆角、文本和滚动对照后，再冻结对外的性能比较结论。

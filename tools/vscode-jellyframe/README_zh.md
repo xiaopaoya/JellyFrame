@@ -2,7 +2,7 @@
 
 # JellyFrame VS Code 工具
 
-> 最后更新：2026-09-15；适用版本：0.6.0-dev；扩展版本：0.4.57；兼容基线：0.5.0
+> 最后更新：2026-09-17；适用版本：0.6.0-dev；扩展版本：0.4.62；兼容基线：0.5.0
 
 JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里检查、预览、调试和
 打包 JellyFrame App。安装后可以从左侧 JellyFrame 活动栏、资源管理器/编辑器右键菜单
@@ -32,7 +32,12 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
   归因对象，以及相对上一帧增长最大的命令。这些是性能相关性和空间重叠证据，不是 DOM 变更根因；
   缺失、截断或部分计时会在限制中明确显示。
 - “生成性能报告”会将 App 报告、Render Trace、设备 telemetry 和 microbench（均可选）合并为
-  独立 JSON/HTML；缺失的数据会明确显示为不可用，不会把桌面耗时当成设备 FPS。
+  独立 JSON/HTML；它会自动发现项目构建目录中的最新输入，并通过一次多选建立
+  `.jellyframe/build/performance/` 下带时间戳的自包含会话。输入按来源分别复制并记录 SHA-256，
+  会话 manifest 不保留外部源文件的绝对路径；单文件和单会话快照分别限制为 64 MiB 与 128 MiB。
+  缺失的数据会明确显示为不可用，不会把桌面耗时当成设备 FPS。
+- “打开性能历史”可重新打开当前 App 最近 20 个完成或失败的会话，并显示源码提交、Runtime 与
+  Render Core 身份。
 - 对 app 作者建议、package warnings 和管线 diagnostics 提供 inline diagnostics。
 - Explorer 中的 JellyFrame 状态视图显示当前 app、构建目录、报告诊断和性能摘要。
 - 首次配置作者环境时选择已安装的 JellyFrame SDK，独立 App 工作区随后可直接使用。

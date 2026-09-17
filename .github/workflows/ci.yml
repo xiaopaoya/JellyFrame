@@ -124,6 +124,7 @@ jobs:
           node tests\tool_regression\vscode_status_presentation_tests.js
           node tests\tool_regression\vscode_sdk_download_tests.js
           node tests\tool_regression\vscode_render_trace_viewer_tests.js
+          node tests\tool_regression\vscode_performance_sessions_tests.js
           python tests\tool_regression\sdk_archive_tests.py
           python tests\tool_regression\render_performance_report_tests.py
           python tests\tool_regression\benchmark_guard_tests.py
