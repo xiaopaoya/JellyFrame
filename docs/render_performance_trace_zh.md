@@ -305,5 +305,6 @@ GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立�
 - 建立“输入/脚本更新 -> mutation -> invalidation -> layer/command -> dirty 区”的可靠
   关联，仅在 producer 确实提供证据时展示元素根因；
 - 项目级有界历史和身份记录已交付；同 workload、同来源、同 board/viewport 且 ABI 兼容时的自动
-  版本回归判定已交付，身份不足或不一致时拒绝比较；多会话设备趋势图仍待完成；
+  版本回归判定已交付，身份不足或不一致时拒绝比较；设备 aggregate 的多会话趋势图与有界
+  JSON/HTML 归档也已交付，严格按 case/profile/board/viewport/ABI 分组且不补齐缺失指标；
 - 完成嵌入式 UI、圆角、文本和滚动对照后，再冻结对外的性能比较结论。

@@ -11,6 +11,7 @@
   "command.openRenderTrace": "JellyFrame: Open Render Performance Trace",
   "command.performanceReport": "JellyFrame: Generate Performance Report",
   "command.performanceHistory": "JellyFrame: Open Performance History",
+  "command.performanceTrend": "JellyFrame: Open Device Performance Trends",
   "command.listBuilds": "JellyFrame: List Desktop Builds",
   "command.setupDesktopBuild": "JellyFrame: Create Compatible Desktop Build",
   "command.package": "JellyFrame: Generate Resource Package",

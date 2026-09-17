@@ -11,6 +11,7 @@
   "command.openRenderTrace": "JellyFrame：打开渲染性能 Trace",
   "command.performanceReport": "JellyFrame：生成性能报告",
   "command.performanceHistory": "JellyFrame：打开性能历史",
+  "command.performanceTrend": "JellyFrame：打开设备性能趋势",
   "command.listBuilds": "JellyFrame：列出桌面构建",
   "command.setupDesktopBuild": "JellyFrame：创建兼容桌面构建",
   "command.package": "JellyFrame：生成资源包",

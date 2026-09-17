@@ -4,6 +4,7 @@ const path = require("path");
 
 const SESSION_FORMAT = "jellyframe.performance.session";
 const HISTORY_FORMAT = "jellyframe.performance.history";
+const TREND_FORMAT = "jellyframe.performance.device-trend";
 const HISTORY_LIMIT = 20;
 const MAX_INPUT_BYTES = 64 * 1024 * 1024;
 const MAX_SESSION_INPUT_BYTES = 128 * 1024 * 1024;
@@ -238,6 +239,12 @@ function performanceProfile(report) {
         kind: "deviceTelemetry",
         key: sourceKey(["device", identity.case, identity.profile, identity.board, identity.viewport]),
         label: identity.case,
+        identity: {
+          case: String(identity.case),
+          profile: String(identity.profile),
+          board: String(identity.board),
+          viewport: String(identity.viewport)
+        },
         metrics
       });
     }
@@ -288,7 +295,7 @@ function readPerformanceProfile(reportPath) {
 function compatibleRuntime(current, baseline) {
   const currentAbi = current?.renderCoreAbi;
   const baselineAbi = baseline?.renderCoreAbi;
-  return currentAbi === undefined || baselineAbi === undefined || String(currentAbi) === String(baselineAbi);
+  return currentAbi !== undefined && baselineAbi !== undefined && String(currentAbi) === String(baselineAbi);
 }
 
 function versionIdentityChanged(current, baseline) {
@@ -497,11 +504,191 @@ function historyFiles(buildRoot, entry) {
   };
 }
 
+function deviceIdentityForSource(source) {
+  if (source?.identity && [source.identity.case, source.identity.profile, source.identity.board, source.identity.viewport]
+    .every((value) => String(value || "").trim())) {
+    return source.identity;
+  }
+  const parts = String(source?.key || "").split("|");
+  return parts.length === 5 && parts[0] === "device"
+    ? { case: parts[1], profile: parts[2], board: parts[3], viewport: parts[4] }
+    : undefined;
+}
+
+function buildDevicePerformanceTrend(history, appKey, now = new Date(), buildRoot) {
+  const groups = new Map();
+  for (const entry of history?.sessions || []) {
+    if (entry?.status !== "complete" || entry.app?.key !== appKey || entry.runtime?.renderCoreAbi === undefined) {
+      continue;
+    }
+    let profile = entry.performanceProfile;
+    if (!Array.isArray(profile?.sources) && buildRoot) {
+      const reportPath = historyFiles(buildRoot, entry).report;
+      profile = reportPath ? readPerformanceProfile(reportPath) : undefined;
+    }
+    for (const source of profile?.sources || []) {
+      const identity = deviceIdentityForSource(source);
+      if (source?.kind !== "deviceTelemetry" || !source.key || !identity) continue;
+      const abi = String(entry.runtime.renderCoreAbi);
+      const key = `${source.key}|abi=${abi}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          key,
+          workload: source.label,
+          identity,
+          renderCoreAbi: abi,
+          points: []
+        };
+        groups.set(key, group);
+      }
+      const metrics = {};
+      for (const name of ["frameP95Us", "paintP95Us", "presentP95Us", "dmaWaitP95Us"]) {
+        const value = finiteMetric(source.metrics?.[name]);
+        if (value !== undefined) metrics[name] = value;
+      }
+      if (!Object.keys(metrics).length) continue;
+      group.points.push({
+        sessionId: entry.id,
+        createdAt: entry.createdAt,
+        ...(entry.source?.commit ? { commit: entry.source.commit } : {}),
+        runtimeVersion: entry.runtime?.runtimeVersion,
+        renderCoreVersion: entry.runtime?.renderCoreVersion,
+        sdkRelease: entry.runtime?.sdkRelease,
+        metrics
+      });
+    }
+  }
+  const series = [...groups.values()]
+    .map((group) => ({
+      ...group,
+      points: group.points.sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt)))
+    }))
+    .filter((group) => group.points.length >= 2)
+    .sort((left, right) => left.key.localeCompare(right.key));
+  const app = (history?.sessions || []).find((entry) => entry.app?.key === appKey)?.app || { key: appKey };
+  return {
+    format: TREND_FORMAT,
+    formatVersion: 1,
+    generatedAt: now.toISOString(),
+    app,
+    historyLimit: HISTORY_LIMIT,
+    series,
+    limitations: [
+      "Each series has an identical device case, profile, board, viewport, and Render Core ABI.",
+      "Missing metrics remain gaps and are never converted to zero.",
+      "This bounded local history is not a cross-device or cross-library benchmark."
+    ]
+  };
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function metricSegments(points, metric, xAt, yAt) {
+  const segments = [];
+  let current = [];
+  for (let index = 0; index < points.length; ++index) {
+    const value = finiteMetric(points[index].metrics?.[metric]);
+    if (value === undefined) {
+      if (current.length) segments.push(current);
+      current = [];
+    } else {
+      current.push(`${xAt(index)},${yAt(value)}`);
+    }
+  }
+  if (current.length) segments.push(current);
+  return segments;
+}
+
+function renderDevicePerformanceTrendHtml(trend, chinese = false) {
+  const labels = chinese ? {
+    title: "设备性能趋势",
+    empty: "尚无至少包含两个可比会话的设备趋势。",
+    bounded: `仅显示最近 ${trend.historyLimit || HISTORY_LIMIT} 次项目性能会话中的可比设备数据。`,
+    identity: "工作负载身份",
+    session: "会话",
+    version: "版本",
+    time: "时间",
+    limitations: "限制",
+    metrics: { frameP95Us: "Frame p95", paintP95Us: "Paint p95", presentP95Us: "Present p95", dmaWaitP95Us: "DMA wait p95" }
+  } : {
+    title: "Device Performance Trends",
+    empty: "No device trend has at least two comparable sessions yet.",
+    bounded: `Only comparable device data from the latest ${trend.historyLimit || HISTORY_LIMIT} project sessions is shown.`,
+    identity: "Workload identity",
+    session: "Session",
+    version: "Version",
+    time: "Time",
+    limitations: "Limitations",
+    metrics: { frameP95Us: "Frame p95", paintP95Us: "Paint p95", presentP95Us: "Present p95", dmaWaitP95Us: "DMA wait p95" }
+  };
+  const colors = { frameP95Us: "#2ea043", paintP95Us: "#2f81f7", presentP95Us: "#bf8700", dmaWaitP95Us: "#a371f7" };
+  const metricNames = Object.keys(labels.metrics);
+  const sections = (trend.series || []).map((series) => {
+    const width = 820;
+    const height = 270;
+    const left = 62;
+    const right = 18;
+    const top = 18;
+    const bottom = 52;
+    const plotWidth = width - left - right;
+    const plotHeight = height - top - bottom;
+    const allValues = series.points.flatMap((point) => metricNames
+      .map((name) => finiteMetric(point.metrics?.[name])).filter((value) => value !== undefined));
+    const maximum = Math.max(1, ...allValues) * 1.1;
+    const xAt = (index) => Math.round(left + (series.points.length === 1 ? 0 : index * plotWidth / (series.points.length - 1)));
+    const yAt = (value) => Math.round(top + plotHeight - value * plotHeight / maximum);
+    const grid = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+      const y = Math.round(top + plotHeight * (1 - ratio));
+      return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" class="grid"/><text x="${left - 8}" y="${y + 4}" text-anchor="end">${(maximum * ratio / 1000).toFixed(1)}ms</text>`;
+    }).join("");
+    const lines = metricNames.map((metric) => metricSegments(series.points, metric, xAt, yAt)
+      .map((segment) => `<polyline points="${segment.join(" ")}" fill="none" stroke="${colors[metric]}" stroke-width="2" vector-effect="non-scaling-stroke"/>`).join("")).join("");
+    const dots = series.points.map((point, index) => metricNames.map((metric) => {
+      const value = finiteMetric(point.metrics?.[metric]);
+      return value === undefined ? "" : `<circle cx="${xAt(index)}" cy="${yAt(value)}" r="3" fill="${colors[metric]}"><title>${escapeHtml(labels.metrics[metric])}: ${(value / 1000).toFixed(2)}ms</title></circle>`;
+    }).join("")).join("");
+    const labelStep = Math.max(1, Math.ceil(series.points.length / 6));
+    const xLabels = series.points.map((point, index) => {
+      if (index % labelStep !== 0 && index !== series.points.length - 1) return "";
+      const version = String(point.commit || point.renderCoreVersion || point.runtimeVersion || index + 1).slice(0, 10);
+      return `<text x="${xAt(index)}" y="${height - 20}" text-anchor="middle">${escapeHtml(version)}</text>`;
+    }).join("");
+    const legend = metricNames.map((metric) => `<span><i style="background:${colors[metric]}"></i>${escapeHtml(labels.metrics[metric])}</span>`).join("");
+    const rows = series.points.map((point) => {
+      const version = [point.commit && String(point.commit).slice(0, 12), point.renderCoreVersion && `Core ${point.renderCoreVersion}`, point.runtimeVersion && `Runtime ${point.runtimeVersion}`].filter(Boolean).join(" · ") || "-";
+      return `<tr><td><code>${escapeHtml(point.sessionId)}</code></td><td>${escapeHtml(version)}</td><td>${escapeHtml(point.createdAt)}</td>${metricNames.map((metric) => `<td>${point.metrics?.[metric] === undefined ? "-" : `${escapeHtml((point.metrics[metric] / 1000).toFixed(2))} ms`}</td>`).join("")}</tr>`;
+    }).join("");
+    const identity = series.identity || {};
+    return `<section><h2>${escapeHtml(series.workload)}</h2><p class="muted">${escapeHtml(labels.identity)}: ${escapeHtml(identity.profile)} · ${escapeHtml(identity.board)} · ${escapeHtml(identity.viewport)} · ABI ${escapeHtml(series.renderCoreAbi)}</p><div class="legend">${legend}</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(series.workload)}">${grid}${lines}${dots}${xLabels}</svg><div class="table-wrap"><table><tr><th>${escapeHtml(labels.session)}</th><th>${escapeHtml(labels.version)}</th><th>${escapeHtml(labels.time)}</th>${metricNames.map((metric) => `<th>${escapeHtml(labels.metrics[metric])}</th>`).join("")}</tr>${rows}</table></div></section>`;
+  }).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(labels.title)}</title><style>body{font-family:var(--vscode-font-family,system-ui);color:var(--vscode-foreground,#24292f);background:var(--vscode-editor-background,#fff);padding:20px;line-height:1.45}h1{font-size:22px}h2{font-size:17px;margin:0 0 4px}section{border-top:1px solid var(--vscode-panel-border,#d0d7de);padding:18px 0}.muted{color:var(--vscode-descriptionForeground,#57606a)}.legend{display:flex;gap:16px;flex-wrap:wrap;margin:12px 0}.legend span{display:flex;align-items:center;gap:6px}.legend i{width:10px;height:10px;border-radius:2px}svg{display:block;width:100%;max-width:920px;height:auto;border:1px solid var(--vscode-panel-border,#d0d7de);background:var(--vscode-editor-background,#fff)}svg text{font-size:11px;fill:var(--vscode-descriptionForeground,#57606a)}.grid{stroke:var(--vscode-panel-border,#d0d7de);stroke-width:1}.table-wrap{overflow:auto;margin-top:12px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{text-align:left;border-bottom:1px solid var(--vscode-panel-border,#d0d7de);padding:7px 8px;white-space:nowrap}code{font-family:var(--vscode-editor-font-family,monospace)}</style></head><body><h1>${escapeHtml(labels.title)}</h1><p class="muted">${escapeHtml(labels.bounded)}</p>${sections || `<p>${escapeHtml(labels.empty)}</p>`}<h2>${escapeHtml(labels.limitations)}</h2><ul>${(trend.limitations || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></body></html>`;
+}
+
+function writeDevicePerformanceTrend(buildRoot, trend, html) {
+  const directory = path.resolve(buildRoot, "performance", "trends");
+  fs.mkdirSync(directory, { recursive: true });
+  const name = safeName(trend.app?.key, "app");
+  const jsonPath = path.join(directory, `${name}.device-trend.json`);
+  const htmlPath = path.join(directory, `${name}.device-trend.html`);
+  writeJson(jsonPath, trend);
+  fs.writeFileSync(htmlPath, html, "utf8");
+  return { json: jsonPath, html: htmlPath };
+}
+
 module.exports = {
   HISTORY_FORMAT,
   HISTORY_LIMIT,
   MAX_INPUT_BYTES,
   SESSION_FORMAT,
+  TREND_FORMAT,
   appKeyForRoot,
   artifactKind,
   createPerformanceSession,
@@ -512,5 +699,8 @@ module.exports = {
   performanceInputsFromPaths,
   performanceProfile,
   comparePerformanceProfiles,
-  readPerformanceHistory
+  readPerformanceHistory,
+  buildDevicePerformanceTrend,
+  renderDevicePerformanceTrendHtml,
+  writeDevicePerformanceTrend
 };

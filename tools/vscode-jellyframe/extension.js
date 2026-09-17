@@ -37,13 +37,16 @@ const {
 const { parseRenderTrace, renderTraceHtml } = require("./render_trace_viewer");
 const {
   appKeyForRoot,
+  buildDevicePerformanceTrend,
   createPerformanceSession,
   defaultArtifactPaths,
   discoverPerformanceArtifacts,
   finalizePerformanceSession,
   historyFiles,
   performanceInputsFromPaths,
-  readPerformanceHistory
+  readPerformanceHistory,
+  renderDevicePerformanceTrendHtml,
+  writeDevicePerformanceTrend
 } = require("./performance_sessions");
 const {
   appFiles,
@@ -56,6 +59,7 @@ const { attributeDiagnostic } = require("./visual_editor_diagnostics");
 let outputChannel;
 let reportPanel;
 let tracePanel;
+let performanceTrendPanel;
 let capabilityDiagnostics;
 let lastReport;
 let lastReportCommand;
@@ -2270,6 +2274,39 @@ async function openPerformanceHistory(context, resourceUri) {
   }
 }
 
+async function openDevicePerformanceTrend(context, resourceUri) {
+  const root = await packageRoot(resourceUri);
+  if (!root) return;
+  const build = buildDir(context);
+  const history = readPerformanceHistory(build);
+  const trend = buildDevicePerformanceTrend(history, appKeyForRoot(root), new Date(), build);
+  if (!trend.series.length) {
+    vscode.window.showInformationMessage(isChinese()
+      ? "尚无至少两个身份一致的设备性能会话，无法生成趋势。"
+      : "At least two identity-compatible device performance sessions are required for a trend.");
+    return;
+  }
+  const rendered = renderDevicePerformanceTrendHtml(trend, isChinese());
+  const files = writeDevicePerformanceTrend(build, trend, rendered);
+  if (!performanceTrendPanel) {
+    performanceTrendPanel = vscode.window.createWebviewPanel(
+      "jellyframeDevicePerformanceTrend",
+      isChinese() ? "JellyFrame 设备性能趋势" : "JellyFrame Device Performance Trends",
+      vscode.ViewColumn.Beside,
+      { enableScripts: false }
+    );
+    performanceTrendPanel.iconPath = vscode.Uri.joinPath(context.extensionUri, "media", "jellyframe.png");
+    performanceTrendPanel.onDidDispose(() => {
+      performanceTrendPanel = undefined;
+    }, null, context.subscriptions);
+  }
+  performanceTrendPanel.webview.html = rendered;
+  performanceTrendPanel.reveal(vscode.ViewColumn.Beside);
+  ensureOutputChannel().appendLine(isChinese()
+    ? `设备性能趋势已更新：${files.json}`
+    : `Device performance trend updated: ${files.json}`);
+}
+
 async function previewPackage(context, resourceUri) {
   const root = await packageRoot(resourceUri);
   if (!root) {
@@ -3712,6 +3749,7 @@ class JellyFrameStatusProvider {
       openRenderTrace: "打开渲染性能 Trace",
       performanceReport: "生成性能报告",
       performanceHistory: "打开性能历史",
+      performanceTrend: "打开设备性能趋势",
       showOutput: "查看运行日志",
       reportReady: "报告已生成",
       noReport: "尚未生成报告",
@@ -3816,6 +3854,7 @@ class JellyFrameStatusProvider {
       openRenderTrace: "Open Render Performance Trace",
       performanceReport: "Generate Performance Report",
       performanceHistory: "Open Performance History",
+      performanceTrend: "Open Device Performance Trends",
       showOutput: "View run log",
       reportReady: "Report ready",
       noReport: "No report yet",
@@ -3885,6 +3924,7 @@ class JellyFrameStatusProvider {
         ...(lastTracePath ? [this.commandItem(labels.openRenderTrace, path.basename(lastTracePath), "jellyframe.openRenderTrace", "graph-line")] : []),
         ...(hasPackage ? [this.commandItem(labels.performanceReport, labels.performanceReport, "jellyframe.performanceReport", "dashboard")] : []),
         ...(hasPackage ? [this.commandItem(labels.performanceHistory, labels.performanceHistory, "jellyframe.performanceHistory", "history")] : []),
+        ...(hasPackage ? [this.commandItem(labels.performanceTrend, labels.performanceTrend, "jellyframe.performanceTrend", "graph")] : []),
         this.commandItem(labels.showOutput, chinese ? "打开 JellyFrame 命令与运行日志。" : "Open JellyFrame command and runtime logs.", "jellyframe.showOutput", "output"),
         this.statusItem(chinese ? "管线诊断" : "Pipeline diagnostics", labels.diagnostics, labels.diagnostics, "pulse"),
         this.statusItem(labels.performance, hasRenderData && performance?.rating ? `${labels.measured}: ${performance.rating}` : labels.notMeasured,
@@ -4565,6 +4605,7 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.openRenderTrace", () => openRenderTrace(context)),
     vscode.commands.registerCommand("jellyframe.performanceReport", (resourceUri) => generatePerformanceReport(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.performanceHistory", (resourceUri) => openPerformanceHistory(context, resourceUri)),
+    vscode.commands.registerCommand("jellyframe.performanceTrend", (resourceUri) => openDevicePerformanceTrend(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.listBuilds", () => listBuilds(context)),
     vscode.commands.registerCommand("jellyframe.setupDesktopBuild", () => {
       const root = currentPackageRoot();

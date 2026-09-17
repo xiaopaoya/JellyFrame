@@ -5,7 +5,10 @@ const path = require("path");
 const {
   HISTORY_LIMIT,
   SESSION_FORMAT,
+  TREND_FORMAT,
+  appKeyForRoot,
   artifactKind,
+  buildDevicePerformanceTrend,
   createPerformanceSession,
   defaultArtifactPaths,
   discoverPerformanceArtifacts,
@@ -14,7 +17,9 @@ const {
   comparePerformanceProfiles,
   performanceProfile,
   performanceInputsFromPaths,
-  readPerformanceHistory
+  readPerformanceHistory,
+  renderDevicePerformanceTrendHtml,
+  writeDevicePerformanceTrend
 } = require("../../tools/vscode-jellyframe/performance_sessions");
 
 function write(filePath, contents) {
@@ -143,6 +148,26 @@ function main() {
     const runtimeEntry = finalizePerformanceSession(runtimeCandidate, { success: true });
     assert(runtimeEntry.comparison, "a Runtime/Core version change is comparable even when the App commit is unchanged");
 
+    const trend = buildDevicePerformanceTrend(
+      readPerformanceHistory(build), appKeyForRoot(app), new Date("2026-09-17T17:00:00.000Z")
+    );
+    assert.equal(trend.format, TREND_FORMAT);
+    assert.equal(trend.series.length, 1);
+    assert.equal(trend.series[0].points.length, 3);
+    assert.equal(trend.series[0].identity.viewport, "172x320");
+    const trendHtml = renderDevicePerformanceTrendHtml(trend, false);
+    assert(trendHtml.includes("Device Performance Trends"));
+    assert(trendHtml.includes("embedded-ui-scroll"));
+    assert(!trendHtml.includes("<script"));
+    const trendFiles = writeDevicePerformanceTrend(build, trend, trendHtml);
+    assert(fs.existsSync(trendFiles.json));
+    assert(fs.existsSync(trendFiles.html));
+    const legacyHistory = readPerformanceHistory(build);
+    delete legacyHistory.sessions[0].performanceProfile;
+    assert.equal(buildDevicePerformanceTrend(
+      legacyHistory, appKeyForRoot(app), new Date("2026-09-17T17:00:00.000Z"), build
+    ).series[0].points.length, 3, "legacy history can rebuild a bounded profile from its archived report");
+
     const incompatibleAbi = createPerformanceSession({
       buildRoot: build,
       appRoot: app,
@@ -155,6 +180,8 @@ function main() {
     write(incompatibleAbi.htmlOutput, "<!doctype html>");
     assert.equal(finalizePerformanceSession(incompatibleAbi, { success: true }).comparison, undefined,
       "different Render Core ABIs are never compared");
+    assert.equal(buildDevicePerformanceTrend(readPerformanceHistory(build), appKeyForRoot(app)).series.length, 1,
+      "a one-point incompatible ABI series is omitted");
 
     const mismatched = JSON.parse(JSON.stringify(candidateReport));
     mismatched.deviceTelemetry[0].identity.case = "embedded-ui-static";
@@ -176,6 +203,72 @@ function main() {
     delete desktopCandidate.metadata.appId;
     assert.equal(performanceProfile(desktopCandidate).sources.length, 0,
       "desktop traces without complete workload identity are not compared");
+
+    const escaped = renderDevicePerformanceTrendHtml({
+      historyLimit: 20,
+      limitations: [],
+      series: [{
+        workload: "<script>alert(1)</script>",
+        identity: { profile: "p", board: "b", viewport: "1x1" },
+        renderCoreAbi: "1",
+        points: [
+          { sessionId: "one", createdAt: "2026-01-01", metrics: { frameP95Us: 1 } },
+          { sessionId: "two", createdAt: "2026-01-02", metrics: { frameP95Us: 2 } }
+        ]
+      }]
+    });
+    assert(!escaped.includes("<script>alert"), "trend HTML escapes workload identity");
+
+    const legacySourceHistory = {
+      sessions: [
+        {
+          id: "legacy-one",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          status: "complete",
+          app: { key: appKeyForRoot(app) },
+          runtime: { renderCoreAbi: 1 },
+          performanceProfile: { sources: [{
+            kind: "deviceTelemetry",
+            key: "device|legacy-scroll|ws147-v0|ws147|172x320",
+            label: "legacy-scroll",
+            metrics: { frameP95Us: 12000, paintP95Us: 7000 }
+          }] }
+        },
+        {
+          id: "legacy-two",
+          createdAt: "2026-01-02T00:00:00.000Z",
+          status: "complete",
+          app: { key: appKeyForRoot(app) },
+          runtime: { renderCoreAbi: 1 },
+          performanceProfile: { sources: [{
+            kind: "deviceTelemetry",
+            key: "device|legacy-scroll|ws147-v0|ws147|172x320",
+            label: "legacy-scroll",
+            metrics: { frameP95Us: 11000 }
+          }] }
+        },
+        {
+          id: "missing-abi",
+          createdAt: "2026-01-03T00:00:00.000Z",
+          status: "complete",
+          app: { key: appKeyForRoot(app) },
+          runtime: {},
+          performanceProfile: { sources: [{
+            kind: "deviceTelemetry",
+            key: "device|legacy-scroll|ws147-v0|ws147|172x320",
+            label: "legacy-scroll",
+            metrics: { frameP95Us: 1 }
+          }] }
+        }
+      ]
+    };
+    const legacyTrend = buildDevicePerformanceTrend(legacySourceHistory, appKeyForRoot(app));
+    assert.equal(legacyTrend.series.length, 1, "legacy device source keys recover their workload identity");
+    assert.equal(legacyTrend.series[0].points.length, 2, "sessions without an explicit ABI are rejected");
+    assert.equal(legacyTrend.series[0].points[1].metrics.paintP95Us, undefined,
+      "missing metrics remain gaps instead of becoming zero");
+    assert(!renderDevicePerformanceTrendHtml(legacyTrend).includes("Paint p95: 0.00ms"),
+      "missing metrics are not rendered as zero-valued points");
 
     for (let index = 0; index < HISTORY_LIMIT + 3; ++index) {
       const session = createPerformanceSession({

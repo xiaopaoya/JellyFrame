@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.63",
+  "version": "0.4.64",
   "publisher": "jellyframe",
   "icon": "media/jellyframe.png",
   "repository": {
@@ -27,6 +27,7 @@
     "onCommand:jellyframe.openRenderTrace",
     "onCommand:jellyframe.performanceReport",
     "onCommand:jellyframe.performanceHistory",
+    "onCommand:jellyframe.performanceTrend",
     "onCommand:jellyframe.listBuilds",
     "onCommand:jellyframe.setupDesktopBuild",
     "onCommand:jellyframe.package",
@@ -99,6 +100,11 @@
         "command": "jellyframe.performanceHistory",
         "title": "%command.performanceHistory%",
         "icon": "$(history)"
+      },
+      {
+        "command": "jellyframe.performanceTrend",
+        "title": "%command.performanceTrend%",
+        "icon": "$(graph)"
       },
       {
         "command": "jellyframe.listBuilds",
@@ -298,6 +304,10 @@
           "group": "report@2"
         },
         {
+          "command": "jellyframe.performanceTrend",
+          "group": "report@3"
+        },
+        {
           "command": "jellyframe.showOutput",
           "group": "report@4"
         },
@@ -379,8 +389,12 @@
           "group": "report@3"
         },
         {
-          "command": "jellyframe.showOutput",
+          "command": "jellyframe.performanceTrend",
           "group": "report@4"
+        },
+        {
+          "command": "jellyframe.showOutput",
+          "group": "report@5"
         }
       ],
       "jellyframe.editorActions": [
@@ -426,8 +440,12 @@
           "group": "report@3"
         },
         {
-          "command": "jellyframe.showOutput",
+          "command": "jellyframe.performanceTrend",
           "group": "report@4"
+        },
+        {
+          "command": "jellyframe.showOutput",
+          "group": "report@5"
         }
       ],
       "view/title": [
