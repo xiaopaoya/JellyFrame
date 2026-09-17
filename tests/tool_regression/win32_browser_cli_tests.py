@@ -115,6 +115,7 @@ def write_jfapp(
     summary_text: str | None = None,
     capabilities: list[object] | None = None,
     network_allowed: bool | None = None,
+    fonts: list[dict] | None = None,
 ) -> None:
     declared_capabilities = capabilities or []
     projected_network_allowed = (
@@ -133,7 +134,7 @@ def write_jfapp(
             "script": "classic",
             "viewport": {"designWidth": 172, "designHeight": 320},
             "budgets": {"maxResourceBytes": 65536},
-            "fonts": [],
+            "fonts": fonts or [],
             "targets": {"test": {"viewport": {"width": 172, "height": 320}, "output": "jfapp"}},
             "permissions": [],
             "capabilities": declared_capabilities,
@@ -859,6 +860,30 @@ def main() -> int:
                 "native loader must reject a non-normalized summary entry path")
         require("entry must be a normalized absolute app path" in entry_result.stdout,
                 "native entry rejection must name the malformed summary field")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-summary-font-license-") as directory:
+        bundle = Path(directory) / "font-license.jfapp"
+        write_jfapp(
+            bundle,
+            "org.jellyframe.font-license-probe",
+            1,
+            "1.0.0",
+            "/index.html",
+            fonts=[{
+                "family": "Jelly Probe",
+                "id": "probe",
+                "license": {"name": "Probe License", "source": "sources/probe.bdf"},
+                "profile": "app-subset-cn",
+                "sizes": [16],
+                "source": "/fonts/probe.jffont",
+                "weights": [400],
+            }],
+        )
+        font_result = run_case(exe, ["--registry-store", str(Path(directory) / "store"),
+                                     "--install-bundle", str(bundle)])
+        require(font_result.returncode == 0,
+                "native loader must read fonts[].source without confusing nested license.source: " +
+                font_result.stdout)
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-install-candidate-") as directory:
         root = Path(directory)

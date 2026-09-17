@@ -11,7 +11,7 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 ## 功能
 
 - 为 `jellyframe.app.json` 关联 JSON schema。
-- 命令面板提供“验证 App 包结构”“检查 App 包渲染”“预览”、VS Code 内嵌调试、外部窗口调试、frame script 回放、打开截图和生成 package。
+- 命令面板提供“验证 App 包结构”“检查 App 包渲染”“预览”、VS Code 内嵌调试、外部窗口调试、frame script 回放、打开截图、生成性能报告和生成 package。
 - 可从内置 blank、weather、clock、timer 和 calculator 模板创建 app。
 - 提供受 JellyFrame 能力约束的可视化 App 编辑器，支持拖放布局、属性编辑、可读
   HTML/CSS 生成，并可直接转入桌面壳调试。
@@ -31,6 +31,8 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
   选中异常帧后还会显示触发阈值与当前值、最耗时阶段、最耗时命令、脏区重绘证据中累计耗时最高的
   归因对象，以及相对上一帧增长最大的命令。这些是性能相关性和空间重叠证据，不是 DOM 变更根因；
   缺失、截断或部分计时会在限制中明确显示。
+- “生成性能报告”会将 App 报告、Render Trace、设备 telemetry 和 microbench（均可选）合并为
+  独立 JSON/HTML；缺失的数据会明确显示为不可用，不会把桌面耗时当成设备 FPS。
 - 对 app 作者建议、package warnings 和管线 diagnostics 提供 inline diagnostics。
 - Explorer 中的 JellyFrame 状态视图显示当前 app、构建目录、报告诊断和性能摘要。
 - 首次配置作者环境时选择已安装的 JellyFrame SDK，独立 App 工作区随后可直接使用。
@@ -101,6 +103,14 @@ SDK 安装不会覆盖已有目录；Windows 的短暂权限或文件占用会�
 “检查 App 渲染”会先做同样的结构验证，再从仓库 preset 和当前 App manifest 已声明 target 中选择目标 profile，运行 Render Core 预检、响应式布局和字体检查；
 该入口还可以附加 `.jfcapture` 程控回放，把静态管线诊断和多页面交互路径合并到一份报告。
 需要查看实际画面或手动交互时，请使用“预览”或桌面调试。
+
+当 manifest `fonts[]` 已声明 `.jffont`，但源 App 中缺少对应文件时，“检查 App 渲染”、
+“生成资源包”、“预览 App”和“打包并部署 App”会询问是否从已授权 BDF 自动生成并导入。
+插件会先选择目标字体（多个缺失条目时），再只允许选择 `.bdf` 文件，并把
+`--font-source-bdf` / `--font-resource-id` 传给统一 CLI 流程。独立的
+“生成并导入缺失字体”命令会生成可安装 `.jfapp` 和报告；源 manifest 与 App 目录不会被改写。
+缺少 `license.name` / `license.source` 时操作会中止并提供打开 manifest 的入口；插件不会下载
+或擅自打包系统字体。
 
 `JellyFrame` 活动栏视图只使用一层顶级分区；每个 App 操作、构建状态和设备状态直接显示在对应分区下，
 避免 VS Code 树控件的多层缩进造成层级误读。命令以图标和功能提示表示，构建、设备与报告结果则为只读状态，避免混淆。它不依赖当前是否打开编辑器

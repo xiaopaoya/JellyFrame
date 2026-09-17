@@ -347,26 +347,28 @@ and records the plan in the JSON report:
 }
 ```
 
-When a licensed BDF bitmap font is available, the same preflight can generate a
-`.jffont` supplement:
+When a licensed BDF bitmap font is available, first declare the target
+`.jffont`, family, profile, axes and license metadata in manifest `fonts[]`.
+Even when that file is absent from the source tree, the same preflight can
+generate and package it:
 
 ```powershell
-python tools\jellyframe_cli.py check `
+python tools\jellyframe_cli.py package `
   --root samples\apps\packages\jelly_font_policy `
   --target round-300 `
   --report build\font_policy.report.json `
+  --output-bundle build\font_policy.jfapp `
   --font-source-bdf src\render_core\samples\fonts\bitmap\tiny.bdf `
-  --font-output build\font_policy.generated.jffont `
   --font-coverage-bits 2 `
   --font-allow-missing
 ```
 
-The generated `.jffont` is not injected into the source package automatically.
-To use it at runtime, copy or write it into the app directory and declare it in
-`jellyframe.app.json` `fonts[]` with `id`, `source`, `profile`, `family` and
-license metadata. This explicit step is intentional: the app author must own
-font source and redistribution decisions, and the tool should not silently ship
-third-party font data.
+The generated `.jffont` is written to the bundle's declared `fonts[].source`
+through a temporary package overlay, without modifying the source package. Use
+`--font-resource-id` when several declared fonts are missing, or `--font-output`
+when a persistent generated artifact is also required. The app author still
+owns font source and redistribution decisions; the tool does not download fonts
+or silently ship system/third-party font data without license metadata.
 
 Built-in target presets live under `tools/presets/targets`. List them with:
 

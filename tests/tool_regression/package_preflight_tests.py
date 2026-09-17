@@ -6,12 +6,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 import jellyframe_cli  # noqa: E402
+import app_registry  # noqa: E402
 import package_app  # noqa: E402
 
 
@@ -2135,6 +2137,78 @@ class PackagePreflightTests(unittest.TestCase):
 
         self.assertEqual(package_app.normalized_int_list([8, True, "12", 16], 1), [8, 16])
         self.assertEqual(package_app.normalized_int_list([400, 1200], 1, 1000), [400])
+
+    def test_external_jffont_overlay_is_packaged_at_declared_manifest_source(self):
+        sample_font = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy" / "fonts" / "tiny_cn.jffont"
+        with tempfile.TemporaryDirectory(prefix="jellyframe-font-overlay-") as directory:
+            root = Path(directory)
+            sample_root = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy"
+            manifest = package_app.validate_manifest(package_app.read_manifest(sample_root))
+            manifest["id"] = "org.example.font-overlay"
+            manifest["fonts"] = [{
+                "id": "generated-cn",
+                "source": "/fonts/generated_cn.jffont",
+                "profile": "app-subset-cn",
+                "family": "Generated CN",
+                "license": {"name": "Test font", "source": "test-font.bdf"},
+                "sizes": [16],
+                "weights": [400],
+            }]
+            resources, imports = package_app.apply_imported_font_resources(
+                [], manifest, [f"/fonts/generated_cn.jffont={sample_font}"], 4096)
+            bundle_path = root / "font-overlay.jfapp"
+            package_app.write_jfapp_bundle(bundle_path, manifest, resources)
+            parsed = app_registry.parse_jfapp(bundle_path.read_bytes())
+
+            self.assertEqual(len(imports), 1)
+            self.assertEqual(resources[0]["path"], "/fonts/generated_cn.jffont")
+            self.assertEqual(resources[0]["kind"], "jellyframe::HostResourceKind::Font")
+            self.assertFalse((root / "fonts" / "generated_cn.jffont").exists())
+            self.assertEqual(parsed["summary"]["fonts"][0]["source"], "/fonts/generated_cn.jffont")
+            self.assertEqual(parsed["resourceCount"], 1)
+            self.assertIn(b"/fonts/generated_cn.jffont", bundle_path.read_bytes())
+
+    def test_external_jffont_overlay_rejects_undeclared_or_occupied_paths(self):
+        sample_font = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy" / "fonts" / "tiny_cn.jffont"
+        manifest = {"fonts": [{"source": "/fonts/declared.jffont"}]}
+        with self.assertRaises(SystemExit):
+            package_app.apply_imported_font_resources(
+                [], manifest, [f"/fonts/other.jffont={sample_font}"], 4096)
+        with self.assertRaises(SystemExit):
+            package_app.apply_imported_font_resources(
+                [{"path": "/fonts/declared.jffont"}],
+                manifest,
+                [f"/fonts/declared.jffont={sample_font}"],
+                4096,
+            )
+
+    def test_generated_font_target_requires_unique_licensed_missing_manifest_entry(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-font-target-") as directory:
+            root = Path(directory)
+            manifest_path = root / "jellyframe.app.json"
+            manifest_path.write_text(json.dumps({
+                "fonts": [{
+                    "id": "generated-cn",
+                    "source": "/fonts/generated_cn.jffont",
+                    "profile": "app-subset-cn",
+                    "license": {"name": "Test font", "source": "test-font.bdf"},
+                }],
+            }), encoding="utf-8")
+            args = SimpleNamespace(
+                root=root,
+                font_source_bdf=Path("test-font.bdf"),
+                font_resource_id=None,
+                font_output=None,
+            )
+
+            target = jellyframe_cli.select_generated_font_target(args)
+            staged = jellyframe_cli.staged_generated_font_path(args, target)
+
+            self.assertEqual(target["id"], "generated-cn")
+            self.assertEqual(staged.name, "generated_cn.jffont")
+            self.assertFalse((root / "fonts" / "generated_cn.jffont").exists())
+            for path in args._temporary_paths:
+                package_app.shutil.rmtree(path, ignore_errors=True)
 
     def test_package_background_image_diagnostics_match_the_bounded_css_subset(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-background-image-") as directory:

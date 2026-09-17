@@ -149,6 +149,17 @@ also offers optional `.jfcapture` programmed playback, merging the static
 pipeline diagnostics with a multi-page interaction path. Use Preview or desktop
 debugging for the actual image and interactive behavior.
 
+When manifest `fonts[]` declares a `.jffont` that is absent from the source App,
+Check App Rendering, Generate Resource Package, Preview App, and Package and
+Deploy App offer to generate and import it from a licensed BDF. The extension
+selects the target font when several declarations are missing, accepts only a
+`.bdf` file, and forwards `--font-source-bdf` / `--font-resource-id` to the
+shared CLI path. The separate `Generate and Import Missing Fonts` command emits
+an installable `.jfapp` and report without modifying the source manifest or App
+directory. Missing `license.name` / `license.source` stops the operation and
+offers to open the manifest; the extension does not download or silently bundle
+system fonts.
+
 The `JellyFrame` Activity Bar uses one level of top-level sections. Each App action, build status and device status appears directly below its section, avoiding misleading multi-level indentation in VS Code's native tree control.
 Commands have icons and functional tooltips; build, device and report results remain read-only status entries.
 It is always contributed, including when no workspace file is open. After

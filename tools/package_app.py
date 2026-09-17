@@ -2254,6 +2254,63 @@ def discover_resources(root: Path, max_resource_bytes: int) -> list[dict]:
     return resources
 
 
+def apply_imported_font_resources(resources: list[dict],
+                                  manifest: dict,
+                                  imports: list[str],
+                                  max_resource_bytes: int) -> tuple[list[dict], list[dict]]:
+    if not imports:
+        return resources, []
+    declared_sources = {
+        font.get("source", "")
+        for font in manifest.get("fonts", [])
+        if isinstance(font, dict)
+    }
+    resources_by_path = {resource["path"]: resource for resource in resources}
+    diagnostics = []
+    for value in imports:
+        if "=" not in value:
+            fail("--import-font-resource must use APP_PATH=HOST_PATH")
+        app_path_value, host_path_value = value.split("=", 1)
+        app_path = normalize_app_path(app_path_value)
+        host_path = Path(host_path_value)
+        if app_path not in declared_sources:
+            fail(f"imported font path is not declared in manifest fonts[]: {app_path}")
+        if app_path in resources_by_path:
+            fail(f"imported font path is already occupied by a package resource: {app_path}")
+        if host_path.is_symlink():
+            fail(f"imported font must not be a symlink: {host_path}")
+        host_path = host_path.resolve()
+        if host_path.suffix.lower() != ".jffont":
+            fail(f"imported font must use the .jffont runtime format: {host_path}")
+        if not host_path.is_file():
+            fail(f"imported font does not exist: {host_path}")
+        data = host_path.read_bytes()
+        parsed = parse_jffont(data)
+        if not parsed.get("ok"):
+            fail(f"imported font is not a valid .jffont resource: {host_path} ({parsed.get('error', 'invalid')})")
+        if max_resource_bytes > 0 and len(data) > max_resource_bytes:
+            fail(f"imported font exceeds maxResourceBytes: {app_path} ({len(data)} bytes)")
+        resource = {
+            "path": app_path,
+            "file": host_path,
+            "kind": "jellyframe::HostResourceKind::Font",
+            "size": len(data),
+            "crc32": f"{zlib.crc32(data) & 0xffffffff:08x}",
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "relativeFile": app_path.lstrip("/"),
+            "generated": True,
+            "imported": True,
+        }
+        resources_by_path[app_path] = resource
+        diagnostics.append({
+            "path": app_path,
+            "hostPath": str(host_path),
+            "size": len(data),
+            "sha256": resource["sha256"],
+        })
+    return sorted(resources_by_path.values(), key=lambda item: item["path"]), diagnostics
+
+
 def collect_resource_budget_warnings(resources: list[dict], budgets: dict) -> list[dict]:
     limit = int_field(budgets, "maxResourceBytes", 0)
     used = sum(resource["size"] for resource in resources)
@@ -2896,6 +2953,8 @@ def main() -> int:
                         help="Compile statically referenced restricted SVG icons to package-local BMP resources.")
     parser.add_argument("--svg-raster-size", type=int, default=32,
                         help="Maximum generated SVG BMP dimension in pixels (1..256, default: 32).")
+    parser.add_argument("--import-font-resource", action="append", default=[], metavar="APP_PATH=HOST_PATH",
+                        help="Package an external .jffont at a path already declared in manifest fonts[].")
     args = parser.parse_args()
     if args.rasterize_svg and not 1 <= args.svg_raster_size <= 256:
         fail("--svg-raster-size must be between 1 and 256")
@@ -2916,6 +2975,8 @@ def main() -> int:
     budgets = effective_budgets(manifest, target_config)
     max_resource_bytes = int_field(budgets, "maxResourceBytes", 0)
     resources = discover_resources(root, max_resource_bytes)
+    resources, imported_font_resources = apply_imported_font_resources(
+        resources, manifest, args.import_font_resource, max_resource_bytes)
     svg_staging = tempfile.TemporaryDirectory(prefix="jellyframe-static-svg-")
     resources, svg_diagnostics, svg_warnings = apply_static_svg_rasterization(
         resources, Path(svg_staging.name), max_resource_bytes, args.rasterize_svg, args.svg_raster_size)
@@ -2982,6 +3043,7 @@ def main() -> int:
         "imageDiagnostics": image_diagnostics,
         "backgroundImageDiagnostics": background_image_diagnostics,
         "fontDiagnostics": font_diagnostics,
+        "importedFontResources": imported_font_resources,
         "runtimeBudgetEstimate": collect_runtime_budget_estimate(resources, budgets, font_diagnostics),
         "warnings": warnings,
     }

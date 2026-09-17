@@ -176,6 +176,20 @@ The manifest is part of the app, not boilerplate.
 - If CSS uses a custom `font-family`, add a matching `.jffont` manifest entry or
   use `system-ui`/`sans-serif`.
 
+## Packaging Missing Fonts
+
+During `package`, `preview`, or a source-package `install`, the tool can subset a licensed BDF font to the App's actual characters and include it automatically. First declare the target `.jffont` in manifest `fonts[]`, including `id`, `source`, `profile`, `family`, `sizes`, `weights`, and complete `license.name` / `license.source` metadata. The declared `.jffont` may still be absent from the source directory. Then run:
+
+```powershell
+python tools\jellyframe_cli.py package `
+  --root path\to\app `
+  --report build\app.report.json `
+  --output-bundle build\app.jfapp `
+  --font-source-bdf path\to\licensed-font.bdf
+```
+
+The tool generates a temporary `.jffont` from the scanned `*.used_chars.txt`, revalidates glyph coverage, font budgets and the manifest, and writes it to the declared `fonts[].source` inside the bundle. It does not modify the source manifest or App directory. Add `--font-resource-id <id>` when multiple declared fonts are missing, and use `--font-output` only when a persistent generated artifact is also needed. The tool does not download fonts or redistribute system fonts without declared license metadata.
+
 ## Small-Screen Layout Recipes
 
 Good defaults for wearable apps:

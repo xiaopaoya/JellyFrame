@@ -93,7 +93,8 @@ python tools\jellyframe_cli.py doctor `
 汇总行会输出 `measured=`，方便审阅者区分纯静态预检与已经合并 Win32/实机证据的报告。
 
 需要比较多次采样时，可使用 `render_performance_report.py` 生成统一 JSON 和可打开的
-HTML 汇总：
+HTML 汇总。VS Code 扩展中的“生成性能报告”提供同一流程的图形入口，可选择 App 报告、
+Render Trace、设备 telemetry 和 microbench；所有设备数据仍保持 aggregate 语义：
 
 ```powershell
 python tools\render_performance_report.py `
@@ -160,6 +161,20 @@ Manifest 不是样板文件，而是 app 契约的一部分。
 - 预算要真实。没有测量就提高预算，通常只是把失败挪到设备上。
 - CSS 使用自定义 `font-family` 时，要么添加匹配 family 的 `.jffont` manifest 条目，要么使用
   `system-ui` / `sans-serif`。
+
+## 打包缺失字体
+
+运行 `package`、`preview` 或源码包 `install` 时，可以让工具把有授权的 BDF 字体按 App 实际字符裁剪并自动放入安装包。先在 manifest `fonts[]` 声明目标 `.jffont` 的 `id`、`source`、`profile`、`family`、`sizes`、`weights`，以及完整的 `license.name` / `license.source`；源目录中可以暂时没有该 `.jffont`。然后运行：
+
+```powershell
+python tools\jellyframe_cli.py package `
+  --root path\to\app `
+  --report build\app.report.json `
+  --output-bundle build\app.jfapp `
+  --font-source-bdf path\to\licensed-font.bdf
+```
+
+工具会使用扫描出的 `*.used_chars.txt` 生成临时 `.jffont`，复验 glyph、字体预算和 manifest，再把它写到 bundle 中声明的 `fonts[].source`。源 manifest 和 App 目录不会被改写。存在多个缺失字体时增加 `--font-resource-id <id>`；需要保留生成文件时再指定 `--font-output`。工具不会自动下载字体，也不会打包未声明授权信息的系统字体。
 
 ## 小屏布局 recipes
 

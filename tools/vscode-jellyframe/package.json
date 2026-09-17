@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.57",
+  "version": "0.4.59",
   "publisher": "jellyframe",
   "icon": "media/jellyframe.png",
   "repository": {
@@ -23,11 +23,13 @@
     "onCommand:jellyframe.debug",
     "onCommand:jellyframe.debugExternal",
     "onCommand:jellyframe.runFrameScript",
-    "onCommand:jellyframe.openCapture",
-    "onCommand:jellyframe.openRenderTrace",
-    "onCommand:jellyframe.listBuilds",
+      "onCommand:jellyframe.openCapture",
+      "onCommand:jellyframe.openRenderTrace",
+      "onCommand:jellyframe.performanceReport",
+      "onCommand:jellyframe.listBuilds",
     "onCommand:jellyframe.setupDesktopBuild",
     "onCommand:jellyframe.package",
+    "onCommand:jellyframe.packageMissingFonts",
     "onCommand:jellyframe.newFromTemplate",
     "onCommand:jellyframe.visualEditor",
     "onCommand:jellyframe.showReport",
@@ -88,6 +90,11 @@
         "icon": "$(graph-line)"
       },
       {
+        "command": "jellyframe.performanceReport",
+        "title": "%command.performanceReport%",
+        "icon": "$(dashboard)"
+      },
+      {
         "command": "jellyframe.listBuilds",
         "title": "%command.listBuilds%",
         "icon": "$(list-tree)"
@@ -101,6 +108,11 @@
         "command": "jellyframe.package",
         "title": "%command.package%",
         "icon": "$(package)"
+      },
+      {
+        "command": "jellyframe.packageMissingFonts",
+        "title": "%command.packageMissingFonts%",
+        "icon": "$(symbol-file)"
       },
       {
         "command": "jellyframe.newFromTemplate",
@@ -231,12 +243,16 @@
           "group": "package@4"
         },
         {
-          "command": "jellyframe.newFromTemplate",
+          "command": "jellyframe.packageMissingFonts",
           "group": "package@5"
         },
         {
+          "command": "jellyframe.newFromTemplate",
+          "group": "package@6"
+        },
+        {
           "command": "jellyframe.visualEditor",
-          "group": "package@6",
+          "group": "package@7",
           "when": "jellyframe.visualEditorEligible"
         },
         {
@@ -268,8 +284,12 @@
           "group": "report@0"
         },
         {
+          "command": "jellyframe.performanceReport",
+          "group": "report@1"
+        },
+        {
           "command": "jellyframe.showOutput",
-          "group": "report@2"
+          "group": "report@3"
         },
         {
           "command": "jellyframe.deviceDiscover",
@@ -320,8 +340,12 @@
           "group": "package@4"
         },
         {
+          "command": "jellyframe.packageMissingFonts",
+          "group": "package@5"
+        },
+        {
           "command": "jellyframe.visualEditor",
-          "group": "package@5",
+          "group": "package@6",
           "when": "jellyframe.visualEditorEligible"
         },
         {
@@ -337,8 +361,12 @@
           "group": "report@1"
         },
         {
-          "command": "jellyframe.showOutput",
+          "command": "jellyframe.performanceReport",
           "group": "report@2"
+        },
+        {
+          "command": "jellyframe.showOutput",
+          "group": "report@3"
         }
       ],
       "jellyframe.editorActions": [
@@ -376,8 +404,12 @@
           "group": "report@1"
         },
         {
-          "command": "jellyframe.showOutput",
+          "command": "jellyframe.performanceReport",
           "group": "report@2"
+        },
+        {
+          "command": "jellyframe.showOutput",
+          "group": "report@3"
         }
       ],
       "view/title": [

@@ -269,23 +269,24 @@ CLI 的 `check`、`package`、`preview` 和源码包 `install` 默认使用 `--f
 }
 ```
 
-如果已有授权 BDF bitmap font，可以让 CLI 在同一次预检中生成 `.jffont`：
+如果已有授权 BDF bitmap font，先在 manifest `fonts[]` 中声明目标 `.jffont`、family、profile、
+axis 和授权信息；即使源目录中还没有该文件，CLI 也可以在同一次预检中生成并打包它：
 
 ```powershell
-python tools\jellyframe_cli.py check `
+python tools\jellyframe_cli.py package `
   --root samples\apps\packages\jelly_font_policy `
   --target round-300 `
   --report build\font_policy.report.json `
+  --output-bundle build\font_policy.jfapp `
   --font-source-bdf src\render_core\samples\fonts\bitmap\tiny.bdf `
-  --font-output build\font_policy.generated.jffont `
   --font-coverage-bits 2 `
   --font-allow-missing
 ```
 
-生成的 `.jffont` 不会自动修改源码包。要让 runtime 使用它，仍需把文件复制或输出到 app
-目录下，并在 `jellyframe.app.json` 的 `fonts[]` 中声明 `id`、`source`、`profile`、`family`
-和授权信息。这个显式步骤是有意保留的：字体来源和授权必须由 app 作者确认，工具不应替作者
-默默发布第三方字体资源。
+生成的 `.jffont` 通过临时 package overlay 写入 bundle 的 `fonts[].source`，不会修改源码包。
+多个声明字体同时缺失时用 `--font-resource-id` 选择；需要保留独立生成文件时使用
+`--font-output`。字体来源和授权仍必须由 app 作者显式确认，工具不会下载字体或默默发布
+未声明授权信息的系统/第三方字体。
 
 内置 target presets 位于 `tools/presets/targets`。可以这样列出：
 

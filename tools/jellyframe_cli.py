@@ -220,7 +220,69 @@ def package_command(args: argparse.Namespace, validate_only: bool) -> list[str]:
     if getattr(args, "rasterize_svg", False):
         command.append("--rasterize-svg")
         command.extend(["--svg-raster-size", str(args.svg_raster_size)])
+    for font_import in getattr(args, "_font_resource_imports", []):
+        command.extend([
+            "--import-font-resource",
+            f"{font_import['source']}={font_import['file']}",
+        ])
     return command
+
+
+def missing_manifest_font_targets(root: Path) -> list[dict]:
+    manifest_path = root / "jellyframe.app.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    missing = []
+    for font in manifest.get("fonts", []):
+        if not isinstance(font, dict):
+            continue
+        source = font.get("source", "")
+        if not isinstance(source, str) or not source:
+            continue
+        local = root / Path(*source.lstrip("/").replace("\\", "/").split("/"))
+        if not local.is_file():
+            missing.append(font)
+    return missing
+
+
+def select_generated_font_target(args: argparse.Namespace) -> dict | None:
+    if not getattr(args, "font_source_bdf", None):
+        return None
+    candidates = missing_manifest_font_targets(args.root)
+    requested_id = getattr(args, "font_resource_id", None)
+    if requested_id:
+        candidates = [font for font in candidates if font.get("id") == requested_id]
+        if not candidates:
+            raise SystemExit(
+                f"--font-resource-id does not identify a missing manifest font: {requested_id}")
+    if not candidates:
+        if getattr(args, "font_output", None):
+            return None
+        raise SystemExit(
+            "--font-source-bdf requires one missing manifest fonts[] entry when --font-output is omitted")
+    if len(candidates) != 1:
+        ids = ", ".join(str(font.get("id", "<unnamed>")) for font in candidates)
+        raise SystemExit(
+            "font generation target is ambiguous; use --font-resource-id to select one of: " + ids)
+    target = candidates[0]
+    source = str(target.get("source", ""))
+    if not source.lower().endswith(".jffont"):
+        raise SystemExit(f"generated manifest font source must end in .jffont: {source}")
+    license_info = target.get("license", {})
+    if not isinstance(license_info, dict) or not license_info.get("name") or not license_info.get("source"):
+        raise SystemExit(
+            f"manifest font {target.get('id', source)} requires license.name and license.source before automatic packaging")
+    return target
+
+
+def staged_generated_font_path(args: argparse.Namespace, target: dict | None) -> Path | None:
+    output = getattr(args, "font_output", None)
+    if output is not None or target is None:
+        return output
+    directory = Path(tempfile.mkdtemp(prefix="jellyframe-font-import-"))
+    if not hasattr(args, "_temporary_paths"):
+        args._temporary_paths = []
+    args._temporary_paths.append(directory)
+    return directory / Path(str(target["source"])).name
 
 
 def cmd_validate(args: argparse.Namespace, *, run_programmatic: bool = True) -> int:
@@ -899,7 +961,7 @@ ADVICE_BY_CODE = {
     "font-missing-glyphs": {
         "title": "Target fonts do not cover all app text",
         "explanation": "Some source characters are not covered by the target font profile or app font supplements.",
-        "action": "Run the default font subset preflight, generate a .jffont supplement from the used-chars file, then declare it in manifest fonts[].",
+        "action": "Declare a licensed .jffont supplement in manifest fonts[], then pass its BDF source with --font-source-bdf so package/install can generate and import the used glyphs.",
     },
     "missing-font-resource": {
         "title": "Declared font resource is not packaged",
@@ -1556,8 +1618,9 @@ def enrich_font_advice(advice: list[dict],
             if missing_count:
                 sample_text = ", ".join(missing_sample) if missing_sample else "the reported non-ASCII characters"
                 entry["action"] = (
-                    f"Generate a .jffont subset covering {sample_text} ({missing_count} missing non-ASCII "
-                    "codepoint(s)), declare it in manifest fonts[], then rerun the default font preflight."
+                    f"Declare a licensed .jffont supplement covering {sample_text} ({missing_count} missing "
+                    "non-ASCII codepoint(s)), then pass --font-source-bdf so package/install can generate, "
+                    "validate and import it."
                 )
 
     usage = font_diagnostics.get("fontFamilyUsage", {})
@@ -2698,6 +2761,12 @@ def run_package_preflight(args: argparse.Namespace, include_pipeline: bool) -> i
         font_result = run_font_resource_check(args)
         if font_result != 0:
             return font_result
+        if getattr(args, "_generated_manifest_font", False):
+            subset_report = getattr(args, "_font_subset_report", {})
+            validate_result = cmd_validate(args, run_programmatic=False)
+            if validate_result != 0:
+                return validate_result
+            merge_font_subset_report(args.report, subset_report)
     return enforce_diagnostics_policy(args) if include_pipeline else 0
 
 
@@ -2708,6 +2777,7 @@ def cmd_package(args: argparse.Namespace) -> int:
     package_result = run_command(package_command(args, False))
     if package_result != 0:
         return package_result
+    merge_font_subset_report(args.report, getattr(args, "_font_subset_report", {}))
     merge_pipeline_report(args.report, getattr(args, "_pipeline_report", {}))
     merge_responsive_profiles(args.report, getattr(args, "_responsive_profiles", []))
     if getattr(args, "runtime_log", None):
@@ -2736,6 +2806,7 @@ def cmd_preview(args: argparse.Namespace) -> int:
         args.debug_dir = previous_debug_dir
         if package_result != 0:
             return package_result
+        merge_font_subset_report(args.report, getattr(args, "_font_subset_report", {}))
         merge_pipeline_report(args.report, getattr(args, "_pipeline_report", {}))
         merge_responsive_profiles(args.report, getattr(args, "_responsive_profiles", []))
         if getattr(args, "frame_script", None):
@@ -2914,8 +2985,9 @@ def run_font_resource_check(args: argparse.Namespace) -> int:
     if result != 0:
         return result
 
-    generated_font = getattr(args, "font_output", None)
     font_source_bdf = getattr(args, "font_source_bdf", None)
+    generated_target = select_generated_font_target(args)
+    generated_font = staged_generated_font_path(args, generated_target)
     generated = False
     if generated_font and font_subset_mode == "off":
         raise SystemExit("--font-output requires --font-subset auto or a used-chars path")
@@ -2949,19 +3021,43 @@ def run_font_resource_check(args: argparse.Namespace) -> int:
             return result
         generated = True
 
-    merge_font_subset_report(args.report, {
+        if generated_target is not None:
+            args._generated_manifest_font = True
+            source = str(generated_target["source"])
+            local_source = args.root / Path(*source.lstrip("/").replace("\\", "/").split("/"))
+            if generated_font.resolve() != local_source.resolve():
+                imports = getattr(args, "_font_resource_imports", [])
+                imports = [entry for entry in imports if entry.get("source") != source]
+                imports.append({
+                    "id": str(generated_target.get("id", "")),
+                    "source": source,
+                    "file": generated_font.resolve(),
+                })
+                args._font_resource_imports = imports
+
+    subset_report = {
         "mode": font_subset_mode,
         "usedChars": str(emit_used_chars) if emit_used_chars else "",
         "sourceBdf": str(font_source_bdf) if font_source_bdf else "",
         "generatedFont": str(generated_font) if generated_font else "",
         "generated": generated,
+        "packageImportReady": bool(generated and generated_target is not None),
+        "packagedByCommand": bool(
+            generated and generated_target is not None
+            and getattr(args, "command", "") in {"package", "preview", "install"}),
+        "manifestFontId": str(generated_target.get("id", "")) if generated_target else "",
+        "manifestSource": str(generated_target.get("source", "")) if generated_target else "",
         "coverageBits": int(getattr(args, "font_coverage_bits", 1)),
         "note": (
-            "Generated .jffont files must still be declared in manifest fonts[] before runtime use."
+            "Generated .jffont was imported into the package at its declared manifest fonts[] source."
+            if generated and generated_target is not None else
+            "Generated .jffont is not attached to a missing manifest fonts[] entry."
             if generated else
             "Use --font-source-bdf and --font-output to generate a .jffont supplement from the scanned used chars."
         ),
-    })
+    }
+    args._font_subset_report = subset_report
+    merge_font_subset_report(args.report, subset_report)
     return 0
 
 
@@ -2981,6 +3077,14 @@ def cmd_check(args: argparse.Namespace) -> int:
         font_result = run_font_resource_check(args)
         if font_result != 0:
             return font_result
+        if getattr(args, "_generated_manifest_font", False):
+            subset_report = getattr(args, "_font_subset_report", {})
+            validate_result = cmd_validate(args, run_programmatic=False)
+            if validate_result != 0:
+                return validate_result
+            merge_font_subset_report(args.report, subset_report)
+            merge_pipeline_report(args.report, getattr(args, "_pipeline_report", {}))
+            merge_responsive_profiles(args.report, getattr(args, "_responsive_profiles", []))
     if getattr(args, "frame_script", None):
         scripted_result = run_programmatic_validation(args, args.root, args.report)
         if scripted_result != 0:
@@ -3953,7 +4057,9 @@ def add_font_preflight_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--font-source-bdf", type=Path,
                         help="Optional BDF source used to generate a .jffont supplement during preflight.")
     parser.add_argument("--font-output", type=Path,
-                        help="Optional generated .jffont output path. Requires --font-source-bdf.")
+                        help="Optional generated .jffont output path. When omitted, a missing manifest font is staged and packaged without modifying the source tree.")
+    parser.add_argument("--font-resource-id",
+                        help="Manifest fonts[].id to fill when more than one declared font resource is missing.")
     parser.add_argument("--font-coverage-bits", type=int, default=1, choices=[1, 2, 4],
                         help="Coverage depth for generated .jffont supplements.")
     parser.add_argument("--font-allow-missing", action="store_true",
@@ -4253,7 +4359,11 @@ def main() -> int:
     trial.set_defaults(func=cmd_trial)
 
     args = parser.parse_args()
-    return args.func(args)
+    try:
+        return args.func(args)
+    finally:
+        for path in getattr(args, "_temporary_paths", []):
+            shutil.rmtree(path, ignore_errors=True)
 
 
 if __name__ == "__main__":

@@ -1221,6 +1221,12 @@ async function deployDeviceApp(context, resourceUri) {
   if (confirmed !== action) {
     return;
   }
+  const fontArgs = await selectMissingFontImport(root, {
+    purpose: isChinese() ? "部署前处理缺失字体包" : "Handle missing font packages before deployment"
+  });
+  if (fontArgs === undefined) {
+    return;
+  }
   ensureBuildDir(context);
   const base = outputBase(root);
   const bundleDirectory = path.join(buildDir(context), "device-bundles");
@@ -1228,7 +1234,8 @@ async function deployDeviceApp(context, resourceUri) {
   const bundle = path.join(bundleDirectory, `${base}.jfapp`);
   const report = path.join(buildDir(context), `vscode-${base}-device-package-report.json`);
   const packageOutcome = await runCliWithOptions(context, [
-    "package", "--root", root, "--target", deviceTarget, "--report", report, "--output-bundle", bundle
+    "package", "--root", root, "--target", deviceTarget, "--report", report, "--output-bundle", bundle,
+    ...fontArgs
   ], { commandName: isChinese() ? "打包设备 App" : "Package device App", reportPath: report });
   if (packageOutcome?.code !== 0 || !fs.existsSync(bundle)) {
     return;
@@ -1705,6 +1712,175 @@ function selectedFontBudget() {
   return undefined;
 }
 
+function manifestResourceFile(root, source) {
+  if (typeof source !== "string" || !source.startsWith("/") || source.includes(":")) {
+    return undefined;
+  }
+  const parts = source.replace(/\\/g, "/").split("/").filter(Boolean);
+  if (parts.some((part) => part === "." || part === "..")) {
+    return undefined;
+  }
+  return path.join(root, ...parts);
+}
+
+function missingManifestFonts(root) {
+  const manifest = readJsonObject(packageManifestPath(root));
+  if (!Array.isArray(manifest?.fonts)) {
+    return [];
+  }
+  return manifest.fonts.filter((font) => {
+    if (!font || typeof font !== "object" || Array.isArray(font)) {
+      return false;
+    }
+    const file = manifestResourceFile(root, font.source);
+    return file !== undefined && !fs.existsSync(file);
+  });
+}
+
+function fontHasRedistributionMetadata(font) {
+  return typeof font?.license?.name === "string" && font.license.name.trim() !== "" &&
+    typeof font?.license?.source === "string" && font.license.source.trim() !== "";
+}
+
+async function selectMissingFontImport(root, options = {}) {
+  const chinese = isChinese();
+  const missing = missingManifestFonts(root);
+  if (missing.length === 0) {
+    if (options.required) {
+      vscode.window.showInformationMessage(chinese
+        ? "当前 App 没有已声明但缺失的字体包。"
+        : "This App has no declared font package that is currently missing.");
+      return undefined;
+    }
+    return [];
+  }
+
+  if (!options.required) {
+    const action = await vscode.window.showQuickPick([
+      {
+        label: chinese ? "选择 BDF 并自动导入" : "Choose BDF and import automatically",
+        description: chinese ? `${missing.length} 个 manifest 字体资源缺失` : `${missing.length} manifest font resource(s) are missing`,
+        value: "generate"
+      },
+      {
+        label: chinese ? "继续但不生成字体" : "Continue without generating fonts",
+        description: chinese ? "报告仍会保留缺失字体诊断" : "The report will retain missing-font diagnostics",
+        value: "skip"
+      }
+    ], {
+      placeHolder: options.purpose || (chinese
+        ? "检测到缺失字体包，选择本次操作方式"
+        : "Missing font packages were detected; choose how to continue"),
+      ignoreFocusOut: true
+    });
+    if (!action) {
+      return undefined;
+    }
+    if (action.value === "skip") {
+      return [];
+    }
+  }
+
+  let target = missing[0];
+  if (missing.length > 1) {
+    const selected = await vscode.window.showQuickPick(missing.map((font) => ({
+      label: String(font.id || font.source || "font"),
+      description: String(font.family || font.profile || ""),
+      detail: `${font.source || ""}${fontHasRedistributionMetadata(font)
+        ? "" : (chinese ? " · 缺少授权元数据" : " · missing license metadata")}`,
+      font
+    })), {
+      placeHolder: chinese ? "选择本次生成的缺失字体" : "Select the missing font to generate",
+      ignoreFocusOut: true
+    });
+    if (!selected) {
+      return undefined;
+    }
+    target = selected.font;
+  }
+
+  if (!fontHasRedistributionMetadata(target)) {
+    const openManifest = chinese ? "打开 manifest" : "Open manifest";
+    const selected = await vscode.window.showErrorMessage(chinese
+      ? `字体 ${target.id || target.source} 缺少 license.name 或 license.source，不能自动打包。`
+      : `Font ${target.id || target.source} is missing license.name or license.source and cannot be packaged automatically.`,
+    openManifest);
+    if (selected === openManifest) {
+      await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(packageManifestPath(root)));
+    }
+    return undefined;
+  }
+  if (typeof target.id !== "string" || target.id.trim() === "") {
+    vscode.window.showErrorMessage(chinese
+      ? "缺失字体条目没有有效 id；请先修复 jellyframe.app.json。"
+      : "The missing font entry has no valid id; fix jellyframe.app.json first.");
+    return undefined;
+  }
+  if (typeof target.source !== "string" || !target.source.toLowerCase().endsWith(".jffont")) {
+    vscode.window.showErrorMessage(chinese
+      ? `字体 ${target.id || target.source} 的 source 必须是 .jffont 路径。`
+      : `Font ${target.id || target.source} must declare a .jffont source path.`);
+    return undefined;
+  }
+
+  const selected = await vscode.window.showOpenDialog({
+    defaultUri: vscode.Uri.file(root),
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    filters: { "Bitmap Distribution Format": ["bdf"] },
+    openLabel: chinese ? "选择已授权 BDF" : "Select licensed BDF"
+  });
+  const bdf = selected && selected[0] ? selected[0].fsPath : undefined;
+  if (!bdf) {
+    return undefined;
+  }
+  return [
+    "--font-source-bdf", bdf,
+    "--font-resource-id", target.id
+  ];
+}
+
+async function packageMissingFonts(context, resourceUri) {
+  if (!requireAuthorSdk(context)) {
+    return;
+  }
+  const root = await packageRoot(resourceUri);
+  if (!root) {
+    return;
+  }
+  const selectedTarget = await selectTarget(context, root, {
+    purpose: isChinese() ? "选择字体包验证使用的目标显示形态" : "Select the target used to validate the font package"
+  });
+  if (!selectedTarget) {
+    return;
+  }
+  const fontArgs = await selectMissingFontImport(root, { required: true });
+  if (!fontArgs) {
+    return;
+  }
+  const fontBudget = selectedFontBudget();
+  if (!fontBudget) {
+    return;
+  }
+  ensureBuildDir(context);
+  const base = outputBase(root);
+  const report = path.join(buildDir(context), `vscode-${base}-font-package-report.json`);
+  const bundle = path.join(buildDir(context), `vscode-${base}-fonts.jfapp`);
+  runCliWithOptions(context, [
+    "package", "--root", root,
+    "--target", selectedTarget,
+    "--report", report,
+    "--output-bundle", bundle,
+    "--font-budget", fontBudget,
+    ...fontArgs
+  ], {
+    commandName: isChinese() ? "生成并导入缺失字体" : "Generate and import missing fonts",
+    packageRoot: root,
+    reportPath: report
+  });
+}
+
 async function selectFrameScript(root, purpose) {
   const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
   const choice = await vscode.window.showQuickPick([
@@ -1757,6 +1933,15 @@ async function runPackageCommand(context, commandName, resourceUri) {
   if (selectedTarget) {
     args.push("--target", selectedTarget);
   }
+  if (commandName === "check" || commandName === "package") {
+    const fontArgs = await selectMissingFontImport(root, {
+      purpose: isChinese() ? "检测到缺失字体包" : "Missing font packages detected"
+    });
+    if (fontArgs === undefined) {
+      return;
+    }
+    args.push(...fontArgs);
+  }
   const options = {
     commandName,
     packageRoot: root,
@@ -1798,6 +1983,112 @@ async function runPackageCommand(context, commandName, resourceUri) {
   runCliWithOptions(context, args, options);
 }
 
+async function selectOptionalPerformanceFile(root, filters, label) {
+  const chinese = isChinese();
+  const choice = await vscode.window.showQuickPick([
+    { label: chinese ? "跳过" : "Skip", value: undefined },
+    { label: chinese ? "选择文件" : "Choose a file", value: "choose" }
+  ], {
+    placeHolder: label,
+    ignoreFocusOut: true
+  });
+  if (!choice || !choice.value) {
+    return undefined;
+  }
+  const selected = await vscode.window.showOpenDialog({
+    defaultUri: vscode.Uri.file(root),
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    filters,
+    openLabel: chinese ? "选择性能数据文件" : "Select performance data file"
+  });
+  return selected && selected[0] ? selected[0].fsPath : undefined;
+}
+
+async function generatePerformanceReport(context, resourceUri) {
+  if (!requireAuthorSdk(context)) {
+    return;
+  }
+  const root = await packageRoot(resourceUri);
+  if (!root) {
+    return;
+  }
+  const tool = path.join(repoRoot(context), "tools", "render_performance_report.py");
+  if (!fs.existsSync(tool)) {
+    vscode.window.showErrorMessage(isChinese()
+      ? `找不到 Render 性能报告工具：${tool}`
+      : `Missing Render performance report tool: ${tool}`);
+    return;
+  }
+  const base = outputBase(root);
+  const outputDirectory = buildDir(context);
+  ensureBuildDir(context);
+  const reportCandidates = fs.readdirSync(outputDirectory)
+    .filter((name) => name.startsWith(`vscode-${base}-`) && name.endsWith("-report.json"))
+    .map((name) => path.join(outputDirectory, name))
+    .filter((file) => fs.statSync(file).isFile())
+    .sort((left, right) => fs.statSync(right).mtimeMs - fs.statSync(left).mtimeMs);
+  let packageReport;
+  if (reportCandidates.length === 1) {
+    packageReport = reportCandidates[0];
+  } else if (reportCandidates.length > 1) {
+    const choice = await vscode.window.showQuickPick(reportCandidates.map((file) => ({
+      label: path.basename(file),
+      description: new Date(fs.statSync(file).mtimeMs).toLocaleString(),
+      value: file
+    })), {
+      placeHolder: isChinese() ? "选择要合并的 App 报告" : "Choose the App report to merge",
+      ignoreFocusOut: true
+    });
+    packageReport = choice?.value;
+  }
+  if (!packageReport) {
+    const selected = await vscode.window.showOpenDialog({
+      defaultUri: vscode.Uri.file(root),
+      canSelectFiles: true,
+      canSelectFolders: false,
+      canSelectMany: false,
+      filters: { "JellyFrame reports": ["json"] },
+      openLabel: isChinese() ? "选择 App 报告" : "Select App report"
+    });
+    packageReport = selected && selected[0] ? selected[0].fsPath : undefined;
+  }
+  const trace = lastTracePath && fs.existsSync(lastTracePath)
+    ? lastTracePath
+    : await selectOptionalPerformanceFile(root, { "Render traces": ["jsonl", "trace", "json"] },
+      isChinese() ? "选择 Render Trace（可选）" : "Choose a Render Trace (optional)");
+  const deviceTelemetry = await selectOptionalPerformanceFile(root, { "Device telemetry": ["log", "txt", "json"] },
+    isChinese() ? "选择设备 telemetry（可选）" : "Choose device telemetry (optional)");
+  const microbench = await selectOptionalPerformanceFile(root, { "Microbench output": ["txt", "log", "json"] },
+    isChinese() ? "选择 Render Core microbench（可选）" : "Choose Render Core microbench (optional)");
+  const microbenchBaseline = microbench
+    ? await selectOptionalPerformanceFile(root, { "Microbench output": ["txt", "log", "json"] },
+      isChinese() ? "选择 microbench baseline（可选）" : "Choose a microbench baseline (optional)")
+    : undefined;
+  const output = path.join(outputDirectory, `vscode-${base}-performance.json`);
+  const htmlOutput = path.join(outputDirectory, `vscode-${base}-performance.html`);
+  const args = ["--output", output, "--html-output", htmlOutput];
+  if (packageReport) args.unshift("--report", packageReport);
+  if (trace) args.push("--trace", trace);
+  if (deviceTelemetry) args.push("--device-telemetry", deviceTelemetry);
+  if (microbench) args.push("--microbench", microbench);
+  if (microbenchBaseline) args.push("--microbench-baseline", microbenchBaseline);
+  runDetachedPython(context, tool, args, {
+    wait: true,
+    failureLabel: isChinese() ? "生成 Render 性能报告" : "Generate Render performance report",
+    onClose: (code) => {
+      if (code !== 0 || !fs.existsSync(htmlOutput)) {
+        return;
+      }
+      loadReport(output, "performance");
+      updateReportDiagnostics(root);
+      statusProvider?.refresh();
+      vscode.commands.executeCommand("vscode.open", vscode.Uri.file(htmlOutput));
+    }
+  });
+}
+
 async function previewPackage(context, resourceUri) {
   if (!requireAuthorSdk(context)) {
     return;
@@ -1820,6 +2111,13 @@ async function previewPackage(context, resourceUri) {
   const output = path.join(buildDir(context), `vscode-${base}.bmp`);
   const report = path.join(buildDir(context), `vscode-${base}-preview-report.json`);
   const args = ["preview", "--root", root, "--target", selectedTarget, "--output", output, "--report", report];
+  const fontArgs = await selectMissingFontImport(root, {
+    purpose: isChinese() ? "预览前处理缺失字体包" : "Handle missing font packages before preview"
+  });
+  if (fontArgs === undefined) {
+    return;
+  }
+  args.push(...fontArgs);
   if (frameScript) {
     args.push(
       "--frame-script", frameScript,
@@ -3142,6 +3440,7 @@ class JellyFrameStatusProvider {
 
     const root = currentPackageRoot();
     const hasPackage = Boolean(root);
+    const missingFontCount = hasPackage ? missingManifestFonts(root).length : 0;
     const visualEditorAvailable = Boolean(root && isVisualEditorEligible(root));
     updateVisualEditorContext(root);
     const app = hasPackage ? path.basename(root) : "No package selected";
@@ -3226,9 +3525,11 @@ class JellyFrameStatusProvider {
       visualEditorUnavailable: "可视化编辑不可用",
       visualEditorCompatibility: "支持可视化模型或标准 blank 起始 App；任意现有 HTML/CSS 不会自动还原。",
       packageResources: "生成资源包",
+      packageMissingFonts: "生成并导入缺失字体",
       openReport: "打开最近报告",
       openCapture: "打开截图或回放文件",
       openRenderTrace: "打开渲染性能 Trace",
+      performanceReport: "生成性能报告",
       showOutput: "查看运行日志",
       reportReady: "报告已生成",
       noReport: "尚未生成报告",
@@ -3250,6 +3551,7 @@ class JellyFrameStatusProvider {
         create: "从官方模板创建一个新的 App 包。",
         visualEditor: "用受 JellyFrame 特性约束的拖放画布编辑当前 App，并生成可读源码。",
         packageResources: "生成供固件或 App Runtime 使用的资源包。",
+        packageMissingFonts: `选择已授权 BDF，为 ${missingFontCount} 个缺失 manifest 字体资源生成 subset 并写入 .jfapp。`,
         discoverDevice: "通过已配置的 Provider 列出可连接设备。",
         selectDevice: "在已发现设备中切换本次操作的目标。",
         inspectDevice: "读取并校验当前设备的 Developer Image 与 Render Core 身份。",
@@ -3323,9 +3625,11 @@ class JellyFrameStatusProvider {
       visualEditorUnavailable: "Visual editor unavailable",
       visualEditorCompatibility: "Visual models and the standard blank starter are supported; arbitrary HTML/CSS is not round-tripped.",
       packageResources: "Generate resource package",
+      packageMissingFonts: "Generate and import missing fonts",
       openReport: "Open latest report",
       openCapture: "Open capture or playback file",
       openRenderTrace: "Open Render Performance Trace",
+      performanceReport: "Generate Performance Report",
       showOutput: "View run log",
       reportReady: "Report ready",
       noReport: "No report yet",
@@ -3347,6 +3651,7 @@ class JellyFrameStatusProvider {
         create: "Create a new App package from an official template.",
         visualEditor: "Edit the current App on a JellyFrame-constrained drag-and-drop canvas and generate readable source.",
         packageResources: "Generate a resource package for firmware or App Runtime use.",
+        packageMissingFonts: `Choose a licensed BDF, generate a subset for ${missingFontCount} missing manifest font resource(s), and write it into a .jfapp.`,
         discoverDevice: "List connectable devices through the configured Provider.",
         selectDevice: "Change the target for subsequent device operations.",
         inspectDevice: "Read and validate the selected Developer Image and Render Core identity.",
@@ -3380,11 +3685,16 @@ class JellyFrameStatusProvider {
           ? [this.commandItem(labels.visualEditor, labels.actionHints.visualEditor, "jellyframe.visualEditor", "layout", root)]
           : (hasPackage ? [this.statusItem(labels.visualEditor, labels.visualEditorUnavailable, labels.visualEditorCompatibility, "layout")] : [])),
         ...(hasPackage ? [this.commandItem(labels.packageResources, labels.actionHints.packageResources, "jellyframe.package", "package", root)] : []),
+        ...(missingFontCount > 0
+          ? [this.commandItem(labels.packageMissingFonts, labels.actionHints.packageMissingFonts,
+            "jellyframe.packageMissingFonts", "symbol-file", root)]
+          : []),
       ]),
       this.group(labels.reports, "report", [
         ...(lastReport ? [this.commandItem(labels.openReport, labels.reportReady, "jellyframe.showReport", "output")] : []),
         ...(lastCapturePath ? [this.commandItem(labels.openCapture, path.basename(lastCapturePath), "jellyframe.openCapture", "open-preview")] : []),
         ...(lastTracePath ? [this.commandItem(labels.openRenderTrace, path.basename(lastTracePath), "jellyframe.openRenderTrace", "graph-line")] : []),
+        ...(hasPackage ? [this.commandItem(labels.performanceReport, labels.performanceReport, "jellyframe.performanceReport", "dashboard")] : []),
         this.commandItem(labels.showOutput, chinese ? "打开 JellyFrame 命令与运行日志。" : "Open JellyFrame command and runtime logs.", "jellyframe.showOutput", "output"),
         this.statusItem(chinese ? "管线诊断" : "Pipeline diagnostics", labels.diagnostics, labels.diagnostics, "pulse"),
         this.statusItem(labels.performance, hasRenderData && performance?.rating ? `${labels.measured}: ${performance.rating}` : labels.notMeasured,
@@ -4063,6 +4373,7 @@ function activate(context) {
     vscode.commands.registerCommand("jellyframe.runFrameScript", (resourceUri) => runFrameScript(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.openCapture", () => openCapture(context)),
     vscode.commands.registerCommand("jellyframe.openRenderTrace", () => openRenderTrace(context)),
+    vscode.commands.registerCommand("jellyframe.performanceReport", (resourceUri) => generatePerformanceReport(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.listBuilds", () => listBuilds(context)),
     vscode.commands.registerCommand("jellyframe.setupDesktopBuild", () => {
       const root = currentPackageRoot();
@@ -4071,6 +4382,7 @@ function activate(context) {
     }),
     vscode.commands.registerCommand("jellyframe.manageAuthorEnvironment", () => manageAuthorEnvironment(context)),
     vscode.commands.registerCommand("jellyframe.package", (resourceUri) => runPackageCommand(context, "package", resourceUri)),
+    vscode.commands.registerCommand("jellyframe.packageMissingFonts", (resourceUri) => packageMissingFonts(context, resourceUri)),
     vscode.commands.registerCommand("jellyframe.newFromTemplate", () => newFromTemplate(context)),
     vscode.commands.registerCommand("jellyframe.visualEditor", async (resourceUri) => {
       const root = await packageRoot(resourceUri);

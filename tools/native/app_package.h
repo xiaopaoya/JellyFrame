@@ -1157,34 +1157,68 @@ inline std::vector<std::string> json_collect_object_string_values(const std::str
         }
 
         const std::size_t object_close = index + 1;
-        const std::size_t field_pos = json.find(field_needle, object_open);
-        if (field_pos == std::string::npos || field_pos >= object_close) {
-            object_open = std::string::npos;
-            continue;
-        }
-        const std::size_t colon = json.find(':', field_pos + field_needle.size());
-        if (colon == std::string::npos || colon >= object_close) {
-            object_open = std::string::npos;
-            continue;
-        }
-        std::size_t quote = json.find('"', colon + 1);
-        if (quote == std::string::npos || quote >= object_close) {
-            object_open = std::string::npos;
-            continue;
-        }
-        std::string parsed;
-        for (++quote; quote < object_close; ++quote) {
-            const char ch = json[quote];
-            if (ch == '"') {
-                values.push_back(std::move(parsed));
-                break;
-            }
-            if (ch == '\\' && quote + 1 < object_close) {
-                const char escaped_ch = json[++quote];
-                parsed.push_back(escaped_ch == 'n' ? '\n' : escaped_ch);
+        int nested_depth = 0;
+        for (std::size_t cursor = object_open + 1; cursor + field_needle.size() < object_close;) {
+            const char current = json[cursor];
+            if (current == '{' || current == '[') {
+                ++nested_depth;
+                ++cursor;
                 continue;
             }
-            parsed.push_back(ch);
+            if (current == '}' || current == ']') {
+                --nested_depth;
+                ++cursor;
+                continue;
+            }
+            if (current != '"') {
+                ++cursor;
+                continue;
+            }
+
+            const std::size_t key_begin = cursor;
+            bool key_escaped = false;
+            for (++cursor; cursor < object_close; ++cursor) {
+                if (key_escaped) {
+                    key_escaped = false;
+                } else if (json[cursor] == '\\') {
+                    key_escaped = true;
+                } else if (json[cursor] == '"') {
+                    break;
+                }
+            }
+            if (cursor >= object_close || nested_depth != 0 ||
+                json.compare(key_begin, field_needle.size(), field_needle) != 0) {
+                ++cursor;
+                continue;
+            }
+            std::size_t value = cursor + 1;
+            while (value < object_close && std::isspace(static_cast<unsigned char>(json[value]))) {
+                ++value;
+            }
+            if (value >= object_close || json[value] != ':') {
+                ++cursor;
+                continue;
+            }
+            for (++value; value < object_close && std::isspace(static_cast<unsigned char>(json[value])); ++value) {
+            }
+            if (value >= object_close || json[value] != '"') {
+                break;
+            }
+            std::string parsed;
+            for (++value; value < object_close; ++value) {
+                const char ch = json[value];
+                if (ch == '"') {
+                    values.push_back(std::move(parsed));
+                    break;
+                }
+                if (ch == '\\' && value + 1 < object_close) {
+                    const char escaped_ch = json[++value];
+                    parsed.push_back(escaped_ch == 'n' ? '\n' : escaped_ch);
+                    continue;
+                }
+                parsed.push_back(ch);
+            }
+            break;
         }
         object_open = std::string::npos;
     }
