@@ -40,6 +40,8 @@ python tools\render_performance_report.py `
 - frame total 的 average、p50、p95、max；
 - parse、style、render tree、layout、layer、flatten、paint、present 等阶段的总耗时和占比；
 - dirty rect 数量、dirty 面积、frame update action/reason 和 pipeline object count；
+- trace 提供时，逐帧报告会保留有界的 `captureFile`、`dirtyRects`、`stageSpans` 和
+  `commandSpans`；HTML 帧表会标出这些实际观测数据的数量，不把缺失 span 推断成阶段时间线；
 - producer 提供时的 display command 类型与受限 owner 归因排行；
 - 设备 aggregate telemetry 与隔离 microbench 的独立区域；
 - Render Trace 查看器提供跨帧的 command/stage/owner 调用数、累计耗时和单次调用 p95；新 trace

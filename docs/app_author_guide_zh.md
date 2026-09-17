@@ -108,7 +108,8 @@ python tools\render_performance_report.py `
 
 其中 `--trace` 使用版本化的 `jellyframe.render.trace.v0` JSONL：每条 frame 记录可包含
 `stagesUs`、`dirtyRectCount`、`dirtyAreaPercent`、`action`、`reason`、`pipeline` 和
-可选的 `commands` 归因。当前 Win32/port 尚未默认产生该逐帧文件，因此没有 trace 时
+可选的 `commands` 归因；producer 提供时，报告还会保留有界的 `captureFile`、`dirtyRects`、
+`stageSpans` 与 `commandSpans`，供逐帧时间线和局部重绘检查使用。当前 Win32/port 尚未默认产生该逐帧文件，因此没有 trace 时
 工具仍会报告已有的单帧 timings 和设备 aggregate telemetry，但会明确列出限制；不能
 把 isolated microbench 或 desktop 时间解释为某个 MCU 元素的真实耗时。
 

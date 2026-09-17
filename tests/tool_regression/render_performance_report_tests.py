@@ -21,7 +21,19 @@ class RenderPerformanceReportTests(unittest.TestCase):
             trace = root / "trace.jsonl"
             trace.write_text(
                 json.dumps({"format": "jellyframe.render.trace.v0", "type": "session", "viewport": {"width": 172, "height": 320}}) + "\n"
-                + json.dumps({"type": "frame", "frame": 1, "totalUs": 100, "stagesUs": {"layout": 25, "paint": 75}, "dirtyRectCount": 1, "dirtyAreaPercent": 4}) + "\n"
+                + json.dumps({
+                    "type": "frame", "frame": 1, "totalUs": 100,
+                    "stagesUs": {"layout": 25, "paint": 75},
+                    "dirtyRectCount": 1, "dirtyAreaPercent": 4,
+                    "captureFile": "frames/frame_001.bmp",
+                    "dirtyRects": [{"x": 2, "y": 3, "width": 20, "height": 10}],
+                    "stageSpans": [{"name": "paint", "startUs": 25, "durationUs": 75}],
+                    "commandSpans": [{
+                        "type": "FillRect", "owner": "id:card", "startUs": 25,
+                        "durationUs": 40, "pixels": 200,
+                        "rect": {"x": 2, "y": 3, "width": 20, "height": 10}
+                    }]
+                }) + "\n"
                 + json.dumps({"type": "frame", "frame": 2, "totalUs": 200, "stagesUs": {"layout": 50, "paint": 150}, "commands": [{"type": "BoxShadow", "owner": "id:card-1", "us": 120, "pixels": 320, "samples": 2}, {"type": "BoxShadow", "owner": "not a safe owner", "us": 30, "pixels": 20, "samples": 1}], "commandsTruncated": True}) + "\n",
                 encoding="utf-8",
             )
@@ -49,6 +61,11 @@ class RenderPerformanceReportTests(unittest.TestCase):
                 "unattributed",
             )
             self.assertTrue(report["summary"]["commandOwnerAttributionTruncated"])
+            self.assertEqual(report["frames"][0]["captureFile"], "frames/frame_001.bmp")
+            self.assertEqual(report["frames"][0]["dirtyRects"], [{"x": 2, "y": 3, "width": 20, "height": 10}])
+            self.assertEqual(report["frames"][0]["stageSpans"], [{"name": "paint", "startUs": 25, "durationUs": 75}])
+            self.assertEqual(report["frames"][0]["commandSpans"][0]["owner"], "id:card")
+            self.assertEqual(report["frames"][0]["commandSpans"][0]["rect"]["width"], 20)
             self.assertEqual(report["metadata"]["viewport"], {"width": 172, "height": 320})
 
     def test_html_output_is_generated(self):
@@ -69,6 +86,7 @@ class RenderPerformanceReportTests(unittest.TestCase):
             rendered = html_output.read_text(encoding="utf-8")
             self.assertIn("JellyFrame Render Performance", rendered)
             self.assertIn("Command / owner attribution", rendered)
+            self.assertIn("Trace observability", rendered)
 
     def test_microbench_average_and_stats_probes_are_parsed_and_rendered(self):
         with tempfile.TemporaryDirectory() as directory:

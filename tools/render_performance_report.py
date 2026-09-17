@@ -22,6 +22,9 @@ from typing import Any
 TRACE_FORMAT = "jellyframe.render.trace.v0"
 REPORT_FORMAT = "jellyframe.render.performance.report"
 MAX_COMMAND_OWNER_GROUPS = 128
+MAX_TRACE_DIRTY_RECTS = 32
+MAX_TRACE_STAGE_SPANS = 64
+MAX_TRACE_COMMAND_SPANS = 256
 SAFE_TRACE_OWNER = re.compile(r"^[A-Za-z0-9:_-]{1,64}$")
 DEVICE_PROFILE_RECORD_KINDS = frozenset((
     "device_profile",
@@ -52,6 +55,53 @@ def number(value: Any) -> float | None:
     if isinstance(value, (int, float)) and math.isfinite(float(value)) and float(value) >= 0:
         return float(value)
     return None
+
+
+def safe_integer(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    if value < 0:
+        return None
+    return value
+
+
+def normalize_trace_rect(value: Any) -> dict[str, int] | None:
+    if not isinstance(value, dict):
+        return None
+    coordinates = {key: safe_integer(value.get(key)) for key in ("x", "y", "width", "height")}
+    if any(item is None for item in coordinates.values()):
+        return None
+    return coordinates  # type: ignore[return-value]
+
+
+def normalize_trace_spans(value: Any, *, command: bool) -> tuple[list[dict[str, Any]], bool]:
+    if not isinstance(value, list):
+        return [], False
+    limit = MAX_TRACE_COMMAND_SPANS if command else MAX_TRACE_STAGE_SPANS
+    spans: list[dict[str, Any]] = []
+    for item in value[:limit]:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("type" if command else "name")
+        start_us = safe_integer(item.get("startUs"))
+        duration_us = safe_integer(item.get("durationUs"))
+        if not isinstance(name, str) or not name.strip() or start_us is None or duration_us is None:
+            continue
+        normalized: dict[str, Any] = {
+            ("type" if command else "name"): name.strip()[:96],
+            "startUs": start_us,
+            "durationUs": duration_us,
+        }
+        if command:
+            owner = command_owner(item)
+            pixels = safe_integer(item.get("pixels"))
+            normalized["owner"] = owner
+            normalized["pixels"] = pixels if pixels is not None else 0
+            rect = normalize_trace_rect(item.get("rect"))
+            if rect is not None:
+                normalized["rect"] = rect
+        spans.append(normalized)
+    return spans, len(value) > limit
 
 
 def percentile(values: list[float], percent: float) -> float:
@@ -100,9 +150,29 @@ def normalize_frame(raw: dict[str, Any], source: str, fallback_index: int) -> di
     }
     for key in ("action", "reason", "repaint", "dirtyMode", "dirtyReason",
                 "dirtyRectCount", "dirtyAreaPercent", "pipeline", "timingComplete",
-                "commandsTruncated", "nodesTruncated", "commandInvalidSamples"):
+                "commandsTruncated", "nodesTruncated", "commandInvalidSamples",
+                "dirtyRectsTruncated", "stageSpansTruncated", "commandSpansTruncated"):
         if key in raw:
             result[key] = raw[key]
+    if isinstance(raw.get("captureFile"), str) and raw["captureFile"].strip():
+        result["captureFile"] = raw["captureFile"].strip()[:256]
+    if isinstance(raw.get("dirtyRects"), list):
+        result["dirtyRects"] = [
+            rect for rect in (normalize_trace_rect(item) for item in raw["dirtyRects"][:MAX_TRACE_DIRTY_RECTS])
+            if rect is not None
+        ]
+        if len(raw["dirtyRects"]) > MAX_TRACE_DIRTY_RECTS:
+            result["dirtyRectsTruncated"] = True
+    stage_spans, stage_spans_truncated = normalize_trace_spans(raw.get("stageSpans"), command=False)
+    if isinstance(raw.get("stageSpans"), list):
+        result["stageSpans"] = stage_spans
+        if stage_spans_truncated:
+            result["stageSpansTruncated"] = True
+    command_spans, command_spans_truncated = normalize_trace_spans(raw.get("commandSpans"), command=True)
+    if isinstance(raw.get("commandSpans"), list):
+        result["commandSpans"] = command_spans
+        if command_spans_truncated:
+            result["commandSpansTruncated"] = True
     commands = raw.get("commands", raw.get("commandAttribution"))
     if isinstance(commands, list):
         result["commands"] = commands
@@ -509,10 +579,20 @@ def render_html(report: dict[str, Any]) -> str:
         )
     frame_rows = []
     for frame in report.get("frames", []):
+        observability = []
+        if isinstance(frame.get("captureFile"), str):
+            observability.append(f"capture={frame['captureFile']}")
+        if isinstance(frame.get("stageSpans"), list):
+            observability.append(f"stage spans={len(frame['stageSpans'])}")
+        if isinstance(frame.get("commandSpans"), list):
+            observability.append(f"command spans={len(frame['commandSpans'])}")
+        if isinstance(frame.get("dirtyRects"), list):
+            observability.append(f"dirty rects={len(frame['dirtyRects'])}")
         frame_rows.append(
             f"<tr><td>{html.escape(str(frame.get('frame', '')))}</td><td>{html.escape(str(frame.get('totalUs', 0)))} us</td>"
             f"<td>{html.escape(str(frame.get('action', '')))}</td><td>{html.escape(str(frame.get('reason', '')))}</td>"
-            f"<td>{html.escape(str(frame.get('dirtyRectCount', '')))}</td><td>{html.escape(str(frame.get('dirtyAreaPercent', '')))}</td></tr>"
+            f"<td>{html.escape(str(frame.get('dirtyRectCount', '')))}</td><td>{html.escape(str(frame.get('dirtyAreaPercent', '')))}</td>"
+            f"<td>{html.escape('; '.join(observability) or '-')}</td></tr>"
         )
     command_rows = []
     for command in summary.get("commandOwnerAttribution", []):
@@ -638,7 +718,7 @@ def render_html(report: dict[str, Any]) -> str:
 <h2>Frame summary</h2>
 <p>Frames: {frames} · average: {average} us · p50: {p50} us · p95: {p95} us · max: {maximum} us</p>
 <h2>Stage share</h2><table><tr><th>Stage</th><th>Total</th><th>Share</th></tr>{stage_rows}</table>
-<h2>Frames</h2><table><tr><th>Frame</th><th>Total</th><th>Action</th><th>Reason</th><th>Dirty rects</th><th>Dirty area %</th></tr>{frame_rows}</table>
+<h2>Frames</h2><table><tr><th>Frame</th><th>Total</th><th>Action</th><th>Reason</th><th>Dirty rects</th><th>Dirty area %</th><th>Trace observability</th></tr>{frame_rows}</table>
 <h2>Command / owner attribution</h2><p><small>Desktop raster invocation time only.{command_note}</small></p>
 <table><tr><th>Owner</th><th>Command</th><th>Time</th><th>Candidate pixels</th><th>Samples</th></tr>{command_rows}</table>
 {microbench_section}
@@ -652,7 +732,7 @@ def render_html(report: dict[str, Any]) -> str:
         p95=html.escape(str(summary.get("totalUs", {}).get("p95", 0))),
         maximum=html.escape(str(summary.get("totalUs", {}).get("max", 0))),
         stage_rows="".join(rows) or "<tr><td colspan='3'>No stage timings</td></tr>",
-        frame_rows="".join(frame_rows) or "<tr><td colspan='6'>No per-frame trace</td></tr>",
+        frame_rows="".join(frame_rows) or "<tr><td colspan='7'>No per-frame trace</td></tr>",
         command_rows="".join(command_rows) or "<tr><td colspan='5'>No command attribution</td></tr>",
         command_note=command_note,
         microbench_section=microbench_section,
