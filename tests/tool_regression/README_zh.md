@@ -26,7 +26,8 @@ render-core 或 app-runtime C++ 单元测试的行为。
 包内图片不会退化成不可见占位。
 
 `font_policy_report_tests.py` 验证 app 字体路径：检查字体策略样例报告两个可用 `.jffont`
-runtime family，保持故意缺字 warning 稳定，并用 Win32 `--use-app-fonts` 捕获样例。
+runtime family，保持故意缺字 warning 稳定，并用 Win32 `--use-app-fonts` 捕获样例；它还会打包
+`jelly_font_size_warning`，锁定插件安装提示所依赖的唯一 `font-size-unavailable` warning。
 
 `win32_browser_cli_tests.py` 检查交互式 Win32 壳的 CLI/help/error 契约，包括 registry
 安装/更新/回滚/启用/禁用命令模式、授权 file-broker smoke 命令和坏 app 系统存活 smoke。

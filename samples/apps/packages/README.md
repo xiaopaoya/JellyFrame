@@ -49,6 +49,8 @@ Acceptance packages and capability details:
 - `jelly_font_policy`: package font-family and `.jffont` supplement policy
   sample with two runtime families, missing-glyph diagnostics and Win32
   `--use-app-fonts` validation.
+- `jelly_font_size_warning`: emits one deterministic `font-size-unavailable`
+  warning for extension pre-install prompt acceptance.
 - `jelly_static_modules`: package-time static local ES-module graph that becomes
   one classic device script before preview or packaging.
 - `jelly_component_recipes`: scroll/dirty-region and component-structure

@@ -8,6 +8,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FONT_POLICY = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy"
+FONT_SIZE_WARNING = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_size_warning"
 
 
 def run(command: list[str], capture: bool = False) -> subprocess.CompletedProcess:
@@ -78,6 +79,21 @@ def assert_font_report(report_path: Path) -> None:
     assert "あ" in used_chars.read_text(encoding="utf-8")
 
 
+def assert_font_size_warning_report(report_path: Path) -> None:
+    report = json.loads(report_path.read_text(encoding="utf-8-sig"))
+    warnings = report.get("warnings", [])
+    assert [warning["code"] for warning in warnings] == ["font-size-unavailable"]
+    assert warnings[0]["sizes"] == [12]
+    assert warnings[0]["nativeSize"] == 8
+    assert warnings[0]["renderableSizes"] == [8, 16, 24, 32, 40, 48, 56, 64]
+
+    font = report["fontDiagnostics"]["manifestFonts"][0]
+    assert font["id"] == "size-probe"
+    assert font["usedSizes"] == [12]
+    assert font["declaredUnavailableSizes"] == [12]
+    assert font["unavailableUsedSizes"] == [12]
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print("usage: font_policy_report_tests.py WIN32_BROWSER_EXE BUILD_TOOL_DIR", file=sys.stderr)
@@ -120,6 +136,23 @@ def main() -> int:
         assert "diagnostics: 0" in output
         assert "app_fonts=on" in output
         assert capture.is_file() and capture.stat().st_size > 54
+
+        warning_report = output_dir / "font_size_warning.report.json"
+        warning_bundle = output_dir / "font_size_warning.jfapp"
+        run([
+            sys.executable,
+            str(REPO_ROOT / "tools" / "package_app.py"),
+            "--root",
+            str(FONT_SIZE_WARNING),
+            "--target",
+            "rect-172x320",
+            "--report",
+            str(warning_report),
+            "--output-bundle",
+            str(warning_bundle),
+        ])
+        assert_font_size_warning_report(warning_report)
+        assert warning_bundle.is_file() and warning_bundle.stat().st_size > 0
     return 0
 
 

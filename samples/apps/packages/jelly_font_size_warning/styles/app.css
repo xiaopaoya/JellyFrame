@@ -1,0 +1,52 @@
+:root {
+  display: block;
+  background: #000000;
+  color: #e8f3fa;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  display: block;
+  margin: 0;
+  padding: 20px 14px;
+  background: #000000;
+}
+
+main {
+  display: block;
+  padding: 16px 12px;
+  border: 1px solid #315464;
+  border-radius: 8px;
+  background: #121c28;
+}
+
+p,
+h1 {
+  margin: 0;
+}
+
+.eyebrow {
+  color: #67dded;
+  font-size: 10px;
+}
+
+h1 {
+  margin-top: 12px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.probe {
+  margin-top: 18px;
+  color: #ffcc88;
+  font-family: "Jelly Size Probe", system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.detail {
+  margin-top: 12px;
+  color: #adc4d2;
+  font-size: 12px;
+  line-height: 18px;
+}

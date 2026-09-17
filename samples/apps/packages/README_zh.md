@@ -39,6 +39,7 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather 
 - `jelly_audio_smoke`：用于 Win32 host-owned audio smoke 路径的包内音频资源示例。
 - `jelly_font_policy`：用于说明 CSS `font-family` 与 `.jffont` 补充包策略的示例，
   覆盖两个 runtime family、缺字诊断和 Win32 `--use-app-fonts` 验收。
+- `jelly_font_size_warning`：只产生一条确定性的 `font-size-unavailable`，用于验收插件安装前的字号提示。
 - `jelly_static_modules`：展示打包期静态本地 ES-module 图如何在 preview 或 packaging 前变成一个 classic device script。
 - `jelly_component_recipes`：scroll/dirty-region 与组件结构回归输入；面向作者的 recipe 正文在 `docs/app_author_recipes_zh.md`。
 - `jelly_watch_face`：transform/radius/gradient 时序回归输入。

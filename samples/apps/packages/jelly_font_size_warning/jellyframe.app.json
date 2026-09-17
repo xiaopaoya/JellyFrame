@@ -1,0 +1,74 @@
+{
+  "$schema": "../../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.examples.font_size_warning",
+  "name": "Font Size Warning Probe",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.6.0",
+    "minRenderCore": "0.6.2",
+    "script": "none"
+  },
+  "viewport": {
+    "designWidth": 172,
+    "designHeight": 320,
+    "shape": "rect"
+  },
+  "budgets": {
+    "maxResourceBytes": 8192,
+    "maxDomNodes": 32,
+    "maxCssRules": 32,
+    "maxDisplayCommands": 64,
+    "maxAppFonts": 1,
+    "maxAppFontBytes": 1024,
+    "maxAppFontGlyphs": 8
+  },
+  "fonts": [
+    {
+      "id": "size-probe",
+      "source": "/fonts/size_probe.jffont",
+      "profile": "tiny",
+      "family": "Jelly Size Probe",
+      "license": {
+        "name": "JellyFrame sample font",
+        "source": "src/render_core/samples/fonts/bitmap/tiny.bdf"
+      },
+      "sizes": [12],
+      "weights": [400]
+    }
+  ],
+  "targets": {
+    "round-300": {
+      "viewport": {
+        "width": 300,
+        "height": 300,
+        "shape": "round"
+      },
+      "fontProfile": "tiny",
+      "output": "jfapp"
+    },
+    "rect-320x240": {
+      "viewport": {
+        "width": 320,
+        "height": 240,
+        "shape": "rect"
+      },
+      "fontProfile": "tiny",
+      "output": "jfapp"
+    },
+    "rect-172x320": {
+      "viewport": {
+        "width": 172,
+        "height": 320,
+        "shape": "rect"
+      },
+      "fontProfile": "tiny",
+      "output": "jfapp"
+    }
+  }
+}

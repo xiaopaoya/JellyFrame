@@ -32,7 +32,8 @@ package-local images cannot regress into invisible placeholders.
 `font_policy_report_tests.py` validates the app-font path. It checks that the
 font policy sample reports two usable `.jffont` runtime families, keeps the
 intentional missing-glyph warning stable and captures the sample through Win32
-with `--use-app-fonts`.
+with `--use-app-fonts`. It also packages `jelly_font_size_warning` and locks the
+single `font-size-unavailable` warning used by the extension install prompt.
 
 `win32_browser_cli_tests.py` checks CLI/help/error contracts for the interactive
 Win32 shell, including registry install/update/rollback/enable/disable command mode, the
