@@ -2538,7 +2538,9 @@ void run_retained_ui_task(void* raw_context) {
                         status->set_text_content(active ? "READY" : "PAUSE");
                     }
 #elif CONFIG_JELLYFRAME_ESP32S3_EMBEDDED_UI_WORKLOAD_FULL_REPAINT
-                    context->document->set_attribute("data-screen", active ? "alt" : "base");
+                    if (jellyframe::Node* screen = find_by_id(*context->document, "screen")) {
+                        screen->set_attribute("data-screen", active ? "alt" : "base");
+                    }
 #endif
                 }
                 next_tick_us = esp_timer_get_time() + 33333ULL;

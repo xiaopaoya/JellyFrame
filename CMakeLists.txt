@@ -525,6 +525,12 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
+                NAME jellyframe_embedded_ui_workload_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/embedded_ui_workload_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            add_test(
                 NAME jellyframe_tool_app_registry_tests
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/app_registry_tests.py

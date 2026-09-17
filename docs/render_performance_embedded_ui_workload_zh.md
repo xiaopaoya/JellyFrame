@@ -1,6 +1,6 @@
 # Render Core 嵌入式 UI 对照 workload V0
 
-> 状态：Stage 3 下一项硬件执行稿；最后更新：2026-09-15；适用版本：0.6.0-dev
+> 状态：Stage 3 fixture qualification 待实机执行；最后更新：2026-09-17；适用版本：0.6.0-dev
 > 适用范围：ESP32-S3 retained UI port 与等价桌面 capture
 
 本文定义一个比单一 fill/gradient 更接近真实 App 的固定 workload，用于关闭
@@ -79,6 +79,42 @@ Observer / time:
 ```
 
 照片、录像和 framebuffer hash可以作为附加证据；缺少它们不影响合规性。
+
+### 3.1 当前 fixture qualification
+
+正式 baseline/candidate 矩阵前，先用当前主线分别构建四个独立目录，确认 fixture 本身
+能够完成窗口。要求 ESP-IDF 5.3 或更高版本；不要复用 build 目录：
+
+```powershell
+cd ports\esp32s3-idf
+$profiles = @("static", "local_update", "scroll", "full_repaint")
+foreach ($profile in $profiles) {
+  idf.py -B "build-ws147-embedded-ui-$profile" `
+    -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_embedded_ui_$profile.defaults" build
+}
+```
+
+依次刷写每个 build，并在唯一串口采集进程中取得一个完整窗口：
+
+```powershell
+idf.py -B build-ws147-embedded-ui-static -p COMx flash
+python tools\collect_device_profile_window.py `
+  --port COMx `
+  --output test_artifacts\embedded-ui-fixture-qualification\static `
+  --timeout 90 `
+  --reset
+```
+
+对 `local_update`、`scroll` 和 `full_repaint` 重复上述命令并使用对应 build/output。四组
+`capture.json` 都必须为 `status=pass`，五类 profile record 的 window 相同。固定状态检查：
+
+- `static`：状态滑块在 25/75 间切换，其他文本与布局稳定；
+- `local_update`：Focus mode、Quiet hours 和 PAUSE/READY 按固定节奏切换，无残影或错误换行；
+- `scroll`：设置列表往返滚动，拖动中和停止后均无底部错行、旧行残留或跳位；
+- `full_repaint`：`#screen` 背景和状态卡边框在 base/alt 间切换，整屏无未更新区域。
+
+该 qualification 只验证 fixture 可用性和采集完整性，不构成性能优化结论。通过后再选择
+明确的 baseline/candidate commit，按本文其余要求执行每侧至少三次的正式矩阵。
 
 ## 4. 通过标准
 

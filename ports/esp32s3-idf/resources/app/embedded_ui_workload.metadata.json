@@ -14,7 +14,6 @@
     "focusMode": "ON",
     "quietHours": "22:00",
     "profile": "BASE",
-    "quietHours": "22:00",
     "touchFeedback": "ON",
     "syncInterval": "15 min",
     "scrollY": 0

@@ -1,5 +1,7 @@
 # Font Size Install Warning Probe
 
+> Last updated: 2026-09-17; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
+
 This acceptance package exists only to trigger the VS Code extension's pre-install font-size warning deterministically.
 
 - Its packaged `.jffont` has an `8px` native line height.
