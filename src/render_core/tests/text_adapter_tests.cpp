@@ -183,6 +183,13 @@ void extreme_fallback_font_sizes_remain_defined() {
           "extreme fallback widths wrap without arithmetic overflow");
 }
 
+void fallback_normal_line_height_tracks_font_size() {
+    check(fallback_text_metrics("A", 9, 400).line_height == 11,
+          "small fallback text uses a proportional normal line height");
+    check(fallback_text_metrics("A", 14, 400).line_height == 17,
+          "fallback normal line height does not add a fixed six-pixel floor");
+}
+
 } // namespace
 
 int main() {
@@ -195,6 +202,7 @@ int main() {
         counting_wrap_matches_materialized_wrap();
         extreme_letter_spacing_uses_one_bounded_value();
         extreme_fallback_font_sizes_remain_defined();
+        fallback_normal_line_height_tracks_font_size();
     } catch (const std::exception& error) {
         std::cerr << "text adapter test failed: " << error.what() << '\n';
         return 1;

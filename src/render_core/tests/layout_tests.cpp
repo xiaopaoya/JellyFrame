@@ -759,6 +759,87 @@ void grid_places_fixed_columns_and_spans() {
           "span grid item moves to next row and covers both columns");
 }
 
+void grid_aligns_items_within_fixed_height_rows() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main id='center'><span id='center-item'></span></main>"
+        "<main id='end'><span id='end-item'></span></main>"
+        "<main id='self'><span id='self-item'></span></main>"
+        "<main id='stretch'><span id='stretch-item'></span></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "main { display: grid; width: 80px; height: 30px; grid-template-columns: 1fr; align-items: center; }"
+        "span { display: block; height: 10px; margin-top: 2px; margin-bottom: 4px; }"
+        "#end { align-items: flex-end; }"
+        "#self-item { align-self: flex-end; }"
+        "#stretch { align-items: stretch; } #stretch-item { height: auto; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 100, 160);
+
+    const LayoutBox* center = find_first_by_id(*layout_tree, "center");
+    const LayoutBox* center_item = find_first_by_id(*layout_tree, "center-item");
+    const LayoutBox* end = find_first_by_id(*layout_tree, "end");
+    const LayoutBox* end_item = find_first_by_id(*layout_tree, "end-item");
+    const LayoutBox* self = find_first_by_id(*layout_tree, "self");
+    const LayoutBox* self_item = find_first_by_id(*layout_tree, "self-item");
+    const LayoutBox* stretch = find_first_by_id(*layout_tree, "stretch");
+    const LayoutBox* stretch_item = find_first_by_id(*layout_tree, "stretch-item");
+    check(center != nullptr && center_item != nullptr && end != nullptr && end_item != nullptr &&
+              self != nullptr && self_item != nullptr && stretch != nullptr && stretch_item != nullptr,
+          "grid alignment fixture boxes exist");
+    check(center_item->rect.y - center->rect.y == 9,
+          "grid center alignment uses the item's outer margin box");
+    check(end_item->rect.y - end->rect.y == 16,
+          "grid end alignment uses the item's outer margin box");
+    check(self_item->rect.y - self->rect.y == 16,
+          "grid align-self overrides the container alignment");
+    check(stretch_item->rect.y - stretch->rect.y == 2 && stretch_item->rect.height == 24,
+          "grid stretch fills a fixed-height row while preserving margins");
+}
+
+void grid_auto_column_uses_intrinsic_content_width() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><header id='header'><span id='leading'></span><b id='trailing'>08:42</b></header></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; }"
+        "#header { display: grid; width: 158px; grid-template-columns: 1fr auto; }"
+        "#trailing { font-size: 11px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 172, 80);
+
+    const LayoutBox* header = find_first_by_id(*layout_tree, "header");
+    const LayoutBox* leading = find_first_by_id(*layout_tree, "leading");
+    const LayoutBox* trailing = find_first_by_id(*layout_tree, "trailing");
+    check(header != nullptr && leading != nullptr && trailing != nullptr,
+          "auto grid column fixture boxes exist");
+    check(trailing->rect.width < header->rect.width / 2,
+          "auto grid column shrink-wraps its text instead of sharing fractional space");
+    check(trailing->rect.x + trailing->rect.width == header->rect.x + header->rect.width,
+          "auto grid column is placed against the grid end");
+    check(leading->rect.width + trailing->rect.width == header->rect.width,
+          "fractional grid column receives the remaining width");
+}
+
+void range_author_dimensions_override_control_defaults() {
+    HtmlParser html_parser;
+    CssParser css_parser;
+    auto document = html_parser.parse(
+        "<body><main><input id='level' type='range' min='0' max='100' value='25'></main></body>");
+    StyleResolver resolver(css_parser.parse(
+        "body { margin: 0; } main { width: 42px; }"
+        "#level { display: block; width: 38px; height: 10px; }"));
+    LayoutEngine layout_engine(resolver);
+    auto layout_tree = layout_engine.layout(*document, 80, 80);
+
+    const LayoutBox* level = find_first_by_id(*layout_tree, "level");
+    check(level != nullptr, "range dimension fixture exists");
+    check(level->rect.width == 38 && level->rect.height == 10,
+          "explicit range dimensions are not enlarged by control defaults");
+}
+
 void grid_places_explicit_rows_and_numeric_lines() {
     HtmlParser html_parser;
     CssParser css_parser;
@@ -905,6 +986,9 @@ int main() {
 #if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
         max_width_percent_clamps_nested_flex_grid_items();
         grid_places_fixed_columns_and_spans();
+        grid_aligns_items_within_fixed_height_rows();
+        grid_auto_column_uses_intrinsic_content_width();
+        range_author_dimensions_override_control_defaults();
         grid_places_explicit_rows_and_numeric_lines();
         grid_row_budget_uses_non_overlapping_block_fallback();
 #endif

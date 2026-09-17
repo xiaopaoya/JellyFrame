@@ -2314,9 +2314,8 @@ bool measure_text_with_gdi(const std::string& text,
     }
 
     if (ok) {
-        metrics->width = std::max(0L, size.cx) + (wide.empty() ? 0 : std::max(2, font_size / 4));
-        metrics->line_height = std::max(1L, text_metric.tmHeight + text_metric.tmExternalLeading) +
-            std::max(2, font_size / 6);
+        metrics->width = std::max(0L, size.cx);
+        metrics->line_height = std::max(1L, text_metric.tmHeight + text_metric.tmExternalLeading);
     }
 
     if (old_font != nullptr) {

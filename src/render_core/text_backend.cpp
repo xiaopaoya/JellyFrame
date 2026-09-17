@@ -122,7 +122,7 @@ TextMetrics fallback_text_metrics(const std::string& text, int font_size, int fo
     }
     const int padding = std::max(6, safe_font_size / 2);
     const int line_height = clamp_nonnegative_int64(
-        static_cast<std::int64_t>(safe_font_size) + std::max(6, safe_font_size / 3));
+        static_cast<std::int64_t>(safe_font_size) + std::max(2, (safe_font_size + 4) / 5));
     return TextMetrics{
         clamp_nonnegative_int64(static_cast<std::int64_t>(width) +
                                 (text.empty() ? 0 : padding) + bold_extra),

@@ -1254,7 +1254,9 @@ bool parse_simple_grid_template_columns(const std::string& raw_value,
             } else {
                 return false;
             }
-        } else if (track == "auto" || track == "1fr" || track == "min-content" || track == "max-content" ||
+        } else if (track == "auto" || track == "min-content" || track == "max-content") {
+            stored_width = -1;
+        } else if (track == "1fr" ||
                    (!track.empty() && track.back() == 'r' && track.size() >= 2 && track[track.size() - 2] == 'f')) {
             stored_width = 0;
         } else {
@@ -1279,7 +1281,9 @@ bool parse_simple_grid_template_columns(const std::string& raw_value,
         int width = 0;
         if (parse_length_px(token, width, em_base, context)) {
             parsed[static_cast<std::size_t>(parsed_count)] = std::max(1, width);
-        } else if (token == "auto" || token == "1fr" || token == "min-content" || token == "max-content") {
+        } else if (token == "auto" || token == "min-content" || token == "max-content") {
+            parsed[static_cast<std::size_t>(parsed_count)] = -1;
+        } else if (token == "1fr") {
             parsed[static_cast<std::size_t>(parsed_count)] = 0;
         } else if (!token.empty() && token.back() == 'f' && token.size() >= 2 && token[token.size() - 2] == 'r') {
             parsed[static_cast<std::size_t>(parsed_count)] = 0;
@@ -5065,7 +5069,11 @@ Style default_style_for(const Node& node) {
             style.min_width = 44;
         } else if (node.tag_name == "input" && node.attribute("type") == "range") {
             style.width = 140;
-            style.min_width = 120;
+            style.height = 18;
+            style.min_width = 0;
+            style.padding = EdgeSizes{};
+            style.border_width = EdgeSizes{};
+            style.background_color = Color{0, 0, 0, 0};
         }
     } else if (node.tag_name == "img" || node.tag_name == "picture") {
         style.display = Display::InlineBlock;
