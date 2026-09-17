@@ -1,0 +1,2 @@
+# Sweep variant for the acceptance-only GRAM row-identification probe.
+CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_VSCSAD_DELAY_US=4000

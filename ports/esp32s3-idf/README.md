@@ -118,16 +118,17 @@ For the WS147 retained modes, use their complete defaults files rather than
 overlaying the Timer bring-up file:
 
 ```powershell
-# Deterministic 30 Hz retained-scroll measurement.
-idf.py -B build-ws147-scroll -D SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults build
+# Deterministic 30 Hz retained-scroll measurement. Keep sdkconfig beside the
+# isolated build so an existing project-root sdkconfig cannot override it.
+idf.py -B build-ws147-scroll -D "SDKCONFIG=build-ws147-scroll/sdkconfig" -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults" build
 
 # Interactive retained scroll demo. Apply after the benchmark defaults.
-idf.py -B build-ws147-scroll-demo -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_scroll_demo.defaults" build
+idf.py -B build-ws147-scroll-demo -D "SDKCONFIG=build-ws147-scroll-demo/sdkconfig" -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_scroll_demo.defaults" build
 
 # Phase D control (A) and the held WS147 physical-GRAM experiment (B).
 # Both use the same full-screen, opaque, single-scroll-viewport fixture.
-idf.py -B build-ws147-panel-a -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_panel_scroll_a.defaults" build
-idf.py -B build-ws147-panel-b -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_panel_scroll_b.defaults" build
+idf.py -B build-ws147-panel-a -D "SDKCONFIG=build-ws147-panel-a/sdkconfig" -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_panel_scroll_a.defaults" build
+idf.py -B build-ws147-panel-b -D "SDKCONFIG=build-ws147-panel-b/sdkconfig" -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_scroll_benchmark.defaults;sdkconfig.ws147_panel_scroll_b.defaults" build
 ```
 
 The WS147 B defaults intentionally keep

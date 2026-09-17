@@ -162,6 +162,14 @@
 #define CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_FALLBACK_PROBE 0
 #endif
 
+#ifndef CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_GRAM_PROBE
+#define CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_GRAM_PROBE 0
+#endif
+
+#ifndef CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_VSCSAD_DELAY_US
+#define CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_VSCSAD_DELAY_US 0
+#endif
+
 namespace jellyframe_esp32s3 {
 
 struct InstalledBundleUiSession {
@@ -188,13 +196,16 @@ constexpr std::string_view kScrollBenchCardsUrl = "/scroll_bench_cards.html";
 constexpr std::string_view kScrollBenchBackgroundUrl = "/scroll_bench_background.html";
 constexpr std::string_view kScrollBenchClearUrl = "/scroll_bench_clear.html";
 constexpr std::string_view kScrollBenchPanelUrl = "/scroll_bench_panel.html";
+constexpr std::string_view kScrollBenchGramProbeUrl = "/scroll_bench_gram_probe.html";
 constexpr jellyframe::Color kBackground{248, 250, 252, 255};
 constexpr int kScrollIndicatorRepaintWidth = 8;
 constexpr std::uint32_t kBandAutorouteTransitionCount = 30;
 constexpr std::uint64_t kBandAutorouteIntervalUs = 500000ULL;
 
 std::string_view scroll_benchmark_url() {
-#if CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_TEXT
+#if CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_GRAM_PROBE
+    return kScrollBenchGramProbeUrl;
+#elif CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_TEXT
     return kScrollBenchTextUrl;
 #elif CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_CARDS
     return kScrollBenchCardsUrl;
@@ -210,7 +221,9 @@ std::string_view scroll_benchmark_url() {
 }
 
 const char* scroll_benchmark_workload() {
-#if CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_TEXT
+#if CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_GRAM_PROBE
+    return "panel-gram-probe";
+#elif CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_TEXT
     return "text";
 #elif CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_CARDS
     return "cards";
@@ -552,6 +565,10 @@ bool panel_scroll_acceleration_enabled(const TimerUiTaskContext& context) {
 bool panel_scroll_candidate(const TimerUiTaskContext& context, std::size_t dirty_count) {
     if (!panel_scroll_acceleration_enabled(context) ||
         !CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_WORKLOAD_PANEL ||
+        // Physical-GRAM scroll has no verified TE/vblank handshake yet. Keep
+        // it out of direct-touch and inertia frames, where a scanout during
+        // the address transition can expose a stale row at the opposite edge.
+        context.scroll_gesture.dragging() || context.scroll_gesture.has_inertia() ||
         !context.scroll_benchmark || context.board_runtime.packed_scroll_flush == nullptr ||
         context.panel.packed_scroll_flush == nullptr || context.panel.reset_scroll == nullptr ||
         !context.has_framebuffer_scroll_blit || context.frame_buffer == nullptr ||
@@ -2777,6 +2794,13 @@ bool start_scroll_benchmark_task() {
     context->telemetry_app_id = "org.jellyframe.bringup.scroll";
     context->scroll_workload = context->scroll_autorun ? scroll_benchmark_workload() : "interactive-full";
     context->scroll_benchmark = true;
+#if CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_GRAM_PROBE
+    ESP_LOGI(kTag,
+             "panel_scroll_gram_probe enabled=1 step_pixels=%d vscsad_delay_us=%u direction_diagnostics=%d",
+             CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_STEP_PIXELS,
+             static_cast<unsigned>(CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_VSCSAD_DELAY_US),
+             CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_DIRECTION_DIAGNOSTICS ? 1 : 0);
+#endif
     return start_ui_task(context, "jellyframe_scroll");
 }
 

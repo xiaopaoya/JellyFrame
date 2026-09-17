@@ -1,0 +1,2 @@
+# Diagnostic-only GRAM probe ordering variant.
+CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_VSCSAD_BEFORE_STRIP_PROBE=y

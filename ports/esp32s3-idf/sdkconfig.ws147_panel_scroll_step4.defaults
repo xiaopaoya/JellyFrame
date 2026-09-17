@@ -1,0 +1,2 @@
+# Temporary direction/physical-GRAM diagnostic: four-pixel automatic step.
+CONFIG_JELLYFRAME_ESP32S3_SCROLL_BENCH_STEP_PIXELS=4

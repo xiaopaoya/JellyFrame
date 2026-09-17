@@ -19,6 +19,7 @@
 #include "esp_heap_caps.h"
 #include "esp_lcd_panel_commands.h"
 #include "esp_lcd_panel_io.h"
+#include "esp_rom_sys.h"
 #include "esp_timer.h"
 #endif
 
@@ -74,6 +75,10 @@ struct Ws147DisplayContext {
     std::size_t dma_pixel_capacity = 0;
     bool panel_scroll_configured = false;
     std::uint16_t panel_scroll_start = 0;
+#if CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_DIRECTION_DIAGNOSTICS
+    std::uint32_t panel_scroll_positive_diagnostic_count = 0;
+    std::uint32_t panel_scroll_negative_diagnostic_count = 0;
+#endif
     BoardInputQueue* input_queue = nullptr;
     bool touch_task_stop = false;
     bool touch_down = false;
@@ -345,10 +350,12 @@ esp_err_t ws147_set_window(esp_lcd_panel_io_handle_t io, int x_start, int y_star
     return ws147_lcd_tx_param(io, LCD_CMD_RASET, row_data, sizeof(row_data));
 }
 
-bool ws147_packed_flush(const std::uint16_t* pixels,
-                        jellyframe::Rect dirty_rect,
-                        Rgb565PackedFlushMetrics* metrics,
-                        void* context) {
+// The caller owns the LCD mutex. This lets panel-scroll keep strip DMA and
+// VSCSAD publication in one ordered transaction.
+bool ws147_packed_flush_locked(const std::uint16_t* pixels,
+                               jellyframe::Rect dirty_rect,
+                               Rgb565PackedFlushMetrics* metrics,
+                               void* context) {
     auto* display = static_cast<Ws147DisplayContext*>(context);
     if (display == nullptr || display->lcd_io == nullptr || pixels == nullptr ||
         dirty_rect.width <= 0 || dirty_rect.height <= 0) {
@@ -365,13 +372,11 @@ bool ws147_packed_flush(const std::uint16_t* pixels,
     if (metrics != nullptr) {
         *metrics = {};
     }
-    ws147_lock_lcd(*display);
     for (int y = 0; y < dirty_rect.height; y += rows_per_chunk) {
         const int rows = std::min(rows_per_chunk, dirty_rect.height - y);
         const std::size_t pixels_in_chunk =
             static_cast<std::size_t>(dirty_rect.width) * static_cast<std::size_t>(rows);
         if (pixels_in_chunk > max_chunk_pixels) {
-            ws147_unlock_lcd(*display);
             return false;
         }
         const std::uint16_t* source =
@@ -404,15 +409,27 @@ bool ws147_packed_flush(const std::uint16_t* pixels,
             ++metrics->chunks;
         }
         if (window_result != ESP_OK || submit_result != ESP_OK || !completed) {
-            ws147_unlock_lcd(*display);
             return false;
         }
     }
-    ws147_unlock_lcd(*display);
     if (!display->backlight_on) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(ws147_set_backlight(*display, true));
     }
     return true;
+}
+
+bool ws147_packed_flush(const std::uint16_t* pixels,
+                        jellyframe::Rect dirty_rect,
+                        Rgb565PackedFlushMetrics* metrics,
+                        void* context) {
+    auto* display = static_cast<Ws147DisplayContext*>(context);
+    if (display == nullptr) {
+        return false;
+    }
+    ws147_lock_lcd(*display);
+    const bool result = ws147_packed_flush_locked(pixels, dirty_rect, metrics, context);
+    ws147_unlock_lcd(*display);
+    return result;
 }
 
 void ws147_accumulate_metrics(Rgb565PackedFlushMetrics& target,
@@ -456,34 +473,6 @@ bool ws147_configure_panel_scroll(Ws147DisplayContext& display,
     return true;
 }
 
-bool ws147_set_panel_scroll_start(Ws147DisplayContext& display,
-                                  std::uint16_t start_row,
-                                  Rgb565PackedFlushMetrics* metrics) {
-    constexpr int height = CONFIG_JELLYFRAME_WS147_LCD_HEIGHT;
-    if (start_row >= height) {
-        return false;
-    }
-    const std::uint8_t data[2] = {
-        static_cast<std::uint8_t>((start_row >> 8) & 0xff),
-        static_cast<std::uint8_t>(start_row & 0xff),
-    };
-    const std::uint64_t start = esp_timer_get_time();
-    ws147_lock_lcd(display);
-    const esp_err_t result = ws147_lcd_tx_param(display.lcd_io,
-                                                  kWs147CmdVerticalScrollStart,
-                                                  data,
-                                                  sizeof(data));
-    ws147_unlock_lcd(display);
-    if (metrics != nullptr) {
-        metrics->scroll_setup_us += static_cast<std::uint32_t>(esp_timer_get_time() - start);
-    }
-    if (result != ESP_OK) {
-        return false;
-    }
-    display.panel_scroll_start = start_row;
-    return true;
-}
-
 bool ws147_packed_scroll_flush(const std::uint16_t* pixels,
                                jellyframe::Rect exposed_strip,
                                int scroll_delta_y,
@@ -511,29 +500,127 @@ bool ws147_packed_scroll_flush(const std::uint16_t* pixels,
     const int old_start = display->panel_scroll_start;
     const int next_start = (old_start + scroll_delta_y + height) % height;
     const int physical_start = scroll_delta_y > 0 ? old_start : next_start;
-    if (!ws147_set_panel_scroll_start(*display, static_cast<std::uint16_t>(next_start), metrics)) {
-        return false;
+#if CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_DIRECTION_DIAGNOSTICS
+    std::uint32_t& direction_diagnostic_count = scroll_delta_y > 0
+        ? display->panel_scroll_positive_diagnostic_count
+        : display->panel_scroll_negative_diagnostic_count;
+    const std::uint32_t diagnostic_id = direction_diagnostic_count;
+    const bool emit_diagnostic = diagnostic_id < 16;
+    if (emit_diagnostic) {
+        ++direction_diagnostic_count;
+        ESP_LOGI(kTag,
+                 "panel_scroll_direction_diag id=%u phase=before-vscsad delta_y=%d direction=%s old_start=%d next_start=%d physical_start=%d exposed=%d,%d,%d,%d rows=%d",
+                 static_cast<unsigned>(diagnostic_id),
+                 scroll_delta_y,
+                 scroll_delta_y > 0 ? "positive" : "negative",
+                 old_start,
+                 next_start,
+                 physical_start,
+                 exposed_strip.x,
+                 exposed_strip.y,
+                 exposed_strip.width,
+                 exposed_strip.height,
+                 rows);
     }
-
-    const int first_rows = std::min(rows, height - physical_start);
-    Rgb565PackedFlushMetrics part_metrics;
-    if (!ws147_packed_flush(pixels,
-                            jellyframe::Rect{0, physical_start, width, first_rows},
-                            &part_metrics,
-                            display)) {
-        return false;
-    }
-    ws147_accumulate_metrics(*metrics, part_metrics);
-    if (first_rows != rows) {
-        part_metrics = {};
-        if (!ws147_packed_flush(pixels + static_cast<std::size_t>(first_rows) * width,
-                                jellyframe::Rect{0, 0, width, rows - first_rows},
-                                &part_metrics,
-                                display)) {
+#endif
+    ws147_lock_lcd(*display);
+    auto publish_scroll_start = [&]() {
+        const std::uint8_t data[2] = {
+            static_cast<std::uint8_t>((next_start >> 8) & 0xff),
+            static_cast<std::uint8_t>(next_start & 0xff),
+        };
+        const std::uint64_t vscsad_start = esp_timer_get_time();
+        const esp_err_t vscsad_result = ws147_lcd_tx_param(
+            display->lcd_io, kWs147CmdVerticalScrollStart, data, sizeof(data));
+        if (metrics != nullptr) {
+            metrics->scroll_setup_us += static_cast<std::uint32_t>(
+                esp_timer_get_time() - vscsad_start);
+        }
+        if (vscsad_result != ESP_OK) {
             return false;
         }
-        ws147_accumulate_metrics(*metrics, part_metrics);
-        ++metrics->scroll_wraps;
+        display->panel_scroll_start = static_cast<std::uint16_t>(next_start);
+#if CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_DIRECTION_DIAGNOSTICS
+        if (emit_diagnostic) {
+            ESP_LOGI(kTag,
+                     "panel_scroll_direction_diag id=%u phase=after-vscsad mapped_start=%u",
+                     static_cast<unsigned>(diagnostic_id),
+                     static_cast<unsigned>(display->panel_scroll_start));
+        }
+#endif
+        return true;
+    };
+    const int first_rows = std::min(rows, height - physical_start);
+    auto write_exposed_strip = [&]() {
+        Rgb565PackedFlushMetrics part_metrics;
+        bool strip_ok = ws147_packed_flush_locked(
+            pixels,
+            jellyframe::Rect{0, physical_start, width, first_rows},
+            &part_metrics,
+            display);
+        if (strip_ok) {
+            ws147_accumulate_metrics(*metrics, part_metrics);
+        }
+        if (strip_ok && first_rows != rows) {
+            part_metrics = {};
+            strip_ok = ws147_packed_flush_locked(
+                pixels + static_cast<std::size_t>(first_rows) * width,
+                jellyframe::Rect{0, 0, width, rows - first_rows},
+                &part_metrics,
+                display);
+            if (strip_ok) {
+                ws147_accumulate_metrics(*metrics, part_metrics);
+                ++metrics->scroll_wraps;
+            }
+        }
+#if CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_DIRECTION_DIAGNOSTICS
+        if (strip_ok && emit_diagnostic) {
+            ESP_LOGI(kTag,
+                     "panel_scroll_direction_diag id=%u phase=after-strip-dma first_rows=%d second_rows=%d wrapped=%d mapped_start=%u",
+                     static_cast<unsigned>(diagnostic_id),
+                     first_rows,
+                     rows - first_rows,
+                     first_rows != rows ? 1 : 0,
+                     static_cast<unsigned>(display->panel_scroll_start));
+        }
+#endif
+        return strip_ok;
+    };
+    bool ok = true;
+#if CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_VSCSAD_BEFORE_STRIP_PROBE
+    ok = publish_scroll_start();
+    if (ok) {
+        ok = write_exposed_strip();
+    }
+    if (!ok) {
+        // Keep the software ring state aligned for the normal fallback path.
+        const int failed_start = display->panel_scroll_start;
+        if (failed_start != old_start) {
+            const std::uint8_t data[2] = {
+                static_cast<std::uint8_t>((old_start >> 8) & 0xff),
+                static_cast<std::uint8_t>(old_start & 0xff),
+            };
+            (void)ws147_lcd_tx_param(
+                display->lcd_io, kWs147CmdVerticalScrollStart, data, sizeof(data));
+            display->panel_scroll_start = static_cast<std::uint16_t>(old_start);
+        }
+    }
+#else
+    ok = write_exposed_strip();
+    if (ok) {
+#if CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_GRAM_PROBE
+        constexpr std::uint32_t kVscsadDelayUs =
+            CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_VSCSAD_DELAY_US;
+        if (kVscsadDelayUs > 0) {
+            esp_rom_delay_us(kVscsadDelayUs);
+        }
+#endif
+        ok = publish_scroll_start();
+    }
+#endif
+    ws147_unlock_lcd(*display);
+    if (!ok) {
+        return false;
     }
     return true;
 }
@@ -546,10 +633,22 @@ bool ws147_reset_panel_scroll(void* context) {
     if (!display->panel_scroll_configured && display->panel_scroll_start == 0) {
         return true;
     }
-    if (!ws147_set_panel_scroll_start(*display, 0, nullptr)) {
+
+    // VSCSAD=0 restores the software ring origin, while NORON actually exits
+    // the controller's vertical-scroll mode before a normal full present.
+    ws147_lock_lcd(*display);
+    const std::uint8_t zero_start[2] = {0, 0};
+    const esp_err_t reset_result = ws147_lcd_tx_param(
+        display->lcd_io, kWs147CmdVerticalScrollStart, zero_start, sizeof(zero_start));
+    const esp_err_t normal_mode_result = reset_result == ESP_OK
+        ? ws147_lcd_tx_param(display->lcd_io, LCD_CMD_NORON, nullptr, 0)
+        : reset_result;
+    ws147_unlock_lcd(*display);
+    if (normal_mode_result != ESP_OK) {
         return false;
     }
     display->panel_scroll_configured = false;
+    display->panel_scroll_start = 0;
     return true;
 }
 

@@ -1,0 +1,2 @@
+# Isolated hardware acceptance overlay; keep the checked-in B profile gated.
+CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_VISUAL_ACCEPTED=y

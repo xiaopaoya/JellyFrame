@@ -471,6 +471,48 @@ config JELLYFRAME_WS147_PANEL_SCROLL_VISUAL_ACCEPTED
         This is separate from the experimental acceleration switch so an old
         A/B defaults file cannot activate an unaccepted path.
 
+config JELLYFRAME_WS147_PANEL_SCROLL_DIRECTION_DIAGNOSTICS
+    bool "Log WS147 panel-scroll direction mapping diagnostics"
+    depends on JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION
+    default n
+    help
+        Acceptance-only diagnostic logging for the experimental WS147 path.
+        Logs the logical delta, VSCSAD ring positions, exposed strip geometry,
+        wrap split and ordered command phases for a bounded number of steps.
+        This is for direction-specific hardware investigation and must remain
+        disabled in normal and production profiles.
+
+config JELLYFRAME_WS147_PANEL_SCROLL_GRAM_PROBE
+    bool "Run the WS147 physical-GRAM row-identification probe"
+    depends on JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION && JELLYFRAME_WS147_PANEL_SCROLL_VISUAL_ACCEPTED
+    default n
+    help
+        Uses an opaque full-screen fixture with numbered, color-coded rows and
+        the one-pixel scroll workload. This is an acceptance-only diagnostic
+        for separating a fixed GRAM mapping defect from a scan/latch phase
+        race. It must never be enabled in a normal or production profile.
+
+config JELLYFRAME_WS147_PANEL_SCROLL_VSCSAD_DELAY_US
+    int "Delay before publishing WS147 VSCSAD in the GRAM probe (us)"
+    depends on JELLYFRAME_WS147_PANEL_SCROLL_GRAM_PROBE
+    default 0
+    range 0 20000
+    help
+        Holds the LCD transaction after the exposed strip DMA completes and
+        before VSCSAD is published. Sweep this only in the dedicated GRAM
+        probe; it is not a rendering fix and must remain zero elsewhere.
+
+config JELLYFRAME_WS147_PANEL_SCROLL_VSCSAD_BEFORE_STRIP_PROBE
+    bool "Publish WS147 VSCSAD before strip DMA in the GRAM probe"
+    depends on JELLYFRAME_WS147_PANEL_SCROLL_GRAM_PROBE
+    default n
+    help
+        Diagnostic-only ordering variant for the WS147 GRAM probe. The normal
+        probe order writes the exposed strip first and publishes VSCSAD second.
+        This option reverses those commands to distinguish address publication
+        ordering from a scan/latch race. It must never be enabled in normal or
+        production profiles.
+
 config JELLYFRAME_WS147_PANEL_SCROLL_FALLBACK_PROBE
     bool "Inject one WS147 panel-scroll ineligible-frame fallback"
     depends on JELLYFRAME_WS147_PANEL_SCROLL_ACCELERATION && JELLYFRAME_WS147_PANEL_SCROLL_VISUAL_ACCEPTED
