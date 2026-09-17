@@ -3,6 +3,9 @@ const path = require("path");
 
 const SDK_MANIFEST_FILENAME = "sdk-manifest.json";
 const SDK_INSTALL_METADATA_FILENAME = ".jellyframe-sdk-install.json";
+const RELEASE_VERSION_PATTERN = /^([0-9]+\.[0-9]+\.[0-9]+)(?:-|$)/;
+const RENDER_CORE_LOCK_PATTERN = /^set\(JELLYFRAME_RENDER_CORE_LOCKED_VERSION\s+"([0-9]+\.[0-9]+\.[0-9]+)"\)/m;
+const RENDER_CORE_ABI_PATTERN = /^set\(JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI\s+"([0-9]+)"\)/m;
 
 function existingDirectory(value) {
   if (!value) {
@@ -112,6 +115,54 @@ function readJsonObject(filename) {
   }
 }
 
+function releaseVersion(value) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  return RELEASE_VERSION_PATTERN.exec(value.trim())?.[1];
+}
+
+function readRenderCoreLock(root) {
+  try {
+    const text = fs.readFileSync(path.join(root, "cmake", "jellyframe_dependency_lock.cmake"), "utf8");
+    const version = RENDER_CORE_LOCK_PATTERN.exec(text)?.[1];
+    const abiText = RENDER_CORE_ABI_PATTERN.exec(text)?.[1];
+    return {
+      version,
+      abi: abiText === undefined ? undefined : Number(abiText)
+    };
+  } catch (_) {
+    return {};
+  }
+}
+
+function sdkManifestCompatibility(metadata, manifest) {
+  const runtime = manifest?.runtime;
+  if (!metadata || !runtime || typeof runtime !== "object" || Array.isArray(runtime)) {
+    return { compatible: true, issues: [] };
+  }
+  const issues = [];
+  const requiredRuntime = releaseVersion(runtime.minJellyFrame);
+  const sdkRuntime = releaseVersion(metadata.runtimeVersion);
+  if (requiredRuntime && sdkRuntime && requiredRuntime !== sdkRuntime) {
+    issues.push({
+      code: "runtime-version-mismatch",
+      required: requiredRuntime,
+      actual: sdkRuntime
+    });
+  }
+  const requiredCore = releaseVersion(runtime.minRenderCore);
+  const sdkCore = releaseVersion(metadata.renderCoreVersion);
+  if (requiredCore && sdkCore && requiredCore !== sdkCore) {
+    issues.push({
+      code: "render-core-version-mismatch",
+      required: requiredCore,
+      actual: sdkCore
+    });
+  }
+  return { compatible: issues.length === 0, issues };
+}
+
 function readSdkMetadata(root) {
   if (!isSdkRoot(root)) {
     return undefined;
@@ -127,10 +178,13 @@ function readSdkMetadata(root) {
     }
   })();
   const packaged = manifest?.format === "jellyframe.app-author-sdk" && manifest.formatVersion === 1;
+  const renderCore = readRenderCoreLock(resolved);
   return {
     root: resolved,
     kind: packaged ? "app-sdk" : "source-checkout",
     runtimeVersion: typeof manifest?.runtimeVersion === "string" ? manifest.runtimeVersion : sourceVersion,
+    renderCoreVersion: renderCore.version,
+    renderCoreAbi: renderCore.abi,
     releaseTag: typeof install?.releaseTag === "string" ? install.releaseTag : undefined,
     desktopProfiles: manifest?.desktopProfiles && typeof manifest.desktopProfiles === "object"
       ? Object.keys(manifest.desktopProfiles).sort()
@@ -146,5 +200,6 @@ module.exports = {
   readSdkMetadata,
   readProjectDescriptor,
   resolveSdkRoot,
+  sdkManifestCompatibility,
   SDK_INSTALL_METADATA_FILENAME
 };

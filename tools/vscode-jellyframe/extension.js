@@ -26,6 +26,7 @@ const {
   isSdkRoot,
   readSdkMetadata,
   resolveSdkRoot,
+  sdkManifestCompatibility,
   SDK_INSTALL_METADATA_FILENAME
 } = require("./author_environment");
 const {
@@ -100,6 +101,47 @@ function requireAuthorSdk(context) {
     }
   });
   return undefined;
+}
+
+async function requireCompatibleAuthorSdk(context, root) {
+  const sdkDirectory = requireAuthorSdk(context);
+  if (!sdkDirectory) {
+    return false;
+  }
+  const metadata = readSdkMetadata(sdkDirectory);
+  const manifest = readJsonObject(packageManifestPath(root));
+  const compatibility = sdkManifestCompatibility(metadata, manifest);
+  if (compatibility.compatible) {
+    return true;
+  }
+
+  const chinese = isChinese();
+  const issueText = compatibility.issues.map((issue) => {
+    if (issue.code === "render-core-version-mismatch") {
+      return chinese
+        ? `App 需要 Render Core ${issue.required}，当前 SDK 锁定 ${issue.actual}`
+        : `App requires Render Core ${issue.required}; the current SDK locks ${issue.actual}`;
+    }
+    return chinese
+      ? `App 需要 Runtime ${issue.required}，当前 SDK 提供 ${issue.actual}`
+      : `App requires Runtime ${issue.required}; the current SDK provides ${issue.actual}`;
+  }).join(chinese ? "；" : "; ");
+  const manage = chinese ? "管理作者环境" : "Manage author environment";
+  const checkUpdates = metadata?.kind === "app-sdk"
+    ? (chinese ? "检查 SDK 更新" : "Check SDK updates")
+    : undefined;
+  const actions = checkUpdates ? [checkUpdates, manage] : [manage];
+  const selected = await vscode.window.showErrorMessage(
+    chinese
+      ? `当前作者 SDK 与 App 不兼容：${issueText}。命令尚未启动。`
+      : `The current App Author SDK is incompatible with this App: ${issueText}. The command was not started.`,
+    { modal: true }, ...actions);
+  if (selected === checkUpdates) {
+    await checkAuthorSdkUpdate(context, sdkDirectory);
+  } else if (selected === manage) {
+    await manageAuthorEnvironment(context);
+  }
+  return false;
 }
 
 function buildDir(context) {
@@ -751,10 +793,13 @@ async function manageAuthorEnvironment(context) {
 
   const metadata = readSdkMetadata(sdkDirectory);
   const version = metadata?.releaseTag || metadata?.runtimeVersion || path.basename(sdkDirectory);
+  const core = metadata?.renderCoreVersion
+    ? ` · Core ${metadata.renderCoreVersion}${Number.isInteger(metadata.renderCoreAbi) ? ` / ABI ${metadata.renderCoreAbi}` : ""}`
+    : "";
   const picked = await vscode.window.showQuickPick([
     {
       label: chinese ? "检查 SDK 更新" : "Check for SDK updates",
-      description: chinese ? `当前：${version}` : `Current: ${version}`,
+      description: chinese ? `当前：${version}${core}` : `Current: ${version}${core}`,
       action: "update"
     },
     {
@@ -768,7 +813,7 @@ async function manageAuthorEnvironment(context) {
       action: "open"
     }
   ], {
-    title: chinese ? `JellyFrame 作者环境：${version}` : `JellyFrame author environment: ${version}`,
+    title: chinese ? `JellyFrame 作者环境：${version}${core}` : `JellyFrame author environment: ${version}${core}`,
     placeHolder: chinese ? "选择要执行的环境操作" : "Choose an environment action"
   });
   if (picked?.action === "update") {
@@ -1197,6 +1242,9 @@ async function deployDeviceApp(context, resourceUri) {
   }
   const root = await packageRoot(resourceUri);
   if (!root) {
+    return;
+  }
+  if (!await requireCompatibleAuthorSdk(context, root)) {
     return;
   }
   const manifestPath = packageManifestPath(root);
@@ -1865,11 +1913,11 @@ async function selectMissingFontImport(root, options = {}) {
 }
 
 async function packageMissingFonts(context, resourceUri) {
-  if (!requireAuthorSdk(context)) {
-    return;
-  }
   const root = await packageRoot(resourceUri);
   if (!root) {
+    return;
+  }
+  if (!await requireCompatibleAuthorSdk(context, root)) {
     return;
   }
   const selectedTarget = await selectTarget(context, root, {
@@ -1936,11 +1984,11 @@ async function selectFrameScript(root, purpose) {
 }
 
 async function runPackageCommand(context, commandName, resourceUri) {
-  if (!requireAuthorSdk(context)) {
-    return;
-  }
   const root = await packageRoot(resourceUri);
   if (!root) {
+    return;
+  }
+  if (!await requireCompatibleAuthorSdk(context, root)) {
     return;
   }
   const selectedTarget = commandName === "validate" ? undefined : await selectTarget(context, root, {
@@ -2113,11 +2161,11 @@ async function generatePerformanceReport(context, resourceUri) {
 }
 
 async function previewPackage(context, resourceUri) {
-  if (!requireAuthorSdk(context)) {
-    return;
-  }
   const root = await packageRoot(resourceUri);
   if (!root) {
+    return;
+  }
+  if (!await requireCompatibleAuthorSdk(context, root)) {
     return;
   }
   const selectedTarget = await selectTarget(context, root, {
@@ -2160,11 +2208,11 @@ async function debugExternalApp(context, resourceUri) {
     vscode.window.showErrorMessage("JellyFrame desktop shell is only available on Windows.");
     return;
   }
-  if (!requireAuthorSdk(context)) {
-    return;
-  }
   const root = await packageRoot(resourceUri);
   if (!root) {
+    return;
+  }
+  if (!await requireCompatibleAuthorSdk(context, root)) {
     return;
   }
   const selectedTarget = await selectTarget(context, root, {
@@ -3107,9 +3155,9 @@ async function debugApp(context, resourceUri, options = {}) {
     vscode.window.showErrorMessage('JellyFrame desktop shell is only available on Windows.');
     return;
   }
-  if (!requireAuthorSdk(context)) return;
   const root = await packageRoot(resourceUri);
   if (!root) return;
+  if (!await requireCompatibleAuthorSdk(context, root)) return;
   const launcher = debugLauncherPath(context);
   if (!fs.existsSync(launcher)) {
     vscode.window.showErrorMessage(`Missing debug launcher: ${launcher}`);
@@ -3238,11 +3286,11 @@ async function runFrameScript(context, resourceUri) {
     vscode.window.showErrorMessage("JellyFrame frame-script playback currently requires the desktop shell on Windows.");
     return;
   }
-  if (!requireAuthorSdk(context)) {
-    return;
-  }
   const root = await packageRoot(resourceUri);
   if (!root) {
+    return;
+  }
+  if (!await requireCompatibleAuthorSdk(context, root)) {
     return;
   }
   const selected = await vscode.window.showOpenDialog({
@@ -3563,7 +3611,10 @@ class JellyFrameStatusProvider {
       measured: "已测量",
       notMeasured: "尚未测量",
       buildValue: buildPresentation.summary,
-      sdkValue: sdkDirectory ? (sdkMetadata?.releaseTag || sdkMetadata?.runtimeVersion || path.basename(sdkDirectory)) : "未配置",
+      sdkValue: sdkDirectory
+        ? `${sdkMetadata?.releaseTag || sdkMetadata?.runtimeVersion || path.basename(sdkDirectory)}` +
+          `${sdkMetadata?.renderCoreVersion ? ` · Core ${sdkMetadata.renderCoreVersion}` : ""}`
+        : "未配置",
       actionHints: {
         validate: "快速检查 manifest、入口和本地资源；不启动渲染管线。",
         check: "运行渲染预检、响应式与字体检查；可选程控回放。",
@@ -3663,7 +3714,10 @@ class JellyFrameStatusProvider {
       measured: "Measured",
       notMeasured: "Not measured",
       buildValue: buildPresentation.summary,
-      sdkValue: sdkDirectory ? (sdkMetadata?.releaseTag || sdkMetadata?.runtimeVersion || path.basename(sdkDirectory)) : "Not configured",
+      sdkValue: sdkDirectory
+        ? `${sdkMetadata?.releaseTag || sdkMetadata?.runtimeVersion || path.basename(sdkDirectory)}` +
+          `${sdkMetadata?.renderCoreVersion ? ` · Core ${sdkMetadata.renderCoreVersion}` : ""}`
+        : "Not configured",
       actionHints: {
         validate: "Quickly check the manifest, entry point and local resources without starting Render Core.",
         check: "Run render preflight, responsive and font checks; optionally replay a capture.",

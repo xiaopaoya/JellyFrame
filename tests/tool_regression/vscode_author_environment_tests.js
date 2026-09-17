@@ -8,7 +8,8 @@ const {
   isInside,
   readSdkMetadata,
   readProjectDescriptor,
-  resolveSdkRoot
+  resolveSdkRoot,
+  sdkManifestCompatibility
 } = require("../../tools/vscode-jellyframe/author_environment");
 
 function main() {
@@ -19,6 +20,10 @@ function main() {
     fs.mkdirSync(path.join(sdk, "tools"), { recursive: true });
     fs.mkdirSync(workspace, { recursive: true });
     fs.writeFileSync(path.join(sdk, "tools", "jellyframe_cli.py"), "", "utf8");
+    fs.mkdirSync(path.join(sdk, "cmake"), { recursive: true });
+    fs.writeFileSync(path.join(sdk, "cmake", "jellyframe_dependency_lock.cmake"),
+      'set(JELLYFRAME_RENDER_CORE_LOCKED_VERSION "0.6.2")\n' +
+      'set(JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI "1")\n', "utf8");
     fs.writeFileSync(path.join(sdk, "sdk-manifest.json"), JSON.stringify({
       format: "jellyframe.app-author-sdk",
       formatVersion: 1,
@@ -43,8 +48,34 @@ function main() {
       root: path.resolve(sdk),
       kind: "app-sdk",
       runtimeVersion: "0.6.0-dev",
+      renderCoreVersion: "0.6.2",
+      renderCoreAbi: 1,
       releaseTag: "app-sdk-v0.6.0-dev.1",
       desktopProfiles: ["desktop-release"]
+    });
+    assert.deepStrictEqual(sdkManifestCompatibility(readSdkMetadata(sdk), {
+      runtime: { minJellyFrame: "0.6.0", minRenderCore: "0.6.2" }
+    }), { compatible: true, issues: [] });
+    assert.deepStrictEqual(sdkManifestCompatibility(readSdkMetadata(sdk), {
+      runtime: { minJellyFrame: "0.6.0", minRenderCore: "0.6.3" }
+    }), {
+      compatible: false,
+      issues: [{ code: "render-core-version-mismatch", required: "0.6.3", actual: "0.6.2" }]
+    });
+    assert.deepStrictEqual(sdkManifestCompatibility(readSdkMetadata(sdk), {
+      runtime: { minJellyFrame: "0.7.0", minRenderCore: "0.6.2" }
+    }), {
+      compatible: false,
+      issues: [{ code: "runtime-version-mismatch", required: "0.7.0", actual: "0.6.0" }]
+    });
+    assert.deepStrictEqual(sdkManifestCompatibility({
+      runtimeVersion: "0.6.0-dev",
+      renderCoreVersion: "0.6.1"
+    }, {
+      runtime: { minJellyFrame: "0.6.0", minRenderCore: "0.6.2" }
+    }), {
+      compatible: false,
+      issues: [{ code: "render-core-version-mismatch", required: "0.6.2", actual: "0.6.1" }]
     });
     assert.equal(resolveSdkRoot({ workspaceRoot: workspace, extensionPath: root }), path.resolve(sdk));
     const alternativeSdk = path.join(root, "alternative-sdk");

@@ -107,7 +107,11 @@ configured SDK, `JELLYFRAME_SDK_ROOT`, or an SDK found above the
 current workspace. `jellyframe.sdkRoot` is the preferred explicit setting;
 `jellyframe.repoRoot` remains a legacy alias. `jellyframe.buildDir` is optional.
 When an App command needs an SDK but none is configured, it offers **Configure author
-environment** directly instead of running an incomplete command. SDK installation never
+environment** directly instead of running an incomplete command. Author environment status
+also shows the SDK Render Core lock. If an App manifest requests a different Runtime/Core
+line, validation, check, package, preview, debugging, frame-script playback and device deployment
+stop before launching a command and offer
+SDK update or environment-selection actions. SDK installation never
 overwrites an existing directory: transient Windows access or file-lock failures are retried,
 then the extension offers retry, another location, or use of an already-valid SDK.
 The official App Author SDK intentionally contains prebuilt `desktop-release` and
