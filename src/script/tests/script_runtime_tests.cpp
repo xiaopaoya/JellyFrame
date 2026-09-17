@@ -2383,6 +2383,14 @@ void javascript_canvas_2d_is_optional_and_lazy() {
         "ctx.arc(6, 6, 2, 0, Math.PI);"
         "ctx.closePath();"
         "ctx.fill();"
+        "ctx.save();"
+        "ctx.fillStyle = '#336699';"
+        "ctx.fillRect(5, 1, 2, 2);"
+        "ctx.restore();"
+        "ctx.beginPath();"
+        "ctx.moveTo(1, 1);"
+        "ctx.lineTo(2, 1);"
+        "ctx.stroke();"
         "ctx.font + ':' + String(textWidth > 0) + ':' + ctx.fillStyle");
     check(result.ok && result.value == "bold 10px system-ui:true:#00ff00",
           "canvas context draws and reflects text state");
