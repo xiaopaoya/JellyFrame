@@ -1,6 +1,6 @@
 # Render Core 嵌入式 UI 对照 workload V0
 
-> 状态：Stage 3 fixture qualification 待实机执行；最后更新：2026-09-17；适用版本：0.6.0-dev
+> 状态：Stage 3 fixture qualification 已通过，正式对照矩阵待执行；最后更新：2026-09-18；适用版本：0.6.0-dev
 > 适用范围：ESP32-S3 retained UI port 与等价桌面 capture
 
 本文定义一个比单一 fill/gradient 更接近真实 App 的固定 workload，用于关闭
@@ -81,6 +81,19 @@ Observer / time:
 照片、录像和 framebuffer hash可以作为附加证据；缺少它们不影响合规性。
 
 ### 3.1 当前 fixture qualification
+
+2026-09-18 已在 WS147 上完成四个独立 clean profile 的资格验证，归档位于
+`ports/esp32s3-idf/test_artifacts/embedded-ui-fixture-qualification/`。测试固件来源为
+`a15aad75`；随后提交 `7807874f` 只修改 VS Code 主机扩展、CI、测试和文档，未修改
+ESP32-S3 固件、Render Core、Runtime、fixture 或设备 profile 协议。因此结果仍应归因于
+`a15aad75`，但在本项资格验证范围内与 `7807874f` 等价，无需重跑或改写固件版本。
+
+四组 clean capture 均为 `status=pass`，各包含一个完整窗口、30 个 warm-up present、
+120 个 measured present、五类 profile record，且 `partial=0`、`contaminated=0`、
+`present_failures=0`；固定状态人工检查均通过。记录仍为 `timing_complete=0`、
+`missing=script_us`，所以本次结果只关闭 fixture 和采集链路资格验证，不提供完整脚本阶段
+计时，也不构成 baseline/candidate 性能结论。初次 `static/` 污染采集仅作为诊断证据保留，
+不属于通过结果。
 
 正式 baseline/candidate 矩阵前，先用当前主线分别构建四个独立目录，确认 fixture 本身
 能够完成窗口。要求 ESP-IDF 5.3 或更高版本；不要复用 build 目录：
