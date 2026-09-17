@@ -11,7 +11,7 @@ the render-core and app-runtime C++ unit suites.
 | Goal | Tests |
 | --- | --- |
 | Manifest, resource and package safety | `package_preflight_tests.py`, `package_image_fixture_tests.py` |
-| App install/update/delete/rollback | `app_registry_tests.py`, `win32_browser_cli_tests.py` |
+| App install/update/delete/rollback and WS147 release integrity | `app_registry_tests.py`, `win32_browser_cli_tests.py`, `ws147_device_provider_release_tests.py` |
 | Desktop app-shell workflow evidence | `desktop_app_shell_workflow_tests.py` |
 | HTML/CSS audit and profile declarations | `html_support_table_tests.py`, `css_support_table_tests.py`, `render_core_feature_profile_tests.py`, `render_core_feature_registry_tests.py` |
 | Visual diagnostics and layout captures | `pipeline_visual_diagnostics_tests.py`, `flex_grid_capture_tests.py` |

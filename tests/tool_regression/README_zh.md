@@ -10,7 +10,7 @@ render-core 或 app-runtime C++ 单元测试的行为。
 | 目标 | 测试 |
 | --- | --- |
 | manifest、资源和 package 安全 | `package_preflight_tests.py`、`package_image_fixture_tests.py` |
-| app 安装/更新/删除/回滚 | `app_registry_tests.py`、`win32_browser_cli_tests.py` |
+| app 安装/更新/删除/回滚与 WS147 发布完整性 | `app_registry_tests.py`、`win32_browser_cli_tests.py`、`ws147_device_provider_release_tests.py` |
 | 桌面 App 壳工作流证据 | `desktop_app_shell_workflow_tests.py` |
 | HTML/CSS 表和 profile | `html_support_table_tests.py`、`css_support_table_tests.py`、`render_core_feature_*_tests.py` |
 | 视觉 diagnostics 和布局捕获 | `pipeline_visual_diagnostics_tests.py`、`flex_grid_capture_tests.py` |
