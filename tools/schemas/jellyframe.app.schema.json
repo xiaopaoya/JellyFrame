@@ -171,6 +171,7 @@
             }
           },
           "sizes": {
+            "description": "Exact CSS pixel sizes validated for this bitmap font. Packaging checks these values against the .jffont native line height and its supported integer scales.",
             "type": "array",
             "items": {
               "type": "integer",

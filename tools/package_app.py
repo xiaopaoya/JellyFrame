@@ -303,6 +303,85 @@ def collect_font_family_usage(resources: list[dict], manifest_fonts: list[dict])
     }
 
 
+def parse_static_font_size_px(value: str) -> int | None:
+    match = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)?)px(?:\s*!important)?\s*", value, flags=re.I)
+    if match is None:
+        return None
+    parsed = float(match.group(1))
+    if parsed < 1 or parsed > 4096:
+        return None
+    return int(parsed + 0.5)
+
+
+def collect_font_size_usage(resources: list[dict]) -> dict:
+    entries = []
+    unresolved = []
+    seen = set()
+    for resource in resources:
+        kind = resource_kind_name(resource["kind"])
+        suffix = resource["file"].suffix.lower()
+        if kind != "Stylesheet" and suffix not in {".html", ".htm"}:
+            continue
+        try:
+            text = resource["file"].read_text(encoding="utf-8-sig")
+        except UnicodeDecodeError:
+            continue
+        css_sources = []
+        if kind == "Stylesheet":
+            css_sources.append(text)
+        else:
+            css_sources.extend(match.group(1) for match in re.finditer(
+                r"<style[^>]*>(.*?)</style>", text, flags=re.I | re.S))
+            css_sources.extend(match.group(1) for match in re.finditer(
+                r"style\s*=\s*\"([^\"]*)\"", text, flags=re.I | re.S))
+            css_sources.extend(match.group(1) for match in re.finditer(
+                r"style\s*=\s*'([^']*)'", text, flags=re.I | re.S))
+
+        for css_text in css_sources:
+            cleaned = strip_css_comments(css_text)
+            declaration_blocks = [match.group(1) for match in re.finditer(r"\{([^{}]*)\}", cleaned, flags=re.S)]
+            if ":" in cleaned and not declaration_blocks:
+                declaration_blocks = [cleaned]
+            for block in declaration_blocks:
+                size_matches = list(re.finditer(r"(?:^|;)\s*font-size\s*:\s*([^;{}]+)", block, flags=re.I))
+                if not size_matches:
+                    continue
+                family_match = re.search(r"(?:^|;)\s*font-family\s*:\s*([^;{}]+)", block, flags=re.I)
+                primary_family = ""
+                if family_match is not None:
+                    families = split_css_top_level(family_match.group(1), ",")
+                    if families:
+                        primary_family = normalize_font_family_name(families[0])
+                for size_match in size_matches:
+                    raw = size_match.group(1).strip()
+                    size = parse_static_font_size_px(raw)
+                    if size is None:
+                        key = (resource["path"], raw, primary_family.lower())
+                        if key not in seen:
+                            seen.add(key)
+                            unresolved.append({
+                                "value": raw,
+                                "family": primary_family,
+                                "source": resource["path"],
+                            })
+                        continue
+                    key = (resource["path"], size, primary_family.lower())
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    entries.append({
+                        "size": size,
+                        "family": primary_family,
+                        "source": resource["path"],
+                    })
+    return {
+        "model": "static-px-font-size-declarations",
+        "entries": entries,
+        "usedSizes": sorted({entry["size"] for entry in entries}),
+        "unresolved": unresolved,
+    }
+
+
 def parse_background_service_policy(manifest: dict) -> dict:
     services = manifest.get("backgroundServices", {})
     if services and not isinstance(services, dict):
@@ -2548,6 +2627,7 @@ def collect_font_diagnostics(manifest: dict,
                              budgets: dict) -> tuple[dict, list[dict]]:
     resources_by_path = {resource["path"]: resource for resource in resources}
     source_codepoints = collect_source_codepoints(resources)
+    font_size_usage = collect_font_size_usage(resources)
     target_profile = target_config.get("fontProfile", "")
     if not isinstance(target_profile, str) or not target_profile:
         target_profile = "tiny"
@@ -2635,6 +2715,53 @@ def collect_font_diagnostics(manifest: dict,
             "usedGlyphCount": len(source_codepoints & glyphs),
             "usedGlyphSample": codepoint_sample(source_codepoints & glyphs, 24),
             })
+        native_size = parsed["lineHeight"]
+        renderable_sizes = [native_size * scale for scale in range(1, 9)]
+        declared_sizes = font_entry["sizes"]
+        declared_unavailable_sizes = sorted(set(declared_sizes) - set(renderable_sizes))
+        normalized_family = normalize_font_family_name(font_entry["family"]).lower()
+        used_sizes = sorted({
+            entry["size"] for entry in font_size_usage["entries"]
+            if normalized_family and normalize_font_family_name(entry["family"]).lower() == normalized_family
+        })
+        undeclared_used_sizes = sorted(set(used_sizes) - set(declared_sizes))
+        unavailable_used_sizes = sorted(set(used_sizes) - set(renderable_sizes))
+        font_entry.update({
+            "nativeSize": native_size,
+            "renderableSizes": renderable_sizes,
+            "usedSizes": used_sizes,
+            "undeclaredUsedSizes": undeclared_used_sizes,
+            "declaredUnavailableSizes": declared_unavailable_sizes,
+            "unavailableUsedSizes": unavailable_used_sizes,
+        })
+        if undeclared_used_sizes:
+            warnings.append({
+                "level": "warning",
+                "code": "font-size-not-declared",
+                "message": (
+                    f"CSS uses font sizes not declared by manifest font {font_entry['id'] or source}: "
+                    + ", ".join(f"{size}px" for size in undeclared_used_sizes)
+                ),
+                "source": source or "jellyframe.app.json",
+                "fontId": font_entry["id"],
+                "sizes": undeclared_used_sizes,
+            })
+        if declared_unavailable_sizes or unavailable_used_sizes:
+            affected_sizes = sorted(set(declared_unavailable_sizes) | set(unavailable_used_sizes))
+            warnings.append({
+                "level": "warning",
+                "code": "font-size-unavailable",
+                "message": (
+                    f"font {font_entry['id'] or source} cannot render declared/used sizes exactly and will use "
+                    f"integer bitmap scaling from {native_size}px: "
+                    + ", ".join(f"{size}px" for size in affected_sizes)
+                ),
+                "source": source or "jellyframe.app.json",
+                "fontId": font_entry["id"],
+                "nativeSize": native_size,
+                "renderableSizes": renderable_sizes,
+                "sizes": affected_sizes,
+            })
         manifest_fonts.append(font_entry)
 
     font_family_usage = collect_font_family_usage(resources, manifest_fonts)
@@ -2646,6 +2773,27 @@ def collect_font_diagnostics(manifest: dict,
             "code": "font-family-unmatched",
             "message": f"CSS primary font-family is not declared as a manifest runtime font: {entry['family']}",
             "source": entry["source"],
+        })
+
+    manifest_families = {
+        normalize_font_family_name(font.get("family", "")).lower(): font
+        for font in manifest_fonts
+        if normalize_font_family_name(font.get("family", ""))
+    }
+    for entry in font_size_usage["unresolved"]:
+        manifest_font = manifest_families.get(normalize_font_family_name(entry["family"]).lower())
+        if manifest_font is None:
+            continue
+        warnings.append({
+            "level": "warning",
+            "code": "font-size-unresolved",
+            "message": (
+                f"font size for manifest font {manifest_font.get('id') or manifest_font.get('source')} "
+                f"cannot be verified statically: {entry['value']}"
+            ),
+            "source": entry["source"],
+            "fontId": manifest_font.get("id", ""),
+            "value": entry["value"],
         })
 
     missing = source_codepoints - system_covered - app_covered
@@ -2705,6 +2853,7 @@ def collect_font_diagnostics(manifest: dict,
         "missingNonAsciiSample": codepoint_sample(missing_non_ascii),
         "manifestFonts": manifest_fonts,
         "fontFamilyUsage": font_family_usage,
+        "fontSizeUsage": font_size_usage,
     }
     return diagnostics, warnings
 

@@ -1240,6 +1240,29 @@ async function deployDeviceApp(context, resourceUri) {
   if (packageOutcome?.code !== 0 || !fs.existsSync(bundle)) {
     return;
   }
+  const packageReport = readJsonObject(report);
+  const sizeWarnings = Array.isArray(packageReport?.warnings)
+    ? packageReport.warnings.filter((warning) => warning?.code === "font-size-unavailable" ||
+      warning?.code === "font-size-not-declared" || warning?.code === "font-size-unresolved")
+    : [];
+  if (sizeWarnings.length > 0) {
+    const affected = [...new Set(sizeWarnings.flatMap((warning) => Array.isArray(warning?.sizes)
+      ? warning.sizes.filter(Number.isInteger).map((size) => `${size}px`) : []))];
+    const continueInstall = isChinese() ? "仍然安装" : "Install anyway";
+    const openReport = isChinese() ? "查看报告" : "View report";
+    const selectedAction = await vscode.window.showWarningMessage(
+      isChinese()
+        ? `App 字号声明不完整，或字体包无法精确提供所用字号${affected.length ? `（${affected.join("、")}）` : ""}。设备可能使用整数缩放，排版可能变化。`
+        : `App font-size metadata is incomplete, or the font package cannot provide the exact sizes${affected.length ? ` (${affected.join(", ")})` : ""}. The device may use integer scaling, which can change layout.`,
+      { modal: true }, openReport, continueInstall);
+    if (selectedAction === openReport) {
+      await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(report));
+      return;
+    }
+    if (selectedAction !== continueInstall) {
+      return;
+    }
+  }
   await runDeviceLifecycleCommand(context, "install", ["--bundle", bundle], {
     label: isChinese() ? "部署 App" : "Deploy App",
     refreshApps: true

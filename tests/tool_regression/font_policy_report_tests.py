@@ -37,10 +37,23 @@ def assert_font_report(report_path: Path) -> None:
     assert fonts["tiny-cn"]["sizes"] == [8, 12, 18, 36]
     assert fonts["tiny-cn"]["weights"] == [400, 700]
     assert fonts["tiny-cn"]["usedGlyphCount"] == 2
+    assert fonts["tiny-cn"]["nativeSize"] == 8
+    assert fonts["tiny-cn"]["renderableSizes"] == [8, 16, 24, 32, 40, 48, 56, 64]
+    assert fonts["tiny-cn"]["usedSizes"] == [12]
+    assert fonts["tiny-cn"]["declaredUnavailableSizes"] == [12, 18, 36]
+    assert fonts["tiny-cn"]["unavailableUsedSizes"] == [12]
     assert fonts["tiny-symbols"]["status"] == "usable"
     assert fonts["tiny-symbols"]["sizes"] == [8, 12, 18, 36]
     assert fonts["tiny-symbols"]["weights"] == [400, 700]
     assert fonts["tiny-symbols"]["usedGlyphCount"] == 3
+    assert fonts["tiny-symbols"]["nativeSize"] == 8
+    assert fonts["tiny-symbols"]["usedSizes"] == [18]
+    assert fonts["tiny-symbols"]["declaredUnavailableSizes"] == [12, 18, 36]
+    assert fonts["tiny-symbols"]["unavailableUsedSizes"] == [18]
+
+    size_usage = diagnostics["fontSizeUsage"]
+    assert size_usage["usedSizes"] == [12, 13, 14, 18, 28]
+    assert size_usage["unresolved"] == []
 
     family_status = {
         entry["family"]: entry["status"]
@@ -51,7 +64,11 @@ def assert_font_report(report_path: Path) -> None:
     assert diagnostics["fontFamilyUsage"]["unmatchedPrimaryCount"] == 0
 
     warnings = report.get("warnings", [])
-    assert [warning["code"] for warning in warnings] == ["font-missing-glyphs"]
+    assert [warning["code"] for warning in warnings] == [
+        "font-size-unavailable",
+        "font-size-unavailable",
+        "font-missing-glyphs",
+    ]
 
     subset = report["fontSubset"]
     assert subset["mode"] == "auto"

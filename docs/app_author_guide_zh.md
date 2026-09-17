@@ -249,6 +249,7 @@ body {
 | `visual-scroll-container` | 内部滚动区域裁切了内容。报告通常包含 `node`、`path`、`boxHeight`、`contentHeight` 和 `overflowY`。 | 确认报告中的容器可被触摸/滚轮/按键滚动，并把固定导航放在滚动容器外。 |
 | `visual-nested-scroll-container` | 内外滚动区域都裁切了纵向内容。 | 每个 route 保持一个主纵向滚动区域；把内部内容并入外层列表，或改为不溢出的固定高度控件。 |
 | `font-family-unmatched` | CSS 自定义字体没有对应 manifest 字体。 | 使用 `system-ui`，或声明匹配 family 的 `.jffont`。 |
+| `font-size-not-declared` / `font-size-unavailable` / `font-size-unresolved` | CSS 请求的字号未在 manifest 声明、打包的位图字体无法精确渲染该字号，或字号无法静态核验。 | 使用报告中的可渲染字号，或打包具有对应原生行高的字体；发布前解析动态字号并重新检查排版。 |
 | `font-missing-glyphs` | target 字体不覆盖 app 文本。 | 用生成的 `*.used_chars.txt` 制作并声明 app 字体补充包。 |
 | `style-property-unsupported` | CSS 属性不在支持子集。 | 换成文档化属性，或用 Canvas/资源图表达效果。 |
 | `html-node-limit` / `html-depth-limit` / `html-attribute-limit` | 解析的 markup 超过有界 DOM budget，后续节点、后代或属性被丢弃。 | 扁平化过多 wrapper，长列表做虚拟化，状态只保留在少量属性中。只有获得实机内存数据后再提高 DOM budget。 |

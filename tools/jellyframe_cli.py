@@ -1079,6 +1079,21 @@ ADVICE_BY_CODE = {
         "explanation": "The manifest font metadata is present but not in the documented numeric array shape.",
         "action": "Use integer arrays such as \"sizes\": [16, 20] and \"weights\": [400, 700].",
     },
+    "font-size-not-declared": {
+        "title": "CSS font size is not declared by the app font",
+        "explanation": "A statically identifiable custom font-family uses a pixel size absent from the matching manifest fonts[].sizes list.",
+        "action": "Add the size only after validating an exact face for it, or change the CSS to a size supported by the packaged font.",
+    },
+    "font-size-unavailable": {
+        "title": "Packaged bitmap font will substitute the requested size",
+        "explanation": "The .jffont resource contains one native bitmap size and the current runtime can only apply integer scaling from that size.",
+        "action": "Use one of the reported renderableSizes, or package a font face whose native lineHeight matches the requested size. Verify layout again because fallback changes text metrics.",
+    },
+    "font-size-unresolved": {
+        "title": "Custom font size could not be verified statically",
+        "explanation": "The package uses a dynamic or unsupported font-size expression for a manifest-declared custom font, so preflight cannot prove the exact runtime size.",
+        "action": "Use a static px size for release validation, or inspect the package report and verify every resolved runtime value against the font's renderableSizes.",
+    },
     "font-license-missing": {
         "title": "Font license metadata is missing",
         "explanation": "The package redistributes or declares a font supplement without clear license metadata.",

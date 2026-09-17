@@ -2138,6 +2138,95 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(package_app.normalized_int_list([8, True, "12", 16], 1), [8, 16])
         self.assertEqual(package_app.normalized_int_list([400, 1200], 1, 1000), [400])
 
+    def test_font_size_usage_correlates_static_custom_family_declarations(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-font-size-usage-") as directory:
+            root = Path(directory)
+            css = root / "app.css"
+            css.write_text(
+                '.exact { font-family: "Jelly Tiny", system-ui; font-size: 16px; }\n'
+                '.missing { font-size: 12px !important; font-family: "Jelly Tiny", sans-serif; }\n'
+                '.dynamic { font-family: "Jelly Tiny"; font-size: var(--label-size); }\n'
+                '.system { font-size: 13px; }\n',
+                encoding="utf-8")
+            resources = [{
+                "path": "/app.css",
+                "kind": "jellyframe::HostResourceKind::Stylesheet",
+                "file": css,
+                "size": css.stat().st_size,
+            }]
+
+            usage = package_app.collect_font_size_usage(resources)
+
+        self.assertEqual(usage["usedSizes"], [12, 13, 16])
+        by_size = {entry["size"]: entry["family"] for entry in usage["entries"]}
+        self.assertEqual(by_size[12], "Jelly Tiny")
+        self.assertEqual(by_size[16], "Jelly Tiny")
+        self.assertEqual(by_size[13], "")
+        self.assertEqual(usage["unresolved"], [{
+            "value": "var(--label-size)",
+            "family": "Jelly Tiny",
+            "source": "/app.css",
+        }])
+
+    def test_font_diagnostics_report_declared_and_used_unavailable_sizes(self):
+        sample_font = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy" / "fonts" / "tiny_cn.jffont"
+        with tempfile.TemporaryDirectory(prefix="jellyframe-font-size-diagnostics-") as directory:
+            root = Path(directory)
+            css = root / "app.css"
+            css.write_text(
+                '.available { font-family: "Jelly Tiny"; font-size: 16px; }\n'
+                '.undeclared { font-family: "Jelly Tiny"; font-size: 24px; }\n'
+                '.unavailable { font-family: "Jelly Tiny"; font-size: 12px; }\n'
+                '.dynamic { font-family: "Jelly Tiny"; font-size: var(--label-size); }\n',
+                encoding="utf-8")
+            resources = [
+                {
+                    "path": "/app.css",
+                    "kind": "jellyframe::HostResourceKind::Stylesheet",
+                    "file": css,
+                    "size": css.stat().st_size,
+                },
+                {
+                    "path": "/fonts/tiny.jffont",
+                    "kind": "jellyframe::HostResourceKind::Font",
+                    "file": sample_font,
+                    "size": sample_font.stat().st_size,
+                },
+            ]
+            diagnostics, warnings = package_app.collect_font_diagnostics(
+                {
+                    "fonts": [{
+                        "id": "tiny",
+                        "source": "/fonts/tiny.jffont",
+                        "profile": "tiny",
+                        "family": "Jelly Tiny",
+                        "license": {"name": "Test font", "source": "tiny.bdf"},
+                        "sizes": [8, 12, 16],
+                        "weights": [400],
+                    }],
+                },
+                resources,
+                {"fontProfile": "tiny"},
+                {},
+            )
+
+        font = diagnostics["manifestFonts"][0]
+        self.assertEqual(font["nativeSize"], 8)
+        self.assertEqual(font["renderableSizes"], [8, 16, 24, 32, 40, 48, 56, 64])
+        self.assertEqual(font["usedSizes"], [12, 16, 24])
+        self.assertEqual(font["undeclaredUsedSizes"], [24])
+        self.assertEqual(font["declaredUnavailableSizes"], [12])
+        self.assertEqual(font["unavailableUsedSizes"], [12])
+        size_warning = next(warning for warning in warnings if warning["code"] == "font-size-unavailable")
+        self.assertEqual(size_warning["sizes"], [12])
+
+        declaration_warning = next(warning for warning in warnings if warning["code"] == "font-size-not-declared")
+        self.assertEqual(declaration_warning["sizes"], [24])
+
+        unresolved_warning = next(warning for warning in warnings if warning["code"] == "font-size-unresolved")
+        self.assertEqual(unresolved_warning["fontId"], "tiny")
+        self.assertEqual(unresolved_warning["value"], "var(--label-size)")
+
     def test_external_jffont_overlay_is_packaged_at_declared_manifest_source(self):
         sample_font = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy" / "fonts" / "tiny_cn.jffont"
         with tempfile.TemporaryDirectory(prefix="jellyframe-font-overlay-") as directory:
