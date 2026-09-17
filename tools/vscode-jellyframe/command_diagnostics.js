@@ -90,6 +90,22 @@ function providerReason(resultCode, chinese) {
   return reasons[resultCode] || (chinese ? "设备返回了未完成结果。" : "The device returned an incomplete result.");
 }
 
+function transportUnavailableReason(detail, chinese) {
+  const normalized = String(detail || "").toLowerCase();
+  if (normalized.includes("timed out") || normalized.includes("did not respond")) {
+    return chinese
+      ? "配置的串口已打开，但设备未响应 JFDP。请确认设备运行的是与当前 Provider 配套的 Developer Image；测试固件不提供设备发现端点。随后重启或重新插拔设备再试。"
+      : "The configured serial port opened, but the device did not respond to JFDP. Confirm that the device is running the Developer Image paired with this provider; test firmware does not expose the discovery endpoint. Then reset or reconnect the device and retry.";
+  }
+  if (normalized.includes("failed to write") || normalized.includes("failed to read") ||
+      normalized.includes("write timeout") || normalized.includes("read timeout")) {
+    return chinese
+      ? "配置的串口已打开，但 USB 传输已停滞。请关闭串口监视器，重新插拔或重启设备，并确认设备运行的是配套 Developer Image。"
+      : "The configured serial port opened, but USB transport stalled. Close serial monitors, reconnect or reset the device, and confirm that it is running the paired Developer Image.";
+  }
+  return providerReason("transport-unavailable", chinese);
+}
+
 function protocolMismatchReason(detail, chinese) {
   const match = /^Developer Image identity mismatch at ([A-Za-z]+): manifest expects (.+); device attests (.+?)\.(?: Install the Provider and manifest paired with this firmware, or flash the Developer Image described by the configured manifest\.)?$/.exec(detail);
   if (!match) {
@@ -128,7 +144,9 @@ function commandFailure({ operation, stdout, stderr, chinese = false, internalEr
     const detail = conciseText(rawDetail);
     const reason = structured.resultCode === "protocol-mismatch"
       ? protocolMismatchReason(rawDetail, chinese)
-      : providerReason(structured.resultCode, chinese);
+      : structured.resultCode === "transport-unavailable"
+        ? transportUnavailableReason(rawDetail, chinese)
+        : providerReason(structured.resultCode, chinese);
     return {
       resultCode: structured.resultCode,
       message: `${label}${chinese ? "失败" : " failed"}：${reason}${detail && structured.resultCode !== "protocol-mismatch" ? ` ${detail}` : ""}`
@@ -150,5 +168,6 @@ module.exports = {
   appendBoundedOutput,
   commandFailure,
   protocolMismatchReason,
+  transportUnavailableReason,
   parseStructuredResult
 };

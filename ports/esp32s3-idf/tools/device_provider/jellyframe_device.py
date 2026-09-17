@@ -469,7 +469,10 @@ class Wire:
                 if response_type != message_type or session != self.session_id or response_request != request_id:
                     raise ProviderError("protocol-mismatch", "device response correlation failed")
                 return response_payload
-        raise ProviderError("transport-unavailable", "configured endpoint timed out")
+        raise ProviderError(
+            "transport-unavailable",
+            "configured endpoint opened but did not respond to JFDP/1 before the control deadline",
+        )
 
 
 def load_config(path_text: str | None) -> ProviderConfig:

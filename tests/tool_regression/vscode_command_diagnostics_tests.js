@@ -4,6 +4,7 @@ const {
   appendBoundedOutput,
   commandFailure,
   protocolMismatchReason,
+  transportUnavailableReason,
   parseStructuredResult
 } = require("../../tools/vscode-jellyframe/command_diagnostics");
 
@@ -35,6 +36,24 @@ function main() {
   assert.match(providerFailure.message, /关闭其他串口监视器/);
   assert.match(providerFailure.message, /configured endpoint is unavailable/);
   assert.doesNotMatch(providerFailure.message, /code 3/);
+
+  const endpointTimeout = commandFailure({
+    operation: "发现设备",
+    chinese: true,
+    stdout: JSON.stringify({ resultCode: "transport-unavailable", message: "configured endpoint timed out" })
+  });
+  assert.match(endpointTimeout.message, /串口已打开/);
+  assert.match(endpointTimeout.message, /Developer Image/);
+  assert.match(endpointTimeout.message, /测试固件不提供设备发现端点/);
+  assert.doesNotMatch(endpointTimeout.message, /关闭其他串口监视器并检查 USB 连接/);
+
+  const stalledWrite = commandFailure({
+    operation: "Discover device",
+    stdout: JSON.stringify({ resultCode: "transport-unavailable", message: "failed to write configured endpoint" })
+  });
+  assert.match(stalledWrite.message, /USB transport stalled/);
+  assert.match(stalledWrite.message, /Developer Image/);
+  assert.match(transportUnavailableReason("configured endpoint is unavailable", true), /关闭其他串口监视器/);
 
   const identityMismatch = commandFailure({
     operation: "发现设备",
