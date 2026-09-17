@@ -45,6 +45,7 @@ class DevicePerformanceManifestTests(unittest.TestCase):
             "conditions_json": conditions,
             "commit": "abc123",
             "visual_status": "visual-equivalent-only",
+            "visual_record": "visual-check.md",
             "stability_status": "pass",
             "target_metric": "frameP95Us",
             "acceptance_mode": "target-improvement",
@@ -63,6 +64,7 @@ class DevicePerformanceManifestTests(unittest.TestCase):
             self.assertEqual(len(manifest["reports"]), 3)
             self.assertTrue(all(path.startswith("../drag-scroll/") for path in manifest["reports"]))
             self.assertEqual(manifest["visualEvidence"]["status"], "visual-equivalent-only")
+            self.assertEqual(manifest["visualEvidence"]["record"], "visual-check.md")
             self.assertEqual(manifest["identity"]["firmwareSha256"], "A" * 64)
 
     def test_rejects_short_matrix(self):

@@ -69,6 +69,9 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     output = args.output.resolve()
     conditions = read_json(args.conditions_json)
     reports, firmware_hash = collect_reports(root, args.workload, args.side)
+    visual_evidence: dict[str, Any] = {"status": args.visual_status}
+    if args.visual_record:
+        visual_evidence.update({"method": "operator-checklist", "record": args.visual_record})
     return {
         "format": FORMAT,
         "workload": args.workload,
@@ -78,7 +81,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
             "side": args.side,
         },
         "conditions": conditions,
-        "visualEvidence": {"status": args.visual_status},
+        "visualEvidence": visual_evidence,
         "stability": {"status": args.stability_status},
         "acceptance": {
             "mode": args.acceptance_mode,
@@ -100,6 +103,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--conditions-json", required=True, type=Path)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--visual-status", choices=VISUAL_STATUSES, default="missing")
+    parser.add_argument("--visual-record", help="Optional relative path to a fixed-state visual-check record.")
     parser.add_argument("--stability-status", choices=("pass", "fail"), default="fail")
     parser.add_argument("--target-metric", default="frameP95Us")
     parser.add_argument("--acceptance-mode", choices=ACCEPTANCE_MODES, default="target-improvement")

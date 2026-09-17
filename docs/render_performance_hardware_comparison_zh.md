@@ -11,6 +11,10 @@ frame、paint、present、转换或 DMA 等阶段耗时，以及是否引入视�
 本测试不能仅凭串口数据回答某个 DOM 元素的耗时，也不能把桌面 microbench、设备
 `frame_us`、`present_us` 和 DMA 时间相加后当成统一的 Core 耗时。
 
+设备没有可靠 framebuffer readback 时，不要求逐像素比较，也不因为缺少像素 hash
+自动阻止性能验收。必须使用固定状态检查记录确认首帧、关键中间状态和最终状态没有
+可见布局、裁剪、残留或错行回归；readback/hash 只作为可选增强证据。
+
 ## 1. 测试对象
 
 每次对照包含两个固件组：
@@ -79,8 +83,7 @@ profile OFF 的 baseline 宣称优化收益。
     boot.log
     console.log
     input.txt
-    screen-before.jpg
-    screen-after.jpg
+    visual-check.md
     result.json
   candidate/
     firmware.sha256
@@ -88,8 +91,7 @@ profile OFF 的 baseline 宣称优化收益。
     boot.log
     console.log
     input.txt
-    screen-before.jpg
-    screen-after.jpg
+    visual-check.md
     result.json
   comparison.json
   comparison.html
@@ -121,6 +123,7 @@ python tools\device_performance_manifest.py `
   --conditions-json D:\JellyFramePerf\comparison-...\matrix\conditions.json `
   --commit <baseline-commit> `
   --visual-status visual-equivalent-only `
+  --visual-record visual-check.md `
   --stability-status pass
 
 python tools\device_performance_compare.py `
@@ -130,8 +133,10 @@ python tools\device_performance_compare.py `
   --html-output comparison.html
 ```
 
-manifest 最小形状如下；`visualEvidence.status` 为 `exact-readback` 才可能得到 `PASS`，
-照片或目检应填 `visual-equivalent-only`，结果会保守标记为 `PARTIAL`：
+manifest 最小形状如下。`exact-readback` 是可选的增强证据；没有可靠回读时，使用
+`visual-equivalent-only`，并在 `visualEvidence.method` 和 `visual-check.md` 中记录固定
+状态检查。只要性能、稳定性、输入和行为检查完整，`visual-equivalent-only` 同样可以得到
+`PASS`；只有缺失或失败的视觉/行为检查才会降级或失败：
 
 ```json
 {
@@ -145,7 +150,11 @@ manifest 最小形状如下；`visualEvidence.status` 为 `exact-readback` 才�
     "warmupFrames": 30,
     "measuredFrames": 120
   },
-  "visualEvidence": {"status": "exact-readback"},
+  "visualEvidence": {
+    "status": "visual-equivalent-only",
+    "method": "operator-checklist",
+    "record": "visual-check.md"
+  },
   "stability": {"status": "pass"},
   "acceptance": {"mode": "target-improvement", "targetMetric": "frameP95Us"},
   "reports": ["repeat-01/result.json", "repeat-02/result.json", "repeat-03/result.json"]
@@ -158,6 +167,30 @@ manifest 最小形状如下；`visualEvidence.status` 为 `exact-readback` 才�
 
 `metadata.json` 和 `comparison.json` 必须同时保留机器可读的原始路径、固件 hash、
 profile window、有效 frames、各阶段 p50/p95/max、错误计数和内存 low-water。
+
+`visual-check.md` 可以使用以下最小模板。它是操作者对固定检查点的记录，不要求照片、
+显示回读或逐像素工具；如果某一项无法观察，必须写明原因并将结果降级为 `PARTIAL`：
+
+```text
+Visual check: PASS | FAIL | PARTIAL
+Observer / time:
+Baseline firmware / candidate firmware:
+Input script and reset state: identical | not-identical
+
+Checkpoint 1 - initial state:
+  layout / alignment:
+  clipping / rounded corners:
+  residual pixels / wrong-line artifacts:
+Checkpoint 2 - active input or scroll state:
+  control follows input:
+  dirty area updates without stale content:
+  text wrapping / bottom edge:
+Checkpoint 3 - final state:
+  expected content and position:
+  teardown / return state:
+Notes:
+Conclusion: visually-equivalent-only | not-comparable
+```
 
 ## 5. 统计方法
 
@@ -188,10 +221,11 @@ delta_percent = (candidate_p95 - baseline_p95) / baseline_p95 * 100
 每个 workload 必须满足：
 
 - baseline 与 candidate 的输入脚本、有效窗口数和 warm-up 规则一致；
-- 首帧、关键中间状态和最终状态视觉一致；
-- 有 framebuffer readback 时，固定关键帧 hash 完全一致；
-- 无法 readback 时，使用固定角度、固定亮度和固定时刻照片，并标记
-  `visual-equivalent-only`；
+- 首帧、关键中间状态和最终状态通过固定检查点；至少记录布局、裁剪、残留、错行、
+  触摸响应和最终状态是否符合预期；
+- 有 framebuffer readback 时，可以附加固定关键帧 hash，但不得把它作为本测试的必要条件；
+- 无法 readback 时，将 `visualEvidence.status` 设为 `visual-equivalent-only`，并保留
+  `visual-check.md` 或等价的结构化检查记录；照片可以附加，但不是必需证据；
 - 两组都无 panic、watchdog、brownout、reset、DMA、SPI、panel、present 或 touch task 错误；
 - `present_failures=0`，不得出现新增队列丢弃或恢复路径；
 - `internal_free_min`、`psram_free_min`、stack low-water 不低于既有 port 安全下限，且
@@ -212,17 +246,17 @@ delta_percent = (candidate_p95 - baseline_p95) / baseline_p95 * 100
 - 若改善只出现在 `paint_us`，但 `present_us` 或 `dma_wait_us` 占主导，应明确写成
   “Core 阶段改善，端到端体验未证明改善”。
 
-“改善”必须同时有稳定性和视觉证据。单次运行、平均值下降、串口无错误但没有屏幕
-证据，都不足以放行。
+“改善”必须同时有稳定性和固定状态检查记录。单次运行、平均值下降、串口无错误但
+没有行为检查记录，都不足以放行；逐像素 readback 不是必要条件。
 
 ## 7. 结果分类
 
 | 结果 | 条件 |
 | --- | --- |
-| `PASS` | 固定条件完整，视觉/稳定性通过，目标指标达到门槛，且无其他阶段回归 |
-| `PARTIAL` | 硬件数据有效但缺少 readback、重复次数不足或只能得到 visual-equivalent-only |
+| `PASS` | 固定条件完整，行为检查/稳定性通过，目标指标达到门槛，且无其他阶段回归；`visual-equivalent-only` 可以通过 |
+| `PARTIAL` | 硬件数据有效但视觉检查缺失、重复次数不足或某项指标无法严格比较 |
 | `INVALID` | 版本、输入、配置、窗口、日志或样本不一致；必须重测 |
-| `FAIL` | 证据完整但出现视觉/稳定性回归、目标性能回归或内存门槛失败 |
+| `FAIL` | 行为检查失败、出现视觉/稳定性回归、目标性能回归或内存门槛失败 |
 
 ## 8. 与桌面 microbench 的对应关系
 
@@ -259,6 +293,7 @@ Frame delta (%):
 Baseline paint/present/DMA p95 (us):
 Candidate paint/present/DMA p95 (us):
 Visual evidence: exact-readback | visual-equivalent-only | missing
+Visual check record: visual-check.md
 Memory low-water delta:
 Errors / resets / recovery:
 Microbench reference:

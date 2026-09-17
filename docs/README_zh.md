@@ -86,6 +86,7 @@
 - [embedded_optimization_notes_zh.md](embedded_optimization_notes_zh.md)：当前优化选择和基准基线。
 - [render_performance_trace_zh.md](render_performance_trace_zh.md)：Render Core 性能观测、逐帧 trace、VS Code 工具目标和公平对比方案。
 - [render_performance_hardware_comparison_zh.md](render_performance_hardware_comparison_zh.md)：Render Core 优化前后硬件对照测试、证据和通过标准。
+- [render_performance_embedded_ui_workload_zh.md](render_performance_embedded_ui_workload_zh.md)：Stage 3 嵌入式 UI 对照 workload、固定状态检查和无回读验收要求。
 - [device_performance_profile_rfc_zh.md](device_performance_profile_rfc_zh.md)：Device OS/port 的默认关闭、有界阶段窗口性能 profile 契约。
 - [porting_work_guide_zh.md](porting_work_guide_zh.md)：分阶段开发板移植指导。
 

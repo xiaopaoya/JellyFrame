@@ -288,4 +288,17 @@ GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立�
 - CPU 2D 的 opaque-fill、horizontal-gradient 与 vertical-gradient GDI 基础对照已交付，但尚不足以
   代表完整库；
 - 仍需完成至少一个嵌入式 UI 对照，并扩展圆角和文本等价 workload，才给出“快/慢”的
-  总体定量结论。
+  总体定量结论；设备对照以固定状态检查和稳定性日志为正确性门槛，不把逐像素 readback
+  作为默认硬件前置条件。
+- 下一项固定 workload 已定义为 [嵌入式 UI 对照 workload V0](render_performance_embedded_ui_workload_zh.md)，
+  覆盖黑底可穿戴页面、设置行、状态卡、底部导航、文本更新、滚动和全屏重绘。
+
+### 第四阶段：面向 App 作者的闭环
+
+- 将 package report、`.jfcapture`、Render Trace 和设备 telemetry 的选择与合并接入 VS Code
+  一键入口；
+- 增加低开销、有界的实时 trace 环形缓冲，桌面默认可用，设备仍默认只采集 aggregate；
+- 建立“输入/脚本更新 -> mutation -> invalidation -> layer/command -> dirty 区”的可靠
+  关联，仅在 producer 确实提供证据时展示元素根因；
+- 增加项目级历史报告、版本回归和设备/workload 趋势；
+- 完成嵌入式 UI、圆角、文本和滚动对照后，再冻结对外的性能比较结论。

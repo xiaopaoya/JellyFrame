@@ -81,14 +81,23 @@ class DevicePerformanceCompareTests(unittest.TestCase):
             self.assertEqual(frame["candidate"]["median"], 950)
             self.assertEqual(frame["deltaPercent"], -13.64)
 
-    def test_visual_equivalent_only_is_partial(self):
+    def test_visual_equivalent_only_is_accepted_without_readback(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             baseline = self.write_side(root, "baseline", [1000, 1000, 1000], visual="visual-equivalent-only")
-            candidate = self.write_side(root, "candidate", [900, 900, 900])
+            candidate = self.write_side(root, "candidate", [900, 900, 900], visual="visual-equivalent-only")
+            result = self.module.compare_sides(self.module.load_side(baseline), self.module.load_side(candidate))
+            self.assertEqual(result["status"], "PASS")
+            self.assertFalse(any("visual" in reason for reason in result["statusReasons"]))
+
+    def test_missing_visual_evidence_remains_partial(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            baseline = self.write_side(root, "baseline", [1000, 1000, 1000], visual="missing")
+            candidate = self.write_side(root, "candidate", [900, 900, 900], visual="visual-equivalent-only")
             result = self.module.compare_sides(self.module.load_side(baseline), self.module.load_side(candidate))
             self.assertEqual(result["status"], "PARTIAL")
-            self.assertTrue(any("visual" in reason for reason in result["statusReasons"]))
+            self.assertTrue(any("visual evidence is missing" in reason for reason in result["statusReasons"]))
 
     def test_condition_mismatch_is_invalid(self):
         with tempfile.TemporaryDirectory() as directory:

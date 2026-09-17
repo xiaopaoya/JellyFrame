@@ -251,8 +251,14 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
         reasons.append("presentFailures is non-zero")
     if base_manifest["stability"]["status"] != "pass" or candidate_manifest["stability"]["status"] != "pass":
         reasons.append("stability evidence is not passing")
-    if base_manifest.get("visualEvidence", {}).get("status") != "exact-readback" or candidate_manifest.get("visualEvidence", {}).get("status") != "exact-readback":
-        reasons.append("visual evidence is not exact framebuffer readback")
+    visual_statuses = {
+        base_manifest.get("visualEvidence", {}).get("status", "missing"),
+        candidate_manifest.get("visualEvidence", {}).get("status", "missing"),
+    }
+    if "fail" in visual_statuses:
+        reasons.append("visual evidence failed")
+    elif "missing" in visual_statuses:
+        reasons.append("visual evidence is missing")
     if not all(check.get("pass") for check in checks):
         reasons.append("one or more acceptance checks failed")
 
@@ -262,9 +268,11 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
         status = "FAIL"
     elif base_manifest["stability"]["status"] != "pass" or candidate_manifest["stability"]["status"] != "pass":
         status = "FAIL"
+    elif "fail" in visual_statuses:
+        status = "FAIL"
     elif not all(check.get("pass") for check in checks):
         status = "FAIL"
-    elif base_manifest.get("visualEvidence", {}).get("status") != "exact-readback" or candidate_manifest.get("visualEvidence", {}).get("status") != "exact-readback":
+    elif "missing" in visual_statuses:
         status = "PARTIAL"
     else:
         status = "PASS"
@@ -298,7 +306,7 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
         "metrics": metrics,
         "limitations": [
             "Device profile inputs are aggregate window percentiles; repeat summaries do not reconstruct raw frame distributions.",
-            "A PARTIAL result with visual-equivalent-only evidence is not pixel equivalence.",
+            "visual-equivalent-only evidence can pass the behavioral gate but is not pixel equivalence.",
             "This comparison does not attribute time to individual DOM elements or commands.",
         ],
     }

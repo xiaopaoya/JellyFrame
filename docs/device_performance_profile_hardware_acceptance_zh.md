@@ -8,6 +8,10 @@
 输入和同一固件路径下，开启 profile 是否改变了画面、稳定性或帧耗时。它不是 FPS
 承诺，也不能用来推断某个 DOM 元素或 paint command 的耗时。
 
+本 V0 不要求设备提供 framebuffer readback，也不要求逐像素 hash。设备显示正确性
+通过固定状态检查和原始日志验收；如果现场具备可靠 readback，可以作为附加证据记录，
+但缺少它不会自动使样本降级。
+
 ## 1. 前置条件
 
 ### 1.1 工具与版本
@@ -108,24 +112,35 @@ device_profile_counters
     boot.log
     console.log
     input.txt
-    screen-before.jpg
-    screen-after.jpg
+    visual-check.md
   on/
     firmware.sha256
     sdkconfig
     boot.log
     console.log
     input.txt
-    screen-before.jpg
-    screen-after.jpg
+    visual-check.md
   report.json
   report.html
   result.md
 ```
 
 `metadata.json` 必须记录 commit、Core/Runtime/ABI、board、viewport、panel、workload、
-输入脚本、测试时间和操作者。截图若不是设备 framebuffer 精确回读，必须标明为人工
-视觉证据，不能声称像素级等效。
+输入脚本、测试时间和操作者。`visual-check.md` 应记录固定状态检查结果；照片和
+framebuffer 回读均为可选附件，不能把它们作为 V0 必需条件。
+
+推荐的 `visual-check.md` 最小内容：
+
+```text
+Visual check: PASS | FAIL | PARTIAL
+Observer / time:
+OFF and ON reset state: identical | not-identical
+Initial state: layout / clipping / residual pixels / wrong-line artifacts
+Active input state: input response / dirty update / text wrapping
+Final state: content / position / teardown
+Notes:
+Conclusion: visually-equivalent-only | not-comparable
+```
 
 用 host 工具验证并生成报告：
 
@@ -158,10 +173,11 @@ python tools\render_performance_report.py `
 
 在相同输入下，OFF 与 ON 必须满足：
 
-- 首帧和最终状态视觉一致；
-- 可进行设备 framebuffer 回读时，关键帧像素 hash 完全一致；
-- 无回读能力时，至少提供固定角度、固定亮度和固定时间点的屏幕照片，并将结论标为
-  `visual-equivalent-only`，不能标为像素等效；
+- 首帧、关键中间状态和最终状态通过固定检查点，至少记录布局、裁剪、残留、错行、
+  触摸响应和最终状态；
+- 可进行设备 framebuffer 回读时，可以附加关键帧像素 hash，但不是 V0 必需条件；
+- 无回读能力时，将结论标为 `visual-equivalent-only`，并保留 `visual-check.md` 或
+  等价的结构化检查记录；照片可以附加，但不是必需条件；
 - present 成功数、输入响应、dirty/full 行为和 teardown 无新增错误；
 - 无 panic、watchdog、brownout、reset、DMA/SPI/panel 或触摸任务错误；
 - `internal_free_min`、`psram_free_min` 和 stack low-water 不得越过既有 port 安全下限，
@@ -190,10 +206,10 @@ OFF 只有长期 `port_telemetry` 而没有同等 120-present 的 frame p95 时�
 
 | 结果 | 条件 |
 | --- | --- |
-| `PASS` | 记录完整、两组行为一致、无硬件/稳定性错误、性能开销不超过 3% |
-| `PARTIAL` | 仅有人工视觉证据、窗口不足、缺少等价 OFF 基线，或某项指标无法严格比较 |
+| `PASS` | 记录完整、固定状态检查通过、无硬件/稳定性错误、性能开销不超过 3%；无 readback 仍可通过 |
+| `PARTIAL` | 缺少固定状态检查、窗口不足、缺少等价 OFF 基线，或某项指标无法严格比较 |
 | `INVALID` | 五条记录缺失/重复/混窗、日志被截断、输入不一致、版本或配置不一致 |
-| `FAIL` | 证据完整但像素/行为不一致、出现错误，或 profile 开销超过 3% |
+| `FAIL` | 固定状态检查失败、行为不一致、出现错误，或 profile 开销超过 3% |
 
 `INVALID` 必须重新采集；不能通过删除异常行、拼接不同批次日志或手工改写 summary
 变成 `PARTIAL` 或 `PASS`。

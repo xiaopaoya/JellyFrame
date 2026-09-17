@@ -95,7 +95,7 @@
 
 - CI：`75a550a6` 的运行必须完成，重点查看 sanitizer、Windows scripting、standalone Render Core consumer 和 documentation freshness。
 - 桌面：当前本地 Release 全套 `50/50` CTest 通过；新增性能改动不得降低既有文本、圆角、flex 与 clip 回归覆盖。
-- 设备：panel-scroll 实验文件仍不入主线；只有 TE/vblank 同步、真实 input-to-present 和恢复证据齐备后才重新评估。普通 framebuffer scroll-blit 归档可作为当前安全路径证据。
+- 设备：panel-scroll 实验文件仍不入主线；只有 TE/vblank 同步、真实 input-to-present 和恢复证据齐备后才重新评估。普通 framebuffer scroll-blit 归档可作为当前安全路径证据。性能 A/B 不再要求设备逐像素 readback；固定状态检查、稳定性日志、present 成功和内存门槛是必需条件，可靠 readback 仅作为增强证据。
 - 任何“已修复”项在缺少对应 CI/设备证据时只能标为“代码已落地，验证待闭环”。
 
 ---
