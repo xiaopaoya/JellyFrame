@@ -34,6 +34,7 @@ public:
     JerryScriptRuntime& operator=(const JerryScriptRuntime&) = delete;
 
     void bind_document(Node& document) override;
+    void set_dom_mutation_observer(ScriptDomMutationCallback callback, void* user) override;
     void bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network) override;
     void bind_location_service(AppRuntimeHost& host, AppLocationSnapshotMock& location) override;
     void bind_host_data_snapshot(const AppHostDataSnapshot& snapshot,
@@ -136,10 +137,13 @@ private:
     std::vector<std::string> route_history_;
     std::size_t route_history_index_ = 0;
     std::uint32_t execution_watchdog_depth_ = 0;
+    std::uint32_t script_execution_depth_ = 0;
     std::uint32_t execution_watchdog_remaining_ = 0;
     bool execution_watchdog_interrupted_ = false;
     bool execution_watchdog_interrupt_pending_ = false;
     ScriptCallbackFailure callback_failure_;
+    ScriptDomMutationCallback dom_mutation_callback_ = nullptr;
+    void* dom_mutation_callback_user_ = nullptr;
 
     bool can_adopt_detached_node() const;
     bool can_adopt_detached_node(const Node& node) const;
@@ -222,6 +226,13 @@ private:
                                        std::uint32_t& request_id);
     bool cancel_script_service_request(std::uint32_t request_id);
     void record_script_callback_failure(ScriptCallbackFailureStatus status, std::string message);
+    void notify_dom_mutation(const Node& node,
+                             DomDirtyFlags flags,
+                             std::uint64_t mutation_generation);
+    static void dom_mutation_observer(Node& node,
+                                      DomDirtyFlags flags,
+                                      std::uint64_t mutation_generation,
+                                      void* context);
 };
 
 } // namespace jellyframe

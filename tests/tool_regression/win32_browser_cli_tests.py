@@ -283,7 +283,10 @@ def main() -> int:
             "#first{left:0;top:45px;background:#e33;}"
             "#second{left:25px;top:45px;background:#3c6;}</style>"
             "<div id='first'></div><div id='second'></div>"
-            "<input id='drag' type='range' min='0' max='100' value='0'>",
+            "<input id='drag' type='range' min='0' max='100' value='0'>"
+            "<script>document.getElementById('drag').addEventListener('input', function () {"
+            "document.getElementById('first').setAttribute('data-moved', 'yes');"
+            "});</script>",
             encoding="utf-8",
         )
         (app / "jellyframe.app.json").write_text(
@@ -295,7 +298,7 @@ def main() -> int:
                 "versionCode": 1,
                 "entry": "/index.html",
                 "runtime": {
-                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "none"
+                    "minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "classic"
                 },
                 "viewport": {"designWidth": 160, "designHeight": 60},
             }),
@@ -339,6 +342,10 @@ def main() -> int:
                     for record in frame_records
                     for source in record.get("mutationSources", [])),
                 "render trace must associate scripted input with the stable control owner")
+        require(any(source["kind"] == "script" and source["owner"] == "id:first" and source["mutation"]
+                    for record in frame_records
+                    for source in record.get("mutationSources", [])),
+                "render trace must associate script DOM mutation with the directly changed owner")
         for record in frame_records:
             require(record["type"] == "frame" and record["totalUs"] >= 0,
                     "render trace frame records must contain non-negative totalUs")

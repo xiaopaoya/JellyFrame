@@ -162,6 +162,7 @@ Node& Node::insert_child(std::unique_ptr<Node> child, std::size_t index) {
     index = std::min(index, children.size());
     auto inserted = children.insert(children.begin() + static_cast<std::ptrdiff_t>(index), std::move(child));
     (*inserted)->parent = this;
+    (*inserted)->set_mutation_observer(mutation_observer_, mutation_observer_context_);
     mark_dirty(*this, DomDirtyTree | DomDirtyLayout);
     return **inserted;
 }
@@ -172,6 +173,7 @@ std::unique_ptr<Node> Node::detach_child(const Node& child) {
             continue;
         }
         std::unique_ptr<Node> detached = std::move(*it);
+        detached->clear_mutation_observer(mutation_observer_, mutation_observer_context_);
         detached->parent = nullptr;
         children.erase(it);
         mark_dirty(*this, DomDirtyTree | DomDirtyLayout);
@@ -343,6 +345,24 @@ void Node::remove_destroy_observer(DestroyObserver observer, void* context) {
         destroy_observers_.end());
 }
 
+void Node::set_mutation_observer(MutationObserver observer, void* context) {
+    mutation_observer_ = observer;
+    mutation_observer_context_ = observer == nullptr ? nullptr : context;
+    for (auto& child : children) {
+        child->set_mutation_observer(observer, context);
+    }
+}
+
+void Node::clear_mutation_observer(MutationObserver observer, void* context) {
+    if (mutation_observer_ == observer && mutation_observer_context_ == context) {
+        mutation_observer_ = nullptr;
+        mutation_observer_context_ = nullptr;
+    }
+    for (auto& child : children) {
+        child->clear_mutation_observer(observer, context);
+    }
+}
+
 std::unique_ptr<Node> make_element(std::string tag_name) {
     auto node = std::make_unique<Node>(NodeType::Element);
     node->tag_name = std::move(tag_name);
@@ -366,6 +386,12 @@ void mark_dirty(Node& node, DomDirtyFlags flags) {
         root = current;
     }
     ++root->mutation_generation;
+    if (node.mutation_observer_ != nullptr) {
+        node.mutation_observer_(node,
+                                flags,
+                                root->mutation_generation,
+                                node.mutation_observer_context_);
+    }
 }
 
 DomDirtyFlags subtree_dirty_flags(const Node& node) {

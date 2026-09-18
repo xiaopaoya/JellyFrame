@@ -75,6 +75,10 @@ private:
 
 struct Node : public EventTarget {
     using DestroyObserver = void (*)(Node& node, void* context);
+    using MutationObserver = void (*)(Node& node,
+                                      DomDirtyFlags flags,
+                                      std::uint64_t mutation_generation,
+                                      void* context);
 
     explicit Node(NodeType node_type);
     ~Node();
@@ -108,13 +112,21 @@ struct Node : public EventTarget {
     void clear_destroy_observer(DestroyObserver observer, void* context);
     void add_destroy_observer(DestroyObserver observer, void* context);
     void remove_destroy_observer(DestroyObserver observer, void* context);
+    // This observer is intentionally opt-in. It is used by tooling hosts to
+    // receive mutation values without adding a mutation queue to the DOM.
+    void set_mutation_observer(MutationObserver observer, void* context);
+    void clear_mutation_observer(MutationObserver observer, void* context);
 
 private:
+    friend void mark_dirty(Node& node, DomDirtyFlags flags);
+
     struct DestroyObserverEntry {
         DestroyObserver observer = nullptr;
         void* context = nullptr;
     };
     std::vector<DestroyObserverEntry> destroy_observers_;
+    MutationObserver mutation_observer_ = nullptr;
+    void* mutation_observer_context_ = nullptr;
 };
 
 std::unique_ptr<Node> make_element(std::string tag_name);

@@ -55,6 +55,25 @@ Node* find_by_id(Node& node, const std::string& id) {
     return nullptr;
 }
 
+struct DomMutationObservation {
+    std::vector<const Node*> nodes;
+    std::vector<DomDirtyFlags> flags;
+    std::vector<std::uint64_t> generations;
+};
+
+void observe_dom_mutation(void* user,
+                          const Node& node,
+                          DomDirtyFlags flags,
+                          std::uint64_t mutation_generation) {
+    auto* observation = static_cast<DomMutationObservation*>(user);
+    if (observation == nullptr) {
+        return;
+    }
+    observation->nodes.push_back(&node);
+    observation->flags.push_back(flags);
+    observation->generations.push_back(mutation_generation);
+}
+
 void expression_returns_value() {
     JerryScriptRuntime runtime;
     const ScriptEvaluationResult result = runtime.eval("1 + 2", "expression.js");
@@ -277,6 +296,50 @@ void inline_document_script_mutates_dom() {
     MouseEvent click("click", 1, 1);
     dispatch_event(*button, click);
     check(button->text_content() == "1", "inline script listener mutates DOM after click");
+}
+
+void script_dom_mutation_observer_is_scoped_and_precise() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><div id='target'></div></body>");
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    DomMutationObservation observation;
+    runtime.set_dom_mutation_observer(observe_dom_mutation, &observation);
+    Node* target = find_by_id(*document, "target");
+    check(target != nullptr, "mutation observer test target exists");
+
+    target->set_attribute("data-host", "value");
+    check(observation.nodes.empty(), "host-side DOM mutation is outside script observation scope");
+
+    const ScriptEvaluationResult result = runtime.eval(
+        "var t = document.getElementById('target');"
+        "t.setAttribute('class', 'active');"
+        "t.textContent = 'hello';"
+        "var child = document.createElement('span');"
+        "t.appendChild(child);"
+        "t.removeChild(child);"
+        "'done';");
+    check(result.ok && result.value == "done", "script mutation observer test script succeeds");
+    check(observation.nodes.size() == 4, "each attached script DOM mutation is observed once");
+    check(observation.nodes[0] == target && observation.nodes[1] == target &&
+              observation.nodes[2] == target && observation.nodes[3] == target,
+          "script mutation observer reports the directly mutated owner");
+    check((observation.flags[0] & DomDirtyAttributes) != 0U &&
+              (observation.flags[1] & DomDirtyText) != 0U &&
+              (observation.flags[2] & DomDirtyTree) != 0U &&
+              (observation.flags[3] & DomDirtyTree) != 0U,
+          "script mutation observer preserves dirty flag categories");
+    for (std::size_t index = 1; index < observation.generations.size(); ++index) {
+        check(observation.generations[index] > observation.generations[index - 1],
+              "script mutation observer generations are monotonic");
+    }
+
+    runtime.set_dom_mutation_observer(nullptr, nullptr);
+    const std::size_t observed_before_clear = observation.nodes.size();
+    const ScriptEvaluationResult after_clear = runtime.eval("t.setAttribute('data-after-clear', 'yes');");
+    check(after_clear.ok, "script remains usable after clearing mutation observer");
+    check(observation.nodes.size() == observed_before_clear,
+          "cleared script mutation observer receives no later callbacks");
 }
 
 void document_get_element_by_id_updates_text_content() {
@@ -2687,6 +2750,7 @@ int main() {
         runtime_can_restart();
         base64_helpers_follow_html_binary_string_subset();
         inline_document_script_mutates_dom();
+        script_dom_mutation_observer_is_scoped_and_precise();
         document_get_element_by_id_updates_text_content();
         document_create_and_append_element();
         javascript_append_and_prepend_mix_text_and_nodes();

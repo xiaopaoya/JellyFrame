@@ -1,7 +1,7 @@
 # Render Trace 命令/节点归因 RFC
 
 > 最后更新：2026-09-17；适用版本：0.6.0-dev
-> 状态：第 1、2、3 步及首个 mutation/invalidation source producer 已交付；命令/元素归因仅在显式 Win32 Render Trace capture 下启用
+> 状态：第 1、2、3 步及脚本 mutation owner 传播已交付；命令/元素归因仅在显式 Win32 Render Trace capture 下启用
 
 ## 目标
 
@@ -90,6 +90,12 @@ frame record 还可以包含 producer 明确观察到的 `mutationSources`：
 `invalidation=true`。source 缺失、被截断或只有空间重叠证据时，查看器必须继续显示“无法确认
 mutation 根因”，不能把 command owner 猜成 mutation owner。
 
+脚本 source 由可选的 `ScriptRuntime` DOM mutation observer 产生。observer 在脚本执行栈内直接从
+统一 `mark_dirty` 入口取得被修改节点、dirty flags 和 root mutation generation，再由桌面 producer
+立即转换为安全 owner 与可选的旧布局 bounds；它不把 `Node*` 或事件 payload 写入 trace。脚本执行栈
+外的宿主 DOM 修改不会被标成 `script`，没有 observer 或非脚本构建也不增加 mutation 队列。若某帧
+没有收到精确脚本回调，producer 才保留一次 generation/invalidation fallback，避免重复 source。
+
 ## 实现顺序
 
 1. **Owner token sidecar（已交付）**：`DisplayCommand::trace_owner_token`、opt-in registry、
@@ -108,8 +114,9 @@ mutation 根因”，不能把 command owner 猜成 mutation owner。
    提供逐帧命令排名、最慢帧跳转，以及按 command、stage、owner 的跨帧调用数/累计耗时/p95 聚合。截断、
    无效样本和 `unattributed` 单独显示，聚合只代表已记录样本，不把缺失数据补成零。
    同一 producer 现记录 frame-local `mutationSources`，覆盖 deterministic frame script 的输入/系统/宿主
-   事件、脚本回调、动画、滚动和首帧诊断 repaint；source 只在观察到 mutation 或 invalidation 时写出，
-   且受 16 项及 JSONL 行大小限制。VS Code 查看器与离线报告保留并显示该字段。
+   事件、脚本回调、动画、滚动和首帧诊断 repaint；脚本 DOM mutation 通过 Runtime observer 精确关联
+   到直接被修改的安全 owner。source 只在观察到 mutation 或 invalidation 时写出，且受 16 项及 JSONL
+   行大小限制。VS Code 查看器与离线报告保留并显示该字段。
 4. **正确性及开销门槛**：同一 `.jfcapture` 的 profile on/off frame hash 必须相同；Release desktop
    baseline 上 profiling p95 额外 CPU 时间应记录且可解释，不设虚假的“零开销”要求。
    `tools/render_trace_profile_ab.py` 是标准配对 runner：它交替运行 baseline/profiled、校验每帧
@@ -129,6 +136,6 @@ mutation 根因”，不能把 command owner 猜成 mutation owner。
   Core benchmark 不得出现回归。
 - trace 中不出现裸地址、DOM path、用户文本、文件路径、密钥或设备物理地址。
 
-上述 producer 的边界、Core 单元测试、Win32 JSONL 回归及 profile on/off 像素一致性验证完成后，
+上述 producer 的边界、Core/Script 单元测试、Win32 JSONL 回归及 profile on/off 像素一致性验证完成后，
 Render Trace 可以如实称为“桌面 capture 可用的 command/node attribution”。它仍不代表设备计时，
 也不代表完整 paint/composite 时间已按元素拆分。

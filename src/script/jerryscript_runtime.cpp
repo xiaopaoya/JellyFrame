@@ -484,6 +484,10 @@ struct ScriptRuntimeAccess {
         return runtime.execution_watchdog_depth_;
     }
 
+    static std::uint32_t& script_execution_depth(JerryScriptRuntime& runtime) {
+        return runtime.script_execution_depth_;
+    }
+
     static std::uint32_t& execution_watchdog_remaining(JerryScriptRuntime& runtime) {
         return runtime.execution_watchdog_remaining_;
     }
@@ -788,9 +792,31 @@ private:
     bool installed_ = false;
 };
 
+class ScriptDomMutationScope {
+public:
+    explicit ScriptDomMutationScope(JerryScriptRuntime& runtime)
+        : runtime_(runtime) {
+        ++ScriptRuntimeAccess::script_execution_depth(runtime_);
+    }
+
+    ~ScriptDomMutationScope() {
+        std::uint32_t& depth = ScriptRuntimeAccess::script_execution_depth(runtime_);
+        if (depth > 0) {
+            --depth;
+        }
+    }
+
+    ScriptDomMutationScope(const ScriptDomMutationScope&) = delete;
+    ScriptDomMutationScope& operator=(const ScriptDomMutationScope&) = delete;
+
+private:
+    JerryScriptRuntime& runtime_;
+};
+
 template <typename Callback>
 JerryValue run_with_execution_budget(JerryScriptRuntime& runtime, Callback&& callback) {
     ScriptExecutionBudgetScope scope(runtime);
+    ScriptDomMutationScope mutation_scope(runtime);
     JerryValue result(callback());
     if (jerry_value_is_exception(result.get())) {
         JerryValue exception_value(jerry_exception_value(jerry_value_copy(result.get()), true));
@@ -6533,6 +6559,9 @@ void JerryScriptRuntime::install_script_service_gateway() {
 
 JerryScriptRuntime::~JerryScriptRuntime() {
     if (initialized_) {
+        if (bound_document_ != nullptr) {
+            bound_document_->clear_mutation_observer(dom_mutation_observer, this);
+        }
         clear_xml_http_requests();
         clear_audio_elements();
         clear_geolocation_requests();
@@ -6555,6 +6584,9 @@ JerryScriptRuntime::~JerryScriptRuntime() {
 }
 
 void JerryScriptRuntime::bind_document(Node& document) {
+    if (bound_document_ != nullptr) {
+        bound_document_->clear_mutation_observer(dom_mutation_observer, this);
+    }
     callback_failure_ = {};
     clear_xml_http_requests();
     clear_audio_elements();
@@ -6579,6 +6611,9 @@ void JerryScriptRuntime::bind_document(Node& document) {
         canvas_2d_->clear();
     }
     bound_document_ = &document;
+    if (dom_mutation_callback_ != nullptr) {
+        bound_document_->set_mutation_observer(dom_mutation_observer, this);
+    }
     dom_statistics_cached_document_ = nullptr;
     dom_statistics_cached_generation_ = 0;
     dom_statistics_cached_document_stats_ = {};
@@ -6678,6 +6713,36 @@ void JerryScriptRuntime::bind_document(Node& document) {
         delete_property(global.get(), "localStorage");
     }
     install_script_service_gateway();
+}
+
+void JerryScriptRuntime::set_dom_mutation_observer(ScriptDomMutationCallback callback, void* user) {
+    if (bound_document_ != nullptr) {
+        bound_document_->clear_mutation_observer(dom_mutation_observer, this);
+    }
+    dom_mutation_callback_ = callback;
+    dom_mutation_callback_user_ = user;
+    if (bound_document_ != nullptr && dom_mutation_callback_ != nullptr) {
+        bound_document_->set_mutation_observer(dom_mutation_observer, this);
+    }
+}
+
+void JerryScriptRuntime::notify_dom_mutation(const Node& node,
+                                             DomDirtyFlags flags,
+                                             std::uint64_t mutation_generation) {
+    if (dom_mutation_callback_ == nullptr || script_execution_depth_ == 0) {
+        return;
+    }
+    dom_mutation_callback_(dom_mutation_callback_user_, node, flags, mutation_generation);
+}
+
+void JerryScriptRuntime::dom_mutation_observer(Node& node,
+                                               DomDirtyFlags flags,
+                                               std::uint64_t mutation_generation,
+                                               void* context) {
+    auto* runtime = static_cast<JerryScriptRuntime*>(context);
+    if (runtime != nullptr) {
+        runtime->notify_dom_mutation(node, flags, mutation_generation);
+    }
 }
 
 bool JerryScriptRuntime::submit_script_service_request(std::uint8_t kind,

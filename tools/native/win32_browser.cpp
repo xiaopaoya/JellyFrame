@@ -244,6 +244,14 @@ public:
     }
     std::size_t size() const { return source_count_; }
     bool truncated() const { return truncated_; }
+    bool has_kind(FrameTraceMutationSourceKind kind) const {
+        for (std::size_t index = 0; index < source_count_; ++index) {
+            if (sources_[index].kind == kind) {
+                return true;
+            }
+        }
+        return false;
+    }
 
 private:
     std::array<FrameTraceMutationSource, kMaxFrameTraceMutationSources> sources_{};
@@ -4750,6 +4758,28 @@ private:
         trace_event_has_owner_bounds_ = trace_layout_bounds_for_owner(*node, trace_event_owner_bounds_);
     }
 
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+    static void record_script_dom_mutation(void* user,
+                                           const Node& node,
+                                           DomDirtyFlags flags,
+                                           std::uint64_t mutation_generation) {
+        auto* app = static_cast<BrowserApp*>(user);
+        if (app == nullptr || app->options_.render_trace_path.empty()) {
+            return;
+        }
+        const std::string owner = app->frame_trace_command_attribution_.owner_label_for_node(node);
+        Rect owner_bounds;
+        const bool has_owner_bounds = app->trace_layout_bounds_for_owner(node, owner_bounds);
+        app->frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Script,
+                                               flags,
+                                               mutation_generation,
+                                               true,
+                                               true,
+                                               owner,
+                                               has_owner_bounds ? &owner_bounds : nullptr);
+    }
+#endif
+
     bool trace_layout_bounds_for_owner(const Node& node, Rect& bounds) const {
         if (layout_tree_ == nullptr ||
             frame_trace_command_attribution_.owner_label_for_node(node) == "unattributed") {
@@ -6010,6 +6040,9 @@ private:
                 });
                 script_runtime_->set_host_time_ms(current_time_ms());
                 script_runtime_->bind_document(*document_);
+                if (!options_.render_trace_path.empty()) {
+                    script_runtime_->set_dom_mutation_observer(record_script_dom_mutation, this);
+                }
                 for (const DocumentScript& script : document_scripts) {
                     const ScriptEvaluationResult result = script_runtime_->eval(script.source, script.name);
                     if (!result.ok) {
@@ -7681,7 +7714,8 @@ private:
         const std::size_t animation_callbacks = animation_budget_enabled
             ? script_runtime_->pump_animation_frame(now_ms, frame_options.max_animation_callbacks_per_frame)
             : 0;
-        if (observe_script_source && document_ != nullptr) {
+        if (observe_script_source && document_ != nullptr &&
+            !frame_trace_mutation_sources_.has_kind(FrameTraceMutationSourceKind::Script)) {
             frame_trace_mutation_sources_.observe(
                 FrameTraceMutationSourceKind::Script,
                 *document_,

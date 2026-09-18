@@ -78,6 +78,11 @@ struct ScriptAudioHost {
     void* user = nullptr;
 };
 
+using ScriptDomMutationCallback = void (*)(void* user,
+                                            const Node& node,
+                                            DomDirtyFlags flags,
+                                            std::uint64_t mutation_generation);
+
 // Framework-owned limits for the selected script backend and its DOM bindings.
 // The selected backend must enforce every applicable limit without converting
 // callbacks or values through an intermediate runtime representation.
@@ -127,6 +132,12 @@ public:
     virtual ~ScriptRuntime() = default;
 
     virtual void bind_document(Node& document) = 0;
+    // Optional tooling hook. Implementations must not retain a queue or add
+    // work when the callback is null.
+    virtual void set_dom_mutation_observer(ScriptDomMutationCallback callback, void* user) {
+        (void) callback;
+        (void) user;
+    }
     virtual void bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network) = 0;
     virtual void bind_location_service(AppRuntimeHost& host, AppLocationSnapshotMock& location) = 0;
     virtual void bind_host_data_snapshot(const AppHostDataSnapshot& snapshot,
