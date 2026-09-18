@@ -25,6 +25,8 @@ MAX_COMMAND_OWNER_GROUPS = 128
 MAX_TRACE_DIRTY_RECTS = 32
 MAX_TRACE_STAGE_SPANS = 64
 MAX_TRACE_COMMAND_SPANS = 256
+MAX_TRACE_MUTATION_SOURCES = 16
+TRACE_MUTATION_SOURCE_KINDS = frozenset(("input", "script", "animation", "scroll", "system", "host", "initial"))
 SAFE_TRACE_OWNER = re.compile(r"^[A-Za-z0-9:_-]{1,64}$")
 DEVICE_PROFILE_RECORD_KINDS = frozenset((
     "device_profile",
@@ -104,6 +106,33 @@ def normalize_trace_spans(value: Any, *, command: bool) -> tuple[list[dict[str, 
     return spans, len(value) > limit
 
 
+def normalize_trace_mutation_sources(value: Any) -> tuple[list[dict[str, Any]], bool]:
+    if not isinstance(value, list):
+        return [], False
+    sources: list[dict[str, Any]] = []
+    for item in value[:MAX_TRACE_MUTATION_SOURCES]:
+        if not isinstance(item, dict):
+            continue
+        kind = item.get("kind")
+        dirty_flags = safe_integer(item.get("dirtyFlags"))
+        generation = safe_integer(item.get("mutationGeneration"))
+        count = safe_integer(item.get("count"))
+        if (not isinstance(kind, str) or kind not in TRACE_MUTATION_SOURCE_KINDS or
+                dirty_flags is None or generation is None or count is None or count < 1 or
+                not isinstance(item.get("mutation"), bool) or
+                not isinstance(item.get("invalidation"), bool)):
+            continue
+        sources.append({
+            "kind": kind,
+            "dirtyFlags": dirty_flags,
+            "mutationGeneration": generation,
+            "count": count,
+            "mutation": item["mutation"],
+            "invalidation": item["invalidation"],
+        })
+    return sources, len(value) > MAX_TRACE_MUTATION_SOURCES
+
+
 def percentile(values: list[float], percent: float) -> float:
     if not values:
         return 0.0
@@ -173,6 +202,11 @@ def normalize_frame(raw: dict[str, Any], source: str, fallback_index: int) -> di
         result["commandSpans"] = command_spans
         if command_spans_truncated:
             result["commandSpansTruncated"] = True
+    mutation_sources, mutation_sources_truncated = normalize_trace_mutation_sources(raw.get("mutationSources"))
+    if isinstance(raw.get("mutationSources"), list):
+        result["mutationSources"] = mutation_sources
+        if mutation_sources_truncated:
+            result["mutationSourcesTruncated"] = True
     commands = raw.get("commands", raw.get("commandAttribution"))
     if isinstance(commands, list):
         result["commands"] = commands
@@ -588,6 +622,14 @@ def render_html(report: dict[str, Any]) -> str:
             observability.append(f"command spans={len(frame['commandSpans'])}")
         if isinstance(frame.get("dirtyRects"), list):
             observability.append(f"dirty rects={len(frame['dirtyRects'])}")
+        if isinstance(frame.get("mutationSources"), list):
+            kinds = sorted({
+                str(source.get("kind")) for source in frame["mutationSources"]
+                if isinstance(source, dict) and isinstance(source.get("kind"), str)
+            })
+            observability.append("mutation sources=" + (",".join(kinds) if kinds else "none"))
+        if frame.get("mutationSourcesTruncated"):
+            observability.append("mutation sources truncated")
         frame_rows.append(
             f"<tr><td>{html.escape(str(frame.get('frame', '')))}</td><td>{html.escape(str(frame.get('totalUs', 0)))} us</td>"
             f"<td>{html.escape(str(frame.get('action', '')))}</td><td>{html.escape(str(frame.get('reason', '')))}</td>"

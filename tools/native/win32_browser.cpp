@@ -114,6 +114,113 @@ constexpr std::size_t kMaxFrameTraceOwners = 64;
 constexpr std::size_t kMaxFrameTraceOwnerLabelBytes = 64;
 constexpr std::size_t kMaxFrameTraceTrackedIds = kMaxFrameTraceOwners;
 constexpr std::size_t kMaxFrameTraceSpans = 32;
+constexpr std::size_t kMaxFrameTraceMutationSources = 16;
+
+enum class FrameTraceMutationSourceKind {
+    Input,
+    Script,
+    Animation,
+    Scroll,
+    System,
+    Host,
+    Initial,
+};
+
+const char* frame_trace_mutation_source_kind_name(FrameTraceMutationSourceKind kind) {
+    switch (kind) {
+    case FrameTraceMutationSourceKind::Input:
+        return "input";
+    case FrameTraceMutationSourceKind::Script:
+        return "script";
+    case FrameTraceMutationSourceKind::Animation:
+        return "animation";
+    case FrameTraceMutationSourceKind::Scroll:
+        return "scroll";
+    case FrameTraceMutationSourceKind::System:
+        return "system";
+    case FrameTraceMutationSourceKind::Host:
+        return "host";
+    case FrameTraceMutationSourceKind::Initial:
+        return "initial";
+    }
+    return "unknown";
+}
+
+struct FrameTraceMutationSource {
+    FrameTraceMutationSourceKind kind = FrameTraceMutationSourceKind::Initial;
+    DomDirtyFlags dirty_flags = DomDirtyNone;
+    std::uint64_t mutation_generation = 0;
+    std::size_t count = 0;
+    bool mutation = false;
+    bool invalidation = false;
+};
+
+class FrameTraceMutationSources {
+public:
+    void clear_frame() {
+        source_count_ = 0;
+        truncated_ = false;
+    }
+
+    void observe(FrameTraceMutationSourceKind kind,
+                 const Node& root,
+                 std::uint64_t generation_before,
+                 DomDirtyFlags dirty_before,
+                 DomDirtyFlags fallback_dirty_flags = DomDirtyNone) {
+        const std::uint64_t generation = root.mutation_generation;
+        const DomDirtyFlags dirty_after = subtree_dirty_flags(root);
+        const bool mutation = generation != generation_before;
+        const bool invalidation = mutation || dirty_after != dirty_before || fallback_dirty_flags != DomDirtyNone;
+        if (!mutation && !invalidation) {
+            return;
+        }
+        add(kind,
+            dirty_after != DomDirtyNone ? dirty_after : fallback_dirty_flags,
+            generation,
+            mutation,
+            invalidation);
+    }
+
+    void add(FrameTraceMutationSourceKind kind,
+             DomDirtyFlags dirty_flags,
+             std::uint64_t mutation_generation,
+             bool mutation,
+             bool invalidation) {
+        for (std::size_t index = 0; index < source_count_; ++index) {
+            FrameTraceMutationSource& source = sources_[index];
+            if (source.kind == kind && source.mutation_generation == mutation_generation &&
+                source.dirty_flags == dirty_flags && source.mutation == mutation &&
+                source.invalidation == invalidation) {
+                if (source.count != std::numeric_limits<std::size_t>::max()) {
+                    ++source.count;
+                }
+                return;
+            }
+        }
+        if (source_count_ >= kMaxFrameTraceMutationSources) {
+            truncated_ = true;
+            return;
+        }
+        sources_[source_count_] = FrameTraceMutationSource{kind,
+                                                           dirty_flags,
+                                                           mutation_generation,
+                                                           1,
+                                                           mutation,
+                                                           invalidation};
+        ++source_count_;
+    }
+
+    const std::array<FrameTraceMutationSource, kMaxFrameTraceMutationSources>& sources() const {
+        return sources_;
+    }
+    std::size_t size() const { return source_count_; }
+    bool truncated() const { return truncated_; }
+
+private:
+    std::array<FrameTraceMutationSource, kMaxFrameTraceMutationSources> sources_{};
+    std::size_t source_count_ = 0;
+    bool truncated_ = false;
+};
 
 struct FrameTraceSpan {
     FrameTraceStage stage;
@@ -3729,7 +3836,8 @@ public:
                      const std::string& capture_file,
                      const std::vector<Rect>& dirty_rects,
                      const FrameTraceTimings& timings,
-                     const FrameTraceCommandAttribution& command_attribution) {
+                     const FrameTraceCommandAttribution& command_attribution,
+                     const FrameTraceMutationSources& mutation_sources) {
         if (!active_ || frame_records_ >= kMaxRenderTraceRecords) {
             return false;
         }
@@ -3762,6 +3870,36 @@ public:
         record << ']';
         if (dirty_rects.size() > trace_dirty_count) {
             record << ",\"dirtyRectsTruncated\":true";
+        }
+        std::string mutation_sources_json;
+        bool mutation_sources_truncated = mutation_sources.truncated();
+        constexpr std::size_t kTraceMutationSourceSuffixReserve = 192;
+        for (std::size_t index = 0; index < mutation_sources.size(); ++index) {
+            const FrameTraceMutationSource& source = mutation_sources.sources()[index];
+            std::ostringstream entry;
+            entry << "{\"kind\":\"" << frame_trace_mutation_source_kind_name(source.kind)
+                  << "\",\"dirtyFlags\":" << source.dirty_flags
+                  << ",\"mutationGeneration\":" << source.mutation_generation
+                  << ",\"count\":" << source.count
+                  << ",\"mutation\":" << (source.mutation ? "true" : "false")
+                  << ",\"invalidation\":" << (source.invalidation ? "true" : "false") << '}';
+            std::string next = entry.str();
+            if (!mutation_sources_json.empty()) {
+                next.insert(next.begin(), ',');
+            }
+            if (record.str().size() + sizeof(",\"mutationSources\":[") - 1U +
+                    mutation_sources_json.size() + next.size() + 1U +
+                    kTraceMutationSourceSuffixReserve > kMaxRenderTraceLineBytes) {
+                mutation_sources_truncated = true;
+                break;
+            }
+            mutation_sources_json += next;
+        }
+        if (!mutation_sources_json.empty()) {
+            record << ",\"mutationSources\":[" << mutation_sources_json << ']';
+        }
+        if (mutation_sources_truncated) {
+            record << ",\"mutationSourcesTruncated\":true";
         }
         record << ",\"pipeline\":{\"domNodes\":" << dom_nodes
                << ",\"layoutBoxes\":" << layout_boxes
@@ -4067,6 +4205,15 @@ public:
         for (int frame = 0; frame < options_.frame_count; ++frame) {
             trace_frame_timings_.clear();
             frame_trace_command_attribution_.clear_frame_samples();
+            frame_trace_mutation_sources_.clear_frame();
+            last_frame_dirty_flags_ = DomDirtyNone;
+            if (trace.active() && frame == 0 && document_ != nullptr) {
+                frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Initial,
+                                                  DomDirtyPaint,
+                                                  document_->mutation_generation,
+                                                  false,
+                                                  true);
+            }
             std::string capture_name;
             if (!options_.frame_output_dir.empty()) {
                 std::ostringstream capture;
@@ -4130,7 +4277,8 @@ public:
                                   capture_name,
                                   updated ? last_dirty_rects_ : std::vector<Rect>{},
                                   trace_frame_timings_,
-                                  frame_trace_command_attribution_);
+                                  frame_trace_command_attribution_,
+                                  frame_trace_mutation_sources_);
             }
             if (!options_.frame_montage_path.empty() && frame == 0) {
                 montage_columns = options_.frame_montage_columns > 0
@@ -4397,6 +4545,8 @@ private:
     std::uint64_t frame_update_sequence_ = 0;
     FrameTraceTimings trace_frame_timings_;
     FrameTraceCommandAttribution frame_trace_command_attribution_;
+    FrameTraceMutationSources frame_trace_mutation_sources_;
+    DomDirtyFlags last_frame_dirty_flags_ = DomDirtyNone;
     std::uint64_t vscode_frame_sequence_ = 0;
     std::vector<std::filesystem::path> vscode_frame_paths_;
     std::string vscode_input_buffer_;
@@ -4556,37 +4706,50 @@ private:
             if (event.frame_index != frame_index) {
                 continue;
             }
+            FrameTraceMutationSourceKind source_kind = FrameTraceMutationSourceKind::Input;
+            const bool observe_source = !options_.render_trace_path.empty() && document_ != nullptr;
+            const std::uint64_t generation_before = observe_source ? document_->mutation_generation : 0;
+            const DomDirtyFlags dirty_before = observe_source ? subtree_dirty_flags(*document_) : DomDirtyNone;
+            const std::uint64_t frame_updates_before = frame_update_sequence_;
             switch (event.kind) {
             case ScriptedFrameEventKind::NetworkOnline:
+                source_kind = FrameTraceMutationSourceKind::System;
                 debug_system_state_.network_online = true;
                 queue_system_event(AppSystemEventKind::NetworkStatusChanged, "network online");
                 break;
             case ScriptedFrameEventKind::NetworkOffline:
+                source_kind = FrameTraceMutationSourceKind::System;
                 debug_system_state_.network_online = false;
                 queue_system_event(AppSystemEventKind::NetworkStatusChanged, "network offline");
                 break;
             case ScriptedFrameEventKind::ScreenVisible:
+                source_kind = FrameTraceMutationSourceKind::System;
                 debug_system_state_.screen_on = true;
                 queue_system_event(AppSystemEventKind::ScreenStateChanged, "screen visible");
                 break;
             case ScriptedFrameEventKind::ScreenHidden:
+                source_kind = FrameTraceMutationSourceKind::System;
                 debug_system_state_.screen_on = false;
                 queue_system_event(AppSystemEventKind::ScreenStateChanged, "screen hidden");
                 break;
             case ScriptedFrameEventKind::LowPowerOn:
+                source_kind = FrameTraceMutationSourceKind::System;
                 debug_system_state_.low_power_mode = true;
                 queue_system_event(AppSystemEventKind::LowPowerModeChanged, "low power on");
                 break;
             case ScriptedFrameEventKind::LowPowerOff:
+                source_kind = FrameTraceMutationSourceKind::System;
                 debug_system_state_.low_power_mode = false;
                 queue_system_event(AppSystemEventKind::LowPowerModeChanged, "low power off");
                 break;
             case ScriptedFrameEventKind::TimeMs:
+                source_kind = FrameTraceMutationSourceKind::System;
                 scripted_now_ms_ = event.value;
                 debug_system_state_.unix_time_ms = event.value;
                 queue_system_event(AppSystemEventKind::TimeChanged, "time ms");
                 break;
             case ScriptedFrameEventKind::Battery:
+                source_kind = FrameTraceMutationSourceKind::System;
                 debug_host_data_.has.battery = true;
                 debug_host_data_.battery.timestamp_ms = current_time_ms();
                 debug_host_data_.battery.percent = static_cast<std::uint8_t>(event.x);
@@ -4596,6 +4759,7 @@ private:
                 queue_system_event(AppSystemEventKind::BatteryChanged, "battery");
                 break;
             case ScriptedFrameEventKind::Weather:
+                source_kind = FrameTraceMutationSourceKind::Host;
                 debug_host_data_.has.weather = true;
                 debug_host_data_.weather.timestamp_ms = current_time_ms();
                 debug_host_data_.weather.temperature_c_x10 = static_cast<std::int16_t>(event.x);
@@ -4603,12 +4767,14 @@ private:
                 debug_host_data_.weather.condition = event.weather_condition;
                 break;
             case ScriptedFrameEventKind::Activity:
+                source_kind = FrameTraceMutationSourceKind::Host;
                 debug_host_data_.has.activity = true;
                 debug_host_data_.activity.timestamp_ms = current_time_ms();
                 debug_host_data_.activity.steps = static_cast<std::uint32_t>(event.x);
                 debug_host_data_.activity.active_minutes = static_cast<std::uint32_t>(event.y);
                 break;
             case ScriptedFrameEventKind::Location:
+                source_kind = FrameTraceMutationSourceKind::Host;
                 debug_host_data_.has.location = true;
                 debug_host_data_.location.timestamp_ms = current_time_ms();
                 debug_host_data_.location.latitude = event.latitude;
@@ -4618,6 +4784,7 @@ private:
                     current_time_ms(), event.latitude, event.longitude, event.scalar, 0.0f, 0.0f});
                 break;
             case ScriptedFrameEventKind::Sensor:
+                source_kind = FrameTraceMutationSourceKind::Host;
                 debug_host_data_.sensors.timestamp_ms = current_time_ms();
                 switch (event.sensor_kind) {
                 case ScriptedHostSensorKind::Accelerometer:
@@ -4727,6 +4894,14 @@ private:
             case ScriptedFrameEventKind::Escape:
                 handle_key_down(VK_ESCAPE);
                 break;
+            }
+            if (observe_source && document_ != nullptr) {
+                frame_trace_mutation_sources_.observe(
+                    source_kind,
+                    *document_,
+                    generation_before,
+                    dirty_before,
+                    frame_update_sequence_ != frame_updates_before ? last_frame_dirty_flags_ : DomDirtyNone);
             }
         }
     }
@@ -6050,6 +6225,13 @@ private:
                                                            previous,
                                                            next);
             if (rendered) {
+                if (!options_.render_trace_path.empty() && document_ != nullptr) {
+                    frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Scroll,
+                                                      DomDirtyNone,
+                                                      document_->mutation_generation,
+                                                      false,
+                                                      true);
+                }
                 ++scroll_container_counters_.scrolls;
             }
             return rendered;
@@ -6765,6 +6947,13 @@ private:
         update_blit_pixels_after_scroll(previous);
         publish_vscode_frame();
         InvalidateRect(hwnd_, nullptr, FALSE);
+        if (!options_.render_trace_path.empty() && document_ != nullptr) {
+            frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Scroll,
+                                              DomDirtyNone,
+                                              document_->mutation_generation,
+                                              false,
+                                              true);
+        }
         return true;
     }
 
@@ -7369,12 +7558,28 @@ private:
             return;
         }
         const std::uint64_t now_ms = current_time_ms();
+        const bool observe_script_source = !options_.render_trace_path.empty() && document_ != nullptr;
+        const std::uint64_t script_generation_before = observe_script_source
+            ? document_->mutation_generation
+            : 0;
+        const DomDirtyFlags script_dirty_before = observe_script_source
+            ? subtree_dirty_flags(*document_)
+            : DomDirtyNone;
+        const std::uint64_t script_frame_updates_before = frame_update_sequence_;
         const std::size_t callbacks =
             script_runtime_->pump_timers(now_ms, frame_options.max_timer_callbacks_per_frame);
         const bool audio_event_handled = pump_script_audio_events(now_ms);
         const std::size_t animation_callbacks = animation_budget_enabled
             ? script_runtime_->pump_animation_frame(now_ms, frame_options.max_animation_callbacks_per_frame)
             : 0;
+        if (observe_script_source && document_ != nullptr) {
+            frame_trace_mutation_sources_.observe(
+                FrameTraceMutationSourceKind::Script,
+                *document_,
+                script_generation_before,
+                script_dirty_before,
+                frame_update_sequence_ != script_frame_updates_before ? last_frame_dirty_flags_ : DomDirtyNone);
+        }
         if (script_runtime_ != nullptr && script_runtime_->take_execution_watchdog_interrupt()) {
             recover_active_app_after_script_watchdog("script callback execution budget exceeded");
             return;
@@ -7407,6 +7612,13 @@ private:
         }
         clear_animation_overrides_after_render_ = animation_timeline_.empty();
         document_->dirty_flags |= DomDirtyPaint;
+        if (!options_.render_trace_path.empty()) {
+            frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Animation,
+                                              DomDirtyPaint,
+                                              document_->mutation_generation,
+                                              false,
+                                              true);
+        }
         return true;
     }
 
@@ -7513,6 +7725,7 @@ private:
         last_frame_update_action_ = plan.action;
         last_frame_update_reason_ = plan.reason;
         last_frame_repaint_reason_ = plan.reason;
+        last_frame_dirty_flags_ = dirty_flags;
         record_frame_update_plan(frame_update_statistics_, plan, dirty_flags);
     }
 

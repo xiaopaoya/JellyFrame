@@ -305,7 +305,9 @@ GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立�
   展示，不进行桌面/设备耗时混算；`.jfcapture` 仍通过其生成的 report/trace 间接进入会话；
 - 增加低开销、有界的实时 trace 环形缓冲，桌面默认可用，设备仍默认只采集 aggregate；
 - 建立“输入/脚本更新 -> mutation -> invalidation -> layer/command -> dirty 区”的可靠
-  关联，仅在 producer 确实提供证据时展示元素根因；
+  关联，仅在 producer 确实提供证据时展示元素根因；当前已完成 deterministic desktop capture 的
+  frame-local source -> mutation generation -> invalidation 记录，source 到具体 DOM owner 及 dirty
+  rect 的完整因果链仍待下一步 producer/core hook；
 - 项目级有界历史和身份记录已交付；同 workload、同来源、同 board/viewport 且 ABI 兼容时的自动
   版本回归判定已交付，身份不足或不一致时拒绝比较；设备 aggregate 的多会话趋势图与有界
   JSON/HTML 归档也已交付，严格按 case/profile/board/viewport/ABI 分组且不补齐缺失指标；

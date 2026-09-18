@@ -74,6 +74,10 @@ function main() {
       { x: "invalid", y: 0, width: 10, height: 10 }
     ],
     dirtyRectsTruncated: true,
+    mutationSources: [
+      { kind: "input", dirtyFlags: 32, mutationGeneration: 4, count: 1, mutation: true, invalidation: true }
+    ],
+    mutationSourcesTruncated: true,
     commands: [
       { type: "Text", owner: "id:title", us: 1000, pixels: 20, samples: 2 },
       { type: "FillRect", owner: "n2", us: 400, pixels: 50, samples: 1 },
@@ -357,6 +361,8 @@ function main() {
   assert(html.includes("anomalyAttribution"));
   assert(html.includes("脏区内的实际重绘证据"));
   assert(html.includes("frameDirtyEvidence"));
+  assert(html.includes("mutationSources"));
+  assert(html.includes("输入 / mutation 来源"));
   assert(html.includes("相邻帧变化"));
   assert(html.includes("frameDeltas"));
   assert(html.includes("仅显示异常帧"));
@@ -398,6 +404,8 @@ function main() {
   assert(overflowSpan.errors.some((error) => error.includes("command spans")));
   const invalidRect = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, commandSpans: [{ type: "Text", owner: "id:x", startUs: 0, durationUs: 1, pixels: 1, rect: { x: 0, y: 0, width: -1, height: 1 } }] })}\n`);
   assert(invalidRect.errors.some((error) => error.includes("command spans")));
+  const invalidMutationSource = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, mutationSources: [{ kind: "unknown", dirtyFlags: 32, mutationGeneration: 1, count: 1, mutation: true, invalidation: true }] })}\n`);
+  assert(invalidMutationSource.errors.some((error) => error.includes("mutation sources")));
 }
 
 main();

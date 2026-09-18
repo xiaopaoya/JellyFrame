@@ -330,9 +330,27 @@ def main() -> int:
         frame_records = trace_records[1:]
         require([record["frame"] for record in frame_records] == list(range(5)),
                 "render trace frame numbers must be strictly increasing")
+        require(any(source["kind"] == "initial" for source in frame_records[0].get("mutationSources", [])),
+                "render trace must identify the initial diagnostic repaint source")
+        require(any(source["kind"] == "input" for record in frame_records
+                    for source in record.get("mutationSources", [])),
+                "render trace must associate scripted input with an observed invalidation")
         for record in frame_records:
             require(record["type"] == "frame" and record["totalUs"] >= 0,
                     "render trace frame records must contain non-negative totalUs")
+            mutation_sources = record.get("mutationSources", [])
+            require(isinstance(mutation_sources, list) and len(mutation_sources) <= 16,
+                    "render trace mutation sources must stay bounded")
+            for source in mutation_sources:
+                require(set(source) == {"kind", "dirtyFlags", "mutationGeneration", "count", "mutation", "invalidation"},
+                        "render trace mutation sources must use stable fields")
+                require(source["kind"] in {"input", "script", "animation", "scroll", "system", "host", "initial"},
+                        "render trace mutation source kind must be stable")
+                require(all(isinstance(source[key], int) and source[key] >= 0
+                            for key in ("dirtyFlags", "mutationGeneration", "count")) and
+                        source["count"] >= 1 and isinstance(source["mutation"], bool) and
+                        isinstance(source["invalidation"], bool),
+                        "render trace mutation source values must be bounded")
             require(record["timingComplete"] is False,
                     "capture-only trace must not claim complete phase timing")
             require(isinstance(record["stagesUs"], dict),

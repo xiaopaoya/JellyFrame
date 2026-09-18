@@ -1,7 +1,7 @@
 # Render Trace 命令/节点归因 RFC
 
-> 最后更新：2026-09-10；适用版本：0.6.0-dev  
-> 状态：第 1、2、3 步已交付；命令/元素归因仅在显式 Win32 Render Trace capture 下启用
+> 最后更新：2026-09-17；适用版本：0.6.0-dev
+> 状态：第 1、2、3 步及首个 mutation/invalidation source producer 已交付；命令/元素归因仅在显式 Win32 Render Trace capture 下启用
 
 ## 目标
 
@@ -20,6 +20,9 @@
   所有额外工作只由明确的 desktop profiling/trace 配置开启。
 - trace 中最多导出 64 个 command 聚合项、64 个 node 描述和 4 KiB 单行；超限必须用明确的
   `commandsTruncated` / `nodesTruncated` 标记，绝不能无声遗漏并假称完整归因。
+- 每帧最多导出 16 个 mutation source 项；超限必须输出 `mutationSourcesTruncated`。source 只保存
+  `kind`、dirty flags、mutation generation、计数及 mutation/invalidation 布尔值，不保存 Node 指针、
+  DOM path、文本或事件 payload。
 - 归因记录的是实际执行的 raster work，不能把整个 layer 或 paint 阶段时间猜分给第一个元素。
   没有可靠 owner 或无有效时钟样本时保留 `unattributed`，而不是伪造 `nodeId`。
 - 正确性优先：开启或关闭 profiling 的 framebuffer 像素 hash 必须一致。profiling 开销单独报告，
@@ -69,6 +72,23 @@ frame record 的可选 `commands` 数组按 `(ownerToken, type)` 聚合：
 - 当前 producer 不输出伪精确的 `commandAttributionOverheadUs`：profiling 开销应由相同 capture 的
   profile on/off 完整 A/B 测量给出，而不是把 observer 记账时间误写为命令执行时间。
 
+frame record 还可以包含 producer 明确观察到的 `mutationSources`：
+
+```json
+"mutationSources":[
+  {"kind":"input","dirtyFlags":32,"mutationGeneration":7,"count":1,
+   "mutation":true,"invalidation":true},
+  {"kind":"scroll","dirtyFlags":0,"mutationGeneration":7,"count":1,
+   "mutation":false,"invalidation":true}
+]
+```
+
+`kind` 当前包括 `input`、`script`、`animation`、`scroll`、`system`、`host` 和 `initial`。这表示
+该 frame 内 producer 观察到的输入或宿主来源与 mutation/invalidation 的时间关联；`mutationGeneration`
+来自当前文档根节点，不能当作跨 reload 的稳定元素 ID。`scroll` 等不改变 DOM 的来源可以只有
+`invalidation=true`。source 缺失、被截断或只有空间重叠证据时，查看器必须继续显示“无法确认
+mutation 根因”，不能把 command owner 猜成 mutation owner。
+
 ## 实现顺序
 
 1. **Owner token sidecar（已交付）**：`DisplayCommand::trace_owner_token`、opt-in registry、
@@ -86,6 +106,9 @@ frame record 的可选 `commands` 数组按 `(ownerToken, type)` 聚合：
    DOM 内容或像素输出的 paint-only diagnostic repaint。当前 VS Code 查看器继续兼容读取 trace；查看器现已
    提供逐帧命令排名、最慢帧跳转，以及按 command、stage、owner 的跨帧调用数/累计耗时/p95 聚合。截断、
    无效样本和 `unattributed` 单独显示，聚合只代表已记录样本，不把缺失数据补成零。
+   同一 producer 现记录 frame-local `mutationSources`，覆盖 deterministic frame script 的输入/系统/宿主
+   事件、脚本回调、动画、滚动和首帧诊断 repaint；source 只在观察到 mutation 或 invalidation 时写出，
+   且受 16 项及 JSONL 行大小限制。VS Code 查看器与离线报告保留并显示该字段。
 4. **正确性及开销门槛**：同一 `.jfcapture` 的 profile on/off frame hash 必须相同；Release desktop
    baseline 上 profiling p95 额外 CPU 时间应记录且可解释，不设虚假的“零开销”要求。
    `tools/render_trace_profile_ab.py` 是标准配对 runner：它交替运行 baseline/profiled、校验每帧

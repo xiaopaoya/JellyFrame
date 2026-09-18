@@ -99,6 +99,29 @@ function parseRenderTrace(text) {
         continue;
       }
     }
+    if (record.mutationSources !== undefined) {
+      if (!Array.isArray(record.mutationSources)) {
+        errors.push(`line ${index + 1}: mutationSources must be an array`);
+        continue;
+      }
+      const sourceKinds = new Set(["input", "script", "animation", "scroll", "system", "host", "initial"]);
+      const invalidSource = record.mutationSources.some((source) =>
+        !source || typeof source !== "object" || !sourceKinds.has(source.kind) ||
+        !Number.isSafeInteger(source.dirtyFlags) || source.dirtyFlags < 0 ||
+        !Number.isSafeInteger(source.mutationGeneration) || source.mutationGeneration < 0 ||
+        !Number.isSafeInteger(source.count) || source.count < 1 ||
+        typeof source.mutation !== "boolean" || typeof source.invalidation !== "boolean"
+      );
+      if (invalidSource) {
+        errors.push(`line ${index + 1}: mutation sources must have stable bounded fields`);
+        continue;
+      }
+    }
+    if (record.mutationSourcesTruncated !== undefined &&
+        typeof record.mutationSourcesTruncated !== "boolean") {
+      errors.push(`line ${index + 1}: mutationSourcesTruncated must be boolean`);
+      continue;
+    }
     frames.push(record);
     previousFrame = record.frame;
   }
@@ -887,6 +910,13 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
      dirtyEvidenceNote: "仅表示带有最终 raster 矩形的命令与已记录 dirty rect 发生空间重叠，不是 DOM 变更根因；未命中的命令或截断数据不会显示。",
      dirtyRectIndexes: "脏区编号",
      overlapPixels: "重叠像素",
+    mutationSources: "输入 / mutation 来源",
+    mutationSourcesNote: "仅显示 producer 明确观察到的来源；它把事件、mutation generation 和 invalidation 关联到当前帧，不会用 dirty 与命令的空间重叠猜测根因。",
+    mutationGeneration: "mutation generation",
+    dirtyFlags: "dirty flags",
+    invalidation: "invalidation",
+    mutation: "mutation",
+    sourceTruncated: "来源记录已截断，当前列表不是完整记录。",
     aggregate: "跨帧聚合",
     aggregateNote: "按有效 trace 样本累计；p95 是单次调用耗时的第 95 百分位。被截断的帧只代表已记录的下界。",
     aggregateCommand: "命令",
@@ -996,6 +1026,13 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
      dirtyEvidenceNote: "Shows only spatial overlap between commands with final raster rectangles and recorded dirty rectangles; it is not the DOM mutation cause. Unmatched or truncated work is omitted.",
      dirtyRectIndexes: "Dirty rects",
      overlapPixels: "Overlap pixels",
+    mutationSources: "Input / mutation sources",
+    mutationSourcesNote: "Only producer-observed sources are shown. They associate events, mutation generation and invalidation with this frame; dirty/command overlap is never promoted to a mutation cause.",
+    mutationGeneration: "Mutation generation",
+    dirtyFlags: "Dirty flags",
+    invalidation: "Invalidation",
+    mutation: "Mutation",
+    sourceTruncated: "Mutation source records were truncated; this list is not complete.",
     aggregate: "Cross-frame aggregation",
     aggregateNote: "Totals include valid trace samples; p95 is the 95th percentile of per-call time. Truncated frames are lower bounds.",
     aggregateCommand: "Command",
@@ -1133,8 +1170,12 @@ function render(){
  const dirtyEvidence=model.frameDirtyEvidence?.[String(frame.frame)]||{available:false,entries:[]};
  const dirtyRects=Array.isArray(frame.dirtyRects)?frame.dirtyRects.filter((rect)=>rect&&Number.isFinite(Number(rect.x))&&Number.isFinite(Number(rect.y))&&Number.isFinite(Number(rect.width))&&Number.isFinite(Number(rect.height))&&Number(rect.width)>0&&Number(rect.height)>0).slice(0,32):[];
  const viewportWidth=Math.max(1,Number(model.session?.viewport?.width)||1); const viewportHeight=Math.max(1,Number(model.session?.viewport?.height)||1);
- const dirtyRectView=dirtyRects.length?'<h2>'+esc(labels.dirtyRects)+'</h2><div>'+dirtyRects.map((rect,index)=>{const x=Number(rect.x)||0;const y=Number(rect.y)||0;const width=Math.max(0,Number(rect.width)||0);const height=Math.max(0,Number(rect.height)||0);return '<div class="dirty-rect"><span class="bar"><i style="width:'+Math.min(100,Math.max(1,Math.round(width*100/viewportWidth)))+'%"></i></span><code>#'+fmt(index)+' '+fmt(x)+','+fmt(y)+' '+fmt(width)+'x'+fmt(height)+'</code></div>';}).join('')+(frame.dirtyRectsTruncated?'<p class="muted">'+esc(labels.dirtyRectsTruncated)+'</p>':'')+'</div>':'';
- const dirtyEvidenceView=dirtyEvidence.available?'<h2>'+esc(labels.dirtyEvidence)+'</h2><p class="muted">'+esc(labels.dirtyEvidenceNote)+'</p>'+(dirtyEvidence.entries.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.time)+'</th><th>'+esc(labels.dirtyRectIndexes)+'</th><th>'+esc(labels.overlapPixels)+'</th></tr>'+dirtyEvidence.entries.map((entry)=>'<tr><td>'+esc(entry.type)+'</td><td><code>'+esc(entry.owner)+'</code></td><td>'+fmt(entry.durationUs)+' us</td><td>'+entry.dirtyRectIndexes.map((index)=>'#'+fmt(index)).join(', ')+'</td><td>'+fmt(entry.overlapPixels)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>'):'';
+  const dirtyRectView=dirtyRects.length?'<h2>'+esc(labels.dirtyRects)+'</h2><div>'+dirtyRects.map((rect,index)=>{const x=Number(rect.x)||0;const y=Number(rect.y)||0;const width=Math.max(0,Number(rect.width)||0);const height=Math.max(0,Number(rect.height)||0);return '<div class="dirty-rect"><span class="bar"><i style="width:'+Math.min(100,Math.max(1,Math.round(width*100/viewportWidth)))+'%"></i></span><code>#'+fmt(index)+' '+fmt(x)+','+fmt(y)+' '+fmt(width)+'x'+fmt(height)+'</code></div>';}).join('')+(frame.dirtyRectsTruncated?'<p class="muted">'+esc(labels.dirtyRectsTruncated)+'</p>':'')+'</div>':'';
+  const dirtyEvidenceView=dirtyEvidence.available?'<h2>'+esc(labels.dirtyEvidence)+'</h2><p class="muted">'+esc(labels.dirtyEvidenceNote)+'</p>'+(dirtyEvidence.entries.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.time)+'</th><th>'+esc(labels.dirtyRectIndexes)+'</th><th>'+esc(labels.overlapPixels)+'</th></tr>'+dirtyEvidence.entries.map((entry)=>'<tr><td>'+esc(entry.type)+'</td><td><code>'+esc(entry.owner)+'</code></td><td>'+fmt(entry.durationUs)+' us</td><td>'+entry.dirtyRectIndexes.map((index)=>'#'+fmt(index)).join(', ')+'</td><td>'+fmt(entry.overlapPixels)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>'):'';
+  const mutationSources=Array.isArray(frame.mutationSources)?frame.mutationSources.filter((source)=>source&&typeof source.kind==='string').slice(0,16):[];
+  const mutationSourcesView='<h2>'+esc(labels.mutationSources)+'</h2><p class="muted">'+esc(labels.mutationSourcesNote)+'</p>'+
+    (mutationSources.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.mutationGeneration)+'</th><th>'+esc(labels.dirtyFlags)+'</th><th>'+esc(labels.mutation)+'</th><th>'+esc(labels.invalidation)+'</th><th>'+esc(labels.samples)+'</th></tr>'+mutationSources.map((source)=>'<tr><td><code>'+esc(source.kind)+'</code></td><td>'+fmt(source.mutationGeneration)+'</td><td>'+fmt(source.dirtyFlags)+'</td><td>'+esc(source.mutation?'true':'false')+'</td><td>'+esc(source.invalidation?'true':'false')+'</td><td>'+fmt(source.count)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>')+
+    (frame.mutationSourcesTruncated?'<p class="muted">'+esc(labels.sourceTruncated)+'</p>':'');
  const capture=model.frameImages?.[String(frame.frame)];
  const dirtyOverlay=dirtyRects.length?'<p class="muted dirty-overlay-label">'+esc(labels.dirtyOverlay)+'</p><div class="capture-stage">'+dirtyRects.map((rect)=>{const x=Number(rect.x)||0;const y=Number(rect.y)||0;const width=Math.max(0,Number(rect.width)||0);const height=Math.max(0,Number(rect.height)||0);return '<i class="dirty-overlay" style="left:'+Math.max(0,Math.min(100,x*100/viewportWidth))+'%;top:'+Math.max(0,Math.min(100,y*100/viewportHeight))+'%;width:'+Math.max(0,Math.min(100,width*100/viewportWidth))+'%;height:'+Math.max(0,Math.min(100,height*100/viewportHeight))+'%"></i>';}).join('')+'<img src="'+esc(capture||'')+'" alt="'+esc(labels.capture)+'"></div>':'';
  const captureView=capture?'<section class="capture"><strong>'+esc(labels.capture)+'</strong>'+(dirtyRects.length?dirtyOverlay:'<img src="'+esc(capture)+'" alt="'+esc(labels.capture)+'">')+'</section>':'<section class="capture muted">'+esc(labels.noCapture)+'</section>';
@@ -1173,8 +1214,9 @@ function render(){
  captureView+
  hotspotView+
  attributionView+
- frameDeltaView+
- stageTimelineView+
+  frameDeltaView+
+  mutationSourcesView+
+  stageTimelineView+
  commandTimelineView+
  stageCompositionView+
  '<div class="dirty"><span>'+esc(labels.dirtyCoverage)+'</span><span class="bar"><i style="width:'+dirtyPercent+'%"></i></span><span>'+dirtyPercent.toFixed(1)+'%</span></div>'+
