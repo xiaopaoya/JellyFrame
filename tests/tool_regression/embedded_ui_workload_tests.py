@@ -97,6 +97,15 @@ class EmbeddedUiWorkloadTests(unittest.TestCase):
         self.assertIn('screen->set_attribute("data-screen", active ? "alt" : "base")', source)
         self.assertNotIn('context->document->set_attribute("data-screen", active ? "alt" : "base")', source)
 
+    def test_device_profile_histogram_covers_long_embedded_frames(self):
+        source = (PORT_ROOT / "main" / "jellyframe_esp32s3_ui_task.cpp").read_text(encoding="utf-8")
+        self.assertIn(
+            "using DeviceProfileTimingHistogram = FixedTimingHistogram<512, std::uint16_t>;",
+            source,
+        )
+        self.assertIn("DeviceProfileTimingHistogram::kBucketCount", source)
+        self.assertIn("DeviceProfileTimingHistogram::kBucketUs", source)
+
 
 if __name__ == "__main__":
     unittest.main()

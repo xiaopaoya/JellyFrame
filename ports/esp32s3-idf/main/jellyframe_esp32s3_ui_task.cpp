@@ -264,11 +264,12 @@ struct PipelineCache {
     jellyframe::MonotonicArena layer_arena;
 };
 
-struct TimingHistogram {
+template <std::size_t BucketCount, typename BucketCounter>
+struct FixedTimingHistogram {
     static constexpr std::uint32_t kBucketUs = 1000;
-    static constexpr std::size_t kBucketCount = 128;
+    static constexpr std::size_t kBucketCount = BucketCount;
 
-    std::uint32_t buckets[kBucketCount]{};
+    std::array<BucketCounter, kBucketCount> buckets{};
     std::uint32_t samples = 0;
 
     void record(std::uint32_t us) {
@@ -293,17 +294,25 @@ struct TimingHistogram {
     }
 };
 
+using TimingHistogram = FixedTimingHistogram<128, std::uint32_t>;
+
 #if CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_PROFILE
+// The bounded profile window has at most 600 samples per stage. A 16-bit
+// counter keeps 1 ms resolution while extending the open upper bucket to
+// 511 ms without imposing the 32-bit storage cost on normal telemetry.
+using DeviceProfileTimingHistogram = FixedTimingHistogram<512, std::uint16_t>;
+static_assert(CONFIG_JELLYFRAME_ESP32S3_DEVICE_PERFORMANCE_WINDOW_FRAMES <= 600);
+
 struct DevicePerformanceWindow {
-    TimingHistogram frame;
-    TimingHistogram input;
-    TimingHistogram planning;
-    TimingHistogram pipeline;
-    TimingHistogram paint;
-    TimingHistogram present;
-    TimingHistogram convert;
-    TimingHistogram dma_submit;
-    TimingHistogram dma_wait;
+    DeviceProfileTimingHistogram frame;
+    DeviceProfileTimingHistogram input;
+    DeviceProfileTimingHistogram planning;
+    DeviceProfileTimingHistogram pipeline;
+    DeviceProfileTimingHistogram paint;
+    DeviceProfileTimingHistogram present;
+    DeviceProfileTimingHistogram convert;
+    DeviceProfileTimingHistogram dma_submit;
+    DeviceProfileTimingHistogram dma_wait;
     std::uint32_t warmup_active_frames = 0;
     std::uint32_t measured_active_frames = 0;
     std::uint32_t measured_present_frames = 0;
@@ -1023,8 +1032,8 @@ void print_device_profile(const DevicePerformanceWindow& profile,
              "device_profile_timing window=1 viewport=%ux%u histogram_bucket_us=%u histogram_ceiling_us=%u frame_us_p50=%u frame_us_p95=%u frame_us_max=%u input_us_p50=%u input_us_p95=%u planning_us_p50=%u planning_us_p95=%u",
              static_cast<unsigned>(context.width),
              static_cast<unsigned>(context.height),
-             static_cast<unsigned>(TimingHistogram::kBucketUs),
-             static_cast<unsigned>(TimingHistogram::kBucketCount * TimingHistogram::kBucketUs),
+             static_cast<unsigned>(DeviceProfileTimingHistogram::kBucketUs),
+             static_cast<unsigned>(DeviceProfileTimingHistogram::kBucketCount * DeviceProfileTimingHistogram::kBucketUs),
              static_cast<unsigned>(profile.frame.percentile_us(50)),
              static_cast<unsigned>(profile.frame.percentile_us(95)),
              static_cast<unsigned>(profile.frame_max_us),
