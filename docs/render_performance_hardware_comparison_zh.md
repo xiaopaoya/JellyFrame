@@ -1,7 +1,7 @@
 # Render Core 性能硬件对照测试要求
 
 > 最后更新：2026-09-18；适用版本：0.6.0-dev
-> 状态：主线 3 硬件执行稿；适用 ESP32-S3 retained UI port
+> 状态：主线 3 硬件执行稿；`local_update` range retest 已 PASS；四 workload 总体验收仍按矩阵状态管理
 
 本文用于比较 Render Core 或 Runtime 优化前后的真实设备表现。它补充
 [Device Performance Profile V0 实机验收要求](device_performance_profile_hardware_acceptance_zh.md)，不替代该文档的窗口完整性和 profile 开销验收。
@@ -17,21 +17,23 @@ frame、paint、present、转换或 DMA 等阶段耗时，以及是否引入视�
 
 ## 当前正式 pair
 
-主线当前指定以下 pair；正式 A/B 已完成首轮采集，结果正在复核：
+主线当前指定以下 pair；四 workload 首轮矩阵已完成，`local_update` 在扩大 histogram ceiling 后已完成交错顺序复测：
 
 | 角色 | commit | 内容边界 |
 | --- | --- | --- |
-| `baseline` | `35fb0cd8` | fixture qualification 之后的主线基线，无本轮待验证的 Render Core/Runtime 性能改动 |
-| `candidate` | `48d3866c` | `src/render_core/text_backend.cpp` 的 ASCII 码点测量缓存优化 |
+| `baseline` | `f8399989` | `35fb0cd8` 基线加同样的 512000 us profile histogram range 修复 |
+| `candidate` | `c7bd65f2` | `48d3866c` 的 ASCII 码点测量缓存优化，加同样的 profile histogram range 修复 |
 
-两侧都包含 `c3c2f712` 引入的 `embedded_ui_workload` fixture 以及
-`a15aad75` 的 qualification 修复；`35fb0cd8..48d3866c` 的差异仅包含 candidate
-性能改动，不包含 fixture、字体、profile 协议、trace/tooling 或文档变化。桌面
-microbench 已观察到长文本 anywhere-wrap 的局部改善，但这不是设备端结论。
+两侧都包含相同的 `embedded_ui_workload` fixture、字体、profile 协议和
+512000 us histogram range 修复；pair 的有效差异仅为 candidate 的
+`src/render_core/text_backend.cpp` ASCII 码点测量缓存优化。桌面 microbench
+已观察到长文本 anywhere-wrap 的局部改善，但这不是设备端结论。
 
-正式矩阵已使用 ESP-IDF 5.3.1 完成四个 workload、两侧各三次有效窗口。若设备构建发现该优化带来
-栈、字体或行为问题，应将 pair 标为 `INVALID`，不得用后续修复提交混入 candidate
-后继续比较；修复后需重新指定完整 pair。
+正式矩阵首轮已使用 ESP-IDF 5.3.1 完成四个 workload、两侧各三次有效窗口，但其中多个
+percentile 受旧 histogram 上限影响，不能作为最终性能结论。随后 `local_update` 使用
+`B1, C1, C2, B2, B3, C3` 顺序完成 range retest，六个窗口均完整，定量非回归与固定状态
+检查均通过，结果为 `PASS (visual-equivalent-only)`。其余三个 workload 尚未用该精确 pair
+完成同等 range retest，因此不能把 `local_update` 的 PASS 扩展为四 workload 总体 PASS。
 
 ## 1. 测试对象
 

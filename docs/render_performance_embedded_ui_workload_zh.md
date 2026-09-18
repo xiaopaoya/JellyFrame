@@ -152,6 +152,18 @@ panel/DMA/touch 错误，稳定性和内存没有明显退化。
 `local_update` 使用 baseline/candidate 交错或反向顺序重新采集，以区分 candidate 影响与
 温度、执行顺序或显示链路漂移。当前矩阵可以作为稳定性证据，不能证明设备端性能收益。
 
+### 3.3 `local_update` range retest
+
+2026-09-18 使用精确 pair `f8399989` / `c7bd65f2` 和 `1000 us / 512000 us`
+histogram 完成交错顺序 `B1, C1, C2, B2, B3, C3` 的六个冷启动窗口。六个窗口均满足
+`frames=120`、`partial=0`、`contaminated=0`、`present_failures=0`，且没有 percentile
+落入 `511000 us` 上限桶。固定状态操作者检查无异常，比较器结果为
+`PASS (visual-equivalent-only)`。
+
+该复测确认 candidate 在 `embedded-ui-local-update` 下无 frame、present、DMA、内存或
+稳定性回归；paint p95 为 `-0.96%`，frame/present p95 为 `0%`。它没有测出可确认的设备端
+加速，也不替代 `static`、`scroll`、`full_repaint` 的同 pair range retest。
+
 ## 4. 通过标准
 
 每组每个 workload 必须满足：

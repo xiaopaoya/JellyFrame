@@ -301,10 +301,11 @@ GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立�
   fallback、shaping 和宿主 `TextPainter` 差异，跨库适配仍不能直接宣称 comparable。
   嵌入式 UI 对照以固定状态检查和稳定性日志为正确性门槛，不把逐像素 readback 作为
   默认硬件前置条件。
-- 下一项固定 workload 已定义为 [嵌入式 UI 对照 workload V0](render_performance_embedded_ui_workload_zh.md)，
-  覆盖黑底可穿戴页面、设置行、状态卡、底部导航、文本更新、滚动和全屏重绘。四套 profile
-  已使用同一 30 帧 warm-up、120 帧测量窗口和 15 秒启动延迟，并由工具回归锁定资源、状态节点与
-  profile 对称性；四组 fixture qualification 已通过，正式 baseline/candidate 设备矩阵仍待执行。
+- [嵌入式 UI 对照 workload V0](render_performance_embedded_ui_workload_zh.md) 已完成 fixture
+  qualification 和四 workload 首轮矩阵。首轮部分 percentile 受旧 histogram 上限影响；随后
+  `local_update` 使用扩大 range 的精确 pair 完成交错复测并通过 `PASS (visual-equivalent-only)`。
+  `static`、`scroll`、`full_repaint` 尚未完成同 pair 的 range retest，因此四 workload 总体性能
+  结论仍保持开放。
 
 ### 第四阶段：面向 App 作者的闭环
 

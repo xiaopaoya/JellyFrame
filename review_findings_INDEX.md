@@ -1,6 +1,6 @@
 # jellyframe 0.6.1 代码审查 — 汇总与交叉核对
 
-> 最后更新：2026-09-15；适用版本：0.6.0-dev
+> 最后更新：2026-09-18；适用版本：0.6.0-dev
 
 审查范围：`render_core`（`src/render_core/`，42 个 `.cpp`）与 `app_runtime`（`src/app_runtime/`）。
 审查口径：性能、实现正确性、可读性。**不含安全审查**（按用户说明，这些是善意代码）；不提出重写方案，只给最小、局部的修复。
@@ -45,7 +45,7 @@
 
 ## 2026-09-14 处置状态
 
-以下状态以当前 `master`（`2037f74e`）源码和本地测试为准。审查报告本身保留为历史发现记录，不把历史严重级别直接当作当前未修复数。
+以下状态以当前 `master`（`16307862`）源码、本地测试和已归档实机证据为准。审查报告本身保留为历史发现记录，不把历史严重级别直接当作当前未修复数。
 
 ### 已有代码修复，等待 CI/实机证据闭环
 
@@ -91,10 +91,19 @@
 
 该矩阵于 2026-09-15 获准 `PASS (human visual-equivalence)`。操作者补充的 12 张照片与归档 SHA-256 全部匹配，目检和照片比对未发现候选新增视觉回归。由于缺少 display-readback 仪器或治具，本候选明确豁免逐像素比较；该豁免仅适用于 `comparison-13264-de0c541d`，不建立自动像素等价能力。`drag-scroll` 两侧共同存在绿色文字下沿裁剪，仍作为共享 fixture 限制单列；合成双向拖动也不等同于真实触摸 input-to-present 延迟，不关闭 A2 panel/input 出口。
 
+### 2026-09-18 profile-range `local_update` retest
+
+使用精确 pair `f8399989` / `c7bd65f2`、`1000 us / 512000 us` histogram 和
+`B1, C1, C2, B2, B3, C3` 交错顺序完成六个窗口。六个窗口均完整，未出现上限桶、present
+failure、稳定性错误或内存回归；固定状态检查无异常。归档结果为
+`D:\JellyFramePerf\profile-range-pair\embedded-ui-local-update-range-retest`，比较器状态为
+`PASS (visual-equivalent-only)`。该结果只关闭 `local_update` 的 range retest，不代表其余
+三个 workload 已完成同 pair 复测，也不证明 candidate 带来设备端加速。
+
 ### 验证出口
 
-- CI：`75a550a6` 的运行必须完成，重点查看 sanitizer、Windows scripting、standalone Render Core consumer 和 documentation freshness。
-- 桌面：当前本地 Release 全套 `50/50` CTest 通过；新增性能改动不得降低既有文本、圆角、flex 与 clip 回归覆盖。
+- CI：`16307862` 的 master CI 已通过，包含 sanitizer、Windows scripting、standalone Render Core consumer 和 documentation freshness。
+- 桌面：当前本地 Release 全套 `57/57` CTest 通过；新增性能改动不得降低既有文本、圆角、flex 与 clip 回归覆盖。
 - 设备：panel-scroll 实验文件仍不入主线；只有 TE/vblank 同步、真实 input-to-present 和恢复证据齐备后才重新评估。普通 framebuffer scroll-blit 归档可作为当前安全路径证据。性能 A/B 不再要求设备逐像素 readback；固定状态检查、稳定性日志、present 成功和内存门槛是必需条件，可靠 readback 仅作为增强证据。
 - 任何“已修复”项在缺少对应 CI/设备证据时只能标为“代码已落地，验证待闭环”。
 
