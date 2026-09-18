@@ -75,6 +75,11 @@ class RenderPerformanceReportTests(unittest.TestCase):
             self.assertEqual(report["frames"][0]["mutationSources"][0]["owner"], "id:card")
             self.assertEqual(report["frames"][0]["mutationSources"][0]["dirtyRectIndexes"], [0])
             self.assertEqual(report["frames"][0]["mutationSources"][0]["mutationGeneration"], 7)
+            self.assertEqual(report["summary"]["mutationSourceEvidence"], [{
+                "kind": "input", "owner": "id:card", "commandUs": 40, "commandCount": 1,
+                "dirtyEvidenceUs": 40, "dirtyEvidenceHits": 1, "frames": 1,
+                "evidence": "owner-command",
+            }])
             self.assertEqual(report["metadata"]["viewport"], {"width": 172, "height": 320})
 
     def test_html_output_is_generated(self):

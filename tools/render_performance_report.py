@@ -145,6 +145,65 @@ def normalize_trace_mutation_sources(value: Any) -> tuple[list[dict[str, Any]], 
     return sources, len(value) > MAX_TRACE_MUTATION_SOURCES
 
 
+def trace_rect_intersects(left: dict[str, int], right: dict[str, int]) -> bool:
+    return (min(left["x"] + left["width"], right["x"] + right["width"]) > max(left["x"], right["x"]) and
+            min(left["y"] + left["height"], right["y"] + right["height"]) > max(left["y"], right["y"]))
+
+
+def frame_mutation_source_evidence(frame: dict[str, Any]) -> list[dict[str, Any]]:
+    sources = frame.get("mutationSources")
+    if not isinstance(sources, list):
+        return []
+    dirty_rects = frame.get("dirtyRects") if isinstance(frame.get("dirtyRects"), list) else []
+    normalized_dirty_rects = [normalize_trace_rect(rect) for rect in dirty_rects]
+    normalized_dirty_rects = [rect for rect in normalized_dirty_rects if rect is not None]
+    raw_commands = frame.get("commandSpans") if isinstance(frame.get("commandSpans"), list) else frame.get("commands", [])
+    commands: list[dict[str, Any]] = []
+    if isinstance(raw_commands, list):
+        for item in raw_commands:
+            if not isinstance(item, dict):
+                continue
+            owner = command_owner(item)
+            duration = number(item.get("durationUs" if "durationUs" in item else "us"))
+            if duration is None or duration < 0:
+                continue
+            commands.append({
+                "owner": owner,
+                "us": duration,
+                "count": number(item.get("samples", 1)) or 1,
+                "rect": normalize_trace_rect(item.get("rect")),
+            })
+    evidence: list[dict[str, Any]] = []
+    for source in sources[:MAX_TRACE_MUTATION_SOURCES]:
+        if not isinstance(source, dict):
+            continue
+        owner = source.get("owner") if isinstance(source.get("owner"), str) else "unattributed"
+        dirty_indexes = {index for index in source.get("dirtyRectIndexes", []) if isinstance(index, int)}
+        matching = [command for command in commands if command["owner"] == owner]
+        command_us = sum(float(command["us"]) for command in matching)
+        command_count = sum(float(command["count"]) for command in matching)
+        dirty_commands = [
+            command for command in matching
+            if command["rect"] is not None and any(
+                index in dirty_indexes and index < len(normalized_dirty_rects) and
+                trace_rect_intersects(command["rect"], normalized_dirty_rects[index])
+                for index in dirty_indexes
+            )
+        ]
+        dirty_us = sum(float(command["us"]) for command in dirty_commands)
+        dirty_hits = len(dirty_commands)
+        evidence.append({
+            "kind": source.get("kind", "unknown"),
+            "owner": owner,
+            "commandUs": round_number(command_us),
+            "commandCount": round_number(command_count),
+            "dirtyEvidenceUs": round_number(dirty_us),
+            "dirtyEvidenceHits": dirty_hits,
+            "evidence": "owner-command" if command_us > 0 else "owner-dirty" if dirty_us > 0 else "source-only",
+        })
+    return evidence
+
+
 def percentile(values: list[float], percent: float) -> float:
     if not values:
         return 0.0
@@ -514,6 +573,7 @@ def aggregate(frames: list[dict[str, Any]]) -> dict[str, Any]:
     command_totals: dict[str, float] = {}
     command_owner_totals: dict[tuple[str, str], dict[str, float]] = {}
     command_owner_truncated = False
+    mutation_source_totals: dict[tuple[str, str], dict[str, float]] = {}
     for frame in frames:
         for command in frame.get("commands", []):
             if not isinstance(command, dict):
@@ -539,6 +599,17 @@ def aggregate(frames: list[dict[str, Any]]) -> dict[str, Any]:
                 if samples is not None:
                     group["samples"] += samples
         command_owner_truncated = command_owner_truncated or bool(frame.get("commandsTruncated"))
+        for evidence in frame_mutation_source_evidence(frame):
+            key = (str(evidence.get("kind", "unknown")), str(evidence.get("owner", "unattributed")))
+            group = mutation_source_totals.setdefault(key, {
+                "commandUs": 0.0, "commandCount": 0.0, "dirtyEvidenceUs": 0.0,
+                "dirtyEvidenceHits": 0.0, "frames": 0.0,
+            })
+            group["commandUs"] += float(evidence.get("commandUs", 0))
+            group["commandCount"] += float(evidence.get("commandCount", 0))
+            group["dirtyEvidenceUs"] += float(evidence.get("dirtyEvidenceUs", 0))
+            group["dirtyEvidenceHits"] += float(evidence.get("dirtyEvidenceHits", 0))
+            group["frames"] += 1
     command_owner_rows = [
         {
             "owner": owner,
@@ -549,6 +620,21 @@ def aggregate(frames: list[dict[str, Any]]) -> dict[str, Any]:
         }
         for (owner, name), values in sorted(
             command_owner_totals.items(), key=lambda entry: entry[1]["us"], reverse=True
+        )
+    ]
+    mutation_source_rows = [
+        {
+            "kind": kind,
+            "owner": owner,
+            "commandUs": round_number(values["commandUs"]),
+            "commandCount": round_number(values["commandCount"]),
+            "dirtyEvidenceUs": round_number(values["dirtyEvidenceUs"]),
+            "dirtyEvidenceHits": round_number(values["dirtyEvidenceHits"]),
+            "frames": round_number(values["frames"]),
+            "evidence": "owner-command" if values["commandUs"] > 0 else "owner-dirty" if values["dirtyEvidenceUs"] > 0 else "source-only",
+        }
+        for (kind, owner), values in sorted(
+            mutation_source_totals.items(), key=lambda entry: entry[1]["commandUs"], reverse=True
         )
     ]
     return {
@@ -564,6 +650,7 @@ def aggregate(frames: list[dict[str, Any]]) -> dict[str, Any]:
         "commandAttributionUs": {name: round_number(value) for name, value in sorted(command_totals.items(), key=lambda entry: entry[1], reverse=True)},
         "commandOwnerAttribution": command_owner_rows,
         "commandOwnerAttributionTruncated": command_owner_truncated,
+        "mutationSourceEvidence": mutation_source_rows,
     }
 
 
@@ -660,6 +747,26 @@ def render_html(report: dict[str, Any]) -> str:
             f"<td>{html.escape(str(command.get('samples', 0)))}</td></tr>"
         )
     command_note = " Rows were truncated; ranking is incomplete." if summary.get("commandOwnerAttributionTruncated") else ""
+    mutation_source_rows = []
+    for source in summary.get("mutationSourceEvidence", []):
+        if not isinstance(source, dict):
+            continue
+        mutation_source_rows.append(
+            f"<tr><td><code>{html.escape(str(source.get('kind', 'unknown')))}</code></td>"
+            f"<td><code>{html.escape(str(source.get('owner', 'unattributed')))}</code></td>"
+            f"<td>{html.escape(str(source.get('commandUs', 0)))} us / {html.escape(str(source.get('commandCount', 0)))}</td>"
+            f"<td>{html.escape(str(source.get('dirtyEvidenceUs', 0)))} us / {html.escape(str(source.get('dirtyEvidenceHits', 0)))}</td>"
+            f"<td><code>{html.escape(str(source.get('evidence', 'source-only')))}</code></td>"
+            f"<td>{html.escape(str(source.get('frames', 0)))}</td></tr>"
+        )
+    mutation_source_section = (
+        "<h2>Mutation source evidence</h2>"
+        "<p><small>Same-owner command and dirty-region correlation only; this is not proof of DOM mutation causality.</small></p>"
+        "<table><tr><th>Kind</th><th>Owner</th><th>Linked commands</th><th>Linked dirty evidence</th><th>Evidence</th><th>Frames</th></tr>"
+        + "".join(mutation_source_rows)
+        + "</table>"
+        if mutation_source_rows else ""
+    )
     microbench_rows = []
     for probe in report.get("microbenchProbes", []):
         if not isinstance(probe, dict):
@@ -775,6 +882,7 @@ def render_html(report: dict[str, Any]) -> str:
 <h2>Frames</h2><table><tr><th>Frame</th><th>Total</th><th>Action</th><th>Reason</th><th>Dirty rects</th><th>Dirty area %</th><th>Trace observability</th></tr>{frame_rows}</table>
 <h2>Command / owner attribution</h2><p><small>Desktop raster invocation time only.{command_note}</small></p>
 <table><tr><th>Owner</th><th>Command</th><th>Time</th><th>Candidate pixels</th><th>Samples</th></tr>{command_rows}</table>
+{mutation_source_section}
 {microbench_section}
 {comparison_section}
 {device_section}
@@ -789,6 +897,7 @@ def render_html(report: dict[str, Any]) -> str:
         frame_rows="".join(frame_rows) or "<tr><td colspan='7'>No per-frame trace</td></tr>",
         command_rows="".join(command_rows) or "<tr><td colspan='5'>No command attribution</td></tr>",
         command_note=command_note,
+        mutation_source_section=mutation_source_section,
         microbench_section=microbench_section,
         comparison_section=comparison_section,
         device_section=device_section,
