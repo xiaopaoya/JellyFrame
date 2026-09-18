@@ -15,6 +15,25 @@ frame、paint、present、转换或 DMA 等阶段耗时，以及是否引入视�
 自动阻止性能验收。必须使用固定状态检查记录确认首帧、关键中间状态和最终状态没有
 可见布局、裁剪、残留或错行回归；readback/hash 只作为可选增强证据。
 
+## 当前正式 pair
+
+主线当前指定以下 pair，尚未开始设备刷写或正式 A/B：
+
+| 角色 | commit | 内容边界 |
+| --- | --- | --- |
+| `baseline` | `35fb0cd8` | fixture qualification 之后的主线基线，无本轮待验证的 Render Core/Runtime 性能改动 |
+| `candidate` | `48d3866c` | `src/render_core/text_backend.cpp` 的 ASCII 码点测量缓存优化 |
+
+两侧都包含 `c3c2f712` 引入的 `embedded_ui_workload` fixture 以及
+`a15aad75` 的 qualification 修复；`35fb0cd8..48d3866c` 的差异仅包含 candidate
+性能改动，不包含 fixture、字体、profile 协议、trace/tooling 或文档变化。桌面
+microbench 已观察到长文本 anywhere-wrap 的局部改善，但这不是设备端结论。
+
+正式矩阵前仍必须分别使用 ESP-IDF 5.3+ 完成四个 workload 的 candidate/baseline
+构建，并记录固件 SHA-256、SDK 配置和 Core/ABI 身份。若设备构建发现该优化带来
+栈、字体或行为问题，应将 pair 标为 `INVALID`，不得用后续修复提交混入 candidate
+后继续比较；修复后需重新指定完整 pair。
+
 ## 1. 测试对象
 
 每次对照包含两个固件组：
