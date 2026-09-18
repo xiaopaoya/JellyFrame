@@ -107,10 +107,17 @@ function parseRenderTrace(text) {
       const sourceKinds = new Set(["input", "script", "animation", "scroll", "system", "host", "initial"]);
       const invalidSource = record.mutationSources.some((source) =>
         !source || typeof source !== "object" || !sourceKinds.has(source.kind) ||
+        typeof source.owner !== "string" || !source.owner.trim() ||
         !Number.isSafeInteger(source.dirtyFlags) || source.dirtyFlags < 0 ||
         !Number.isSafeInteger(source.mutationGeneration) || source.mutationGeneration < 0 ||
         !Number.isSafeInteger(source.count) || source.count < 1 ||
-        typeof source.mutation !== "boolean" || typeof source.invalidation !== "boolean"
+        typeof source.mutation !== "boolean" || typeof source.invalidation !== "boolean" ||
+        !Array.isArray(source.dirtyRectIndexes) ||
+        source.dirtyRectIndexes.some((index) => !Number.isSafeInteger(index) || index < 0 || index >= 32) ||
+        (source.ownerBounds !== undefined && (!source.ownerBounds || typeof source.ownerBounds !== "object" ||
+          !Number.isSafeInteger(source.ownerBounds.x) || !Number.isSafeInteger(source.ownerBounds.y) ||
+          !Number.isSafeInteger(source.ownerBounds.width) || source.ownerBounds.width < 0 ||
+          !Number.isSafeInteger(source.ownerBounds.height) || source.ownerBounds.height < 0))
       );
       if (invalidSource) {
         errors.push(`line ${index + 1}: mutation sources must have stable bounded fields`);
@@ -1174,7 +1181,7 @@ function render(){
   const dirtyEvidenceView=dirtyEvidence.available?'<h2>'+esc(labels.dirtyEvidence)+'</h2><p class="muted">'+esc(labels.dirtyEvidenceNote)+'</p>'+(dirtyEvidence.entries.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.time)+'</th><th>'+esc(labels.dirtyRectIndexes)+'</th><th>'+esc(labels.overlapPixels)+'</th></tr>'+dirtyEvidence.entries.map((entry)=>'<tr><td>'+esc(entry.type)+'</td><td><code>'+esc(entry.owner)+'</code></td><td>'+fmt(entry.durationUs)+' us</td><td>'+entry.dirtyRectIndexes.map((index)=>'#'+fmt(index)).join(', ')+'</td><td>'+fmt(entry.overlapPixels)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>'):'';
   const mutationSources=Array.isArray(frame.mutationSources)?frame.mutationSources.filter((source)=>source&&typeof source.kind==='string').slice(0,16):[];
   const mutationSourcesView='<h2>'+esc(labels.mutationSources)+'</h2><p class="muted">'+esc(labels.mutationSourcesNote)+'</p>'+
-    (mutationSources.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.mutationGeneration)+'</th><th>'+esc(labels.dirtyFlags)+'</th><th>'+esc(labels.mutation)+'</th><th>'+esc(labels.invalidation)+'</th><th>'+esc(labels.samples)+'</th></tr>'+mutationSources.map((source)=>'<tr><td><code>'+esc(source.kind)+'</code></td><td>'+fmt(source.mutationGeneration)+'</td><td>'+fmt(source.dirtyFlags)+'</td><td>'+esc(source.mutation?'true':'false')+'</td><td>'+esc(source.invalidation?'true':'false')+'</td><td>'+fmt(source.count)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>')+
+    (mutationSources.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.mutationGeneration)+'</th><th>'+esc(labels.dirtyFlags)+'</th><th>'+esc(labels.dirtyRectIndexes)+'</th><th>'+esc(labels.mutation)+'</th><th>'+esc(labels.invalidation)+'</th><th>'+esc(labels.samples)+'</th></tr>'+mutationSources.map((source)=>'<tr><td><code>'+esc(source.kind)+'</code></td><td><code>'+esc(source.owner||'unattributed')+'</code></td><td>'+fmt(source.mutationGeneration)+'</td><td>'+fmt(source.dirtyFlags)+'</td><td>'+esc(Array.isArray(source.dirtyRectIndexes)?source.dirtyRectIndexes.map((index)=>'#'+index).join(', ')||'-':'-')+'</td><td>'+esc(source.mutation?'true':'false')+'</td><td>'+esc(source.invalidation?'true':'false')+'</td><td>'+fmt(source.count)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>')+
     (frame.mutationSourcesTruncated?'<p class="muted">'+esc(labels.sourceTruncated)+'</p>':'');
  const capture=model.frameImages?.[String(frame.frame)];
  const dirtyOverlay=dirtyRects.length?'<p class="muted dirty-overlay-label">'+esc(labels.dirtyOverlay)+'</p><div class="capture-stage">'+dirtyRects.map((rect)=>{const x=Number(rect.x)||0;const y=Number(rect.y)||0;const width=Math.max(0,Number(rect.width)||0);const height=Math.max(0,Number(rect.height)||0);return '<i class="dirty-overlay" style="left:'+Math.max(0,Math.min(100,x*100/viewportWidth))+'%;top:'+Math.max(0,Math.min(100,y*100/viewportHeight))+'%;width:'+Math.max(0,Math.min(100,width*100/viewportWidth))+'%;height:'+Math.max(0,Math.min(100,height*100/viewportHeight))+'%"></i>';}).join('')+'<img src="'+esc(capture||'')+'" alt="'+esc(labels.capture)+'"></div>':'';

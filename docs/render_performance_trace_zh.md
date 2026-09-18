@@ -306,8 +306,9 @@ GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立�
 - 增加低开销、有界的实时 trace 环形缓冲，桌面默认可用，设备仍默认只采集 aggregate；
 - 建立“输入/脚本更新 -> mutation -> invalidation -> layer/command -> dirty 区”的可靠
   关联，仅在 producer 确实提供证据时展示元素根因；当前已完成 deterministic desktop capture 的
-  frame-local source -> mutation generation -> invalidation 记录，source 到具体 DOM owner 及 dirty
-  rect 的完整因果链仍待下一步 producer/core hook；
+  frame-local source -> mutation generation -> invalidation 记录，并对安全唯一 `id` 提供 owner bounds
+  与 dirty rect 空间关联；脚本 mutation 的完整 owner 传播、命令执行关联和真正 mutation 根因判定仍需
+  下一步 producer/core hook，空间命中不能单独证明因果关系；
 - 项目级有界历史和身份记录已交付；同 workload、同来源、同 board/viewport 且 ABI 兼容时的自动
   版本回归判定已交付，身份不足或不一致时拒绝比较；设备 aggregate 的多会话趋势图与有界
   JSON/HTML 归档也已交付，严格按 case/profile/board/viewport/ABI 分组且不补齐缺失指标；

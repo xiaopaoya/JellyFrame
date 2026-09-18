@@ -21,8 +21,8 @@
 - trace 中最多导出 64 个 command 聚合项、64 个 node 描述和 4 KiB 单行；超限必须用明确的
   `commandsTruncated` / `nodesTruncated` 标记，绝不能无声遗漏并假称完整归因。
 - 每帧最多导出 16 个 mutation source 项；超限必须输出 `mutationSourcesTruncated`。source 只保存
-  `kind`、dirty flags、mutation generation、计数及 mutation/invalidation 布尔值，不保存 Node 指针、
-  DOM path、文本或事件 payload。
+  `kind`、安全 owner、dirty flags、mutation generation、计数、mutation/invalidation 布尔值，以及可选的
+  owner bounds/dirty rect 编号；不保存 Node 指针、DOM path、文本或事件 payload。
 - 归因记录的是实际执行的 raster work，不能把整个 layer 或 paint 阶段时间猜分给第一个元素。
   没有可靠 owner 或无有效时钟样本时保留 `unattributed`，而不是伪造 `nodeId`。
 - 正确性优先：开启或关闭 profiling 的 framebuffer 像素 hash 必须一致。profiling 开销单独报告，
@@ -76,10 +76,11 @@ frame record 还可以包含 producer 明确观察到的 `mutationSources`：
 
 ```json
 "mutationSources":[
-  {"kind":"input","dirtyFlags":32,"mutationGeneration":7,"count":1,
-   "mutation":true,"invalidation":true},
-  {"kind":"scroll","dirtyFlags":0,"mutationGeneration":7,"count":1,
-   "mutation":false,"invalidation":true}
+  {"kind":"input","owner":"id:card","dirtyFlags":32,"mutationGeneration":7,"count":1,
+   "mutation":true,"invalidation":true,"dirtyRectIndexes":[0],
+   "ownerBounds":{"x":8,"y":12,"width":64,"height":28}},
+  {"kind":"scroll","owner":"unattributed","dirtyFlags":0,"mutationGeneration":7,"count":1,
+   "mutation":false,"invalidation":true,"dirtyRectIndexes":[]}
 ]
 ```
 

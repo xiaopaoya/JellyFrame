@@ -67,6 +67,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -153,6 +154,19 @@ struct FrameTraceMutationSource {
     std::size_t count = 0;
     bool mutation = false;
     bool invalidation = false;
+    std::array<char, kMaxFrameTraceOwnerLabelBytes> owner{};
+    std::size_t owner_length = 0;
+    Rect owner_bounds;
+    bool has_owner_bounds = false;
+
+    void set_owner(std::string_view label) {
+        const std::string_view safe_label = label.empty() ? std::string_view("unattributed") : label;
+        owner_length = std::min(owner.size() - 1U, safe_label.size());
+        std::copy_n(safe_label.data(), owner_length, owner.data());
+        owner[owner_length] = '\0';
+    }
+
+    std::string_view owner_label() const { return std::string_view(owner.data(), owner_length); }
 };
 
 class FrameTraceMutationSources {
@@ -166,7 +180,9 @@ public:
                  const Node& root,
                  std::uint64_t generation_before,
                  DomDirtyFlags dirty_before,
-                 DomDirtyFlags fallback_dirty_flags = DomDirtyNone) {
+                 DomDirtyFlags fallback_dirty_flags = DomDirtyNone,
+                 std::string_view owner_label = {},
+                 const Rect* owner_bounds = nullptr) {
         const std::uint64_t generation = root.mutation_generation;
         const DomDirtyFlags dirty_after = subtree_dirty_flags(root);
         const bool mutation = generation != generation_before;
@@ -178,19 +194,26 @@ public:
             dirty_after != DomDirtyNone ? dirty_after : fallback_dirty_flags,
             generation,
             mutation,
-            invalidation);
+            invalidation,
+            owner_label,
+            owner_bounds);
     }
 
     void add(FrameTraceMutationSourceKind kind,
              DomDirtyFlags dirty_flags,
              std::uint64_t mutation_generation,
              bool mutation,
-             bool invalidation) {
+             bool invalidation,
+             std::string_view owner_label = {},
+             const Rect* owner_bounds = nullptr) {
+        const std::string_view normalized_owner = owner_label.empty()
+            ? std::string_view("unattributed")
+            : owner_label;
         for (std::size_t index = 0; index < source_count_; ++index) {
             FrameTraceMutationSource& source = sources_[index];
             if (source.kind == kind && source.mutation_generation == mutation_generation &&
                 source.dirty_flags == dirty_flags && source.mutation == mutation &&
-                source.invalidation == invalidation) {
+                source.invalidation == invalidation && source.owner_label() == normalized_owner) {
                 if (source.count != std::numeric_limits<std::size_t>::max()) {
                     ++source.count;
                 }
@@ -201,12 +224,18 @@ public:
             truncated_ = true;
             return;
         }
-        sources_[source_count_] = FrameTraceMutationSource{kind,
-                                                           dirty_flags,
-                                                           mutation_generation,
-                                                           1,
-                                                           mutation,
-                                                           invalidation};
+        FrameTraceMutationSource& source = sources_[source_count_];
+        source.kind = kind;
+        source.dirty_flags = dirty_flags;
+        source.mutation_generation = mutation_generation;
+        source.count = 1;
+        source.mutation = mutation;
+        source.invalidation = invalidation;
+        source.set_owner(normalized_owner);
+        source.has_owner_bounds = owner_bounds != nullptr;
+        if (owner_bounds != nullptr) {
+            source.owner_bounds = *owner_bounds;
+        }
         ++source_count_;
     }
 
@@ -402,6 +431,15 @@ public:
             return "unattributed";
         }
         return owner_labels_[token - 1U];
+    }
+
+    std::string owner_label_for_node(const Node& node) const {
+        const std::string& id = node.attribute("id");
+        const auto count = id_counts_.find(id);
+        if (trace_owner_id_is_safe(id) && count != id_counts_.end() && count->second == 1U) {
+            return "id:" + id;
+        }
+        return "unattributed";
     }
 
 private:
@@ -3878,11 +3916,36 @@ public:
             const FrameTraceMutationSource& source = mutation_sources.sources()[index];
             std::ostringstream entry;
             entry << "{\"kind\":\"" << frame_trace_mutation_source_kind_name(source.kind)
+                  << "\",\"owner\":\"" << json_escape_for_trace(std::string(source.owner_label()))
                   << "\",\"dirtyFlags\":" << source.dirty_flags
                   << ",\"mutationGeneration\":" << source.mutation_generation
                   << ",\"count\":" << source.count
                   << ",\"mutation\":" << (source.mutation ? "true" : "false")
-                  << ",\"invalidation\":" << (source.invalidation ? "true" : "false") << '}';
+                  << ",\"invalidation\":" << (source.invalidation ? "true" : "false")
+                  << ",\"dirtyRectIndexes\":[";
+            bool first_dirty_index = true;
+            if (source.has_owner_bounds) {
+                for (std::size_t dirty_index = 0;
+                     dirty_index < std::min(dirty_rects.size(), kMaxFrameTraceDirtyRects);
+                     ++dirty_index) {
+                    if (empty_rect(intersect_rect(source.owner_bounds, dirty_rects[dirty_index]))) {
+                        continue;
+                    }
+                    if (!first_dirty_index) {
+                        entry << ',';
+                    }
+                    entry << dirty_index;
+                    first_dirty_index = false;
+                }
+            }
+            entry << ']';
+            if (source.has_owner_bounds) {
+                entry << ",\"ownerBounds\":{\"x\":" << source.owner_bounds.x
+                      << ",\"y\":" << source.owner_bounds.y
+                      << ",\"width\":" << std::max(0, source.owner_bounds.width)
+                      << ",\"height\":" << std::max(0, source.owner_bounds.height) << '}';
+            }
+            entry << '}';
             std::string next = entry.str();
             if (!mutation_sources_json.empty()) {
                 next.insert(next.begin(), ',');
@@ -4207,6 +4270,9 @@ public:
             frame_trace_command_attribution_.clear_frame_samples();
             frame_trace_mutation_sources_.clear_frame();
             last_frame_dirty_flags_ = DomDirtyNone;
+            if (trace.active() && document_ != nullptr) {
+                frame_trace_command_attribution_.prepare_for_tree_build(*document_);
+            }
             if (trace.active() && frame == 0 && document_ != nullptr) {
                 frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Initial,
                                                   DomDirtyPaint,
@@ -4547,6 +4613,9 @@ private:
     FrameTraceCommandAttribution frame_trace_command_attribution_;
     FrameTraceMutationSources frame_trace_mutation_sources_;
     DomDirtyFlags last_frame_dirty_flags_ = DomDirtyNone;
+    std::string trace_event_owner_label_;
+    Rect trace_event_owner_bounds_;
+    bool trace_event_has_owner_bounds_ = false;
     std::uint64_t vscode_frame_sequence_ = 0;
     std::vector<std::filesystem::path> vscode_frame_paths_;
     std::string vscode_input_buffer_;
@@ -4671,6 +4740,29 @@ private:
         return scripted_time_enabled_ ? scripted_now_ms_ : GetTickCount64();
     }
 
+    void record_trace_event_owner(const Node* node) {
+        trace_event_owner_label_.clear();
+        trace_event_has_owner_bounds_ = false;
+        if (options_.render_trace_path.empty() || node == nullptr) {
+            return;
+        }
+        trace_event_owner_label_ = frame_trace_command_attribution_.owner_label_for_node(*node);
+        trace_event_has_owner_bounds_ = trace_layout_bounds_for_owner(*node, trace_event_owner_bounds_);
+    }
+
+    bool trace_layout_bounds_for_owner(const Node& node, Rect& bounds) const {
+        if (layout_tree_ == nullptr ||
+            frame_trace_command_attribution_.owner_label_for_node(node) == "unattributed") {
+            return false;
+        }
+        const LayoutBox* box = find_layout_by_id(*layout_tree_, node.attribute("id"));
+        if (box == nullptr) {
+            return false;
+        }
+        bounds = box->rect;
+        return true;
+    }
+
     void rebuild_input_controller(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
         input_ = std::make_unique<InputController>(
             *layer_tree_,
@@ -4707,6 +4799,8 @@ private:
                 continue;
             }
             FrameTraceMutationSourceKind source_kind = FrameTraceMutationSourceKind::Input;
+            trace_event_owner_label_.clear();
+            trace_event_has_owner_bounds_ = false;
             const bool observe_source = !options_.render_trace_path.empty() && document_ != nullptr;
             const std::uint64_t generation_before = observe_source ? document_->mutation_generation : 0;
             const DomDirtyFlags dirty_before = observe_source ? subtree_dirty_flags(*document_) : DomDirtyNone;
@@ -4859,6 +4953,7 @@ private:
                     break;
                 }
                 Node* target = find_node_by_id(*document_, event.target_id);
+                record_trace_event_owner(target);
                 bool changed = false;
                 bool satisfied = false;
                 if (target != nullptr) {
@@ -4901,7 +4996,9 @@ private:
                     *document_,
                     generation_before,
                     dirty_before,
-                    frame_update_sequence_ != frame_updates_before ? last_frame_dirty_flags_ : DomDirtyNone);
+                    frame_update_sequence_ != frame_updates_before ? last_frame_dirty_flags_ : DomDirtyNone,
+                    trace_event_owner_label_,
+                    trace_event_has_owner_bounds_ ? &trace_event_owner_bounds_ : nullptr);
             }
         }
     }
@@ -6226,11 +6323,16 @@ private:
                                                            next);
             if (rendered) {
                 if (!options_.render_trace_path.empty() && document_ != nullptr) {
+                    const std::string owner = frame_trace_command_attribution_.owner_label_for_node(*scroll_node);
+                    Rect owner_bounds;
+                    const bool has_owner_bounds = trace_layout_bounds_for_owner(*scroll_node, owner_bounds);
                     frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Scroll,
                                                       DomDirtyNone,
                                                       document_->mutation_generation,
                                                       false,
-                                                      true);
+                                                      true,
+                                                      owner,
+                                                      has_owner_bounds ? &owner_bounds : nullptr);
                 }
                 ++scroll_container_counters_.scrolls;
             }
@@ -7361,10 +7463,12 @@ private:
         input.buttons = buttons_from_keys(wparam);
         input.modifiers = modifiers_from_keys(wparam);
         if (update_scroll_drag(input.y)) {
+            record_trace_event_owner(scroll_drag_target_);
             set_title("drag-scroll scrollY=" + std::to_string(scroll_y_));
             return;
         }
         const Node* target = input_->pointer_move(input);
+        record_trace_event_owner(target);
         rerender_if_dirty(input_->focused_node());
         set_title("hover " + describe_node(target));
     }
@@ -7380,6 +7484,7 @@ private:
         input.buttons = buttons_from_keys(wparam) | 1;
         input.modifiers = modifiers_from_keys(wparam);
         const Node* target = input_->pointer_down(input);
+        record_trace_event_owner(target);
         begin_scroll_drag(target, input.y);
         rerender_if_dirty(input_->focused_node());
         set_title("active " + describe_node(target));
@@ -7404,6 +7509,7 @@ private:
         }
         reset_scroll_motion();
         const Node* target = input_->pointer_up(input);
+        record_trace_event_owner(target);
         follow_hash_anchor(target);
         if (process_shell_action_if_needed()) {
             return;
@@ -7425,6 +7531,7 @@ private:
         input.delta_y = GET_WHEEL_DELTA_WPARAM(wparam);
         input.modifiers = modifiers_from_keys(wparam);
         const Node* target = input_->wheel(input);
+        record_trace_event_owner(target);
         stop_scroll_inertia();
         rerender_if_dirty(input_->focused_node());
         const int scroll_delta = -input.delta_y;
@@ -7439,6 +7546,7 @@ private:
             return;
         }
         const Node* focus = input_->focused_node();
+        record_trace_event_owner(focus);
         if (input_->text_input(wide_char_to_utf8(static_cast<wchar_t>(wparam)))) {
             rerender_if_dirty(focus);
         }
@@ -7496,6 +7604,7 @@ private:
             return;
         }
         const Node* focus = input_->focused_node();
+        record_trace_event_owner(focus);
         if (input_->key_down(key)) {
             rerender_if_dirty(focus);
         } else if (key.code == KeyCode::ArrowDown || key.code == KeyCode::ArrowUp) {
@@ -7613,11 +7722,28 @@ private:
         clear_animation_overrides_after_render_ = animation_timeline_.empty();
         document_->dirty_flags |= DomDirtyPaint;
         if (!options_.render_trace_path.empty()) {
-            frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Animation,
-                                              DomDirtyPaint,
-                                              document_->mutation_generation,
-                                              false,
-                                              true);
+            for (const StyleOverride& override : style_overrides_) {
+                if (override.node == nullptr) {
+                    continue;
+                }
+                const std::string owner = frame_trace_command_attribution_.owner_label_for_node(*override.node);
+                Rect owner_bounds;
+                const bool has_owner_bounds = trace_layout_bounds_for_owner(*override.node, owner_bounds);
+                frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Animation,
+                                                  DomDirtyPaint,
+                                                  document_->mutation_generation,
+                                                  false,
+                                                  true,
+                                                  owner,
+                                                  has_owner_bounds ? &owner_bounds : nullptr);
+            }
+            if (style_overrides_.empty()) {
+                frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Animation,
+                                                  DomDirtyPaint,
+                                                  document_->mutation_generation,
+                                                  false,
+                                                  true);
+            }
         }
         return true;
     }

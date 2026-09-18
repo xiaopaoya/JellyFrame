@@ -114,22 +114,34 @@ def normalize_trace_mutation_sources(value: Any) -> tuple[list[dict[str, Any]], 
         if not isinstance(item, dict):
             continue
         kind = item.get("kind")
+        owner = item.get("owner")
         dirty_flags = safe_integer(item.get("dirtyFlags"))
         generation = safe_integer(item.get("mutationGeneration"))
         count = safe_integer(item.get("count"))
+        dirty_rect_indexes = item.get("dirtyRectIndexes")
         if (not isinstance(kind, str) or kind not in TRACE_MUTATION_SOURCE_KINDS or
+                not isinstance(owner, str) or not SAFE_TRACE_OWNER.fullmatch(owner) or
                 dirty_flags is None or generation is None or count is None or count < 1 or
                 not isinstance(item.get("mutation"), bool) or
-                not isinstance(item.get("invalidation"), bool)):
+                not isinstance(item.get("invalidation"), bool) or
+                not isinstance(dirty_rect_indexes, list) or
+                any(safe_integer(index) is None or index >= MAX_TRACE_DIRTY_RECTS
+                    for index in dirty_rect_indexes)):
             continue
-        sources.append({
+        normalized: dict[str, Any] = {
             "kind": kind,
+            "owner": owner,
             "dirtyFlags": dirty_flags,
             "mutationGeneration": generation,
             "count": count,
             "mutation": item["mutation"],
             "invalidation": item["invalidation"],
-        })
+            "dirtyRectIndexes": [safe_integer(index) for index in dirty_rect_indexes],
+        }
+        owner_bounds = normalize_trace_rect(item.get("ownerBounds"))
+        if owner_bounds is not None:
+            normalized["ownerBounds"] = owner_bounds
+        sources.append(normalized)
     return sources, len(value) > MAX_TRACE_MUTATION_SOURCES
 
 

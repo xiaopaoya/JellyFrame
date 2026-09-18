@@ -335,6 +335,10 @@ def main() -> int:
         require(any(source["kind"] == "input" for record in frame_records
                     for source in record.get("mutationSources", [])),
                 "render trace must associate scripted input with an observed invalidation")
+        require(any(source["kind"] == "input" and source["owner"] == "id:drag"
+                    for record in frame_records
+                    for source in record.get("mutationSources", [])),
+                "render trace must associate scripted input with the stable control owner")
         for record in frame_records:
             require(record["type"] == "frame" and record["totalUs"] >= 0,
                     "render trace frame records must contain non-negative totalUs")
@@ -342,10 +346,16 @@ def main() -> int:
             require(isinstance(mutation_sources, list) and len(mutation_sources) <= 16,
                     "render trace mutation sources must stay bounded")
             for source in mutation_sources:
-                require(set(source) == {"kind", "dirtyFlags", "mutationGeneration", "count", "mutation", "invalidation"},
+                require(set(source).issuperset({"kind", "owner", "dirtyFlags", "mutationGeneration", "count", "mutation", "invalidation", "dirtyRectIndexes"}),
                         "render trace mutation sources must use stable fields")
                 require(source["kind"] in {"input", "script", "animation", "scroll", "system", "host", "initial"},
                         "render trace mutation source kind must be stable")
+                require(isinstance(source["owner"], str) and source["owner"],
+                        "render trace mutation source owner must be stable")
+                require(isinstance(source["dirtyRectIndexes"], list) and
+                        all(isinstance(index, int) and 0 <= index < 32
+                            for index in source["dirtyRectIndexes"]),
+                        "render trace mutation source dirty links must be bounded")
                 require(all(isinstance(source[key], int) and source[key] >= 0
                             for key in ("dirtyFlags", "mutationGeneration", "count")) and
                         source["count"] >= 1 and isinstance(source["mutation"], bool) and

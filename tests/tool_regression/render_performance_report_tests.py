@@ -28,8 +28,9 @@ class RenderPerformanceReportTests(unittest.TestCase):
                     "captureFile": "frames/frame_001.bmp",
                     "dirtyRects": [{"x": 2, "y": 3, "width": 20, "height": 10}],
                     "mutationSources": [{
-                        "kind": "input", "dirtyFlags": 32, "mutationGeneration": 7,
-                        "count": 1, "mutation": True, "invalidation": True
+                        "kind": "input", "owner": "id:card", "dirtyFlags": 32, "mutationGeneration": 7,
+                        "count": 1, "mutation": True, "invalidation": True,
+                        "dirtyRectIndexes": [0], "ownerBounds": {"x": 2, "y": 3, "width": 20, "height": 10}
                     }],
                     "stageSpans": [{"name": "paint", "startUs": 25, "durationUs": 75}],
                     "commandSpans": [{
@@ -71,6 +72,8 @@ class RenderPerformanceReportTests(unittest.TestCase):
             self.assertEqual(report["frames"][0]["commandSpans"][0]["owner"], "id:card")
             self.assertEqual(report["frames"][0]["commandSpans"][0]["rect"]["width"], 20)
             self.assertEqual(report["frames"][0]["mutationSources"][0]["kind"], "input")
+            self.assertEqual(report["frames"][0]["mutationSources"][0]["owner"], "id:card")
+            self.assertEqual(report["frames"][0]["mutationSources"][0]["dirtyRectIndexes"], [0])
             self.assertEqual(report["frames"][0]["mutationSources"][0]["mutationGeneration"], 7)
             self.assertEqual(report["metadata"]["viewport"], {"width": 172, "height": 320})
 

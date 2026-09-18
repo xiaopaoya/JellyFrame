@@ -75,7 +75,7 @@ function main() {
     ],
     dirtyRectsTruncated: true,
     mutationSources: [
-      { kind: "input", dirtyFlags: 32, mutationGeneration: 4, count: 1, mutation: true, invalidation: true }
+      { kind: "input", owner: "id:title", dirtyFlags: 32, mutationGeneration: 4, count: 1, mutation: true, invalidation: true, dirtyRectIndexes: [0], ownerBounds: { x: 8, y: 12, width: 64, height: 28 } }
     ],
     mutationSourcesTruncated: true,
     commands: [
@@ -404,7 +404,7 @@ function main() {
   assert(overflowSpan.errors.some((error) => error.includes("command spans")));
   const invalidRect = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, commandSpans: [{ type: "Text", owner: "id:x", startUs: 0, durationUs: 1, pixels: 1, rect: { x: 0, y: 0, width: -1, height: 1 } }] })}\n`);
   assert(invalidRect.errors.some((error) => error.includes("command spans")));
-  const invalidMutationSource = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, mutationSources: [{ kind: "unknown", dirtyFlags: 32, mutationGeneration: 1, count: 1, mutation: true, invalidation: true }] })}\n`);
+  const invalidMutationSource = parseRenderTrace(`${JSON.stringify(session)}\n${JSON.stringify({ ...frame, mutationSources: [{ kind: "unknown", owner: "unattributed", dirtyFlags: 32, mutationGeneration: 1, count: 1, mutation: true, invalidation: true, dirtyRectIndexes: [] }] })}\n`);
   assert(invalidMutationSource.errors.some((error) => error.includes("mutation sources")));
 }
 
