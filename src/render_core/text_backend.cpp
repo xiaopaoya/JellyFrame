@@ -3,6 +3,7 @@
 #include "render_core/text_scan.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstddef>
 #include <limits>
@@ -14,6 +15,49 @@ namespace {
 
 constexpr std::uint32_t kFontFamilyFnvOffset = 0x811c9dc5U;
 constexpr std::uint32_t kFontFamilyFnvPrime = 0x01000193U;
+
+// Most embedded labels are ASCII. Keep that hot cache inline so repeated
+// glyphs do not allocate unordered_map nodes; non-ASCII codepoints retain the
+// existing hash cache and measurement semantics.
+template <typename Value>
+class ScalarValueCache {
+public:
+    void reserve(std::size_t expected_values) {
+        extended_.reserve(std::min<std::size_t>(expected_values, 32));
+    }
+
+    bool lookup(std::uint32_t codepoint, Value& value) const {
+        if (codepoint < ascii_present_.size()) {
+            const std::size_t index = static_cast<std::size_t>(codepoint);
+            if (!ascii_present_[index]) {
+                return false;
+            }
+            value = ascii_values_[index];
+            return true;
+        }
+        const auto found = extended_.find(codepoint);
+        if (found == extended_.end()) {
+            return false;
+        }
+        value = found->second;
+        return true;
+    }
+
+    void store(std::uint32_t codepoint, const Value& value) {
+        if (codepoint < ascii_present_.size()) {
+            const std::size_t index = static_cast<std::size_t>(codepoint);
+            ascii_values_[index] = value;
+            ascii_present_[index] = true;
+            return;
+        }
+        extended_.emplace(codepoint, value);
+    }
+
+private:
+    std::array<Value, 128> ascii_values_{};
+    std::array<bool, 128> ascii_present_{};
+    std::unordered_map<std::uint32_t, Value> extended_;
+};
 
 int clamp_nonnegative_int64(std::int64_t value) {
     return static_cast<int>(std::clamp<std::int64_t>(
@@ -227,23 +271,21 @@ TextMetrics measure_text_with_letter_spacing(const TextMeasureProvider& provider
     // A scalar can occur many times in a label or paragraph. Reuse its
     // backend measurement while keeping the existing per-codepoint spacing
     // semantics and avoiding a temporary string on cache hits.
-    std::unordered_map<std::uint32_t, TextMetrics> scalar_metrics;
+    ScalarValueCache<TextMetrics> scalar_metrics;
     scalar_metrics.reserve(std::min<std::size_t>(text.size(), 32));
     std::size_t codepoint_count = 0;
     for (std::size_t begin = 0; begin < text.size();) {
         std::size_t end = begin;
         const std::uint32_t codepoint = consume_utf8_codepoint(text, end);
-        const auto cached = scalar_metrics.find(codepoint);
-        const TextMetrics scalar = cached != scalar_metrics.end()
-            ? cached->second
-            : measure_text_range(provider,
-                                 text.data() + begin,
-                                 end - begin,
-                                 font_size,
-                                 font_weight,
-                                 font_family_hash);
-        if (cached == scalar_metrics.end()) {
-            scalar_metrics.emplace(codepoint, scalar);
+        TextMetrics scalar;
+        if (!scalar_metrics.lookup(codepoint, scalar)) {
+            scalar = measure_text_range(provider,
+                                        text.data() + begin,
+                                        end - begin,
+                                        font_size,
+                                        font_weight,
+                                        font_family_hash);
+            scalar_metrics.store(codepoint, scalar);
         }
         if (metrics.width > std::numeric_limits<int>::max() - scalar.width) {
             metrics.width = std::numeric_limits<int>::max();
@@ -279,7 +321,7 @@ std::vector<std::string> wrap_text_anywhere(const TextMeasureProvider& provider,
     const int bounded_spacing = bounded_letter_spacing(font_size, letter_spacing);
     std::string line;
     line.reserve(std::min<std::size_t>(text.size(), 64));
-    std::unordered_map<std::uint32_t, int> scalar_widths;
+    ScalarValueCache<int> scalar_widths;
     scalar_widths.reserve(std::min<std::size_t>(text.size(), 32));
     int line_width = 0;
     for (std::size_t begin = 0; begin < text.size();) {
@@ -293,17 +335,15 @@ std::vector<std::string> wrap_text_anywhere(const TextMeasureProvider& provider,
             begin = end;
             continue;
         }
-        const auto cached_width = scalar_widths.find(codepoint);
-        const int scalar_width = cached_width != scalar_widths.end()
-            ? cached_width->second
-            : measure_text_range(provider,
-                                 scalar.data(),
-                                 scalar.size(),
-                                 font_size,
-                                 font_weight,
-                                 font_family_hash).width;
-        if (cached_width == scalar_widths.end()) {
-            scalar_widths.emplace(codepoint, scalar_width);
+        int scalar_width = 0;
+        if (!scalar_widths.lookup(codepoint, scalar_width)) {
+            scalar_width = measure_text_range(provider,
+                                              scalar.data(),
+                                              scalar.size(),
+                                              font_size,
+                                              font_weight,
+                                              font_family_hash).width;
+            scalar_widths.store(codepoint, scalar_width);
         }
         const int candidate_width = line.empty()
             ? scalar_width
@@ -336,7 +376,7 @@ std::size_t count_wrapped_lines_anywhere(const TextMeasureProvider& provider,
 
     const int width_limit = std::max(1, available_width);
     const int bounded_spacing = bounded_letter_spacing(font_size, letter_spacing);
-    std::unordered_map<std::uint32_t, int> scalar_widths;
+    ScalarValueCache<int> scalar_widths;
     scalar_widths.reserve(std::min<std::size_t>(text.size(), 32));
     std::size_t line_count = 0;
     bool line_empty = true;
@@ -352,17 +392,15 @@ std::size_t count_wrapped_lines_anywhere(const TextMeasureProvider& provider,
             begin = end;
             continue;
         }
-        const auto cached_width = scalar_widths.find(codepoint);
-        const int scalar_width = cached_width != scalar_widths.end()
-            ? cached_width->second
-            : measure_text_range(provider,
-                                 scalar.data(),
-                                 scalar.size(),
-                                 font_size,
-                                 font_weight,
-                                 font_family_hash).width;
-        if (cached_width == scalar_widths.end()) {
-            scalar_widths.emplace(codepoint, scalar_width);
+        int scalar_width = 0;
+        if (!scalar_widths.lookup(codepoint, scalar_width)) {
+            scalar_width = measure_text_range(provider,
+                                              scalar.data(),
+                                              scalar.size(),
+                                              font_size,
+                                              font_weight,
+                                              font_family_hash).width;
+            scalar_widths.store(codepoint, scalar_width);
         }
         const int candidate_width = line_empty
             ? scalar_width
