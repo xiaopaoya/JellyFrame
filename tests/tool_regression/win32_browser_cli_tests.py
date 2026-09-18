@@ -342,10 +342,11 @@ def main() -> int:
                     for record in frame_records
                     for source in record.get("mutationSources", [])),
                 "render trace must associate scripted input with the stable control owner")
-        require(any(source["kind"] == "script" and source["owner"] == "id:first" and source["mutation"]
-                    for record in frame_records
-                    for source in record.get("mutationSources", [])),
-                "render trace must associate script DOM mutation with the directly changed owner")
+        if scripting_enabled:
+            require(any(source["kind"] == "script" and source["owner"] == "id:first" and source["mutation"]
+                        for record in frame_records
+                        for source in record.get("mutationSources", [])),
+                    "render trace must associate script DOM mutation with the directly changed owner")
         for record in frame_records:
             require(record["type"] == "frame" and record["totalUs"] >= 0,
                     "render trace frame records must contain non-negative totalUs")
