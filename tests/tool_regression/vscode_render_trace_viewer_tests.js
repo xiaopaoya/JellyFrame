@@ -1,6 +1,6 @@
 const assert = require("assert");
 const fs = require("fs");
-const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameDeltaSummary, frameAnomalySummary, frameAnomalyAttribution, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
+const { parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameMutationEvidence, frameHotspotSummary, frameDeltaSummary, frameAnomalySummary, frameAnomalyAttribution, frameTimingSummary, renderTraceHtml } = require("../../tools/vscode-jellyframe/render_trace_viewer");
 const vm = require("vm");
 
 function loadTraceHelpers() {
@@ -179,6 +179,18 @@ function main() {
       overlapPixels: 1792
     }]
   });
+  const mutationEvidence = frameMutationEvidence({
+    ...commandFrame,
+    mutationSources: [
+      { kind: "script", owner: "id:title", dirtyFlags: 4, mutationGeneration: 5, count: 1, mutation: true, invalidation: true, dirtyRectIndexes: [0] },
+      { kind: "input", owner: "id:card", dirtyFlags: 32, mutationGeneration: 5, count: 1, mutation: false, invalidation: true, dirtyRectIndexes: [0] }
+    ]
+  });
+  assert.equal(mutationEvidence.available, true);
+  assert.deepEqual(mutationEvidence.entries, [
+    { kind: "script", owner: "id:title", commandUs: 90, commandCount: 1, dirtyEvidenceUs: 0, dirtyEvidenceHits: 0, evidence: "owner-command" },
+    { kind: "input", owner: "id:card", commandUs: 70, commandCount: 1, dirtyEvidenceUs: 70, dirtyEvidenceHits: 1, evidence: "owner-command" }
+  ]);
   const linkedCommandFrame = {
     ...spanFrame,
     frame: 2,
@@ -363,6 +375,7 @@ function main() {
   assert(html.includes("frameDirtyEvidence"));
   assert(html.includes("mutationSources"));
   assert(html.includes("输入 / mutation 来源"));
+  assert(html.includes("sourceCommandTime"));
   assert(html.includes("相邻帧变化"));
   assert(html.includes("frameDeltas"));
   assert(html.includes("仅显示异常帧"));

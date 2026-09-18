@@ -116,7 +116,8 @@ mutation 根因”，不能把 command owner 猜成 mutation owner。
    同一 producer 现记录 frame-local `mutationSources`，覆盖 deterministic frame script 的输入/系统/宿主
    事件、脚本回调、动画、滚动和首帧诊断 repaint；脚本 DOM mutation 通过 Runtime observer 精确关联
    到直接被修改的安全 owner。source 只在观察到 mutation 或 invalidation 时写出，且受 16 项及 JSONL
-   行大小限制。VS Code 查看器与离线报告保留并显示该字段。
+   行大小限制。VS Code 查看器在 source 表中额外显示同 owner 的命令耗时和 dirty evidence 关联，
+   但仍明确这是相关性证据，不是 mutation 根因证明；离线报告保留并显示原始 source 字段。
 4. **正确性及开销门槛**：同一 `.jfcapture` 的 profile on/off frame hash 必须相同；Release desktop
    baseline 上 profiling p95 额外 CPU 时间应记录且可解释，不设虚假的“零开销”要求。
    `tools/render_trace_profile_ab.py` 是标准配对 runner：它交替运行 baseline/profiled、校验每帧

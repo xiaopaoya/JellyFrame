@@ -655,6 +655,29 @@ function frameCommandCostMap(frame) {
   return { source: "aggregate", map, truncated: frame?.commandsTruncated === true };
 }
 
+function frameMutationEvidence(frame) {
+  const sources = Array.isArray(frame?.mutationSources)
+    ? frame.mutationSources.filter((source) => source && typeof source.kind === "string").slice(0, 16)
+    : [];
+  const commandCosts = frameCommandCostMap(frame);
+  const commandRows = Array.from(commandCosts.map.values());
+  const dirtyEvidence = frameDirtyRepaintEvidence(frame);
+  const entries = sources.map((source) => {
+    const owner = typeof source.owner === "string" && source.owner.trim() ? source.owner.trim() : "unattributed";
+    const commands = commandRows.filter((item) => item.owner === owner);
+    const commandUs = commands.reduce((total, item) => Math.min(Number.MAX_SAFE_INTEGER, total + item.us), 0);
+    const commandCount = commands.reduce((total, item) => Math.min(Number.MAX_SAFE_INTEGER, total + item.count), 0);
+    const sourceDirtyRects = new Set(Array.isArray(source.dirtyRectIndexes) ? source.dirtyRectIndexes : []);
+    const dirtyRows = dirtyEvidence.entries.filter((item) => item.owner === owner &&
+      item.dirtyRectIndexes.some((index) => sourceDirtyRects.has(index)));
+    const dirtyEvidenceUs = dirtyRows.reduce((total, item) => Math.min(Number.MAX_SAFE_INTEGER, total + item.durationUs), 0);
+    const dirtyEvidenceHits = dirtyRows.reduce((total, item) => Math.min(Number.MAX_SAFE_INTEGER, total + item.dirtyRectIndexes.length), 0);
+    const evidence = commandUs > 0 ? "owner-command" : dirtyEvidenceUs > 0 ? "owner-dirty" : "source-only";
+    return { kind: source.kind, owner, commandUs, commandCount, dirtyEvidenceUs, dirtyEvidenceHits, evidence };
+  });
+  return { available: sources.length > 0, entries, commandSource: commandCosts.source, dirtyEvidenceAvailable: dirtyEvidence.available };
+}
+
 function frameDeltaSummary(frame, previousFrame) {
   if (!frame || !previousFrame) return { available: false };
   const currentTiming = frameTimingBreakdown(frame);
@@ -864,7 +887,8 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
   const frameAnomalyAttributions = Object.fromEntries((parsed?.frames || []).map((frame, index) => [
     String(frame.frame), frameAnomalyAttribution(frame, index > 0 ? parsed.frames[index - 1] : null, frameAnomalies.thresholds)
   ]));
-  const data = safeJson({ ...parsed, frameImages, frameTiming, frameComposition, frameTimelines, frameCommandTimelines, frameDirtyEvidence, frameDeltas, frameHotspots, frameSummary, frameAnomalies, frameAnomalyAttributions, aggregate: aggregateTrace(parsed) });
+  const frameMutationEvidenceByFrame = Object.fromEntries((parsed?.frames || []).map((frame) => [String(frame.frame), frameMutationEvidence(frame)]));
+  const data = safeJson({ ...parsed, frameImages, frameTiming, frameComposition, frameTimelines, frameCommandTimelines, frameDirtyEvidence, frameMutationEvidence: frameMutationEvidenceByFrame, frameDeltas, frameHotspots, frameSummary, frameAnomalies, frameAnomalyAttributions, aggregate: aggregateTrace(parsed) });
   const labels = chinese ? {
     title: "Render Trace",
     frame: "帧",
@@ -915,7 +939,10 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
      dirtyOverlay: "截图中的脏区",
      dirtyEvidence: "脏区内的实际重绘证据",
      dirtyEvidenceNote: "仅表示带有最终 raster 矩形的命令与已记录 dirty rect 发生空间重叠，不是 DOM 变更根因；未命中的命令或截断数据不会显示。",
-     dirtyRectIndexes: "脏区编号",
+    dirtyRectIndexes: "脏区编号",
+    sourceCommandTime: "关联命令",
+    sourceDirtyTime: "关联脏区耗时",
+    sourceEvidence: "关联证据",
      overlapPixels: "重叠像素",
     mutationSources: "输入 / mutation 来源",
     mutationSourcesNote: "仅显示 producer 明确观察到的来源；它把事件、mutation generation 和 invalidation 关联到当前帧，不会用 dirty 与命令的空间重叠猜测根因。",
@@ -1031,7 +1058,10 @@ function renderTraceHtml(parsed, chinese, title, options = {}) {
      dirtyOverlay: "Dirty regions in capture",
      dirtyEvidence: "Observed repaint inside dirty regions",
      dirtyEvidenceNote: "Shows only spatial overlap between commands with final raster rectangles and recorded dirty rectangles; it is not the DOM mutation cause. Unmatched or truncated work is omitted.",
-     dirtyRectIndexes: "Dirty rects",
+    dirtyRectIndexes: "Dirty rects",
+    sourceCommandTime: "Linked commands",
+    sourceDirtyTime: "Linked dirty time",
+    sourceEvidence: "Link evidence",
      overlapPixels: "Overlap pixels",
     mutationSources: "Input / mutation sources",
     mutationSourcesNote: "Only producer-observed sources are shown. They associate events, mutation generation and invalidation with this frame; dirty/command overlap is never promoted to a mutation cause.",
@@ -1180,8 +1210,10 @@ function render(){
   const dirtyRectView=dirtyRects.length?'<h2>'+esc(labels.dirtyRects)+'</h2><div>'+dirtyRects.map((rect,index)=>{const x=Number(rect.x)||0;const y=Number(rect.y)||0;const width=Math.max(0,Number(rect.width)||0);const height=Math.max(0,Number(rect.height)||0);return '<div class="dirty-rect"><span class="bar"><i style="width:'+Math.min(100,Math.max(1,Math.round(width*100/viewportWidth)))+'%"></i></span><code>#'+fmt(index)+' '+fmt(x)+','+fmt(y)+' '+fmt(width)+'x'+fmt(height)+'</code></div>';}).join('')+(frame.dirtyRectsTruncated?'<p class="muted">'+esc(labels.dirtyRectsTruncated)+'</p>':'')+'</div>':'';
   const dirtyEvidenceView=dirtyEvidence.available?'<h2>'+esc(labels.dirtyEvidence)+'</h2><p class="muted">'+esc(labels.dirtyEvidenceNote)+'</p>'+(dirtyEvidence.entries.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.time)+'</th><th>'+esc(labels.dirtyRectIndexes)+'</th><th>'+esc(labels.overlapPixels)+'</th></tr>'+dirtyEvidence.entries.map((entry)=>'<tr><td>'+esc(entry.type)+'</td><td><code>'+esc(entry.owner)+'</code></td><td>'+fmt(entry.durationUs)+' us</td><td>'+entry.dirtyRectIndexes.map((index)=>'#'+fmt(index)).join(', ')+'</td><td>'+fmt(entry.overlapPixels)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>'):'';
   const mutationSources=Array.isArray(frame.mutationSources)?frame.mutationSources.filter((source)=>source&&typeof source.kind==='string').slice(0,16):[];
+  const mutationEvidence=model.frameMutationEvidence?.[String(frame.frame)]||{entries:[]};
+  const mutationEvidenceByIndex=mutationEvidence.entries||[];
   const mutationSourcesView='<h2>'+esc(labels.mutationSources)+'</h2><p class="muted">'+esc(labels.mutationSourcesNote)+'</p>'+
-    (mutationSources.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.mutationGeneration)+'</th><th>'+esc(labels.dirtyFlags)+'</th><th>'+esc(labels.dirtyRectIndexes)+'</th><th>'+esc(labels.mutation)+'</th><th>'+esc(labels.invalidation)+'</th><th>'+esc(labels.samples)+'</th></tr>'+mutationSources.map((source)=>'<tr><td><code>'+esc(source.kind)+'</code></td><td><code>'+esc(source.owner||'unattributed')+'</code></td><td>'+fmt(source.mutationGeneration)+'</td><td>'+fmt(source.dirtyFlags)+'</td><td>'+esc(Array.isArray(source.dirtyRectIndexes)?source.dirtyRectIndexes.map((index)=>'#'+index).join(', ')||'-':'-')+'</td><td>'+esc(source.mutation?'true':'false')+'</td><td>'+esc(source.invalidation?'true':'false')+'</td><td>'+fmt(source.count)+'</td></tr>').join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>')+
+    (mutationSources.length?'<table><tr><th>'+esc(labels.type)+'</th><th>'+esc(labels.owner)+'</th><th>'+esc(labels.mutationGeneration)+'</th><th>'+esc(labels.dirtyFlags)+'</th><th>'+esc(labels.dirtyRectIndexes)+'</th><th>'+esc(labels.sourceCommandTime)+'</th><th>'+esc(labels.sourceDirtyTime)+'</th><th>'+esc(labels.sourceEvidence)+'</th><th>'+esc(labels.mutation)+'</th><th>'+esc(labels.invalidation)+'</th><th>'+esc(labels.samples)+'</th></tr>'+mutationSources.map((source,index)=>{const evidence=mutationEvidenceByIndex[index]||{};return '<tr><td><code>'+esc(source.kind)+'</code></td><td><code>'+esc(source.owner||'unattributed')+'</code></td><td>'+fmt(source.mutationGeneration)+'</td><td>'+fmt(source.dirtyFlags)+'</td><td>'+esc(Array.isArray(source.dirtyRectIndexes)?source.dirtyRectIndexes.map((index)=>'#'+index).join(', ')||'-':'-')+'</td><td>'+fmt(evidence.commandUs)+' us / '+fmt(evidence.commandCount)+'</td><td>'+fmt(evidence.dirtyEvidenceUs)+' us / '+fmt(evidence.dirtyEvidenceHits)+'</td><td><code>'+esc(evidence.evidence||'source-only')+'</code></td><td>'+esc(source.mutation?'true':'false')+'</td><td>'+esc(source.invalidation?'true':'false')+'</td><td>'+fmt(source.count)+'</td></tr>';}).join('')+'</table>':'<p class="muted">'+esc(labels.none)+'</p>')+
     (frame.mutationSourcesTruncated?'<p class="muted">'+esc(labels.sourceTruncated)+'</p>':'');
  const capture=model.frameImages?.[String(frame.frame)];
  const dirtyOverlay=dirtyRects.length?'<p class="muted dirty-overlay-label">'+esc(labels.dirtyOverlay)+'</p><div class="capture-stage">'+dirtyRects.map((rect)=>{const x=Number(rect.x)||0;const y=Number(rect.y)||0;const width=Math.max(0,Number(rect.width)||0);const height=Math.max(0,Number(rect.height)||0);return '<i class="dirty-overlay" style="left:'+Math.max(0,Math.min(100,x*100/viewportWidth))+'%;top:'+Math.max(0,Math.min(100,y*100/viewportHeight))+'%;width:'+Math.max(0,Math.min(100,width*100/viewportWidth))+'%;height:'+Math.max(0,Math.min(100,height*100/viewportHeight))+'%"></i>';}).join('')+'<img src="'+esc(capture||'')+'" alt="'+esc(labels.capture)+'"></div>':'';
@@ -1244,4 +1276,4 @@ function render(){
 </script></body></html>`;
 }
 
-module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameHotspotSummary, frameCommandCostMap, frameDeltaSummary, frameAnomalySummary, frameAnomalyAttribution, frameTimingSummary, renderTraceHtml };
+module.exports = { MAX_TRACE_BYTES, MAX_TRACE_LINES, parseRenderTrace, aggregateTrace, frameTimingBreakdown, frameStageComposition, frameStageTimeline, frameCommandTimeline, frameDirtyRepaintEvidence, frameMutationEvidence, frameHotspotSummary, frameCommandCostMap, frameDeltaSummary, frameAnomalySummary, frameAnomalyAttribution, frameTimingSummary, renderTraceHtml };
