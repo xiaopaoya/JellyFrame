@@ -43,6 +43,9 @@ python tools\render_performance_report.py `
 - trace 提供时，逐帧报告会保留有界的 `captureFile`、`dirtyRects`、`stageSpans` 和
   `commandSpans`；HTML 帧表会标出这些实际观测数据的数量，不把缺失 span 推断成阶段时间线；
 - producer 提供时的 display command 类型与受限 owner 归因排行；
+- trace source-aware JSON/HTML 归档还会在 summary 中按 `kind + owner` 汇总 mutation source 的关联命令
+  耗时、dirty evidence 耗时、命中数和覆盖帧数；该汇总保留相关性边界，不把同 owner 或空间重叠宣称为
+  mutation 根因；
 - 设备 aggregate telemetry 与隔离 microbench 的独立区域；
 - Render Trace 查看器提供跨帧的 command/stage/owner 调用数、累计耗时和单次调用 p95；新 trace
   还会按 `type + owner + stage` 聚合真实 `commandSpans`，显示 raster invocation 的调用数、累计耗时、p95
