@@ -1,6 +1,6 @@
 # Render Core 性能硬件对照测试要求
 
-> 最后更新：2026-09-15；适用版本：0.6.0-dev
+> 最后更新：2026-09-18；适用版本：0.6.0-dev
 > 状态：主线 3 硬件执行稿；适用 ESP32-S3 retained UI port
 
 本文用于比较 Render Core 或 Runtime 优化前后的真实设备表现。它补充
@@ -17,7 +17,7 @@ frame、paint、present、转换或 DMA 等阶段耗时，以及是否引入视�
 
 ## 当前正式 pair
 
-主线当前指定以下 pair，尚未开始设备刷写或正式 A/B：
+主线当前指定以下 pair；正式 A/B 已完成首轮采集，结果正在复核：
 
 | 角色 | commit | 内容边界 |
 | --- | --- | --- |
@@ -29,8 +29,7 @@ frame、paint、present、转换或 DMA 等阶段耗时，以及是否引入视�
 性能改动，不包含 fixture、字体、profile 协议、trace/tooling 或文档变化。桌面
 microbench 已观察到长文本 anywhere-wrap 的局部改善，但这不是设备端结论。
 
-正式矩阵前仍必须分别使用 ESP-IDF 5.3+ 完成四个 workload 的 candidate/baseline
-构建，并记录固件 SHA-256、SDK 配置和 Core/ABI 身份。若设备构建发现该优化带来
+正式矩阵已使用 ESP-IDF 5.3.1 完成四个 workload、两侧各三次有效窗口。若设备构建发现该优化带来
 栈、字体或行为问题，应将 pair 标为 `INVALID`，不得用后续修复提交混入 candidate
 后继续比较；修复后需重新指定完整 pair。
 
@@ -222,6 +221,11 @@ delta_percent = (candidate_p95 - baseline_p95) / baseline_p95 * 100
 优先使用每次重复的窗口 p95，再对重复结果报告中位数和范围。若 baseline p95 为 0，
 该项不计算百分比，显示 `not-comparable`。同时报告 p50、p95、max，避免平均值掩盖
 拖动中的长尾卡顿。
+
+比较器必须保留 `histogram_bucket_us` 和 `histogram_ceiling_us`。任何 percentile
+达到 `histogram_ceiling_us - histogram_bucket_us` 时，表示落入开放上限桶，只能解释为
+“至少该值”；该指标必须标为 `histogram-saturated`，不得计算变化百分比或据此宣称通过。
+两侧或各重复的 histogram 配置不一致时，固定条件无效，比较结果为 `INVALID`。
 
 性能结果必须区分：
 

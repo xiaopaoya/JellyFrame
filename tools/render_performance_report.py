@@ -503,6 +503,8 @@ def load_device_telemetry(path: Path) -> dict[str, Any]:
         "full": "fullFrames", "dirty": "dirtyFrames", "flushes": "flushes",
         "frame_us_p50": "frameP50Us", "frame_us_p95": "frameP95Us",
         "frame_us_max": "frameMaxUs", "paint_us_p50": "paintP50Us",
+        "histogram_bucket_us": "histogramBucketUs",
+        "histogram_ceiling_us": "histogramCeilingUs",
         "input_us_p50": "inputP50Us", "input_us_p95": "inputP95Us",
         "planning_us_p50": "planningP50Us", "planning_us_p95": "planningP95Us",
         "pipeline_us_p50": "pipelineP50Us", "pipeline_us_p95": "pipelineP95Us",

@@ -1,6 +1,6 @@
 # Render Core 嵌入式 UI 对照 workload V0
 
-> 状态：Stage 3 fixture qualification 已通过，正式对照矩阵待执行；最后更新：2026-09-18；适用版本：0.6.0-dev
+> 状态：Stage 3 正式矩阵已采集，量程与 local-update 回归待复测；最后更新：2026-09-18；适用版本：0.6.0-dev
 > 适用范围：ESP32-S3 retained UI port 与等价桌面 capture
 
 本文定义一个比单一 fill/gradient 更接近真实 App 的固定 workload，用于关闭
@@ -128,6 +128,29 @@ python tools\collect_device_profile_window.py `
 
 该 qualification 只验证 fixture 可用性和采集完整性，不构成性能优化结论。通过后再选择
 明确的 baseline/candidate commit，按本文其余要求执行每侧至少三次的正式矩阵。
+
+### 3.2 正式矩阵首轮复核
+
+2026-09-18 已完成 `35fb0cd8` baseline 与 `48d3866c` candidate 的四 workload、每侧
+三次采集。24 个窗口均满足 30 warm-up、120 measured frames、`partial=0`、
+`contaminated=0`、`present_failures=0`，未发现 panic、watchdog、brownout、reset 或
+panel/DMA/touch 错误，稳定性和内存没有明显退化。
+
+首轮结果尚不能关闭 Stage 3：
+
+- `local_update` 与 `full_repaint` 的 frame/pipeline p50、p95 达到 127000 us，正好是
+  1000 us bucket、128000 us ceiling 的开放上限桶，不能把两侧相同的 127000 us 解释为
+  “无变化”；`scroll` 的 frame p95 也同样饱和；
+- `local_update` 的 present p95 从 99000 us 增至 102000 us，变化 `+3.03%`，略超
+  既定 3% 阶段回归门槛；DMA wait p95 同时从 71000 us 增至 73000 us；
+- 固定状态检查仍需写入 manifest。它不要求照片或逐像素证据；操作者检查通过即可使用
+  `visual-equivalent-only`；
+- baseline `static` 三个 `capture.json` 末尾含字面量 `\\n`，原始 console hash 可核对，
+  但归档 JSON 需要带记录地机械修复，不能静默覆盖原证据。
+
+下一次硬件复测应扩大 histogram ceiling（或缩小 bucket 且保持有界开销），并至少对
+`local_update` 使用 baseline/candidate 交错或反向顺序重新采集，以区分 candidate 影响与
+温度、执行顺序或显示链路漂移。当前矩阵可以作为稳定性证据，不能证明设备端性能收益。
 
 ## 4. 通过标准
 

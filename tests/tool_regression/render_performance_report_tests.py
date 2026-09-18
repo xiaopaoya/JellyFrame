@@ -187,7 +187,8 @@ class RenderPerformanceReportTests(unittest.TestCase):
                 "device_profile format=jellyframe.device.profile.v0 case=drag profile=ws147-v0 "
                 "board=waveshare-esp32-s3-touch-lcd-1.47 "
                 "window=1 frame_us_p50=28600 frame_us_p95=41700 frames=120 pipeline_frames=8 partial=0\n"
-                "device_profile_timing window=1 viewport=172x320 input_us_p95=310\n"
+                "device_profile_timing window=1 viewport=172x320 input_us_p95=310 "
+                "histogram_bucket_us=1000 histogram_ceiling_us=128000\n"
                 "device_profile_pipeline window=1 paint_us_p95=16800 present_us_p95=22800\n"
                 "device_profile_present window=1 dma_wait_us_p95=17100\n"
                 "device_profile_counters window=1 dirty_pixels_avg=18944 packed_bytes=4546560 "
@@ -217,6 +218,8 @@ class RenderPerformanceReportTests(unittest.TestCase):
         self.assertEqual(report["deviceTelemetry"][0]["metrics"]["dmaWaitP95Us"], 17100)
         self.assertEqual(report["deviceTelemetry"][0]["metrics"]["pipelineFrames"], 8)
         self.assertEqual(report["deviceTelemetry"][0]["metrics"]["packedBytes"], 4546560)
+        self.assertEqual(report["deviceTelemetry"][0]["metrics"]["histogramBucketUs"], 1000)
+        self.assertEqual(report["deviceTelemetry"][0]["metrics"]["histogramCeilingUs"], 128000)
 
     def test_device_profile_telemetry_strips_serial_ansi_codes(self):
         with tempfile.TemporaryDirectory() as directory:

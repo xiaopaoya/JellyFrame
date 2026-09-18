@@ -27,14 +27,23 @@ METRIC_UNITS = {
     "frameP50Us": "us",
     "frameP95Us": "us",
     "frameMaxUs": "us",
+    "inputP50Us": "us",
+    "inputP95Us": "us",
+    "planningP50Us": "us",
+    "planningP95Us": "us",
+    "pipelineP50Us": "us",
+    "pipelineP95Us": "us",
     "paintP50Us": "us",
     "paintP95Us": "us",
     "presentP50Us": "us",
     "presentP95Us": "us",
     "convertP50Us": "us",
     "convertP95Us": "us",
+    "dmaSubmitP50Us": "us",
+    "dmaSubmitP95Us": "us",
     "dmaWaitP50Us": "us",
     "dmaWaitP95Us": "us",
+    "pipelineFrames": "count",
     "internalFreeMinBytes": "bytes",
     "psramFreeMinBytes": "bytes",
     "stackFreeWords": "words",
@@ -43,6 +52,10 @@ METRIC_UNITS = {
     "presentFailures": "count",
 }
 REQUIRED_METRICS = ("frameP95Us", "presentP95Us", "presentFailures")
+HISTOGRAM_METRICS = {
+    name for name, unit in METRIC_UNITS.items()
+    if unit == "us" and (name.endswith("P50Us") or name.endswith("P95Us"))
+}
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -127,7 +140,16 @@ def load_sample(path: Path) -> dict[str, Any]:
         for name in METRIC_UNITS
         if finite_number(metrics.get(name)) is not None
     }
-    return {"path": str(path), "metrics": normalized}
+    bucket = finite_number(metrics.get("histogramBucketUs"))
+    ceiling = finite_number(metrics.get("histogramCeilingUs"))
+    if (bucket is None) != (ceiling is None):
+        raise SystemExit(f"{path}: incomplete device profile histogram configuration")
+    histogram = None
+    if bucket is not None and ceiling is not None:
+        if bucket <= 0 or ceiling <= bucket:
+            raise SystemExit(f"{path}: invalid device profile histogram configuration")
+        histogram = {"bucketUs": rounded(bucket), "ceilingUs": rounded(ceiling)}
+    return {"path": str(path), "metrics": normalized, "histogram": histogram}
 
 
 def fixed_condition_mismatches(baseline: dict[str, Any], candidate: dict[str, Any]) -> list[str]:
@@ -152,7 +174,29 @@ def load_side(manifest_path: Path) -> dict[str, Any]:
         for name in metric_names
         if all(name in sample["metrics"] for sample in samples)
     }
-    return {"manifest": manifest, "samples": samples, "summary": summary}
+    histogram_keys = {
+        None if sample["histogram"] is None else (
+            sample["histogram"]["bucketUs"], sample["histogram"]["ceilingUs"]
+        )
+        for sample in samples
+    }
+    histogram_consistent = len(histogram_keys) == 1
+    histogram = samples[0]["histogram"] if histogram_consistent else None
+    saturated_metrics: set[str] = set()
+    if histogram is not None:
+        threshold = float(histogram["ceilingUs"]) - float(histogram["bucketUs"])
+        saturated_metrics = {
+            name for name in HISTOGRAM_METRICS
+            if any(float(sample["metrics"].get(name, -1)) >= threshold for sample in samples)
+        }
+    return {
+        "manifest": manifest,
+        "samples": samples,
+        "summary": summary,
+        "histogram": histogram,
+        "histogramConsistent": histogram_consistent,
+        "saturatedMetrics": saturated_metrics,
+    }
 
 
 def delta_percent(candidate: float, baseline: float) -> float | None:
@@ -165,6 +209,9 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
     base_manifest = baseline["manifest"]
     candidate_manifest = candidate["manifest"]
     mismatches = fixed_condition_mismatches(base_manifest, candidate_manifest)
+    if (not baseline["histogramConsistent"] or not candidate["histogramConsistent"]
+            or baseline["histogram"] != candidate["histogram"]):
+        mismatches.append("histogramConfig")
     names = sorted(set(baseline["summary"]) | set(candidate["summary"]))
     metrics: list[dict[str, Any]] = []
     for name in names:
@@ -175,6 +222,17 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
             row.update({"status": "not-comparable", "reason": "metric-missing-on-one-side"})
         elif mismatches:
             row.update({"status": "not-comparable", "reason": "fixed-condition-mismatch"})
+        elif name in baseline["saturatedMetrics"] or name in candidate["saturatedMetrics"]:
+            row.update({
+                "status": "not-comparable",
+                "reason": "histogram-saturated",
+                "baseline": old,
+                "candidate": new,
+                "saturated": {
+                    "baseline": name in baseline["saturatedMetrics"],
+                    "candidate": name in candidate["saturatedMetrics"],
+                },
+            })
         else:
             row.update({
                 "status": "comparable",
@@ -193,6 +251,7 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
     target = acceptance.get("targetMetric", "frameP95Us")
     minimum_improvement = float(acceptance.get("minimumImprovementPercent", 5))
     max_frame_regression = float(acceptance.get("maxFrameRegressionPercent", 3))
+    max_stage_regression = float(acceptance.get("maxStageRegressionPercent", 3))
     max_memory_regression = float(acceptance.get("maxMemoryRegressionPercent", 5))
     checks: list[dict[str, Any]] = []
     target_row = next((row for row in metrics if row["name"] == target), None)
@@ -210,11 +269,13 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
             check["maximumDeltaPercent"] = rounded(max_frame_regression)
         checks.append(check)
     else:
+        saturated = bool(target_row and target_row.get("reason") == "histogram-saturated")
         checks.append({
             "name": "targetImprovement" if mode == "target-improvement" else "targetNonRegression",
             "metric": target,
             "pass": False,
-            "reason": "target-metric-unavailable",
+            "reason": "target-metric-inconclusive" if saturated else "target-metric-unavailable",
+            "inconclusive": saturated,
         })
 
     frame_row = next((row for row in metrics if row["name"] == "frameP95Us"), None)
@@ -228,7 +289,44 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
             "pass": frame_delta is not None and frame_delta <= max_frame_regression,
         })
     else:
-        checks.append({"name": "frameRegression", "metric": "frameP95Us", "pass": False, "reason": "frame-metric-unavailable"})
+        saturated = bool(frame_row and frame_row.get("reason") == "histogram-saturated")
+        checks.append({
+            "name": "frameRegression", "metric": "frameP95Us", "pass": False,
+            "reason": "frame-metric-inconclusive" if saturated else "frame-metric-unavailable",
+            "inconclusive": saturated,
+        })
+
+    for metric_name in ("paintP95Us", "presentP95Us"):
+        stage_row = next((row for row in metrics if row["name"] == metric_name), None)
+        check: dict[str, Any] = {
+            "name": "stageRegression",
+            "metric": metric_name,
+            "maximumDeltaPercent": rounded(max_stage_regression),
+        }
+        if stage_row and stage_row.get("status") == "comparable":
+            old_median = float(stage_row["baseline"]["median"])
+            new_median = float(stage_row["candidate"]["median"])
+            stage_delta = stage_row["deltaPercent"]
+            if old_median == 0:
+                check.update({
+                    "actualDeltaPercent": 0 if new_median == 0 else None,
+                    "pass": new_median == 0,
+                })
+                if new_median != 0:
+                    check["reason"] = "baseline-zero-candidate-nonzero"
+            else:
+                check.update({
+                    "actualDeltaPercent": stage_delta,
+                    "pass": stage_delta is not None and stage_delta <= max_stage_regression,
+                })
+        else:
+            saturated = bool(stage_row and stage_row.get("reason") == "histogram-saturated")
+            check.update({
+                "pass": False,
+                "reason": "stage-metric-inconclusive" if saturated else "stage-metric-unavailable",
+                "inconclusive": saturated,
+            })
+        checks.append(check)
 
     base_memory = baseline["summary"].get("internalFreeMinBytes")
     candidate_memory = candidate["summary"].get("internalFreeMinBytes")
@@ -259,8 +357,12 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
         reasons.append("visual evidence failed")
     elif "missing" in visual_statuses:
         reasons.append("visual evidence is missing")
-    if not all(check.get("pass") for check in checks):
+    inconclusive_checks = [check for check in checks if check.get("inconclusive")]
+    failed_checks = [check for check in checks if not check.get("pass") and not check.get("inconclusive")]
+    if failed_checks:
         reasons.append("one or more acceptance checks failed")
+    if inconclusive_checks:
+        reasons.append("one or more acceptance checks are inconclusive because histogram values saturated")
 
     if mismatches:
         status = "INVALID"
@@ -270,9 +372,9 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
         status = "FAIL"
     elif "fail" in visual_statuses:
         status = "FAIL"
-    elif not all(check.get("pass") for check in checks):
+    elif failed_checks:
         status = "FAIL"
-    elif "missing" in visual_statuses:
+    elif inconclusive_checks or "missing" in visual_statuses:
         status = "PARTIAL"
     else:
         status = "PASS"
@@ -286,12 +388,14 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
         "baseline": {
             "identity": base_manifest["identity"],
             "repeatCount": len(baseline["samples"]),
+            "histogram": baseline["histogram"],
             "visualEvidence": base_manifest.get("visualEvidence", {}),
             "summary": baseline["summary"],
         },
         "candidate": {
             "identity": candidate_manifest["identity"],
             "repeatCount": len(candidate["samples"]),
+            "histogram": candidate["histogram"],
             "visualEvidence": candidate_manifest.get("visualEvidence", {}),
             "summary": candidate["summary"],
         },
@@ -300,12 +404,14 @@ def compare_sides(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[s
             "targetMetric": target,
             "minimumImprovementPercent": minimum_improvement,
             "maxFrameRegressionPercent": max_frame_regression,
+            "maxStageRegressionPercent": max_stage_regression,
             "maxMemoryRegressionPercent": max_memory_regression,
             "checks": checks,
         },
         "metrics": metrics,
         "limitations": [
             "Device profile inputs are aggregate window percentiles; repeat summaries do not reconstruct raw frame distributions.",
+            "A percentile in the histogram upper bucket is censored and is not treated as an exact comparable value.",
             "visual-equivalent-only evidence can pass the behavioral gate but is not pixel equivalence.",
             "This comparison does not attribute time to individual DOM elements or commands.",
         ],
