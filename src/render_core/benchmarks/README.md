@@ -114,3 +114,10 @@ Retained repaint probes:
 
 These probes quantify the remaining cost after text/style layout reuse. They do
 not imply display-list diffing or subtree replay.
+
+The accepted cross-library boundary and the deliberate exclusions for rounded
+coverage and host-dependent text are recorded in
+`../../../docs/render_performance_cpu_workload_matrix_zh.md`. The rounded and text probes
+listed above are valid JellyFrame regression baselines; they are not cross-library
+claims until an adapter supplies matching coverage, font identity, shaping and
+output-validation conditions.

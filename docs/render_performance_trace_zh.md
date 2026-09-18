@@ -295,9 +295,12 @@ GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立�
 - 以真实 developer-image workload 复核 Core/Runtime 优化收益；
 - CPU 2D 的 opaque-fill、horizontal-gradient 与 vertical-gradient GDI 基础对照已交付，但尚不足以
   代表完整库；
-- 仍需完成至少一个嵌入式 UI 对照，并扩展圆角和文本等价 workload，才给出“快/慢”的
-  总体定量结论；设备对照以固定状态检查和稳定性日志为正确性门槛，不把逐像素 readback
-  作为默认硬件前置条件。
+- 桌面 CPU 对照的 workload 边界已冻结，见
+  [CPU workload 矩阵](render_performance_cpu_workload_matrix_zh.md)。当前三个矩形
+  primitive 已可 comparable；圆角和文本已有 Core 内部 probe，但由于 coverage、字体
+  fallback、shaping 和宿主 `TextPainter` 差异，跨库适配仍不能直接宣称 comparable。
+  嵌入式 UI 对照以固定状态检查和稳定性日志为正确性门槛，不把逐像素 readback 作为
+  默认硬件前置条件。
 - 下一项固定 workload 已定义为 [嵌入式 UI 对照 workload V0](render_performance_embedded_ui_workload_zh.md)，
   覆盖黑底可穿戴页面、设置行、状态卡、底部导航、文本更新、滚动和全屏重绘。四套 profile
   已使用同一 30 帧 warm-up、120 帧测量窗口和 15 秒启动延迟，并由工具回归锁定资源、状态节点与
@@ -319,4 +322,5 @@ GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立�
 - 项目级有界历史和身份记录已交付；同 workload、同来源、同 board/viewport 且 ABI 兼容时的自动
   版本回归判定已交付，身份不足或不一致时拒绝比较；设备 aggregate 的多会话趋势图与有界
   JSON/HTML 归档也已交付，严格按 case/profile/board/viewport/ABI 分组且不补齐缺失指标；
-- 完成嵌入式 UI、圆角、文本和滚动对照后，再冻结对外的性能比较结论。
+- 完成嵌入式 UI 设备矩阵，并为圆角/文本找到满足 workload 矩阵条件的适配器后，再
+  冻结对外的性能比较结论。
