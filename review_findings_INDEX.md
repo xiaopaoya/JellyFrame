@@ -91,14 +91,19 @@
 
 该矩阵于 2026-09-15 获准 `PASS (human visual-equivalence)`。操作者补充的 12 张照片与归档 SHA-256 全部匹配，目检和照片比对未发现候选新增视觉回归。由于缺少 display-readback 仪器或治具，本候选明确豁免逐像素比较；该豁免仅适用于 `comparison-13264-de0c541d`，不建立自动像素等价能力。`drag-scroll` 两侧共同存在绿色文字下沿裁剪，仍作为共享 fixture 限制单列；合成双向拖动也不等同于真实触摸 input-to-present 延迟，不关闭 A2 panel/input 出口。
 
-### 2026-09-18 profile-range `local_update` retest
+### 2026-09-18 profile-range 四 workload retest
 
 使用精确 pair `f8399989` / `c7bd65f2`、`1000 us / 512000 us` histogram 和
 `B1, C1, C2, B2, B3, C3` 交错顺序完成六个窗口。六个窗口均完整，未出现上限桶、present
 failure、稳定性错误或内存回归；固定状态检查无异常。归档结果为
 `D:\JellyFramePerf\profile-range-pair\embedded-ui-local-update-range-retest`，比较器状态为
-`PASS (visual-equivalent-only)`。该结果只关闭 `local_update` 的 range retest，不代表其余
-三个 workload 已完成同 pair 复测，也不证明 candidate 带来设备端加速。
+`PASS (visual-equivalent-only)`。
+
+随后 `static`、`scroll`、`full_repaint` 使用相同 pair、histogram 配置与交错顺序完成另
+18 个窗口。所有窗口完整、无饱和、无 present failure、稳定性错误或内存回归；三项固定
+状态目检均正常，比较器均为 `PASS (visual-equivalent-only)`。归档位于
+`D:\JellyFramePerf\profile-range-pair\embedded-ui-three-workload-range-retest`。至此该 pair 的
+四 workload 非回归验收关闭；结果不证明 candidate 带来设备端显著加速。
 
 ### 验证出口
 

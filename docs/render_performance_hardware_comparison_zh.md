@@ -1,7 +1,7 @@
 # Render Core 性能硬件对照测试要求
 
 > 最后更新：2026-09-18；适用版本：0.6.0-dev
-> 状态：主线 3 硬件执行稿；`local_update` range retest 已 PASS；四 workload 总体验收仍按矩阵状态管理
+> 状态：主线 3 硬件执行稿；四 workload range retest 已完成并通过非回归验收
 
 本文用于比较 Render Core 或 Runtime 优化前后的真实设备表现。它补充
 [Device Performance Profile V0 实机验收要求](device_performance_profile_hardware_acceptance_zh.md)，不替代该文档的窗口完整性和 profile 开销验收。
@@ -17,7 +17,7 @@ frame、paint、present、转换或 DMA 等阶段耗时，以及是否引入视�
 
 ## 当前正式 pair
 
-主线当前指定以下 pair；四 workload 首轮矩阵已完成，`local_update` 在扩大 histogram ceiling 后已完成交错顺序复测：
+主线当前指定以下 pair；四 workload 均已在扩大 histogram ceiling 后完成交错顺序复测：
 
 | 角色 | commit | 内容边界 |
 | --- | --- | --- |
@@ -30,10 +30,11 @@ frame、paint、present、转换或 DMA 等阶段耗时，以及是否引入视�
 已观察到长文本 anywhere-wrap 的局部改善，但这不是设备端结论。
 
 正式矩阵首轮已使用 ESP-IDF 5.3.1 完成四个 workload、两侧各三次有效窗口，但其中多个
-percentile 受旧 histogram 上限影响，不能作为最终性能结论。随后 `local_update` 使用
-`B1, C1, C2, B2, B3, C3` 顺序完成 range retest，六个窗口均完整，定量非回归与固定状态
-检查均通过，结果为 `PASS (visual-equivalent-only)`。其余三个 workload 尚未用该精确 pair
-完成同等 range retest，因此不能把 `local_update` 的 PASS 扩展为四 workload 总体 PASS。
+percentile 受旧 histogram 上限影响，不能作为最终性能结论。随后四个 workload 均使用
+`B1, C1, C2, B2, B3, C3` 顺序完成 `1000 us / 512000 us` range retest。24 个窗口全部
+完整，定量非回归、稳定性、内存与固定状态检查均通过，结果为
+`PASS (visual-equivalent-only)`。该结果关闭本 pair 的四 workload 非回归验收，但没有测出
+足以宣称设备端显著加速的收益。
 
 ## 1. 测试对象
 

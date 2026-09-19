@@ -1,6 +1,6 @@
 # Render Core 嵌入式 UI 对照 workload V0
 
-> 状态：Stage 3 正式矩阵已采集，量程与 local-update 回归待复测；最后更新：2026-09-18；适用版本：0.6.0-dev
+> 状态：Stage 3 四 workload range retest 已完成并通过非回归验收；最后更新：2026-09-18；适用版本：0.6.0-dev
 > 适用范围：ESP32-S3 retained UI port 与等价桌面 capture
 
 本文定义一个比单一 fill/gradient 更接近真实 App 的固定 workload，用于关闭
@@ -162,7 +162,21 @@ histogram 完成交错顺序 `B1, C1, C2, B2, B3, C3` 的六个冷启动窗口�
 
 该复测确认 candidate 在 `embedded-ui-local-update` 下无 frame、present、DMA、内存或
 稳定性回归；paint p95 为 `-0.96%`，frame/present p95 为 `0%`。它没有测出可确认的设备端
-加速，也不替代 `static`、`scroll`、`full_repaint` 的同 pair range retest。
+加速。
+
+### 3.4 其余三个 workload range retest
+
+同日使用相同精确 pair、histogram 配置和交错顺序完成 `static`、`scroll`、
+`full_repaint` 的 18 个冷启动窗口。全部窗口满足 `frames=120`、`partial=0`、
+`contaminated=0`、`present_failures=0`，没有 percentile 落入 `511000 us` 上限桶，且未发现
+panic、watchdog、brownout、DMA/SPI/panel/touch 错误或内存回归。操作者固定状态目检无异常，
+三个比较器结果均为 `PASS (visual-equivalent-only)`。
+
+candidate 相对 baseline 的 frame p95 变化分别为：`static 0%`、`scroll -1.09%`、
+`full_repaint -0.39%`；paint 与 present p95 均无回归。归档位于
+`D:\JellyFramePerf\profile-range-pair\embedded-ui-three-workload-range-retest`。结合 3.3 的
+`local_update` 结果，本 pair 的四 workload 非回归验收已经完成，但数据不支持设备端显著
+加速声明。
 
 ## 4. 通过标准
 
