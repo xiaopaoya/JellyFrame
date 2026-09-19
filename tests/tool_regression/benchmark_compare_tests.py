@@ -98,6 +98,18 @@ class BenchmarkCompareTests(unittest.TestCase):
         self.assertEqual(result["status"], "not-comparable")
         self.assertEqual(result["fixedConditionMismatches"], ["workloadParameters"])
 
+    def test_bitmap_text_font_and_placement_mismatch_is_rejected(self):
+        parameters = {"fontIdentity": "clock-5x7-v1", "fontMasksHex": "708898a8c88870",
+                      "fontSize": 14, "fontWeight": 400, "wrapWidth": 144,
+                      "lineBreakMode": "fixed-lines-no-wrap", "scale": 2}
+        baseline = {**self.base, "workload": "bitmap-clock-text-rgb-v1", "workloadParameters": parameters}
+        for key in parameters:
+            with self.subTest(field=key):
+                candidate = {**baseline, "workloadParameters": {**parameters, key: "changed"}}
+                result = self.module.compare_runs(baseline, candidate)
+                self.assertEqual(result["status"], "not-comparable")
+                self.assertEqual(result["fixedConditionMismatches"], ["workloadParameters"])
+
     def test_failed_output_validation_is_not_comparable(self):
         candidate = {**self.base, "outputValidation": {"status": "fail", "method": "rgba-sha256", "reference": "fixture-v1"}}
         result = self.module.compare_runs(self.base, candidate)

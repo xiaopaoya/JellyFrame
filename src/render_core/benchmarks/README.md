@@ -34,10 +34,28 @@ V2 includes end-of-batch completion in the timer and completes reset beforehand.
 It alternates paired sample order and checks an independent pixel oracle.
 V1 lacked completion barriers; its timing rankings must not be reused.
 
+`bitmap-text` is a GDI-only shared-font probe (`bitmap-clock-text-rgb-v1`).
+The existing Core `BitmapFont` painter and GDI cached-glyph `TransparentBlt`
+draw the same 1bpp clock font at 2x scale with identical advance measurement.
+Eight fixed centered lines alternate two ASCII strings. Full-surface exact RGB
+and an independent per-pixel mask oracle are mandatory. Missing glyphs are not
+allowed. Measurement includes completion and shared advance lookup, excludes
+font/atlas creation and reset, and reports batch-average us/line and 548 ink
+pixels/line. This is not a benchmark of GDI `DrawText`, TTF/CJK shaping, wrapping,
+antialiased text, font loading or complete UI. SDL2 does not support this mode.
+
+The 2026-09-19 Windows Release run used six sequential repeats, 500 samples and
+30 warmups each. Median repeat p95 was 2.888 us/line for Core and 49.9565 us/line
+for this GDI glyph-blit adapter; all RGB digests were `464c5cd1e8b7b543`.
+Artifacts: `D:/JellyFramePerf/bitmap-text-gdi-20260919/final/`. This compares the
+declared implementations, including GDI's per-glyph blit calls, not an optimal
+native text engine or a general text/library ranking.
+
 ```powershell
 jellyframe_cpu2d_compare <output-directory> 100 opaque-fill
 jellyframe_cpu2d_compare <output-directory> 100 horizontal-gradient
 jellyframe_cpu2d_compare <output-directory> 100 vertical-gradient
+jellyframe_cpu2d_compare <output-directory> 500 bitmap-text
 jellyframe_cpu2d_compare <output-directory> 100 opaque-fill sdl2 C:\path\to\SDL2.dll
 jellyframe_cpu2d_compare <output-directory> 100 opaque-dirty-fill sdl2 C:\path\to\SDL2.dll
 jellyframe_cpu2d_compare <output-directory> 100 alpha-grid sdl2 C:\path\to\SDL2.dll

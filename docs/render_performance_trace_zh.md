@@ -334,7 +334,8 @@ renderer 也不能提供等价圆角 AA，因此 `rounded-card-rgb-v1` 继续保
   full/dirty opaque-fill 与 alpha-grid 另有 SDL2 software renderer 对照；这些 primitive 尚不足以代表完整库；
 - 桌面 CPU 对照的 workload 边界已冻结，见
   [CPU workload 矩阵](render_performance_cpu_workload_matrix_zh.md)。当前五个矩形
-  primitive 已可 comparable；圆角和文本已有 Core 内部 probe，但由于 coverage、字体
+  primitive 已可 comparable；另有共享字体的固定 bitmap 文本/GDI glyph-blit 子集。
+  圆角和通用文本已有 Core 内部 probe，但由于 coverage、字体
   fallback、shaping 和宿主 `TextPainter` 差异，跨库适配仍不能直接宣称 comparable。
   嵌入式 UI 对照以固定状态检查和稳定性日志为正确性门槛，不把逐像素 readback 作为
   默认硬件前置条件。

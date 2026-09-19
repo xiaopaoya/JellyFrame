@@ -50,6 +50,9 @@
 - [x] 将桌面多轮对照收敛到 `benchmark_compare.py`：支持每侧 3–32 轮，校验跨轮条件与
   单侧版本稳定，保留逐轮 p95、其中位数/范围和输入哈希；source-over 六轮存档复算一致。
   不合并采样、不自动判定显著性；设备继续使用独立 aggregate 比较器。
+- [x] 新增 `bitmap-clock-text-rgb-v1`：共享固定字形，Core BitmapFont painter 对照 GDI
+  缓存字形 blit，独立 mask oracle 与全屏 exact RGB 验证；Debug/Release 回归和六轮
+  500 样本测量完成。只关闭固定 bitmap 绘制子集，不宣称通用文本/shaping/换行或设备加速。
 - [x] 完成现有 Render Trace/Performance Profile 的状态核对：桌面逐帧 trace、阶段/command/owner
   归因与设备 aggregate profile 已交付；设备逐元素 trace 尚未实现，aggregate 数据不得冒充元素耗时。
 - [x] 用同一 App、输入、构建和机器完成 profile OFF/ON A/B，确认 p50/p95、报告开销
@@ -72,7 +75,7 @@
   绿色文字下沿裁剪，继续单列限制。
 - [ ] 继续扩展与主流图形库的同分辨率/像素格式对照。当前 GDI 已覆盖全屏/局部不透明填充和两种轴向渐变，
   GDI/SDL2 software renderer 均覆盖 exact-RGB 的半透明 source-over 网格，SDL2 另覆盖 exact-RGB 的
-  全屏/局部不透明填充；圆角、文本、完整 UI 与 LVGL 仍无满足
+  全屏/局部不透明填充；固定 bitmap 文本另有 GDI glyph-blit 对照，圆角、通用文本、完整 UI 与 LVGL 仍无满足
   等价语义的 adapter。在这些矩阵完成前不宣称“JellyFrame 整体比主流图形库快/慢”。
 
 ### 3. 近期交互性能与设备出口

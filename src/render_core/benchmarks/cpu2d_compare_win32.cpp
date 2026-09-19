@@ -1,5 +1,6 @@
 #include "render_core/software_renderer.h"
 #include "cpu2d_sampling.h"
+#include "cpu2d_text_fixture.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -45,6 +46,7 @@ enum class Workload {
     OpaqueFill,
     OpaqueDirtyFill,
     AlphaGrid,
+    BitmapText,
     HorizontalGradient,
     VerticalGradient,
 };
@@ -440,10 +442,11 @@ Workload parse_workload(const char* raw) {
     if (name == "opaque-fill") return Workload::OpaqueFill;
     if (name == "opaque-dirty-fill") return Workload::OpaqueDirtyFill;
     if (name == "alpha-grid") return Workload::AlphaGrid;
+    if (name == "bitmap-text") return Workload::BitmapText;
     if (name == "horizontal-gradient") return Workload::HorizontalGradient;
     if (name == "vertical-gradient") return Workload::VerticalGradient;
     throw std::runtime_error(
-        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, horizontal-gradient, or vertical-gradient");
+        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, horizontal-gradient, or vertical-gradient");
 }
 
 Backend parse_backend(const char* raw) {
@@ -458,6 +461,7 @@ const char* workload_id(Workload workload) {
     case Workload::OpaqueFill: return "opaque-fill-rgb-v1";
     case Workload::OpaqueDirtyFill: return "opaque-dirty-fill-rgb-v1";
     case Workload::AlphaGrid: return "alpha-grid-rgb-v2";
+    case Workload::BitmapText: return "bitmap-clock-text-rgb-v1";
     case Workload::HorizontalGradient: return "horizontal-gradient-rgb-v1";
     case Workload::VerticalGradient: return "vertical-gradient-rgb-v1";
     }
@@ -469,6 +473,7 @@ bool is_fill_workload(Workload workload) {
 }
 
 Rect workload_rect(Workload workload) {
+    if (workload == Workload::BitmapText) return Rect{14, 20, 144, 20};
     return workload == Workload::OpaqueDirtyFill ? kDirtyRect : kFullRect;
 }
 
@@ -482,15 +487,26 @@ Rect alpha_grid_rect(int index) {
 }
 
 const char* workload_mode(Workload workload) {
-    return workload == Workload::OpaqueDirtyFill || workload == Workload::AlphaGrid ? "dirty" : "full";
+    return workload == Workload::OpaqueDirtyFill || workload == Workload::AlphaGrid ||
+        workload == Workload::BitmapText ? "dirty" : "full";
 }
 
 int workload_pixels(Workload workload) {
+    if (workload == Workload::BitmapText) {
+        int pixels = 0;
+        for (int y = 0; y < kHeight; ++y) {
+            for (int x = 0; x < kWidth; ++x) {
+                if (benchmark::clock_text_ink(x, y)) ++pixels;
+            }
+        }
+        return pixels / benchmark::kClockLineCount;
+    }
     const Rect rect = workload == Workload::AlphaGrid ? alpha_grid_rect(0) : workload_rect(workload);
     return rect.width * rect.height;
 }
 
 int workload_operations_per_sample(Workload workload) {
+    if (workload == Workload::BitmapText) return benchmark::kClockLineCount;
     return workload == Workload::OpaqueDirtyFill || workload == Workload::AlphaGrid ? 64 : 1;
 }
 
@@ -511,6 +527,28 @@ std::string workload_parameters_json(Workload workload) {
                << "\"rows\":" << kAlphaGridRows << ','
                << "\"stepX\":" << kAlphaGridStepX << ','
                << "\"stepY\":" << kAlphaGridStepY;
+    } else if (workload == Workload::BitmapText) {
+        output << "\"operation\":\"bitmap-text-lines\","
+               << "\"fontIdentity\":\"clock-5x7-v1\","
+               << "\"fontMasksHex\":\"";
+        for (std::size_t index = 0; index < benchmark::kClockFont.glyph_count; ++index) {
+            if (index != 0) output << ':';
+            for (const auto row : benchmark::kClockMasks[index]) {
+                output << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(row);
+            }
+        }
+        output << std::dec << "\",\"codepoints\":[32,48,50,52,56,58],"
+               << "\"fontSize\":14,\"fontWeight\":400,\"scale\":2,"
+               << "\"lineHeight\":14,\"wrapWidth\":144,\"fallback\":\"forbidden\","
+               << "\"glyphWidth\":5,\"glyphHeight\":7,\"advance\":6,"
+               << "\"fontRasterizer\":\"shared-fixed-1bpp-mask-nearest\","
+               << "\"lineBreakMode\":\"fixed-lines-no-wrap\",\"align\":\"center\","
+               << "\"texts\":[\"08:42 20:48\",\"24:00 08:42\"],\"lineCount\":8,\"stepY\":32,"
+               << "\"sourceRgb\":\"164757\",\"blend\":\"opaque-ink-transparent-background\","
+               << "\"pixelAccounting\":\"mean-ink-pixels-per-line\","
+               << "\"timing\":\"completed-batch-per-line\",\"sampleOrder\":\"alternating-pairs\","
+               << "\"reset\":\"completed-before-timer\",\"atlasSetup\":\"excluded\","
+               << "\"measurement\":\"shared-bitmap-advance-in-timer\"";
     } else if (is_fill_workload(workload)) {
         output << "\"operation\":\"fill-rect\","
                << "\"sourceRgb\":\"164757\","
@@ -559,7 +597,7 @@ std::string rgb_hash_bgra(const std::uint8_t* pixels) {
 }
 
 OutputComparison compare_output(const FrameBuffer& frame, const std::uint8_t* reference_pixels,
-                                bool validate_alpha_grid) {
+                                Workload workload) {
     OutputComparison comparison;
     comparison.jellyframe_digest = rgb_hash(frame);
     comparison.reference_digest = rgb_hash_bgra(reference_pixels);
@@ -568,7 +606,16 @@ OutputComparison compare_output(const FrameBuffer& frame, const std::uint8_t* re
     for (std::size_t index = 0; index < pixel_count; ++index) {
         const Color actual = frame.pixels[index];
         const std::uint8_t* expected_bgra = reference_pixels + index * 4U;
-        if (validate_alpha_grid) {
+        if (workload == Workload::BitmapText) {
+            const bool ink = benchmark::clock_text_ink(static_cast<int>(index % kWidth),
+                                                       static_cast<int>(index / kWidth));
+            const Color expected = ink ? kFillColor : Color{0, 0, 0, 255};
+            if (actual.r != expected.r || actual.g != expected.g || actual.b != expected.b ||
+                expected_bgra[2] != expected.r || expected_bgra[1] != expected.g || expected_bgra[0] != expected.b) {
+                throw std::runtime_error("bitmap-text output failed independent pixel oracle");
+            }
+        }
+        if (workload == Workload::AlphaGrid) {
             const int x = static_cast<int>(index % kWidth) - kAlphaGridOriginX;
             const int y = static_cast<int>(index / kWidth) - kAlphaGridOriginY;
             const bool in_tile = x >= 0 && y >= 0 &&
@@ -723,7 +770,10 @@ int main(int argc, char** argv) {
         command.gradient_axis = workload == Workload::VerticalGradient
             ? GradientAxis::Vertical
             : GradientAxis::Horizontal;
-        SoftwareRasterizer rasterizer;
+        BitmapFontContext font_context{&benchmark::kClockFont, benchmark::kClockScale};
+        TextPainter text_painter{bitmap_font_paint_callback, &font_context, nullptr, true};
+        SoftwareRasterizer rasterizer(workload == Workload::BitmapText ? text_painter : TextPainter{});
+        const auto text_commands = benchmark::clock_text_commands(kFillColor);
         const int operations_per_sample = workload_operations_per_sample(workload);
         std::vector<double> jellyframe_samples;
         const auto reset_jellyframe = [&] {
@@ -734,7 +784,7 @@ int main(int argc, char** argv) {
             command.rect = alpha_grid_rect(operation);
             rasterizer.rasterize(command, jellyframe_surface, command.rect);
         };
-        if (workload != Workload::AlphaGrid) {
+        if (workload != Workload::AlphaGrid && workload != Workload::BitmapText) {
             jellyframe_samples = measure(samples, operations_per_sample, [&] {
                 rasterizer.rasterize(command, jellyframe_surface, command.rect);
             });
@@ -747,7 +797,47 @@ int main(int argc, char** argv) {
         std::string reference_file;
         if (backend == Backend::Gdi) {
             GdiSurface gdi_surface(workload == Workload::AlphaGrid);
-            if (workload == Workload::AlphaGrid) {
+            if (workload == Workload::BitmapText) {
+                GdiSurface atlas;
+                std::fill_n(atlas.pixels, static_cast<std::size_t>(kWidth) * kHeight * 4, 0);
+                for (std::size_t index = 0; index < benchmark::kClockFont.glyph_count; ++index) {
+                    const auto& glyph = benchmark::kClockGlyphs[index];
+                    for (int y = 0; y < 7; ++y) {
+                        for (int x = 0; x < 5; ++x) {
+                            if ((glyph.rows[y] & (0x80U >> x)) == 0) continue;
+                            auto* pixel = atlas.pixels + (y * kWidth + index * 5 + x) * 4;
+                            pixel[0] = kFillColor.b;
+                            pixel[1] = kFillColor.g;
+                            pixel[2] = kFillColor.r;
+                        }
+                    }
+                }
+                auto pair = benchmark::measure_interleaved(samples, kWarmupIterations,
+                    operations_per_sample, reset_jellyframe,
+                    [&](int line) {
+                        const auto& text = text_commands[static_cast<std::size_t>(line)];
+                        rasterizer.rasterize(text, jellyframe_surface, text.rect);
+                    }, [] {},
+                    [&] { gdi_surface.reset_alpha_grid(); },
+                    [&](int line) {
+                        const auto& text = text_commands[static_cast<std::size_t>(line)];
+                        const auto metrics = measure_bitmap_text(font_context, text.text, 14, 400);
+                        int x = text.rect.x + (text.rect.width - metrics.width) / 2;
+                        const int y = text.rect.y + (text.rect.height - metrics.line_height) / 2;
+                        for (const unsigned char ch : text.text) {
+                            const auto* glyph = find_bitmap_glyph(benchmark::kClockFont, ch);
+                            if (glyph == nullptr) throw std::runtime_error("bitmap-text missing glyph");
+                            const int atlas_x = static_cast<int>(glyph - benchmark::kClockGlyphs) * 5;
+                            if (!TransparentBlt(gdi_surface.dc, x, y, 10, 14, atlas.dc,
+                                                atlas_x, 0, 5, 7, RGB(0, 0, 0))) {
+                                throw std::runtime_error("GDI bitmap glyph blit failed");
+                            }
+                            x += glyph->advance * benchmark::kClockScale;
+                        }
+                    }, [&] { gdi_surface.finish_alpha_grid(); });
+                jellyframe_samples = std::move(pair.first);
+                reference_samples = std::move(pair.second);
+            } else if (workload == Workload::AlphaGrid) {
                 auto pair = benchmark::measure_interleaved(samples, kWarmupIterations,
                     operations_per_sample, reset_jellyframe, paint_jellyframe, [] {},
                     [&] { gdi_surface.reset_alpha_grid(); },
@@ -762,9 +852,8 @@ int main(int argc, char** argv) {
                     else gdi_surface.vertical_gradient();
                 });
             }
-            comparison = compare_output(jellyframe_surface, gdi_surface.pixels,
-                                        workload == Workload::AlphaGrid);
-            reference_name = "windows-gdi";
+            comparison = compare_output(jellyframe_surface, gdi_surface.pixels, workload);
+            reference_name = workload == Workload::BitmapText ? "windows-gdi-bitmap-glyph-blit" : "windows-gdi";
             reference_version = "system";
             reference_file = "gdi.json";
         } else {
@@ -785,13 +874,13 @@ int main(int argc, char** argv) {
                     sdl_surface.fill(workload_rect(workload));
                 });
             }
-            comparison = compare_output(jellyframe_surface, sdl_surface.pixels(),
-                                        workload == Workload::AlphaGrid);
+            comparison = compare_output(jellyframe_surface, sdl_surface.pixels(), workload);
             reference_name = "sdl2-software-renderer";
             reference_version = sdl_surface.version;
             reference_file = "sdl2.json";
         }
-        const double tolerance = is_fill_workload(workload) || workload == Workload::AlphaGrid ? 0.0 : 1.0;
+        const double tolerance = is_fill_workload(workload) || workload == Workload::AlphaGrid ||
+            workload == Workload::BitmapText ? 0.0 : 1.0;
         const bool output_matches = comparison.rmse <= tolerance;
         write_manifest(output_directory / "jellyframe.json", "jellyframe-render-core",
                        JELLYFRAME_CPU2D_CORE_VERSION, workload, jellyframe_samples,

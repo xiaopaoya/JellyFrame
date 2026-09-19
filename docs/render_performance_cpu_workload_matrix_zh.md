@@ -33,6 +33,7 @@ workload 边界。目的不是给 JellyFrame、Cairo、SDL、LVGL 或浏览器�
 | `horizontal-gradient-rgb-v1` | 已接受 | 同上、横向不透明线性渐变、无 AA、RMSE <= 1 | 线性渐变的每像素计算成本 |
 | `vertical-gradient-rgb-v1` | 已接受 | 同上、纵向不透明线性渐变、无 AA、RMSE <= 1 | 另一种渐变访问方向的成本 |
 | `rounded-card-rgb-v1` | Core probe 已有；跨库待适配 | 172x320 黑底、固定卡片矩形/四角半径/颜色、明确 AA 和 source-over | 圆角 coverage、边框和裁剪成本 |
+| `bitmap-clock-text-rgb-v1` | 已接受；GDI bitmap-glyph blit adapter | 共享 clock-5x7-v1 字形，2x 最近邻缩放，8 行固定 ASCII 时间串，黑底，exact RGB | 固定 bitmap 文本的命令与字形绘制成本，不包括系统字体/shaping/自动换行 |
 | `text-lines-v1` | Core probe 已有；跨库待适配 | 固定字体包、family/hash、字号、weight、文本、宽度和换行模式 | 文本测量、换行和绘制成本 |
 | `embedded-ui-v1` | fixture 及两项候选的四 workload 非回归矩阵已通过 | 黑底可穿戴页面、设置行、状态卡、导航、文本更新、滚动、全屏重绘 | 已测 repaint/aggregate 阶段成本，不代表完整脚本/布局路径 |
 
@@ -69,6 +70,17 @@ Render Core 的圆角边缘采用 4x4 coverage，两个结果的边缘像素语�
 否则只能把结果作为 JellyFrame 自身的 `text_*` microbench baseline，不能进入跨库
 性能报告。
 
+`bitmap-clock-text-rgb-v1` 是独立的窄范围例外，不表示 `text-lines-v1` 已完成。
+JellyFrame 使用现有 `BitmapFont` painter，GDI 使用预建字形图集逐字 `TransparentBlt`；
+双方共享六个固定 1bpp glyph、advance 测量和 2x 最近邻缩放，禁止字体 fallback。
+manifest 固定字形位图、字号/weight、line height、宽度、两种文本、对齐和行位置。
+每样本 8 行，计时内包括 advance 测量、绘制及 GDI 完成同步；字体/图集创建与黑底 reset
+在计时外。报告为批平均单行成本，`pixels=548` 是平均每行实际着色像素，不是矩形面积。
+全屏输出同时通过独立 mask oracle 和 exact RGB 对比；不会把相同空白图当作通过。
+该结果不能评价 GDI `DrawText`、TTF rasterizer、中文 shaping、hinting、AA 或换行；
+SDL2 暂无该 adapter，会明确拒绝。缓存图集每字调用的开销是本适配路径的一部分，
+不应将其归纳为 GDI 原生文本引擎性能。
+
 ## 3. JellyFrame 侧 probe 对应
 
 不需要硬件即可运行的 Core probe 当前包括：
@@ -102,8 +114,9 @@ repaint 时，不能把 full repaint 的结果标成 `mode: dirty`；字体不�
 
 ## 5. 当前阶段结论
 
-现阶段可以对外引用的桌面对照仅限五个已接受的矩形 primitive，其中 SDL2 覆盖全屏/局部
-不透明填充与半透明 source-over，GDI 另覆盖两种轴向渐变。圆角和文本已经
+现阶段可以对外引用的桌面对照限于五个已接受的矩形 primitive 与固定 bitmap 文本子集。
+SDL2 覆盖全屏/局部不透明填充与半透明 source-over，GDI 另覆盖两种轴向渐变和 bitmap-glyph blit。
+圆角和通用文本已经
 有可重复的 JellyFrame 内部 probe，但跨库适配仍是待完成工作；嵌入式 UI 则须在
 ESP32-S3 上按 [硬件对照要求](render_performance_hardware_comparison_zh.md)
 完成精确 baseline/candidate 矩阵后才可给出对应设备结论。文本缓存 pair 与 source-over

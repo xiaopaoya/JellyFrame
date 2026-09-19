@@ -109,6 +109,25 @@ blend, gradient axis and endpoint convention must match exactly; a legacy
 manifest without parameters is comparable only with another parameter-less
 manifest.
 
+## Bitmap Text
+
+The GDI-only `bitmap-text` mode adds `bitmap-clock-text-rgb-v1`: eight fixed
+ASCII clock lines from the same six-glyph 1bpp font, rendered at 2x scale. Core
+uses its existing `BitmapFont` painter; GDI uses cached glyph `TransparentBlt`,
+not `DrawText` or a system font. Both include shared advance measurement and
+completed drawing inside the timer, with reset and atlas construction outside.
+Independent mask validation and exact full-surface RGB comparison are required.
+
+```powershell
+build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-text 500 bitmap-text
+```
+
+Each sample is an eight-line batch divided by eight; `pixels=548` is the mean
+number of ink pixels per line. Results do not cover layout, automatic wrapping,
+TTF/CJK shaping, AA, font generation/loading, GDI native text, GPU or devices.
+SDL2 rejects this mode. Glyph masks, font metrics and layout are frozen in the
+manifest; changing any of them requires a separate comparable workload.
+
 ## Repeated Comparisons
 
 The same tool accepts 3-32 independent run manifests per side, in paired repeat

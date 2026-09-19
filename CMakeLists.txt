@@ -323,6 +323,17 @@ if(JELLYFRAME_BUILD_TESTS)
         add_executable(jellyframe_cpu2d_sampling_tests tests/cpu2d_sampling_tests.cpp)
         target_compile_features(jellyframe_cpu2d_sampling_tests PRIVATE cxx_std_17)
         add_test(NAME jellyframe_cpu2d_sampling_tests COMMAND jellyframe_cpu2d_sampling_tests)
+        add_jellyframe_tool(jellyframe_cpu2d_text_fixture_tests tests/cpu2d_text_fixture_tests.cpp)
+        add_test(NAME jellyframe_cpu2d_text_fixture_tests COMMAND jellyframe_cpu2d_text_fixture_tests)
+        add_test(NAME jellyframe_cpu2d_compare_bitmap_text_smoke
+                 COMMAND jellyframe_cpu2d_compare
+                         "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_bitmap_text_smoke"
+                         3 bitmap-text)
+        add_test(NAME jellyframe_cpu2d_compare_sdl2_text_rejected
+                 COMMAND jellyframe_cpu2d_compare
+                         "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_sdl2_text_rejected"
+                         1 bitmap-text sdl2)
+        set_tests_properties(jellyframe_cpu2d_compare_sdl2_text_rejected PROPERTIES WILL_FAIL TRUE)
         add_test(NAME jellyframe_cpu2d_compare_output_smoke
                  COMMAND jellyframe_cpu2d_compare
                          "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_smoke"
