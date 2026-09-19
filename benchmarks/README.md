@@ -1,6 +1,6 @@
 # Benchmarks
 
-> Last updated: 2026-09-15; Applies to: 0.6.0-dev
+> Last updated: 2026-09-19; Applies to: 0.6.0-dev
 
 Root-level benchmarks are reserved for future cross-subproject and app-lifecycle
 benchmarks.
@@ -31,11 +31,23 @@ These are 172x320 primitive probes and do
 not claim whole-library, complete UI, device, rounded-gradient, text, or GPU
 performance.
 
+The same executable can optionally load an SDL2 DLL at runtime and compare the
+`opaque-fill` workload with `SDL_CreateSoftwareRenderer`. This does not add an
+SDL dependency to JellyFrame builds or packages. The adapter deliberately
+rejects gradient workloads because SDL2's software renderer has no equivalent
+gradient primitive.
+
 ```powershell
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-fill 100 opaque-fill
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-gradient 100 horizontal-gradient
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-vertical-gradient 100 vertical-gradient
+build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-sdl2 100 opaque-fill sdl2 C:\path\to\SDL2.dll
 ```
+
+The SDL2 run writes `jellyframe.json` and `sdl2.json`. Compare them with
+`../tools/benchmark_compare.py`; both sides must still pass exact normalized RGB
+validation before timing or throughput is comparable. The result describes only
+this 172x320 full-surface fill, not complete UI performance or GPU rendering.
 
 Cross-library comparisons use the fixed-condition manifest consumed by
 `../tools/benchmark_compare.py`. Each adapter must provide the same workload,

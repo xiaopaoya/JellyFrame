@@ -35,11 +35,160 @@ enum class Workload {
     VerticalGradient,
 };
 
+enum class Backend {
+    Gdi,
+    Sdl2,
+};
+
 struct OutputComparison {
     std::string jellyframe_digest;
-    std::string gdi_digest;
+    std::string reference_digest;
     double rmse = 0.0;
     int max_channel_error = 0;
+};
+
+struct SdlVersion {
+    std::uint8_t major = 0;
+    std::uint8_t minor = 0;
+    std::uint8_t patch = 0;
+};
+
+struct SdlSurface {
+    using InitFn = int(__cdecl*)(std::uint32_t);
+    using QuitFn = void(__cdecl*)();
+    using GetErrorFn = const char*(__cdecl*)();
+    using GetVersionFn = void(__cdecl*)(SdlVersion*);
+    using CreateSurfaceFn = void*(__cdecl*)(void*, int, int, int, int,
+                                            std::uint32_t, std::uint32_t,
+                                            std::uint32_t, std::uint32_t);
+    using FreeSurfaceFn = void(__cdecl*)(void*);
+    using CreateRendererFn = void*(__cdecl*)(void*);
+    using DestroyRendererFn = void(__cdecl*)(void*);
+    using SetDrawBlendModeFn = int(__cdecl*)(void*, int);
+    using SetDrawColorFn = int(__cdecl*)(void*, std::uint8_t, std::uint8_t,
+                                         std::uint8_t, std::uint8_t);
+    using RenderClearFn = int(__cdecl*)(void*);
+    using RenderPresentFn = void(__cdecl*)(void*);
+
+    HMODULE library = nullptr;
+    InitFn init = nullptr;
+    QuitFn quit = nullptr;
+    GetErrorFn get_error = nullptr;
+    GetVersionFn get_version = nullptr;
+    CreateSurfaceFn create_surface = nullptr;
+    FreeSurfaceFn free_surface = nullptr;
+    CreateRendererFn create_renderer = nullptr;
+    DestroyRendererFn destroy_renderer = nullptr;
+    SetDrawBlendModeFn set_draw_blend_mode = nullptr;
+    SetDrawColorFn set_draw_color = nullptr;
+    RenderClearFn render_clear = nullptr;
+    RenderPresentFn render_present = nullptr;
+    std::vector<std::uint32_t> storage;
+    void* surface = nullptr;
+    void* renderer = nullptr;
+    bool initialized = false;
+    std::string version;
+
+    explicit SdlSurface(const std::filesystem::path& library_path)
+        : storage(static_cast<std::size_t>(kWidth) * kHeight, 0U) {
+        library = LoadLibraryW(library_path.c_str());
+        if (library == nullptr) {
+            throw std::runtime_error("failed to load SDL2 library: " + library_path.string());
+        }
+        try {
+            init = symbol<InitFn>("SDL_Init");
+            quit = symbol<QuitFn>("SDL_Quit");
+            get_error = symbol<GetErrorFn>("SDL_GetError");
+            get_version = symbol<GetVersionFn>("SDL_GetVersion");
+            create_surface = symbol<CreateSurfaceFn>("SDL_CreateRGBSurfaceFrom");
+            free_surface = symbol<FreeSurfaceFn>("SDL_FreeSurface");
+            create_renderer = symbol<CreateRendererFn>("SDL_CreateSoftwareRenderer");
+            destroy_renderer = symbol<DestroyRendererFn>("SDL_DestroyRenderer");
+            set_draw_blend_mode = symbol<SetDrawBlendModeFn>("SDL_SetRenderDrawBlendMode");
+            set_draw_color = symbol<SetDrawColorFn>("SDL_SetRenderDrawColor");
+            render_clear = symbol<RenderClearFn>("SDL_RenderClear");
+            render_present = symbol<RenderPresentFn>("SDL_RenderPresent");
+            if (init(0) != 0) fail("SDL_Init failed");
+            initialized = true;
+
+            constexpr std::uint32_t red_mask = 0x00ff0000U;
+            constexpr std::uint32_t green_mask = 0x0000ff00U;
+            constexpr std::uint32_t blue_mask = 0x000000ffU;
+            constexpr std::uint32_t alpha_mask = 0xff000000U;
+            surface = create_surface(storage.data(), kWidth, kHeight, 32,
+                                     kWidth * 4, red_mask, green_mask,
+                                     blue_mask, alpha_mask);
+            if (surface == nullptr) fail("SDL_CreateRGBSurfaceFrom failed");
+            renderer = create_renderer(surface);
+            if (renderer == nullptr) fail("SDL_CreateSoftwareRenderer failed");
+            if (set_draw_blend_mode(renderer, 0) != 0) {
+                fail("SDL_SetRenderDrawBlendMode failed");
+            }
+            if (set_draw_color(renderer, kFillColor.r, kFillColor.g,
+                               kFillColor.b, kFillColor.a) != 0) {
+                fail("SDL_SetRenderDrawColor failed");
+            }
+            SdlVersion current{};
+            get_version(&current);
+            version = std::to_string(current.major) + "." +
+                      std::to_string(current.minor) + "." +
+                      std::to_string(current.patch);
+        } catch (...) {
+            release();
+            throw;
+        }
+    }
+
+    ~SdlSurface() { release(); }
+
+    SdlSurface(const SdlSurface&) = delete;
+    SdlSurface& operator=(const SdlSurface&) = delete;
+
+    void fill() const {
+        if (render_clear(renderer) != 0) fail("SDL_RenderClear failed");
+        render_present(renderer);
+    }
+
+    const std::uint8_t* pixels() const {
+        return reinterpret_cast<const std::uint8_t*>(storage.data());
+    }
+
+private:
+    template <typename Fn>
+    Fn symbol(const char* name) const {
+        const FARPROC address = GetProcAddress(library, name);
+        if (address == nullptr) {
+            throw std::runtime_error(std::string("SDL2 library is missing ") + name);
+        }
+        return reinterpret_cast<Fn>(address);
+    }
+
+    [[noreturn]] void fail(const char* operation) const {
+        const char* detail = get_error != nullptr ? get_error() : nullptr;
+        throw std::runtime_error(std::string(operation) +
+                                 (detail != nullptr && detail[0] != '\0'
+                                      ? std::string(": ") + detail
+                                      : std::string()));
+    }
+
+    void release() {
+        if (renderer != nullptr && destroy_renderer != nullptr) {
+            destroy_renderer(renderer);
+            renderer = nullptr;
+        }
+        if (surface != nullptr && free_surface != nullptr) {
+            free_surface(surface);
+            surface = nullptr;
+        }
+        if (initialized && quit != nullptr) {
+            quit();
+            initialized = false;
+        }
+        if (library != nullptr) {
+            FreeLibrary(library);
+            library = nullptr;
+        }
+    }
 };
 
 #ifndef JELLYFRAME_CPU2D_CORE_VERSION
@@ -160,6 +309,13 @@ Workload parse_workload(const char* raw) {
     throw std::runtime_error("workload must be opaque-fill, horizontal-gradient, or vertical-gradient");
 }
 
+Backend parse_backend(const char* raw) {
+    const std::string name(raw);
+    if (name == "gdi") return Backend::Gdi;
+    if (name == "sdl2") return Backend::Sdl2;
+    throw std::runtime_error("backend must be gdi or sdl2");
+}
+
 const char* workload_id(Workload workload) {
     switch (workload) {
     case Workload::OpaqueFill: return "opaque-fill-rgb-v1";
@@ -185,11 +341,11 @@ std::string rgb_hash(const FrameBuffer& frame) {
     return text.str();
 }
 
-std::string rgb_hash(const GdiSurface& surface) {
+std::string rgb_hash_bgra(const std::uint8_t* pixels) {
     std::uint64_t hash = UINT64_C(1469598103934665603);
-    const std::size_t pixels = static_cast<std::size_t>(kWidth) * kHeight;
-    for (std::size_t index = 0; index < pixels; ++index) {
-        const std::uint8_t* bgra = surface.pixels + index * 4U;
+    const std::size_t pixel_count = static_cast<std::size_t>(kWidth) * kHeight;
+    for (std::size_t index = 0; index < pixel_count; ++index) {
+        const std::uint8_t* bgra = pixels + index * 4U;
         hash = hash_byte(hash, bgra[2]);
         hash = hash_byte(hash, bgra[1]);
         hash = hash_byte(hash, bgra[0]);
@@ -199,15 +355,15 @@ std::string rgb_hash(const GdiSurface& surface) {
     return text.str();
 }
 
-OutputComparison compare_output(const FrameBuffer& frame, const GdiSurface& surface) {
+OutputComparison compare_output(const FrameBuffer& frame, const std::uint8_t* reference_pixels) {
     OutputComparison comparison;
     comparison.jellyframe_digest = rgb_hash(frame);
-    comparison.gdi_digest = rgb_hash(surface);
+    comparison.reference_digest = rgb_hash_bgra(reference_pixels);
     double squared_error = 0.0;
     const std::size_t pixel_count = static_cast<std::size_t>(kWidth) * kHeight;
     for (std::size_t index = 0; index < pixel_count; ++index) {
         const Color actual = frame.pixels[index];
-        const std::uint8_t* expected_bgra = surface.pixels + index * 4U;
+        const std::uint8_t* expected_bgra = reference_pixels + index * 4U;
         const int errors[3]{
             std::abs(static_cast<int>(actual.r) - expected_bgra[2]),
             std::abs(static_cast<int>(actual.g) - expected_bgra[1]),
@@ -310,12 +466,20 @@ void write_manifest(const std::filesystem::path& path,
 
 int main(int argc, char** argv) {
     try {
-        if (argc < 2 || argc > 4) {
-            std::cout << "usage: jellyframe_cpu2d_compare <output-directory> [samples=100] [workload=opaque-fill]\n";
+        if (argc < 2 || argc > 6) {
+            std::cout << "usage: jellyframe_cpu2d_compare <output-directory> [samples=100] "
+                         "[workload=opaque-fill] [backend=gdi] [SDL2.dll]\n";
             return argc < 2 ? 2 : 0;
         }
         const int samples = argc >= 3 ? positive_int(argv[2], "samples") : 100;
-        const Workload workload = argc == 4 ? parse_workload(argv[3]) : Workload::OpaqueFill;
+        const Workload workload = argc >= 4 ? parse_workload(argv[3]) : Workload::OpaqueFill;
+        const Backend backend = argc >= 5 ? parse_backend(argv[4]) : Backend::Gdi;
+        if (backend == Backend::Sdl2 && workload != Workload::OpaqueFill) {
+            throw std::runtime_error("SDL2 adapter currently supports only opaque-fill");
+        }
+        if (backend == Backend::Gdi && argc == 6) {
+            throw std::runtime_error("SDL2 library path is valid only with the sdl2 backend");
+        }
         const std::filesystem::path output_directory(argv[1]);
 
         FrameBuffer jellyframe_surface(kWidth, kHeight, Color{0, 0, 0, 255});
@@ -334,29 +498,50 @@ int main(int argc, char** argv) {
             rasterizer.rasterize(command, jellyframe_surface, Rect{0, 0, kWidth, kHeight});
         });
 
-        GdiSurface gdi_surface;
-        const auto gdi_samples = measure(samples, [&] {
-            if (workload == Workload::OpaqueFill) gdi_surface.fill();
-            else if (workload == Workload::HorizontalGradient) gdi_surface.horizontal_gradient();
-            else gdi_surface.vertical_gradient();
-        });
-        const OutputComparison comparison = compare_output(jellyframe_surface, gdi_surface);
+        OutputComparison comparison;
+        std::vector<double> reference_samples;
+        std::string reference_name;
+        std::string reference_version;
+        std::string reference_file;
+        if (backend == Backend::Gdi) {
+            GdiSurface gdi_surface;
+            reference_samples = measure(samples, [&] {
+                if (workload == Workload::OpaqueFill) gdi_surface.fill();
+                else if (workload == Workload::HorizontalGradient) gdi_surface.horizontal_gradient();
+                else gdi_surface.vertical_gradient();
+            });
+            comparison = compare_output(jellyframe_surface, gdi_surface.pixels);
+            reference_name = "windows-gdi";
+            reference_version = "system";
+            reference_file = "gdi.json";
+        } else {
+            const std::filesystem::path library_path = argc == 6
+                ? std::filesystem::path(argv[5])
+                : std::filesystem::path(L"SDL2.dll");
+            SdlSurface sdl_surface(library_path);
+            reference_samples = measure(samples, [&] { sdl_surface.fill(); });
+            comparison = compare_output(jellyframe_surface, sdl_surface.pixels());
+            reference_name = "sdl2-software-renderer";
+            reference_version = sdl_surface.version;
+            reference_file = "sdl2.json";
+        }
         const double tolerance = workload == Workload::OpaqueFill ? 0.0 : 1.0;
         const bool output_matches = comparison.rmse <= tolerance;
-        write_manifest(output_directory / "jellyframe.json", "jellyframe-render-core", JELLYFRAME_CPU2D_CORE_VERSION,
-                       workload, jellyframe_samples, comparison.jellyframe_digest,
-                       comparison, tolerance, output_matches);
-        write_manifest(output_directory / "gdi.json", "windows-gdi", "system",
-                       workload, gdi_samples, comparison.gdi_digest,
-                       comparison, tolerance, output_matches);
+        write_manifest(output_directory / "jellyframe.json", "jellyframe-render-core",
+                       JELLYFRAME_CPU2D_CORE_VERSION, workload, jellyframe_samples,
+                       comparison.jellyframe_digest, comparison, tolerance, output_matches);
+        write_manifest(output_directory / reference_file, reference_name.c_str(),
+                       reference_version.c_str(), workload, reference_samples,
+                       comparison.reference_digest, comparison, tolerance, output_matches);
         std::cout << "output=" << output_directory.string()
                   << " samples=" << samples
                   << " workload=" << workload_id(workload)
+                  << " backend=" << reference_name
                   << " output_validation=" << (output_matches ? "pass" : "fail")
                   << " rmse=" << comparison.rmse
                   << " max_channel_error=" << comparison.max_channel_error
                   << " jellyframe_digest=" << comparison.jellyframe_digest
-                  << " gdi_digest=" << comparison.gdi_digest << '\n';
+                  << " reference_digest=" << comparison.reference_digest << '\n';
         return output_matches ? 0 : 1;
     } catch (const std::exception& error) {
         std::cerr << "jellyframe_cpu2d_compare failed: " << error.what() << '\n';

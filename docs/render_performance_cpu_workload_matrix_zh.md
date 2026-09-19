@@ -1,6 +1,6 @@
 # Render Core CPU 对照 workload 矩阵
 
-> 最后更新：2026-09-17；适用版本：0.6.0-dev
+> 最后更新：2026-09-19；适用版本：0.6.0-dev
 > 状态：Stage 3 桌面对照定义稿；不是硬件验收结果
 
 本文冻结 Render Core 在桌面 CPU 上与其他 CPU 2D backend 对照时可以接受的
@@ -24,14 +24,17 @@ workload 边界。目的不是给 JellyFrame、Cairo、SDL、LVGL 或浏览器�
 
 | workload | 当前状态 | 固定内容 | 可回答的问题 |
 | --- | --- | --- | --- |
-| `opaque-fill-rgb-v1` | 已接受 | 172x320、RGB888、全屏不透明填充、无 AA、exact RGB | 纯矩形写入和像素吞吐 |
+| `opaque-fill-rgb-v1` | 已接受；GDI/SDL2 adapter | 172x320、RGB888、全屏不透明填充、无 AA、exact RGB | 纯矩形写入和像素吞吐 |
 | `horizontal-gradient-rgb-v1` | 已接受 | 同上、横向不透明线性渐变、无 AA、RMSE <= 1 | 线性渐变的每像素计算成本 |
 | `vertical-gradient-rgb-v1` | 已接受 | 同上、纵向不透明线性渐变、无 AA、RMSE <= 1 | 另一种渐变访问方向的成本 |
 | `rounded-card-rgb-v1` | Core probe 已有；跨库待适配 | 172x320 黑底、固定卡片矩形/四角半径/颜色、明确 AA 和 source-over | 圆角 coverage、边框和裁剪成本 |
 | `text-lines-v1` | Core probe 已有；跨库待适配 | 固定字体包、family/hash、字号、weight、文本、宽度和换行模式 | 文本测量、换行和绘制成本 |
 | `embedded-ui-v1` | fixture 已资格通过；设备矩阵待执行 | 黑底可穿戴页面、设置行、状态卡、导航、文本更新、滚动、全屏重绘 | 真实设备端到端阶段成本 |
 
-前三项由 Windows `jellyframe_cpu2d_compare` 和 memory-DIB GDI 适配器提供。
+前三项由 Windows `jellyframe_cpu2d_compare` 和 memory-DIB GDI 适配器提供；其中
+`opaque-fill-rgb-v1` 还可通过运行时加载的 SDL2 DLL 使用
+`SDL_CreateSoftwareRenderer` 对照。SDL2 adapter 不进入 Runtime/SDK/App 依赖，并且会拒绝
+没有等价 SDL primitive 的渐变 workload。
 `rounded-card-rgb-v1` 不应直接使用没有抗锯齿的 `GDI RoundRect` 作为等价参考：
 Render Core 的圆角边缘采用 4x4 coverage，两个结果的边缘像素语义不同。未来
 适配器必须使用同等 coverage 规则，或者把两边都固定到明确的无 AA 几何模式，
@@ -82,7 +85,8 @@ repaint 时，不能把 full repaint 的结果标成 `mode: dirty`；字体不�
 
 ## 5. 当前阶段结论
 
-现阶段可以对外引用的桌面对照仅限三个已接受的矩形 primitive。圆角和文本已经
+现阶段可以对外引用的桌面对照仅限三个已接受的矩形 primitive，其中 SDL2 仅覆盖
+不透明填充，GDI 覆盖填充和两种轴向渐变。圆角和文本已经
 有可重复的 JellyFrame 内部 probe，但跨库适配仍是待完成工作；嵌入式 UI 则须在
 ESP32-S3 上按 [硬件对照要求](render_performance_hardware_comparison_zh.md)
 完成 baseline/candidate 矩阵后再给出设备结论。

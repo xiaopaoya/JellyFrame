@@ -275,6 +275,12 @@ full/dirty mode、运行环境、warm-up，以及输出验证方法/基准/容�
   要求归一化 RGB RMSE 不超过 1.0。当前 fixture 的最大通道误差为 1，这是两套整数端点插值约定
   的已量化差异，不允许以该容差掩盖更大视觉误差。
 
+`opaque-fill` 还提供可选 SDL2 software renderer adapter：运行时加载调用方指定的
+`SDL2.dll`，在同一进程和同一调用方持有的 RGB surface 上执行 `SDL_RenderClear`/
+`SDL_RenderPresent`，并要求归一化 RGB 完全一致。该 adapter 不给 Runtime、SDK 或 App 包
+增加 SDL 依赖；SDL 没有等价 primitive 的渐变请求会被拒绝，不能借用自定义逐像素循环伪装为
+库能力。
+
 在本开发机的 100 样本 A/B 中，复用首个 clipped row 后 JellyFrame 横向渐变 p95 从 437.7 us 降至
 4.3 us，输出 digest 保持 `177877a38d09ae83`；同轮 GDI 约为 4.4 us p95。该数字只证明 172x320、
 不透明、横向、矩形渐变 primitive 的改动有效，不能外推到完整 UI、设备 FPS、圆角/透明渐变、文本、
@@ -308,8 +314,8 @@ GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立�
 - port 以该显式 profiling 配置提供阶段窗口 aggregate；逐元素、逐 command 或每帧 wire
   trace 不是第三阶段的前提，也不能由 aggregate 推断；
 - 以真实 developer-image workload 复核 Core/Runtime 优化收益；
-- CPU 2D 的 opaque-fill、horizontal-gradient 与 vertical-gradient GDI 基础对照已交付，但尚不足以
-  代表完整库；
+- CPU 2D 的 opaque-fill、horizontal-gradient 与 vertical-gradient GDI 基础对照已交付，
+  opaque-fill 另有 SDL2 software renderer 对照；这些 primitive 尚不足以代表完整库；
 - 桌面 CPU 对照的 workload 边界已冻结，见
   [CPU workload 矩阵](render_performance_cpu_workload_matrix_zh.md)。当前三个矩形
   primitive 已可 comparable；圆角和文本已有 Core 内部 probe，但由于 coverage、字体

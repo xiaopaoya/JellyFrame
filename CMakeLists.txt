@@ -334,6 +334,14 @@ if(JELLYFRAME_BUILD_TESTS)
                          "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_vertical_gradient_smoke"
                          3
                          vertical-gradient)
+        add_test(NAME jellyframe_cpu2d_compare_sdl2_gradient_rejected
+                 COMMAND jellyframe_cpu2d_compare
+                         "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_sdl2_gradient_rejected"
+                         1
+                         horizontal-gradient
+                         sdl2)
+        set_tests_properties(jellyframe_cpu2d_compare_sdl2_gradient_rejected
+                             PROPERTIES WILL_FAIL TRUE)
     endif()
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(JELLYFRAME_BUILD_RENDER_CORE_TESTS)

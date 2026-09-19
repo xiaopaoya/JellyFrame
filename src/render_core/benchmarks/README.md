@@ -1,6 +1,6 @@
 # Render Core Benchmarks
 
-> Last updated: 2026-09-15; Applies to: 0.6.0-dev
+> Last updated: 2026-09-19; Applies to: 0.6.0-dev
 
 Microbenchmarks in this directory measure the platform-neutral render pipeline:
 HTML parsing, CSS parsing, style resolution, render tree, layout, layer tree,
@@ -19,10 +19,17 @@ differ by at most one channel value in the current fixture. The runner writes
 `jellyframe.json` and `gdi.json` manifests for
 `tools/benchmark_compare.py`.
 
+For `opaque-fill` only, the runner can instead load an SDL2 DLL and use
+`SDL_CreateSoftwareRenderer` against the same caller-owned 172x320 RGB surface.
+SDL remains a runtime-only benchmark dependency and is not linked into Render
+Core, Runtime, SDK or App packages. Gradient modes are rejected because SDL2's
+software renderer does not expose an equivalent primitive.
+
 ```powershell
 jellyframe_cpu2d_compare <output-directory> 100 opaque-fill
 jellyframe_cpu2d_compare <output-directory> 100 horizontal-gradient
 jellyframe_cpu2d_compare <output-directory> 100 vertical-gradient
+jellyframe_cpu2d_compare <output-directory> 100 opaque-fill sdl2 C:\path\to\SDL2.dll
 ```
 
 On the development Windows machine, reusing the first clipped horizontal row
