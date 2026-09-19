@@ -302,7 +302,7 @@ if(JELLYFRAME_BUILD_BENCHMARKS)
     jellyframe_enable_render_core_link_map(jellyframe_render_core_microbench)
     if(WIN32)
         add_jellyframe_tool(jellyframe_cpu2d_compare src/render_core/benchmarks/cpu2d_compare_win32.cpp)
-        target_link_libraries(jellyframe_cpu2d_compare PRIVATE gdi32 msimg32)
+        target_link_libraries(jellyframe_cpu2d_compare PRIVATE gdi32 msimg32 gdiplus)
         target_compile_definitions(jellyframe_cpu2d_compare PRIVATE
             JELLYFRAME_CPU2D_CORE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
     endif()
@@ -328,6 +328,8 @@ if(JELLYFRAME_BUILD_TESTS)
                          "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_rounded_qualification" 1 rounded-qualification)
         set_tests_properties(jellyframe_cpu2d_rounded_qualification PROPERTIES
             PASS_REGULAR_EXPRESSION "rounded_qualification=not-comparable different_pixels=[1-9][0-9]* core_oracle=pass performance_measured=false")
+        add_jellyframe_tool(jellyframe_cpu2d_rounded_fixture_tests tests/cpu2d_rounded_fixture_tests.cpp)
+        add_test(NAME jellyframe_cpu2d_rounded_fixture_tests COMMAND jellyframe_cpu2d_rounded_fixture_tests)
         add_jellyframe_tool(jellyframe_cpu2d_text_fixture_tests tests/cpu2d_text_fixture_tests.cpp)
         add_test(NAME jellyframe_cpu2d_text_fixture_tests COMMAND jellyframe_cpu2d_text_fixture_tests)
         add_test(NAME jellyframe_cpu2d_compare_bitmap_text_smoke
@@ -441,6 +443,11 @@ if(JELLYFRAME_BUILD_TESTS)
     endif()
 
     if(Python3_Interpreter_FOUND)
+        if(TARGET jellyframe_cpu2d_compare)
+            add_test(NAME jellyframe_cpu2d_qualification_contract
+                     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/cpu2d_qualification_tests.py"
+                             --runner "$<TARGET_FILE:jellyframe_cpu2d_compare>")
+        endif()
         if(JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS)
             add_test(
                 NAME jellyframe_device_reference_cli_tests

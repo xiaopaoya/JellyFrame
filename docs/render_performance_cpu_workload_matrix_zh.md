@@ -32,7 +32,7 @@ workload 边界。目的不是给 JellyFrame、Cairo、SDL、LVGL 或浏览器�
 | `alpha-grid-rgb-v2` | 已接受；GDI/SDL2 adapter | 172x320 黑底、8x8 个 16x12 不重叠矩形、RGBA `50b4dc80`、source-over、exact RGB、计时内完成同步 | 半透明 source-over 的批平均单块成本 |
 | `horizontal-gradient-rgb-v1` | 已接受 | 同上、横向不透明线性渐变、无 AA、RMSE <= 1 | 线性渐变的每像素计算成本 |
 | `vertical-gradient-rgb-v1` | 已接受 | 同上、纵向不透明线性渐变、无 AA、RMSE <= 1 | 另一种渐变访问方向的成本 |
-| `rounded-card-rgb-v1` | Core probe 已有；原生 GDI 资格检查不等价，AA adapter 待适配 | 172x320 黑底、固定卡片矩形/四角半径/颜色、明确 AA 和 source-over | 圆角 coverage、边框和裁剪成本 |
+| `rounded-card-rgb-v1` | Core probe 已有；GDI/GDI+ 超采样资格检查不等价，AA adapter 待适配 | 172x320 黑底、固定卡片矩形/四角半径/颜色、明确 AA 和 source-over | 圆角 coverage、边框和裁剪成本 |
 | `bitmap-clock-text-rgb-v1` | 已接受；GDI bitmap-glyph blit adapter | 共享 clock-5x7-v1 字形，2x 最近邻缩放，8 行固定 ASCII 时间串，黑底，exact RGB | 固定 bitmap 文本的命令与字形绘制成本，不包括系统字体/shaping/自动换行 |
 | `text-lines-v1` | Core probe 已有；跨库待适配 | 固定字体包、family/hash、字号、weight、文本、宽度和换行模式 | 文本测量、换行和绘制成本 |
 | `embedded-ui-v1` | fixture 及两项候选的四 workload 非回归矩阵已通过 | 黑底可穿戴页面、设置行、状态卡、导航、文本更新、滚动、全屏重绘 | 已测 repaint/aggregate 阶段成本，不代表完整脚本/布局路径 |
@@ -67,6 +67,27 @@ digest 和误差，固定标记 `not-comparable` / `performanceMeasured: false`�
 本机证据位于 `D:/JellyFramePerf/rounded-qualification-20260919/`，不要求硬件照片逐像素比对。
 下一步仍是选择支持等价 AA 的 backend，固定 coverage 契约并通过输出校验后才开始计时；
 不能用原生 GDI 二值圆角的速度补齐此项。
+
+后续 `rounded-supersample-qualification` 已测试 GDI+ `FillPath` 的 4 倍分辨率
+二值 mask（`SmoothingModeNone`、`PixelOffsetModeNone`）及 4x4 box reduction。
+8 个用例包含普通卡片、无圆角对照、小半径、奇数尺寸、最大半径、左侧裁剪、右下裁剪和
+2x2 小形状。Core 均通过独立圆方程 oracle；本机 GDI+ 只有无圆角对照完全一致，
+其余 7 项不满足 exact coverage。标准卡片差 1 个像素的覆盖率，最大半径差 57 个，
+最大覆盖率误差 48/255；不能仅凭标准卡片接近相同就通过适配器。
+这里直接比较颜色量化前的 coverage，避免低对比颜色掩盖差异。报告、分例截图和差异图在
+`D:/JellyFramePerf/rounded-supersample-qualification-20260919/`，不包含耗时。
+这些是本机资格检查结果，不把差异数量固定为跨 Windows 版本的 API 承诺。
+
+圆角后续工作明确区分两条路线：
+
+- **相同 coverage**：继续要求本节的 exact 输出。若通过适配器实现，计时必须包含实际
+  绘制、采样归一化及完成同步，不得以预生成 mask 对照 Core 的实时 coverage 计算。
+- **不同原生 AA 的质量/成本**：属于新的 workload 合同，尚未放行。须先独立制定几何
+  内外部、边缘误差和裁剪的验收标准，再做质量与耗时的联合报告；不能看到本轮误差后
+  放宽现有 exact 门槛，也不能只用全屏 RMSE 掩盖稀疏边缘缺陷。
+
+下一步先定义第二条路线的独立质量合同和负例门禁，不再仅通过开启某个 AA 开关认定等价。
+该合同完成前，两个被拒绝的适配器均不得产生跨库速度排名，也不需要新增硬件 A/B。
 
 `text-lines-v1` 不能用“Render Core 内置 bitmap fallback 对 Windows GDI 默认字体”
 作为公平比较。文本结果受字体包、字号 fallback、hinting、字形 shaping、换行和

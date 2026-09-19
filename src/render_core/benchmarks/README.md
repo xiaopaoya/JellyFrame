@@ -190,3 +190,11 @@ a difference image and a `jellyframe.benchmark.qualification.v0` report. Success
 means the diagnostic ran, not that outputs are equivalent. The comparison tool
 rejects this report as a timing manifest. This closes the native-GDI qualification
 investigation only; an equivalent-AA rounded adapter remains outstanding.
+
+`rounded-supersample-qualification` extends that investigation to eight shapes
+using GDI+ native paths at 4x resolution and box reduction. The independent
+`cpu2d_rounded_fixture.h` oracle is shared with fixture regression tests, not
+with the reference renderer. Qualification compares coverage before RGB rounding;
+there are no timing samples, even when all outputs qualify. GDI+ is a dependency
+of the Windows benchmark only. See `../../../benchmarks/README.md` for invocation
+and the rejected-adapter boundary.

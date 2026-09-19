@@ -146,6 +146,30 @@ not that the backends are comparable. The report is deliberately marked
 its qualification format as a performance manifest. A matching-AA adapter is
 still required before rounded performance comparisons are accepted.
 
+The follow-up `rounded-supersample-qualification` mode uses Windows GDI+
+`FillPath` at 4x resolution with smoothing disabled and `PixelOffsetModeNone`,
+then reduces each 4x4 block. It tests eight frozen cases: a card, a rectangle
+control, small and maximum radii, odd dimensions, two clipped shapes and a
+2x2 shape. The mask is drawn by GDI+, not generated from the Core oracle.
+
+```powershell
+build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\rounded-supersample 1 rounded-supersample-qualification
+```
+
+The independent analytic-circle oracle checks Core in every case. Reports
+count **coverage** differences before RGB rounding, record the maximum coverage
+error and write per-case Core/reference/difference BMPs. All cases must match
+exactly for `output-qualified`; any mismatch gives `not-comparable`. Neither
+status enables timing or makes this a benchmark manifest. The rectangle control
+detects coordinate/stride mistakes; the other cases prevent qualifying a backend
+from one favorable radius. Local qualification on 2026-09-19 found seven failing
+rounded cases; supersampling alone does not establish matching coverage.
+
+GDI+ is linked only into this Windows benchmark executable, never the Core,
+Runtime, SDK or device binaries. An eventual timing adapter would have to include
+its supersampled rendering, reduction and completion in the timed interval;
+precomputed native masks must not be compared against live Core coverage work.
+
 ## Repeated Comparisons
 
 The same tool accepts 3-32 independent run manifests per side, in paired repeat

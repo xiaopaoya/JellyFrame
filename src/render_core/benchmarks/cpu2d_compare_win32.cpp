@@ -5,6 +5,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include "cpu2d_rounded_gdiplus.h"
 
 #include <algorithm>
 #include <chrono>
@@ -48,6 +49,7 @@ enum class Workload {
     AlphaGrid,
     BitmapText,
     RoundedQualification,
+    RoundedSupersampleQualification,
     HorizontalGradient,
     VerticalGradient,
 };
@@ -445,10 +447,11 @@ Workload parse_workload(const char* raw) {
     if (name == "alpha-grid") return Workload::AlphaGrid;
     if (name == "bitmap-text") return Workload::BitmapText;
     if (name == "rounded-qualification") return Workload::RoundedQualification;
+    if (name == "rounded-supersample-qualification") return Workload::RoundedSupersampleQualification;
     if (name == "horizontal-gradient") return Workload::HorizontalGradient;
     if (name == "vertical-gradient") return Workload::VerticalGradient;
     throw std::runtime_error(
-        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, rounded-qualification, horizontal-gradient, or vertical-gradient");
+        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, rounded-qualification, rounded-supersample-qualification, horizontal-gradient, or vertical-gradient");
 }
 
 Backend parse_backend(const char* raw) {
@@ -465,6 +468,7 @@ const char* workload_id(Workload workload) {
     case Workload::AlphaGrid: return "alpha-grid-rgb-v2";
     case Workload::BitmapText: return "bitmap-clock-text-rgb-v1";
     case Workload::RoundedQualification: return "rounded-card-qualification-v0";
+    case Workload::RoundedSupersampleQualification: return "rounded-supersample-qualification-v0";
     case Workload::HorizontalGradient: return "horizontal-gradient-rgb-v1";
     case Workload::VerticalGradient: return "vertical-gradient-rgb-v1";
     }
@@ -701,33 +705,13 @@ int qualify_native_rounded_card(const std::filesystem::path& directory) {
     int partial_coverage_pixels = 0;
     for (int y = 0; y < kHeight; ++y) {
         for (int x = 0; x < kWidth; ++x) {
-            // Independent oracle: distance to the inset rectangle, evaluated
-            // at the declared quarter-pixel grid, not Core coverage helpers.
-            int covered = 0;
-            if (x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height) {
-                for (int sy = 0; sy < 4; ++sy) {
-                    for (int sx = 0; sx < 4; ++sx) {
-                        const int px = x * 4 + sx;
-                        const int py = y * 4 + sy;
-                        const int nearest_x = std::clamp(px, (rect.x + radius) * 4,
-                                                         (rect.x + rect.width - radius) * 4);
-                        const int nearest_y = std::clamp(py, (rect.y + radius) * 4,
-                                                         (rect.y + rect.height - radius) * 4);
-                        const int dx = px - nearest_x;
-                        const int dy = py - nearest_y;
-                        if (dx * dx + dy * dy <= radius * radius * 16) ++covered;
-                    }
-                }
-            }
-            const int coverage = (covered * 255 + 8) / 16;
-            const Color expected{static_cast<std::uint8_t>((kFillColor.r * coverage + 127) / 255),
-                                 static_cast<std::uint8_t>((kFillColor.g * coverage + 127) / 255),
-                                 static_cast<std::uint8_t>((kFillColor.b * coverage + 127) / 255), 255};
+            const int coverage = benchmark::rounded_fixture_coverage(benchmark::kRoundedFixtures.front(), x, y);
+            const Color expected = benchmark::rounded_fixture_color(kFillColor, coverage);
             const Color actual = core.pixel(x, y);
-            if (actual.r != expected.r || actual.g != expected.g || actual.b != expected.b) {
+            if (actual.r != expected.r || actual.g != expected.g || actual.b != expected.b || actual.a != 255) {
                 throw std::runtime_error("Core rounded output failed independent 4x4 oracle");
             }
-            if (covered > 0 && covered < 16) ++partial_coverage_pixels;
+            if (coverage > 0 && coverage < 255) ++partial_coverage_pixels;
             const auto* pixel = native.pixels + (static_cast<std::size_t>(y) * kWidth + x) * 4;
             reference.pixel(x, y) = Color{pixel[2], pixel[1], pixel[0], 255};
             if (actual.r != pixel[2] || actual.g != pixel[1] || actual.b != pixel[0]) {
@@ -760,6 +744,74 @@ int qualify_native_rounded_card(const std::filesystem::path& directory) {
     output.close();
     if (!output) throw std::runtime_error("rounded qualification report write failed");
     std::cout << "rounded_qualification=not-comparable different_pixels=" << different_pixels
+              << " core_oracle=pass performance_measured=false\n";
+    return 0;
+}
+
+int qualify_supersampled_rounded_cards(const std::filesystem::path& directory) {
+    benchmark::GdiPlusSession gdiplus;
+    std::filesystem::create_directories(directory);
+    std::ostringstream cases;
+    int failed_cases = 0;
+    for (const auto& fixture : benchmark::kRoundedFixtures) {
+        FrameBuffer core(kWidth, kHeight, Color{0, 0, 0, 255});
+        FrameBuffer reference(kWidth, kHeight, Color{0, 0, 0, 255});
+        FrameBuffer difference(kWidth, kHeight, Color{0, 0, 0, 255});
+        DisplayCommand command;
+        command.type = DisplayCommandType::FillRect;
+        command.rect = fixture.rect;
+        command.color = kFillColor;
+        command.border_radius = fixture.radius;
+        SoftwareRasterizer{}.rasterize(command, core, kFullRect);
+        const auto coverage = benchmark::gdiplus_rounded_coverage(fixture, kWidth, kHeight);
+        int coverage_mismatches = 0;
+        int max_coverage_error = 0;
+        for (int y = 0; y < kHeight; ++y) {
+            for (int x = 0; x < kWidth; ++x) {
+                const int expected_coverage = benchmark::rounded_fixture_coverage(fixture, x, y);
+                const Color expected = benchmark::rounded_fixture_color(kFillColor, expected_coverage);
+                const Color actual = core.pixel(x, y);
+                if (actual.r != expected.r || actual.g != expected.g || actual.b != expected.b || actual.a != 255) {
+                    throw std::runtime_error(std::string("Core rounded oracle failed: ") + fixture.name);
+                }
+                const int native_coverage = coverage[static_cast<std::size_t>(y) * kWidth + x];
+                reference.pixel(x, y) = benchmark::rounded_fixture_color(kFillColor, native_coverage);
+                if (expected_coverage != native_coverage) {
+                    ++coverage_mismatches;
+                    max_coverage_error = std::max(max_coverage_error, std::abs(expected_coverage - native_coverage));
+                    difference.pixel(x, y) = Color{255, 64, 64, 255};
+                }
+            }
+        }
+        if (coverage_mismatches != 0) ++failed_cases;
+        const auto case_directory = directory / fixture.name;
+        std::filesystem::create_directories(case_directory);
+        write_bmp(core, (case_directory / "core.bmp").string());
+        write_bmp(reference, (case_directory / "gdiplus.bmp").string());
+        write_bmp(difference, (case_directory / "difference.bmp").string());
+        if (cases.tellp() > 0) cases << ",\n";
+        cases << "    {\"name\":\"" << fixture.name << "\",\"rect\":{\"x\":" << fixture.rect.x
+              << ",\"y\":" << fixture.rect.y << ",\"width\":" << fixture.rect.width
+              << ",\"height\":" << fixture.rect.height << "},\"radius\":" << fixture.radius
+              << ",\"coreOraclePassed\":true,\"coverageMismatches\":" << coverage_mismatches
+              << ",\"maxCoverageError\":" << max_coverage_error
+              << ",\"coreDigest\":\"" << rgb_hash(core) << "\",\"referenceDigest\":\""
+              << rgb_hash(reference) << "\"}";
+    }
+    const char* status = failed_cases == 0 ? "output-qualified" : "not-comparable";
+    std::ofstream output(directory / "qualification.json", std::ios::binary);
+    output << "{\n  \"format\":\"jellyframe.benchmark.qualification.v0\",\n"
+           << "  \"workload\":\"rounded-supersample-qualification-v0\",\n"
+           << "  \"status\":\"" << status << "\",\n  \"performanceMeasured\":false,\n"
+           << "  \"backend\":\"windows-gdiplus-supersampled-path\",\n"
+           << "  \"viewport\":{\"width\":172,\"height\":320},\n"
+           << "  \"requiredCoverage\":\"4x4-quarter-pixel-grid-exact\",\n"
+           << "  \"adapter\":\"4x FillPath; SmoothingModeNone; PixelOffsetModeNone; 4x4 box reduction\",\n"
+           << "  \"sourceRgb\":\"164757\",\"backgroundRgb\":\"000000\",\n"
+           << "  \"failedCases\":" << failed_cases << ",\n  \"cases\":[\n" << cases.str() << "\n  ]\n}\n";
+    output.close();
+    if (!output) throw std::runtime_error("supersampled rounded report write failed");
+    std::cout << "rounded_supersample_qualification=" << status << " failed_cases=" << failed_cases
               << " core_oracle=pass performance_measured=false\n";
     return 0;
 }
@@ -857,9 +909,10 @@ int main(int argc, char** argv) {
             throw std::runtime_error("SDL2 library path is valid only with the sdl2 backend");
         }
         const std::filesystem::path output_directory(argv[1]);
-        if (workload == Workload::RoundedQualification) {
-            if (samples != 1) throw std::runtime_error("rounded-qualification requires samples=1; no timing is measured");
-            return qualify_native_rounded_card(output_directory);
+        if (workload == Workload::RoundedQualification || workload == Workload::RoundedSupersampleQualification) {
+            if (samples != 1) throw std::runtime_error("rounded qualification requires samples=1; no timing is measured");
+            return workload == Workload::RoundedQualification ? qualify_native_rounded_card(output_directory)
+                : qualify_supersampled_rounded_cards(output_directory);
         }
 
         FrameBuffer jellyframe_surface(kWidth, kHeight, Color{0, 0, 0, 255});
