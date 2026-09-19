@@ -2,6 +2,7 @@
 """Regression tests for fixed-condition benchmark comparisons."""
 
 import importlib.util
+import copy
 import json
 import subprocess
 import sys
@@ -162,6 +163,127 @@ class BenchmarkCompareTests(unittest.TestCase):
             self.assertIn("Benchmark comparison: comparable", rendered)
             self.assertIn("Baseline fixed conditions", rendered)
             self.assertIn("sourceRgba", rendered)
+
+    def repeats(self):
+        return [copy.deepcopy(self.base) for _ in range(3)]
+
+    def test_repeats_report_median_and_range_without_pooling(self):
+        baseline, candidate = self.repeats(), self.repeats()
+        for run, values in zip(baseline, ([1, 2, 3], [2, 3, 4], [90, 95, 100])):
+            run["measurements"]["frame_us"] = values
+        for run in candidate:
+            run["measurements"]["frame_us"] = [1, 2, 2]
+        result = self.module.compare_repeated_runs(baseline, candidate)
+        self.assertEqual(result["status"], "comparable")
+        metric = next(m for m in result["metrics"] if m["name"] == "frame_us")
+        self.assertEqual(metric["baseline"]["repeatP95"], [3, 4, 100])
+        self.assertEqual(metric["baseline"]["medianP95"], 4)
+        self.assertEqual(metric["baseline"]["maxP95"], 100)
+        self.assertEqual(metric["deltaPercent"], -50)
+        self.assertEqual(len(result["pairs"]), 3)
+        self.assertNotIn("speedup", result)
+
+    def test_repeat_condition_drift_on_both_sides_is_rejected(self):
+        baseline, candidate = self.repeats(), self.repeats()
+        baseline[1]["viewport"]["width"] = candidate[1]["viewport"]["width"] = 240
+        result = self.module.compare_repeated_runs(baseline, candidate)
+        self.assertEqual(result["status"], "not-comparable")
+        self.assertIn("baseline[2].viewport", result["statusReasons"])
+        self.assertTrue(all("deltaPercent" not in m for m in result["metrics"]))
+
+    def test_repeat_environment_version_and_validation_drift_are_rejected(self):
+        for field in ("environment", "version", "outputValidation"):
+            with self.subTest(field=field):
+                candidate = self.repeats()
+                if field == "environment":
+                    candidate[2][field]["cpu"] = "different-cpu"
+                elif field == "version":
+                    candidate[2][field] = "different-version"
+                else:
+                    candidate[2][field]["status"] = "fail"
+                self.assertEqual(self.module.compare_repeated_runs(self.repeats(), candidate)["status"], "not-comparable")
+
+    def test_different_libraries_between_sides_are_allowed(self):
+        candidate = self.repeats()
+        for run in candidate:
+            run.update(library="sdl", version="2.28.2")
+        self.assertEqual(self.module.compare_repeated_runs(self.repeats(), candidate)["status"], "comparable")
+
+    def test_repeat_count_guards(self):
+        for baseline, candidate in ((self.repeats()[:2], self.repeats()[:2]),
+                                    (self.repeats(), self.repeats()[:2])):
+            result = self.module.compare_repeated_runs(baseline, candidate)
+            self.assertEqual(result["status"], "not-comparable")
+        for baseline in ([], self.repeats() * 11):
+            with self.assertRaises(ValueError):
+                self.module.compare_repeated_runs(baseline, self.repeats())
+
+    def test_repeat_missing_metric_and_sample_drift_do_not_get_pooled(self):
+        for missing in (True, False):
+            candidate = self.repeats()
+            if missing:
+                del candidate[1]["measurements"]["frame_us"]
+            else:
+                candidate[1]["measurements"]["frame_us"].append(100)
+            result = self.module.compare_repeated_runs(self.repeats(), candidate)
+            self.assertEqual(result["status"], "not-comparable")
+            frame = next(m for m in result["metrics"] if m["name"] == "frame_us")
+            self.assertNotIn("deltaPercent", frame)
+            pixels = next(m for m in result["metrics"] if m["name"] == "pixels")
+            self.assertEqual(pixels["status"], "comparable")
+
+    def test_repeat_delta_preserves_submicrosecond_precision_and_zero(self):
+        baseline, candidate = self.repeats(), self.repeats()
+        for old, new in zip(baseline, candidate):
+            old["measurements"]["frame_us"] = [0.004] * 3
+            new["measurements"]["frame_us"] = [0.002] * 3
+        result = self.module.compare_repeated_runs(baseline, candidate)
+        metric = next(m for m in result["metrics"] if m["name"] == "frame_us")
+        self.assertEqual(metric["deltaPercent"], -50)
+        for old in baseline:
+            old["measurements"]["frame_us"] = [0] * 3
+        result = self.module.compare_repeated_runs(baseline, candidate)
+        metric = next(m for m in result["metrics"] if m["name"] == "frame_us")
+        self.assertIsNone(metric["deltaPercent"])
+        self.assertEqual(metric["pairedDeltaPercent"], [None] * 3)
+
+    def test_repeat_html_escapes_identity_and_shows_range(self):
+        baseline = self.repeats()
+        for run in baseline:
+            run["library"] = "<script>alert(1)</script>"
+        rendered = self.module.render_html(self.module.compare_repeated_runs(baseline, self.repeats()))
+        self.assertNotIn("<script>", rendered)
+        self.assertIn("median p95 [min, max]", rendered)
+        self.assertIn("Repeat evidence", rendered)
+
+    def test_repeat_cli_and_path_guards(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = [root / f"run-{i}.json" for i in range(6)]
+            for path in paths:
+                path.write_text(json.dumps(self.base), encoding="utf-8")
+            output, html_output = root / "out.json", root / "out.html"
+            command = [sys.executable, str(TOOL), "--baseline", *map(str, paths[:3]),
+                       "--candidate", *map(str, paths[3:]), "--output", str(output),
+                       "--html-output", str(html_output)]
+            process = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(process.returncode, 0, process.stderr)
+            result = json.loads(output.read_text())
+            self.assertEqual(result["status"], "comparable")
+            self.assertEqual(len(result["inputRuns"]["baseline"]), 3)
+            self.assertEqual(len(result["inputRuns"]["baseline"][0]["sha256"]), 64)
+            self.assertIn("Repeated benchmark", html_output.read_text())
+            for change in ("duplicate", "overwrite", "same-output"):
+                altered = command.copy()
+                if change == "duplicate":
+                    altered[4] = altered[3]
+                elif change == "overwrite":
+                    altered[altered.index("--output") + 1] = str(paths[0])
+                else:
+                    altered[altered.index("--html-output") + 1] = str(output)
+                process = subprocess.run(altered, capture_output=True, text=True)
+                self.assertNotEqual(process.returncode, 0, change)
+            self.assertEqual(json.loads(paths[0].read_text()), self.base)
 
 
 if __name__ == "__main__":

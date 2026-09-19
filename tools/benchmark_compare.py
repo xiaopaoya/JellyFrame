@@ -9,6 +9,7 @@ cannot silently become a cross-library claim for different work.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import math
@@ -40,6 +41,7 @@ METRIC_UNITS = {
 }
 MAX_WORKLOAD_PARAMETERS_BYTES = 16 * 1024
 MAX_WORKLOAD_PARAMETERS_DEPTH = 6
+MAX_REPEATS = 32
 
 
 def validate_workload_parameter(value: Any, path: str, depth: int = 0) -> None:
@@ -265,7 +267,116 @@ def compare_runs(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[st
     }
 
 
+def compare_repeated_runs(baseline: list[dict[str, Any]], candidate: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize independent repeats, never pool their invocation samples."""
+    if not baseline or not candidate or max(len(baseline), len(candidate)) > MAX_REPEATS:
+        raise ValueError(f"repeat counts must be between 1 and {MAX_REPEATS}")
+    reasons: list[str] = []
+    if len(baseline) != len(candidate):
+        reasons.append("repeat-count-mismatch")
+    if min(len(baseline), len(candidate)) < 3:
+        reasons.append("at-least-three-repeats-required")
+    for label, runs in (("baseline", baseline), ("candidate", candidate)):
+        for index, run in enumerate(runs):
+            # Comparing only matching pairs would let both sides drift together.
+            for field in comparable_fields(baseline[0], run):
+                reasons.append(f"{label}[{index + 1}].{field}")
+            for field in ("library", "version"):
+                if run.get(field) != runs[0].get(field):
+                    reasons.append(f"{label}[{index + 1}].{field}")
+    pairs = [compare_runs(old, new) for old, new in zip(baseline, candidate)]
+    names = sorted({name for run in baseline + candidate for name in run["measurements"]})
+    metrics: list[dict[str, Any]] = []
+    for name in names:
+        metric: dict[str, Any] = {"name": name, "unit": METRIC_UNITS[name], "status": "not-comparable"}
+        values = [run["measurements"].get(name) for run in baseline + candidate]
+        if reasons:
+            metric["reason"] = "repeat-condition-mismatch"
+        elif any(value is None for value in values):
+            metric["reason"] = "metric-missing-in-repeat"
+        elif len({len(value) for value in values}) != 1:
+            metric["reason"] = "sample-count-mismatch"
+        else:
+            for label, runs in (("baseline", baseline), ("candidate", candidate)):
+                p95s = [percentile(run["measurements"][name], .95) for run in runs]
+                metric[label] = {
+                    "repeatP95": p95s,
+                    "medianP95": statistics.median(p95s),
+                    "minP95": min(p95s), "maxP95": max(p95s),
+                    "samplesPerRepeat": len(runs[0]["measurements"][name]),
+                }
+            old = metric["baseline"]["medianP95"]
+            new = metric["candidate"]["medianP95"]
+            metric["deltaPercent"] = None if old == 0 else round((new - old) * 100 / old, 2)
+            metric["pairedDeltaPercent"] = [None if a == 0 else round((b - a) * 100 / a, 2)
+                for a, b in zip(metric["baseline"]["repeatP95"], metric["candidate"]["repeatP95"])]
+            metric["status"] = "comparable"
+        metrics.append(metric)
+    return {
+        "format": "jellyframe.benchmark.repeat-comparison.v0",
+        "status": "not-comparable" if reasons or any(m["status"] != "comparable" for m in metrics) else "comparable",
+        "statusReasons": reasons + [f'{m["name"]}: {m["reason"]}' for m in metrics if "reason" in m],
+        "repeatCounts": {"baseline": len(baseline), "candidate": len(candidate)},
+        "baseline": pairs[0]["baseline"], "candidate": pairs[0]["candidate"],
+        "fixedConditions": pairs[0]["fixedConditions"],
+        "environment": baseline[0]["environment"],
+        "metrics": metrics, "pairs": pairs,
+        "limitations": [
+            "Median/range summarize repeat p95 values, not pooled samples or individual-operation tails.",
+            "Delta is descriptive, not a significance test or an automatic speedup verdict.",
+            "Run repeats sequentially with alternating execution order; input order pairs repeats but cannot prove execution order.",
+            "This report cannot establish device FPS, DMA timing or whole-library performance.",
+        ],
+    }
+
+
+def render_repeat_html(comparison: dict[str, Any]) -> str:
+    def escape(value: Any) -> str:
+        return html.escape(str(value))
+
+    rows = []
+    for metric in comparison["metrics"]:
+        cells = [metric["name"], metric["unit"]]
+        for side in ("baseline", "candidate"):
+            summary = metric.get(side)
+            cells.append("-" if summary is None else
+                         f'{summary["medianP95"]:g} [{summary["minP95"]:g}, {summary["maxP95"]:g}]')
+        delta = metric.get("deltaPercent")
+        cells.extend(["-" if delta is None else delta, metric.get("reason", metric["status"])])
+        rows.append("<tr>" + "".join(f"<td>{escape(cell)}</td>" for cell in cells) + "</tr>")
+    evidence = {key: comparison[key] for key in
+                ("repeatCounts", "fixedConditions", "environment", "metrics", "pairs")}
+    evidence["inputRuns"] = comparison.get("inputRuns", {})
+    repeat_rows = []
+    for metric in comparison["metrics"]:
+        if metric["status"] != "comparable":
+            continue
+        for index, (old, new, delta) in enumerate(zip(
+                metric["baseline"]["repeatP95"], metric["candidate"]["repeatP95"],
+                metric["pairedDeltaPercent"]), 1):
+            repeat_rows.append("<tr>" + "".join(f"<td>{escape(cell)}</td>" for cell in
+                               (metric["name"], index, old, new, "-" if delta is None else delta)) + "</tr>")
+    return (
+        "<!doctype html><meta charset='utf-8'><title>Repeated benchmark comparison</title>"
+        "<style>body{font-family:system-ui,sans-serif;margin:24px}table{border-collapse:collapse}"
+        "th,td{border:1px solid #bbb;padding:6px;text-align:left}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style>"
+        f'<h1>Repeated benchmark comparison: {escape(comparison["status"])}</h1>'
+        f'<p>{escape(comparison["baseline"])} -&gt; {escape(comparison["candidate"])}</p>'
+        f'<p>{escape(", ".join(comparison["statusReasons"]) or "Fixed conditions matched")}</p>'
+        "<table><tr><th>Metric</th><th>Unit</th><th>Baseline median p95 [min, max]</th>"
+        "<th>Candidate median p95 [min, max]</th><th>Delta %</th><th>Status</th></tr>"
+        + "".join(rows) + "</table><h2>Repeat p95</h2><table><tr><th>Metric</th><th>Repeat</th>"
+        "<th>Baseline</th><th>Candidate</th><th>Delta %</th></tr>"
+        + "".join(repeat_rows) + "</table><h2>Limitations</h2><ul>"
+        + "".join(f"<li>{escape(item)}</li>" for item in comparison["limitations"])
+        + "</ul><details><summary>Repeat evidence and conditions</summary><pre>"
+        + escape(json.dumps(evidence, ensure_ascii=False, indent=2)) + "</pre></details>"
+    )
+
+
 def render_html(comparison: dict[str, Any]) -> str:
+    if comparison["format"] == "jellyframe.benchmark.repeat-comparison.v0":
+        return render_repeat_html(comparison)
     rows = []
     for metric in comparison["metrics"]:
         baseline = metric.get("baseline", {})
@@ -312,8 +423,8 @@ def render_html(comparison: dict[str, Any]) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--baseline", required=True, type=Path)
-    parser.add_argument("--candidate", required=True, type=Path)
+    parser.add_argument("--baseline", required=True, type=Path, nargs="+")
+    parser.add_argument("--candidate", required=True, type=Path, nargs="+")
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--html-output", type=Path)
     return parser.parse_args()
@@ -321,7 +432,25 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    comparison = compare_runs(load_run(args.baseline), load_run(args.candidate))
+    paths = args.baseline + args.candidate
+    if max(len(args.baseline), len(args.candidate)) > MAX_REPEATS:
+        raise SystemExit(f"at most {MAX_REPEATS} repeats per side are supported")
+    if len({path.resolve() for path in paths}) != len(paths):
+        raise SystemExit("duplicate run paths cannot count as independent measurements")
+    for output in (args.output, args.html_output):
+        if output is not None and output.resolve() in {path.resolve() for path in paths}:
+            raise SystemExit("output must not overwrite an input run")
+    if args.html_output is not None and args.output.resolve() == args.html_output.resolve():
+        raise SystemExit("JSON and HTML output paths must differ")
+    baseline = [load_run(path) for path in args.baseline]
+    candidate = [load_run(path) for path in args.candidate]
+    comparison = (compare_runs(baseline[0], candidate[0]) if len(baseline) == len(candidate) == 1
+                  else compare_repeated_runs(baseline, candidate))
+    comparison["inputRuns"] = {
+        side: [{"path": str(path.resolve()), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+               for path in files]
+        for side, files in (("baseline", args.baseline), ("candidate", args.candidate))
+    }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(comparison, indent=2) + "\n", encoding="utf-8")
     if args.html_output:

@@ -34,7 +34,7 @@ workload 边界。目的不是给 JellyFrame、Cairo、SDL、LVGL 或浏览器�
 | `vertical-gradient-rgb-v1` | 已接受 | 同上、纵向不透明线性渐变、无 AA、RMSE <= 1 | 另一种渐变访问方向的成本 |
 | `rounded-card-rgb-v1` | Core probe 已有；跨库待适配 | 172x320 黑底、固定卡片矩形/四角半径/颜色、明确 AA 和 source-over | 圆角 coverage、边框和裁剪成本 |
 | `text-lines-v1` | Core probe 已有；跨库待适配 | 固定字体包、family/hash、字号、weight、文本、宽度和换行模式 | 文本测量、换行和绘制成本 |
-| `embedded-ui-v1` | fixture 已资格通过；设备矩阵待执行 | 黑底可穿戴页面、设置行、状态卡、导航、文本更新、滚动、全屏重绘 | 真实设备端到端阶段成本 |
+| `embedded-ui-v1` | fixture 及两项候选的四 workload 非回归矩阵已通过 | 黑底可穿戴页面、设置行、状态卡、导航、文本更新、滚动、全屏重绘 | 已测 repaint/aggregate 阶段成本，不代表完整脚本/布局路径 |
 
 五项矩形 workload 由 Windows `jellyframe_cpu2d_compare` 和 memory-DIB GDI 适配器提供；其中
 `opaque-fill-rgb-v1`、`opaque-dirty-fill-rgb-v1` 与 `alpha-grid-rgb-v2` 还可通过运行时加载的 SDL2 DLL 使用
@@ -106,7 +106,19 @@ repaint 时，不能把 full repaint 的结果标成 `mode: dirty`；字体不�
 不透明填充与半透明 source-over，GDI 另覆盖两种轴向渐变。圆角和文本已经
 有可重复的 JellyFrame 内部 probe，但跨库适配仍是待完成工作；嵌入式 UI 则须在
 ESP32-S3 上按 [硬件对照要求](render_performance_hardware_comparison_zh.md)
-完成 baseline/candidate 矩阵后再给出设备结论。
+完成精确 baseline/candidate 矩阵后才可给出对应设备结论。文本缓存 pair 与 source-over
+pair 均已通过四 workload 非回归及用户目检，未证实显著设备加速；设备侧仍缺少 script_us，
+且这些窗口 pipeline_frames=0，不把该结果扩展为完整 UI 管线验收。
+
+## 6. 多轮复算
+
+`tools/benchmark_compare.py` 的 `--baseline` / `--candidate` 已支持每侧 3–32 个
+run manifest，按输入顺序逐轮配对；单文件调用保持原有格式。示例见
+[基准工具说明](../benchmarks/README.md#repeated-comparisons)。JSON/HTML 保留每轮 p95、
+各轮 p95 的中位数与范围、逐轮变化及输入 SHA-256，不合并原始样本，也不自动宣布显著加速。
+所有轮次的条件必须一致；不能靠每对两侧同时改变 viewport/配置绕过检查。
+2026-09-19 已使用 source-over 六轮存档复算，得到同样的 -16.88% / -14.62% 桌面专项变化。
+这不是新增硬件性能结论，也不增加圆角/文本的跨库覆盖范围。
 
 这一边界比给出覆盖条件不一致的“总体快慢”数字更严格，也更适合定位下一项
 Render Core 优化：先用内部 probe 判断算法变化，再用固定适配器或真实设备确认

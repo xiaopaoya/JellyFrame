@@ -108,3 +108,35 @@ should also emit the bounded `workloadParameters` object. Geometry, colors,
 blend, gradient axis and endpoint convention must match exactly; a legacy
 manifest without parameters is comparable only with another parameter-less
 manifest.
+
+## Repeated Comparisons
+
+The same tool accepts 3-32 independent run manifests per side, in paired repeat
+order. A single path per side preserves the existing single-run report. Run
+measurements sequentially and alternate backend/executable order; do not benchmark
+while builds or other benchmark processes compete for the CPU.
+
+```powershell
+python tools\benchmark_compare.py `
+  --baseline baseline/01.json baseline/02.json baseline/03.json `
+  --candidate candidate/01.json candidate/02.json candidate/03.json `
+  --output comparison/repeats.json --html-output comparison/repeats.html
+```
+
+The repeat report uses `jellyframe.benchmark.repeat-comparison.v0`. It retains
+each pair, each repeat p95, the median and min/max of those p95s, paired deltas,
+input paths and SHA-256 hashes. It does not pool samples or infer statistical
+significance from a lower median. Zero baselines have a null percentage delta.
+Batch-average samples remain batch-average samples, not individual-operation tails.
+
+All repeats must have identical fixed conditions, including environment and
+workload parameters, even if both sides change together. Library/version must
+remain stable within each side (but may differ between sides). Unequal repeat
+counts, fewer than three repeats, failed output validation, missing metrics or
+changed sample counts prevent the affected comparison. Duplicate input paths and
+outputs that overwrite inputs are rejected. The tool cannot prove that separately
+named files represent independent measurements or that execution was interleaved;
+preserve runner commands and execution-order logs alongside the manifests.
+
+Device aggregate windows must still use `tools/device_performance_compare.py`;
+do not reinterpret those histograms as desktop invocation samples.

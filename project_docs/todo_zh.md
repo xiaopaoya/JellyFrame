@@ -47,6 +47,9 @@
   配置哈希已核验；用户确认目检正常，四 workload 比较器均为 PASS (visual-equivalent-only)。
   frame p95 均持平，paint 变化仅一个 1 ms 桶，不宣称设备显著加速；该非回归门已关闭。
   仍是 aggregate-only、缺失 script_us、pipeline_frames=0，不代表完整 UI 管线或逐元素性能验收。
+- [x] 将桌面多轮对照收敛到 `benchmark_compare.py`：支持每侧 3–32 轮，校验跨轮条件与
+  单侧版本稳定，保留逐轮 p95、其中位数/范围和输入哈希；source-over 六轮存档复算一致。
+  不合并采样、不自动判定显著性；设备继续使用独立 aggregate 比较器。
 - [x] 完成现有 Render Trace/Performance Profile 的状态核对：桌面逐帧 trace、阶段/command/owner
   归因与设备 aggregate profile 已交付；设备逐元素 trace 尚未实现，aggregate 数据不得冒充元素耗时。
 - [x] 用同一 App、输入、构建和机器完成 profile OFF/ON A/B，确认 p50/p95、报告开销
