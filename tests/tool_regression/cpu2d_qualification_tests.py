@@ -65,6 +65,21 @@ def main():
             result = subprocess.run([str(runner), str(rejected), *suffix], capture_output=True, text=True)
             assert result.returncode != 0
             assert not rejected.exists(), "invalid request produced artifacts"
+        quality_root = root / "quality"
+        subprocess.run([str(runner), str(quality_root), "1", "rounded-quality-masks"], check=True, capture_output=True)
+        tool = Path(__file__).resolve().parents[2] / "tools" / "rounded_aa_quality.py"
+        spec = importlib.util.spec_from_file_location("rounded_aa_quality", tool)
+        quality = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(quality)
+        loaded, _ = quality.load_masks(quality_root / "coverage.json")
+        report = quality.make_report(loaded)
+        assert len(report["backends"]) == 3
+        assert report["performanceMeasured"] is False and report["performanceComparable"] is False
+        for backend in report["backends"]:
+            assert len(backend["cases"]) == 8
+            assert next(case for case in backend["cases"] if case["name"] == "rectangle")["status"] == "pass"
+        binary = next(backend for backend in report["backends"] if backend["id"] == "gdiplus-binary-control")
+        assert binary["status"] == "fail", "binary edges must not pass the native-AA quality gate"
     print("rounded qualification contract passed")
 
 

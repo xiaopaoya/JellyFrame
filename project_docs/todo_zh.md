@@ -39,7 +39,7 @@
 
 - [x] 修复重复失败的 scripting CI：`08dc32ba` 将非 trace capture 的诊断重绘预期
   修正为 0，新增 trace OFF/ON 分别 paint=0/1 且 BMP 完全一致的回归；干净 scripting
-  Release 全套 82/82 通过，远端 CI `35451942516`、后续工具提交 CI `35452510254` 四项 job 均全绿。
+  Release 全套 82/82 通过，远端 CI `35451942516`、后续工具提交 CI `35452510254`、`35453618347` 四项 job 均全绿。
   无需恢复无条件诊断重绘来满足过时测试。
 - [x] 完成原生 GDI 圆角资格检查：Core 通过独立 4x4 coverage oracle；固定卡片与
   GDI RoundRect 有 392 个不同像素，输出明确为 not-comparable，无计时数据。
@@ -47,9 +47,13 @@
 - [x] 完成 GDI+ 超采样圆角资格检查：8 项固定几何/裁剪用例均通过 Core 独立 oracle，
   GDI+ 仅普通矩形对照通过，其余 7 项不满足 exact coverage。报告比较颜色量化前覆盖率，
   无计时；增加空白、平移、圆角丢失、越界着色与无效调用回归。不关闭等价 AA adapter 待办。
-- [ ] 下一步定义不同原生 AA 的独立质量/成本合同和负例门禁，与相同 coverage 对照分开。
-  exact 门槛不因本轮差异而放宽；未通过输出资格前不做圆角排名。通用文本/shaping、
-  完整 UI 和 LVGL 对照仍单列待办。
+- [x] 交付不同原生 AA 的独立实验质量合同、mask 导出和 Python 分析器：参考连续像素面积
+  的上下界，不以 Core 为理想答案；内部/外部检查、边缘 RMS/最大误差、面积偏差和
+  pass/fail/indeterminate 状态均可复核。Core 与 GDI+ 当前配置均有未通过项，二值负对照
+  被拒绝；保留原始 mask/hash，不修改历史 exact 合同或设备发布门。
+- [ ] 下一步接入独立的原生 AA 质量/成本联合报告，先冻结实际执行与完成同步计时边界。
+  未通过质量门只保留诊断，不进入等价排名；不得为完成基准默认修改 Core 像素网格。
+  通用文本/shaping、完整 UI 和 LVGL 对照仍单列待办。
 - [x] 修正半透明对照的计时边界：`a4faa1c6` 在计时内完成 SDL2/GDI batch，
   在计时外完成 reset，并交错执行两侧；`alpha-grid-rgb-v1` 的旧排名已撤回。
 - [x] `1e375e5b` 为不透明目标增加逐字节等价的 source-over 快路径；Release/Debug Core

@@ -443,6 +443,8 @@ if(JELLYFRAME_BUILD_TESTS)
     endif()
 
     if(Python3_Interpreter_FOUND)
+        add_test(NAME jellyframe_rounded_aa_quality_tests
+                 COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/rounded_aa_quality_tests.py")
         if(TARGET jellyframe_cpu2d_compare)
             add_test(NAME jellyframe_cpu2d_qualification_contract
                      COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/cpu2d_qualification_tests.py"

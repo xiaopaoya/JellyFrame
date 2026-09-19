@@ -170,6 +170,28 @@ Runtime, SDK or device binaries. An eventual timing adapter would have to includ
 its supersampled rendering, reduction and completion in the timed interval;
 precomputed native masks must not be compared against live Core coverage work.
 
+## Native AA Quality
+
+Native AA quality is separate from exact-output qualification. Export raw white
+coverage masks for Core, native GDI+ AA and a binary negative control, then run
+the independent continuous-area evaluator:
+
+```powershell
+build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\aa-quality 1 rounded-quality-masks
+python tools\rounded_aa_quality.py --input build\aa-quality\coverage.json --output build\aa-quality\quality.json --markdown-output build\aa-quality\report.md
+```
+
+The experimental `rounded-area-quarter-v0` policy requires exact interior/exterior
+coverage, maximum edge error <= 1/4 and edge-only RMS <= 1/8. Integer subdivision
+encloses the continuous area of each unit pixel, retaining uncertainty intervals.
+An interval crossing a limit is indeterminate, not a pass. Core is assessed under
+the same rules; its current point-sampling contract is not the ideal area oracle.
+The analyzer rejects changed fixtures, malformed masks, missing cases, path escapes
+and outputs overwriting inputs. Reports contain input hashes and no timing data.
+Exit 0 only means analysis completed; the quality report cannot enter the benchmark
+rankings. This policy is not a Runtime release gate. See
+`../docs/render_performance_native_aa_quality_zh.md` for the fixed scope and rules.
+
 ## Repeated Comparisons
 
 The same tool accepts 3-32 independent run manifests per side, in paired repeat

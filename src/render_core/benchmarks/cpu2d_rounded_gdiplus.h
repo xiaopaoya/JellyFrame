@@ -28,10 +28,16 @@ private:
     ULONG_PTR token_ = 0;
 };
 
-// Qualification only: native binary path at 4x resolution followed by box
-// reduction. The source mask is produced by GDI+, never by the Core oracle.
-inline std::vector<int> gdiplus_rounded_coverage(const RoundedFixture& fixture, int width, int height) {
-    constexpr int scale = 4;
+enum class GdiPlusRoundedMode { Supersampled, NativeAa, BinaryControl };
+
+// Untimed mask export. Supersampled uses the historical quarter-grid probe;
+// native modes declare pixel-center alignment for the independent area policy.
+// The source mask is produced by GDI+, never by the Core oracle.
+inline std::vector<int> gdiplus_rounded_coverage(const RoundedFixture& fixture, int width, int height,
+                                               GdiPlusRoundedMode mode = GdiPlusRoundedMode::Supersampled) {
+    const bool native_aa = mode == GdiPlusRoundedMode::NativeAa;
+    const bool binary_control = mode == GdiPlusRoundedMode::BinaryControl;
+    const int scale = native_aa || binary_control ? 1 : 4;
     const int stride = width * scale * 4;
     std::vector<std::uint8_t> storage(static_cast<std::size_t>(stride) * height * scale, 0);
     {
@@ -40,9 +46,10 @@ inline std::vector<int> gdiplus_rounded_coverage(const RoundedFixture& fixture, 
         Gdiplus::Graphics graphics(&bitmap);
         check_gdiplus(graphics.GetLastStatus());
         check_gdiplus(graphics.SetPageUnit(Gdiplus::UnitPixel));
-        check_gdiplus(graphics.SetSmoothingMode(Gdiplus::SmoothingModeNone));
-        check_gdiplus(graphics.SetPixelOffsetMode(Gdiplus::PixelOffsetModeNone));
-        check_gdiplus(graphics.SetCompositingMode(Gdiplus::CompositingModeSourceCopy));
+        check_gdiplus(graphics.SetSmoothingMode(native_aa ? Gdiplus::SmoothingModeAntiAlias : Gdiplus::SmoothingModeNone));
+        check_gdiplus(graphics.SetPixelOffsetMode(native_aa || binary_control ? Gdiplus::PixelOffsetModeHalf : Gdiplus::PixelOffsetModeNone));
+        check_gdiplus(graphics.SetCompositingMode(native_aa ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy));
+        if (native_aa) check_gdiplus(graphics.SetCompositingQuality(Gdiplus::CompositingQualityAssumeLinear));
         check_gdiplus(graphics.Clear(Gdiplus::Color(255, 0, 0, 0)));
         Gdiplus::SolidBrush white(Gdiplus::Color(255, 255, 255, 255));
         check_gdiplus(white.GetLastStatus());
@@ -74,13 +81,14 @@ inline std::vector<int> gdiplus_rounded_coverage(const RoundedFixture& fixture, 
                 for (int sx = 0; sx < scale; ++sx) {
                     const auto offset = static_cast<std::size_t>(y * scale + sy) * stride + (x * scale + sx) * 4;
                     const auto value = storage[offset];
-                    if ((value != 0 && value != 255) || storage[offset + 1] != value || storage[offset + 2] != value) {
-                        throw std::runtime_error("GDI+ binary mask contains nonbinary RGB");
+                    if ((!native_aa && value != 0 && value != 255) || storage[offset + 1] != value ||
+                        storage[offset + 2] != value || storage[offset + 3] != 255) {
+                        throw std::runtime_error("GDI+ mask violates grayscale/binary contract");
                     }
-                    covered += value == 255 ? 1 : 0;
+                    covered += value;
                 }
             }
-            coverage[static_cast<std::size_t>(y) * width + x] = (covered * 255 + 8) / 16;
+            coverage[static_cast<std::size_t>(y) * width + x] = (covered + scale * scale / 2) / (scale * scale);
         }
     }
     return coverage;
