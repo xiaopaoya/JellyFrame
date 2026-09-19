@@ -58,6 +58,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cstdint>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -947,6 +948,7 @@ struct BrowserOptions {
     std::uint64_t frame_start_ms = 1000;
     std::string frame_script_path;
     std::string render_trace_path;
+    std::string render_trace_app_id;
     std::string frame_montage_path;
     int frame_montage_columns = 0;
     int frame_montage_gap = 6;
@@ -3221,7 +3223,7 @@ void print_win32_browser_usage(std::ostream& output, const std::string& program_
         << "  --script PATH                  Load an extra classic script file.\n"
         << "  --capture PATH                 Render one frame to BMP/PPM by extension.\n"
         << "  --capture-frames DIR           Hidden deterministic frame capture directory.\n"
-        << "  --render-trace PATH            Write bounded JSONL frame trace (capture mode only).\n"
+        << "  --render-trace PATH            Write bounded JSONL trace for capture or opt-in VS Code debug.\n"
         << "  --vscode-debug                Run the isolated VS Code frame-stream session.\n"
         << "  --vscode-frame-dir DIR        Directory for complete VS Code frame snapshots.\n"
         << "  --force-full-repaint          Disable incremental frame repaint for diagnostics.\n"
@@ -3826,18 +3828,33 @@ public:
     bool open(const std::filesystem::path& path,
               const std::string& app_id,
               int viewport_width,
-              int viewport_height) {
+              int viewport_height,
+              std::string_view capture = "deterministic-frame-script",
+              bool rolling = false) {
         if (path.empty()) {
             return false;
         }
         path_ = path;
+        session_line_.clear();
+        frame_lines_.clear();
+        bytes_written_ = 0;
+        frame_records_ = 0;
+        dropped_frame_records_ = 0;
+        rolling_ = rolling;
+        error_.clear();
+        active_ = true;
         std::ostringstream session;
         session << "{\"format\":\"jellyframe.render.trace.v0\",\"type\":\"session\""
                 << ",\"appId\":\"" << json_escape_for_trace(app_id) << '\"'
                 << ",\"viewport\":{\"width\":" << std::max(0, viewport_width)
                 << ",\"height\":" << std::max(0, viewport_height) << '}'
                 << ",\"profile\":\"desktop\",\"runtime\":\"win32\""
-                << ",\"capture\":\"deterministic-frame-script\"}";
+                << ",\"capture\":\"" << json_escape_for_trace(std::string(capture)) << '\"';
+        if (rolling_) {
+            session << ",\"retention\":{\"mode\":\"ring\",\"maxFrames\":"
+                    << kMaxRenderTraceRecords << ",\"maxBytes\":" << kMaxRenderTraceBytes << '}';
+        }
+        session << '}';
         return write_line(session.str(), false);
     }
 
@@ -3853,17 +3870,37 @@ public:
                 return false;
             }
         }
-        std::ofstream stream(path_, std::ios::binary | std::ios::trunc);
+        std::filesystem::path temporary_path = path_;
+        temporary_path += ".tmp";
+        std::ofstream stream(temporary_path, std::ios::binary | std::ios::trunc);
         if (!stream) {
             disable("cannot open render trace: " + path_.string());
             return false;
         }
-        stream.write(buffer_.data(), static_cast<std::streamsize>(buffer_.size()));
+        stream.write(session_line_.data(), static_cast<std::streamsize>(session_line_.size()));
+        for (const std::string& line : frame_lines_) {
+            stream.write(line.data(), static_cast<std::streamsize>(line.size()));
+        }
+        stream.close();
         if (!stream) {
+            std::filesystem::remove(temporary_path, error);
             disable("render trace write failed");
             return false;
         }
+        if (!MoveFileExW(temporary_path.wstring().c_str(),
+                         path_.wstring().c_str(),
+                         MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+            std::filesystem::remove(temporary_path, error);
+            disable("cannot publish render trace: " + std::to_string(GetLastError()));
+            return false;
+        }
         return true;
+    }
+
+    bool close() {
+        const bool written = finish();
+        active_ = false;
+        return written;
     }
 
     bool write_frame(int frame,
@@ -3884,7 +3921,7 @@ public:
                      const FrameTraceTimings& timings,
                      const FrameTraceCommandAttribution& command_attribution,
                      const FrameTraceMutationSources& mutation_sources) {
-        if (!active_ || frame_records_ >= kMaxRenderTraceRecords) {
+        if (!active_ || (!rolling_ && frame_records_ >= kMaxRenderTraceRecords)) {
             return false;
         }
         std::ostringstream record;
@@ -4088,21 +4125,43 @@ public:
 
     bool active() const { return active_; }
     const std::string& error() const { return error_; }
+    std::size_t stored_frame_records() const { return frame_lines_.size(); }
+    std::size_t dropped_frame_records() const { return dropped_frame_records_; }
 
 private:
     bool write_line(const std::string& line, bool frame) {
-        if (!active_ || line.size() > kMaxRenderTraceLineBytes ||
-            bytes_written_ > kMaxRenderTraceBytes ||
-            line.size() + 1U > kMaxRenderTraceBytes - bytes_written_) {
-            disable(line.size() > kMaxRenderTraceLineBytes
-                        ? "render trace record exceeds line limit"
-                        : "render trace reached size limit");
+        if (!active_ || line.size() > kMaxRenderTraceLineBytes) {
+            disable("render trace record exceeds line limit");
             return false;
         }
-        buffer_.append(line);
-        buffer_.push_back('\n');
-        bytes_written_ += line.size() + 1U;
-        (void)frame;
+        std::string stored = line;
+        stored.push_back('\n');
+        if (!frame) {
+            if (stored.size() > kMaxRenderTraceBytes) {
+                disable("render trace reached size limit");
+                return false;
+            }
+            session_line_ = std::move(stored);
+            bytes_written_ = session_line_.size();
+            return true;
+        }
+        if (rolling_) {
+            while (!frame_lines_.empty() &&
+                   (frame_lines_.size() >= kMaxRenderTraceRecords ||
+                    stored.size() > kMaxRenderTraceBytes - bytes_written_)) {
+                bytes_written_ -= frame_lines_.front().size();
+                frame_lines_.pop_front();
+                ++dropped_frame_records_;
+            }
+        }
+        if (frame_lines_.size() >= kMaxRenderTraceRecords ||
+            bytes_written_ > kMaxRenderTraceBytes ||
+            stored.size() > kMaxRenderTraceBytes - bytes_written_) {
+            disable("render trace reached size limit");
+            return false;
+        }
+        bytes_written_ += stored.size();
+        frame_lines_.push_back(std::move(stored));
         return true;
     }
 
@@ -4114,10 +4173,13 @@ private:
     }
 
     std::filesystem::path path_;
-    std::string buffer_;
+    std::string session_line_;
+    std::deque<std::string> frame_lines_;
     std::size_t bytes_written_ = 0;
     std::size_t frame_records_ = 0;
-    bool active_ = true;
+    std::size_t dropped_frame_records_ = 0;
+    bool rolling_ = false;
+    bool active_ = false;
     std::string error_;
 };
 
@@ -4234,6 +4296,7 @@ public:
             TranslateMessage(&message);
             DispatchMessageW(&message);
         }
+        stop_live_trace();
         return static_cast<int>(message.wParam);
     }
 
@@ -4620,6 +4683,9 @@ private:
     FrameTraceTimings trace_frame_timings_;
     FrameTraceCommandAttribution frame_trace_command_attribution_;
     FrameTraceMutationSources frame_trace_mutation_sources_;
+    FrameTraceWriter live_trace_writer_;
+    bool live_trace_session_open_ = false;
+    std::uint64_t live_trace_frame_sequence_ = 0;
     DomDirtyFlags last_frame_dirty_flags_ = DomDirtyNone;
     std::string trace_event_owner_label_;
     Rect trace_event_owner_bounds_;
@@ -4751,7 +4817,7 @@ private:
     void record_trace_event_owner(const Node* node) {
         trace_event_owner_label_.clear();
         trace_event_has_owner_bounds_ = false;
-        if (options_.render_trace_path.empty() || node == nullptr) {
+        if (!frame_trace_enabled() || node == nullptr) {
             return;
         }
         trace_event_owner_label_ = frame_trace_command_attribution_.owner_label_for_node(*node);
@@ -4764,7 +4830,7 @@ private:
                                            DomDirtyFlags flags,
                                            std::uint64_t mutation_generation) {
         auto* app = static_cast<BrowserApp*>(user);
-        if (app == nullptr || app->options_.render_trace_path.empty()) {
+        if (app == nullptr || !app->frame_trace_enabled()) {
             return;
         }
         const std::string owner = app->frame_trace_command_attribution_.owner_label_for_node(node);
@@ -4831,7 +4897,7 @@ private:
             FrameTraceMutationSourceKind source_kind = FrameTraceMutationSourceKind::Input;
             trace_event_owner_label_.clear();
             trace_event_has_owner_bounds_ = false;
-            const bool observe_source = !options_.render_trace_path.empty() && document_ != nullptr;
+            const bool observe_source = frame_trace_enabled() && document_ != nullptr;
             const std::uint64_t generation_before = observe_source ? document_->mutation_generation : 0;
             const DomDirtyFlags dirty_before = observe_source ? subtree_dirty_flags(*document_) : DomDirtyNone;
             const std::uint64_t frame_updates_before = frame_update_sequence_;
@@ -6040,7 +6106,7 @@ private:
                 });
                 script_runtime_->set_host_time_ms(current_time_ms());
                 script_runtime_->bind_document(*document_);
-                if (!options_.render_trace_path.empty()) {
+                if (frame_trace_enabled()) {
                     script_runtime_->set_dom_mutation_observer(record_script_dom_mutation, this);
                 }
                 for (const DocumentScript& script : document_scripts) {
@@ -6355,7 +6421,7 @@ private:
                                                            previous,
                                                            next);
             if (rendered) {
-                if (!options_.render_trace_path.empty() && document_ != nullptr) {
+                if (frame_trace_enabled() && document_ != nullptr) {
                     const std::string owner = frame_trace_command_attribution_.owner_label_for_node(*scroll_node);
                     Rect owner_bounds;
                     const bool has_owner_bounds = trace_layout_bounds_for_owner(*scroll_node, owner_bounds);
@@ -6366,6 +6432,9 @@ private:
                                                       true,
                                                       owner,
                                                       has_owner_bounds ? &owner_bounds : nullptr);
+                    if (live_trace_writer_.active()) {
+                        frame_trace_mutation_sources_.clear_frame();
+                    }
                 }
                 ++scroll_container_counters_.scrolls;
             }
@@ -6455,11 +6524,139 @@ private:
 #endif
     }
 
+    bool frame_trace_enabled() const {
+        return live_trace_writer_.active() ||
+            (options_.capture_frames && !options_.render_trace_path.empty());
+    }
+
+    std::string live_trace_app_id() const {
+        if (!options_.render_trace_app_id.empty()) {
+            return options_.render_trace_app_id;
+        }
+        if (!active_package_manifest_.id.empty()) {
+            return active_package_manifest_.id;
+        }
+        if (!active_app_id_.empty()) {
+            return active_app_id_;
+        }
+        return "org.jellyframe.desktop.debug";
+    }
+
+    void start_live_trace() {
+        if (!options_.vscode_debug || options_.render_trace_path.empty()) {
+            std::cerr << "JF_TRACE_ERROR live trace requires --vscode-debug and --render-trace\n";
+            return;
+        }
+        if (live_trace_session_open_) {
+            return;
+        }
+        live_trace_frame_sequence_ = 0;
+        trace_frame_timings_.clear();
+        frame_trace_command_attribution_.clear_frame_samples();
+        frame_trace_mutation_sources_.clear_frame();
+        if (!live_trace_writer_.open(options_.render_trace_path,
+                                     live_trace_app_id(),
+                                     viewport_width_,
+                                     viewport_height_,
+                                     "interactive-vscode-ring",
+                                     true)) {
+            std::cerr << "JF_TRACE_ERROR " << live_trace_writer_.error() << '\n';
+            return;
+        }
+        live_trace_session_open_ = true;
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        if (script_runtime_ != nullptr) {
+            script_runtime_->set_dom_mutation_observer(record_script_dom_mutation, this);
+        }
+#endif
+        std::cout << "JF_TRACE_STARTED\t" << options_.render_trace_path << std::endl;
+        if (document_ != nullptr) {
+            frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Initial,
+                                               DomDirtyPaint,
+                                               document_->mutation_generation,
+                                               false,
+                                               true);
+            mark_dirty(*document_, DomDirtyPaint);
+            rerender_if_dirty(input_ != nullptr ? input_->focused_node() : nullptr);
+        }
+    }
+
+    void stop_live_trace() {
+        if (!live_trace_session_open_) {
+            return;
+        }
+        const std::size_t frames = live_trace_writer_.stored_frame_records();
+        const std::size_t dropped = live_trace_writer_.dropped_frame_records();
+        live_trace_session_open_ = false;
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        if (script_runtime_ != nullptr && !options_.capture_frames) {
+            script_runtime_->set_dom_mutation_observer(nullptr, nullptr);
+        }
+#endif
+        if (!live_trace_writer_.active() || !live_trace_writer_.close()) {
+            std::cerr << "JF_TRACE_ERROR " << live_trace_writer_.error() << '\n';
+            return;
+        }
+        std::cout << "JF_TRACE\t" << options_.render_trace_path << "\t" << frames << "\t" << dropped
+                  << std::endl;
+    }
+
     void render_current(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
+        if (!live_trace_writer_.active()) {
+            render_current_impl(hovered_node, active_node, focused_node);
+            return;
+        }
+        trace_frame_timings_.clear();
+        frame_trace_command_attribution_.clear_frame_samples();
+        const std::uint64_t update_sequence_before = frame_update_sequence_;
+        const auto started = std::chrono::steady_clock::now();
+        render_current_impl(hovered_node, active_node, focused_node);
+        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - started);
+        if (frame_update_sequence_ != update_sequence_before) {
+            const DomStatistics dom_stats = document_ != nullptr
+                ? compute_dom_statistics(*document_)
+                : DomStatistics{};
+            const std::size_t layout_boxes = layout_tree_ != nullptr ? count_layout_boxes(*layout_tree_) : 0;
+            const std::size_t layers = layer_tree_ != nullptr ? count_layers(*layer_tree_) : 0;
+            const std::size_t display_commands = layer_tree_ != nullptr
+                ? count_layer_display_commands(*layer_tree_)
+                : 0;
+            const int frame = static_cast<int>(std::min<std::uint64_t>(
+                live_trace_frame_sequence_, static_cast<std::uint64_t>(std::numeric_limits<int>::max())));
+            if (!live_trace_writer_.write_frame(
+                    frame,
+                    elapsed.count() < 0 ? 0 : static_cast<std::uint64_t>(elapsed.count()),
+                    last_frame_update_action_,
+                    last_frame_update_reason_,
+                    last_dirty_region_mode_,
+                    last_dirty_region_reason_,
+                    last_dirty_rect_count_,
+                    last_dirty_area_percent_,
+                    dom_stats.node_count,
+                    layout_boxes,
+                    layers,
+                    display_commands,
+                    frame_buffer_.pixels.size() * sizeof(Color),
+                    "",
+                    last_dirty_rects_,
+                    trace_frame_timings_,
+                    frame_trace_command_attribution_,
+                    frame_trace_mutation_sources_)) {
+                stop_live_trace();
+            }
+            ++live_trace_frame_sequence_;
+        }
+        frame_trace_mutation_sources_.clear_frame();
+        frame_trace_command_attribution_.clear_frame_samples();
+        trace_frame_timings_.clear();
+    }
+
+    void render_current_impl(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
         if (document_ == nullptr || style_resolver_ == nullptr) {
             return;
         }
-        const bool trace_timing_enabled = !options_.render_trace_path.empty();
+        const bool trace_timing_enabled = frame_trace_enabled();
         std::chrono::steady_clock::time_point trace_frame_started{};
         std::chrono::steady_clock::time_point trace_stage_started{};
         if (trace_timing_enabled) {
@@ -7082,12 +7279,15 @@ private:
         update_blit_pixels_after_scroll(previous);
         publish_vscode_frame();
         InvalidateRect(hwnd_, nullptr, FALSE);
-        if (!options_.render_trace_path.empty() && document_ != nullptr) {
+        if (frame_trace_enabled() && document_ != nullptr) {
             frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Scroll,
                                               DomDirtyNone,
                                               document_->mutation_generation,
                                               false,
                                               true);
+            if (live_trace_writer_.active()) {
+                frame_trace_mutation_sources_.clear_frame();
+            }
         }
         return true;
     }
@@ -7354,6 +7554,14 @@ private:
         input >> kind;
         if (kind == "quit") {
             PostMessageW(hwnd_, WM_CLOSE, 0, 0);
+            return;
+        }
+        if (kind == "trace-start") {
+            start_live_trace();
+            return;
+        }
+        if (kind == "trace-stop") {
+            stop_live_trace();
             return;
         }
 
@@ -7700,7 +7908,7 @@ private:
             return;
         }
         const std::uint64_t now_ms = current_time_ms();
-        const bool observe_script_source = !options_.render_trace_path.empty() && document_ != nullptr;
+        const bool observe_script_source = frame_trace_enabled() && document_ != nullptr;
         const std::uint64_t script_generation_before = observe_script_source
             ? document_->mutation_generation
             : 0;
@@ -7755,7 +7963,7 @@ private:
         }
         clear_animation_overrides_after_render_ = animation_timeline_.empty();
         document_->dirty_flags |= DomDirtyPaint;
-        if (!options_.render_trace_path.empty()) {
+        if (frame_trace_enabled()) {
             for (const StyleOverride& override : style_overrides_) {
                 if (override.node == nullptr) {
                     continue;
@@ -8313,8 +8521,8 @@ int main(int argc, char** argv) {
         std::cerr << "--capture-frames/--frame-script requires an output directory, --capture-montage, or --render-trace\n";
         return 1;
     }
-    if (!options.render_trace_path.empty() && !options.capture_frames) {
-        std::cerr << "--render-trace currently requires --capture-frames or --frame-script\n";
+    if (!options.render_trace_path.empty() && !options.capture_frames && !options.vscode_debug) {
+        std::cerr << "--render-trace requires --capture-frames, --frame-script, or --vscode-debug\n";
         return 1;
     }
 
@@ -8433,6 +8641,7 @@ int main(int argc, char** argv) {
     if (!options.app_path.empty()) {
         try {
             const auto package = jellyframe_example::load_app_package(options.app_path, kMaxInputBytes);
+            options.render_trace_app_id = package.manifest.id;
             options.viewport_width = options.viewport_width_set ? options.viewport_width : package.manifest.viewport_width;
             options.viewport_height = options.viewport_height_set ? options.viewport_height : package.manifest.viewport_height;
             if (options.viewport_width <= 0) {

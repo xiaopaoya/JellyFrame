@@ -113,6 +113,11 @@ python tools\render_performance_report.py `
 工具仍会报告已有的单帧 timings 和设备 aggregate telemetry，但会明确列出限制；不能
 把 isolated microbench 或 desktop 时间解释为某个 MCU 元素的真实耗时。
 
+在 VS Code 内嵌调试中，可在问题交互前点击“性能跟踪”，完成后点击“停止跟踪”。
+扩展会自动打开 Render Trace 查看器，可按帧查看阶段耗时、dirty 范围、command/owner 归因、
+相邻帧差异和异常帧。采集默认关闭，最多保留最近 600 帧或 4 MiB，超限时会驱逐旧帧。
+目前直接 scroll-blit/纯 present 路径不保证有完整 Core 阶段归因；这些桌面数据也不等于设备 FPS、DMA 或 panel 耗时。
+
 诊断标题和解释会尽量复用 Web/CSS 规范中已有的表达：parse error、invalid declaration、
 unsupported value、overflow、clipping、deferred API 等。JellyFrame 自己的 `code` 字段只作为
 稳定的机器可读标识，便于工具和 CI 使用。

@@ -1,7 +1,7 @@
 # Render Core 性能观测与对比方案
 
-> 最后更新：2026-09-17；适用版本：0.6.0-dev
-> 状态：第二阶段已交付；Win32 capture 已提供有界 command/owner 归因、跨帧聚合、阶段 span 时间线和 mutation source 关联
+> 最后更新：2026-09-18；适用版本：0.6.0-dev
+> 状态：设备 profile 首轮闭环已完成；Win32 capture 与 VS Code 交互式调试均可显式产生有界 Render Trace
 
 ## 1. 为什么需要这项工具
 
@@ -22,6 +22,10 @@
 计算。没有逐帧 producer 时，它会明确标记为单帧或 aggregate 数据。
 
 ## 2. 当前可用方式
+
+App 作者可以在 VS Code 的内嵌调试视图中点击“性能跟踪”，在需要观察的交互前开始、
+完成后点击“停止跟踪”。结果原子写入项目的 `.jellyframe/build/debug/`，并自动在
+现有 Render Trace 查看器中打开。该采集默认关闭，与语义交互录制相互独立。
 
 对 package report、设备 aggregate telemetry 和 Render Core microbench 输出执行：
 
@@ -117,8 +121,14 @@ build\Release\jellyframe_desktop_shell.exe `
   --frame-count 120
 ```
 
-该 producer 只在显式 `--render-trace` 下启用，并且仅接受 `--capture-frames`/帧脚本模式。
-它使用确定性捕获循环的墙钟时间填充 `totalUs`，并在渲染路径中记录已覆盖的
+该 producer 只在显式 `--render-trace` 下启用。确定性路径接受 `--capture-frames`/帧脚本模式；
+VS Code 内嵌调试路径使用 `--vscode-debug --render-trace <path>` 预配置输出，但在用户
+显式发送 `trace-start` 前不采样。交互模式在内存中保留最近 600 条 frame、最多 4 MiB，
+每行最多 4 KiB；超过上限时驱逐最旧 frame，停止或会话结束时通过临时文件原子发布。
+调试视图会显示保留/驱逐计数并打开同一查看器。当前只有实际进入 Core render 的帧
+具备完整 frame 记录；直接 scroll-blit 或纯 present 路径可能只有帧输出而没有完整阶段归因。
+
+确定性采集使用确定性捕获循环的墙钟时间填充 `totalUs`，并在渲染路径中记录已覆盖的
 `input`、`style`、`renderTree`、`layout`、`layerTree`、`dirty`、`paint`、`present`
 阶段。`script` 目前没有独立计时，因此可能缺失；`timingComplete` 必须为 `false`，
 阶段之和也不保证等于 `totalUs`。这表示“当前已归因的桌面壳阶段耗时”，不表示已经完成
@@ -193,7 +203,7 @@ python tools\render_trace_profile_ab.py `
 8. 异常帧筛选和历史趋势，点击趋势条可跳转到对应 frame；
 9. 缺失 trace、设备只提供 aggregate 或 command 未归因时显示来源和限制。
 
-实时模式应采用有界环形缓冲，不阻塞 render/present，也不在 MCU 默认开启逐元素计时。
+实时模式已在 VS Code 桌面调试中使用有界环形缓冲，默认关闭，采集期间不做逐帧文件 I/O。
 设备侧默认只发送阶段计数和窗口汇总；需要逐命令/逐元素 profiling 时，必须显式启用
 profiling profile，并记录它可能改变时序的事实。
 
@@ -313,7 +323,8 @@ GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立�
   自动发现最新输入，一次多选后将来源快照、SHA-256、源码提交与 Runtime/Core 身份写入
   `.jellyframe/build/performance/<session-id>/`，并维护最近 20 次成功或失败历史。各来源仍独立
   展示，不进行桌面/设备耗时混算；`.jfcapture` 仍通过其生成的 report/trace 间接进入会话；
-- 增加低开销、有界的实时 trace 环形缓冲，桌面默认可用，设备仍默认只采集 aggregate；
+- VS Code 内嵌调试已提供默认关闭的实时 trace 开始/停止入口；桌面端使用
+  600 frame / 4 MiB / 4 KiB 单行的有界环形缓冲，设备仍默认只采集 aggregate；
 - 建立“输入/脚本更新 -> mutation -> invalidation -> layer/command -> dirty 区”的可靠
   关联，仅在 producer 确实提供证据时展示元素根因；当前已完成 deterministic desktop capture 的
   frame-local source -> mutation generation -> invalidation 记录，并对安全唯一 `id` 提供 owner bounds

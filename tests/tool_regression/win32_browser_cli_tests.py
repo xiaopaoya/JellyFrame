@@ -87,6 +87,68 @@ def run_vscode_debug_case(exe: Path, app: Path, frame_dir: Path) -> tuple[int, l
     return process.returncode, frames
 
 
+def run_vscode_trace_case(exe: Path, app: Path, frame_dir: Path, trace: Path) -> tuple[int, list[str]]:
+    process = subprocess.Popen(
+        [str(exe), "--app", str(app), "--vscode-debug", "--vscode-frame-dir", str(frame_dir),
+         "--render-trace", str(trace)],
+        text=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
+    )
+    lines: list[str] = []
+    trace_started = False
+    trace_stop_sent = False
+    output_lines: Queue[str | None] = Queue()
+
+    def read_output() -> None:
+        for line in process.stdout:
+            output_lines.put(line)
+        output_lines.put(None)
+
+    Thread(target=read_output, daemon=True).start()
+    deadline = time.monotonic() + 10.0
+    try:
+        while process.poll() is None and time.monotonic() < deadline:
+            try:
+                line = output_lines.get(timeout=0.1)
+            except Empty:
+                continue
+            if line is None:
+                break
+            line = line.rstrip("\r\n")
+            lines.append(line)
+            if line.startswith("JF_FRAME\t") and not trace_started:
+                process.stdin.write("trace-start\n")
+                process.stdin.flush()
+            elif line.startswith("JF_TRACE_STARTED\t"):
+                trace_started = True
+                process.stdin.write("pointer down 20 20\n")
+                process.stdin.write("pointer move 130 20 1\n")
+                process.stdin.write("pointer up 130 20\n")
+                process.stdin.flush()
+            elif trace_started and line.startswith("JF_FRAME\t") and not trace_stop_sent:
+                trace_stop_sent = True
+                process.stdin.write("trace-stop\n")
+                process.stdin.flush()
+            elif line.startswith("JF_TRACE\t"):
+                process.stdin.write("quit\n")
+                process.stdin.flush()
+        if process.poll() is None:
+            process.stdin.close()
+            process.wait(timeout=3.0)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=3.0)
+        raise AssertionError("VS Code Render Trace shell did not stop after quit")
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=3.0)
+    return process.returncode, lines
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
@@ -261,7 +323,7 @@ def main() -> int:
 
     trace_without_capture = run_case(exe, ["--render-trace", "trace.jsonl"])
     require(trace_without_capture.returncode != 0 and "requires --capture-frames" in trace_without_capture.stdout,
-            "render trace must be restricted to deterministic capture mode")
+            "render trace must require deterministic capture or isolated VS Code debug mode")
 
     too_many_positional_result = run_case(exe, ["a.html", "a.css", "172", "320", "extra"])
     require(too_many_positional_result.returncode != 0, "too many positional arguments must fail")
@@ -550,6 +612,26 @@ def main() -> int:
                 "VS Code debug must publish complete frame files before announcing them")
         require(stream_paths[0].read_bytes() != stream_paths[-1].read_bytes(),
                 "VS Code pointer drag must change the published viewport frame")
+
+        vscode_trace = root / "vscode-render-trace.jsonl"
+        trace_exit, trace_output = run_vscode_trace_case(exe, app, root / "vscode-trace-frames", vscode_trace)
+        require(trace_exit == 0, "VS Code Render Trace shell must stop cleanly after quit")
+        require(any(line.startswith("JF_TRACE_STARTED\t") for line in trace_output),
+                "VS Code Render Trace must confirm recording start")
+        require(any(line.startswith("JF_TRACE\t") for line in trace_output),
+                "VS Code Render Trace must confirm atomic trace publication")
+        require(vscode_trace.is_file(), "VS Code Render Trace must publish the requested JSONL file")
+        live_trace_records = [json.loads(line) for line in vscode_trace.read_text(encoding="utf-8").splitlines()]
+        require(live_trace_records[0]["capture"] == "interactive-vscode-ring",
+                "interactive Render Trace must identify its capture mode")
+        require(live_trace_records[0]["retention"] == {
+            "mode": "ring", "maxFrames": 600, "maxBytes": 4 * 1024 * 1024
+        }, "interactive Render Trace must publish its bounded retention policy")
+        require(len(live_trace_records) >= 2 and all(record["type"] == "frame" for record in live_trace_records[1:]),
+                "interactive Render Trace must retain at least one valid frame record")
+        live_frame_numbers = [record["frame"] for record in live_trace_records[1:]]
+        require(live_frame_numbers == sorted(set(live_frame_numbers)),
+                "interactive Render Trace frame numbers must be strictly increasing")
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-select-popup-") as directory:
         root = Path(directory)

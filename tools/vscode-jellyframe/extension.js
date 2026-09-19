@@ -2418,6 +2418,8 @@ function embeddedDebugHtml(webview) {
   const chinese = /^zh(?:-|$)/i.test(vscode.env.language || '');
   const recordIdle = chinese ? '录制' : 'Record';
   const recordActive = chinese ? '停止录制' : 'Stop recording';
+  const traceIdle = chinese ? '性能跟踪' : 'Trace';
+  const traceActive = chinese ? '停止跟踪' : 'Stop trace';
   const viewportDefault = chinese ? 'App 默认' : 'App default';
   const viewportCustom = chinese ? '自定义' : 'Custom';
   const applyViewport = chinese ? '应用并重启' : 'Apply and restart';
@@ -2456,6 +2458,7 @@ function embeddedDebugHtml(webview) {
     #viewport-custom[hidden] { display: none; }
     #viewport-apply { min-width: auto !important; font-size: 11px; }
     #record.recording { color: var(--vscode-button-foreground); background: var(--vscode-testing-iconFailed, #c74e39); }
+    #trace.recording { color: var(--vscode-button-foreground); background: var(--vscode-statusBarItem-warningBackground, #895503); }
     #stage-content { position: relative; flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center; padding: 18px; overflow: auto; }
     #frame { display: block; flex: none; user-select: none; outline: none; background: #111; image-rendering: auto; }
     #empty { color: var(--vscode-descriptionForeground); }
@@ -2492,13 +2495,15 @@ function embeddedDebugHtml(webview) {
 </head>
 <body>
   <header><strong>JellyFrame</strong><span id="status">Starting desktop shell...</span></header>
-  <section id="workspace"><main id="stage"><div id="stage-bar"><button class="workspace-tab active" aria-selected="true">App viewport</button><div id="stage-controls"><button id="record" title="Record semantic interactions">${recordIdle}</button><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div></div><div id="stage-content"><div id="viewport-controls" title="Change the desktop shell viewport"><select id="viewport-preset"><option value="default">${viewportDefault}</option><option value="172x320">172 x 320</option><option value="240x320">240 x 320</option><option value="300x300">300 x 300</option><option value="320x240">320 x 240</option><option value="390x640">390 x 640</option><option value="custom">${viewportCustom}</option></select><div id="viewport-custom" hidden><input id="viewport-width" inputmode="numeric" pattern="[0-9]*" min="64" max="2048" aria-label="Viewport width" placeholder="W"><span class="times">x</span><input id="viewport-height" inputmode="numeric" pattern="[0-9]*" min="64" max="2048" aria-label="Viewport height" placeholder="H"><button id="viewport-apply" title="${applyViewport}">${applyViewport}</button><button id="viewport-cancel" title="${cancelViewport}">${cancelViewport}</button></div></div><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></div></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="resume" title="${resumeDebug}" hidden>${resumeDebug}</button><button id="restart" title="${restartDebug}" hidden>${restartDebug}</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
+  <section id="workspace"><main id="stage"><div id="stage-bar"><button class="workspace-tab active" aria-selected="true">App viewport</button><div id="stage-controls"><button id="record" title="Record semantic interactions">${recordIdle}</button><button id="trace" title="${traceIdle}">${traceIdle}</button><button id="zoom-out" title="Zoom out">-</button><button id="zoom-fit" title="Fit to available space">Fit</button><button id="zoom-in" title="Zoom in">+</button><span id="zoom-label">Fit</span></div></div><div id="stage-content"><div id="viewport-controls" title="Change the desktop shell viewport"><select id="viewport-preset"><option value="default">${viewportDefault}</option><option value="172x320">172 x 320</option><option value="240x320">240 x 320</option><option value="300x300">300 x 300</option><option value="320x240">320 x 240</option><option value="390x640">390 x 640</option><option value="custom">${viewportCustom}</option></select><div id="viewport-custom" hidden><input id="viewport-width" inputmode="numeric" pattern="[0-9]*" min="64" max="2048" aria-label="Viewport width" placeholder="W"><span class="times">x</span><input id="viewport-height" inputmode="numeric" pattern="[0-9]*" min="64" max="2048" aria-label="Viewport height" placeholder="H"><button id="viewport-apply" title="${applyViewport}">${applyViewport}</button><button id="viewport-cancel" title="${cancelViewport}">${cancelViewport}</button></div></div><span id="empty">Waiting for the first frame...</span><canvas id="frame" tabindex="0" hidden aria-label="JellyFrame app frame"></canvas></div></main><div id="side-resizer" class="resizer" role="separator" aria-label="Resize live log"></div><aside id="log-panel"><div id="log-bar"><span id="log-title">Live log</span><button id="clear-log" title="Clear live log">Clear</button><button id="resume" title="${resumeDebug}" hidden>${resumeDebug}</button><button id="restart" title="${restartDebug}" hidden>${restartDebug}</button><button id="stop" title="Stop desktop shell">Stop</button></div><div id="log-filters"><button class="log-filter active" data-filter="all">All</button><button class="log-filter" data-filter="info">Info</button><button class="log-filter" data-filter="event">Events</button><button class="log-filter" data-filter="warning">Warnings</button><button class="log-filter" data-filter="error">Errors</button></div><div id="log" role="log" aria-live="polite"></div></aside></section>
   <div id="bottom-resizer" class="resizer" role="separator" aria-label="Resize session diagnostics"></div>
   <section id="diagnostics"><div id="diagnostics-title">Session diagnostics</div><pre id="diagnostics-text">Waiting for session configuration...</pre></section>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const recordIdle = '${recordIdle}';
     const recordActive = '${recordActive}';
+    const traceIdle = '${traceIdle}';
+    const traceActive = '${traceActive}';
     const frame = document.getElementById('frame');
     const empty = document.getElementById('empty');
     const stage = document.getElementById('stage-content');
@@ -2507,6 +2512,7 @@ function embeddedDebugHtml(webview) {
     const resume = document.getElementById('resume');
     const restart = document.getElementById('restart');
     const record = document.getElementById('record');
+    const trace = document.getElementById('trace');
     const clearLog = document.getElementById('clear-log');
     const log = document.getElementById('log');
     const diagnostics = document.getElementById('diagnostics-text');
@@ -2532,6 +2538,7 @@ function embeddedDebugHtml(webview) {
     let logLines = [];
     let logFilter = 'all';
     let recording = false;
+    let traceRecording = false;
     let sessionActive = true;
     let appliedViewport = { width: 0, height: 0 };
     let fitMode = viewState.fitMode !== false;
@@ -2579,6 +2586,7 @@ function embeddedDebugHtml(webview) {
       restart.hidden = !stopped;
       stop.disabled = state === 'stopping';
       record.disabled = !sessionActive;
+      trace.disabled = !sessionActive;
       viewportPreset.disabled = state === 'stopping';
       viewportApply.disabled = state === 'stopping';
       viewportCancel.disabled = state === 'stopping';
@@ -2704,6 +2712,11 @@ function embeddedDebugHtml(webview) {
       }
       vscode.postMessage({ type: recording ? 'record-start' : 'record-stop' });
     });
+    trace.addEventListener('click', () => {
+      if (!sessionActive) return;
+      trace.disabled = true;
+      vscode.postMessage({ type: 'trace-toggle', enabled: !traceRecording });
+    });
     stop.addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
     resume.addEventListener('click', () => vscode.postMessage({ type: 'resume' }));
     restart.addEventListener('click', () => vscode.postMessage({ type: 'restart' }));
@@ -2793,6 +2806,11 @@ function embeddedDebugHtml(webview) {
         recording = Boolean(message.recording);
         record.textContent = recording ? recordActive : recordIdle;
         record.classList.toggle('recording', recording);
+      } else if (message.type === 'trace-state') {
+        traceRecording = Boolean(message.recording);
+        trace.textContent = traceRecording ? traceActive : traceIdle;
+        trace.classList.toggle('recording', traceRecording);
+        trace.disabled = !sessionActive;
       } else if (message.type === 'session-state') {
         setSessionState(message.state);
       } else if (message.type === 'viewport-config') {
@@ -2857,6 +2875,23 @@ function parseEmbeddedFrameLine(line) {
   return { sequence, width, height, path: fields[4] };
 }
 
+function parseEmbeddedTraceLine(line) {
+  const fields = String(line).split('\t');
+  if (fields.length === 2 && fields[0] === 'JF_TRACE_STARTED' && fields[1]) {
+    return { type: 'started', path: fields[1] };
+  }
+  if (fields.length === 4 && fields[0] === 'JF_TRACE' && fields[1]) {
+    const frames = Number(fields[2]);
+    const dropped = Number(fields[3]);
+    if (Number.isSafeInteger(frames) && frames >= 0 && Number.isSafeInteger(dropped) && dropped >= 0) {
+      return { type: 'complete', path: fields[1], frames, dropped };
+    }
+    return undefined;
+  }
+  const error = String(line).match(/^JF_TRACE_ERROR\s+(.+)$/);
+  return error ? { type: 'error', error: error[1] } : undefined;
+}
+
 function postEmbeddedMessage(session, message) {
   try {
     session.panel.webview.postMessage(message);
@@ -2886,8 +2921,51 @@ function embeddedDiagnosticsText(session) {
     `Viewport: ${session.requestedViewport?.width > 0 ? `${session.requestedViewport.width}x${session.requestedViewport.height} requested` : 'App default'} · latest frame ${session.lastDeliveredSequence} · ${session.viewport.width}x${session.viewport.height}`,
     `Input: ${session.inputSent} sent · Shell output: ${session.stdoutLines} standard, ${session.stderrLines} error lines`,
     `Semantic capture: ${session.recording ? 'Recording' : 'Idle'} · ${session.recordingActions.length} actions`,
+    `Render Trace: ${session.traceRecording ? 'Recording' : 'Idle'} · ${session.traceFrames} retained / ${session.traceDropped} evicted · ${session.tracePath || 'not written'}`,
     `Stop reason: ${session.stopReason || 'None'}`
   ].join('\n');
+}
+
+function handleEmbeddedTraceProtocol(context, session, line) {
+  const trace = parseEmbeddedTraceLine(line);
+  if (!trace) return false;
+  if (trace.type === 'started') {
+    session.traceRecording = true;
+    session.tracePath = trace.path;
+    session.traceFrames = 0;
+    session.traceDropped = 0;
+    postEmbeddedMessage(session, { type: 'trace-state', recording: true });
+    appendEmbeddedLog(session, 'lifecycle', `render trace started: ${trace.path}`);
+  } else if (trace.type === 'complete') {
+    session.traceRecording = false;
+    session.tracePath = trace.path;
+    session.traceFrames = trace.frames;
+    session.traceDropped = trace.dropped;
+    postEmbeddedMessage(session, { type: 'trace-state', recording: false });
+    appendEmbeddedLog(session, 'lifecycle',
+      `render trace completed: ${trace.frames} retained, ${trace.dropped} evicted`);
+    try {
+      const parsed = parseRenderTrace(fs.readFileSync(trace.path, 'utf8'));
+      lastTracePath = trace.path;
+      statusProvider?.refresh();
+      if (!session.disposed) showRenderTracePanel(context, parsed, trace.path);
+    } catch (error) {
+      const message = isChinese()
+        ? `无法打开交互式 Render Trace：${error.message}`
+        : `Could not open interactive Render Trace: ${error.message}`;
+      appendEmbeddedLog(session, 'error', message);
+      vscode.window.showErrorMessage(message);
+    }
+  } else {
+    session.traceRecording = false;
+    postEmbeddedMessage(session, { type: 'trace-state', recording: false });
+    appendEmbeddedLog(session, 'error', `render trace failed: ${trace.error}`);
+    vscode.window.showErrorMessage(isChinese()
+      ? `Render Trace 失败：${trace.error}`
+      : `Render Trace failed: ${trace.error}`);
+  }
+  scheduleEmbeddedDiagnostics(session);
+  return true;
 }
 
 function scheduleEmbeddedDiagnostics(session) {
@@ -3160,10 +3238,14 @@ function resetEmbeddedRunState(session) {
   session.latestAnnouncedSequence = 0;
   session.lastDeliveredSequence = 0;
   session.outputBuffer = '';
+  session.errorBuffer = '';
   session.forceStopTimer = undefined;
   session.exitPromise = undefined;
   session.resolveExit = undefined;
   session.reportStarted = false;
+  session.traceRecording = false;
+  session.traceFrames = 0;
+  session.traceDropped = 0;
 }
 
 function runEmbeddedDebugReport(context, session) {
@@ -3211,8 +3293,10 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
   const runBase = `${outputBase(session.appRoot)}-debug-${runId}`;
   session.runtimeLog = path.join(buildDir(context), 'debug', `${runBase}-runtime.log`);
   session.reportPath = path.join(buildDir(context), `${runBase}-report.json`);
+  session.tracePath = path.join(buildDir(context), 'debug', `${runBase}-render-trace.jsonl`);
   const args = [session.launcher, '--build-dir', session.buildDir, '--app', session.appRoot,
-    '--runtime-log', session.runtimeLog, '--vscode-debug', '--vscode-frame-dir', frameDir, '--wait'];
+    '--runtime-log', session.runtimeLog, '--vscode-debug', '--vscode-frame-dir', frameDir,
+    '--render-trace', session.tracePath, '--wait'];
   if (session.requestedViewport.width > 0) {
     args.push('--viewport-width', String(session.requestedViewport.width),
       '--viewport-height', String(session.requestedViewport.height));
@@ -3258,23 +3342,36 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
         }
         session.latestAnnouncedSequence = Math.max(session.latestAnnouncedSequence, frame.sequence);
         void deliverEmbeddedFrame(session, frame, runId);
+      } else if (handleEmbeddedTraceProtocol(context, session, line)) {
+        // Protocol markers are state, not app runtime log entries.
       } else if (line) {
         appendEmbeddedLog(session, 'stdout', line);
       }
     }
   });
   child.stderr.on('data', (chunk) => {
-    if (session.runId === runId) appendEmbeddedLog(session, 'stderr', chunk.toString());
+    if (session.runId !== runId) return;
+    session.errorBuffer += chunk.toString();
+    let newline = 0;
+    while ((newline = session.errorBuffer.indexOf('\n')) >= 0) {
+      const line = session.errorBuffer.slice(0, newline).replace(/\r$/, '');
+      session.errorBuffer = session.errorBuffer.slice(newline + 1);
+      if (!handleEmbeddedTraceProtocol(context, session, line) && line) {
+        appendEmbeddedLog(session, 'stderr', line);
+      }
+    }
   });
   child.on('error', (error) => {
     if (session.runId !== runId) return;
     session.active = false;
     session.exited = true;
     session.stopping = false;
+    session.traceRecording = false;
     session.resolveExit?.();
     appendEmbeddedLog(session, 'error', `failed to start: ${error.message}`);
     postEmbeddedMessage(session, { type: 'status', text: `Failed to start: ${error.message}` });
     postEmbeddedMessage(session, { type: 'session-state', state: 'stopped' });
+    postEmbeddedMessage(session, { type: 'trace-state', recording: false });
     postVisualEditorRuntime(session, 'stopped');
     scheduleEmbeddedDiagnostics(session);
     runEmbeddedDebugReport(context, session);
@@ -3285,11 +3382,13 @@ function startEmbeddedDebugProcess(context, session, restartKind = 'resume') {
     session.active = false;
     session.stopping = false;
     session.exitCode = code;
+    session.traceRecording = false;
     if (session.forceStopTimer) clearTimeout(session.forceStopTimer);
     session.resolveExit?.();
     appendEmbeddedLog(session, 'lifecycle', `shell exited with code ${code ?? 'unknown'}`);
     postEmbeddedMessage(session, { type: 'status', text: `Desktop shell stopped (exit ${code ?? 'unknown'}).` });
     postEmbeddedMessage(session, { type: 'session-state', state: 'stopped' });
+    postEmbeddedMessage(session, { type: 'trace-state', recording: false });
     postVisualEditorRuntime(session, 'stopped');
     scheduleEmbeddedDiagnostics(session);
     runEmbeddedDebugReport(context, session);
@@ -3362,6 +3461,7 @@ async function debugApp(context, resourceUri, options = {}) {
     logLines: [], webviewReady: false, diagnosticsScheduled: false, stopReason: undefined, exitCode: undefined,
     latestAnnouncedSequence: 0, lastDeliveredSequence: 0, recording: false, recordingStartSequence: 0,
     recordingActions: [], recordingPendingClick: undefined, recordingSkipped: 0, outputBuffer: '', forceStopTimer: undefined,
+    errorBuffer: '', traceRecording: false, tracePath: '', traceFrames: 0, traceDropped: 0,
     reportTarget, fontBudget, reportStarted: false, runtimeLog: '', reportPath: '', visualEditorPanel: options.visualEditorPanel
   };
   embeddedDebugSession = session;
@@ -3370,6 +3470,7 @@ async function debugApp(context, resourceUri, options = {}) {
       session.webviewReady = true;
       postEmbeddedMessage(session, { type: 'diagnostics', text: embeddedDiagnosticsText(session) });
       postEmbeddedMessage(session, { type: 'session-state', state: session.active ? 'running' : 'stopped' });
+      postEmbeddedMessage(session, { type: 'trace-state', recording: session.traceRecording });
       postEmbeddedMessage(session, { type: 'viewport-config', ...session.requestedViewport });
       for (const entry of session.logLines) postEmbeddedMessage(session, { type: 'log', ...entry });
     } else if (message?.type === 'stop') {
@@ -3412,6 +3513,12 @@ async function debugApp(context, resourceUri, options = {}) {
       postEmbeddedMessage(session, { type: 'record-state', recording: false });
       appendEmbeddedLog(session, 'lifecycle', 'semantic recording stopped');
       void saveEmbeddedRecording(context, session);
+    } else if (message?.type === 'trace-toggle' && typeof message.enabled === 'boolean') {
+      if (session.active && !session.stopping && session.child?.stdin?.writable) {
+        session.child.stdin.write(message.enabled ? 'trace-start\n' : 'trace-stop\n');
+      } else {
+        postEmbeddedMessage(session, { type: 'trace-state', recording: session.traceRecording });
+      }
     } else if (message?.type === 'input' && typeof message.line === 'string' && /^[a-z]+(?: [a-z-]+)?(?: -?\d+){0,4}$/.test(message.line)) {
       if (session.active && !session.stopping && session.child?.stdin?.writable) {
         session.child.stdin.write(`${message.line}\n`);
@@ -4678,6 +4785,7 @@ function deactivate() {
 module.exports = {
   activate,
   deactivate,
+  parseEmbeddedTraceLine,
   traceDirectoryNames,
   traceFrameImageName
 };

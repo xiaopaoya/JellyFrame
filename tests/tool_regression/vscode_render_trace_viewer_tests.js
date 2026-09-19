@@ -24,9 +24,24 @@ function loadTraceHelpers() {
   return module.exports;
 }
 
-const { traceDirectoryNames, traceFrameImageName } = loadTraceHelpers();
+const { parseEmbeddedTraceLine, traceDirectoryNames, traceFrameImageName } = loadTraceHelpers();
 
 function main() {
+  assert.equal(
+    JSON.stringify(parseEmbeddedTraceLine("JF_TRACE_STARTED\tC:\\trace path\\live.jsonl")),
+    JSON.stringify({ type: "started", path: "C:\\trace path\\live.jsonl" })
+  );
+  assert.equal(
+    JSON.stringify(parseEmbeddedTraceLine("JF_TRACE\tC:\\trace path\\live.jsonl\t17\t3")),
+    JSON.stringify({ type: "complete", path: "C:\\trace path\\live.jsonl", frames: 17, dropped: 3 })
+  );
+  assert.equal(
+    JSON.stringify(parseEmbeddedTraceLine("JF_TRACE_ERROR cannot publish trace")),
+    JSON.stringify({ type: "error", error: "cannot publish trace" })
+  );
+  assert.equal(parseEmbeddedTraceLine("JF_TRACE\ttrace.jsonl\tinvalid\t0"), undefined);
+  assert.equal(parseEmbeddedTraceLine("ordinary runtime output"), undefined);
+
   let directoryReads = 0;
   const availableNames = traceDirectoryNames("trace-directory", () => {
     directoryReads += 1;

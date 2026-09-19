@@ -73,6 +73,8 @@ def parse_args() -> argparse.Namespace:
                         help="Run the isolated VS Code frame-stream mode.")
     parser.add_argument("--vscode-frame-dir", type=Path,
                         help="Directory for complete VS Code frame snapshots (requires --vscode-debug).")
+    parser.add_argument("--render-trace", type=Path,
+                        help="Bounded Render Trace output used by opt-in VS Code debug recording.")
     parser.add_argument("--viewport-width", type=int,
                         help="Override the app viewport width for this desktop-shell session.")
     parser.add_argument("--viewport-height", type=int,
@@ -109,6 +111,11 @@ def main() -> int:
             print("--vscode-debug requires --vscode-frame-dir", file=sys.stderr)
             return 2
         command.extend(["--vscode-debug", "--vscode-frame-dir", str(args.vscode_frame_dir)])
+    if args.render_trace:
+        if not args.vscode_debug:
+            print("--render-trace in the debug facade requires --vscode-debug", file=sys.stderr)
+            return 2
+        command.extend(["--render-trace", str(args.render_trace)])
     if args.viewport_width is not None:
         command.extend(["--viewport-width", str(args.viewport_width)])
     if args.viewport_height is not None:

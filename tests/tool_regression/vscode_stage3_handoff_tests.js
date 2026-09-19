@@ -16,6 +16,9 @@ assert(extension.includes("runEmbeddedDebugReport(context, session)"), "embedded
 assert(visualEditor.includes('visualEditorPanel: panel'), "visual editor must register the runtime state bridge");
 assert(visualEditor.includes('id=\"runtime-state\"'), "visual editor must expose runtime state");
 assert(extension.includes("postVisualEditorRuntime(session, 'reporting')"), "report generation state must reach the visual editor");
+assert(extension.includes("type: 'trace-toggle'"), "embedded debug must expose opt-in Render Trace controls");
+assert(extension.includes("'trace-start\\n' : 'trace-stop\\n'"), "embedded debug must forward Render Trace lifecycle commands");
+assert(extension.includes("showRenderTracePanel(context, parsed, trace.path)"), "completed interactive traces must open in the existing viewer");
 assert(visualEditor.includes('message?.type === "model-check"'), "visual editor must expose bounded model checks");
 assert(diagnostics.includes("stable-node-id"), "pipeline diagnostics must have explicit stable-node attribution");
 
