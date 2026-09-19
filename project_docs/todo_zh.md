@@ -37,6 +37,15 @@
 
 ### 2. 渲染性能观测闭环（独立并行主线）
 
+- [x] 修正半透明对照的计时边界：`a4faa1c6` 在计时内完成 SDL2/GDI batch，
+  在计时外完成 reset，并交错执行两侧；`alpha-grid-rgb-v1` 的旧排名已撤回。
+- [x] `1e375e5b` 为不透明目标增加逐字节等价的 source-over 快路径；Release/Debug Core
+  回归及 16,777,216 组单通道组合通过。修正后的桌面基准每侧 6 轮、每轮 500 样本，
+  JellyFrame 的 batch-average 单 tile p95 中位数下降约 15%–17%，不代表设备或整体 UI 加速。
+- [ ] 实机复核 source-over pair：baseline `a4faa1c6` / candidate `1e375e5b`。
+  执行稿与桌面证据位于 `D:/JellyFramePerf/source-over-opaque-20260919/`，
+  先完成同 fixture 四 workload 非回归矩阵；固定状态目检即可，不要求照片逐像素比较。
+  未测得显著改善时明确记录收益未证实，不重复开启无目标的 OFF/ON 测试。
 - [x] 完成现有 Render Trace/Performance Profile 的状态核对：桌面逐帧 trace、阶段/command/owner
   归因与设备 aggregate profile 已交付；设备逐元素 trace 尚未实现，aggregate 数据不得冒充元素耗时。
 - [x] 用同一 App、输入、构建和机器完成 profile OFF/ON A/B，确认 p50/p95、报告开销

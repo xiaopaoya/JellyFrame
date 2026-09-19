@@ -133,6 +133,23 @@ Retained repaint probes:
 These probes quantify the remaining cost after text/style layout reuse. They do
 not imply display-list diffing or subtree replay.
 
+### Opaque-destination source-over candidate
+
+`a4faa1c6` is the completed-batch timing baseline; `1e375e5b` adds only the
+opaque-destination blend specialization and its regression tests. The general
+translucent-destination formula is unchanged. All 256^3 single-channel/source-alpha
+combinations match the original integer rounding; Debug and Release Core tests pass.
+
+On 2026-09-19, six alternating executable repeats per side, 500 samples per repeat,
+using `alpha-grid-rgb-v2` gave JellyFrame median repeat p95 values of 2.171 -> 1.8045
+us/tile alongside GDI and 2.162 -> 1.846 alongside SDL2 2.28.2 (forced batching).
+These are old/new JellyFrame comparisons, not GDI or SDL2 timings. Each sample is
+a completed 64-tile batch divided by 64, not an individual tile tail-latency sample.
+All output digests remained `797bc643a0867f83`; the independent RGB oracle passed.
+Raw manifests, commands, executable hashes and the hardware handoff are archived
+locally at `D:/JellyFramePerf/source-over-opaque-20260919/`. The measured 15-17%
+desktop improvement does not establish MCU or complete-UI performance gains.
+
 The accepted cross-library boundary and the deliberate exclusions for rounded
 coverage and host-dependent text are recorded in
 `../../../docs/render_performance_cpu_workload_matrix_zh.md`. The rounded and text probes
