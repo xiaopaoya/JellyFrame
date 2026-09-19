@@ -45,6 +45,19 @@ int modern_paint_tests_main() {
     assert(rounded_rect_coverage(extreme, center, center) == 255);
     assert(rounded_rect_coverage(extreme, std::numeric_limits<int>::max(),
                                  std::numeric_limits<int>::max()) >= 0);
+    const RasterRoundedRect shortcut_probe = prepare_rounded_rect(Rect{14, 20, 144, 96}, 24);
+    int corner_zero_shortcuts = 0;
+    int corner_full_shortcuts = 0;
+    int corner_sampled_partials = 0;
+    for (int y = shortcut_probe.top; y < shortcut_probe.top + 24; ++y) {
+        for (int x = shortcut_probe.left; x < shortcut_probe.left + 24; ++x) {
+            const RoundedRectCoverage coverage = rounded_rect_coverage_detail(shortcut_probe, x, y);
+            if (!coverage.sampled && coverage.value == 0) ++corner_zero_shortcuts;
+            if (!coverage.sampled && coverage.value == 255) ++corner_full_shortcuts;
+            if (coverage.sampled && coverage.value > 0 && coverage.value < 255) ++corner_sampled_partials;
+        }
+    }
+    assert(corner_zero_shortcuts > 0 && corner_full_shortcuts > 0 && corner_sampled_partials > 0);
     RasterRoundedRect externally_constructed{};
     externally_constructed.left = std::numeric_limits<int>::min();
     externally_constructed.top = std::numeric_limits<int>::min();

@@ -59,9 +59,12 @@
   保留原始计时；八项最终输出与独立 oracle 和质量 mask 一致。分区计数明确为不计时模型，
   隔离 probe 不可相加为阶段占比。三轮 Release 每路径/用例 500 样本存于
   `D:/JellyFramePerf/rounded-core-probes-20260919/`，未更改生产路径或增加设备采样成本。
-- [ ] 下一步评估保留 quarter-grid 输出的角区全满/全空早退；先补极值、裁剪、四角半径
-  等价测试，再做真实 draw A/B，不直接引入覆盖率缓存或移除溢出保护。
-  不把不同质量下的原生库计时差解释成同质量加速，不默认修改 Core 像素网格或设备配置。
+- [x] 完成并验证 quarter-grid 输出保持不变的角区全满/全空早退：使用与原循环相同的
+  饱和距离运算，无法证明时保留 16 点路径；覆盖极值、裁剪、圆角和部分覆盖回归。
+  三轮 Release 隔离 draw 对照已归档至 `D:/JellyFramePerf/rounded-core-probes-20260919/`，
+  八项 mask hash 一致，未修改采样网格、ABI、设备配置或引入生产缓存。
+- [ ] 下一步分别评估非均匀圆角、描边和 rounded clip 路径；必须各自建立输出等价和成本
+  证据，不能把 uniform opaque-fill 收益外推到其它绘制路径，也不新增无必要硬件 A/B。
   通用文本/shaping、完整 UI 和 LVGL 对照仍单列待办。
 - [x] 修正半透明对照的计时边界：`a4faa1c6` 在计时内完成 SDL2/GDI batch，
   在计时外完成 reset，并交错执行两侧；`alpha-grid-rgb-v1` 的旧排名已撤回。

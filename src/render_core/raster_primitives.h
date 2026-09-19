@@ -203,6 +203,42 @@ inline RoundedRectCoverage rounded_rect_coverage_detail(const RasterRoundedRect&
         }
         return left + right;
     };
+
+    // The four-by-four sample grid is monotonic over each pixel's dx/dy
+    // interval. Prove the common all-in/all-out cases before entering the
+    // sixteen-point loop. The same saturating arithmetic is used as below so
+    // extreme externally constructed geometry keeps its existing semantics.
+    const std::int64_t sample_x0 = static_cast<std::int64_t>(x) * kSubpixel - center_x;
+    const std::int64_t sample_y0 = static_cast<std::int64_t>(y) * kSubpixel - center_y;
+    const std::int64_t sample_x1 = sample_x0 + (kSubpixel - 1);
+    const std::int64_t sample_y1 = sample_y0 + (kSubpixel - 1);
+    const auto absolute = [](std::int64_t value) {
+        return value < 0
+            ? static_cast<std::uint64_t>(-(value + 1)) + 1U
+            : static_cast<std::uint64_t>(value);
+    };
+    const auto max_absolute = [absolute](std::int64_t first, std::int64_t last) {
+        return std::max(absolute(first), absolute(last));
+    };
+    const auto min_absolute = [absolute](std::int64_t first, std::int64_t last) {
+        if (first <= 0 && last >= 0) {
+            return std::uint64_t{0};
+        }
+        return std::min(absolute(first), absolute(last));
+    };
+    const std::uint64_t maximum_distance = saturated_add(
+        saturated_multiply(max_absolute(sample_x0, sample_x1), max_absolute(sample_x0, sample_x1)),
+        saturated_multiply(max_absolute(sample_y0, sample_y1), max_absolute(sample_y0, sample_y1)));
+    if (maximum_distance <= radius_squared) {
+        return {255, false};
+    }
+    const std::uint64_t minimum_distance = saturated_add(
+        saturated_multiply(min_absolute(sample_x0, sample_x1), min_absolute(sample_x0, sample_x1)),
+        saturated_multiply(min_absolute(sample_y0, sample_y1), min_absolute(sample_y0, sample_y1)));
+    if (minimum_distance > radius_squared) {
+        return {0, false};
+    }
+
     int covered = 0;
     for (int sy = 0; sy < kSubpixel; ++sy) {
         const std::int64_t sample_y = static_cast<std::int64_t>(y) * kSubpixel + sy;

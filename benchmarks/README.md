@@ -235,6 +235,16 @@ code or device instrumentation is changed. The existing comparison tool rejects
 `jellyframe.rounded.core-probes.v0`. Use Release, repeat sequentially, and retain
 the raw arrays and executable hash. See the native-AA contract for boundaries.
 
+The current Core candidate uses a conservative full/empty shortcut for the
+uniform rounded coverage helper: it compares the maximum or minimum distance
+over a pixel's 4x4 sample interval with the same saturating arithmetic used by
+the exact loop. Only proven all-full/all-empty pixels skip the sixteen tests;
+partial pixels keep the old loop. The candidate's eight masks and RGBA output
+match the pre-change hashes. On the fixed desktop probes, the card production
+p50 moved from about 151 us to 29.6--29.7 us, and maximum-radius moved from
+596.5 us to 97 us across three sequential 500-sample runs. These figures are
+diagnostic only and do not establish device or full-frame speedup.
+
 ## Repeated Comparisons
 
 The same tool accepts 3-32 independent run manifests per side, in paired repeat

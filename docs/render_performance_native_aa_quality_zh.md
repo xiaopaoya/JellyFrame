@@ -122,6 +122,19 @@ build\current-release\Release\jellyframe_cpu2d_compare.exe build\rounded-probes 
 JSON 为 `jellyframe.rounded.core-probes.v0`，标记 `productionPhaseTimings: false` 和
 `performanceComparable: false`；现有跨库比较器拒绝该格式。
 
-下一步根据探针结果评估保持现有像素输出的全满/全空采样早退，先证明极值、裁剪和
-四角半径下等价，再建立真实绘制优化前后对照。不得默认修改采样网格、移除溢出保护、
-更改设备配置或把桌面探针当作真实 workload 的优化验收。本轮没有新增硬件测试要求。
+## 全满/全空采样早退候选
+
+已将探针结果落实为保守 shortcut：对当前像素四个采样坐标的 dx/dy 区间分别求最大
+距离和最小距离；只有能证明 16 个采样点全部在圆内或全部在圆外时，才分别返回 255
+或 0。无法证明时完整保留原有 16 点循环。shortcut 使用与原循环相同的饱和乘法、
+平方和与极值坐标处理，不移除溢出保护，也不改变 `sampled` 统计的含义。
+
+候选验证包括八项 fixture 的生产绘制、预缓存回放、独立 oracle、最终 RGBA 和 mask
+SHA-256；Corner shortcut 另有单元测试覆盖全满、全空和部分覆盖三类。三轮 Release
+探针显示标准卡片的 production p50 从优化前约 151 us 降至 29.6--29.7 us，最大半径
+用例从约 596.5 us 降至 97 us；这是本机隔离 draw 诊断，不是设备帧时间或生产阶段
+占比。优化前后八项 mask hash 一致。
+
+该改动不新增硬件测试要求，因为它未改变 Runtime ABI、采样网格、设备配置或输出契约。
+后续应在 CI 完成后再决定是否对非均匀圆角、描边和 rounded clip 路径分别建立同等
+证据；不得把 uniform opaque-fill 的收益外推到这些路径。
