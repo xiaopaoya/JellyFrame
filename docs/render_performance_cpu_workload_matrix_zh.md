@@ -29,7 +29,7 @@ workload 边界。目的不是给 JellyFrame、Cairo、SDL、LVGL 或浏览器�
 | --- | --- | --- | --- |
 | `opaque-fill-rgb-v1` | 已接受；GDI/SDL2 adapter | 172x320、RGB888、全屏不透明填充、无 AA、exact RGB | 纯矩形写入和像素吞吐 |
 | `opaque-dirty-fill-rgb-v1` | 已接受；GDI/SDL2 adapter | 172x320 黑底、固定 96x48 脏矩形、RGB888、无 AA、exact RGB、每样本 64 次 | 局部不透明写入和 dirty 像素吞吐 |
-| `alpha-grid-rgb-v1` | 已接受；GDI/SDL2 adapter | 172x320 黑底、8x8 个 16x12 不重叠矩形、RGBA `50b4dc80`、source-over、exact RGB | 半透明 source-over 的单块成本 |
+| `alpha-grid-rgb-v2` | 已接受；GDI/SDL2 adapter | 172x320 黑底、8x8 个 16x12 不重叠矩形、RGBA `50b4dc80`、source-over、exact RGB、计时内完成同步 | 半透明 source-over 的批平均单块成本 |
 | `horizontal-gradient-rgb-v1` | 已接受 | 同上、横向不透明线性渐变、无 AA、RMSE <= 1 | 线性渐变的每像素计算成本 |
 | `vertical-gradient-rgb-v1` | 已接受 | 同上、纵向不透明线性渐变、无 AA、RMSE <= 1 | 另一种渐变访问方向的成本 |
 | `rounded-card-rgb-v1` | Core probe 已有；跨库待适配 | 172x320 黑底、固定卡片矩形/四角半径/颜色、明确 AA 和 source-over | 圆角 coverage、边框和裁剪成本 |
@@ -37,7 +37,7 @@ workload 边界。目的不是给 JellyFrame、Cairo、SDL、LVGL 或浏览器�
 | `embedded-ui-v1` | fixture 已资格通过；设备矩阵待执行 | 黑底可穿戴页面、设置行、状态卡、导航、文本更新、滚动、全屏重绘 | 真实设备端到端阶段成本 |
 
 五项矩形 workload 由 Windows `jellyframe_cpu2d_compare` 和 memory-DIB GDI 适配器提供；其中
-`opaque-fill-rgb-v1`、`opaque-dirty-fill-rgb-v1` 与 `alpha-grid-rgb-v1` 还可通过运行时加载的 SDL2 DLL 使用
+`opaque-fill-rgb-v1`、`opaque-dirty-fill-rgb-v1` 与 `alpha-grid-rgb-v2` 还可通过运行时加载的 SDL2 DLL 使用
 `SDL_CreateSoftwareRenderer` 对照。SDL2 adapter 不进入 Runtime/SDK/App 依赖，并且会拒绝
 没有等价 SDL primitive 的渐变 workload。
 
@@ -46,9 +46,11 @@ workload 边界。目的不是给 JellyFrame、Cairo、SDL、LVGL 或浏览器�
 `pixels` 仍是单次操作实际覆盖的 4,608 像素，不得乘成整帧面积。该 workload 不包含 dirty region
 生成、layout、窗口 present 或设备 DMA。
 
-`alpha-grid-rgb-v1` 每个样本在计时外恢复黑底，再在计时内绘制 64 个不重叠 tile，避免重复
+`alpha-grid-rgb-v2` 每个样本在计时外恢复黑底并同步，再在计时内绘制 64 个不重叠 tile 并完成队列同步，避免重复
 source-over 改变后续操作的输入。`paint_us` 是单 tile 平均值，`pixels` 是单 tile 的 192；
 JellyFrame、GDI `AlphaBlend` 和 SDL2 software blend 必须达到 exact normalized RGB。
+逐样本交错交换先后顺序，最终输出另经独立像素公式验证。V1 缺少完成同步，旧排名已撤回，
+不得与 V2 混比；批平均的 p95 不代表单个 tile 的尾延迟。
 
 `rounded-card-rgb-v1` 不应直接使用没有抗锯齿的 `GDI RoundRect` 作为等价参考：
 Render Core 的圆角边缘采用 4x4 coverage，两个结果的边缘像素语义不同。未来

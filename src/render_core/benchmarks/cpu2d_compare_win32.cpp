@@ -1,4 +1,5 @@
 #include "render_core/software_renderer.h"
+#include "cpu2d_sampling.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -90,6 +91,7 @@ struct SdlSurface {
     using RenderClearFn = int(__cdecl*)(void*);
     using RenderFillRectFn = int(__cdecl*)(void*, const SdlRect*);
     using RenderPresentFn = void(__cdecl*)(void*);
+    using RenderFlushFn = int(__cdecl*)(void*);
 
     HMODULE library = nullptr;
     InitFn init = nullptr;
@@ -105,6 +107,7 @@ struct SdlSurface {
     RenderClearFn render_clear = nullptr;
     RenderFillRectFn render_fill_rect = nullptr;
     RenderPresentFn render_present = nullptr;
+    RenderFlushFn render_flush = nullptr;
     std::vector<std::uint32_t> storage;
     void* surface = nullptr;
     void* renderer = nullptr;
@@ -131,6 +134,7 @@ struct SdlSurface {
             render_clear = symbol<RenderClearFn>("SDL_RenderClear");
             render_fill_rect = symbol<RenderFillRectFn>("SDL_RenderFillRect");
             render_present = symbol<RenderPresentFn>("SDL_RenderPresent");
+            render_flush = symbol<RenderFlushFn>("SDL_RenderFlush");
             if (init(0) != 0) fail("SDL_Init failed");
             initialized = true;
 
@@ -186,6 +190,11 @@ struct SdlSurface {
                            kAlphaColor.b, kAlphaColor.a) != 0) {
             fail("failed to reset SDL alpha-grid surface");
         }
+        finish_alpha_grid();
+    }
+
+    void finish_alpha_grid() const {
+        if (render_flush(renderer) != 0) fail("SDL_RenderFlush failed");
     }
 
     void alpha_fill(Rect rect) const {
@@ -365,6 +374,10 @@ struct GdiSurface {
         }
     }
 
+    void finish_alpha_grid() const {
+        if (GdiFlush() == 0) throw std::runtime_error("GDI alpha-grid flush failed");
+    }
+
     void alpha_fill(Rect rect) const {
         if (alpha_source_dc == nullptr) {
             throw std::runtime_error("GDI alpha source was not initialized");
@@ -444,7 +457,7 @@ const char* workload_id(Workload workload) {
     switch (workload) {
     case Workload::OpaqueFill: return "opaque-fill-rgb-v1";
     case Workload::OpaqueDirtyFill: return "opaque-dirty-fill-rgb-v1";
-    case Workload::AlphaGrid: return "alpha-grid-rgb-v1";
+    case Workload::AlphaGrid: return "alpha-grid-rgb-v2";
     case Workload::HorizontalGradient: return "horizontal-gradient-rgb-v1";
     case Workload::VerticalGradient: return "vertical-gradient-rgb-v1";
     }
@@ -491,6 +504,9 @@ std::string workload_parameters_json(Workload workload) {
         output << "\"operation\":\"source-over-grid\","
                << "\"sourceRgba\":\"50b4dc80\","
                << "\"blend\":\"source-over\","
+               << "\"timing\":\"completed-batch-per-tile\","
+               << "\"sampleOrder\":\"alternating-pairs\","
+               << "\"reset\":\"completed-before-timer\","
                << "\"columns\":" << kAlphaGridColumns << ','
                << "\"rows\":" << kAlphaGridRows << ','
                << "\"stepX\":" << kAlphaGridStepX << ','
@@ -542,7 +558,8 @@ std::string rgb_hash_bgra(const std::uint8_t* pixels) {
     return text.str();
 }
 
-OutputComparison compare_output(const FrameBuffer& frame, const std::uint8_t* reference_pixels) {
+OutputComparison compare_output(const FrameBuffer& frame, const std::uint8_t* reference_pixels,
+                                bool validate_alpha_grid) {
     OutputComparison comparison;
     comparison.jellyframe_digest = rgb_hash(frame);
     comparison.reference_digest = rgb_hash_bgra(reference_pixels);
@@ -551,6 +568,25 @@ OutputComparison compare_output(const FrameBuffer& frame, const std::uint8_t* re
     for (std::size_t index = 0; index < pixel_count; ++index) {
         const Color actual = frame.pixels[index];
         const std::uint8_t* expected_bgra = reference_pixels + index * 4U;
+        if (validate_alpha_grid) {
+            const int x = static_cast<int>(index % kWidth) - kAlphaGridOriginX;
+            const int y = static_cast<int>(index / kWidth) - kAlphaGridOriginY;
+            const bool in_tile = x >= 0 && y >= 0 &&
+                x / kAlphaGridStepX < kAlphaGridColumns &&
+                y / kAlphaGridStepY < kAlphaGridRows &&
+                x % kAlphaGridStepX < kAlphaGridTileWidth &&
+                y % kAlphaGridStepY < kAlphaGridTileHeight;
+            const auto channel = [in_tile](int value) {
+                return in_tile ? (value * kAlphaColor.a + 127) / 255 : 0;
+            };
+            if (actual.r != channel(kAlphaColor.r) || actual.g != channel(kAlphaColor.g) ||
+                actual.b != channel(kAlphaColor.b) ||
+                expected_bgra[2] != channel(kAlphaColor.r) ||
+                expected_bgra[1] != channel(kAlphaColor.g) ||
+                expected_bgra[0] != channel(kAlphaColor.b)) {
+                throw std::runtime_error("alpha-grid output failed independent pixel oracle");
+            }
+        }
         const int errors[3]{
             std::abs(static_cast<int>(actual.r) - expected_bgra[2]),
             std::abs(static_cast<int>(actual.g) - expected_bgra[1]),
@@ -573,29 +609,6 @@ std::vector<double> measure(int samples, int operations_per_sample, Fn&& fn) {
     for (int index = 0; index < samples; ++index) {
         const auto begin = Clock::now();
         for (int operation = 0; operation < operations_per_sample; ++operation) fn();
-        const auto end = Clock::now();
-        values.push_back(std::chrono::duration<double, std::micro>(end - begin).count() /
-                         operations_per_sample);
-    }
-    return values;
-}
-
-template <typename ResetFn, typename Fn>
-std::vector<double> measure_indexed(int samples,
-                                    int operations_per_sample,
-                                    ResetFn&& reset,
-                                    Fn&& fn) {
-    const auto run_sample = [&] {
-        reset();
-        for (int operation = 0; operation < operations_per_sample; ++operation) fn(operation);
-    };
-    for (int index = 0; index < kWarmupIterations; ++index) run_sample();
-    std::vector<double> values;
-    values.reserve(static_cast<std::size_t>(samples));
-    for (int index = 0; index < samples; ++index) {
-        reset();
-        const auto begin = Clock::now();
-        for (int operation = 0; operation < operations_per_sample; ++operation) fn(operation);
         const auto end = Clock::now();
         values.push_back(std::chrono::duration<double, std::micro>(end - begin).count() /
                          operations_per_sample);
@@ -713,17 +726,15 @@ int main(int argc, char** argv) {
         SoftwareRasterizer rasterizer;
         const int operations_per_sample = workload_operations_per_sample(workload);
         std::vector<double> jellyframe_samples;
-        if (workload == Workload::AlphaGrid) {
-            jellyframe_samples = measure_indexed(samples, operations_per_sample,
-                [&] {
-                    std::fill(jellyframe_surface.pixels.begin(), jellyframe_surface.pixels.end(),
-                              Color{0, 0, 0, 255});
-                },
-                [&](int operation) {
-                    command.rect = alpha_grid_rect(operation);
-                    rasterizer.rasterize(command, jellyframe_surface, command.rect);
-                });
-        } else {
+        const auto reset_jellyframe = [&] {
+            std::fill(jellyframe_surface.pixels.begin(), jellyframe_surface.pixels.end(),
+                      Color{0, 0, 0, 255});
+        };
+        const auto paint_jellyframe = [&](int operation) {
+            command.rect = alpha_grid_rect(operation);
+            rasterizer.rasterize(command, jellyframe_surface, command.rect);
+        };
+        if (workload != Workload::AlphaGrid) {
             jellyframe_samples = measure(samples, operations_per_sample, [&] {
                 rasterizer.rasterize(command, jellyframe_surface, command.rect);
             });
@@ -737,9 +748,13 @@ int main(int argc, char** argv) {
         if (backend == Backend::Gdi) {
             GdiSurface gdi_surface(workload == Workload::AlphaGrid);
             if (workload == Workload::AlphaGrid) {
-                reference_samples = measure_indexed(samples, operations_per_sample,
+                auto pair = benchmark::measure_interleaved(samples, kWarmupIterations,
+                    operations_per_sample, reset_jellyframe, paint_jellyframe, [] {},
                     [&] { gdi_surface.reset_alpha_grid(); },
-                    [&](int operation) { gdi_surface.alpha_fill(alpha_grid_rect(operation)); });
+                    [&](int operation) { gdi_surface.alpha_fill(alpha_grid_rect(operation)); },
+                    [&] { gdi_surface.finish_alpha_grid(); });
+                jellyframe_samples = std::move(pair.first);
+                reference_samples = std::move(pair.second);
             } else {
                 reference_samples = measure(samples, operations_per_sample, [&] {
                     if (is_fill_workload(workload)) gdi_surface.fill(workload_rect(workload));
@@ -747,7 +762,8 @@ int main(int argc, char** argv) {
                     else gdi_surface.vertical_gradient();
                 });
             }
-            comparison = compare_output(jellyframe_surface, gdi_surface.pixels);
+            comparison = compare_output(jellyframe_surface, gdi_surface.pixels,
+                                        workload == Workload::AlphaGrid);
             reference_name = "windows-gdi";
             reference_version = "system";
             reference_file = "gdi.json";
@@ -757,15 +773,20 @@ int main(int argc, char** argv) {
                 : std::filesystem::path(L"SDL2.dll");
             SdlSurface sdl_surface(library_path);
             if (workload == Workload::AlphaGrid) {
-                reference_samples = measure_indexed(samples, operations_per_sample,
+                auto pair = benchmark::measure_interleaved(samples, kWarmupIterations,
+                    operations_per_sample, reset_jellyframe, paint_jellyframe, [] {},
                     [&] { sdl_surface.reset_alpha_grid(); },
-                    [&](int operation) { sdl_surface.alpha_fill(alpha_grid_rect(operation)); });
+                    [&](int operation) { sdl_surface.alpha_fill(alpha_grid_rect(operation)); },
+                    [&] { sdl_surface.finish_alpha_grid(); });
+                jellyframe_samples = std::move(pair.first);
+                reference_samples = std::move(pair.second);
             } else {
                 reference_samples = measure(samples, operations_per_sample, [&] {
                     sdl_surface.fill(workload_rect(workload));
                 });
             }
-            comparison = compare_output(jellyframe_surface, sdl_surface.pixels());
+            comparison = compare_output(jellyframe_surface, sdl_surface.pixels(),
+                                        workload == Workload::AlphaGrid);
             reference_name = "sdl2-software-renderer";
             reference_version = sdl_surface.version;
             reference_file = "sdl2.json";

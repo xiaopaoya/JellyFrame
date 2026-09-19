@@ -291,12 +291,13 @@ full/dirty mode、运行环境、warm-up、每样本操作数、`workloadParamet
 不透明、横向、矩形渐变 primitive 的改动有效，不能外推到完整 UI、设备 FPS、圆角/透明渐变、文本、
 GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立等价 workload 和输出质量门禁。
 
-同机单轮 `alpha-grid-rgb-v1` 的 100 样本用于确认该 workload 能区分实现成本，而不是建立库排名：
-JellyFrame/GDI pair 的单 tile p95 分别约为 2.13/7.45 us，JellyFrame/SDL2 2.28.2 pair 分别约为
-2.41/1.04 us，三者输出 digest 均为 `797bc643a0867f83`。GDI 通过 1x1 premultiplied source 的
-`AlphaBlend` 实现，SDL2 通过 software `RenderFillRect` blend 实现；数字只适用于 16x12 黑底
-source-over tile，不包含 surface reset、present、layout、dirty planning 或 DMA，也不能解释为
-JellyFrame、GDI 或 SDL2 的整体快慢。
+`alpha-grid-rgb-v1` 的旧耗时排名已撤回：该版本缺少显式的样本末尾完成同步。
+当前 `alpha-grid-rgb-v2` 在计时外完成黑底重置，在计时内完成 64 次绘制及一次
+GDI `GdiFlush` / SDL2 `SDL_RenderFlush`；JellyFrame 直接写入 CPU buffer，返回即完成。
+两侧逐样本交错执行并交换先后顺序。报告的 p95 是批平均的单 tile 耗时分位数，
+并非单次 tile 尾延迟。完整画面还要通过独立的黑底 source-over 像素公式校验。
+GDI 使用 1x1 premultiplied source 的 `AlphaBlend`，SDL2 使用 software `RenderFillRect`；
+结果只适用于当前 API 路径，不包含 surface reset、窗口 present、layout、dirty planning 或 DMA。
 当前环境没有满足同一 4x4 coverage 语义的 Cairo adapter；GDI `RoundRect` 与 SDL2 software
 renderer 也不能提供等价圆角 AA，因此 `rounded-card-rgb-v1` 继续保持 `not-comparable`，不使用
 放宽 RMSE 的方式掩盖几何/coverage 差异。

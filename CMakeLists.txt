@@ -320,6 +320,9 @@ endif()
 if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
     if(WIN32 AND TARGET jellyframe_cpu2d_compare)
+        add_executable(jellyframe_cpu2d_sampling_tests tests/cpu2d_sampling_tests.cpp)
+        target_compile_features(jellyframe_cpu2d_sampling_tests PRIVATE cxx_std_17)
+        add_test(NAME jellyframe_cpu2d_sampling_tests COMMAND jellyframe_cpu2d_sampling_tests)
         add_test(NAME jellyframe_cpu2d_compare_output_smoke
                  COMMAND jellyframe_cpu2d_compare
                          "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_smoke"

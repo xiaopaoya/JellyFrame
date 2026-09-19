@@ -44,6 +44,12 @@ primitive.
 sample resets the surface outside the timed interval, then reports per-tile time
 and 192 pixels. JellyFrame, GDI `AlphaBlend` and SDL2 software blending must
 produce exact normalized RGB output.
+The `alpha-grid-rgb-v2` timer includes one end-of-batch completion call
+(`GdiFlush` or `SDL_RenderFlush`, requiring SDL2 2.0.10+). Reset completion is
+outside the timer. Paired samples alternate execution order, and an independent
+pixel oracle checks the final image. V1 timing claims are withdrawn because it
+had no completion barrier. Percentiles describe batch-average per-tile time,
+not individual invocation tail latency.
 
 ```powershell
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-fill 100 opaque-fill

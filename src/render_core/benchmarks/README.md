@@ -30,6 +30,9 @@ renderer does not expose an equivalent primitive.
 `alpha-grid` resets the surface outside each timed sample and draws 64
 non-overlapping 16x12 source-over tiles. It reports per-tile time and requires
 exact normalized RGB agreement with GDI `AlphaBlend` or SDL2 software blending.
+V2 includes end-of-batch completion in the timer and completes reset beforehand.
+It alternates paired sample order and checks an independent pixel oracle.
+V1 lacked completion barriers; its timing rankings must not be reused.
 
 ```powershell
 jellyframe_cpu2d_compare <output-directory> 100 opaque-fill
