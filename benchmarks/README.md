@@ -32,7 +32,7 @@ not claim whole-library, complete UI, device, rounded-gradient, text, or GPU
 performance.
 
 The same executable can optionally load an SDL2 DLL at runtime and compare the
-`opaque-fill` and `opaque-dirty-fill` workloads with
+`opaque-fill`, `opaque-dirty-fill` and `alpha-grid` workloads with
 `SDL_CreateSoftwareRenderer`. The dirty workload writes a fixed 96x48 rectangle
 on an initialized 172x320 black surface, reports 4,608 pixels per operation,
 and batches 64 operations inside each timing sample. This does not add an SDL
@@ -40,12 +40,18 @@ dependency to JellyFrame builds or packages. The adapter deliberately rejects
 gradient workloads because SDL2's software renderer has no equivalent gradient
 primitive.
 
+`alpha-grid` draws 64 non-overlapping 16x12 source-over tiles on black. Every
+sample resets the surface outside the timed interval, then reports per-tile time
+and 192 pixels. JellyFrame, GDI `AlphaBlend` and SDL2 software blending must
+produce exact normalized RGB output.
+
 ```powershell
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-fill 100 opaque-fill
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-gradient 100 horizontal-gradient
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-vertical-gradient 100 vertical-gradient
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-sdl2 100 opaque-fill sdl2 C:\path\to\SDL2.dll
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-dirty-sdl2 100 opaque-dirty-fill sdl2 C:\path\to\SDL2.dll
+build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-alpha-sdl2 100 alpha-grid sdl2 C:\path\to\SDL2.dll
 ```
 
 The SDL2 run writes `jellyframe.json` and `sdl2.json`. Compare them with

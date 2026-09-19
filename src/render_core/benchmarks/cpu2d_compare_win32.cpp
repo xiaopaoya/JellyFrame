@@ -28,12 +28,22 @@ constexpr int kWarmupIterations = 30;
 constexpr Color kFillColor{22, 71, 87, 255};
 constexpr Color kGradientFirst{22, 71, 87, 255};
 constexpr Color kGradientSecond{6, 22, 31, 255};
+constexpr Color kAlphaColor{80, 180, 220, 128};
 constexpr Rect kFullRect{0, 0, kWidth, kHeight};
 constexpr Rect kDirtyRect{38, 136, 96, 48};
+constexpr int kAlphaGridColumns = 8;
+constexpr int kAlphaGridRows = 8;
+constexpr int kAlphaGridTileWidth = 16;
+constexpr int kAlphaGridTileHeight = 12;
+constexpr int kAlphaGridOriginX = 6;
+constexpr int kAlphaGridOriginY = 20;
+constexpr int kAlphaGridStepX = 20;
+constexpr int kAlphaGridStepY = 36;
 
 enum class Workload {
     OpaqueFill,
     OpaqueDirtyFill,
+    AlphaGrid,
     HorizontalGradient,
     VerticalGradient,
 };
@@ -167,6 +177,22 @@ struct SdlSurface {
         render_present(renderer);
     }
 
+    void reset_alpha_grid() const {
+        if (set_draw_blend_mode(renderer, 0) != 0 ||
+            set_draw_color(renderer, 0, 0, 0, 255) != 0 ||
+            render_clear(renderer) != 0 ||
+            set_draw_blend_mode(renderer, 1) != 0 ||
+            set_draw_color(renderer, kAlphaColor.r, kAlphaColor.g,
+                           kAlphaColor.b, kAlphaColor.a) != 0) {
+            fail("failed to reset SDL alpha-grid surface");
+        }
+    }
+
+    void alpha_fill(Rect rect) const {
+        const SdlRect target{rect.x, rect.y, rect.width, rect.height};
+        if (render_fill_rect(renderer, &target) != 0) fail("SDL alpha RenderFillRect failed");
+    }
+
     const std::uint8_t* pixels() const {
         return reinterpret_cast<const std::uint8_t*>(storage.data());
     }
@@ -218,9 +244,13 @@ struct GdiSurface {
     HBITMAP bitmap = nullptr;
     HGDIOBJ previous_bitmap = nullptr;
     HBRUSH brush = nullptr;
+    HDC alpha_source_dc = nullptr;
+    HBITMAP alpha_source_bitmap = nullptr;
+    HGDIOBJ previous_alpha_source_bitmap = nullptr;
+    std::uint8_t* alpha_source_pixels = nullptr;
     std::uint8_t* pixels = nullptr;
 
-    GdiSurface() {
+    explicit GdiSurface(bool enable_alpha = false) {
         dc = CreateCompatibleDC(nullptr);
         if (dc == nullptr) {
             throw std::runtime_error("failed to create GDI memory DC");
@@ -259,9 +289,29 @@ struct GdiSurface {
             dc = nullptr;
             throw std::runtime_error("failed to select GDI comparison bitmap");
         }
+        if (enable_alpha) {
+            try {
+                initialize_alpha_source();
+            } catch (...) {
+                if (previous_bitmap != nullptr) SelectObject(dc, previous_bitmap);
+                if (brush != nullptr) DeleteObject(brush);
+                if (bitmap != nullptr) DeleteObject(bitmap);
+                if (dc != nullptr) DeleteDC(dc);
+                previous_bitmap = nullptr;
+                brush = nullptr;
+                bitmap = nullptr;
+                dc = nullptr;
+                throw;
+            }
+        }
     }
 
     ~GdiSurface() {
+        if (alpha_source_dc != nullptr && previous_alpha_source_bitmap != nullptr) {
+            SelectObject(alpha_source_dc, previous_alpha_source_bitmap);
+        }
+        if (alpha_source_bitmap != nullptr) DeleteObject(alpha_source_bitmap);
+        if (alpha_source_dc != nullptr) DeleteDC(alpha_source_dc);
         if (dc != nullptr && previous_bitmap != nullptr) {
             SelectObject(dc, previous_bitmap);
         }
@@ -308,6 +358,59 @@ struct GdiSurface {
 
     void horizontal_gradient() const { gradient(GRADIENT_FILL_RECT_H); }
     void vertical_gradient() const { gradient(GRADIENT_FILL_RECT_V); }
+
+    void reset_alpha_grid() const {
+        if (PatBlt(dc, 0, 0, kWidth, kHeight, BLACKNESS) == 0 || GdiFlush() == 0) {
+            throw std::runtime_error("failed to reset GDI alpha-grid surface");
+        }
+    }
+
+    void alpha_fill(Rect rect) const {
+        if (alpha_source_dc == nullptr) {
+            throw std::runtime_error("GDI alpha source was not initialized");
+        }
+        BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        if (AlphaBlend(dc, rect.x, rect.y, rect.width, rect.height,
+                       alpha_source_dc, 0, 0, 1, 1, blend) == 0) {
+            throw std::runtime_error("GDI AlphaBlend failed");
+        }
+    }
+
+private:
+    void initialize_alpha_source() {
+        alpha_source_dc = CreateCompatibleDC(nullptr);
+        if (alpha_source_dc == nullptr) {
+            throw std::runtime_error("failed to create GDI alpha source DC");
+        }
+        BITMAPINFO source_info{};
+        source_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        source_info.bmiHeader.biWidth = 1;
+        source_info.bmiHeader.biHeight = -1;
+        source_info.bmiHeader.biPlanes = 1;
+        source_info.bmiHeader.biBitCount = 32;
+        source_info.bmiHeader.biCompression = BI_RGB;
+        void* source_pixels = nullptr;
+        alpha_source_bitmap = CreateDIBSection(alpha_source_dc, &source_info, DIB_RGB_COLORS,
+                                               &source_pixels, nullptr, 0);
+        alpha_source_pixels = static_cast<std::uint8_t*>(source_pixels);
+        if (alpha_source_bitmap == nullptr || alpha_source_pixels == nullptr) {
+            DeleteDC(alpha_source_dc);
+            alpha_source_dc = nullptr;
+            throw std::runtime_error("failed to create GDI alpha source bitmap");
+        }
+        previous_alpha_source_bitmap = SelectObject(alpha_source_dc, alpha_source_bitmap);
+        if (previous_alpha_source_bitmap == nullptr || previous_alpha_source_bitmap == HGDI_ERROR) {
+            DeleteObject(alpha_source_bitmap);
+            alpha_source_bitmap = nullptr;
+            DeleteDC(alpha_source_dc);
+            alpha_source_dc = nullptr;
+            throw std::runtime_error("failed to select GDI alpha source bitmap");
+        }
+        alpha_source_pixels[0] = static_cast<std::uint8_t>((kAlphaColor.b * kAlphaColor.a + 127) / 255);
+        alpha_source_pixels[1] = static_cast<std::uint8_t>((kAlphaColor.g * kAlphaColor.a + 127) / 255);
+        alpha_source_pixels[2] = static_cast<std::uint8_t>((kAlphaColor.r * kAlphaColor.a + 127) / 255);
+        alpha_source_pixels[3] = kAlphaColor.a;
+    }
 };
 
 int positive_int(const char* raw, const char* name) {
@@ -323,10 +426,11 @@ Workload parse_workload(const char* raw) {
     const std::string name(raw);
     if (name == "opaque-fill") return Workload::OpaqueFill;
     if (name == "opaque-dirty-fill") return Workload::OpaqueDirtyFill;
+    if (name == "alpha-grid") return Workload::AlphaGrid;
     if (name == "horizontal-gradient") return Workload::HorizontalGradient;
     if (name == "vertical-gradient") return Workload::VerticalGradient;
     throw std::runtime_error(
-        "workload must be opaque-fill, opaque-dirty-fill, horizontal-gradient, or vertical-gradient");
+        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, horizontal-gradient, or vertical-gradient");
 }
 
 Backend parse_backend(const char* raw) {
@@ -340,6 +444,7 @@ const char* workload_id(Workload workload) {
     switch (workload) {
     case Workload::OpaqueFill: return "opaque-fill-rgb-v1";
     case Workload::OpaqueDirtyFill: return "opaque-dirty-fill-rgb-v1";
+    case Workload::AlphaGrid: return "alpha-grid-rgb-v1";
     case Workload::HorizontalGradient: return "horizontal-gradient-rgb-v1";
     case Workload::VerticalGradient: return "vertical-gradient-rgb-v1";
     }
@@ -354,26 +459,43 @@ Rect workload_rect(Workload workload) {
     return workload == Workload::OpaqueDirtyFill ? kDirtyRect : kFullRect;
 }
 
+Rect alpha_grid_rect(int index) {
+    const int column = index % kAlphaGridColumns;
+    const int row = index / kAlphaGridColumns;
+    return Rect{kAlphaGridOriginX + column * kAlphaGridStepX,
+                kAlphaGridOriginY + row * kAlphaGridStepY,
+                kAlphaGridTileWidth,
+                kAlphaGridTileHeight};
+}
+
 const char* workload_mode(Workload workload) {
-    return workload == Workload::OpaqueDirtyFill ? "dirty" : "full";
+    return workload == Workload::OpaqueDirtyFill || workload == Workload::AlphaGrid ? "dirty" : "full";
 }
 
 int workload_pixels(Workload workload) {
-    const Rect rect = workload_rect(workload);
+    const Rect rect = workload == Workload::AlphaGrid ? alpha_grid_rect(0) : workload_rect(workload);
     return rect.width * rect.height;
 }
 
 int workload_operations_per_sample(Workload workload) {
-    return workload == Workload::OpaqueDirtyFill ? 64 : 1;
+    return workload == Workload::OpaqueDirtyFill || workload == Workload::AlphaGrid ? 64 : 1;
 }
 
 std::string workload_parameters_json(Workload workload) {
-    const Rect rect = workload_rect(workload);
+    const Rect rect = workload == Workload::AlphaGrid ? alpha_grid_rect(0) : workload_rect(workload);
     std::ostringstream output;
     output << "{\"surfaceInitialRgb\":\"000000\","
            << "\"rect\":{\"x\":" << rect.x << ",\"y\":" << rect.y
            << ",\"width\":" << rect.width << ",\"height\":" << rect.height << "},";
-    if (is_fill_workload(workload)) {
+    if (workload == Workload::AlphaGrid) {
+        output << "\"operation\":\"source-over-grid\","
+               << "\"sourceRgba\":\"50b4dc80\","
+               << "\"blend\":\"source-over\","
+               << "\"columns\":" << kAlphaGridColumns << ','
+               << "\"rows\":" << kAlphaGridRows << ','
+               << "\"stepX\":" << kAlphaGridStepX << ','
+               << "\"stepY\":" << kAlphaGridStepY;
+    } else if (is_fill_workload(workload)) {
         output << "\"operation\":\"fill-rect\","
                << "\"sourceRgb\":\"164757\","
                << "\"blend\":\"opaque-replace\"";
@@ -451,6 +573,29 @@ std::vector<double> measure(int samples, int operations_per_sample, Fn&& fn) {
     for (int index = 0; index < samples; ++index) {
         const auto begin = Clock::now();
         for (int operation = 0; operation < operations_per_sample; ++operation) fn();
+        const auto end = Clock::now();
+        values.push_back(std::chrono::duration<double, std::micro>(end - begin).count() /
+                         operations_per_sample);
+    }
+    return values;
+}
+
+template <typename ResetFn, typename Fn>
+std::vector<double> measure_indexed(int samples,
+                                    int operations_per_sample,
+                                    ResetFn&& reset,
+                                    Fn&& fn) {
+    const auto run_sample = [&] {
+        reset();
+        for (int operation = 0; operation < operations_per_sample; ++operation) fn(operation);
+    };
+    for (int index = 0; index < kWarmupIterations; ++index) run_sample();
+    std::vector<double> values;
+    values.reserve(static_cast<std::size_t>(samples));
+    for (int index = 0; index < samples; ++index) {
+        reset();
+        const auto begin = Clock::now();
+        for (int operation = 0; operation < operations_per_sample; ++operation) fn(operation);
         const auto end = Clock::now();
         values.push_back(std::chrono::duration<double, std::micro>(end - begin).count() /
                          operations_per_sample);
@@ -543,9 +688,9 @@ int main(int argc, char** argv) {
         const int samples = argc >= 3 ? positive_int(argv[2], "samples") : 100;
         const Workload workload = argc >= 4 ? parse_workload(argv[3]) : Workload::OpaqueFill;
         const Backend backend = argc >= 5 ? parse_backend(argv[4]) : Backend::Gdi;
-        if (backend == Backend::Sdl2 && !is_fill_workload(workload)) {
+        if (backend == Backend::Sdl2 && !is_fill_workload(workload) && workload != Workload::AlphaGrid) {
             throw std::runtime_error(
-                "SDL2 adapter currently supports only opaque-fill and opaque-dirty-fill");
+                "SDL2 adapter currently supports opaque-fill, opaque-dirty-fill, and alpha-grid");
         }
         if (backend == Backend::Gdi && argc == 6) {
             throw std::runtime_error("SDL2 library path is valid only with the sdl2 backend");
@@ -554,20 +699,35 @@ int main(int argc, char** argv) {
 
         FrameBuffer jellyframe_surface(kWidth, kHeight, Color{0, 0, 0, 255});
         DisplayCommand command;
-        command.type = is_fill_workload(workload)
+        command.type = is_fill_workload(workload) || workload == Workload::AlphaGrid
             ? DisplayCommandType::FillRect
             : DisplayCommandType::LinearGradient;
-        command.rect = workload_rect(workload);
-        command.color = is_fill_workload(workload) ? kFillColor : kGradientFirst;
+        command.rect = workload == Workload::AlphaGrid ? alpha_grid_rect(0) : workload_rect(workload);
+        command.color = workload == Workload::AlphaGrid
+            ? kAlphaColor
+            : (is_fill_workload(workload) ? kFillColor : kGradientFirst);
         command.color2 = kGradientSecond;
         command.gradient_axis = workload == Workload::VerticalGradient
             ? GradientAxis::Vertical
             : GradientAxis::Horizontal;
         SoftwareRasterizer rasterizer;
         const int operations_per_sample = workload_operations_per_sample(workload);
-        const auto jellyframe_samples = measure(samples, operations_per_sample, [&] {
-            rasterizer.rasterize(command, jellyframe_surface, command.rect);
-        });
+        std::vector<double> jellyframe_samples;
+        if (workload == Workload::AlphaGrid) {
+            jellyframe_samples = measure_indexed(samples, operations_per_sample,
+                [&] {
+                    std::fill(jellyframe_surface.pixels.begin(), jellyframe_surface.pixels.end(),
+                              Color{0, 0, 0, 255});
+                },
+                [&](int operation) {
+                    command.rect = alpha_grid_rect(operation);
+                    rasterizer.rasterize(command, jellyframe_surface, command.rect);
+                });
+        } else {
+            jellyframe_samples = measure(samples, operations_per_sample, [&] {
+                rasterizer.rasterize(command, jellyframe_surface, command.rect);
+            });
+        }
 
         OutputComparison comparison;
         std::vector<double> reference_samples;
@@ -575,12 +735,18 @@ int main(int argc, char** argv) {
         std::string reference_version;
         std::string reference_file;
         if (backend == Backend::Gdi) {
-            GdiSurface gdi_surface;
-            reference_samples = measure(samples, operations_per_sample, [&] {
-                if (is_fill_workload(workload)) gdi_surface.fill(workload_rect(workload));
-                else if (workload == Workload::HorizontalGradient) gdi_surface.horizontal_gradient();
-                else gdi_surface.vertical_gradient();
-            });
+            GdiSurface gdi_surface(workload == Workload::AlphaGrid);
+            if (workload == Workload::AlphaGrid) {
+                reference_samples = measure_indexed(samples, operations_per_sample,
+                    [&] { gdi_surface.reset_alpha_grid(); },
+                    [&](int operation) { gdi_surface.alpha_fill(alpha_grid_rect(operation)); });
+            } else {
+                reference_samples = measure(samples, operations_per_sample, [&] {
+                    if (is_fill_workload(workload)) gdi_surface.fill(workload_rect(workload));
+                    else if (workload == Workload::HorizontalGradient) gdi_surface.horizontal_gradient();
+                    else gdi_surface.vertical_gradient();
+                });
+            }
             comparison = compare_output(jellyframe_surface, gdi_surface.pixels);
             reference_name = "windows-gdi";
             reference_version = "system";
@@ -590,15 +756,21 @@ int main(int argc, char** argv) {
                 ? std::filesystem::path(argv[5])
                 : std::filesystem::path(L"SDL2.dll");
             SdlSurface sdl_surface(library_path);
-            reference_samples = measure(samples, operations_per_sample, [&] {
-                sdl_surface.fill(workload_rect(workload));
-            });
+            if (workload == Workload::AlphaGrid) {
+                reference_samples = measure_indexed(samples, operations_per_sample,
+                    [&] { sdl_surface.reset_alpha_grid(); },
+                    [&](int operation) { sdl_surface.alpha_fill(alpha_grid_rect(operation)); });
+            } else {
+                reference_samples = measure(samples, operations_per_sample, [&] {
+                    sdl_surface.fill(workload_rect(workload));
+                });
+            }
             comparison = compare_output(jellyframe_surface, sdl_surface.pixels());
             reference_name = "sdl2-software-renderer";
             reference_version = sdl_surface.version;
             reference_file = "sdl2.json";
         }
-        const double tolerance = is_fill_workload(workload) ? 0.0 : 1.0;
+        const double tolerance = is_fill_workload(workload) || workload == Workload::AlphaGrid ? 0.0 : 1.0;
         const bool output_matches = comparison.rmse <= tolerance;
         write_manifest(output_directory / "jellyframe.json", "jellyframe-render-core",
                        JELLYFRAME_CPU2D_CORE_VERSION, workload, jellyframe_samples,

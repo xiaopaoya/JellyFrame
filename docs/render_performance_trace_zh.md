@@ -268,17 +268,19 @@ full/dirty mode、运行环境、warm-up、每样本操作数、`workloadParamet
 - 若 present/DMA 占主导，继续优化 Core paint 不会改善实机帧率；若 layout/script 占主导，
   应优先减少重建或 App 更新范围，而不是改 rasterizer。
 
-当前 Windows-only `jellyframe_cpu2d_compare` 已提供四个 CPU 2D primitive 对照。它们均在同一进程中
+当前 Windows-only `jellyframe_cpu2d_compare` 已提供五个 CPU 2D primitive 对照。它们均在同一进程中
 使用 JellyFrame 与 memory-DIB GDI、172x320 RGB surface、固定 30 次 warm-up 和相同样本数：
 
 - `opaque-fill` 对照不透明全屏填充，要求归一化 RGB 完全一致；
 - `opaque-dirty-fill` 对照黑底上的固定 96x48 局部填充，要求归一化 RGB 完全一致；单次操作过短，
   因而每个样本固定批处理 64 次后报告每次平均值，manifest 仍只记录每次实际覆盖的 4,608 像素；
+- `alpha-grid` 在计时外重置黑底，然后 source-over 8x8 个不重叠的 16x12 半透明 tile；要求
+  exact RGB，报告单 tile 平均时间和 192 个像素，不把 64 次批处理伪装成单次面积；
 - `horizontal-gradient` 与 `vertical-gradient` 分别对照不透明横向/纵向渐变和 GDI `GradientFill`，
   要求归一化 RGB RMSE 不超过 1.0。当前 fixture 的最大通道误差为 1，这是两套整数端点插值约定
   的已量化差异，不允许以该容差掩盖更大视觉误差。
 
-`opaque-fill` 和 `opaque-dirty-fill` 还提供可选 SDL2 software renderer adapter：运行时加载调用方指定的
+`opaque-fill`、`opaque-dirty-fill` 和 `alpha-grid` 还提供可选 SDL2 software renderer adapter：运行时加载调用方指定的
 `SDL2.dll`，在同一进程和同一调用方持有的 RGB surface 上执行 `SDL_RenderClear` 或
 `SDL_RenderFillRect`，再执行 `SDL_RenderPresent`，并要求归一化 RGB 完全一致。该 adapter 不给 Runtime、SDK 或 App 包
 增加 SDL 依赖；比较器会拒绝 `operationsPerSample` 不一致的 pair。SDL 没有等价 primitive 的渐变请求会被拒绝，不能借用自定义逐像素循环伪装为
@@ -288,6 +290,13 @@ full/dirty mode、运行环境、warm-up、每样本操作数、`workloadParamet
 4.3 us，输出 digest 保持 `177877a38d09ae83`；同轮 GDI 约为 4.4 us p95。该数字只证明 172x320、
 不透明、横向、矩形渐变 primitive 的改动有效，不能外推到完整 UI、设备 FPS、圆角/透明渐变、文本、
 GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立等价 workload 和输出质量门禁。
+
+同机单轮 `alpha-grid-rgb-v1` 的 100 样本用于确认该 workload 能区分实现成本，而不是建立库排名：
+JellyFrame/GDI pair 的单 tile p95 分别约为 2.13/7.45 us，JellyFrame/SDL2 2.28.2 pair 分别约为
+2.41/1.04 us，三者输出 digest 均为 `797bc643a0867f83`。GDI 通过 1x1 premultiplied source 的
+`AlphaBlend` 实现，SDL2 通过 software `RenderFillRect` blend 实现；数字只适用于 16x12 黑底
+source-over tile，不包含 surface reset、present、layout、dirty planning 或 DMA，也不能解释为
+JellyFrame、GDI 或 SDL2 的整体快慢。
 当前环境没有满足同一 4x4 coverage 语义的 Cairo adapter；GDI `RoundRect` 与 SDL2 software
 renderer 也不能提供等价圆角 AA，因此 `rounded-card-rgb-v1` 继续保持 `not-comparable`，不使用
 放宽 RMSE 的方式掩盖几何/coverage 差异。
@@ -320,10 +329,10 @@ renderer 也不能提供等价圆角 AA，因此 `rounded-card-rgb-v1` 继续保
 - port 以该显式 profiling 配置提供阶段窗口 aggregate；逐元素、逐 command 或每帧 wire
   trace 不是第三阶段的前提，也不能由 aggregate 推断；
 - 以真实 developer-image workload 复核 Core/Runtime 优化收益；
-- CPU 2D 的 full/dirty opaque-fill、horizontal-gradient 与 vertical-gradient GDI 基础对照已交付，
-  full/dirty opaque-fill 另有 SDL2 software renderer 对照；这些 primitive 尚不足以代表完整库；
+- CPU 2D 的 full/dirty opaque-fill、alpha-grid、horizontal-gradient 与 vertical-gradient GDI 基础对照已交付，
+  full/dirty opaque-fill 与 alpha-grid 另有 SDL2 software renderer 对照；这些 primitive 尚不足以代表完整库；
 - 桌面 CPU 对照的 workload 边界已冻结，见
-  [CPU workload 矩阵](render_performance_cpu_workload_matrix_zh.md)。当前四个矩形
+  [CPU workload 矩阵](render_performance_cpu_workload_matrix_zh.md)。当前五个矩形
   primitive 已可 comparable；圆角和文本已有 Core 内部 probe，但由于 coverage、字体
   fallback、shaping 和宿主 `TextPainter` 差异，跨库适配仍不能直接宣称 comparable。
   嵌入式 UI 对照以固定状态检查和稳定性日志为正确性门槛，不把逐像素 readback 作为

@@ -19,7 +19,7 @@ differ by at most one channel value in the current fixture. The runner writes
 `jellyframe.json` and `gdi.json` manifests for
 `tools/benchmark_compare.py`.
 
-For `opaque-fill` and `opaque-dirty-fill`, the runner can instead load an SDL2
+For `opaque-fill`, `opaque-dirty-fill` and `alpha-grid`, the runner can instead load an SDL2
 DLL and use `SDL_CreateSoftwareRenderer` against the same caller-owned 172x320
 RGB surface. The dirty workload writes a fixed 96x48 region and batches 64
 operations per measured sample before reporting per-operation time. SDL remains
@@ -27,12 +27,17 @@ a runtime-only benchmark dependency and is not linked into Render Core, Runtime,
 SDK or App packages. Gradient modes are rejected because SDL2's software
 renderer does not expose an equivalent primitive.
 
+`alpha-grid` resets the surface outside each timed sample and draws 64
+non-overlapping 16x12 source-over tiles. It reports per-tile time and requires
+exact normalized RGB agreement with GDI `AlphaBlend` or SDL2 software blending.
+
 ```powershell
 jellyframe_cpu2d_compare <output-directory> 100 opaque-fill
 jellyframe_cpu2d_compare <output-directory> 100 horizontal-gradient
 jellyframe_cpu2d_compare <output-directory> 100 vertical-gradient
 jellyframe_cpu2d_compare <output-directory> 100 opaque-fill sdl2 C:\path\to\SDL2.dll
 jellyframe_cpu2d_compare <output-directory> 100 opaque-dirty-fill sdl2 C:\path\to\SDL2.dll
+jellyframe_cpu2d_compare <output-directory> 100 alpha-grid sdl2 C:\path\to\SDL2.dll
 ```
 
 On the development Windows machine, reusing the first clipped horizontal row
