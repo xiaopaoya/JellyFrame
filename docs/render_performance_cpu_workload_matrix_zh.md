@@ -25,16 +25,23 @@ workload 边界。目的不是给 JellyFrame、Cairo、SDL、LVGL 或浏览器�
 | workload | 当前状态 | 固定内容 | 可回答的问题 |
 | --- | --- | --- | --- |
 | `opaque-fill-rgb-v1` | 已接受；GDI/SDL2 adapter | 172x320、RGB888、全屏不透明填充、无 AA、exact RGB | 纯矩形写入和像素吞吐 |
+| `opaque-dirty-fill-rgb-v1` | 已接受；GDI/SDL2 adapter | 172x320 黑底、固定 96x48 脏矩形、RGB888、无 AA、exact RGB、每样本 64 次 | 局部不透明写入和 dirty 像素吞吐 |
 | `horizontal-gradient-rgb-v1` | 已接受 | 同上、横向不透明线性渐变、无 AA、RMSE <= 1 | 线性渐变的每像素计算成本 |
 | `vertical-gradient-rgb-v1` | 已接受 | 同上、纵向不透明线性渐变、无 AA、RMSE <= 1 | 另一种渐变访问方向的成本 |
 | `rounded-card-rgb-v1` | Core probe 已有；跨库待适配 | 172x320 黑底、固定卡片矩形/四角半径/颜色、明确 AA 和 source-over | 圆角 coverage、边框和裁剪成本 |
 | `text-lines-v1` | Core probe 已有；跨库待适配 | 固定字体包、family/hash、字号、weight、文本、宽度和换行模式 | 文本测量、换行和绘制成本 |
 | `embedded-ui-v1` | fixture 已资格通过；设备矩阵待执行 | 黑底可穿戴页面、设置行、状态卡、导航、文本更新、滚动、全屏重绘 | 真实设备端到端阶段成本 |
 
-前三项由 Windows `jellyframe_cpu2d_compare` 和 memory-DIB GDI 适配器提供；其中
-`opaque-fill-rgb-v1` 还可通过运行时加载的 SDL2 DLL 使用
+四项矩形 workload 由 Windows `jellyframe_cpu2d_compare` 和 memory-DIB GDI 适配器提供；其中
+`opaque-fill-rgb-v1` 与 `opaque-dirty-fill-rgb-v1` 还可通过运行时加载的 SDL2 DLL 使用
 `SDL_CreateSoftwareRenderer` 对照。SDL2 adapter 不进入 Runtime/SDK/App 依赖，并且会拒绝
 没有等价 SDL primitive 的渐变 workload。
+
+局部填充的 64 次批处理只用于降低亚微秒单次操作的计时噪声；manifest 记录
+`operationsPerSample: 64`，比较器会拒绝批处理数量不同的结果。报告中的 `paint_us` 已除以 64，
+`pixels` 仍是单次操作实际覆盖的 4,608 像素，不得乘成整帧面积。该 workload 不包含 dirty region
+生成、layout、窗口 present 或设备 DMA。
+
 `rounded-card-rgb-v1` 不应直接使用没有抗锯齿的 `GDI RoundRect` 作为等价参考：
 Render Core 的圆角边缘采用 4x4 coverage，两个结果的边缘像素语义不同。未来
 适配器必须使用同等 coverage 规则，或者把两边都固定到明确的无 AA 几何模式，
@@ -85,8 +92,8 @@ repaint 时，不能把 full repaint 的结果标成 `mode: dirty`；字体不�
 
 ## 5. 当前阶段结论
 
-现阶段可以对外引用的桌面对照仅限三个已接受的矩形 primitive，其中 SDL2 仅覆盖
-不透明填充，GDI 覆盖填充和两种轴向渐变。圆角和文本已经
+现阶段可以对外引用的桌面对照仅限四个已接受的矩形 primitive，其中 SDL2 覆盖全屏/局部
+不透明填充，GDI 另覆盖两种轴向渐变。圆角和文本已经
 有可重复的 JellyFrame 内部 probe，但跨库适配仍是待完成工作；嵌入式 UI 则须在
 ESP32-S3 上按 [硬件对照要求](render_performance_hardware_comparison_zh.md)
 完成 baseline/candidate 矩阵后再给出设备结论。

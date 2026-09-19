@@ -28,9 +28,12 @@ constexpr int kWarmupIterations = 30;
 constexpr Color kFillColor{22, 71, 87, 255};
 constexpr Color kGradientFirst{22, 71, 87, 255};
 constexpr Color kGradientSecond{6, 22, 31, 255};
+constexpr Rect kFullRect{0, 0, kWidth, kHeight};
+constexpr Rect kDirtyRect{38, 136, 96, 48};
 
 enum class Workload {
     OpaqueFill,
+    OpaqueDirtyFill,
     HorizontalGradient,
     VerticalGradient,
 };
@@ -53,6 +56,13 @@ struct SdlVersion {
     std::uint8_t patch = 0;
 };
 
+struct SdlRect {
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+};
+
 struct SdlSurface {
     using InitFn = int(__cdecl*)(std::uint32_t);
     using QuitFn = void(__cdecl*)();
@@ -68,6 +78,7 @@ struct SdlSurface {
     using SetDrawColorFn = int(__cdecl*)(void*, std::uint8_t, std::uint8_t,
                                          std::uint8_t, std::uint8_t);
     using RenderClearFn = int(__cdecl*)(void*);
+    using RenderFillRectFn = int(__cdecl*)(void*, const SdlRect*);
     using RenderPresentFn = void(__cdecl*)(void*);
 
     HMODULE library = nullptr;
@@ -82,6 +93,7 @@ struct SdlSurface {
     SetDrawBlendModeFn set_draw_blend_mode = nullptr;
     SetDrawColorFn set_draw_color = nullptr;
     RenderClearFn render_clear = nullptr;
+    RenderFillRectFn render_fill_rect = nullptr;
     RenderPresentFn render_present = nullptr;
     std::vector<std::uint32_t> storage;
     void* surface = nullptr;
@@ -107,6 +119,7 @@ struct SdlSurface {
             set_draw_blend_mode = symbol<SetDrawBlendModeFn>("SDL_SetRenderDrawBlendMode");
             set_draw_color = symbol<SetDrawColorFn>("SDL_SetRenderDrawColor");
             render_clear = symbol<RenderClearFn>("SDL_RenderClear");
+            render_fill_rect = symbol<RenderFillRectFn>("SDL_RenderFillRect");
             render_present = symbol<RenderPresentFn>("SDL_RenderPresent");
             if (init(0) != 0) fail("SDL_Init failed");
             initialized = true;
@@ -144,8 +157,13 @@ struct SdlSurface {
     SdlSurface(const SdlSurface&) = delete;
     SdlSurface& operator=(const SdlSurface&) = delete;
 
-    void fill() const {
-        if (render_clear(renderer) != 0) fail("SDL_RenderClear failed");
+    void fill(Rect rect) const {
+        if (rect.x == 0 && rect.y == 0 && rect.width == kWidth && rect.height == kHeight) {
+            if (render_clear(renderer) != 0) fail("SDL_RenderClear failed");
+        } else {
+            const SdlRect target{rect.x, rect.y, rect.width, rect.height};
+            if (render_fill_rect(renderer, &target) != 0) fail("SDL_RenderFillRect failed");
+        }
         render_present(renderer);
     }
 
@@ -255,8 +273,8 @@ struct GdiSurface {
     GdiSurface(const GdiSurface&) = delete;
     GdiSurface& operator=(const GdiSurface&) = delete;
 
-    void fill() const {
-        RECT rect{0, 0, kWidth, kHeight};
+    void fill(Rect target) const {
+        RECT rect{target.x, target.y, target.x + target.width, target.y + target.height};
         if (FillRect(dc, &rect, brush) == 0) {
             throw std::runtime_error("GDI FillRect failed");
         }
@@ -304,9 +322,11 @@ int positive_int(const char* raw, const char* name) {
 Workload parse_workload(const char* raw) {
     const std::string name(raw);
     if (name == "opaque-fill") return Workload::OpaqueFill;
+    if (name == "opaque-dirty-fill") return Workload::OpaqueDirtyFill;
     if (name == "horizontal-gradient") return Workload::HorizontalGradient;
     if (name == "vertical-gradient") return Workload::VerticalGradient;
-    throw std::runtime_error("workload must be opaque-fill, horizontal-gradient, or vertical-gradient");
+    throw std::runtime_error(
+        "workload must be opaque-fill, opaque-dirty-fill, horizontal-gradient, or vertical-gradient");
 }
 
 Backend parse_backend(const char* raw) {
@@ -319,10 +339,32 @@ Backend parse_backend(const char* raw) {
 const char* workload_id(Workload workload) {
     switch (workload) {
     case Workload::OpaqueFill: return "opaque-fill-rgb-v1";
+    case Workload::OpaqueDirtyFill: return "opaque-dirty-fill-rgb-v1";
     case Workload::HorizontalGradient: return "horizontal-gradient-rgb-v1";
     case Workload::VerticalGradient: return "vertical-gradient-rgb-v1";
     }
     return "unknown";
+}
+
+bool is_fill_workload(Workload workload) {
+    return workload == Workload::OpaqueFill || workload == Workload::OpaqueDirtyFill;
+}
+
+Rect workload_rect(Workload workload) {
+    return workload == Workload::OpaqueDirtyFill ? kDirtyRect : kFullRect;
+}
+
+const char* workload_mode(Workload workload) {
+    return workload == Workload::OpaqueDirtyFill ? "dirty" : "full";
+}
+
+int workload_pixels(Workload workload) {
+    const Rect rect = workload_rect(workload);
+    return rect.width * rect.height;
+}
+
+int workload_operations_per_sample(Workload workload) {
+    return workload == Workload::OpaqueDirtyFill ? 64 : 1;
 }
 
 std::uint64_t hash_byte(std::uint64_t hash, std::uint8_t value) {
@@ -379,15 +421,16 @@ OutputComparison compare_output(const FrameBuffer& frame, const std::uint8_t* re
 }
 
 template <typename Fn>
-std::vector<double> measure(int samples, Fn&& fn) {
+std::vector<double> measure(int samples, int operations_per_sample, Fn&& fn) {
     for (int index = 0; index < kWarmupIterations; ++index) fn();
     std::vector<double> values;
     values.reserve(static_cast<std::size_t>(samples));
     for (int index = 0; index < samples; ++index) {
         const auto begin = Clock::now();
-        fn();
+        for (int operation = 0; operation < operations_per_sample; ++operation) fn();
         const auto end = Clock::now();
-        values.push_back(std::chrono::duration<double, std::micro>(end - begin).count());
+        values.push_back(std::chrono::duration<double, std::micro>(end - begin).count() /
+                         operations_per_sample);
     }
     return values;
 }
@@ -403,12 +446,12 @@ std::string json_array(const std::vector<double>& values) {
     return output.str();
 }
 
-std::string repeated_pixels(int samples) {
+std::string repeated_pixels(int samples, int pixels) {
     std::ostringstream output;
     output << '[';
     for (int index = 0; index < samples; ++index) {
         if (index != 0) output << ',';
-        output << kWidth * kHeight;
+        output << pixels;
     }
     output << ']';
     return output.str();
@@ -446,10 +489,11 @@ void write_manifest(const std::filesystem::path& path,
            << "  \"viewport\": {\"width\": " << kWidth << ", \"height\": " << kHeight << "},\n"
            << "  \"pixelFormat\": \"rgb888\",\n"
            << "  \"antialiasing\": false,\n"
-           << "  \"mode\": \"full\",\n"
+           << "  \"mode\": \"" << workload_mode(workload) << "\",\n"
            << "  \"environment\": {\"os\": \"windows\", \"architecture\": \"" << architecture
            << "\", \"process\": \"same\", \"buildType\": \"" << build_type << "\"},\n"
            << "  \"warmupIterations\": " << kWarmupIterations << ",\n"
+           << "  \"operationsPerSample\": " << workload_operations_per_sample(workload) << ",\n"
            << "  \"outputValidation\": {\"status\": \"" << (output_matches ? "pass" : "fail")
            << "\", \"method\": \"" << (tolerance == 0.0 ? "normalized-rgb-exact" : "normalized-rgb-rmse")
            << "\", \"reference\": \"" << workload_id(workload) << "\", \"tolerance\": "
@@ -458,7 +502,8 @@ void write_manifest(const std::filesystem::path& path,
            << ", \"maxChannelError\": " << comparison.max_channel_error
            << ", \"digest\": \"" << digest << "\"},\n"
            << "  \"measurements\": {\"paint_us\": " << json_array(samples)
-           << ", \"pixels\": " << repeated_pixels(static_cast<int>(samples.size())) << "}\n"
+           << ", \"pixels\": " << repeated_pixels(static_cast<int>(samples.size()),
+                                                    workload_pixels(workload)) << "}\n"
            << "}\n";
 }
 
@@ -474,8 +519,9 @@ int main(int argc, char** argv) {
         const int samples = argc >= 3 ? positive_int(argv[2], "samples") : 100;
         const Workload workload = argc >= 4 ? parse_workload(argv[3]) : Workload::OpaqueFill;
         const Backend backend = argc >= 5 ? parse_backend(argv[4]) : Backend::Gdi;
-        if (backend == Backend::Sdl2 && workload != Workload::OpaqueFill) {
-            throw std::runtime_error("SDL2 adapter currently supports only opaque-fill");
+        if (backend == Backend::Sdl2 && !is_fill_workload(workload)) {
+            throw std::runtime_error(
+                "SDL2 adapter currently supports only opaque-fill and opaque-dirty-fill");
         }
         if (backend == Backend::Gdi && argc == 6) {
             throw std::runtime_error("SDL2 library path is valid only with the sdl2 backend");
@@ -484,18 +530,19 @@ int main(int argc, char** argv) {
 
         FrameBuffer jellyframe_surface(kWidth, kHeight, Color{0, 0, 0, 255});
         DisplayCommand command;
-        command.type = workload == Workload::OpaqueFill
+        command.type = is_fill_workload(workload)
             ? DisplayCommandType::FillRect
             : DisplayCommandType::LinearGradient;
-        command.rect = Rect{0, 0, kWidth, kHeight};
-        command.color = workload == Workload::OpaqueFill ? kFillColor : kGradientFirst;
+        command.rect = workload_rect(workload);
+        command.color = is_fill_workload(workload) ? kFillColor : kGradientFirst;
         command.color2 = kGradientSecond;
         command.gradient_axis = workload == Workload::VerticalGradient
             ? GradientAxis::Vertical
             : GradientAxis::Horizontal;
         SoftwareRasterizer rasterizer;
-        const auto jellyframe_samples = measure(samples, [&] {
-            rasterizer.rasterize(command, jellyframe_surface, Rect{0, 0, kWidth, kHeight});
+        const int operations_per_sample = workload_operations_per_sample(workload);
+        const auto jellyframe_samples = measure(samples, operations_per_sample, [&] {
+            rasterizer.rasterize(command, jellyframe_surface, command.rect);
         });
 
         OutputComparison comparison;
@@ -505,8 +552,8 @@ int main(int argc, char** argv) {
         std::string reference_file;
         if (backend == Backend::Gdi) {
             GdiSurface gdi_surface;
-            reference_samples = measure(samples, [&] {
-                if (workload == Workload::OpaqueFill) gdi_surface.fill();
+            reference_samples = measure(samples, operations_per_sample, [&] {
+                if (is_fill_workload(workload)) gdi_surface.fill(workload_rect(workload));
                 else if (workload == Workload::HorizontalGradient) gdi_surface.horizontal_gradient();
                 else gdi_surface.vertical_gradient();
             });
@@ -519,13 +566,15 @@ int main(int argc, char** argv) {
                 ? std::filesystem::path(argv[5])
                 : std::filesystem::path(L"SDL2.dll");
             SdlSurface sdl_surface(library_path);
-            reference_samples = measure(samples, [&] { sdl_surface.fill(); });
+            reference_samples = measure(samples, operations_per_sample, [&] {
+                sdl_surface.fill(workload_rect(workload));
+            });
             comparison = compare_output(jellyframe_surface, sdl_surface.pixels());
             reference_name = "sdl2-software-renderer";
             reference_version = sdl_surface.version;
             reference_file = "sdl2.json";
         }
-        const double tolerance = workload == Workload::OpaqueFill ? 0.0 : 1.0;
+        const double tolerance = is_fill_workload(workload) ? 0.0 : 1.0;
         const bool output_matches = comparison.rmse <= tolerance;
         write_manifest(output_directory / "jellyframe.json", "jellyframe-render-core",
                        JELLYFRAME_CPU2D_CORE_VERSION, workload, jellyframe_samples,

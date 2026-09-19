@@ -324,6 +324,11 @@ if(JELLYFRAME_BUILD_TESTS)
                  COMMAND jellyframe_cpu2d_compare
                          "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_smoke"
                          3)
+        add_test(NAME jellyframe_cpu2d_compare_dirty_output_smoke
+                 COMMAND jellyframe_cpu2d_compare
+                         "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_dirty_smoke"
+                         3
+                         opaque-dirty-fill)
         add_test(NAME jellyframe_cpu2d_compare_gradient_output_smoke
                  COMMAND jellyframe_cpu2d_compare
                          "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_gradient_smoke"

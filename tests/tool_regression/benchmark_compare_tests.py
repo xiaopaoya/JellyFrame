@@ -59,6 +59,18 @@ class BenchmarkCompareTests(unittest.TestCase):
         self.assertEqual(result["fixedConditionMismatches"], ["workload"])
         self.assertTrue(all(item["status"] == "not-comparable" for item in result["metrics"]))
 
+    def test_full_and_dirty_modes_are_not_comparable(self):
+        candidate = {**self.base, "mode": "dirty"}
+        result = self.module.compare_runs(self.base, candidate)
+        self.assertEqual(result["status"], "not-comparable")
+        self.assertEqual(result["fixedConditionMismatches"], ["mode"])
+
+    def test_different_operation_batch_sizes_are_not_comparable(self):
+        candidate = {**self.base, "operationsPerSample": 64}
+        result = self.module.compare_runs(self.base, candidate)
+        self.assertEqual(result["status"], "not-comparable")
+        self.assertEqual(result["fixedConditionMismatches"], ["operationsPerSample"])
+
     def test_failed_output_validation_is_not_comparable(self):
         candidate = {**self.base, "outputValidation": {"status": "fail", "method": "rgba-sha256", "reference": "fixture-v1"}}
         result = self.module.compare_runs(self.base, candidate)
@@ -73,6 +85,16 @@ class BenchmarkCompareTests(unittest.TestCase):
                 "measurements": {"mystery_score": [1, 2, 3]},
             }), encoding="utf-8")
             with self.assertRaisesRegex(SystemExit, "has no standardized unit"):
+                self.module.load_run(path)
+
+    def test_loader_rejects_invalid_operation_batch_size(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "run.json"
+            path.write_text(json.dumps({
+                **self.base,
+                "operationsPerSample": 0,
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "operationsPerSample must be a positive integer"):
                 self.module.load_run(path)
 
     def test_sample_count_mismatch_is_metric_specific(self):

@@ -89,6 +89,10 @@ def load_run(path: Path) -> dict[str, Any]:
         raise SystemExit(f"benchmark run environment must be a non-empty object: {path}")
     if isinstance(value.get("warmupIterations"), bool) or not isinstance(value.get("warmupIterations"), int) or value["warmupIterations"] < 0:
         raise SystemExit(f"benchmark run warmupIterations must be a non-negative integer: {path}")
+    operations_per_sample = value.get("operationsPerSample", 1)
+    if isinstance(operations_per_sample, bool) or not isinstance(operations_per_sample, int) or operations_per_sample <= 0:
+        raise SystemExit(f"benchmark run operationsPerSample must be a positive integer: {path}")
+    result["operationsPerSample"] = operations_per_sample
     validation = value.get("outputValidation")
     if not isinstance(validation, dict) or validation.get("status") not in ("pass", "fail") or not isinstance(validation.get("method"), str) or not validation["method"].strip() or not isinstance(validation.get("reference"), str) or not validation["reference"].strip():
         raise SystemExit(f"benchmark run outputValidation requires status pass/fail, method and reference: {path}")
@@ -129,6 +133,8 @@ def comparable_fields(baseline: dict[str, Any], candidate: dict[str, Any]) -> li
         mismatches.append("outputValidation.tolerance")
     if baseline_validation.get("status") != "pass" or candidate_validation.get("status") != "pass":
         mismatches.append("outputValidation.status")
+    if baseline.get("operationsPerSample", 1) != candidate.get("operationsPerSample", 1):
+        mismatches.append("operationsPerSample")
     return mismatches
 
 
