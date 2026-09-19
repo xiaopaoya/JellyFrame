@@ -1,6 +1,6 @@
 # JellyFrame 活动待办
 
-> 最后更新：2026-09-18；适用版本：0.6.0-dev
+> 最后更新：2026-09-19；适用版本：0.6.0-dev
 >
 > 本清单是 [路线图](roadmap_zh.md) 的近期执行队列，不记录已经关闭的验收、性能微实验或历史移植任务。
 
@@ -51,7 +51,8 @@
   真实手势延迟测量。
 - [x] VS Code 内嵌调试已增加显式启停的桌面 Render Trace；默认不采样，采集时使用
   600 frame / 4 MiB / 4 KiB 单行上限的环形缓冲，停止后原子写盘并打开现有查看器。
-  设备侧仍保持 aggregate-only；直接 scroll-blit/纯 present 的完整阶段归因继续作为已知限制。
+  整页 `present-only / scroll-blit` 与内部 `scroll-container` 已分别补齐真实 present 及
+  layer/paint/present/command 证据；设备侧仍保持 aggregate-only。
 - [x] 归档并校验四个 workload 的操作者视觉复核。12 张照片的 SHA-256 全部匹配，支持
   人工视觉等价且未报告候选特有回归；候选于 2026-09-15 获准通过。因缺少 display-readback
   仪器或治具，本候选豁免逐像素比较，该豁免不建立自动像素门禁。拖动 fixture 两侧共同存在

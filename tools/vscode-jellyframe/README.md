@@ -2,7 +2,7 @@
 
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-09-18; Applies to: 0.6.0-dev; extension version: 0.4.65; compatibility baseline: 0.5.0
+> Last updated: 2026-09-19; Applies to: 0.6.0-dev; extension version: 0.4.65; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -48,8 +48,10 @@ Palette as entry points.
 - Embedded debugging has an explicit **Trace / Stop trace** control. Sampling is
   off by default; while enabled, the native shell retains at most the latest
   600 rendered frames or 4 MiB in memory and atomically publishes the JSONL on
-  stop. The completed trace opens in the existing viewer. Direct scroll-blit or
-  present-only updates may not contain complete Core stage attribution.
+  stop. The completed trace opens in the existing viewer. Root framebuffer
+  scrolling is identified as `present-only / scroll-blit` with its measured
+  present span; internal scroll containers retain measured layer, paint,
+  present, dirty-region and raster-command evidence.
 - Inline diagnostics for app-author advice, package warnings and pipeline
   diagnostics.
 - **Generate Performance Report** discovers the latest App report, Render Trace,

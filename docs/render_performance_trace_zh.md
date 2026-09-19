@@ -1,6 +1,6 @@
 # Render Core 性能观测与对比方案
 
-> 最后更新：2026-09-18；适用版本：0.6.0-dev
+> 最后更新：2026-09-19；适用版本：0.6.0-dev
 > 状态：设备 profile 首轮闭环已完成；Win32 capture 与 VS Code 交互式调试均可显式产生有界 Render Trace
 
 ## 1. 为什么需要这项工具
@@ -125,8 +125,10 @@ build\Release\jellyframe_desktop_shell.exe `
 VS Code 内嵌调试路径使用 `--vscode-debug --render-trace <path>` 预配置输出，但在用户
 显式发送 `trace-start` 前不采样。交互模式在内存中保留最近 600 条 frame、最多 4 MiB，
 每行最多 4 KiB；超过上限时驱逐最旧 frame，停止或会话结束时通过临时文件原子发布。
-调试视图会显示保留/驱逐计数并打开同一查看器。当前只有实际进入 Core render 的帧
-具备完整 frame 记录；直接 scroll-blit 或纯 present 路径可能只有帧输出而没有完整阶段归因。
+调试视图会显示保留/驱逐计数并打开同一查看器。常规 Core render 帧记录完整的已观测阶段；
+整页 framebuffer scroll-blit 使用 `present-only / scroll-blit` 明确表示没有发生 Core repaint，
+只记录真实 present span 和提交区域。内部滚动容器使用 `scroll-container` reason，并记录
+layer tree、paint、present、dirty rect 和实际 raster command 归因。
 
 确定性采集使用确定性捕获循环的墙钟时间填充 `totalUs`，并在渲染路径中记录已覆盖的
 `input`、`style`、`renderTree`、`layout`、`layerTree`、`dirty`、`paint`、`present`
@@ -143,6 +145,9 @@ VS Code 内嵌调试路径使用 `--vscode-debug --render-trace <path>` 预配�
 
 - `format`、`type`、`frame`、`totalUs`、`stagesUs` 必须存在；所有时间为非负整数微秒；
 - `frame` 在同一 session 严格递增；重复、回退或损坏记录必须被工具报告，不能静默排序；
+- `action` / `reason` 必须描述 producer 实际执行的路径。`present-only / scroll-blit`
+  表示只复用 framebuffer 并提交，不得伪造 paint 或 command 耗时；`scroll-container`
+  则可包含重建 layer tree 和局部/全量 repaint；
 - `totalUs` 是 producer 测得的 frame wall time；`stagesUs` 可以存在未归因间隙，工具不得
   宣称阶段之和等于 total，除非 producer 明确给出 `timingComplete: true`；
 - `stageSpans` 是可选的真实阶段 span 数组，每项包含 `name`、相对于 frame trace 起点的

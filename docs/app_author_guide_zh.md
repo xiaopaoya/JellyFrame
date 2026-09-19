@@ -1,6 +1,6 @@
 # App 作者手册
 
-> 最后更新：2026-08-25；适用版本：0.6.0-dev；当前开发线：0.6.0
+> 最后更新：2026-09-19；适用版本：0.6.0-dev；当前开发线：0.6.0
 
 这是一份给 JellyFrame app 作者的短契约。JellyFrame 不是迷你浏览器，而是一个 Web 形状的嵌入式
 UI runtime：HTML 负责结构，CSS 使用文档化的小屏样式子集，JavaScript 负责有界本地交互，manifest
@@ -116,7 +116,9 @@ python tools\render_performance_report.py `
 在 VS Code 内嵌调试中，可在问题交互前点击“性能跟踪”，完成后点击“停止跟踪”。
 扩展会自动打开 Render Trace 查看器，可按帧查看阶段耗时、dirty 范围、command/owner 归因、
 相邻帧差异和异常帧。采集默认关闭，最多保留最近 600 帧或 4 MiB，超限时会驱逐旧帧。
-目前直接 scroll-blit/纯 present 路径不保证有完整 Core 阶段归因；这些桌面数据也不等于设备 FPS、DMA 或 panel 耗时。
+直接整页 scroll-blit 会显示为 `present-only / scroll-blit`，只有 present 耗时而没有伪造的 paint；
+内部滚动容器会显示 `scroll-container` 及实际 layer/paint/present 阶段。这些桌面数据仍不等于
+设备 FPS、DMA 或 panel 耗时。
 
 诊断标题和解释会尽量复用 Web/CSS 规范中已有的表达：parse error、invalid declaration、
 unsupported value、overflow、clipping、deferred API 等。JellyFrame 自己的 `code` 字段只作为

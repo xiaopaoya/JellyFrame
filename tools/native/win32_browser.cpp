@@ -3905,8 +3905,8 @@ public:
 
     bool write_frame(int frame,
                      std::uint64_t total_us,
-                     FrameUpdateAction action,
-                     FrameUpdateReason reason,
+                     std::string_view action,
+                     std::string_view reason,
                      DirtyRegionMode dirty_mode,
                      DirtyRegionFallbackReason dirty_reason,
                      std::size_t dirty_rect_count,
@@ -3929,8 +3929,8 @@ public:
                << ",\"frame\":" << std::max(0, frame)
                << ",\"totalUs\":" << total_us
                << ",\"timingComplete\":false"
-               << ",\"action\":\"" << frame_update_action_name(action) << '\"'
-               << ",\"reason\":\"" << frame_update_reason_name(reason) << '\"'
+               << ",\"action\":\"" << json_escape_for_trace(std::string(action)) << '\"'
+               << ",\"reason\":\"" << json_escape_for_trace(std::string(reason)) << '\"'
                << ",\"dirtyMode\":\"" << dirty_region_mode_name(dirty_mode) << '\"'
                << ",\"dirtyReason\":\"" << dirty_region_fallback_reason_name(dirty_reason) << '\"'
                << ",\"dirtyRectCount\":" << dirty_rect_count
@@ -4400,8 +4400,8 @@ public:
                     : 0;
                 trace.write_frame(frame,
                                   elapsed.count() < 0 ? 0 : static_cast<std::uint64_t>(elapsed.count()),
-                                  action,
-                                  reason,
+                                  frame_update_action_name(action),
+                                  frame_update_reason_name(reason),
                                   dirty_mode,
                                   dirty_reason,
                                   updated ? last_dirty_rect_count_ : 0,
@@ -6283,6 +6283,30 @@ private:
         if (layout_tree_ == nullptr) {
             return false;
         }
+        const bool trace_live_frame = live_trace_writer_.active();
+        const auto trace_frame_started = trace_live_frame
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
+        if (trace_live_frame) {
+            begin_live_trace_frame(trace_frame_started, true);
+            const Node* scroll_node = scroll_match != nullptr && scroll_match->layer != nullptr &&
+                    scroll_match->layer->box != nullptr
+                ? scroll_match->layer->box->node
+                : nullptr;
+            const std::string owner = scroll_node != nullptr
+                ? frame_trace_command_attribution_.owner_label_for_node(*scroll_node)
+                : "unattributed";
+            Rect owner_bounds;
+            const bool has_owner_bounds = scroll_node != nullptr &&
+                trace_layout_bounds_for_owner(*scroll_node, owner_bounds);
+            frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Scroll,
+                                              DomDirtyNone,
+                                              document_ != nullptr ? document_->mutation_generation : 0,
+                                              false,
+                                              true,
+                                              owner,
+                                              has_owner_bounds ? &owner_bounds : nullptr);
+        }
         const bool can_strip_blit = !options_.force_full_repaint && scroll_match != nullptr &&
             can_strip_blit_scroll_layer(*scroll_match);
         const Rect strip_visible_rect = can_strip_blit ? scroll_match->visible_rect : Rect{};
@@ -6306,11 +6330,29 @@ private:
         image_resolve_context.style_resolver = style_resolver_.get();
         layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
         layer_options.scroll_resolver = ScrollOffsetResolver{resolve_browser_scroll_y, this};
+        if (trace_live_frame) {
+            layer_options.trace_owner_resolver =
+                DisplayCommandTraceOwnerResolver{resolve_frame_trace_owner, &frame_trace_command_attribution_};
+        }
         LayerTreeBuilder layer_builder(layer_options);
+        const auto layer_started = trace_live_frame
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
         layer_tree_ = layer_builder.build(*layout_tree_);
+        if (trace_live_frame) {
+            add_live_trace_span(FrameTraceStage::LayerTree,
+                                trace_frame_started,
+                                layer_started,
+                                std::chrono::steady_clock::now());
+        }
 
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);
         compositor_options.diagnostics = &diagnostics_;
+        if (trace_live_frame) {
+            compositor_options.rasterizer_timing = SoftwareRasterizerTiming{steady_clock_microseconds, nullptr};
+            compositor_options.command_observer =
+                SoftwareRasterizerCommandObserver{observe_frame_trace_command, &frame_trace_command_attribution_};
+        }
         SoftwareCompositor compositor(text_backend.painter,
                                       ImagePainter{paint_image_surface, &image_context_},
                                       compositor_options);
@@ -6318,6 +6360,9 @@ private:
         const Rect content_bounds{0, 0, viewport_width_, content_height};
         dirty_content_rect = intersect_rect(dirty_content_rect, content_bounds);
         if (use_strip_blit) {
+            const auto paint_started = trace_live_frame
+                ? std::chrono::steady_clock::now()
+                : std::chrono::steady_clock::time_point{};
             const Rect move_source{strip_visible_rect.x + strip_plan.move_source.x,
                                    strip_visible_rect.y + strip_plan.move_source.y,
                                    strip_plan.move_source.width,
@@ -6346,13 +6391,32 @@ private:
                                    page_background_,
                                    dirty_rects,
                                    dirty_count);
+            if (trace_live_frame) {
+                add_live_trace_span(FrameTraceStage::Paint,
+                                    trace_frame_started,
+                                    paint_started,
+                                    std::chrono::steady_clock::now());
+            }
             ++scroll_container_counters_.strip_blits;
             ++scroll_container_counters_.dirty_repaints;
             record_present_estimate_for_content_rects(dirty_rects, dirty_count);
+            const auto present_started = trace_live_frame
+                ? std::chrono::steady_clock::now()
+                : std::chrono::steady_clock::time_point{};
             rebuild_input_controller(hovered_node, active_node, focused_node);
             update_blit_pixels_for_content_rect(strip_visible_rect);
             publish_vscode_frame();
             InvalidateRect(hwnd_, nullptr, FALSE);
+            if (trace_live_frame) {
+                add_live_trace_span(FrameTraceStage::Present,
+                                    trace_frame_started,
+                                    present_started,
+                                    std::chrono::steady_clock::now());
+                DirtyRegionResult trace_region;
+                trace_region.mode = DirtyRegionMode::DirtyRects;
+                trace_region.rects.assign(dirty_rects, dirty_rects + dirty_count);
+                write_live_trace_frame(trace_frame_started, "scroll-blit", "scroll-container", trace_region);
+            }
             return true;
         }
 
@@ -6366,6 +6430,9 @@ private:
             dirty_region_should_repaint_incrementally(scroll_dirty_region,
                                                       content_bounds,
                                                       kIncrementalDirtyAreaLimitPercent);
+        const auto paint_started = trace_live_frame
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
         if (can_repaint_dirty) {
             compositor.render_into(*layer_tree_, frame_buffer_, page_background_, &dirty_content_rect, 1);
             ++scroll_container_counters_.dirty_repaints;
@@ -6373,11 +6440,23 @@ private:
         } else {
             frame_buffer_ = compositor.render(*layer_tree_, viewport_width_, content_height, page_background_);
             if (frame_buffer_.width <= 0 || frame_buffer_.height <= 0) {
+                if (trace_live_frame) {
+                    discard_live_trace_frame();
+                }
                 return false;
             }
             ++scroll_container_counters_.full_repaints;
             record_present_estimate_full_viewport();
         }
+        if (trace_live_frame) {
+            add_live_trace_span(FrameTraceStage::Paint,
+                                trace_frame_started,
+                                paint_started,
+                                std::chrono::steady_clock::now());
+        }
+        const auto present_started = trace_live_frame
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
         rebuild_input_controller(hovered_node, active_node, focused_node);
         if (can_repaint_dirty) {
             update_blit_pixels_for_content_rect(dirty_content_rect);
@@ -6386,6 +6465,26 @@ private:
         }
         publish_vscode_frame();
         InvalidateRect(hwnd_, nullptr, FALSE);
+        if (trace_live_frame) {
+            add_live_trace_span(FrameTraceStage::Present,
+                                trace_frame_started,
+                                present_started,
+                                std::chrono::steady_clock::now());
+            DirtyRegionResult trace_region;
+            if (can_repaint_dirty) {
+                trace_region = scroll_dirty_region;
+            } else {
+                trace_region.mode = DirtyRegionMode::FullFrame;
+                trace_region.fallback_reason = empty_rect(dirty_content_rect)
+                    ? DirtyRegionFallbackReason::EmptyAfterClipping
+                    : DirtyRegionFallbackReason::DirtyAreaTooLarge;
+                trace_region.rects.push_back(Rect{0, 0, viewport_width_, content_height});
+            }
+            write_live_trace_frame(trace_frame_started,
+                                   "repaint-existing",
+                                   "scroll-container",
+                                   trace_region);
+        }
         return true;
     }
 
@@ -6421,7 +6520,7 @@ private:
                                                            previous,
                                                            next);
             if (rendered) {
-                if (frame_trace_enabled() && document_ != nullptr) {
+                if (!live_trace_writer_.active() && frame_trace_enabled() && document_ != nullptr) {
                     const std::string owner = frame_trace_command_attribution_.owner_label_for_node(*scroll_node);
                     Rect owner_bounds;
                     const bool has_owner_bounds = trace_layout_bounds_for_owner(*scroll_node, owner_bounds);
@@ -6432,9 +6531,6 @@ private:
                                                       true,
                                                       owner,
                                                       has_owner_bounds ? &owner_bounds : nullptr);
-                    if (live_trace_writer_.active()) {
-                        frame_trace_mutation_sources_.clear_frame();
-                    }
                 }
                 ++scroll_container_counters_.scrolls;
             }
@@ -6601,55 +6697,116 @@ private:
                   << std::endl;
     }
 
+    void begin_live_trace_frame(std::chrono::steady_clock::time_point started,
+                                bool clear_mutation_sources = false) {
+        trace_frame_timings_.clear();
+        frame_trace_command_attribution_.clear_frame_samples();
+        if (clear_mutation_sources) {
+            frame_trace_mutation_sources_.clear_frame();
+        }
+        frame_trace_command_attribution_.begin_frame(steady_clock_timepoint_microseconds(started));
+        if (document_ != nullptr) {
+            frame_trace_command_attribution_.prepare_for_tree_build(*document_);
+        }
+    }
+
+    void add_live_trace_span(FrameTraceStage stage,
+                             std::chrono::steady_clock::time_point frame_started,
+                             std::chrono::steady_clock::time_point started,
+                             std::chrono::steady_clock::time_point ended) {
+        const auto offset = std::chrono::duration_cast<std::chrono::microseconds>(started - frame_started);
+        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(ended - started);
+        if (offset.count() >= 0 && elapsed.count() > 0) {
+            trace_frame_timings_.add_span(stage,
+                                          static_cast<std::uint64_t>(offset.count()),
+                                          static_cast<std::uint64_t>(elapsed.count()));
+        }
+    }
+
+    void discard_live_trace_frame() {
+        frame_trace_mutation_sources_.clear_frame();
+        frame_trace_command_attribution_.clear_frame_samples();
+        trace_frame_timings_.clear();
+    }
+
+    void write_live_trace_frame(std::chrono::steady_clock::time_point started,
+                                std::string_view action,
+                                std::string_view reason,
+                                const DirtyRegionResult& dirty_region,
+                                std::size_t dirty_rect_count = std::numeric_limits<std::size_t>::max(),
+                                int dirty_area_percent = -1) {
+        if (!live_trace_writer_.active()) {
+            return;
+        }
+        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - started);
+        const DomStatistics dom_stats = document_ != nullptr
+            ? compute_dom_statistics(*document_)
+            : DomStatistics{};
+        const std::size_t layout_boxes = layout_tree_ != nullptr ? count_layout_boxes(*layout_tree_) : 0;
+        const std::size_t layers = layer_tree_ != nullptr ? count_layers(*layer_tree_) : 0;
+        const std::size_t display_commands = layer_tree_ != nullptr
+            ? count_layer_display_commands(*layer_tree_)
+            : 0;
+        const int frame = static_cast<int>(std::min<std::uint64_t>(
+            live_trace_frame_sequence_, static_cast<std::uint64_t>(std::numeric_limits<int>::max())));
+        if (dirty_rect_count == std::numeric_limits<std::size_t>::max()) {
+            dirty_rect_count = dirty_region.rects.size();
+        }
+        if (dirty_area_percent < 0) {
+            dirty_area_percent = dirty_region_area_percent(
+                dirty_region, Rect{0, 0, viewport_width_, viewport_height_});
+        }
+        if (!live_trace_writer_.write_frame(
+                frame,
+                elapsed.count() < 0 ? 0 : static_cast<std::uint64_t>(elapsed.count()),
+                action,
+                reason,
+                dirty_region.mode,
+                dirty_region.fallback_reason,
+                dirty_rect_count,
+                dirty_area_percent,
+                dom_stats.node_count,
+                layout_boxes,
+                layers,
+                display_commands,
+                frame_buffer_.pixels.size() * sizeof(Color),
+                "",
+                dirty_region.rects,
+                trace_frame_timings_,
+                frame_trace_command_attribution_,
+                frame_trace_mutation_sources_)) {
+            stop_live_trace();
+        }
+        ++live_trace_frame_sequence_;
+        frame_trace_mutation_sources_.clear_frame();
+        frame_trace_command_attribution_.clear_frame_samples();
+        trace_frame_timings_.clear();
+    }
+
     void render_current(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
         if (!live_trace_writer_.active()) {
             render_current_impl(hovered_node, active_node, focused_node);
             return;
         }
-        trace_frame_timings_.clear();
-        frame_trace_command_attribution_.clear_frame_samples();
         const std::uint64_t update_sequence_before = frame_update_sequence_;
         const auto started = std::chrono::steady_clock::now();
+        begin_live_trace_frame(started);
         render_current_impl(hovered_node, active_node, focused_node);
-        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::steady_clock::now() - started);
         if (frame_update_sequence_ != update_sequence_before) {
-            const DomStatistics dom_stats = document_ != nullptr
-                ? compute_dom_statistics(*document_)
-                : DomStatistics{};
-            const std::size_t layout_boxes = layout_tree_ != nullptr ? count_layout_boxes(*layout_tree_) : 0;
-            const std::size_t layers = layer_tree_ != nullptr ? count_layers(*layer_tree_) : 0;
-            const std::size_t display_commands = layer_tree_ != nullptr
-                ? count_layer_display_commands(*layer_tree_)
-                : 0;
-            const int frame = static_cast<int>(std::min<std::uint64_t>(
-                live_trace_frame_sequence_, static_cast<std::uint64_t>(std::numeric_limits<int>::max())));
-            if (!live_trace_writer_.write_frame(
-                    frame,
-                    elapsed.count() < 0 ? 0 : static_cast<std::uint64_t>(elapsed.count()),
-                    last_frame_update_action_,
-                    last_frame_update_reason_,
-                    last_dirty_region_mode_,
-                    last_dirty_region_reason_,
-                    last_dirty_rect_count_,
-                    last_dirty_area_percent_,
-                    dom_stats.node_count,
-                    layout_boxes,
-                    layers,
-                    display_commands,
-                    frame_buffer_.pixels.size() * sizeof(Color),
-                    "",
-                    last_dirty_rects_,
-                    trace_frame_timings_,
-                    frame_trace_command_attribution_,
-                    frame_trace_mutation_sources_)) {
-                stop_live_trace();
-            }
-            ++live_trace_frame_sequence_;
+            DirtyRegionResult dirty_region;
+            dirty_region.mode = last_dirty_region_mode_;
+            dirty_region.fallback_reason = last_dirty_region_reason_;
+            dirty_region.rects = last_dirty_rects_;
+            write_live_trace_frame(started,
+                                   frame_update_action_name(last_frame_update_action_),
+                                   frame_update_reason_name(last_frame_update_reason_),
+                                   dirty_region,
+                                   last_dirty_rect_count_,
+                                   last_dirty_area_percent_);
+        } else {
+            discard_live_trace_frame();
         }
-        frame_trace_mutation_sources_.clear_frame();
-        frame_trace_command_attribution_.clear_frame_samples();
-        trace_frame_timings_.clear();
     }
 
     void render_current_impl(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
@@ -7276,18 +7433,50 @@ private:
         if (scroll_y_ == previous) {
             return false;
         }
+        const bool trace_live_frame = live_trace_writer_.active();
+        const auto trace_frame_started = trace_live_frame
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
+        ScrollBlitPlan trace_plan;
+        bool trace_fast_blit = false;
+        if (trace_live_frame) {
+            begin_live_trace_frame(trace_frame_started, true);
+            frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Scroll,
+                                              DomDirtyNone,
+                                              document_ != nullptr ? document_->mutation_generation : 0,
+                                              false,
+                                              true);
+            const std::size_t target_size =
+                static_cast<std::size_t>(viewport_width_) * static_cast<std::size_t>(viewport_height_);
+            if (blit_pixels_.size() == target_size && frame_buffer_.width > 0 && frame_buffer_.height > 0) {
+                trace_plan = plan_vertical_scroll_blit(
+                    viewport_width_, viewport_height_, frame_buffer_.height, previous, scroll_y_);
+                trace_fast_blit = trace_plan.mode == ScrollBlitMode::FastBlit;
+            }
+        }
         update_blit_pixels_after_scroll(previous);
         publish_vscode_frame();
         InvalidateRect(hwnd_, nullptr, FALSE);
-        if (frame_trace_enabled() && document_ != nullptr) {
+        if (trace_live_frame) {
+            add_live_trace_span(FrameTraceStage::Present,
+                                trace_frame_started,
+                                trace_frame_started,
+                                std::chrono::steady_clock::now());
+            DirtyRegionResult trace_region;
+            if (trace_fast_blit) {
+                trace_region.mode = DirtyRegionMode::DirtyRects;
+                trace_region.rects.push_back(trace_plan.exposed_strip);
+            } else {
+                trace_region.mode = DirtyRegionMode::FullFrame;
+                trace_region.rects.push_back(Rect{0, 0, viewport_width_, viewport_height_});
+            }
+            write_live_trace_frame(trace_frame_started, "present-only", "scroll-blit", trace_region);
+        } else if (frame_trace_enabled() && document_ != nullptr) {
             frame_trace_mutation_sources_.add(FrameTraceMutationSourceKind::Scroll,
                                               DomDirtyNone,
                                               document_->mutation_generation,
                                               false,
                                               true);
-            if (live_trace_writer_.active()) {
-                frame_trace_mutation_sources_.clear_frame();
-            }
         }
         return true;
     }

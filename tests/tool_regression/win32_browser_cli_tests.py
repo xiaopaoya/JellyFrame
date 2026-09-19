@@ -87,7 +87,15 @@ def run_vscode_debug_case(exe: Path, app: Path, frame_dir: Path) -> tuple[int, l
     return process.returncode, frames
 
 
-def run_vscode_trace_case(exe: Path, app: Path, frame_dir: Path, trace: Path) -> tuple[int, list[str]]:
+def run_vscode_trace_case(
+    exe: Path,
+    app: Path,
+    frame_dir: Path,
+    trace: Path,
+    input_lines: tuple[str, ...] = (
+        "pointer down 20 20", "pointer move 130 20 1", "pointer up 130 20"
+    ),
+) -> tuple[int, list[str]]:
     process = subprocess.Popen(
         [str(exe), "--app", str(app), "--vscode-debug", "--vscode-frame-dir", str(frame_dir),
          "--render-trace", str(trace)],
@@ -100,6 +108,7 @@ def run_vscode_trace_case(exe: Path, app: Path, frame_dir: Path, trace: Path) ->
     lines: list[str] = []
     trace_started = False
     trace_stop_sent = False
+    frames_after_trace_start = 0
     output_lines: Queue[str | None] = Queue()
 
     def read_output() -> None:
@@ -124,14 +133,15 @@ def run_vscode_trace_case(exe: Path, app: Path, frame_dir: Path, trace: Path) ->
                 process.stdin.flush()
             elif line.startswith("JF_TRACE_STARTED\t"):
                 trace_started = True
-                process.stdin.write("pointer down 20 20\n")
-                process.stdin.write("pointer move 130 20 1\n")
-                process.stdin.write("pointer up 130 20\n")
+                for input_line in input_lines:
+                    process.stdin.write(f"{input_line}\n")
                 process.stdin.flush()
-            elif trace_started and line.startswith("JF_FRAME\t") and not trace_stop_sent:
-                trace_stop_sent = True
-                process.stdin.write("trace-stop\n")
-                process.stdin.flush()
+            elif trace_started and line.startswith("JF_FRAME\t"):
+                frames_after_trace_start += 1
+                if frames_after_trace_start >= 2 and not trace_stop_sent:
+                    trace_stop_sent = True
+                    process.stdin.write("trace-stop\n")
+                    process.stdin.flush()
             elif line.startswith("JF_TRACE\t"):
                 process.stdin.write("quit\n")
                 process.stdin.flush()
@@ -632,6 +642,48 @@ def main() -> int:
         live_frame_numbers = [record["frame"] for record in live_trace_records[1:]]
         require(live_frame_numbers == sorted(set(live_frame_numbers)),
                 "interactive Render Trace frame numbers must be strictly increasing")
+
+        root_scroll_trace = root / "vscode-root-scroll-trace.jsonl"
+        root_scroll_exit, _ = run_vscode_trace_case(
+            exe,
+            REPO_ROOT / "tests" / "fixtures" / "apps" / "jelly_scroll_probe",
+            root / "vscode-root-scroll-frames",
+            root_scroll_trace,
+            ("wheel 150 150 -120",),
+        )
+        require(root_scroll_exit == 0, "root scroll Render Trace session must stop cleanly")
+        root_scroll_records = [json.loads(line) for line in root_scroll_trace.read_text(encoding="utf-8").splitlines()]
+        root_scroll_frames = [record for record in root_scroll_records if record.get("type") == "frame"]
+        direct_scroll = next((record for record in root_scroll_frames
+                              if record.get("action") == "present-only" and
+                              record.get("reason") == "scroll-blit"), None)
+        require(direct_scroll is not None, "root scroll must retain its direct present-only trace frame")
+        require(set(direct_scroll["stagesUs"]).issubset({"present"}) and
+                direct_scroll["stagesUs"].get("present", 0) > 0,
+                "root scroll trace must report only its measured present path")
+        require(direct_scroll["dirtyMode"] in {"dirty-rects", "full-frame"} and
+                direct_scroll["dirtyRectCount"] >= 1,
+                "root scroll trace must retain its presented region")
+
+        container_scroll_trace = root / "vscode-container-scroll-trace.jsonl"
+        container_scroll_exit, _ = run_vscode_trace_case(
+            exe,
+            REPO_ROOT / "tests" / "fixtures" / "apps" / "jelly_scroll_container_probe",
+            root / "vscode-container-scroll-frames",
+            container_scroll_trace,
+            ("wheel 150 142 -120",),
+        )
+        require(container_scroll_exit == 0, "container scroll Render Trace session must stop cleanly")
+        container_records = [json.loads(line) for line in container_scroll_trace.read_text(encoding="utf-8").splitlines()]
+        container_frames = [record for record in container_records if record.get("type") == "frame"]
+        container_scroll = next((record for record in container_frames
+                                 if record.get("reason") == "scroll-container"), None)
+        require(container_scroll is not None, "container scroll must retain its direct trace frame")
+        require(all(container_scroll["stagesUs"].get(stage, 0) > 0
+                    for stage in ("layerTree", "paint", "present")),
+                "container scroll must expose measured layer, paint, and present stages")
+        require(container_scroll.get("commands"),
+                "container scroll must retain command attribution from its direct repaint")
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-select-popup-") as directory:
         root = Path(directory)
