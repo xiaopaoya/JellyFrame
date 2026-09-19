@@ -54,6 +54,19 @@ inline void blend_color(Color& destination, Color source) {
     const int src_a = source.a;
     const int dst_a = destination.a;
     const int inv_src_a = 255 - src_a;
+    // An opaque destination fixes out_a at 255; keep the original integer rounding.
+    if (dst_a == 255) {
+        const auto blend_opaque_channel = [&](int src, int dst) {
+            return static_cast<std::uint8_t>((src * src_a + dst * inv_src_a + 127) / 255);
+        };
+        destination = Color{
+            blend_opaque_channel(source.r, destination.r),
+            blend_opaque_channel(source.g, destination.g),
+            blend_opaque_channel(source.b, destination.b),
+            255,
+        };
+        return;
+    }
     const int out_a = src_a + ((dst_a * inv_src_a + 127) / 255);
     if (out_a == 0) {
         destination = Color{0, 0, 0, 0};

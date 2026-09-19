@@ -716,6 +716,49 @@ void per_corner_rounded_rect_keeps_square_bottom_left() {
     check(frame_buffer.pixel(2, 2).r < 255, "rounded top-left corner keeps antialiased coverage");
 }
 
+Color reference_source_over(Color destination, Color source) {
+    if (source.a == 0) return destination;
+    if (source.a == 255) return source;
+    const int inverse = 255 - source.a;
+    const int alpha = source.a + (destination.a * inverse + 127) / 255;
+    const auto channel = [&](int src, int dst) {
+        const int premultiplied = src * source.a +
+            (dst * destination.a * inverse + 127) / 255;
+        return static_cast<std::uint8_t>((premultiplied + alpha / 2) / alpha);
+    };
+    return Color{channel(source.r, destination.r), channel(source.g, destination.g),
+                 channel(source.b, destination.b), static_cast<std::uint8_t>(alpha)};
+}
+
+void source_over_opaque_destination_matches_all_channel_values() {
+    for (int alpha = 0; alpha < 256; ++alpha) {
+        for (int source = 0; source < 256; ++source) {
+            for (int destination = 0; destination < 256; ++destination) {
+                Color actual{static_cast<std::uint8_t>(destination),
+                             static_cast<std::uint8_t>(255 - destination), 127, 255};
+                const Color input{static_cast<std::uint8_t>(source), 63,
+                                  static_cast<std::uint8_t>(source), static_cast<std::uint8_t>(alpha)};
+                const Color expected = reference_source_over(actual, input);
+                blend_color(actual, input);
+                check(actual.r == expected.r && actual.g == expected.g &&
+                      actual.b == expected.b && actual.a == expected.a,
+                      "opaque destination blend preserves every byte combination");
+            }
+        }
+    }
+    for (int dst_alpha = 0; dst_alpha < 255; ++dst_alpha) {
+        for (int src_alpha = 0; src_alpha < 256; ++src_alpha) {
+            Color actual{19, 255, 127, static_cast<std::uint8_t>(dst_alpha)};
+            const Color input{231, 0, 128, static_cast<std::uint8_t>(src_alpha)};
+            const Color expected = reference_source_over(actual, input);
+            blend_color(actual, input);
+            check(actual.r == expected.r && actual.g == expected.g &&
+                  actual.b == expected.b && actual.a == expected.a,
+                  "transparent destination retains general source-over semantics");
+        }
+    }
+}
+
 void source_over_alpha_composites() {
     FrameBuffer frame_buffer(1, 1, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
@@ -2280,6 +2323,7 @@ int main() {
         rounded_fill_antialiases_edge_pixels();
         per_corner_rounded_rect_keeps_square_bottom_left();
         source_over_alpha_composites();
+        source_over_opaque_destination_matches_all_channel_values();
         clipping_limits_rasterization();
         image_command_uses_injected_painter();
         image_command_falls_back_without_painter();
