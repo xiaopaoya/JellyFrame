@@ -253,7 +253,8 @@ present/DMA 时间和视觉误差。不同库不支持的能力单独标记 `not
 
 仓库提供 `tools/benchmark_compare.py` 作为统一比较入口。Cairo、SDL、LVGL 或其他适配器只负责输出
 `jellyframe.benchmark.run.v0` JSON；工具会检查 workload、viewport、pixel format、抗锯齿、
-full/dirty mode、运行环境、warm-up，以及输出验证方法/基准/容差。任一条件不一致或任一侧视觉验证
+full/dirty mode、运行环境、warm-up、每样本操作数、`workloadParameters` 中的几何/颜色/blend，
+以及输出验证方法/基准/容差。任一条件不一致或任一侧视觉验证
 未通过时，整组结果标记为 `not-comparable`。只有成对的 pixels 与正耗时样本才派生 MPix/s，
 不会从平均像素数猜测吞吐率。
 
@@ -287,6 +288,9 @@ full/dirty mode、运行环境、warm-up，以及输出验证方法/基准/容�
 4.3 us，输出 digest 保持 `177877a38d09ae83`；同轮 GDI 约为 4.4 us p95。该数字只证明 172x320、
 不透明、横向、矩形渐变 primitive 的改动有效，不能外推到完整 UI、设备 FPS、圆角/透明渐变、文本、
 GPU 或其他机器。圆角、文本以及 LVGL 实机对照仍需分别建立等价 workload 和输出质量门禁。
+当前环境没有满足同一 4x4 coverage 语义的 Cairo adapter；GDI `RoundRect` 与 SDL2 software
+renderer 也不能提供等价圆角 AA，因此 `rounded-card-rgb-v1` 继续保持 `not-comparable`，不使用
+放宽 RMSE 的方式掩盖几何/coverage 差异。
 
 ## 7. 阶段出口
 

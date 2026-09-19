@@ -37,6 +37,11 @@ class BenchmarkCompareTests(unittest.TestCase):
             "mode": "full",
             "environment": {"os": "windows", "architecture": "x64", "cpu": "test-cpu", "buildType": "release"},
             "warmupIterations": 30,
+            "workloadParameters": {
+                "rect": {"x": 0, "y": 0, "width": 172, "height": 320},
+                "sourceRgba": "164757ff",
+                "blend": "source-over",
+            },
             "outputValidation": {"status": "pass", "method": "rgba-sha256", "reference": "fixture-v1"},
             "measurements": {"frame_us": [100, 120, 110], "pixels": [10000, 10000, 10000]},
         }
@@ -51,6 +56,8 @@ class BenchmarkCompareTests(unittest.TestCase):
         self.assertEqual(frame["deltaPercent"], -16.67)
         throughput = next(item for item in result["metrics"] if item["unit"] == "MPix/s")
         self.assertEqual(throughput["name"], "mpix_per_s_using_frame_us")
+        self.assertEqual(result["fixedConditions"]["workloadParameters"], self.base["workloadParameters"])
+        self.assertEqual(result["candidateFixedConditions"]["workloadParameters"], self.base["workloadParameters"])
 
     def test_fixed_condition_mismatch_is_not_comparable(self):
         candidate = {**self.base, "workload": "rounded-card"}
@@ -70,6 +77,25 @@ class BenchmarkCompareTests(unittest.TestCase):
         result = self.module.compare_runs(self.base, candidate)
         self.assertEqual(result["status"], "not-comparable")
         self.assertEqual(result["fixedConditionMismatches"], ["operationsPerSample"])
+
+    def test_different_workload_parameters_are_not_comparable(self):
+        candidate = {
+            **self.base,
+            "workloadParameters": {
+                **self.base["workloadParameters"],
+                "sourceRgba": "ffffffff",
+            },
+        }
+        result = self.module.compare_runs(self.base, candidate)
+        self.assertEqual(result["status"], "not-comparable")
+        self.assertEqual(result["fixedConditionMismatches"], ["workloadParameters"])
+
+    def test_missing_workload_parameters_on_one_side_is_not_comparable(self):
+        candidate = dict(self.base)
+        candidate.pop("workloadParameters")
+        result = self.module.compare_runs(self.base, candidate)
+        self.assertEqual(result["status"], "not-comparable")
+        self.assertEqual(result["fixedConditionMismatches"], ["workloadParameters"])
 
     def test_failed_output_validation_is_not_comparable(self):
         candidate = {**self.base, "outputValidation": {"status": "fail", "method": "rgba-sha256", "reference": "fixture-v1"}}
@@ -97,6 +123,16 @@ class BenchmarkCompareTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "operationsPerSample must be a positive integer"):
                 self.module.load_run(path)
 
+    def test_loader_rejects_invalid_workload_parameters(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "run.json"
+            path.write_text(json.dumps({
+                **self.base,
+                "workloadParameters": [],
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "workloadParameters must be a non-empty object"):
+                self.module.load_run(path)
+
     def test_sample_count_mismatch_is_metric_specific(self):
         candidate = {**self.base, "measurements": {"frame_us": [80, 90], "pixels": [10000, 10000]}}
         result = self.module.compare_runs(self.base, candidate)
@@ -122,7 +158,10 @@ class BenchmarkCompareTests(unittest.TestCase):
             ], cwd=ROOT, check=False, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["status"], "comparable")
-            self.assertIn("Benchmark comparison: comparable", html_output.read_text(encoding="utf-8"))
+            rendered = html_output.read_text(encoding="utf-8")
+            self.assertIn("Benchmark comparison: comparable", rendered)
+            self.assertIn("Baseline fixed conditions", rendered)
+            self.assertIn("sourceRgba", rendered)
 
 
 if __name__ == "__main__":

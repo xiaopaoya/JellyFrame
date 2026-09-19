@@ -72,6 +72,7 @@ results are considered comparable.
   "environment": {"os": "windows", "architecture": "x64", "cpu": "model", "buildType": "release"},
   "warmupIterations": 30,
   "operationsPerSample": 1,
+  "workloadParameters": {"surfaceInitialRgb": "000000", "rect": {"x": 0, "y": 0, "width": 172, "height": 320}, "operation": "fill-rect", "sourceRgb": "164757", "blend": "opaque-replace"},
   "outputValidation": {"status": "pass", "method": "normalized-rgb-exact", "reference": "opaque-fill-rgb-v1"},
   "measurements": {"paint_us": [4.0, 3.9, 4.1], "pixels": [55040, 55040, 55040]}
 }
@@ -90,4 +91,8 @@ the same cardinality; same-name metrics with different sample counts are
 individually marked `not-comparable`. Both sides must pass the same
 output-validation method, reference and tolerance; otherwise every metric is
 marked `not-comparable`. `operationsPerSample` defaults to 1 for old manifests,
-must be a positive integer, and must match between both sides.
+must be a positive integer, and must match between both sides. New adapters
+should also emit the bounded `workloadParameters` object. Geometry, colors,
+blend, gradient axis and endpoint convention must match exactly; a legacy
+manifest without parameters is comparable only with another parameter-less
+manifest.

@@ -38,6 +38,30 @@ METRIC_UNITS = {
     "dirty_pixels": "pixels",
     "peak_bytes": "bytes",
 }
+MAX_WORKLOAD_PARAMETERS_BYTES = 16 * 1024
+MAX_WORKLOAD_PARAMETERS_DEPTH = 6
+
+
+def validate_workload_parameter(value: Any, path: str, depth: int = 0) -> None:
+    if depth > MAX_WORKLOAD_PARAMETERS_DEPTH:
+        raise ValueError(f"{path} exceeds maximum nesting depth")
+    if value is None or isinstance(value, (str, bool)):
+        return
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if not math.isfinite(float(value)):
+            raise ValueError(f"{path} contains a non-finite number")
+        return
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            validate_workload_parameter(item, f"{path}[{index}]", depth + 1)
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str) or not key:
+                raise ValueError(f"{path} keys must be non-empty strings")
+            validate_workload_parameter(item, f"{path}.{key}", depth + 1)
+        return
+    raise ValueError(f"{path} contains an unsupported value")
 
 
 def load_run(path: Path) -> dict[str, Any]:
@@ -93,6 +117,17 @@ def load_run(path: Path) -> dict[str, Any]:
     if isinstance(operations_per_sample, bool) or not isinstance(operations_per_sample, int) or operations_per_sample <= 0:
         raise SystemExit(f"benchmark run operationsPerSample must be a positive integer: {path}")
     result["operationsPerSample"] = operations_per_sample
+    if "workloadParameters" in value:
+        workload_parameters = value["workloadParameters"]
+        if not isinstance(workload_parameters, dict) or not workload_parameters:
+            raise SystemExit(f"benchmark run workloadParameters must be a non-empty object: {path}")
+        try:
+            validate_workload_parameter(workload_parameters, "workloadParameters")
+        except ValueError as error:
+            raise SystemExit(f"benchmark run {error}: {path}") from error
+        encoded_parameters = json.dumps(workload_parameters, ensure_ascii=False, separators=(",", ":"))
+        if len(encoded_parameters.encode("utf-8")) > MAX_WORKLOAD_PARAMETERS_BYTES:
+            raise SystemExit(f"benchmark run workloadParameters exceeds byte limit: {path}")
     validation = value.get("outputValidation")
     if not isinstance(validation, dict) or validation.get("status") not in ("pass", "fail") or not isinstance(validation.get("method"), str) or not validation["method"].strip() or not isinstance(validation.get("reference"), str) or not validation["reference"].strip():
         raise SystemExit(f"benchmark run outputValidation requires status pass/fail, method and reference: {path}")
@@ -135,6 +170,8 @@ def comparable_fields(baseline: dict[str, Any], candidate: dict[str, Any]) -> li
         mismatches.append("outputValidation.status")
     if baseline.get("operationsPerSample", 1) != candidate.get("operationsPerSample", 1):
         mismatches.append("operationsPerSample")
+    if baseline.get("workloadParameters") != candidate.get("workloadParameters"):
+        mismatches.append("workloadParameters")
     return mismatches
 
 
@@ -198,6 +235,26 @@ def compare_runs(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[st
         "status": status,
         "baseline": {"library": baseline["library"], "version": baseline.get("version")},
         "candidate": {"library": candidate["library"], "version": candidate.get("version")},
+        "fixedConditions": {
+            "workload": baseline.get("workload"),
+            "viewport": baseline.get("viewport"),
+            "pixelFormat": baseline.get("pixelFormat"),
+            "antialiasing": baseline.get("antialiasing"),
+            "mode": baseline.get("mode"),
+            "warmupIterations": baseline.get("warmupIterations"),
+            "operationsPerSample": baseline.get("operationsPerSample", 1),
+            "workloadParameters": baseline.get("workloadParameters"),
+        },
+        "candidateFixedConditions": {
+            "workload": candidate.get("workload"),
+            "viewport": candidate.get("viewport"),
+            "pixelFormat": candidate.get("pixelFormat"),
+            "antialiasing": candidate.get("antialiasing"),
+            "mode": candidate.get("mode"),
+            "warmupIterations": candidate.get("warmupIterations"),
+            "operationsPerSample": candidate.get("operationsPerSample", 1),
+            "workloadParameters": candidate.get("workloadParameters"),
+        },
         "fixedConditionMismatches": mismatches,
         "metrics": metrics,
         "limitations": [
@@ -227,10 +284,18 @@ def render_html(comparison: dict[str, Any]) -> str:
         "<p class='error'>Fixed-condition mismatch: " +
         html.escape(", ".join(comparison["fixedConditionMismatches"])) + "</p>"
     )
+    fixed_conditions = html.escape(json.dumps(
+        comparison.get("fixedConditions", {}), ensure_ascii=False, indent=2
+    ))
+    candidate_fixed_conditions = html.escape(json.dumps(
+        comparison.get("candidateFixedConditions", {}), ensure_ascii=False, indent=2
+    ))
     return """<!doctype html><meta charset='utf-8'><title>Benchmark comparison</title>
 <style>body{{font-family:system-ui,sans-serif;margin:24px}}table{{border-collapse:collapse}}th,td{{border:1px solid #bbb;padding:6px;text-align:left}}.error{{color:#a00}}</style>
 <h1>Benchmark comparison: {status}</h1>{mismatch}
 <p>{baseline} -> {candidate}</p>
+<details open><summary>Baseline fixed conditions</summary><pre>{fixed_conditions}</pre></details>
+<details><summary>Candidate fixed conditions</summary><pre>{candidate_fixed_conditions}</pre></details>
 <table><tr><th>Metric</th><th>Unit</th><th>Baseline p95</th><th>Candidate p95</th><th>Delta %</th><th>Status</th></tr>{rows}</table>
 <h2>Limitations</h2><ul>{limitations}</ul>
 """.format(
@@ -239,6 +304,8 @@ def render_html(comparison: dict[str, Any]) -> str:
         candidate=html.escape(str(comparison["candidate"]["library"])),
         mismatch=mismatch,
         rows="".join(rows),
+        fixed_conditions=fixed_conditions,
+        candidate_fixed_conditions=candidate_fixed_conditions,
         limitations="".join(f"<li>{html.escape(item)}</li>" for item in comparison["limitations"]),
     )
 

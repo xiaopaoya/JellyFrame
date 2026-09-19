@@ -14,11 +14,14 @@ workload 边界。目的不是给 JellyFrame、Cairo、SDL、LVGL 或浏览器�
 - viewport、像素格式、alpha 语义和 full/dirty repaint mode；
 - 抗锯齿约定、颜色空间、blend 模式和裁剪区域；
 - workload 版本、输入数据、字体资源和字体 fallback 策略；
+- `workloadParameters` 中的几何、颜色、blend、轴向和端点约定；
 - warm-up 次数、样本数、进程/线程模型、构建类型和机器信息；
 - 输出校验方法、参考 fixture 和容差。
 
 输出校验失败、字体身份不一致或任一固定条件不同，比较器必须返回
 `not-comparable`，不能继续计算 MPix/s 或把较快的一侧称为胜出。
+新 adapter 必须输出有界的 `workloadParameters` 对象；旧 manifest 仅在两侧都缺少该字段时
+保持兼容，新旧混用不得比较。
 
 ## 2. 矩阵
 

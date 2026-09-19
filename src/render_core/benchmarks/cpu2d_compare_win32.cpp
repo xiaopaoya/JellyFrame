@@ -367,6 +367,29 @@ int workload_operations_per_sample(Workload workload) {
     return workload == Workload::OpaqueDirtyFill ? 64 : 1;
 }
 
+std::string workload_parameters_json(Workload workload) {
+    const Rect rect = workload_rect(workload);
+    std::ostringstream output;
+    output << "{\"surfaceInitialRgb\":\"000000\","
+           << "\"rect\":{\"x\":" << rect.x << ",\"y\":" << rect.y
+           << ",\"width\":" << rect.width << ",\"height\":" << rect.height << "},";
+    if (is_fill_workload(workload)) {
+        output << "\"operation\":\"fill-rect\","
+               << "\"sourceRgb\":\"164757\","
+               << "\"blend\":\"opaque-replace\"";
+    } else {
+        output << "\"operation\":\"linear-gradient\","
+               << "\"firstRgb\":\"164757\","
+               << "\"secondRgb\":\"06161f\","
+               << "\"axis\":\""
+               << (workload == Workload::VerticalGradient ? "vertical" : "horizontal") << "\","
+               << "\"colorSpace\":\"srgb-byte-linear\","
+               << "\"endpoint\":\"rect-exclusive\"";
+    }
+    output << '}';
+    return output.str();
+}
+
 std::uint64_t hash_byte(std::uint64_t hash, std::uint8_t value) {
     return (hash ^ value) * UINT64_C(1099511628211);
 }
@@ -494,6 +517,7 @@ void write_manifest(const std::filesystem::path& path,
            << "\", \"process\": \"same\", \"buildType\": \"" << build_type << "\"},\n"
            << "  \"warmupIterations\": " << kWarmupIterations << ",\n"
            << "  \"operationsPerSample\": " << workload_operations_per_sample(workload) << ",\n"
+           << "  \"workloadParameters\": " << workload_parameters_json(workload) << ",\n"
            << "  \"outputValidation\": {\"status\": \"" << (output_matches ? "pass" : "fail")
            << "\", \"method\": \"" << (tolerance == 0.0 ? "normalized-rgb-exact" : "normalized-rgb-rmse")
            << "\", \"reference\": \"" << workload_id(workload) << "\", \"tolerance\": "
