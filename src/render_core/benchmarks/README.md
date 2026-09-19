@@ -150,6 +150,14 @@ Raw manifests, commands, executable hashes and the hardware handoff are archived
 locally at `D:/JellyFramePerf/source-over-opaque-20260919/`. The measured 15-17%
 desktop improvement does not establish MCU or complete-UI performance gains.
 
+The WS147 hardware pair completed four embedded-UI workloads with three repeats
+per side (24 complete windows). Firmware, sdkconfig and raw-log hashes were
+verified; user-confirmed visual inspection and all four non-regression comparisons
+passed (`visual-equivalent-only`). Frame p95 stayed unchanged; paint shifts of one
+1 ms histogram bucket do not demonstrate significant device acceleration. Evidence
+is in the archive's `hardware/` directory. These are repaint/aggregate measurements
+(`pipeline_frames=0`, `script_us` missing), not complete UI-pipeline validation.
+
 The accepted cross-library boundary and the deliberate exclusions for rounded
 coverage and host-dependent text are recorded in
 `../../../docs/render_performance_cpu_workload_matrix_zh.md`. The rounded and text probes
