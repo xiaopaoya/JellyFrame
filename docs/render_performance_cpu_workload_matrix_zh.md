@@ -92,7 +92,9 @@ digest 和误差，固定标记 `not-comparable` / `performanceMeasured: false`�
 纯质量报告不包含计时；独立的质量/成本联合报告现已接入完成同步的单次 draw 测量，
 将最后一次实际绘制的 mask SHA-256 与原始耗时绑定，按用例展示质量状态和 p50/p95。
 它仍是 diagnostic-only，不进入现有等价排名，也不修改 Core 像素契约以让基准通过。
-下一步是 Core 自身固定输出下的圆角成本归因。本轮不新增硬件 A/B。
+Core 固定输出的成本探针也已交付：真实 draw、隔离 coverage 和缓存后的像素写入分别
+计时，保留分区工作量与 exact oracle 校验。它们不是可相加的生产阶段，不形成跨库排名。
+下一步验证保持输出的全满/全空采样早退；本轮工具不新增硬件 A/B。
 
 `text-lines-v1` 不能用“Render Core 内置 bitmap fallback 对 Windows GDI 默认字体”
 作为公平比较。文本结果受字体包、字号 fallback、hinting、字形 shaping、换行和

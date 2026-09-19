@@ -3,6 +3,8 @@
 import argparse
 import importlib.util
 import json
+import hashlib
+import math
 from pathlib import Path
 import subprocess
 import tempfile
@@ -92,6 +94,58 @@ def main():
         assert "no speed ranking" in quality.markdown(report)
         for suffix in (["10001", "rounded-quality-cost"], ["3", "rounded-quality-cost", "sdl2"]):
             rejected = root / "bad-cost"
+            result = subprocess.run([str(runner), str(rejected), *suffix], capture_output=True, text=True)
+            assert result.returncode != 0 and not rejected.exists()
+        probe_root = root / "core-probes"
+        subprocess.run([str(runner), str(probe_root), "6", "rounded-core-probes"], check=True, capture_output=True)
+        probes = json.loads((probe_root / "probes.json").read_text(encoding="utf-8"))
+        assert probes["format"] == "jellyframe.rounded.core-probes.v0"
+        assert probes["productionPhaseTimings"] is False and probes["performanceComparable"] is False
+        assert probes["sampleCount"] == 6 and probes["warmupIterations"] == 30
+        assert probes["timingContract"]["operationsPerSample"] == 1
+        assert {case["name"] for case in probes["cases"]} == expected_cases
+        geometry = {case["name"]: case for case in probes["fixtures"]}
+        for case in probes["cases"]:
+            fixture = geometry[case["name"]]
+            x0, y0, width, height = fixture["rect"]
+            radius = fixture["radius"]
+            pgm = (quality_root / "core-quarter-grid" / (case["name"] + ".pgm")).read_bytes()
+            assert case["maskSha256"] == hashlib.sha256(pgm).hexdigest()
+            assert case["outputValidation"] == "production-replay-oracle-exact"
+            pixels = pgm.split(b"\n", 3)[3]
+            center = 0
+            corner_values = []
+            for y in range(max(0, y0), min(320, y0 + height)):
+                for x in range(max(0, x0), min(172, x0 + width)):
+                    corner = ((x < x0 + radius or x >= x0 + width - radius) and
+                              (y < y0 + radius or y >= y0 + height - radius))
+                    if corner:
+                        corner_values.append(pixels[y * 172 + x])
+                    else:
+                        center += 1
+            counts = case["workCounts"]
+            assert counts["source"] == "untimed-probe-plan"
+            assert counts["centerPixels"] == center
+            assert counts["cornerPixels"] == len(corner_values)
+            assert counts["sampleTests"] == len(corner_values) * 16
+            assert counts["cornerZero"] == corner_values.count(0)
+            assert counts["cornerFull"] == corner_values.count(255)
+            assert counts["cornerPartial"] == sum(0 < value < 255 for value in corner_values)
+            assert [p["id"] for p in case["probes"]] == ["production-draw", "isolated-coverage", "cached-writes"]
+            for probe in case["probes"]:
+                assert len(probe["us"]) == 6
+                assert all(math.isfinite(value) and value >= 0 for value in probe["us"])
+                assert abs(probe["p50Us"] - sorted(probe["us"])[2]) <= 0.001
+                assert abs(probe["p95Us"] - max(probe["us"])) <= 0.001
+        try:
+            module.load_run(probe_root / "probes.json")
+        except SystemExit as error:
+            assert "unsupported benchmark run format" in str(error)
+        else:
+            raise AssertionError("isolated probes accepted as comparable performance")
+        assert "not production phase timings" in (probe_root / "report.md").read_text(encoding="utf-8")
+        for suffix in (["10001", "rounded-core-probes"], ["6", "rounded-core-probes", "sdl2"]):
+            rejected = root / "bad-probes"
             result = subprocess.run([str(runner), str(rejected), *suffix], capture_output=True, text=True)
             assert result.returncode != 0 and not rejected.exists()
     print("rounded qualification contract passed")

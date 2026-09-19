@@ -1,6 +1,7 @@
 #include "render_core/software_renderer.h"
 #include "cpu2d_sampling.h"
 #include "cpu2d_text_fixture.h"
+#include "render_core/raster_primitives.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -53,6 +54,7 @@ enum class Workload {
     RoundedSupersampleQualification,
     RoundedQualityMasks,
     RoundedQualityCost,
+    RoundedCoreProbes,
     HorizontalGradient,
     VerticalGradient,
 };
@@ -453,10 +455,11 @@ Workload parse_workload(const char* raw) {
     if (name == "rounded-supersample-qualification") return Workload::RoundedSupersampleQualification;
     if (name == "rounded-quality-masks") return Workload::RoundedQualityMasks;
     if (name == "rounded-quality-cost") return Workload::RoundedQualityCost;
+    if (name == "rounded-core-probes") return Workload::RoundedCoreProbes;
     if (name == "horizontal-gradient") return Workload::HorizontalGradient;
     if (name == "vertical-gradient") return Workload::VerticalGradient;
     throw std::runtime_error(
-        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, rounded-qualification, rounded-supersample-qualification, rounded-quality-masks, rounded-quality-cost, horizontal-gradient, or vertical-gradient");
+        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, rounded-qualification, rounded-supersample-qualification, rounded-quality-masks, rounded-quality-cost, rounded-core-probes, horizontal-gradient, or vertical-gradient");
 }
 
 Backend parse_backend(const char* raw) {
@@ -854,6 +857,178 @@ void write_rounded_fixtures(std::ostream& stream) {
     stream << ']';
 }
 
+// Benchmark-only decomposition of the uniform opaque fill. Keep its output
+// checked against both production rasterize and the independent fixture oracle.
+// These probes are not instrumented production phases and are not additive.
+struct RoundedProbePlan {
+    RasterRoundedRect geometry;
+    std::vector<Rect> centers;
+    std::vector<Rect> corners;
+    std::vector<int> coverage;
+
+    explicit RoundedProbePlan(const benchmark::RoundedFixture& fixture)
+        : geometry(prepare_rounded_rect(fixture.rect, fixture.radius)) {
+        const Rect rect = fixture.rect;
+        const int radius = fixture.radius;
+        const auto append = [](std::vector<Rect>& regions, Rect region) {
+            region = raster_intersect_rect(region, kFullRect);
+            if (!raster_empty_rect(region)) regions.push_back(region);
+        };
+        if (!radius) {
+            append(centers, rect);
+            return;
+        }
+        append(centers, {rect.x, rect.y + radius, rect.width, rect.height - 2 * radius});
+        append(centers, {rect.x + radius, rect.y, rect.width - 2 * radius, radius});
+        append(centers, {rect.x + radius, rect.y + rect.height - radius, rect.width - 2 * radius, radius});
+        append(corners, {rect.x, rect.y, radius, radius});
+        append(corners, {rect.x + rect.width - radius, rect.y, radius, radius});
+        append(corners, {rect.x, rect.y + rect.height - radius, radius, radius});
+        append(corners, {rect.x + rect.width - radius, rect.y + rect.height - radius, radius, radius});
+        for (const Rect corner : corners) coverage.resize(coverage.size() + corner.width * corner.height);
+    }
+};
+
+// Prevent an optimizing benchmark build from dropping repeated probe writes.
+__declspec(noinline) void probe_rounded_coverage(RoundedProbePlan& plan) {
+    std::size_t index = 0;
+    for (const Rect corner : plan.corners) {
+        for (int y = corner.y; y < corner.y + corner.height; ++y) {
+            for (int x = corner.x; x < corner.x + corner.width; ++x) {
+                plan.coverage[index++] = rounded_rect_coverage(plan.geometry, x, y);
+            }
+        }
+    }
+}
+
+__declspec(noinline) void probe_rounded_cached_writes(const RoundedProbePlan& plan, FrameBuffer& target) {
+    constexpr Color white{255, 255, 255, 255};
+    for (const Rect region : plan.centers) {
+        for (int y = region.y; y < region.y + region.height; ++y) {
+            Color* row = target.pixels.data() + static_cast<std::size_t>(y) * kWidth + region.x;
+            std::fill_n(row, region.width, white);
+        }
+    }
+    std::size_t index = 0;
+    for (const Rect corner : plan.corners) {
+        for (int y = corner.y; y < corner.y + corner.height; ++y) {
+            Color* row = target.pixels.data() + static_cast<std::size_t>(y) * kWidth;
+            for (int x = corner.x; x < corner.x + corner.width; ++x) {
+                const int coverage = plan.coverage[index++];
+                if (coverage == 255) row[x] = white;
+                else if (coverage > 0) blend_pixel_unchecked(target, x, y, with_coverage(white, coverage));
+            }
+        }
+    }
+}
+
+double probe_percentile(std::vector<double> values, double quantile) {
+    std::sort(values.begin(), values.end());
+    return values[static_cast<std::size_t>(std::ceil(quantile * values.size())) - 1];
+}
+
+int export_rounded_core_probes(const std::filesystem::path& directory, int samples) {
+    std::ostringstream cases;
+    cases << std::fixed << std::setprecision(3);
+    std::ostringstream report;
+    report << "# Core Rounded Fill Probes\n\n"
+           << "Diagnostic-only isolated probes, not production phase timings. No additive percentages, "
+           << "speed ranking, or device claim. Coverage probe includes output-array writes; cached replay "
+           << "excludes coverage computation and plan preparation. Warm cache, white on black, uniform radii.\n\n"
+           << "| Case | Center pixels | Corner pixels | Corner zero/full/partial | Production p50/p95 us | "
+           << "Coverage probe p50/p95 us | Cached writes p50/p95 us |\n"
+           << "| --- | ---: | ---: | --- | --- | --- | --- |\n";
+    for (std::size_t index = 0; index < benchmark::kRoundedFixtures.size(); ++index) {
+        const auto& fixture = benchmark::kRoundedFixtures[index];
+        RoundedProbePlan plan(fixture);
+        probe_rounded_coverage(plan);
+        const auto expected_coverage = plan.coverage;
+        FrameBuffer production(kWidth, kHeight, Color{0, 0, 0, 255});
+        FrameBuffer replay(kWidth, kHeight, Color{0, 0, 0, 255});
+        SoftwareRasterizer rasterizer;
+        auto timings = benchmark::measure_rotating(samples, kWarmupIterations, 3,
+            [&](int probe) {
+                if (probe == 0) production.clear(Color{0, 0, 0, 255});
+                if (probe == 1) std::fill(plan.coverage.begin(), plan.coverage.end(), -1);
+                if (probe == 2) replay.clear(Color{0, 0, 0, 255});
+            },
+            [&](int probe) {
+                if (probe == 0) {
+                    DisplayCommand command;
+                    command.type = DisplayCommandType::FillRect;
+                    command.rect = fixture.rect;
+                    command.border_radius = fixture.radius;
+                    command.color = Color{255, 255, 255, 255};
+                    rasterizer.rasterize(command, production, kFullRect);
+                } else if (probe == 1) probe_rounded_coverage(plan);
+                else probe_rounded_cached_writes(plan, replay);
+            }, [](int) {});
+        if (plan.coverage != expected_coverage) throw std::runtime_error("coverage probe changed output");
+        std::vector<int> mask;
+        for (int y = 0; y < kHeight; ++y) {
+            for (int x = 0; x < kWidth; ++x) {
+                const int expected = benchmark::rounded_fixture_coverage(fixture, x, y);
+                for (const FrameBuffer* frame : {&production, &replay}) {
+                    const Color pixel = frame->pixel(x, y);
+                    if (pixel.r != expected || pixel.g != expected || pixel.b != expected || pixel.a != 255) {
+                        throw std::runtime_error("rounded probe production/replay/oracle mismatch");
+                    }
+                }
+                mask.push_back(expected);
+            }
+        }
+        int center_pixels = 0;
+        for (const Rect center : plan.centers) center_pixels += center.width * center.height;
+        const auto zero = std::count(plan.coverage.begin(), plan.coverage.end(), 0);
+        const auto full = std::count(plan.coverage.begin(), plan.coverage.end(), 255);
+        const auto partial = static_cast<std::ptrdiff_t>(plan.coverage.size()) - zero - full;
+        if (index) cases << ',';
+        cases << "{\"name\":\"" << fixture.name << "\",\"outputValidation\":\"production-replay-oracle-exact\","
+              << "\"maskSha256\":\"" << mask_sha256(mask) << "\",\"workCounts\":{\"source\":\"untimed-probe-plan\","
+              << "\"centerPixels\":" << center_pixels << ",\"cornerPixels\":" << plan.coverage.size()
+              << ",\"sampleTests\":" << plan.coverage.size() * 16 << ",\"cornerZero\":" << zero
+              << ",\"cornerFull\":" << full << ",\"cornerPartial\":" << partial << "},\"probes\":[";
+        report << "| " << fixture.name << " | " << center_pixels << " | " << plan.coverage.size()
+               << " | " << zero << '/' << full << '/' << partial << " | ";
+        const char* names[]{"production-draw", "isolated-coverage", "cached-writes"};
+        for (int probe = 0; probe < 3; ++probe) {
+            const double p50 = probe_percentile(timings[probe], 0.50);
+            const double p95 = probe_percentile(timings[probe], 0.95);
+            if (probe) cases << ',';
+            cases << "{\"id\":\"" << names[probe] << "\",\"us\":" << json_array(timings[probe])
+                  << ",\"p50Us\":" << p50 << ",\"p95Us\":" << p95 << '}';
+            report << std::fixed << std::setprecision(3) << p50 << '/' << p95 << " | ";
+        }
+        cases << "]}";
+        report << '\n';
+    }
+    std::filesystem::create_directories(directory);
+    std::ofstream output(directory / "probes.json", std::ios::binary);
+    output << "{\"format\":\"jellyframe.rounded.core-probes.v0\",\"fixtureSet\":\"rounded-uniform-v0\","
+           << "\"viewport\":{\"width\":172,\"height\":320},\"performanceComparable\":false,"
+           << "\"productionPhaseTimings\":false,\"sampleCount\":" << samples
+           << ",\"warmupIterations\":" << kWarmupIterations << ",\"coreVersion\":\"" << JELLYFRAME_CPU2D_CORE_VERSION
+           << "\",\"buildType\":\""
+#ifdef NDEBUG
+           << "release"
+#else
+           << "debug"
+#endif
+           << "\",\"timingContract\":{\"id\":\"rounded-core-isolated-probes-v0\","
+           << "\"clock\":\"steady-clock-microseconds\",\"operationsPerSample\":1,"
+           << "\"order\":\"rotating-forward-reverse\",\"reset\":\"before-timer\","
+           << "\"setup\":\"plan-surfaces-allocation-excluded\",\"validation\":\"after-last-timed-operation\"},\"fixtures\":";
+    write_rounded_fixtures(output);
+    output << ",\"cases\":[" << cases.str() << "]}\n";
+    output.close();
+    std::ofstream markdown(directory / "report.md", std::ios::binary);
+    markdown << report.str();
+    markdown.close();
+    if (!output || !markdown) throw std::runtime_error("rounded probe report write failed");
+    std::cout << "rounded_core_probes=validated cases=8 production_phase_timings=false\n";
+    return 0;
+}
+
 int export_rounded_quality_masks(const std::filesystem::path& directory, int cost_samples = 0) {
     benchmark::GdiPlusSession gdiplus;
     constexpr auto case_count = benchmark::kRoundedFixtures.size();
@@ -1055,6 +1230,10 @@ int main(int argc, char** argv) {
             throw std::runtime_error("SDL2 library path is valid only with the sdl2 backend");
         }
         const std::filesystem::path output_directory(argv[1]);
+        if (workload == Workload::RoundedCoreProbes) {
+            if (samples > 10000) throw std::runtime_error("rounded core probes permit at most 10000 samples");
+            return export_rounded_core_probes(output_directory, samples);
+        }
         if (workload == Workload::RoundedQualityCost) {
             if (samples > 10000) throw std::runtime_error("rounded quality cost permits at most 10000 samples");
             return export_rounded_quality_masks(output_directory, samples);

@@ -39,7 +39,7 @@
 
 - [x] 修复重复失败的 scripting CI：`08dc32ba` 将非 trace capture 的诊断重绘预期
   修正为 0，新增 trace OFF/ON 分别 paint=0/1 且 BMP 完全一致的回归；干净 scripting
-  Release 全套 82/82 通过，远端 CI `35451942516` 及后续工具提交至 `35454655010` 四项 job 均全绿。
+  Release 全套 82/82 通过，远端 CI `35451942516` 及后续工具提交至 `35460149360` 四项 job 均全绿。
   无需恢复无条件诊断重绘来满足过时测试。
 - [x] 完成原生 GDI 圆角资格检查：Core 通过独立 4x4 coverage oracle；固定卡片与
   GDI RoundRect 有 392 个不同像素，输出明确为 not-comparable，无计时数据。
@@ -55,8 +55,13 @@
   构造命令/path、绘制和完成同步；三 backend 六顺序轮换。耗时与实际绘制 mask SHA-256
   绑定，错配拒绝；保留原始样本、质量状态和 p50/p95，不生成速度比或赢家。
   桌面 Release 三轮、每 case/backend 500 样本已归档至 `D:/JellyFramePerf/rounded-aa-cost-20260919/`。
-- [ ] 下一步沿 Core 自身固定输出进行圆角成本归因，区分 coverage 与内部填充工作，
-  不把不同质量下的原生库计时差解释成同质量加速。不默认修改 Core 像素网格或设备配置。
+- [x] 交付 Core 圆角隔离成本探针：真实 draw、角区 coverage、预缓存后的填充/混合各自
+  保留原始计时；八项最终输出与独立 oracle 和质量 mask 一致。分区计数明确为不计时模型，
+  隔离 probe 不可相加为阶段占比。三轮 Release 每路径/用例 500 样本存于
+  `D:/JellyFramePerf/rounded-core-probes-20260919/`，未更改生产路径或增加设备采样成本。
+- [ ] 下一步评估保留 quarter-grid 输出的角区全满/全空早退；先补极值、裁剪、四角半径
+  等价测试，再做真实 draw A/B，不直接引入覆盖率缓存或移除溢出保护。
+  不把不同质量下的原生库计时差解释成同质量加速，不默认修改 Core 像素网格或设备配置。
   通用文本/shaping、完整 UI 和 LVGL 对照仍单列待办。
 - [x] 修正半透明对照的计时边界：`a4faa1c6` 在计时内完成 SDL2/GDI batch，
   在计时外完成 reset，并交错执行两侧；`alpha-grid-rgb-v1` 的旧排名已撤回。

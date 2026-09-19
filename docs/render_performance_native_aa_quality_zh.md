@@ -91,5 +91,37 @@ Core、Runtime、设备固件或 SDK 的新依赖。性能证据必须用 Releas
 Debug 仅作功能检查。该成本是本机 warm draw API 路径，不包括布局、脚本、present/DMA、
 cold start 或设备帧耗时。没有新的硬件 A/B 要求。
 
-下一步沿 Core 自身固定输出做圆角成本归因，区分 coverage 与内部填充工作；此报告不授权
-默认修改采样网格、像素基线或设备发布配置，也不替代真实 workload 的优化验收。
+## Core 内部成本探针
+
+```powershell
+build\current-release\Release\jellyframe_cpu2d_compare.exe build\rounded-probes 500 rounded-core-probes
+```
+
+生成 `probes.json` 和 `report.md`，合同为 `rounded-core-isolated-probes-v0`。沿用八项
+固定 fixture、30 次预热、三路径六顺序轮换、每样本一次操作和 nearest-rank p50/p95。
+原始微秒数组保留，不合并不同用例或重复轮次。三个路径分别为：
+
+- `production-draw`：真实 Core 命令构造、rasterize 和销毁，与前述成本合同一致。
+- `isolated-coverage`：对预先裁剪的四个角区调用实际 coverage helper，并写入预分配数组。
+  计入遍历、计算和数组写入，不包括区域准备、像素混合或 framebuffer 写入。
+- `cached-writes`：使用预先计算的 coverage，填充内部连续区间，角区满覆盖直接写入，
+  部分覆盖混合。计入数组读取与像素写入，不包括 coverage 计算、命令或区域准备。
+
+资源创建、分区、缓存分配和 reset 均在计时外；coverage probe 每次先将数组重置为 -1，
+绘制路径每次先清黑。最后一次实际绘制与缓存回放均逐像素核对独立 quarter-grid oracle，
+颜色三个通道及 alpha 都需一致；报告记录同一 PGM 序列化格式的 mask SHA-256。
+自动回归另与原生 AA 质量导出的 Core mask 核对，并独立计算裁剪后分区计数。
+
+`workCounts` 是**不计时的基准分区模型**：内部像素、角区像素、角区 0/255/部分覆盖
+以及当前 helper 每角区像素 16 次采样的工作量。它不是运行时采集的硬件指令数。
+分区只适用此固定统一圆角、不透明源、黑色不透明目标，不适用于所有圆角绘制。
+
+两个隔离 probe **不是生产管线阶段计时**：准备工作、缓存访存、分支和编译内联与完整
+绘制不同。不能相加、相减 p95 或给出“coverage 占帧时间百分比”；微小用例的 0 微秒
+表示时钟分辨率下取整，不代表无成本。缓存回放是诊断实验，不是已实现的生产缓存方案。
+JSON 为 `jellyframe.rounded.core-probes.v0`，标记 `productionPhaseTimings: false` 和
+`performanceComparable: false`；现有跨库比较器拒绝该格式。
+
+下一步根据探针结果评估保持现有像素输出的全满/全空采样早退，先证明极值、裁剪和
+四角半径下等价，再建立真实绘制优化前后对照。不得默认修改采样网格、移除溢出保护、
+更改设备配置或把桌面探针当作真实 workload 的优化验收。本轮没有新增硬件测试要求。

@@ -213,6 +213,28 @@ equivalent output. The existing benchmark ranking tool rejects this format.
 Use Release and repeat sequentially without simultaneous builds. Do not pool
 repeat samples or extrapolate these CPU draw timings to layout, present or devices.
 
+## Core Rounded Cost Probes
+
+```powershell
+build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\rounded-probes 500 rounded-core-probes
+```
+
+Writes `probes.json` and `report.md` for the eight frozen uniform-radius fixtures.
+Three rotating paths measure production draw, isolated coverage calculation into
+a preallocated array, and center/corner writes using cached coverage. Setup and
+reset are untimed, with 30 warmups and 1-10000 individual samples per path/case.
+Both final framebuffer outputs must exactly match the independent quarter-grid
+oracle. Mask SHA-256 also matches the quality exporter. Untimed partition counts
+describe center/corner work, not sampled hardware instructions.
+
+These are diagnostic microexperiments, **not additive production phase timings**.
+Do not subtract p95s, infer frame percentages, rank libraries or claim a production
+cache implementation. Probe array traffic/setup differs from the real renderer;
+tiny durations may round to zero at the clock resolution. No production rendering
+code or device instrumentation is changed. The existing comparison tool rejects
+`jellyframe.rounded.core-probes.v0`. Use Release, repeat sequentially, and retain
+the raw arrays and executable hash. See the native-AA contract for boundaries.
+
 ## Repeated Comparisons
 
 The same tool accepts 3-32 independent run manifests per side, in paired repeat
