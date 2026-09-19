@@ -1,4 +1,5 @@
 import json
+import re
 import hashlib
 import struct
 import subprocess
@@ -341,6 +342,33 @@ def main() -> int:
             "too many positional arguments must explain the accepted shape")
     require("Use --help for usage." in too_many_positional_result.stdout,
             "positional argument errors must point to --help")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-trace-opt-in-") as directory:
+        root = Path(directory)
+        page = root / "static.html"
+        page.write_text("<style>body{background:#123;}div{width:40px;height:20px;background:#3c6;}</style>"
+                        "<div></div>", encoding="utf-8")
+        counters = {}
+        for mode in ("off", "on"):
+            args = [str(page), "--capture-frames", str(root / mode), "--frame-count", "2"]
+            if mode == "on":
+                args += ["--render-trace", str(root / "trace.jsonl")]
+            result = run_case(exe, args)
+            require(result.returncode == 0, f"trace {mode} capture failed: {result.stdout}")
+            line = re.search(r"(?m)^\s*frame_dirty_flags ([^\r\n]+)", result.stdout)
+            require(line is not None, f"trace {mode} capture omitted dirty counters")
+            counters[mode] = {name: int(value) for name, value in re.findall(r"(\w+)=(\d+)", line.group(1))}
+        require(counters["off"]["paint"] == 0,
+                "capture without trace must not schedule a diagnostic paint")
+        require(counters["on"]["paint"] == 1,
+                "capture with trace must schedule exactly one diagnostic paint")
+        for frame in range(2):
+            filename = f"frame_{frame:03d}.bmp"
+            require((root / "off" / filename).read_bytes() == (root / "on" / filename).read_bytes(),
+                    "trace diagnostic repaint must not change captured pixels")
+        records = [json.loads(line) for line in (root / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
+        require(len(records) == 3 and records[1]["action"] == "repaint-existing",
+                "static trace must retain a real initial diagnostic repaint")
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-scripted-pointer-drag-") as directory:
         root = Path(directory)
