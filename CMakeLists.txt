@@ -302,7 +302,7 @@ if(JELLYFRAME_BUILD_BENCHMARKS)
     jellyframe_enable_render_core_link_map(jellyframe_render_core_microbench)
     if(WIN32)
         add_jellyframe_tool(jellyframe_cpu2d_compare src/render_core/benchmarks/cpu2d_compare_win32.cpp)
-        target_link_libraries(jellyframe_cpu2d_compare PRIVATE gdi32 msimg32 gdiplus)
+        target_link_libraries(jellyframe_cpu2d_compare PRIVATE gdi32 msimg32 gdiplus bcrypt)
         target_compile_definitions(jellyframe_cpu2d_compare PRIVATE
             JELLYFRAME_CPU2D_CORE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
     endif()

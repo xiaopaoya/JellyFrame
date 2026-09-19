@@ -89,8 +89,10 @@ digest 和误差，固定标记 `not-comparable` / `performanceMeasured: false`�
 第二条路线已交付独立的[实验质量合同与工具](render_performance_native_aa_quality_zh.md)：
 采用连续几何面积区间参考，Core 与 native adapter 同样接受内部/外部与边缘误差检查，
 不能仅通过开启 AA 开关认定等价。二值输出、空白、错误几何、缺失用例等有拒绝测试。
-质量报告不包含计时，不能进入现有排名；下一步是独立的质量/成本联合报告，
-并非修改 Core 像素契约以让基准通过。本轮不新增硬件 A/B。
+纯质量报告不包含计时；独立的质量/成本联合报告现已接入完成同步的单次 draw 测量，
+将最后一次实际绘制的 mask SHA-256 与原始耗时绑定，按用例展示质量状态和 p50/p95。
+它仍是 diagnostic-only，不进入现有等价排名，也不修改 Core 像素契约以让基准通过。
+下一步是 Core 自身固定输出下的圆角成本归因。本轮不新增硬件 A/B。
 
 `text-lines-v1` 不能用“Render Core 内置 bitmap fallback 对 Windows GDI 默认字体”
 作为公平比较。文本结果受字体包、字号 fallback、hinting、字形 shaping、换行和

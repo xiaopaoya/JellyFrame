@@ -12,6 +12,13 @@ import re
 
 
 FORMAT = "jellyframe.rounded.quality.v0"
+JOINT_FORMAT = "jellyframe.rounded.quality-cost.v0"
+TIMING_CONTRACT = {
+    "id": "rounded-native-completed-draw-v0", "clock": "steady-clock-microseconds",
+    "operationsPerSample": 1, "order": "rotating-forward-reverse", "reset": "completed-before-timer",
+    "setup": "surfaces-contexts-brush-excluded", "draw": "command-path-construction-and-destruction-included",
+    "finish": "synchronous-in-timer", "maskExtraction": "after-last-timed-draw",
+}
 INPUT_FORMAT = "jellyframe.rounded.coverage.v0"
 WIDTH, HEIGHT = 172, 320
 PGM_HEADER = b"P5\n172 320\n255\n"
@@ -185,8 +192,60 @@ def make_report(loaded: dict) -> dict:
                 "interiorExteriorErrors": 0}, "backends": backends}
 
 
+def attach_cost(report: dict, loaded: dict, path: Path) -> None:
+    raw = bounded_read(path, 8 * 1024 * 1024)
+    cost = json.loads(raw)
+    if not isinstance(cost, dict) or cost.get("format") != "jellyframe.rounded.cost.v0":
+        raise ValueError("unsupported rounded cost manifest")
+    for name, expected in (("fixtureSet", "rounded-uniform-v0"), ("fixtures", FIXTURES),
+                           ("viewport", {"width": WIDTH, "height": HEIGHT}), ("timingContract", TIMING_CONTRACT),
+                           ("warmupIterations", 30)):
+        if json.dumps(cost.get(name), sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True):
+            raise ValueError(f"cost {name} contract changed")
+    count = cost.get("sampleCount")
+    if type(count) is not int or not 1 <= count <= 10000:
+        raise ValueError("cost sampleCount must be 1-10000")
+    if cost.get("buildType") not in ("debug", "release") or not isinstance(cost.get("coreVersion"), str) or not 1 <= len(cost["coreVersion"]) <= 64:
+        raise ValueError("cost build/core identity missing")
+    backends = cost.get("backends")
+    if not isinstance(backends, list) or len(backends) != len(loaded["backends"]):
+        raise ValueError("cost backend set mismatch")
+    summaries = []
+    for backend, observed in zip(backends, loaded["backends"]):
+        if not isinstance(backend, dict) or backend.get("id") != observed["id"] or backend.get("method") != observed["method"]:
+            raise ValueError("cost backend identity mismatch")
+        cases = backend.get("cases")
+        if not isinstance(cases, list) or len(cases) != len(FIXTURES):
+            raise ValueError("cost cases missing")
+        results = []
+        for fixture, case, (_, digest) in zip(FIXTURES, cases, observed["masks"]):
+            if not isinstance(case, dict) or case.get("name") != fixture["name"] or case.get("maskSha256") != digest:
+                raise ValueError("cost mask identity mismatch")
+            values = case.get("paint_us")
+            if not isinstance(values, list) or len(values) != count or any(
+                type(value) not in (int, float) or not 0 <= value <= 1e12 for value in values
+            ):
+                raise ValueError("invalid cost samples")
+            ordered = sorted(values)
+            results.append({"count": count, "p50Us": ordered[math.ceil(count * 0.5) - 1],
+                            "p95Us": ordered[math.ceil(count * 0.95) - 1], "minUs": ordered[0],
+                            "maxUs": ordered[-1], "paintUs": values, "use": "diagnostic-only"})
+        summaries.append(results)
+    # Commit only after validating every case, so a rejected join cannot leave
+    # a partially augmented report for callers using the module directly.
+    for backend, cases in zip(report["backends"], summaries):
+        for case, summary in zip(backend["cases"], cases):
+            case["cost"] = summary
+    report.update({"format": JOINT_FORMAT, "performanceMeasured": True,
+                   "costInputSha256": hashlib.sha256(raw).hexdigest(), "timingContract": TIMING_CONTRACT,
+                   "sampleCount": count, "warmupIterations": 30, "buildType": cost["buildType"],
+                   "coreVersion": cost["coreVersion"]})
+
+
 def markdown(report: dict) -> str:
-    lines = ["# Rounded AA Quality", "", "Experimental quality policy; no timing or speed ranking.", "",
+    measured = report["performanceMeasured"]
+    lines = ["# Rounded AA Quality and Cost" if measured else "# Rounded AA Quality", "",
+             "Diagnostic completed-draw timings; no speed ranking." if measured else "Experimental quality policy; no timing or speed ranking.", "",
              "Policy: rounded-area-quarter-v0. Exact interior/exterior; maximum edge error <= 1/4; edge RMS <= 1/8.", "",
              "Coverage errors are fractions of one pixel (0-1), not RGB-byte errors.",
              "Intervals enclose oracle uncertainty; indeterminate is not a pass.", "",
@@ -198,6 +257,18 @@ def markdown(report: dict) -> str:
             maximum = " - ".join(f"{value:.5f}" for value in case["edgeMaxError"])
             lines.append(f"| {backend['id']} | {case['name']} | {case['status']} | "
                          f"{case['interiorErrors']} / {case['exteriorErrors']} | {rms} | {maximum} |")
+    if measured:
+        lines += ["", "## Completed Draw Cost", "",
+                  "Microseconds per individual draw, nearest-rank percentiles. No FPS, speed ratios or winners.",
+                  "Setup/reset/mask extraction excluded; command/path creation, drawing and completion included.",
+                  "Each draw starts on black. Native-AA output is not pixel-equivalent to Core.", "",
+                  "| Backend | Case | Quality | Samples | p50 us | p95 us | Min us | Max us |",
+                  "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |"]
+        for backend in report["backends"]:
+            for case in backend["cases"]:
+                cost = case["cost"]
+                lines.append(f"| {backend['id']} | {case['name']} | {case['status']} | {cost['count']} | "
+                             f"{cost['p50Us']:.3f} | {cost['p95Us']:.3f} | {cost['minUs']:.3f} | {cost['maxUs']:.3f} |")
     return "\n".join(lines) + "\n"
 
 
@@ -206,13 +277,18 @@ def main() -> int:
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--markdown-output", type=Path)
+    parser.add_argument("--cost-input", type=Path, help="optional matching completed-draw cost manifest")
     args = parser.parse_args()
     try:
         loaded, inputs = load_masks(args.input)
+        if args.cost_input:
+            inputs.add(args.cost_input.resolve())
         outputs = [path.resolve() for path in (args.output, args.markdown_output) if path is not None]
         if len(set(outputs)) != len(outputs) or any(path in inputs for path in outputs):
             raise ValueError("outputs must be distinct and cannot overwrite inputs")
         report = make_report(loaded)
+        if args.cost_input:
+            attach_cost(report, loaded, args.cost_input)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         if args.markdown_output:
@@ -220,7 +296,7 @@ def main() -> int:
             args.markdown_output.write_text(markdown(report), encoding="utf-8")
     except (OSError, ValueError) as error:
         parser.error(str(error))
-    print("rounded quality report written; performance_measured=false")
+    print(f"rounded report written; performance_measured={str(report['performanceMeasured']).lower()} ranking=disabled")
     return 0
 
 

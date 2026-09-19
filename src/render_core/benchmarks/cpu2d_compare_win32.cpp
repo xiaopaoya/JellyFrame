@@ -5,6 +5,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <bcrypt.h>
 #include "cpu2d_rounded_gdiplus.h"
 
 #include <algorithm>
@@ -51,6 +52,7 @@ enum class Workload {
     RoundedQualification,
     RoundedSupersampleQualification,
     RoundedQualityMasks,
+    RoundedQualityCost,
     HorizontalGradient,
     VerticalGradient,
 };
@@ -450,10 +452,11 @@ Workload parse_workload(const char* raw) {
     if (name == "rounded-qualification") return Workload::RoundedQualification;
     if (name == "rounded-supersample-qualification") return Workload::RoundedSupersampleQualification;
     if (name == "rounded-quality-masks") return Workload::RoundedQualityMasks;
+    if (name == "rounded-quality-cost") return Workload::RoundedQualityCost;
     if (name == "horizontal-gradient") return Workload::HorizontalGradient;
     if (name == "vertical-gradient") return Workload::VerticalGradient;
     throw std::runtime_error(
-        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, rounded-qualification, rounded-supersample-qualification, rounded-quality-masks, horizontal-gradient, or vertical-gradient");
+        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, rounded-qualification, rounded-supersample-qualification, rounded-quality-masks, rounded-quality-cost, horizontal-gradient, or vertical-gradient");
 }
 
 Backend parse_backend(const char* raw) {
@@ -472,6 +475,7 @@ const char* workload_id(Workload workload) {
     case Workload::RoundedQualification: return "rounded-card-qualification-v0";
     case Workload::RoundedSupersampleQualification: return "rounded-supersample-qualification-v0";
     case Workload::RoundedQualityMasks: return "rounded-native-aa-quality-v0";
+    case Workload::RoundedQualityCost: return "rounded-native-aa-quality-cost-v0";
     case Workload::HorizontalGradient: return "horizontal-gradient-rgb-v1";
     case Workload::VerticalGradient: return "vertical-gradient-rgb-v1";
     }
@@ -819,19 +823,86 @@ int qualify_supersampled_rounded_cards(const std::filesystem::path& directory) {
     return 0;
 }
 
-int export_rounded_quality_masks(const std::filesystem::path& directory) {
+std::string json_array(const std::vector<double>& values);
+
+std::string rounded_mask_bytes(const std::vector<int>& coverage) {
+    std::string bytes = "P5\n172 320\n255\n";
+    for (int value : coverage) bytes.push_back(static_cast<char>(value));
+    return bytes;
+}
+
+std::string mask_sha256(const std::vector<int>& coverage) {
+    auto bytes = rounded_mask_bytes(coverage);
+    std::array<unsigned char, 32> digest{};
+    if (BCryptHash(BCRYPT_SHA256_ALG_HANDLE, nullptr, 0, reinterpret_cast<PUCHAR>(bytes.data()),
+                   static_cast<ULONG>(bytes.size()), digest.data(), static_cast<ULONG>(digest.size())) < 0) {
+        throw std::runtime_error("quality mask SHA-256 failed");
+    }
+    std::ostringstream text;
+    for (auto value : digest) text << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(value);
+    return text.str();
+}
+
+void write_rounded_fixtures(std::ostream& stream) {
+    stream << '[';
+    for (std::size_t index = 0; index < benchmark::kRoundedFixtures.size(); ++index) {
+        const auto& fixture = benchmark::kRoundedFixtures[index];
+        if (index) stream << ',';
+        stream << "{\"name\":\"" << fixture.name << "\",\"rect\":[" << fixture.rect.x << ',' << fixture.rect.y
+               << ',' << fixture.rect.width << ',' << fixture.rect.height << "],\"radius\":" << fixture.radius << '}';
+    }
+    stream << ']';
+}
+
+int export_rounded_quality_masks(const std::filesystem::path& directory, int cost_samples = 0) {
     benchmark::GdiPlusSession gdiplus;
+    constexpr auto case_count = benchmark::kRoundedFixtures.size();
+    std::vector<std::vector<std::vector<int>>> masks(3, std::vector<std::vector<int>>(case_count));
+    std::vector<std::vector<std::vector<double>>> timings(3, std::vector<std::vector<double>>(case_count));
+    for (std::size_t index = 0; index < case_count; ++index) {
+        const auto& fixture = benchmark::kRoundedFixtures[index];
+        FrameBuffer frame(kWidth, kHeight, Color{0, 0, 0, 255});
+        SoftwareRasterizer rasterizer;
+        benchmark::GdiPlusRoundedSurface aa(kWidth, kHeight, benchmark::GdiPlusRoundedMode::NativeAa);
+        benchmark::GdiPlusRoundedSurface binary(kWidth, kHeight, benchmark::GdiPlusRoundedMode::BinaryControl);
+        const auto reset = [&](int backend) {
+            if (backend == 0) frame.clear(Color{0, 0, 0, 255});
+            else (backend == 1 ? aa : binary).reset();
+        };
+        const auto paint = [&](int backend) {
+            if (backend == 0) {
+                DisplayCommand command;
+                command.type = DisplayCommandType::FillRect;
+                command.rect = fixture.rect;
+                command.border_radius = fixture.radius;
+                command.color = Color{255, 255, 255, 255};
+                rasterizer.rasterize(command, frame, kFullRect);
+            } else (backend == 1 ? aa : binary).draw(fixture);
+        };
+        const auto finish = [&](int backend) {
+            if (backend != 0) (backend == 1 ? aa : binary).finish();
+        };
+        if (cost_samples) {
+            auto measured = benchmark::measure_rotating(cost_samples, kWarmupIterations, 3, reset, paint, finish);
+            for (int backend = 0; backend < 3; ++backend) timings[backend][index] = std::move(measured[backend]);
+        } else {
+            for (int backend = 0; backend < 3; ++backend) { reset(backend); paint(backend); finish(backend); }
+        }
+        for (const auto pixel : frame.pixels) {
+            if (pixel.r != pixel.g || pixel.g != pixel.b || pixel.a != 255) {
+                throw std::runtime_error("Core quality mask is not opaque grayscale");
+            }
+            masks[0][index].push_back(pixel.r);
+        }
+        masks[1][index] = aa.coverage();
+        masks[2][index] = binary.coverage();
+    }
     std::filesystem::create_directories(directory);
     std::ofstream manifest(directory / "coverage.json", std::ios::binary);
     manifest << "{\"format\":\"jellyframe.rounded.coverage.v0\",\"fixtureSet\":\"rounded-uniform-v0\","
-             << "\"viewport\":{\"width\":172,\"height\":320},\"performanceMeasured\":false,\"fixtures\":[";
-    for (std::size_t index = 0; index < benchmark::kRoundedFixtures.size(); ++index) {
-        const auto& fixture = benchmark::kRoundedFixtures[index];
-        if (index) manifest << ',';
-        manifest << "{\"name\":\"" << fixture.name << "\",\"rect\":[" << fixture.rect.x << ',' << fixture.rect.y
-                 << ',' << fixture.rect.width << ',' << fixture.rect.height << "],\"radius\":" << fixture.radius << '}';
-    }
-    manifest << "],\"backends\":[";
+             << "\"viewport\":{\"width\":172,\"height\":320},\"performanceMeasured\":false,\"fixtures\":";
+    write_rounded_fixtures(manifest);
+    manifest << ",\"backends\":[";
     const char* names[]{"core-quarter-grid", "gdiplus-native-aa", "gdiplus-binary-control"};
     const char* methods[]{"Core 4x4 quarter-origin samples", "GDI+ AntiAlias; PixelOffsetHalf; SourceOver; AssumeLinear",
                           "GDI+ None; PixelOffsetHalf; SourceCopy"};
@@ -841,29 +912,9 @@ int export_rounded_quality_masks(const std::filesystem::path& directory) {
         std::filesystem::create_directories(directory / names[backend]);
         for (std::size_t index = 0; index < benchmark::kRoundedFixtures.size(); ++index) {
             const auto& fixture = benchmark::kRoundedFixtures[index];
-            std::vector<int> coverage;
-            if (backend == 0) {
-                FrameBuffer frame(kWidth, kHeight, Color{0, 0, 0, 255});
-                DisplayCommand command;
-                command.type = DisplayCommandType::FillRect;
-                command.rect = fixture.rect;
-                command.border_radius = fixture.radius;
-                command.color = Color{255, 255, 255, 255};
-                SoftwareRasterizer{}.rasterize(command, frame, kFullRect);
-                for (const auto pixel : frame.pixels) {
-                    if (pixel.r != pixel.g || pixel.g != pixel.b || pixel.a != 255) {
-                        throw std::runtime_error("Core quality mask is not opaque grayscale");
-                    }
-                    coverage.push_back(pixel.r);
-                }
-            } else {
-                coverage = benchmark::gdiplus_rounded_coverage(fixture, kWidth, kHeight,
-                    backend == 1 ? benchmark::GdiPlusRoundedMode::NativeAa : benchmark::GdiPlusRoundedMode::BinaryControl);
-            }
             const std::string relative = std::string(names[backend]) + '/' + fixture.name + ".pgm";
             std::ofstream mask(directory / relative, std::ios::binary);
-            mask << "P5\n172 320\n255\n";
-            for (const int value : coverage) mask.put(static_cast<char>(value));
+            mask << rounded_mask_bytes(masks[backend][index]);
             mask.close();
             if (!mask) throw std::runtime_error("quality mask write failed");
             if (index) manifest << ',';
@@ -874,7 +925,40 @@ int export_rounded_quality_masks(const std::filesystem::path& directory) {
     manifest << "]}\n";
     manifest.close();
     if (!manifest) throw std::runtime_error("quality manifest write failed");
-    std::cout << "rounded_quality_masks=exported backends=3 cases=8 performance_measured=false\n";
+    if (cost_samples) {
+        std::ofstream cost(directory / "cost.json", std::ios::binary);
+        cost << "{\"format\":\"jellyframe.rounded.cost.v0\",\"fixtureSet\":\"rounded-uniform-v0\","
+             << "\"viewport\":{\"width\":172,\"height\":320},\"fixtures\":";
+        write_rounded_fixtures(cost);
+        cost << ",\"sampleCount\":" << cost_samples << ",\"warmupIterations\":" << kWarmupIterations
+             << ",\"coreVersion\":\"" << JELLYFRAME_CPU2D_CORE_VERSION << "\",\"buildType\":\""
+#ifdef NDEBUG
+             << "release"
+#else
+             << "debug"
+#endif
+             << "\",\"timingContract\":{\"id\":\"rounded-native-completed-draw-v0\","
+             << "\"clock\":\"steady-clock-microseconds\",\"operationsPerSample\":1,"
+             << "\"order\":\"rotating-forward-reverse\",\"reset\":\"completed-before-timer\","
+             << "\"setup\":\"surfaces-contexts-brush-excluded\",\"draw\":\"command-path-construction-and-destruction-included\","
+             << "\"finish\":\"synchronous-in-timer\",\"maskExtraction\":\"after-last-timed-draw\"},\"backends\":[";
+        for (int backend = 0; backend < 3; ++backend) {
+            if (backend) cost << ',';
+            cost << "{\"id\":\"" << names[backend] << "\",\"method\":\"" << methods[backend] << "\",\"cases\":[";
+            for (std::size_t index = 0; index < case_count; ++index) {
+                if (index) cost << ',';
+                cost << "{\"name\":\"" << benchmark::kRoundedFixtures[index].name << "\",\"maskSha256\":\""
+                     << mask_sha256(masks[backend][index]) << "\",\"paint_us\":" << json_array(timings[backend][index]) << '}';
+            }
+            cost << "]}";
+        }
+        cost << "]}\n";
+        cost.close();
+        if (!cost) throw std::runtime_error("quality cost report write failed");
+        std::cout << "rounded_quality_cost=exported samples=" << cost_samples << " ranking=disabled\n";
+    }
+    std::cout << "rounded_quality_masks=exported backends=3 cases=8 performance_measured="
+              << (cost_samples ? "true" : "false") << '\n';
     return 0;
 }
 
@@ -971,6 +1055,10 @@ int main(int argc, char** argv) {
             throw std::runtime_error("SDL2 library path is valid only with the sdl2 backend");
         }
         const std::filesystem::path output_directory(argv[1]);
+        if (workload == Workload::RoundedQualityCost) {
+            if (samples > 10000) throw std::runtime_error("rounded quality cost permits at most 10000 samples");
+            return export_rounded_quality_masks(output_directory, samples);
+        }
         if (workload == Workload::RoundedQualityMasks) {
             if (samples != 1) throw std::runtime_error("rounded quality masks require samples=1; no timing is measured");
             return export_rounded_quality_masks(output_directory);

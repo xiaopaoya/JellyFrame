@@ -39,7 +39,7 @@
 
 - [x] 修复重复失败的 scripting CI：`08dc32ba` 将非 trace capture 的诊断重绘预期
   修正为 0，新增 trace OFF/ON 分别 paint=0/1 且 BMP 完全一致的回归；干净 scripting
-  Release 全套 82/82 通过，远端 CI `35451942516`、后续工具提交 CI `35452510254`、`35453618347` 四项 job 均全绿。
+  Release 全套 82/82 通过，远端 CI `35451942516` 及后续工具提交至 `35454655010` 四项 job 均全绿。
   无需恢复无条件诊断重绘来满足过时测试。
 - [x] 完成原生 GDI 圆角资格检查：Core 通过独立 4x4 coverage oracle；固定卡片与
   GDI RoundRect 有 392 个不同像素，输出明确为 not-comparable，无计时数据。
@@ -51,8 +51,12 @@
   的上下界，不以 Core 为理想答案；内部/外部检查、边缘 RMS/最大误差、面积偏差和
   pass/fail/indeterminate 状态均可复核。Core 与 GDI+ 当前配置均有未通过项，二值负对照
   被拒绝；保留原始 mask/hash，不修改历史 exact 合同或设备发布门。
-- [ ] 下一步接入独立的原生 AA 质量/成本联合报告，先冻结实际执行与完成同步计时边界。
-  未通过质量门只保留诊断，不进入等价排名；不得为完成基准默认修改 Core 像素网格。
+- [x] 交付独立的原生 AA 质量/成本联合报告：复用目标、计时外完成黑底 reset，计时内
+  构造命令/path、绘制和完成同步；三 backend 六顺序轮换。耗时与实际绘制 mask SHA-256
+  绑定，错配拒绝；保留原始样本、质量状态和 p50/p95，不生成速度比或赢家。
+  桌面 Release 三轮、每 case/backend 500 样本已归档至 `D:/JellyFramePerf/rounded-aa-cost-20260919/`。
+- [ ] 下一步沿 Core 自身固定输出进行圆角成本归因，区分 coverage 与内部填充工作，
+  不把不同质量下的原生库计时差解释成同质量加速。不默认修改 Core 像素网格或设备配置。
   通用文本/shaping、完整 UI 和 LVGL 对照仍单列待办。
 - [x] 修正半透明对照的计时边界：`a4faa1c6` 在计时内完成 SDL2/GDI batch，
   在计时外完成 reset，并交错执行两侧；`alpha-grid-rgb-v1` 的旧排名已撤回。

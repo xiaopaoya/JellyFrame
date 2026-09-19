@@ -80,6 +80,20 @@ def main():
             assert next(case for case in backend["cases"] if case["name"] == "rectangle")["status"] == "pass"
         binary = next(backend for backend in report["backends"] if backend["id"] == "gdiplus-binary-control")
         assert binary["status"] == "fail", "binary edges must not pass the native-AA quality gate"
+        cost_root = root / "cost"
+        subprocess.run([str(runner), str(cost_root), "3", "rounded-quality-cost"], check=True, capture_output=True)
+        cost_loaded, _ = quality.load_masks(cost_root / "coverage.json")
+        assert loaded == cost_loaded, "timed draw output differs from untimed quality fixture"
+        quality.attach_cost(report, cost_loaded, cost_root / "cost.json")
+        assert report["format"] == quality.JOINT_FORMAT
+        assert report["performanceMeasured"] is True and report["performanceComparable"] is False
+        assert report["sampleCount"] == 3
+        assert all(len(case["cost"]["paintUs"]) == 3 for backend in report["backends"] for case in backend["cases"])
+        assert "no speed ranking" in quality.markdown(report)
+        for suffix in (["10001", "rounded-quality-cost"], ["3", "rounded-quality-cost", "sdl2"]):
+            rejected = root / "bad-cost"
+            result = subprocess.run([str(runner), str(rejected), *suffix], capture_output=True, text=True)
+            assert result.returncode != 0 and not rejected.exists()
     print("rounded qualification contract passed")
 
 

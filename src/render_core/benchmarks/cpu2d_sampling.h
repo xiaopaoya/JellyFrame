@@ -1,10 +1,39 @@
 #pragma once
 
 #include <chrono>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
 namespace jellyframe::benchmark {
+
+// Rotate the starting backend and reverse direction on alternate rounds. With
+// three backends this visits all six permutations. One completed draw per sample.
+template <typename Clock = std::chrono::steady_clock, typename Reset, typename Paint, typename Finish>
+std::vector<std::vector<double>> measure_rotating(int samples, int warmups, int backends,
+                                                Reset reset, Paint paint, Finish finish) {
+    if (samples < 1 || samples > 10000 || warmups < 0 || warmups > 10000 || backends < 1 || backends > 4) {
+        throw std::invalid_argument("invalid rotating sample limits");
+    }
+    std::vector<std::vector<double>> result(static_cast<std::size_t>(backends));
+    for (auto& values : result) values.reserve(samples);
+    for (int round = 0; round < warmups + samples; ++round) {
+        const int start = (round / 2) % backends;
+        for (int step = 0; step < backends; ++step) {
+            const int backend = (start + (round % 2 ? backends - step : step)) % backends;
+            reset(backend);
+            const auto begin = Clock::now();
+            paint(backend);
+            finish(backend);
+            const auto end = Clock::now();
+            if (round >= warmups) {
+                result[static_cast<std::size_t>(backend)].push_back(
+                    std::chrono::duration<double, std::micro>(end - begin).count());
+            }
+        }
+    }
+    return result;
+}
 
 // Paint and completion are timed together; reset must complete before returning.
 template <typename Clock = std::chrono::steady_clock,

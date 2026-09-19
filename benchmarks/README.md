@@ -192,6 +192,27 @@ Exit 0 only means analysis completed; the quality report cannot enter the benchm
 rankings. This policy is not a Runtime release gate. See
 `../docs/render_performance_native_aa_quality_zh.md` for the fixed scope and rules.
 
+For diagnostic completed-draw timings on Windows 10+, use:
+
+```powershell
+build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\aa-cost 500 rounded-quality-cost
+python tools\rounded_aa_quality.py --input build\aa-cost\coverage.json --cost-input build\aa-cost\cost.json --output build\aa-cost\joint.json --markdown-output build\aa-cost\report.md
+```
+
+Targets/contexts/brushes are reused; completed black reset is outside the timer.
+Each timed operation includes command/path construction, drawing, destruction
+and completion. The three backends rotate through all six execution orders, with
+30 warmups per case/backend. Samples are individual operations, not batch means.
+Mask extraction and I/O are untimed; masks come from the final measured draw.
+SHA-256, fixed fixtures, backend methods and the frozen timing contract must match
+before the analyzer joins cost to quality. Sample counts are bounded to 1-10000.
+
+`jellyframe.rounded.quality-cost.v0` retains raw samples, nearest-rank p50/p95 and
+quality status, but remains diagnostic-only: no FPS, ratios, winners or claims of
+equivalent output. The existing benchmark ranking tool rejects this format.
+Use Release and repeat sequentially without simultaneous builds. Do not pool
+repeat samples or extrapolate these CPU draw timings to layout, present or devices.
+
 ## Repeated Comparisons
 
 The same tool accepts 3-32 independent run manifests per side, in paired repeat

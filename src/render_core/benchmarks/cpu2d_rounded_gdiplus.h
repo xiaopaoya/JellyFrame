@@ -30,29 +30,34 @@ private:
 
 enum class GdiPlusRoundedMode { Supersampled, NativeAa, BinaryControl };
 
-// Untimed mask export. Supersampled uses the historical quarter-grid probe;
+// Reusable draw target. Supersampled uses the historical quarter-grid probe;
 // native modes declare pixel-center alignment for the independent area policy.
+// reset() completes before timing; draw()/finish() can be timed together.
 // The source mask is produced by GDI+, never by the Core oracle.
-inline std::vector<int> gdiplus_rounded_coverage(const RoundedFixture& fixture, int width, int height,
-                                               GdiPlusRoundedMode mode = GdiPlusRoundedMode::Supersampled) {
-    const bool native_aa = mode == GdiPlusRoundedMode::NativeAa;
-    const bool binary_control = mode == GdiPlusRoundedMode::BinaryControl;
-    const int scale = native_aa || binary_control ? 1 : 4;
-    const int stride = width * scale * 4;
-    std::vector<std::uint8_t> storage(static_cast<std::size_t>(stride) * height * scale, 0);
-    {
-        Gdiplus::Bitmap bitmap(width * scale, height * scale, stride, PixelFormat32bppARGB, storage.data());
+class GdiPlusRoundedSurface {
+public:
+    GdiPlusRoundedSurface(int width, int height, GdiPlusRoundedMode mode)
+        : width(width), height(height), native_aa(mode == GdiPlusRoundedMode::NativeAa),
+          scale(mode == GdiPlusRoundedMode::Supersampled ? 4 : 1), stride(width * scale * 4),
+          storage(static_cast<std::size_t>(stride) * height * scale, 0),
+          bitmap(width * scale, height * scale, stride, PixelFormat32bppARGB, storage.data()),
+          graphics(&bitmap), white(Gdiplus::Color(255, 255, 255, 255)) {
         check_gdiplus(bitmap.GetLastStatus());
-        Gdiplus::Graphics graphics(&bitmap);
         check_gdiplus(graphics.GetLastStatus());
         check_gdiplus(graphics.SetPageUnit(Gdiplus::UnitPixel));
         check_gdiplus(graphics.SetSmoothingMode(native_aa ? Gdiplus::SmoothingModeAntiAlias : Gdiplus::SmoothingModeNone));
-        check_gdiplus(graphics.SetPixelOffsetMode(native_aa || binary_control ? Gdiplus::PixelOffsetModeHalf : Gdiplus::PixelOffsetModeNone));
+        check_gdiplus(graphics.SetPixelOffsetMode(scale == 1 ? Gdiplus::PixelOffsetModeHalf : Gdiplus::PixelOffsetModeNone));
         check_gdiplus(graphics.SetCompositingMode(native_aa ? Gdiplus::CompositingModeSourceOver : Gdiplus::CompositingModeSourceCopy));
         if (native_aa) check_gdiplus(graphics.SetCompositingQuality(Gdiplus::CompositingQualityAssumeLinear));
-        check_gdiplus(graphics.Clear(Gdiplus::Color(255, 0, 0, 0)));
-        Gdiplus::SolidBrush white(Gdiplus::Color(255, 255, 255, 255));
         check_gdiplus(white.GetLastStatus());
+    }
+
+    void reset() {
+        check_gdiplus(graphics.Clear(Gdiplus::Color(255, 0, 0, 0)));
+        finish();
+    }
+
+    void draw(const RoundedFixture& fixture) {
         const auto rect = fixture.rect;
         const auto x = static_cast<Gdiplus::REAL>(rect.x * scale);
         const auto y = static_cast<Gdiplus::REAL>(rect.y * scale);
@@ -71,27 +76,51 @@ inline std::vector<int> gdiplus_rounded_coverage(const RoundedFixture& fixture, 
             check_gdiplus(path.CloseFigure());
         }
         check_gdiplus(graphics.FillPath(&white, &path));
-        graphics.Flush(Gdiplus::FlushIntentionSync);
     }
-    std::vector<int> coverage(static_cast<std::size_t>(width) * height, 0);
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            int covered = 0;
-            for (int sy = 0; sy < scale; ++sy) {
-                for (int sx = 0; sx < scale; ++sx) {
-                    const auto offset = static_cast<std::size_t>(y * scale + sy) * stride + (x * scale + sx) * 4;
-                    const auto value = storage[offset];
-                    if ((!native_aa && value != 0 && value != 255) || storage[offset + 1] != value ||
-                        storage[offset + 2] != value || storage[offset + 3] != 255) {
-                        throw std::runtime_error("GDI+ mask violates grayscale/binary contract");
+
+    void finish() { graphics.Flush(Gdiplus::FlushIntentionSync); }
+
+    std::vector<int> coverage() const {
+        std::vector<int> coverage(static_cast<std::size_t>(width) * height, 0);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                int covered = 0;
+                for (int sy = 0; sy < scale; ++sy) {
+                    for (int sx = 0; sx < scale; ++sx) {
+                        const auto offset = static_cast<std::size_t>(y * scale + sy) * stride + (x * scale + sx) * 4;
+                        const auto value = storage[offset];
+                        if ((!native_aa && value != 0 && value != 255) || storage[offset + 1] != value ||
+                            storage[offset + 2] != value || storage[offset + 3] != 255) {
+                            throw std::runtime_error("GDI+ mask violates grayscale/binary contract");
+                        }
+                        covered += value;
                     }
-                    covered += value;
                 }
+                coverage[static_cast<std::size_t>(y) * width + x] = (covered + scale * scale / 2) / (scale * scale);
             }
-            coverage[static_cast<std::size_t>(y) * width + x] = (covered + scale * scale / 2) / (scale * scale);
         }
+        return coverage;
     }
-    return coverage;
+
+private:
+    int width;
+    int height;
+    bool native_aa;
+    int scale;
+    int stride;
+    std::vector<std::uint8_t> storage;
+    Gdiplus::Bitmap bitmap;
+    Gdiplus::Graphics graphics;
+    Gdiplus::SolidBrush white;
+};
+
+inline std::vector<int> gdiplus_rounded_coverage(const RoundedFixture& fixture, int width, int height,
+                                               GdiPlusRoundedMode mode = GdiPlusRoundedMode::Supersampled) {
+    GdiPlusRoundedSurface surface(width, height, mode);
+    surface.reset();
+    surface.draw(fixture);
+    surface.finish();
+    return surface.coverage();
 }
 
 } // namespace jellyframe::benchmark
