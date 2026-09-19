@@ -323,6 +323,11 @@ if(JELLYFRAME_BUILD_TESTS)
         add_executable(jellyframe_cpu2d_sampling_tests tests/cpu2d_sampling_tests.cpp)
         target_compile_features(jellyframe_cpu2d_sampling_tests PRIVATE cxx_std_17)
         add_test(NAME jellyframe_cpu2d_sampling_tests COMMAND jellyframe_cpu2d_sampling_tests)
+        add_test(NAME jellyframe_cpu2d_rounded_qualification
+                 COMMAND jellyframe_cpu2d_compare
+                         "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_rounded_qualification" 1 rounded-qualification)
+        set_tests_properties(jellyframe_cpu2d_rounded_qualification PROPERTIES
+            PASS_REGULAR_EXPRESSION "rounded_qualification=not-comparable different_pixels=[1-9][0-9]* core_oracle=pass performance_measured=false")
         add_jellyframe_tool(jellyframe_cpu2d_text_fixture_tests tests/cpu2d_text_fixture_tests.cpp)
         add_test(NAME jellyframe_cpu2d_text_fixture_tests COMMAND jellyframe_cpu2d_text_fixture_tests)
         add_test(NAME jellyframe_cpu2d_compare_bitmap_text_smoke

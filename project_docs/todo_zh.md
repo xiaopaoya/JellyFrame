@@ -37,6 +37,15 @@
 
 ### 2. 渲染性能观测闭环（独立并行主线）
 
+- [x] 修复重复失败的 scripting CI：`08dc32ba` 将非 trace capture 的诊断重绘预期
+  修正为 0，新增 trace OFF/ON 分别 paint=0/1 且 BMP 完全一致的回归；干净 scripting
+  Release 全套 82/82 通过，远端 CI `35451942516` 四项 job 全绿。
+  无需恢复无条件诊断重绘来满足过时测试。
+- [x] 完成原生 GDI 圆角资格检查：Core 通过独立 4x4 coverage oracle；固定卡片与
+  GDI RoundRect 有 392 个不同像素，输出明确为 not-comparable，无计时数据。
+  自动化回归与比较器拒绝资格报告的测试已加入；本项不关闭等价 AA adapter 待办。
+- [ ] 下一步为圆角选择支持等价 AA 的参考 backend，先固定 coverage/output 契约，
+  输出通过后再接入多轮测量；通用文本/shaping、完整 UI 和 LVGL 对照仍单列待办。
 - [x] 修正半透明对照的计时边界：`a4faa1c6` 在计时内完成 SDL2/GDI batch，
   在计时外完成 reset，并交错执行两侧；`alpha-grid-rgb-v1` 的旧排名已撤回。
 - [x] `1e375e5b` 为不透明目标增加逐字节等价的 source-over 快路径；Release/Debug Core

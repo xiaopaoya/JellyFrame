@@ -182,3 +182,11 @@ coverage and host-dependent text are recorded in
 listed above are valid JellyFrame regression baselines; they are not cross-library
 claims until an adapter supplies matching coverage, font identity, shaping and
 output-validation conditions.
+
+The Windows `jellyframe_cpu2d_compare <directory> 1 rounded-qualification` mode
+records the native GDI/Core rounded-coverage mismatch without measuring time.
+It validates Core against an independent 4x4 oracle, then writes two captures,
+a difference image and a `jellyframe.benchmark.qualification.v0` report. Success
+means the diagnostic ran, not that outputs are equivalent. The comparison tool
+rejects this report as a timing manifest. This closes the native-GDI qualification
+investigation only; an equivalent-AA rounded adapter remains outstanding.

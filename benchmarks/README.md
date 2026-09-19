@@ -128,6 +128,24 @@ TTF/CJK shaping, AA, font generation/loading, GDI native text, GPU or devices.
 SDL2 rejects this mode. Glyph masks, font metrics and layout are frozen in the
 manifest; changing any of them requires a separate comparable workload.
 
+## Rounded Coverage Qualification
+
+Native GDI `RoundRect` uses binary coverage; Core uses a 4x4 quarter-pixel
+coverage grid. Check that mismatch explicitly before implementing a rounded
+timing adapter:
+
+```powershell
+build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\rounded-qualification 1 rounded-qualification
+```
+
+This GDI-only mode requires `samples=1` and measures no performance. It checks
+Core against an independent coverage oracle and writes `core.bmp`, `gdi.bmp`,
+`difference.bmp` and `qualification.json`. Exit 0 means the probe completed,
+not that the backends are comparable. The report is deliberately marked
+`not-comparable` and `performanceMeasured: false`; `benchmark_compare.py` rejects
+its qualification format as a performance manifest. A matching-AA adapter is
+still required before rounded performance comparisons are accepted.
+
 ## Repeated Comparisons
 
 The same tool accepts 3-32 independent run manifests per side, in paired repeat

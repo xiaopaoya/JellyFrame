@@ -126,6 +126,14 @@ class BenchmarkCompareTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "has no standardized unit"):
                 self.module.load_run(path)
 
+    def test_qualification_report_is_not_a_performance_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "qualification.json"
+            path.write_text(json.dumps({"format": "jellyframe.benchmark.qualification.v0",
+                                        "status": "not-comparable", "performanceMeasured": False}), encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "unsupported benchmark run format"):
+                self.module.load_run(path)
+
     def test_loader_rejects_invalid_operation_batch_size(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "run.json"
