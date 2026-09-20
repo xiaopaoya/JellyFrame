@@ -162,3 +162,17 @@ stroke 入口。
 固定 36 个 44x34 控件的本机 Release 参考值约为 uniform stroke `693.695 us`、
 non-uniform 1px stroke `350.305 us`。该数字仅用于后续对照；当前没有足够证据支持再
 对描边做更激进的区间改写，因此本轮不修改描边生产算法，不新增硬件测试要求。
+
+## Rounded clip 合成
+
+Core microbench 新增 `rounded_clip_replay_raster` 和
+`nested_rounded_clip_replay_raster`。两者都使用同一组 36 个填充命令和 320x260 临时
+surface；嵌套用例的内层可见区域更小，因此不能按 clip 数量直接比较耗时。三轮 Release
+结果为单层 `519.490/503.450/520.095 us`，嵌套 `437.925/430.275/443.420 us`。
+
+同一次不计时统计快照记录：36 个 replay 命令、53,856 个命令候选像素、83,200 个
+temporary/mask 像素、208 个 full 行、52 个 sampled 行、2,016 次 clip visit、127 次
+4x4 math visit、14,624 个 known-full 像素和 9,869 个 blended 像素。它们解释工作形状，
+不是 CPU 指令数，也不能加成阶段占比；replay、temporary prepare、composite 仍须分开
+看待。现有 clip 链输出等价和统计回归继续作为门槛，本轮只增加观测入口，不改变 clip
+算法，因此不新增硬件测试要求。

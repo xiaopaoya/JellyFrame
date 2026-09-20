@@ -263,6 +263,21 @@ non-uniform 1px stroke commands. The existing stroke implementation already
 restricts middle rows to vertical bands plus corner candidates; no additional
 production stroke rewrite is justified by this measurement alone.
 
+Rounded clip replay has two additional entries: `rounded_clip_replay_raster` and
+`nested_rounded_clip_replay_raster`. Both replay the same 36 fill commands into
+one temporary surface; the second applies two clip records and has a smaller
+inner visible region, so its time must not be divided by clip count. Three
+sequential Release runs measured single-clip `519.490 / 503.450 / 520.095 us`
+and nested-clip `437.925 / 430.275 / 443.420 us`.
+
+The one-shot `rounded_clip_profile` line reports the existing counters without
+timing instrumentation: 36 commands, 53,856 replay candidate pixels, 83,200
+temporary/mask pixels, 208 full-coverage rows, 52 sampled rows, 2,016 clip
+visits, 127 subpixel math visits, 14,624 known-full pixels and 9,869 blended
+pixels. These counts are work-shape diagnostics, not CPU instruction counts or
+additive phase time. Replay, temporary-surface preparation and composite remain
+separate concepts; no device performance claim follows from this desktop entry.
+
 ## Repeated Comparisons
 
 The same tool accepts 3-32 independent run manifests per side, in paired repeat

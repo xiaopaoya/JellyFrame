@@ -629,6 +629,47 @@ int run_render_core_microbench(int argc, char** argv) {
         rasterizer.rasterize(per_corner_stroke_commands, target, Rect{0, 0, 320, 260});
     }));
 
+    const RasterClip rounded_clip{{0, 0, 320, 260}, encode_corner_radii(CornerRadii{28, 20, 24, 16})};
+    print_result("rounded_clip_replay_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(320, 260, Color{255, 255, 255, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize_clipped(rounded_commands.data(), rounded_commands.size(), target,
+                                     Rect{0, 0, 320, 260}, 0, 0, &rounded_clip, 1);
+    }));
+
+    const RasterClip nested_rounded_clips[] = {
+        {{0, 0, 320, 260}, encode_corner_radii(CornerRadii{28, 20, 24, 16})},
+        {{12, 10, 296, 240}, encode_corner_radii(CornerRadii{20, 14, 18, 12})},
+    };
+    print_result("nested_rounded_clip_replay_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(320, 260, Color{255, 255, 255, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize_clipped(rounded_commands.data(), rounded_commands.size(), target,
+                                     Rect{0, 0, 320, 260}, 0, 0, nested_rounded_clips, 2);
+    }));
+
+    SoftwareRasterizerStatistics rounded_clip_statistics;
+    SoftwareRasterizerOptions rounded_clip_options;
+    rounded_clip_options.statistics = &rounded_clip_statistics;
+    FrameBuffer rounded_clip_profile_target(320, 260, Color{255, 255, 255, 255});
+    SoftwareRasterizer rounded_clip_profile_rasterizer({}, nullptr, rounded_clip_options);
+    rounded_clip_profile_rasterizer.rasterize_clipped(
+        rounded_commands.data(), rounded_commands.size(), rounded_clip_profile_target,
+        Rect{0, 0, 320, 260}, 0, 0, &rounded_clip, 1);
+    std::cout << "rounded_clip_profile runs=" << rounded_clip_statistics.rounded_clip_runs
+              << " commands=" << rounded_clip_statistics.rounded_clip_commands
+              << " replay_candidate_pixels="
+              << rounded_clip_statistics.rounded_clip_replay_candidate_pixels_by_type[
+                     static_cast<std::size_t>(DisplayCommandType::FillRect)]
+              << " temporary_pixels=" << rounded_clip_statistics.rounded_clip_temporary_pixels
+              << " mask_pixels=" << rounded_clip_statistics.rounded_clip_mask_pixels
+              << " full_rows=" << rounded_clip_statistics.rounded_clip_full_coverage_rows
+              << " sampled_rows=" << rounded_clip_statistics.rounded_clip_coverage_sampled_rows
+              << " clip_evaluations=" << rounded_clip_statistics.rounded_clip_coverage_clip_evaluations
+              << " math_evaluations=" << rounded_clip_statistics.rounded_clip_coverage_math_evaluations
+              << " known_full_pixels=" << rounded_clip_statistics.rounded_clip_coverage_known_full_pixels
+              << " blended_pixels=" << rounded_clip_statistics.rounded_clip_blended_pixels << '\n';
+
     DisplayCommand opaque_screen_gradient;
     opaque_screen_gradient.type = DisplayCommandType::LinearGradient;
     opaque_screen_gradient.rect = Rect{0, 0, 172, 320};

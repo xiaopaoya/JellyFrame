@@ -70,8 +70,12 @@
 - [x] 完成圆角描边边界审查：确认 `13264bcd` 已将中间行限制到边带/角区候选；补齐
   非均匀、裁剪、负坐标和奇数宽度的全像素 RGBA reference 测试，并增加 uniform/
   non-uniform stroke microbench。当前没有足够收益支持进一步改写，未改变生产算法。
-- [ ] 下一步评估 rounded clip 合成路径；必须单独验证 clip 链、full/zero/partial 覆盖和
-  输出等价，不能把 fill/stroke 的成本结果外推到 clip，也不新增无必要硬件 A/B。
+- [x] 完成 rounded clip 合成的成本观测入口：增加单层/嵌套 clip microbench 和工作形状
+  快照，现有 clip 链的 full/zero/partial、统计和输出等价回归继续通过。三轮 Release
+  记录已归档于 `D:/JellyFramePerf/rounded-clip-cost-20260919/`，未改变 clip 算法。
+- [ ] 下一步评估 rounded clip 的 replay/temporary/composite 三段是否有可证明的独立优化；
+  必须保持 clip 链输出等价，不能把 fill/stroke 的成本结果外推到 clip，也不新增无必要
+  硬件 A/B。
   通用文本/shaping、完整 UI 和 LVGL 对照仍单列待办。
 - [x] 修正半透明对照的计时边界：`a4faa1c6` 在计时内完成 SDL2/GDI batch，
   在计时外完成 reset，并交错执行两侧；`alpha-grid-rgb-v1` 的旧排名已撤回。
