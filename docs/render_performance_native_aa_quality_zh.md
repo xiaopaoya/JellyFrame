@@ -150,3 +150,15 @@ SHA-256；Corner shortcut 另有单元测试覆盖全满、全空和部分覆盖
 三轮 baseline 为 368.245/385.400/367.175 us，候选为 175.635/174.935/179.575 us。
 该 microbench 包含既有 target/rasterizer setup，数值只作同机前后信号，不是设备帧时间。
 本轮没有改变采样网格、Runtime ABI 或设备配置，因此不新增硬件测试要求。
+
+## 圆角描边边界
+
+现有 `stroke_rounded_rect` 已在较早的 `13264bcd` 路径中完成包围盒拆分：内圈之外的
+中间行只保留左右边带和实际圆角候选区，顶部/底部行才检查完整横向范围；coverage
+helper 继续负责外圈减内圈的覆盖率差分。本轮补充了普通、裁剪、负坐标、非均匀半径、
+奇数宽度的全像素 RGBA reference 回归，并在 Core microbench 增加 uniform/non-uniform
+stroke 入口。
+
+固定 36 个 44x34 控件的本机 Release 参考值约为 uniform stroke `693.695 us`、
+non-uniform 1px stroke `350.305 us`。该数字仅用于后续对照；当前没有足够证据支持再
+对描边做更激进的区间改写，因此本轮不修改描边生产算法，不新增硬件测试要求。

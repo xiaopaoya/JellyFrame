@@ -594,6 +594,41 @@ int run_render_core_microbench(int argc, char** argv) {
         rasterizer.rasterize(per_corner_rounded_commands, target, Rect{0, 0, 320, 260});
     }));
 
+    DisplayList rounded_stroke_commands;
+    for (int row = 0; row < 6; ++row) {
+        for (int column = 0; column < 6; ++column) {
+            DisplayCommand command = fill_command(Rect{column * 52, row * 42, 44, 34},
+                                                   Color{20, 184, 166, 255},
+                                                   12);
+            command.type = DisplayCommandType::StrokeRect;
+            command.stroke_width = 2;
+            rounded_stroke_commands.push_back(command);
+        }
+    }
+    print_result("rounded_stroke_aa_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(320, 260, Color{255, 255, 255, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(rounded_stroke_commands, target, Rect{0, 0, 320, 260});
+    }));
+
+    DisplayList per_corner_stroke_commands;
+    const int per_corner_stroke_radius = encode_corner_radii(CornerRadii{12, 6, 3, 0});
+    for (int row = 0; row < 6; ++row) {
+        for (int column = 0; column < 6; ++column) {
+            DisplayCommand command = fill_command(Rect{column * 52, row * 42, 44, 34},
+                                                   Color{20, 184, 166, 255},
+                                                   per_corner_stroke_radius);
+            command.type = DisplayCommandType::StrokeRect;
+            command.stroke_width = 1;
+            per_corner_stroke_commands.push_back(command);
+        }
+    }
+    print_result("per_corner_stroke_aa_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(320, 260, Color{255, 255, 255, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(per_corner_stroke_commands, target, Rect{0, 0, 320, 260});
+    }));
+
     DisplayCommand opaque_screen_gradient;
     opaque_screen_gradient.type = DisplayCommandType::LinearGradient;
     opaque_screen_gradient.rect = Rect{0, 0, 172, 320};

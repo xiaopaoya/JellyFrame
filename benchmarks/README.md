@@ -255,6 +255,14 @@ uniform workload stayed within normal run noise. The candidate fills non-corner
 row spans directly and retains the existing coverage helper for all corner
 candidate pixels, including overlapping-radius branch precedence.
 
+The microbench also exposes `rounded_stroke_aa_raster` and
+`per_corner_stroke_aa_raster`. These are diagnostic workload entries, not a new
+cross-library contract. The current Release reference on the local machine was
+about 693.695 us for 36 uniform 44x34 stroke commands and 350.305 us for 36
+non-uniform 1px stroke commands. The existing stroke implementation already
+restricts middle rows to vertical bands plus corner candidates; no additional
+production stroke rewrite is justified by this measurement alone.
+
 ## Repeated Comparisons
 
 The same tool accepts 3-32 independent run manifests per side, in paired repeat

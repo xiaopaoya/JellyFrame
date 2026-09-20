@@ -688,6 +688,57 @@ void rounded_stroke_keeps_straight_edges_visible() {
     check(frame_buffer.pixel(2, 2).r == 255, "rounded stroke keeps the outer corner clear");
 }
 
+void rounded_stroke_matches_full_pixel_reference() {
+    struct Case {
+        Rect rect;
+        int radii;
+        int width;
+        Rect clip;
+    };
+    const std::array<Case, 3> cases{{
+        {{2, 2, 18, 18}, encode_corner_radii(CornerRadii{8, 4, 2, 0}), 1, {0, 0, 32, 28}},
+        {{-3, 3, 24, 22}, encode_corner_radii(CornerRadii{11, 7, 10, 4}), 3, {1, 1, 30, 25}},
+        {{4, -2, 23, 19}, encode_corner_radii(CornerRadii{9, 5, 3, 7}), 2, {2, 0, 27, 24}},
+    }};
+    const Color ink{240, 190, 40, 255};
+    for (const Case& test : cases) {
+        FrameBuffer actual(32, 28, Color{35, 45, 55, 255});
+        FrameBuffer expected(32, 28, Color{35, 45, 55, 255});
+        DisplayCommand command;
+        command.type = DisplayCommandType::StrokeRect;
+        command.rect = test.rect;
+        command.border_radius = test.radii;
+        command.stroke_width = test.width;
+        command.color = ink;
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(command, actual, test.clip);
+
+        const int width = std::min(test.width, std::max(1, std::min(test.rect.width, test.rect.height) / 2));
+        const int twice_width = safe_add(width, width);
+        const Rect inner{
+            safe_add(test.rect.x, width), safe_add(test.rect.y, width),
+            std::max(0, safe_add(test.rect.width, safe_negate(twice_width))),
+            std::max(0, safe_add(test.rect.height, safe_negate(twice_width))),
+        };
+        const RasterRoundedRect outer = prepare_rounded_rect(test.rect, test.radii);
+        const RasterRoundedRect inner_geometry = prepare_rounded_rect(
+            inner, expand_corner_radii(test.radii, -width));
+        const Rect visible = raster_intersect_rect(
+            raster_intersect_rect(test.rect, {0, 0, 32, 28}), test.clip);
+        for (int y = visible.y; y < safe_edge(visible.y, visible.height); ++y) {
+            for (int x = visible.x; x < safe_edge(visible.x, visible.width); ++x) {
+                const int outside = rounded_rect_coverage(outer, x, y);
+                const int inside = raster_empty_rect(inner) ? 0 : rounded_rect_coverage(inner_geometry, x, y);
+                const int coverage = std::max(0, outside - inside);
+                if (coverage > 0) {
+                    blend_pixel(expected, x, y, with_coverage(ink, coverage));
+                }
+            }
+        }
+        check_equal_pixels(actual, expected, "rounded stroke matches full pixel reference");
+    }
+}
+
 void rounded_fill_antialiases_edge_pixels() {
     FrameBuffer frame_buffer(12, 12, Color{255, 255, 255, 255});
     SoftwareRasterizer rasterizer;
@@ -2354,6 +2405,7 @@ int main() {
         rounded_stroke_keeps_corner_pixels_clear();
         square_stroke_paints_all_four_edges();
         rounded_stroke_keeps_straight_edges_visible();
+        rounded_stroke_matches_full_pixel_reference();
         rounded_fill_antialiases_edge_pixels();
         per_corner_rounded_rect_keeps_square_bottom_left();
         per_corner_rounded_rect_matches_full_pixel_reference();

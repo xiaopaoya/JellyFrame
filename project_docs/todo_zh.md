@@ -67,8 +67,11 @@
   直接整段写入；普通/裁剪/负坐标全像素 reference 回归通过。三轮同机 Release
   microbench 已归档于 `D:/JellyFramePerf/rounded-nonuniform-cost-20260919/`，候选约
   比 baseline 快 51%--54%，未改变像素、采样网格、ABI 或设备配置。
-- [ ] 下一步分别评估描边和 rounded clip 路径；必须各自建立输出等价和成本证据，不能把
-  uniform/non-uniform opaque-fill 收益外推到其它绘制路径，也不新增无必要硬件 A/B。
+- [x] 完成圆角描边边界审查：确认 `13264bcd` 已将中间行限制到边带/角区候选；补齐
+  非均匀、裁剪、负坐标和奇数宽度的全像素 RGBA reference 测试，并增加 uniform/
+  non-uniform stroke microbench。当前没有足够收益支持进一步改写，未改变生产算法。
+- [ ] 下一步评估 rounded clip 合成路径；必须单独验证 clip 链、full/zero/partial 覆盖和
+  输出等价，不能把 fill/stroke 的成本结果外推到 clip，也不新增无必要硬件 A/B。
   通用文本/shaping、完整 UI 和 LVGL 对照仍单列待办。
 - [x] 修正半透明对照的计时边界：`a4faa1c6` 在计时内完成 SDL2/GDI batch，
   在计时外完成 reset，并交错执行两侧；`alpha-grid-rgb-v1` 的旧排名已撤回。
