@@ -41,7 +41,7 @@
   "configuration.sdkRoot": "Optional absolute JellyFrame SDK or repository root. Configure this once for standalone App workspaces.",
   "configuration.buildDir": "Optional absolute or repository-relative desktop runtime output directory. Leave empty to auto-detect a compatible build.",
   "configuration.openCaptureAfterRun": "Open a generated capture after preview or frame-script execution.",
-  "configuration.pythonPath": "Python executable filename available on PATH, or an absolute path to a Python executable, used to run tools/jellyframe_cli.py.",
+  "configuration.pythonPath": "Leave empty to use the SDK's bundled Python (system Python for source checkouts/older SDKs). Set an executable path to explicitly override it.",
   "configuration.defaultTarget": "Default built-in target profile. App commands also list target profiles declared by the current App manifest.",
   "configuration.defaultTarget.round300": "300 x 300 round generic wearable profile.",
   "configuration.defaultTarget.rect320x240": "320 x 240 landscape rectangular profile.",

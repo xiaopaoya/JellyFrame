@@ -99,6 +99,16 @@ function resolveSdkRoot({ workspaceRoot, configuredRoot, extensionPath, env = pr
   return findSdkRootFrom(extensionPath);
 }
 
+function resolvePython({ sdkRoot, configuredPath, platform = process.platform } = {}) {
+  const override = String(configuredPath || "").trim();
+  if (override) return override;
+  if (sdkRoot && platform === "win32") {
+    const bundled = path.join(sdkRoot, "runtime", "python", "python.exe");
+    if (fs.existsSync(bundled)) return bundled;
+  }
+  return platform === "win32" ? "python" : "python3";
+}
+
 function authorOutputRoot(workspaceRoot, sdkRoot) {
   if (workspaceRoot && sdkRoot && !isInside(workspaceRoot, sdkRoot)) {
     return path.join(workspaceRoot, ".jellyframe", "build");
@@ -193,6 +203,7 @@ function readSdkMetadata(root) {
 }
 
 module.exports = {
+  resolvePython,
   authorOutputRoot,
   findSdkRootFrom,
   isInside,

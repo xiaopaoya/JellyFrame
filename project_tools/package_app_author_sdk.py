@@ -9,6 +9,8 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from sdk_python_runtime import install_runtime
+
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 AUTHOR_TOOL_FILES = (
@@ -20,6 +22,7 @@ AUTHOR_TOOL_FILES = (
     "jellyframe_cli.py",
     "jellyframe_versions.py",
     "package_app.py",
+    "render_performance_report.py",
     "svg_rasterize.py",
 )
 DESKTOP_TOOL_NAMES = (
@@ -85,12 +88,17 @@ def write_sdk_readme(root: Path, version: str) -> None:
         "does not contain ports, ESP-IDF, Render Core maintenance tools or project test fixtures.\n\n"
         "In VS Code, open an App in its own directory and run **JellyFrame: Configure Author\n"
         "Environment** once, selecting this directory. Reports and temporary output belong in\n"
-        "the App's `.jellyframe/build`, not in this SDK.\n",
+        "the App's `.jellyframe/build`, not in this SDK.\n\n"
+        "Official Windows x64 packages include `runtime/python/python.exe` and pyserial.\n"
+        "No system Python, pip, or PATH changes are needed. Leave `jellyframe.pythonPath`\n"
+        "empty to select it automatically. Upstream licenses and pinned download provenance\n"
+        "are retained in `runtime/python`.\n",
         encoding="utf-8",
     )
 
 
-def build_sdk(build_dir: Path, scripting_build_dir: Path | None, output: Path) -> None:
+def build_sdk(build_dir: Path, scripting_build_dir: Path | None, output: Path,
+              embedded_python_cache: Path | None = None, msvc_runtime_dir: Path | None = None) -> None:
     version = (REPOSITORY / "VERSION").read_text(encoding="utf-8").strip()
     output = output.resolve()
     if output.suffix.lower() != ".zip":
@@ -123,11 +131,24 @@ def build_sdk(build_dir: Path, scripting_build_dir: Path | None, output: Path) -
             scripting_destination = root / "build" / "desktop-scripting-release" / "Release"
             scripting_tools = copy_desktop_runtime(
                 scripting_build_dir.resolve(), scripting_destination, ("jellyframe_desktop_shell",))
+        if msvc_runtime_dir is not None:
+            for name in ("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"):
+                required_file(msvc_runtime_dir / name, "MSVC redistributable runtime")
+            for library in msvc_runtime_dir.glob("*.dll"):
+                copy_file(library, normal_destination / library.name)
+                if scripting_build_dir is not None:
+                    copy_file(library, scripting_destination / library.name)
         write_sdk_readme(root, version)
+        python_runtime = None
+        if embedded_python_cache is not None:
+            python_runtime = install_runtime(root / "runtime" / "python", embedded_python_cache)
         manifest = {
             "format": "jellyframe.app-author-sdk",
             "formatVersion": 1,
             "runtimeVersion": version,
+            **({"pythonRuntime": python_runtime} if python_runtime else {}),
+            **({"nativeRuntime": {"kind": "msvc-app-local", "files": sorted(
+                library.name for library in msvc_runtime_dir.glob("*.dll"))}} if msvc_runtime_dir else {}),
             "desktopProfiles": {
                 "desktop-release": {"tools": normal_tools},
                 **({"desktop-scripting-release": {"tools": scripting_tools}} if scripting_build_dir else {}),
@@ -149,8 +170,12 @@ def main() -> int:
     parser.add_argument("--scripting-build-dir", type=Path,
                         help="Optional scripting Release directory for classic-script App debugging.")
     parser.add_argument("--output", required=True, type=Path, help="Output .zip path.")
+    parser.add_argument("--embedded-python-cache", type=Path,
+                        help="Include pinned Windows x64 Python and pyserial; download/cache artifacts here at build time.")
+    parser.add_argument("--msvc-runtime-dir", type=Path,
+                        help="Visual Studio redistributable x64 Microsoft.VC*.CRT directory for app-local DLLs.")
     args = parser.parse_args()
-    build_sdk(args.build_dir, args.scripting_build_dir, args.output)
+    build_sdk(args.build_dir, args.scripting_build_dir, args.output, args.embedded_python_cache, args.msvc_runtime_dir)
     return 0
 
 

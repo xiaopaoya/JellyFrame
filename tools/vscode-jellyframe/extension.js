@@ -26,6 +26,7 @@ const {
   isSdkRoot,
   readSdkMetadata,
   resolveSdkRoot,
+  resolvePython,
   sdkManifestCompatibility,
   SDK_INSTALL_METADATA_FILENAME
 } = require("./author_environment");
@@ -96,6 +97,10 @@ function repoRoot(context) {
 
 function cliPath(context) {
   return path.join(repoRoot(context), "tools", "jellyframe_cli.py");
+}
+
+function pythonPath(context) {
+  return resolvePython({ sdkRoot: repoRoot(context), configuredPath: config().get("pythonPath", "") });
 }
 
 function requireAuthorSdk(context) {
@@ -434,7 +439,7 @@ async function configureDesktopBuild(context, scripting) {
       progress.report({ message: isChinese() ? "构建 JerryScript..." : "Building JerryScript..." });
       const dependency = await runLocalTool(
         context,
-        config().get("pythonPath", "python"),
+        pythonPath(context),
         jerryscriptBuildArguments(jerry.sourceDirectory),
         { label: isChinese() ? "构建 JerryScript" : "Build JerryScript", cwd: jerry.sourceDirectory }
       );
@@ -675,11 +680,20 @@ async function downloadAuthorSdk(context, preferredParent) {
 
   const staging = fs.mkdtempSync(path.join(parent, ".jellyframe-sdk-install-"));
   try {
-    const extraction = await runLocalTool(context, config().get("pythonPath", "python"), [
+    const windows = process.platform === "win32";
+    const extractor = windows
+      ? path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+      : pythonPath(context);
+    const extractionArgs = windows ? [
+      "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
+      path.join(context.extensionPath, "sdk_archive.ps1"),
+      "-Archive", download.archivePath, "-Destination", staging
+    ] : [
       path.join(context.extensionPath, "sdk_archive.py"),
       download.archivePath,
       staging
-    ], {
+    ];
+    const extraction = await runLocalTool(context, extractor, extractionArgs, {
       label: chinese ? "解压 JellyFrame SDK" : "Extract JellyFrame SDK"
     });
     if (extraction.code !== 0) {
@@ -1380,7 +1394,7 @@ function runCliWithOptions(context, args, options = {}) {
   if (!requireAuthorSdk(context)) {
     return Promise.resolve({ code: undefined, stdout: "", stderr: "", missingSdk: true });
   }
-  const python = config().get("pythonPath", "python");
+  const python = pythonPath(context);
   const cli = cliPath(context);
   const channel = ensureOutputChannel();
   const commandArgs = [cli, ...args];
@@ -1507,7 +1521,7 @@ function runDetachedPython(context, script, args, options = {}) {
     vscode.window.showErrorMessage(`Missing JellyFrame debug tool: ${script}`);
     return;
   }
-  const python = config().get("pythonPath", "python");
+  const python = pythonPath(context);
   const channel = ensureOutputChannel();
   const commandArgs = [script, ...args];
   channel.appendLine(`+ ${[python, ...commandArgs].join(" ")}`);
@@ -3453,7 +3467,7 @@ async function debugApp(context, resourceUri, options = {}) {
   const session = {
     active: false, stopping: false, exited: true, disposed: false, runId: 0, child: undefined, panel,
     appRoot: root, scriptMode: appRequiresScripting(root) ? 'classic' : 'none',
-    buildProfile: path.basename(path.dirname(nativeBuildDirectory)), python: config().get('pythonPath', 'python'),
+    buildProfile: path.basename(path.dirname(nativeBuildDirectory)), python: pythonPath(context),
     launcher, buildDir: nativeBuildDirectory,
     shellPath: path.join(nativeBuildDirectory, process.platform === 'win32' ? 'jellyframe_desktop_shell.exe' : 'jellyframe_desktop_shell'),
     frameDir: '', startedAt: Date.now(), viewport: { width: 1, height: 1 }, requestedViewport,

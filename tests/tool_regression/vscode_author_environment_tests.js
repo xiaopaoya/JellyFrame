@@ -9,6 +9,7 @@ const {
   readSdkMetadata,
   readProjectDescriptor,
   resolveSdkRoot,
+  resolvePython,
   sdkManifestCompatibility
 } = require("../../tools/vscode-jellyframe/author_environment");
 
@@ -79,6 +80,13 @@ function main() {
     });
     assert.equal(resolveSdkRoot({ workspaceRoot: workspace, extensionPath: root }), path.resolve(sdk));
     const alternativeSdk = path.join(root, "alternative-sdk");
+    const bundled = path.join(sdk, "runtime", "python", "python.exe");
+    assert.equal(resolvePython({ sdkRoot: sdk, platform: "win32" }), "python");
+    fs.mkdirSync(path.dirname(bundled), { recursive: true });
+    fs.writeFileSync(bundled, "");
+    assert.equal(resolvePython({ sdkRoot: sdk, platform: "win32" }), bundled);
+    assert.equal(resolvePython({ sdkRoot: sdk, platform: "win32", configuredPath: "custom-python" }), "custom-python");
+    assert.equal(resolvePython({ sdkRoot: sdk, platform: "linux" }), "python3");
     fs.mkdirSync(path.join(alternativeSdk, "tools"), { recursive: true });
     fs.writeFileSync(path.join(alternativeSdk, "tools", "jellyframe_cli.py"), "", "utf8");
     assert.equal(

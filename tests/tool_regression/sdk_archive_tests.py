@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import sys
+import json
+import os
+import subprocess
 import tempfile
 import zipfile
 from pathlib import Path
@@ -31,6 +34,36 @@ def main() -> int:
         else:
             raise AssertionError("path traversal archive was accepted")
         assert not (root / "outside.txt").exists()
+
+        if sys.platform == "win32":
+            powershell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+
+            def windows_extract(archive, destination):
+                return subprocess.run([str(powershell), "-NoProfile", "-NonInteractive", "-ExecutionPolicy",
+                                       "Bypass", "-File", str(REPO_ROOT / "tools/vscode-jellyframe/sdk_archive.ps1"),
+                                       "-Archive", str(archive), "-Destination", str(destination)],
+                                      text=True, capture_output=True, timeout=30)
+
+            result = windows_extract(valid, root / "windows valid out")
+            assert result.returncode == 0, result.stderr
+            assert json.loads(result.stdout)["root"] == "jellyframe-app-sdk-0.6.0"
+            assert windows_extract(valid, root / "windows valid out").returncode != 0
+            for index, unsafe in enumerate(("../outside", "/absolute", "C:/drive", "sdk/x:ads",
+                                            "sdk/CON.txt", "sdk/file.", "sdk/file ", "sdk/../outside",
+                                            "other/file", "sdk/TOOLS/jellyframe_cli.py", "sdk/\\absolute")):
+                bad = root / f"bad-{index}.zip"
+                with zipfile.ZipFile(bad, "w") as archive:
+                    archive.writestr("sdk/tools/jellyframe_cli.py", "# test")
+                    archive.writestr(unsafe, "bad")
+                result = windows_extract(bad, root / f"bad-{index}-out")
+                assert result.returncode != 0, unsafe
+            symlink = root / "symlink.zip"
+            with zipfile.ZipFile(symlink, "w") as archive:
+                archive.writestr("sdk/tools/jellyframe_cli.py", "# test")
+                info = zipfile.ZipInfo("sdk/link")
+                info.external_attr = 0o120777 << 16
+                archive.writestr(info, "../../outside")
+            assert windows_extract(symlink, root / "symlink-out").returncode != 0
 
     print("SDK archive extraction tests passed")
     return 0

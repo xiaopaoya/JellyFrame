@@ -123,9 +123,14 @@ jobs:
           node tests\tool_regression\vscode_device_presentation_tests.js
           node tests\tool_regression\vscode_status_presentation_tests.js
           node tests\tool_regression\vscode_sdk_download_tests.js
+          node tests\tool_regression\vscode_author_environment_tests.js
+          if ($LASTEXITCODE -ne 0) { throw 'Author environment tests failed' }
           node tests\tool_regression\vscode_render_trace_viewer_tests.js
           node tests\tool_regression\vscode_performance_sessions_tests.js
           python tests\tool_regression\sdk_archive_tests.py
+          if ($LASTEXITCODE -ne 0) { throw 'SDK archive tests failed' }
+          python tests\tool_regression\sdk_python_runtime_tests.py
+          if ($LASTEXITCODE -ne 0) { throw 'SDK Python acquisition tests failed' }
           python tests\tool_regression\render_performance_report_tests.py
           python tests\tool_regression\benchmark_guard_tests.py
           python tests\tool_regression\benchmark_compare_tests.py

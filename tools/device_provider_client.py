@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 import threading
 import uuid
 from pathlib import Path
@@ -65,9 +67,13 @@ def invoke_provider(
         command.extend(["--selector", selector])
     command.append(operation)
     command.extend(arguments or [])
+    environment = os.environ.copy()
+    environment["JELLYFRAME_PYTHON"] = sys.executable
+    # Also support published launchers that invoke bare `python`.
+    environment["PATH"] = str(Path(sys.executable).parent) + os.pathsep + environment.get("PATH", "")
     try:
         process = subprocess.Popen(command, shell=False, stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment)
     except OSError as error:
         raise DeviceProviderClientError(f"provider failed to start: {error}") from error
 

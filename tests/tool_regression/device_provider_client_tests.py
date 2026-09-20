@@ -68,6 +68,8 @@ class DeviceProviderClientTests(unittest.TestCase):
             command = run.call_args.args[0]
             self.assertEqual(command, [str(provider), "--output", "json", "--request-id", "jf-test", "discover"])
             self.assertFalse(run.call_args.kwargs["shell"])
+            self.assertEqual(run.call_args.kwargs["env"]["JELLYFRAME_PYTHON"], sys.executable)
+            self.assertTrue(run.call_args.kwargs["env"]["PATH"].startswith(str(Path(sys.executable).parent)))
 
     def test_rejects_a_mismatched_result_and_conflicting_exit_status(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

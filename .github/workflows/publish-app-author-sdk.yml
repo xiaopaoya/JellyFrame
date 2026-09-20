@@ -80,15 +80,38 @@ jobs:
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
           $asset = "jellyframe-app-sdk-$version.zip"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $visualStudio = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $crt = Get-ChildItem "$visualStudio\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT" -Directory |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $crt) { throw 'Missing redistributable x64 MSVC runtime' }
           python project_tools\package_app_author_sdk.py `
             --build-dir build\desktop-release\Release `
             --scripting-build-dir build\desktop-scripting-release\Release `
+            --embedded-python-cache build\sdk-python-cache `
+            --msvc-runtime-dir $crt.FullName `
             --output "build\$asset"
+          if ($LASTEXITCODE -ne 0) { throw 'SDK packaging failed' }
           python tests\tool_regression\app_author_sdk_tests.py build\desktop-release\Release
+          if ($LASTEXITCODE -ne 0) { throw 'SDK regression tests failed' }
+          python tests\tool_regression\sdk_embedded_python_tests.py "build\$asset"
+          if ($LASTEXITCODE -ne 0) { throw 'Isolated SDK Python smoke failed' }
           $hash = (Get-FileHash "build\$asset" -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $asset" | Set-Content -NoNewline -Encoding ascii "build\$asset.sha256"
           "ASSET=build\$asset" >> $env:GITHUB_ENV
           "SIDECAR=build\$asset.sha256" >> $env:GITHUB_ENV
+
+      - name: Package matching VS Code extension
+        shell: pwsh
+        run: |
+          & tools\vscode-jellyframe\manage-extension.ps1 -Action Package
+          if ($LASTEXITCODE -ne 0) { throw 'VSIX packaging failed' }
+          $version = (Get-Content tools\vscode-jellyframe\package.json -Raw | ConvertFrom-Json).version
+          $vsix = "tools/vscode-jellyframe/jellyframe-tools-$version.vsix"
+          $hash = (Get-FileHash $vsix -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  jellyframe-tools-$version.vsix" | Set-Content -NoNewline -Encoding ascii "$vsix.sha256"
+          "VSIX=$vsix" >> $env:GITHUB_ENV
+          "VSIX_SIDECAR=$vsix.sha256" >> $env:GITHUB_ENV
 
       - name: Publish GitHub SDK release
         shell: pwsh
@@ -100,7 +123,7 @@ jobs:
             throw "Release tag already exists: ${{ inputs.tag }}"
           }
           $arguments = @(
-            'release', 'create', '${{ inputs.tag }}', $env:ASSET, $env:SIDECAR,
+            'release', 'create', '${{ inputs.tag }}', $env:ASSET, $env:SIDECAR, $env:VSIX, $env:VSIX_SIDECAR,
             '--repo', '${{ github.repository }}',
             '--target', '${{ inputs.ref }}',
             '--title', 'JellyFrame App Author SDK ${{ inputs.tag }}',

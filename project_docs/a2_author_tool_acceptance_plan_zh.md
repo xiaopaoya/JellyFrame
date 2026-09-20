@@ -1,6 +1,6 @@
 # A2 作者工具与设备流程验收方案
 
-> 最后更新：2026-09-09；适用版本：0.6.0-dev
+> 最后更新：2026-09-20；适用版本：0.6.0-dev
 > 状态：执行方案；A2 当前仍为 partial
 
 本文是 A2 的总验收入口，统一串联 VS Code/CLI 作者流程、WS147 Developer Image、
@@ -41,6 +41,18 @@ A2 通过后，一个不安装 ESP-IDF、不打开 JellyFrame 源码仓库的 Ap
 ## 3. 测试分层
 
 ### A2-0：主机前置与干净环境
+
+2026-09-20 补充：干净 Win11 虚拟机已复现下载 SDK 后因缺少 Python 而无法解压。
+此项阻塞 A2-0；旧 `app-sdk-v0.6.0-dev.2` 不适合作为无系统 Python 的验收输入。
+修复候选为扩展 `0.4.66` 与含 `pythonRuntime` manifest 的新 SDK，正式测试须记录其
+实际 release tag、源码提交及 SDK/VSIX SHA-256，不沿用上表旧 SDK 身份。
+
+重测保持虚拟机无系统 Python、pip、Node、ESP-IDF，且无源码仓库；只要求 VS Code。
+从新版 VSIX 下载 SDK 到含空格目录，使用空的 `jellyframe.pythonPath`，完成创建、check、
+preview、字体生成、package、性能报告及调试，再通过 provider 执行 discover/info/list。
+Output 中 Python 路径须来自 SDK 的 `runtime/python/python.exe`；重启 VS Code 后重复。
+不允许以手工安装 Python 或修改系统 PATH 规避问题。设备安装沿 A2-3 执行；此项不要求
+截图逐像素比对。本机隔离进程 smoke 不能替代干净虚拟机验收。
 
 在没有 JellyFrame 源码、ESP-IDF、旧 provider 配置和旧构建目录的用户目录中：
 

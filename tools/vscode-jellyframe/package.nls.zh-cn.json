@@ -41,7 +41,7 @@
   "configuration.sdkRoot": "可选的 JellyFrame SDK 或仓库根目录绝对路径；独立 App 工作区只需配置一次。",
   "configuration.buildDir": "可选的桌面运行输出目录，可填写绝对路径或相对仓库根目录的路径；留空时自动识别兼容构建。",
   "configuration.openCaptureAfterRun": "预览或运行帧脚本生成截图后，自动打开截图。",
-  "configuration.pythonPath": "运行 tools/jellyframe_cli.py 使用的 Python：PATH 中的可执行文件名，或 Python 可执行文件的绝对路径。",
+  "configuration.pythonPath": "留空使用 SDK 内置 Python（源码目录或旧 SDK 回退到系统 Python）。填写可执行文件路径可显式覆盖。",
   "configuration.defaultTarget": "默认的内建 target profile；App 操作还会列出当前 App manifest 已声明的 target。",
   "configuration.defaultTarget.round300": "300 x 300 通用圆形可穿戴 profile。",
   "configuration.defaultTarget.rect320x240": "320 x 240 横向矩形 profile。",

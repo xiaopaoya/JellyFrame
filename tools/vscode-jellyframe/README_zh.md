@@ -2,7 +2,7 @@
 
 # JellyFrame VS Code 工具
 
-> 最后更新：2026-09-19；适用版本：0.6.0-dev；扩展版本：0.4.65；兼容基线：0.5.0
+> 最后更新：2026-09-20；适用版本：0.6.0-dev；扩展版本：0.4.66；兼容基线：0.5.0
 
 JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里检查、预览、调试和
 打包 JellyFrame App。安装后可以从左侧 JellyFrame 活动栏、资源管理器/编辑器右键菜单
@@ -58,6 +58,12 @@ JellyFrame Tools 是面向 App 作者的 VS Code 扩展，让你在编辑器里�
 - Device OS 生命周期操作按 capability 显式门控；未获当前选中 provider 声明支持时不会显示。
 
 ## 使用扩展
+
+采用内置运行时打包流程的官方 Windows x64 SDK 包含 Python 与 pyserial。
+解压使用系统 PowerShell/.NET，不需要预装 Python。将 `jellyframe.pythonPath` 留空，
+检查、打包、字体、报告、调试及 provider 命令会自动使用 SDK Python；无需 pip、管理员权限
+或修改系统 PATH。旧 SDK（包括 `app-sdk-v0.6.0-dev.2`）仍依赖系统 Python，因此插件与 SDK
+都要更新。显式填写 Python 路径可覆盖自动选择；ESP-IDF/框架构建仍使用各自的开发工具链。
 
 仓库当前提供的是源码版扩展，尚未发布到 VS Code Marketplace。面向 App 作者的使用方式是：
 

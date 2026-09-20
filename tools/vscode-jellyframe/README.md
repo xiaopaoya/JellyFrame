@@ -2,7 +2,7 @@
 
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-09-19; Applies to: 0.6.0-dev; extension version: 0.4.65; compatibility baseline: 0.5.0
+> Last updated: 2026-09-20; Applies to: 0.6.0-dev; extension version: 0.4.66; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -87,6 +87,14 @@ Palette as entry points.
   selected provider explicitly declares support for them.
 
 ## Using The Extension
+
+Official Windows x64 SDKs built with the embedded-runtime packager include Python
+and pyserial. SDK extraction uses Windows PowerShell/.NET, not Python. Leave
+`jellyframe.pythonPath` empty to use SDK Python for checks, packaging, fonts,
+reports, debugging and provider commands. No pip, administrator access or system
+PATH changes are needed. Older SDKs (including `app-sdk-v0.6.0-dev.2`) still need
+system Python; update the SDK as well as the extension. An explicit Python path
+overrides automatic selection. ESP-IDF/framework builds retain their own toolchains.
 
 The repository currently provides the extension as source; it is not yet listed
 on the VS Code Marketplace. To try it with the least setup:

@@ -1,6 +1,6 @@
 # App Author Environment
 
-> Last updated: 2026-08-29; Applies to: 0.6.0-dev
+> Last updated: 2026-09-20; Applies to: 0.6.0-dev
 
 JellyFrame has two distinct audiences:
 
@@ -35,6 +35,19 @@ Reports, captures, frame scripts, and temporary resources default to the App's
 `.jellyframe/build/`, keeping the SDK and source checkout clean. `jellyframe.buildDir` remains an
 explicit override for shared or CI output.
 
+Official Windows x64 SDK builds bundle hash-pinned CPython embeddable and pyserial
+under `runtime/python`, retaining their licenses and `provenance.json`. The VS Code
+extension uses Windows PowerShell/.NET to extract SDKs before any Python is available.
+Leave `jellyframe.pythonPath` empty for automatic SDK interpreter selection. Explicit
+overrides and older SDK/source checkouts may use system Python. The embedded interpreter
+ignores user site packages and `PYTHONHOME`/`PYTHONPATH`; pip is not installed. Provider
+children receive this interpreter through `JELLYFRAME_PYTHON` and a child-only PATH
+prefix, supporting older launchers without changing the user's system environment.
+This does not replace ESP-IDF or other framework-maintainer toolchains.
+Native desktop executables also carry app-local Microsoft Visual C++ redistributable
+DLLs, copied from the build host's licensed Visual Studio redist directory. Win11's
+system UCRT is used; authors do not need Visual Studio or a separate VC runtime installer.
+
 The VSIX includes the App manifest schema, so an independent workspace does not depend on a
 repository-relative schema path. Templates use an accessible GitHub raw schema URL; installed
 VS Code uses the bundled schema, including offline. Do not copy the obsolete `jellyframe.dev` URL
@@ -51,6 +64,9 @@ the delivery. Its manifest records file SHA-256 values and the included desktop 
 distribution uses the manual **Publish App Author SDK** GitHub Actions workflow: provide an
 immutable commit/tag, a new SDK release tag and prerelease state. It builds standard and scripting
 desktop Releases, runs the SDK smoke test, and uploads the ZIP with a matching `.sha256` sidecar.
+The Windows release uses `--embedded-python-cache` to acquire SHA-256-pinned runtime
+archives at build time and runs a separate isolated-Python smoke test with system
+Python absent from the child PATH. It also publishes the matching VSIX and checksum.
 The extension selects the newest release with one SDK ZIP and verifies the GitHub asset digest or
 sidecar before installation. Never substitute an arbitrary source checkout or unverified local
 build directory for an App-author SDK.

@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.65",
+  "version": "0.4.66",
   "publisher": "jellyframe",
   "icon": "media/jellyframe.png",
   "repository": {
@@ -501,7 +501,7 @@
         },
         "jellyframe.pythonPath": {
           "type": "string",
-          "default": "python",
+          "default": "",
           "description": "%configuration.pythonPath%"
         },
         "jellyframe.defaultTarget": {
