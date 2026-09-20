@@ -11,6 +11,7 @@
 #include "render_core/software_renderer.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <iostream>
 #include <limits>
@@ -714,6 +715,39 @@ void per_corner_rounded_rect_keeps_square_bottom_left() {
     rasterizer.rasterize(command, frame_buffer, Rect{0, 0, 24, 24});
     check(frame_buffer.pixel(2, 19).r == 255, "square bottom-left corner remains filled");
     check(frame_buffer.pixel(2, 2).r < 255, "rounded top-left corner keeps antialiased coverage");
+}
+
+void per_corner_rounded_rect_matches_full_pixel_reference() {
+    const Color ink{255, 255, 255, 255};
+    const Rect clip{1, 1, 30, 25};
+    const std::array<Rect, 2> rects{{{2, 2, 18, 18}, {-3, 3, 24, 22}}};
+    const std::array<int, 2> radii{{encode_corner_radii(CornerRadii{8, 4, 2, 0}),
+                                    encode_corner_radii(CornerRadii{11, 7, 10, 4})}};
+    for (std::size_t index = 0; index < rects.size(); ++index) {
+        FrameBuffer actual(32, 28, Color{35, 45, 55, 255});
+        FrameBuffer expected(32, 28, Color{35, 45, 55, 255});
+        DisplayCommand command;
+        command.type = DisplayCommandType::FillRect;
+        command.rect = rects[index];
+        command.border_radius = radii[index];
+        command.color = ink;
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(command, actual, clip);
+
+        const RasterRoundedRect geometry = prepare_rounded_rect(command.rect, command.border_radius);
+        const Rect visible = raster_intersect_rect(raster_intersect_rect(command.rect, {0, 0, 32, 28}), clip);
+        for (int y = visible.y; y < safe_edge(visible.y, visible.height); ++y) {
+            for (int x = visible.x; x < safe_edge(visible.x, visible.width); ++x) {
+                const int coverage = rounded_rect_coverage(geometry, x, y);
+                if (coverage == 255) {
+                    expected.pixel(x, y) = ink;
+                } else if (coverage > 0) {
+                    blend_pixel(expected, x, y, with_coverage(ink, coverage));
+                }
+            }
+        }
+        check_equal_pixels(actual, expected, "non-uniform rounded fill matches full pixel reference");
+    }
 }
 
 Color reference_source_over(Color destination, Color source) {
@@ -2322,6 +2356,7 @@ int main() {
         rounded_stroke_keeps_straight_edges_visible();
         rounded_fill_antialiases_edge_pixels();
         per_corner_rounded_rect_keeps_square_bottom_left();
+        per_corner_rounded_rect_matches_full_pixel_reference();
         source_over_alpha_composites();
         source_over_opaque_destination_matches_all_channel_values();
         clipping_limits_rasterization();

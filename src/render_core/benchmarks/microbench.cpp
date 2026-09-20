@@ -579,6 +579,21 @@ int run_render_core_microbench(int argc, char** argv) {
         rasterizer.rasterize(rounded_commands, target, Rect{0, 0, 320, 260});
     }));
 
+    DisplayList per_corner_rounded_commands;
+    const int per_corner_radius = encode_corner_radii(CornerRadii{12, 6, 3, 0});
+    for (int row = 0; row < 6; ++row) {
+        for (int column = 0; column < 6; ++column) {
+            per_corner_rounded_commands.push_back(fill_command(Rect{column * 52, row * 42, 44, 34},
+                                                               Color{20, 184, 166, 255},
+                                                               per_corner_radius));
+        }
+    }
+    print_result("per_corner_rounded_rect_aa_raster", iterations, average_microseconds(iterations, [&] {
+        FrameBuffer target(320, 260, Color{255, 255, 255, 255});
+        SoftwareRasterizer rasterizer;
+        rasterizer.rasterize(per_corner_rounded_commands, target, Rect{0, 0, 320, 260});
+    }));
+
     DisplayCommand opaque_screen_gradient;
     opaque_screen_gradient.type = DisplayCommandType::LinearGradient;
     opaque_screen_gradient.rect = Rect{0, 0, 172, 320};

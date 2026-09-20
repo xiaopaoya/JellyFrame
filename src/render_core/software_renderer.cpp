@@ -445,6 +445,76 @@ void fill_opaque_region(FrameBuffer& target, Rect rect, Rect clip, Color color) 
     }
 }
 
+void fill_opaque_nonuniform_rounded_rect(FrameBuffer& target,
+                                         Rect rect,
+                                         Rect clip,
+                                         Color color,
+                                         const RasterRoundedRect& rounded) {
+    const Rect visible = clipped_target_rect(target, rect, clip);
+    const int x_end = safe_edge(visible.x, visible.width);
+    const int y_end = safe_edge(visible.y, visible.height);
+    struct Span {
+        int start = 0;
+        int end = 0;
+    };
+    for (int y = visible.y; y < y_end; ++y) {
+        std::array<Span, 4> corner_spans{};
+        int span_count = 0;
+        const auto append_span = [&](std::int64_t start, std::int64_t end) {
+            const int clipped_start = std::max(visible.x, clamp_int64_to_int(start));
+            const int clipped_end = std::min(x_end, clamp_int64_to_int(end));
+            if (clipped_start < clipped_end) {
+                corner_spans[static_cast<std::size_t>(span_count++)] = {clipped_start, clipped_end};
+            }
+        };
+        const CornerRadii& radii = rounded.radii;
+        const std::int64_t row = y;
+        if (row < static_cast<std::int64_t>(rounded.top) + radii.top_left) {
+            append_span(rounded.left, static_cast<std::int64_t>(rounded.left) + radii.top_left);
+        }
+        if (row < static_cast<std::int64_t>(rounded.top) + radii.top_right) {
+            append_span(static_cast<std::int64_t>(rounded.right) - radii.top_right, rounded.right);
+        }
+        if (row >= static_cast<std::int64_t>(rounded.bottom) - radii.bottom_left) {
+            append_span(rounded.left, static_cast<std::int64_t>(rounded.left) + radii.bottom_left);
+        }
+        if (row >= static_cast<std::int64_t>(rounded.bottom) - radii.bottom_right) {
+            append_span(static_cast<std::int64_t>(rounded.right) - radii.bottom_right, rounded.right);
+        }
+
+        std::sort(corner_spans.begin(), corner_spans.begin() + span_count,
+                  [](const Span& left, const Span& right) {
+                      return left.start < right.start ||
+                             (left.start == right.start && left.end < right.end);
+                  });
+        Color* row_pixels = target.pixels.data() + static_cast<std::size_t>(y) *
+            static_cast<std::size_t>(target.width);
+        int cursor = visible.x;
+        for (int index = 0; index < span_count; ++index) {
+            const Span span = corner_spans[static_cast<std::size_t>(index)];
+            if (cursor < span.start) {
+                std::fill(row_pixels + cursor, row_pixels + span.start, color);
+            }
+            cursor = std::max(cursor, span.end);
+        }
+        if (cursor < x_end) {
+            std::fill(row_pixels + cursor, row_pixels + x_end, color);
+        }
+
+        for (int index = 0; index < span_count; ++index) {
+            const Span span = corner_spans[static_cast<std::size_t>(index)];
+            for (int x = span.start; x < span.end; ++x) {
+                const int coverage = rounded_rect_coverage(rounded, x, y);
+                if (coverage == 255) {
+                    row_pixels[x] = color;
+                } else if (coverage > 0) {
+                    blend_pixel_unchecked(target, x, y, with_coverage(color, coverage));
+                }
+            }
+        }
+    }
+}
+
 void fill_opaque_rounded_rect(FrameBuffer& target, Rect rect, Rect clip, Color color, int border_radius) {
     const CornerRadii radii = decode_corner_radii(border_radius);
     if (!has_corner_radius(border_radius)) {
@@ -453,19 +523,11 @@ void fill_opaque_rounded_rect(FrameBuffer& target, Rect rect, Rect clip, Color c
     }
     if (!(radii.top_left == radii.top_right && radii.top_left == radii.bottom_right &&
           radii.top_left == radii.bottom_left)) {
-        const RasterRoundedRect rounded = prepare_rounded_rect(rect, border_radius);
-        const Rect visible = clipped_target_rect(target, rect, clip);
-        const int y_end = safe_edge(visible.y, visible.height);
-        const int x_end = safe_edge(visible.x, visible.width);
-        for (int y = visible.y; y < y_end; ++y) {
-            for (int x = visible.x; x < x_end; ++x) {
-                const int coverage = rounded_rect_coverage(rounded, x, y);
-                if (coverage == 255) {
-                    target.pixel(x, y) = color;
-                }
-                else if (coverage > 0) blend_pixel_unchecked(target, x, y, with_coverage(color, coverage));
-            }
-        }
+        fill_opaque_nonuniform_rounded_rect(target,
+                                             rect,
+                                             clip,
+                                             color,
+                                             prepare_rounded_rect(rect, border_radius));
         return;
     }
     border_radius = std::min(radii.top_left, std::min(rect.width, rect.height) / 2);

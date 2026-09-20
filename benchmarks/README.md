@@ -245,6 +245,16 @@ p50 moved from about 151 us to 29.6--29.7 us, and maximum-radius moved from
 596.5 us to 97 us across three sequential 500-sample runs. These figures are
 diagnostic only and do not establish device or full-frame speedup.
 
+The Render Core microbench also exposes `per_corner_rounded_rect_aa_raster`.
+It uses 36 fixed 44x34 opaque commands with radii `{12,6,3,0}` and is intended
+only as a local before/after signal; target/rasterizer setup is included in the
+existing average-microbench contract. In a sequential Release comparison on
+the same machine, three baseline runs measured 368.245 / 385.400 / 367.175 us
+and the candidate measured 175.635 / 174.935 / 179.575 us. The corresponding
+uniform workload stayed within normal run noise. The candidate fills non-corner
+row spans directly and retains the existing coverage helper for all corner
+candidate pixels, including overlapping-radius branch precedence.
+
 ## Repeated Comparisons
 
 The same tool accepts 3-32 independent run manifests per side, in paired repeat

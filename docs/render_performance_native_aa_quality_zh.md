@@ -138,3 +138,15 @@ SHA-256；Corner shortcut 另有单元测试覆盖全满、全空和部分覆盖
 该改动不新增硬件测试要求，因为它未改变 Runtime ABI、采样网格、设备配置或输出契约。
 后续应在 CI 完成后再决定是否对非均匀圆角、描边和 rounded clip 路径分别建立同等
 证据；不得把 uniform opaque-fill 的收益外推到这些路径。
+
+## 非均匀圆角填充
+
+非均匀半径现在按行拆分：四个角候选区间继续调用原 coverage helper，区间之外的
+连续不透明像素直接整段写入。候选区间按原 coverage 的角点分支顺序处理，因此半径
+重叠时仍保留原有优先级；裁剪、负坐标和部分覆盖仍由原几何/coverage 逻辑处理。
+
+新增全像素 reference 回归覆盖普通和裁剪/负坐标的非均匀半径，并比较 RGBA 全部像素。
+桌面 Release microbench 的固定 workload 为 36 个 44x34 控件、半径 `{12,6,3,0}`，
+三轮 baseline 为 368.245/385.400/367.175 us，候选为 175.635/174.935/179.575 us。
+该 microbench 包含既有 target/rasterizer setup，数值只作同机前后信号，不是设备帧时间。
+本轮没有改变采样网格、Runtime ABI 或设备配置，因此不新增硬件测试要求。
