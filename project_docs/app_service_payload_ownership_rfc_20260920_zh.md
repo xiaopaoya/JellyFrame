@@ -1,5 +1,7 @@
 # App Service 载荷所有权与零拷贝 RFC
 
+> 最后更新：2026-09-20；适用版本：0.6.0-dev
+>
 > 状态：Deferred RFC；不改变当前 `0.6.0-dev` API。
 >
 > 适用范围：`AppVideoFrameProviderMock` 的解码帧像素，以及后续可能出现的
