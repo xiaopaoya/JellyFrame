@@ -11,14 +11,15 @@
 
 ### 本阶段未来四轮对话计划
 
-1. **审查关闭矩阵**：逐条回读两轮审查和新性能审查，记录“已修复、已验证、误报/不成立、
-   延后 RFC、待修复”及对应测试/实机证据；不重复修改已经关闭的项目。
-2. **剩余边界修复**：优先处理仍成立的公共 dirty/clip 上限、跨任务资源身份和资源计费边界；
-   每项同时补正常、拒绝、异常和重复生命周期测试。
-3. **性能缓存与基准**：在稳定 workload 下评估 DOM 统计、字体 fallback context、图像缓存预算、
-   dirty invalidation 的收益；没有 workload 证据的全屏微优化继续延后。
-4. **出口与发布准备**：复跑 Debug/Release/scripting/tool 全套门禁，审查矩阵归档，确认 Core
-   `0.6.2` lock、Developer Image、SDK 和 A2 实机证据一致后，再处理 A3 试用材料。
+1. **审查矩阵收尾**：完成仍开放项的最小复测与处置记录；当前 Flex intrinsic 已复测并暂缓，
+   接下来只处理仍成立的 app service 载荷 API 设计或明确的低优先级条目，不重复修改已关闭项目。
+2. **A2 证据准备与实机出口**：在用户可操作设备时完成干净作者机只读 smoke、完整 VS Code
+   生命周期和真实已安装 App 的 panel/input 结构化记录；WS147 TE/vblank 仅在具备同步证据时继续。
+3. **发布门禁复核**：复跑 Debug/Release/scripting/tool 全套门禁，核对 Core `0.6.2` lock、
+   SDK、Developer Image、provider 和 A2 报告身份；任何失败先归属到 package、transport、
+   registry、Runtime 或 port。
+4. **A3 筹备与编辑器隔离推进**：只有 A2 两项正式证据关闭后才准备外部试用；可视化编辑器继续
+   作为非发布阻断的 Stage 2/3 原型维护，不以新增物料替代 Core、设备或作者流程出口。
 
 当前轮次已完成审查矩阵的初步回读、低风险修复，以及 WS147 定量 Profile OFF/ON 与人工视觉等价验收；下一轮只进入矩阵中仍标记为“待修复”或“待证据”的项目。本候选因缺少治具豁免逐像素比较，该豁免不建立自动像素门禁。
 
