@@ -73,9 +73,12 @@
 - [x] 完成 rounded clip 合成的成本观测入口：增加单层/嵌套 clip microbench 和工作形状
   快照，现有 clip 链的 full/zero/partial、统计和输出等价回归继续通过。三轮 Release
   记录已归档于 `D:/JellyFramePerf/rounded-clip-cost-20260919/`，未改变 clip 算法。
-- [ ] 下一步评估 rounded clip 的 replay/temporary/composite 三段是否有可证明的独立优化；
-  必须保持 clip 链输出等价，不能把 fill/stroke 的成本结果外推到 clip，也不新增无必要
-  硬件 A/B。
+- [x] 评估 rounded clip 的 replay/temporary/composite 三段：新增可选时钟的
+  `rounded_clip_profile_timing`，三轮 Release 显示 replay 约 142--144 us、temporary
+  prepare 约 10 us、composite 约 64--65 us。逐行 `row_needs_coverage` 扫描仍未单独计时，
+  但当前没有证据证明引入行元数据缓存能抵偿分配和状态复杂度，因此保留生产算法；clip
+  链输出等价、统计与预算回归通过，不增加硬件 A/B。后续仅在真实 workload 显示该阶段
+  成为帧预算瓶颈时重新开启。
   通用文本/shaping、完整 UI 和 LVGL 对照仍单列待办。
 - [x] 修正半透明对照的计时边界：`a4faa1c6` 在计时内完成 SDL2/GDI batch，
   在计时外完成 reset，并交错执行两侧；`alpha-grid-rgb-v1` 的旧排名已撤回。

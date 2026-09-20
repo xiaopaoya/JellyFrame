@@ -278,6 +278,17 @@ pixels. These counts are work-shape diagnostics, not CPU instruction counts or
 additive phase time. Replay, temporary-surface preparation and composite remain
 separate concepts; no device performance claim follows from this desktop entry.
 
+The companion `rounded_clip_profile_timing` line enables the existing optional
+clock and reports average replay, temporary preparation and composite time over
+the same iteration count. Three fresh sequential Release runs measured
+replay `141.805 / 143.110 / 144.075 us`, preparation `10.745 / 9.750 / 10.270 us`,
+and composite `64.950 / 64.130 / 65.415 us`; sampled/full composite portions were
+`40.785 / 39.900 / 40.370 us` and `24.165 / 24.230 / 25.045 us`. Clock reads are
+profiling overhead and these values are not a device frame budget. The row
+classification scan remains inside composite and has no independent timer;
+these results do not justify an allocating row-metadata cache, so the current
+production clip algorithm is retained.
+
 ## Repeated Comparisons
 
 The same tool accepts 3-32 independent run manifests per side, in paired repeat

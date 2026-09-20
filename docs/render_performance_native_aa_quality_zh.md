@@ -176,3 +176,11 @@ temporary/mask 像素、208 个 full 行、52 个 sampled 行、2,016 次 clip v
 不是 CPU 指令数，也不能加成阶段占比；replay、temporary prepare、composite 仍须分开
 看待。现有 clip 链输出等价和统计回归继续作为门槛，本轮只增加观测入口，不改变 clip
 算法，因此不新增硬件测试要求。
+
+随后增加了 `rounded_clip_profile_timing` 阶段入口。三轮同机 Release 的每次平均值为：
+replay `141.805/143.110/144.075 us`，temporary prepare `10.745/9.750/10.270 us`，
+composite `64.950/64.130/65.415 us`；composite 内 sampled/full 分别为
+`40.785/39.900/40.370 us` 与 `24.165/24.230/25.045 us`。该入口会读取可选时钟，
+因此仅用于阶段归因，不能当作无 profiling 开销的性能基线或设备帧预算。逐行
+`row_needs_coverage` 扫描仍包含在 composite 中；现有证据不足以证明引入行元数据缓存
+能抵偿额外分配和状态复杂度，本轮保留生产算法，不增加硬件 A/B。

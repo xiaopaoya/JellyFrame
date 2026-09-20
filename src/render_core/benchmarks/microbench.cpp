@@ -19,6 +19,7 @@
 #include <cerrno>
 #include <chrono>
 #include <climits>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
@@ -31,6 +32,11 @@ using namespace jellyframe;
 namespace {
 
 using Clock = std::chrono::steady_clock;
+
+std::uint64_t benchmark_now_microseconds(void*) {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
+}
 
 std::string make_card_html(int count) {
     std::ostringstream html;
@@ -669,6 +675,34 @@ int run_render_core_microbench(int argc, char** argv) {
               << " math_evaluations=" << rounded_clip_statistics.rounded_clip_coverage_math_evaluations
               << " known_full_pixels=" << rounded_clip_statistics.rounded_clip_coverage_known_full_pixels
               << " blended_pixels=" << rounded_clip_statistics.rounded_clip_blended_pixels << '\n';
+
+    SoftwareRasterizerStatistics rounded_clip_timing_statistics;
+    SoftwareRasterizerOptions rounded_clip_timing_options;
+    rounded_clip_timing_options.statistics = &rounded_clip_timing_statistics;
+    rounded_clip_timing_options.timing = {benchmark_now_microseconds, nullptr};
+    rounded_clip_timing_statistics.reset();
+    for (int iteration = 0; iteration < iterations; ++iteration) {
+        FrameBuffer target(320, 260, Color{255, 255, 255, 255});
+        SoftwareRasterizer rasterizer({}, nullptr, rounded_clip_timing_options);
+        rasterizer.rasterize_clipped(rounded_commands.data(), rounded_commands.size(), target,
+                                     Rect{0, 0, 320, 260}, 0, 0, &rounded_clip, 1);
+    }
+    const double timing_divisor = static_cast<double>(std::max(1, iterations));
+    std::cout << "rounded_clip_profile_timing iterations=" << iterations
+              << " replay_avg_us=" << rounded_clip_timing_statistics.rounded_clip_replay_microseconds /
+                     timing_divisor
+              << " prepare_avg_us=" << rounded_clip_timing_statistics.rounded_clip_surface_prepare_microseconds /
+                     timing_divisor
+              << " composite_avg_us=" << rounded_clip_timing_statistics.rounded_clip_composite_microseconds /
+                     timing_divisor
+              << " sampled_composite_avg_us="
+              << rounded_clip_timing_statistics.rounded_clip_coverage_sampled_composite_microseconds /
+                     timing_divisor
+              << " full_composite_avg_us="
+              << rounded_clip_timing_statistics.rounded_clip_full_coverage_composite_microseconds /
+                     timing_divisor
+              << " invalid_samples=" << rounded_clip_timing_statistics.rounded_clip_replay_timing_invalid_samples
+              << '\n';
 
     DisplayCommand opaque_screen_gradient;
     opaque_screen_gradient.type = DisplayCommandType::LinearGradient;
