@@ -20,6 +20,7 @@
   "command.visualEditor": "JellyFrame: Open Visual Editor",
   "command.showReport": "JellyFrame: Show Last Report",
   "command.showOutput": "JellyFrame: View Run Log",
+  "command.deviceConfigureProvider": "JellyFrame: Configure Device Provider",
   "command.deviceDiscover": "JellyFrame: Discover Device",
   "command.deviceSelect": "JellyFrame: Select Device",
   "command.deviceInfo": "JellyFrame: Device Info",

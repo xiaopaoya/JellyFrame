@@ -205,9 +205,11 @@ JSON 报告并自动打开截图。验证、检查和预览分别保留自己的
 
 “发现设备”只连接已配置的 Device OS provider，不会猜测串口或 USB 端点。扩展不捆绑板卡专属
 provider；WS147 请安装版本化交付包
-`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.1-dev.zip`。
-首次使用前，请安装独立 provider 并在 JellyFrame 设置中填写其可执行文件绝对路径；如果路径
-缺失或无效，命令会直接给出配置提示。先执行“发现设备”，再使用“读取设备身份”按配置的
+`jellyframe-ws147-developer-0.6.2-ws147.2-provider-0.1.1-dev.zip`。
+首次使用时执行“JellyFrame：配置 Device Provider”，选择解压目录中的
+`provider/jellyframe-device.cmd`。扩展会写入可执行文件绝对路径，并在标准交付目录中只有一个
+`developer-image/*.manifest.json` 时自动配置它；也可以在 JellyFrame 设置中手动覆盖。路径
+缺失或无效时，命令会直接给出配置提示。先执行“发现设备”，再使用“读取设备身份”按配置的
 Developer Image manifest 校验所选端点；“列出已安装 App”会显示同一端点的 registry generation、版本、
 状态和回滚可用性。这三项均为只读操作，不会安装、启动、删除或刷写设备。
 部署时会选择 viewport 与已验证设备 display 匹配的唯一 App target；target 名称可以不同于设备 profile，

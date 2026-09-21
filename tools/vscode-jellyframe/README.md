@@ -305,11 +305,15 @@ separate so one command does not overwrite another command's result.
 `JellyFrame: Discover Device` uses only an explicitly configured Device OS
 provider executable. The extension does not bundle the board-specific provider.
 For WS147, install the versioned
-`jellyframe-ws147-developer-0.6.0-a2-provider-0.1.1-dev.zip` delivery package.
-It does not infer serial or USB endpoints. Configure the absolute path to the
-separately installed provider in JellyFrame settings; missing or invalid paths
-are reported directly. Run Discover Device first, then use Device Info to
-validate the selected endpoint against the configured Developer Image manifest.
+`jellyframe-ws147-developer-0.6.2-ws147.2-provider-0.1.1-dev.zip` delivery
+package. It does not infer serial or USB endpoints. Run `JellyFrame: Configure
+Device Provider` and select the installed `jellyframe-device.cmd` (or another
+provider executable). The command writes its absolute path to the global
+setting and automatically selects the only `developer-image/*.manifest.json`
+next to the standard provider delivery when one is present. You can still
+override both paths in JellyFrame settings. Missing or invalid paths are
+reported directly. Run Discover Device first, then use Device Info to validate
+the selected endpoint against the configured Developer Image manifest.
 Deployment selects the one App target whose viewport matches the attested device
 display. Target names may differ from the device profile, but every same-size
 target must still be unique. An App without that unambiguous declaration is not

@@ -872,17 +872,119 @@ function showOutputChannel() {
   ensureOutputChannel(true);
 }
 
+function deviceProviderManifestCandidates(provider) {
+  const candidates = new Set();
+  let current = path.dirname(provider);
+  for (let depth = 0; depth < 3; depth += 1) {
+    const developerImageDirectory = path.join(current, "developer-image");
+    try {
+      if (fs.statSync(developerImageDirectory).isDirectory()) {
+        for (const name of fs.readdirSync(developerImageDirectory)) {
+          if (!/\.manifest\.json$/i.test(name)) {
+            continue;
+          }
+          const candidate = path.join(developerImageDirectory, name);
+          if (fs.statSync(candidate).isFile()) {
+            candidates.add(path.normalize(candidate));
+          }
+        }
+      }
+    } catch (_) {
+      // A provider archive may not include a Developer Image manifest.
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+  return Array.from(candidates).sort();
+}
+
+function deviceManifestPath(context, configured) {
+  return path.isAbsolute(configured)
+    ? configured
+    : path.resolve(repoRoot(context), configured);
+}
+
+async function configureDeviceProvider(context) {
+  const chinese = isChinese();
+  const picked = await vscode.window.showOpenDialog({
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    openLabel: chinese ? "选择 Device Provider" : "Select Device Provider",
+    title: chinese
+      ? "选择已安装的 JellyFrame Device Provider"
+      : "Select an installed JellyFrame Device Provider"
+  });
+  const selected = picked?.[0]?.fsPath;
+  if (!selected) {
+    return undefined;
+  }
+  const provider = path.normalize(selected);
+  let providerIsFile = false;
+  try {
+    providerIsFile = path.isAbsolute(provider) && fs.statSync(provider).isFile();
+  } catch (_) {
+    providerIsFile = false;
+  }
+  if (!providerIsFile) {
+    vscode.window.showErrorMessage(chinese
+      ? `所选 Device Provider 不是有效文件：${provider}`
+      : `The selected Device Provider is not a valid file: ${provider}`);
+    return undefined;
+  }
+
+  await config().update("deviceProvider", provider, vscode.ConfigurationTarget.Global);
+
+  const configuredManifest = String(config().get("deviceManifest", "") || "").trim();
+  const currentManifest = configuredManifest ? deviceManifestPath(context, configuredManifest) : "";
+  let selectedManifest = "";
+  if (currentManifest) {
+    try {
+      selectedManifest = fs.statSync(currentManifest).isFile() ? currentManifest : "";
+    } catch (_) {
+      selectedManifest = "";
+    }
+  }
+  const candidates = deviceProviderManifestCandidates(provider);
+  if (!selectedManifest && candidates.length === 1) {
+    selectedManifest = candidates[0];
+    await config().update("deviceManifest", selectedManifest, vscode.ConfigurationTarget.Global);
+  }
+
+  ensureOutputChannel().appendLine(`Device Provider configured: ${provider}`);
+  if (selectedManifest && selectedManifest !== currentManifest) {
+    ensureOutputChannel().appendLine(`Developer Image manifest auto-configured: ${selectedManifest}`);
+  }
+  statusProvider?.refresh();
+
+  const message = selectedManifest
+    ? (chinese
+      ? `Device Provider 已配置，并已自动选择 Developer Image manifest：${selectedManifest}`
+      : `Device Provider configured. Developer Image manifest selected automatically: ${selectedManifest}`)
+    : (chinese
+      ? `Device Provider 已配置：${provider}`
+      : `Device Provider configured: ${provider}`);
+  vscode.window.showInformationMessage(message);
+  return provider;
+}
+
 function configuredDeviceProvider(context) {
   const provider = config().get("deviceProvider", "").trim();
   const chinese = /^zh(?:-|$)/i.test(vscode.env.language || "");
+  const configure = chinese ? "选择 Provider" : "Configure Provider";
   const openSettings = chinese ? "打开设置" : "Open Settings";
   if (!provider || !path.isAbsolute(provider)) {
     const message = chinese
       ? "请先配置 JellyFrame: Device Provider，并填写 provider 可执行文件的绝对路径。"
       : "Configure JellyFrame: Device Provider with an absolute provider path first.";
-    vscode.window.showWarningMessage(message, openSettings).then((choice) => {
-      if (choice) {
-        vscode.commands.executeCommand("workbench.action.openSettings", "@ext:jellyframe.jellyframe-tools jellyframe.deviceProvider");
+    vscode.window.showWarningMessage(message, configure, openSettings).then((choice) => {
+      if (choice === configure) {
+        void configureDeviceProvider(context);
+      } else if (choice === openSettings) {
+        void vscode.commands.executeCommand("workbench.action.openSettings", "@ext:jellyframe.jellyframe-tools jellyframe.deviceProvider");
       }
     });
     return undefined;
@@ -897,9 +999,11 @@ function configuredDeviceProvider(context) {
     const message = chinese
       ? `Device Provider 不存在或不是文件：${provider}`
       : `Device Provider does not exist or is not a file: ${provider}`;
-    vscode.window.showErrorMessage(message, openSettings).then((choice) => {
-      if (choice) {
-        vscode.commands.executeCommand("workbench.action.openSettings", "@ext:jellyframe.jellyframe-tools jellyframe.deviceProvider");
+    vscode.window.showErrorMessage(message, configure, openSettings).then((choice) => {
+      if (choice === configure) {
+        void configureDeviceProvider(context);
+      } else if (choice === openSettings) {
+        void vscode.commands.executeCommand("workbench.action.openSettings", "@ext:jellyframe.jellyframe-tools jellyframe.deviceProvider");
       }
     });
     return undefined;
@@ -3889,6 +3993,7 @@ class JellyFrameStatusProvider {
       deviceActions: "设备操作",
       deviceLifecycle: "App 生命周期与调试",
       deviceStatus: "设备状态",
+      configureDeviceProvider: "配置 Device Provider",
       discoverDevice: "发现设备",
       selectDevice: "选择当前设备",
       inspectDevice: "读取设备身份",
@@ -3963,6 +4068,7 @@ class JellyFrameStatusProvider {
         visualEditor: "用受 JellyFrame 特性约束的拖放画布编辑当前 App，并生成可读源码。",
         packageResources: "生成供固件或 App Runtime 使用的资源包。",
         packageMissingFonts: `选择已授权 BDF，为 ${missingFontCount} 个缺失 manifest 字体资源生成 subset 并写入 .jfapp。`,
+        configureDeviceProvider: "选择 provider 可执行文件，并自动识别同一交付包中的 Developer Image manifest。",
         discoverDevice: "通过已配置的 Provider 列出可连接设备。",
         selectDevice: "在已发现设备中切换本次操作的目标。",
         inspectDevice: "读取并校验当前设备的 Developer Image 与 Render Core 身份。",
@@ -3994,6 +4100,7 @@ class JellyFrameStatusProvider {
       deviceActions: "Device actions",
       deviceLifecycle: "App Lifecycle & Debug",
       deviceStatus: "Device status",
+      configureDeviceProvider: "Configure Device Provider",
       discoverDevice: "Discover device",
       selectDevice: "Select device",
       inspectDevice: "Device info",
@@ -4068,6 +4175,7 @@ class JellyFrameStatusProvider {
         visualEditor: "Edit the current App on a JellyFrame-constrained drag-and-drop canvas and generate readable source.",
         packageResources: "Generate a resource package for firmware or App Runtime use.",
         packageMissingFonts: `Choose a licensed BDF, generate a subset for ${missingFontCount} missing manifest font resource(s), and write it into a .jfapp.`,
+        configureDeviceProvider: "Choose the provider executable and detect a matching Developer Image manifest in the same delivery package.",
         discoverDevice: "List connectable devices through the configured Provider.",
         selectDevice: "Change the target for subsequent device operations.",
         inspectDevice: "Read and validate the selected Developer Image and Render Core identity.",
@@ -4155,6 +4263,7 @@ class JellyFrameStatusProvider {
           "jellyframe.listBuilds", "list-tree"),
       ]),
       this.group(labels.device, "plug", [
+        this.commandItem(labels.configureDeviceProvider, labels.actionHints.configureDeviceProvider, "jellyframe.deviceConfigureProvider", "settings-gear"),
         this.commandItem(labels.discoverDevice, labels.actionHints.discoverDevice, "jellyframe.deviceDiscover", "plug"),
         ...(Array.isArray(lastDeviceDiscovery) && lastDeviceDiscovery.length > 1
           ? [this.commandItem(labels.selectDevice, labels.actionHints.selectDevice, "jellyframe.deviceSelect", "symbol-array")]
@@ -4818,6 +4927,7 @@ function activate(context) {
     }),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),
     vscode.commands.registerCommand("jellyframe.showOutput", () => showOutputChannel()),
+    vscode.commands.registerCommand("jellyframe.deviceConfigureProvider", () => configureDeviceProvider(context)),
     vscode.commands.registerCommand("jellyframe.deviceDiscover", () => discoverDevice(context)),
     vscode.commands.registerCommand("jellyframe.deviceSelect", () => chooseDevice()),
     vscode.commands.registerCommand("jellyframe.deviceInfo", () => inspectDevice(context)),
