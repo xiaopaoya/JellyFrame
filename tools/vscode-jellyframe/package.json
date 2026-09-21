@@ -2,7 +2,7 @@
   "name": "jellyframe-tools",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.4.68",
+  "version": "0.4.69",
   "publisher": "jellyframe",
   "icon": "media/jellyframe.png",
   "repository": {
@@ -36,6 +36,7 @@
     "onCommand:jellyframe.visualEditor",
     "onCommand:jellyframe.showReport",
     "onCommand:jellyframe.showOutput",
+    "onCommand:jellyframe.deviceInstallProvider",
     "onCommand:jellyframe.deviceConfigureProvider",
     "onCommand:jellyframe.deviceDiscover",
     "onCommand:jellyframe.deviceSelect",
@@ -146,6 +147,11 @@
         "command": "jellyframe.showOutput",
         "title": "%command.showOutput%",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "jellyframe.deviceInstallProvider",
+        "title": "%command.deviceInstallProvider%",
+        "icon": "$(cloud-download)"
       },
       {
         "command": "jellyframe.deviceConfigureProvider",
@@ -318,24 +324,28 @@
           "group": "report@4"
         },
         {
-          "command": "jellyframe.deviceConfigureProvider",
+          "command": "jellyframe.deviceInstallProvider",
           "group": "device@0"
         },
         {
-          "command": "jellyframe.deviceDiscover",
+          "command": "jellyframe.deviceConfigureProvider",
           "group": "device@1"
         },
         {
-          "command": "jellyframe.deviceSelect",
+          "command": "jellyframe.deviceDiscover",
           "group": "device@2"
         },
         {
-          "command": "jellyframe.deviceInfo",
+          "command": "jellyframe.deviceSelect",
           "group": "device@3"
         },
         {
-          "command": "jellyframe.deviceList",
+          "command": "jellyframe.deviceInfo",
           "group": "device@4"
+        },
+        {
+          "command": "jellyframe.deviceList",
+          "group": "device@5"
         }
       ],
       "explorer/context": [

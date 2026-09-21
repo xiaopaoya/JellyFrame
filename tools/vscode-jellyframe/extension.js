@@ -36,6 +36,10 @@ const {
   fetchLatestSdkRelease,
   sdkInstallName
 } = require("./sdk_download");
+const {
+  fetchProviderCatalog,
+  downloadProvider
+} = require("./device_provider_download");
 const { parseRenderTrace, renderTraceHtml } = require("./render_trace_viewer");
 const {
   appKeyForRoot,
@@ -969,6 +973,129 @@ async function configureDeviceProvider(context) {
       : `Device Provider configured: ${provider}`);
   vscode.window.showInformationMessage(message);
   return provider;
+}
+
+async function installDeviceProvider(context) {
+  const chinese = isChinese();
+  if (process.platform !== "win32") {
+    vscode.window.showWarningMessage(chinese
+      ? "当前官方 Device Provider 仅提供 Windows x64 版本。"
+      : "The current official Device Provider is available only for Windows x64.");
+    return undefined;
+  }
+  let catalog;
+  try {
+    catalog = await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: chinese ? "正在读取官方 Device Provider 列表" : "Loading the official Device Provider catalog",
+      cancellable: false
+    }, () => fetchProviderCatalog());
+  } catch (error) {
+    const message = chinese
+      ? `无法读取官方 Device Provider 列表：${error.message}`
+      : `Could not load the official Device Provider catalog: ${error.message}`;
+    ensureOutputChannel().appendLine(`[error] ${message}`);
+    vscode.window.showErrorMessage(message);
+    return undefined;
+  }
+  const choices = catalog.entries
+    .filter((entry) => !Array.isArray(entry.platforms) || entry.platforms.includes("win32-x64"))
+    .map((entry) => ({
+      label: entry.name || entry.id,
+      description: `${entry.board || "?"} · Core ${entry.renderCoreVersion || "?"} · ${entry.imageVersion || "?"}`,
+      detail: entry.description || entry.assetName,
+      entry
+    }));
+  if (choices.length === 0) {
+    vscode.window.showInformationMessage(chinese
+      ? "官方列表中没有适用于当前 Windows x64 的 Device Provider。"
+      : "The official catalog has no Device Provider for the current Windows x64 host.");
+    return undefined;
+  }
+  const picked = choices.length === 1
+    ? choices[0]
+    : await vscode.window.showQuickPick(choices, {
+      title: chinese ? "选择官方 Device Provider" : "Select an official Device Provider",
+      placeHolder: chinese ? "选择目标板卡和 Developer Image" : "Choose a target board and Developer Image",
+      matchOnDescription: true,
+      matchOnDetail: true
+    });
+  if (!picked) {
+    return undefined;
+  }
+  const parentChoice = await vscode.window.showOpenDialog({
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: chinese ? "选择安装位置" : "Select install location",
+    title: chinese
+      ? `选择 ${picked.entry.name || picked.entry.id} 的安装父目录`
+      : `Select a parent folder for ${picked.entry.name || picked.entry.id}`
+  });
+  const parent = parentChoice?.[0]?.fsPath;
+  if (!parent) {
+    return undefined;
+  }
+  const rootName = path.basename(picked.entry.assetName, ".zip");
+  const destinationRoot = path.join(parent, rootName);
+  if (fs.existsSync(destinationRoot)) {
+    vscode.window.showErrorMessage(chinese
+      ? `目标目录已存在：${destinationRoot}`
+      : `The destination directory already exists: ${destinationRoot}`);
+    return undefined;
+  }
+  let download;
+  let extractionDirectory;
+  try {
+    download = await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: chinese ? `正在下载 ${picked.entry.name || picked.entry.id}` : `Downloading ${picked.entry.name || picked.entry.id}`,
+      cancellable: false
+    }, (progress) => downloadProvider(picked.entry, {
+      onProgress: ({ received, total }) => progress.report({
+        increment: total > 0 ? Math.max(0, Math.min(100, received / total * 100)) : undefined,
+        message: total > 0 ? `${Math.floor(received / 1024)} / ${Math.ceil(total / 1024)} KiB` : `${Math.floor(received / 1024)} KiB`
+      })
+    }));
+    extractionDirectory = fs.mkdtempSync(path.join(parent, ".jellyframe-provider-install-"));
+    const extraction = await runLocalTool(context, "powershell", [
+      "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(context.extensionPath, "device_provider_archive.ps1"),
+      "-Archive", download.archivePath,
+      "-Destination", extractionDirectory
+    ], { label: chinese ? "解压 Device Provider" : "Extract Device Provider" });
+    if (extraction.code !== 0) {
+      return undefined;
+    }
+    const record = JSON.parse(extraction.stdout.trim().split(/\r?\n/).filter(Boolean).at(-1));
+    if (record.root !== rootName || !record.provider || !record.manifest) {
+      throw new Error("provider archive extraction returned an invalid installation record");
+    }
+    const extractedRoot = path.join(extractionDirectory, record.root);
+    fs.renameSync(extractedRoot, destinationRoot);
+    await config().update("deviceProvider", path.join(destinationRoot, record.provider), vscode.ConfigurationTarget.Global);
+    await config().update("deviceManifest", path.resolve(destinationRoot, record.manifest), vscode.ConfigurationTarget.Global);
+    ensureOutputChannel().appendLine(`Device Provider installed: ${destinationRoot}`);
+    const message = chinese
+      ? `Device Provider 已安装并配置：${path.join(destinationRoot, record.provider)}`
+      : `Device Provider installed and configured: ${path.join(destinationRoot, record.provider)}`;
+    vscode.window.showInformationMessage(message);
+    statusProvider?.refresh();
+    return destinationRoot;
+  } catch (error) {
+    const message = chinese
+      ? `Device Provider 安装失败：${error.message}`
+      : `Device Provider installation failed: ${error.message}`;
+    ensureOutputChannel().appendLine(`[error] ${message}`);
+    vscode.window.showErrorMessage(message);
+    return undefined;
+  } finally {
+    if (extractionDirectory && fs.existsSync(extractionDirectory)) {
+      fs.rmSync(extractionDirectory, { recursive: true, force: true });
+    }
+    if (download?.temporaryDirectory && fs.existsSync(download.temporaryDirectory)) {
+      fs.rmSync(download.temporaryDirectory, { recursive: true, force: true });
+    }
+  }
 }
 
 function configuredDeviceProvider(context) {
@@ -3993,6 +4120,7 @@ class JellyFrameStatusProvider {
       deviceActions: "设备操作",
       deviceLifecycle: "App 生命周期与调试",
       deviceStatus: "设备状态",
+      installDeviceProvider: "安装官方 Device Provider",
       configureDeviceProvider: "配置 Device Provider",
       discoverDevice: "发现设备",
       selectDevice: "选择当前设备",
@@ -4068,6 +4196,7 @@ class JellyFrameStatusProvider {
         visualEditor: "用受 JellyFrame 特性约束的拖放画布编辑当前 App，并生成可读源码。",
         packageResources: "生成供固件或 App Runtime 使用的资源包。",
         packageMissingFonts: `选择已授权 BDF，为 ${missingFontCount} 个缺失 manifest 字体资源生成 subset 并写入 .jfapp。`,
+        installDeviceProvider: "从官方列表下载并校验板卡专属 provider、Developer Image 和恢复资源。",
         configureDeviceProvider: "选择 provider 可执行文件，并自动识别同一交付包中的 Developer Image manifest。",
         discoverDevice: "通过已配置的 Provider 列出可连接设备。",
         selectDevice: "在已发现设备中切换本次操作的目标。",
@@ -4100,6 +4229,7 @@ class JellyFrameStatusProvider {
       deviceActions: "Device actions",
       deviceLifecycle: "App Lifecycle & Debug",
       deviceStatus: "Device status",
+      installDeviceProvider: "Install Official Device Provider",
       configureDeviceProvider: "Configure Device Provider",
       discoverDevice: "Discover device",
       selectDevice: "Select device",
@@ -4175,6 +4305,7 @@ class JellyFrameStatusProvider {
         visualEditor: "Edit the current App on a JellyFrame-constrained drag-and-drop canvas and generate readable source.",
         packageResources: "Generate a resource package for firmware or App Runtime use.",
         packageMissingFonts: `Choose a licensed BDF, generate a subset for ${missingFontCount} missing manifest font resource(s), and write it into a .jfapp.`,
+        installDeviceProvider: "Download and verify a board-specific provider, Developer Image and recovery resources from the official catalog.",
         configureDeviceProvider: "Choose the provider executable and detect a matching Developer Image manifest in the same delivery package.",
         discoverDevice: "List connectable devices through the configured Provider.",
         selectDevice: "Change the target for subsequent device operations.",
@@ -4263,6 +4394,7 @@ class JellyFrameStatusProvider {
           "jellyframe.listBuilds", "list-tree"),
       ]),
       this.group(labels.device, "plug", [
+        this.commandItem(labels.installDeviceProvider, labels.actionHints.installDeviceProvider, "jellyframe.deviceInstallProvider", "cloud-download"),
         this.commandItem(labels.configureDeviceProvider, labels.actionHints.configureDeviceProvider, "jellyframe.deviceConfigureProvider", "settings-gear"),
         this.commandItem(labels.discoverDevice, labels.actionHints.discoverDevice, "jellyframe.deviceDiscover", "plug"),
         ...(Array.isArray(lastDeviceDiscovery) && lastDeviceDiscovery.length > 1
@@ -4927,6 +5059,7 @@ function activate(context) {
     }),
     vscode.commands.registerCommand("jellyframe.showReport", () => showReportPanel(context)),
     vscode.commands.registerCommand("jellyframe.showOutput", () => showOutputChannel()),
+    vscode.commands.registerCommand("jellyframe.deviceInstallProvider", () => installDeviceProvider(context)),
     vscode.commands.registerCommand("jellyframe.deviceConfigureProvider", () => configureDeviceProvider(context)),
     vscode.commands.registerCommand("jellyframe.deviceDiscover", () => discoverDevice(context)),
     vscode.commands.registerCommand("jellyframe.deviceSelect", () => chooseDevice()),

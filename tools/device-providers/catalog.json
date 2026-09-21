@@ -1,0 +1,27 @@
+{
+  "format": "jellyframe.device-provider-catalog",
+  "formatVersion": 1,
+  "repository": "xiaopaoya/JellyFrame",
+  "entries": [
+    {
+      "id": "ws147-developer-0.6.2-ws147.2",
+      "name": "WS147 Developer Image",
+      "description": "WS147 USB Serial/JTAG Device OS provider and matching Developer Image.",
+      "board": "ws147",
+      "providerVersion": "0.1.1-dev",
+      "imageVersion": "0.6.2-ws147.2",
+      "runtimeVersion": "0.6.0-dev",
+      "renderCoreVersion": "0.6.2",
+      "renderCoreAbi": 1,
+      "display": { "width": 172, "height": 320, "shape": "rect" },
+      "profile": "rect-172x320",
+      "transport": "usb-serial-jtag",
+      "releaseTag": "device-provider-ws147-v0.1.1-dev",
+      "assetName": "jellyframe-ws147-developer-0.6.2-ws147.2-provider-0.1.1-dev.zip",
+      "sha256": "4ccb9ccb8589d473e08ddf9890d95d102101d0d46f8126eeab37c0805fef64f7",
+      "prerelease": true,
+      "platforms": ["win32-x64"],
+      "status": "verified-development"
+    }
+  ]
+}

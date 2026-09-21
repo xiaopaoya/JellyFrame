@@ -304,6 +304,11 @@ separate so one command does not overwrite another command's result.
 
 `JellyFrame: Discover Device` uses only an explicitly configured Device OS
 provider executable. The extension does not bundle the board-specific provider.
+`JellyFrame: Install Official Device Provider` reads the repository's curated
+catalog, lists compatible Windows x64 board packages, downloads the
+selected GitHub Release asset, verifies its pinned SHA-256, safely extracts it,
+and configures both provider and Developer Image manifest paths. It never scans
+serial ports or executes an unlisted archive.
 For WS147, install the versioned
 `jellyframe-ws147-developer-0.6.2-ws147.2-provider-0.1.1-dev.zip` delivery
 package. It does not infer serial or USB endpoints. Run `JellyFrame: Configure

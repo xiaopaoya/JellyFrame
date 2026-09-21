@@ -206,6 +206,9 @@ JSON 报告并自动打开截图。验证、检查和预览分别保留自己的
 “发现设备”只连接已配置的 Device OS provider，不会猜测串口或 USB 端点。扩展不捆绑板卡专属
 provider；WS147 请安装版本化交付包
 `jellyframe-ws147-developer-0.6.2-ws147.2-provider-0.1.1-dev.zip`。
+也可以执行“JellyFrame：安装官方 Device Provider”：它读取仓库中的官方列表，列出兼容当前
+Windows x64 的板卡包，下载 GitHub Release 资产，校验固定 SHA-256 后安全解压，并自动配置
+provider 与 Developer Image manifest 路径。它不会扫描串口，也不会执行未列入列表的压缩包。
 首次使用时执行“JellyFrame：配置 Device Provider”，选择解压目录中的
 `provider/jellyframe-device.cmd`。扩展会写入可执行文件绝对路径，并在标准交付目录中只有一个
 `developer-image/*.manifest.json` 时自动配置它；也可以在 JellyFrame 设置中手动覆盖。路径
