@@ -98,6 +98,14 @@ function sha256(pathname) {
   return digest.digest("hex");
 }
 
+function retryableNetworkError(error) {
+  return ["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ECONNREFUSED", "ENETUNREACH"].includes(error?.code);
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 function parseCatalog(value) {
   const catalog = typeof value === "string" ? JSON.parse(value) : value;
   if (catalog?.format !== "jellyframe.device-provider-catalog" || catalog?.formatVersion !== 1 ||
@@ -146,24 +154,40 @@ async function downloadProvider(entry, { onProgress } = {}) {
   const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "jellyframe-provider-download-"));
   const archivePath = path.join(temporaryDirectory, asset.name);
   try {
-    const stream = fs.createWriteStream(archivePath, { flags: "wx" });
-    let streamError;
-    stream.on("error", (error) => { streamError = error; });
-    await request(asset.browser_download_url, {
-      maxBytes: MAX_ARCHIVE_BYTES,
-      onData: (chunk, received, total, response) => {
-        if (!stream.write(chunk)) {
-          response.pause();
-          stream.once("drain", () => response.resume());
-        }
-        onProgress?.({ received, total });
+    let downloaded = false;
+    let lastError;
+    for (let attempt = 0; attempt < 3 && !downloaded; attempt += 1) {
+      const partialPath = `${archivePath}.part-${attempt}`;
+      const stream = fs.createWriteStream(partialPath, { flags: "wx" });
+      let streamError;
+      stream.on("error", (error) => { streamError = error; });
+      try {
+        await request(asset.browser_download_url, {
+          maxBytes: MAX_ARCHIVE_BYTES,
+          onData: (chunk, received, total, response) => {
+            if (!stream.write(chunk)) {
+              response.pause();
+              stream.once("drain", () => response.resume());
+            }
+            onProgress?.({ received, total, attempt });
+          }
+        });
+        if (streamError) throw streamError;
+        await new Promise((resolve, reject) => {
+          stream.end((error) => error ? reject(error) : resolve());
+          stream.on("error", reject);
+        });
+        fs.renameSync(partialPath, archivePath);
+        downloaded = true;
+      } catch (error) {
+        lastError = error;
+        stream.destroy();
+        if (fs.existsSync(partialPath)) fs.rmSync(partialPath, { force: true });
+        if (!retryableNetworkError(error) || attempt === 2) throw error;
+        await wait(500 * (attempt + 1));
       }
-    });
-    if (streamError) throw streamError;
-    await new Promise((resolve, reject) => {
-      stream.end((error) => error ? reject(error) : resolve());
-      stream.on("error", reject);
-    });
+    }
+    if (!downloaded) throw lastError || new Error("provider archive download failed");
     const actualDigest = sha256(archivePath);
     const expectedDigest = String(entry.sha256).toLowerCase();
     if (actualDigest !== expectedDigest) {

@@ -1052,9 +1052,10 @@ async function installDeviceProvider(context) {
       title: chinese ? `正在下载 ${picked.entry.name || picked.entry.id}` : `Downloading ${picked.entry.name || picked.entry.id}`,
       cancellable: false
     }, (progress) => downloadProvider(picked.entry, {
-      onProgress: ({ received, total }) => progress.report({
-        increment: total > 0 ? Math.max(0, Math.min(100, received / total * 100)) : undefined,
-        message: total > 0 ? `${Math.floor(received / 1024)} / ${Math.ceil(total / 1024)} KiB` : `${Math.floor(received / 1024)} KiB`
+      onProgress: ({ received, total, attempt }) => progress.report({
+        message: total > 0
+          ? `${Math.floor(received / 1024)} / ${Math.ceil(total / 1024)} KiB${attempt > 0 ? ` · retry ${attempt}` : ""}`
+          : `${Math.floor(received / 1024)} KiB${attempt > 0 ? ` · retry ${attempt}` : ""}`
       })
     }));
     extractionDirectory = fs.mkdtempSync(path.join(parent, ".jellyframe-provider-install-"));
