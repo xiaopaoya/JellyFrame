@@ -7,7 +7,10 @@ App, security settings and VM configuration unchanged. This probe uses the SDK's
 embedded Python; no system Python, pip, VS Code update or firmware change is needed.
 
 1. Extract the diagnostic ZIP into a local directory in the affected VM.
-2. Double-click `author_startup_probe.cmd` and enter the SDK and App directories.
+2. Double-click `author_startup_probe.cmd` and enter the SDK and specific App directories.
+   The App directory must directly contain `jellyframe.app.json`, not just child App
+   folders (for example, select `Apps/weather`, not `Apps`). You can also paste the
+   full `jellyframe.app.json` file path. Invalid interactive input prompts again.
 3. Let three repeats complete. Return the generated `Documents/JellyFrame-startup-*`
    directory, especially `summary.json` and the timestamped logs.
 

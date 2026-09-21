@@ -108,6 +108,23 @@ def measure(command, cwd, log, timeout=90, first_frame=False):
     return result
 
 
+def read_app_manifest(value):
+    app = value.resolve()
+    if app.is_file() and app.name.lower() == "jellyframe.app.json":
+        app = app.parent
+    manifest_path = app / "jellyframe.app.json"
+    if not manifest_path.is_file():
+        raise ValueError(f"App root must directly contain jellyframe.app.json: {app}. "
+                         "Select the specific App folder, not its parent Apps directory.")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as error:
+        raise ValueError(f"Cannot read App manifest {manifest_path}: {error}") from error
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("runtime", {}), dict):
+        raise ValueError(f"App manifest and its runtime field must be JSON objects: {manifest_path}")
+    return app, manifest
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sdk", required=True, type=Path)
@@ -117,7 +134,10 @@ def main():
     parser.add_argument("--target", help="Same optional target preset selected in the extension.")
     args = parser.parse_args()
     sdk, app, output = args.sdk.resolve(), args.app.resolve(), args.output.resolve()
-    manifest = json.loads((app / "jellyframe.app.json").read_text(encoding="utf-8-sig"))
+    try:
+        app, manifest = read_app_manifest(app)
+    except ValueError as error:
+        parser.error(str(error))
     python = sdk / "runtime/python/python.exe"
     cli = sdk / "tools/jellyframe_cli.py"
     scripted = manifest.get("runtime", {}).get("script", manifest.get("script", "none")) not in (None, "", "none")
@@ -127,7 +147,10 @@ def main():
     for file in (python, cli, shell):
         if not file.is_file():
             parser.error(f"missing SDK file: {file}")
-    output.mkdir(parents=True, exist_ok=False)
+    try:
+        output.mkdir(parents=True, exist_ok=False)
+    except OSError as error:
+        parser.error(f"Cannot create a new report directory {output}: {error}")
     summary = {"format": "jellyframe.author.startup-probe.v0", "sdk": str(sdk), "app": str(app),
                "platform": platform.platform(), "profile": profile, "runs": [],
                "limitations": ["Host wall time, not rendering CPU time or device FPS.",
