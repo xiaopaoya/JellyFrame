@@ -131,6 +131,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'SDK archive tests failed' }
           python tests\tool_regression\sdk_python_runtime_tests.py
           if ($LASTEXITCODE -ne 0) { throw 'SDK Python acquisition tests failed' }
+          python tests\tool_regression\author_startup_probe_tests.py
+          if ($LASTEXITCODE -ne 0) { throw 'Author startup probe tests failed' }
           python tests\tool_regression\render_performance_report_tests.py
           python tests\tool_regression\benchmark_guard_tests.py
           python tests\tool_regression\benchmark_compare_tests.py
