@@ -125,6 +125,8 @@ jobs:
           node tests\tool_regression\vscode_sdk_download_tests.js
           node tests\tool_regression\vscode_author_environment_tests.js
           if ($LASTEXITCODE -ne 0) { throw 'Author environment tests failed' }
+          node tests\tool_regression\vscode_startup_feedback_tests.js
+          if ($LASTEXITCODE -ne 0) { throw 'Startup feedback tests failed' }
           node tests\tool_regression\vscode_render_trace_viewer_tests.js
           node tests\tool_regression\vscode_performance_sessions_tests.js
           python tests\tool_regression\sdk_archive_tests.py

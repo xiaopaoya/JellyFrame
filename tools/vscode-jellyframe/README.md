@@ -2,7 +2,7 @@
 
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-09-20; Applies to: 0.6.0-dev; extension version: 0.4.66; compatibility baseline: 0.5.0
+> Last updated: 2026-09-20; Applies to: 0.6.0-dev; extension version: 0.4.67; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -10,6 +10,13 @@ dedicated JellyFrame Activity Bar view, focused context menus and the Command
 Palette as entry points.
 
 ## Features
+
+- Preview and external-debug startup show progress notifications. Embedded debug
+  shows a loading indicator and elapsed time until a frame is decoded. After ten
+  seconds the message explicitly says startup is slow and still waiting; this is
+  not a failure verdict or an automatic process timeout. The existing Stop control
+  remains available for embedded debugging. A frame arriving before the webview
+  is ready is retained and delivered after readiness.
 
 - JSON schema association for `jellyframe.app.json`.
 - Command palette actions for package-structure validation, render preflight, preview, embedded VS Code debugging,

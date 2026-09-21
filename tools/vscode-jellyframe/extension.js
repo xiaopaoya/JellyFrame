@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const childProcess = require("child_process");
 const vscode = require("vscode");
+const { startupMessage, withStartupProgress } = require("./startup_feedback");
 const { selectBuildDirectory } = require("./build_profiles");
 const {
   desktopBuildPlan,
@@ -1391,6 +1392,10 @@ function runCli(context, args) {
 }
 
 function runCliWithOptions(context, args, options = {}) {
+  if (args[0] === "preview" && !options.startupProgress) {
+    return withStartupProgress(vscode, isChinese() ? "JellyFrame：生成预览" : "JellyFrame: Generating preview",
+      () => runCliWithOptions(context, args, { ...options, startupProgress: true }), isChinese());
+  }
   if (!requireAuthorSdk(context)) {
     return Promise.resolve({ code: undefined, stdout: "", stderr: "", missingSdk: true });
   }
@@ -1525,6 +1530,11 @@ function runDetachedPython(context, script, args, options = {}) {
   const channel = ensureOutputChannel();
   const commandArgs = [script, ...args];
   channel.appendLine(`+ ${[python, ...commandArgs].join(" ")}`);
+  let startupDone = () => {};
+  if (options.startupTitle) {
+    const started = new Promise((resolve) => { startupDone = resolve; });
+    void withStartupProgress(vscode, options.startupTitle, () => started, isChinese());
+  }
   let child;
   let completed = false;
   let stdout = "";
@@ -1532,11 +1542,15 @@ function runDetachedPython(context, script, args, options = {}) {
   const finish = (outcome) => {
     if (!completed) {
       completed = true;
+      startupDone();
       invokeCallback(options.onClose, outcome.code, outcome);
     }
   };
   const append = (stream, chunk) => {
     const text = chunk.toString();
+    // The Python facade prints its command before the native shell starts.
+    // Only subsequent runtime output is evidence that startup progressed.
+    if (text.split(/\r?\n/).some((line) => line.trim() && !line.startsWith("+ "))) startupDone();
     const captured = appendBoundedOutput(stream === "stdout" ? stdout : stderr, text);
     if (stream === "stdout") {
       stdout = captured.text;
@@ -2406,6 +2420,7 @@ async function debugExternalApp(context, resourceUri) {
     "--wait"
   ], {
     wait: true,
+    startupTitle: isChinese() ? "JellyFrame：等待外部调试运行时输出" : "JellyFrame: Waiting for external debug runtime output",
     onClose: (code) => {
       if (code !== 0) {
         return;
@@ -2475,7 +2490,11 @@ function embeddedDebugHtml(webview) {
     #trace.recording { color: var(--vscode-button-foreground); background: var(--vscode-statusBarItem-warningBackground, #895503); }
     #stage-content { position: relative; flex: 1; min-width: 0; min-height: 0; display: grid; place-items: center; padding: 18px; overflow: auto; }
     #frame { display: block; flex: none; user-select: none; outline: none; background: #111; image-rendering: auto; }
-    #empty { color: var(--vscode-descriptionForeground); }
+    #frame[hidden], #empty[hidden] { display: none; }
+    #empty { color: var(--vscode-descriptionForeground); max-width: 100%; text-align: center; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+    #empty.loading::before { content: ''; display: block; box-sizing: border-box; width: 24px; height: 24px; margin: 0 auto 12px; border: 2px solid var(--vscode-panel-border, #808080); border-top-color: var(--vscode-progressBar-background, #3794ff); border-radius: 50%; animation: startup-spin 1s linear infinite; }
+    @keyframes startup-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { #empty.loading::before { animation: none; } }
     .resizer { position: relative; z-index: 2; background: transparent; }
     .resizer:hover, .resizer:active { background: var(--vscode-focusBorder); }
     #side-resizer { cursor: col-resize; }
@@ -2520,6 +2539,30 @@ function embeddedDebugHtml(webview) {
     const traceActive = '${traceActive}';
     const frame = document.getElementById('frame');
     const empty = document.getElementById('empty');
+    const startupMessage = ${startupMessage.toString()};
+    let loadingTimer;
+    function stopLoading() {
+      clearInterval(loadingTimer);
+      loadingTimer = undefined;
+      empty.classList.remove('loading');
+      empty.setAttribute('aria-busy', 'false');
+    }
+    function startLoading() {
+      stopLoading();
+      const started = performance.now();
+      empty.hidden = false;
+      empty.classList.add('loading');
+      empty.setAttribute('role', 'status');
+      empty.setAttribute('aria-busy', 'true');
+      const update = () => {
+        empty.textContent = startupMessage(performance.now() - started, ${chinese});
+        document.getElementById('status').textContent = empty.textContent;
+      };
+      update();
+      loadingTimer = setInterval(update, 1000);
+    }
+    startLoading();
+    window.addEventListener('pagehide', stopLoading);
     const stage = document.getElementById('stage-content');
     const status = document.getElementById('status');
     const stop = document.getElementById('stop');
@@ -2594,6 +2637,12 @@ function embeddedDebugHtml(webview) {
     }
     function setSessionState(state) {
       sessionActive = state === 'running';
+      if (!sessionActive) {
+        stopLoading();
+        if (!renderedSequence) empty.textContent = state === 'stopping'
+          ? ${JSON.stringify(chinese ? '正在停止...' : 'Stopping...')}
+          : ${JSON.stringify(chinese ? '未收到首帧，调试已停止。' : 'Debugging stopped before the first frame.')};
+      }
       const stopped = state === 'stopped';
       stop.hidden = stopped;
       resume.hidden = !stopped;
@@ -2794,13 +2843,18 @@ function embeddedDebugHtml(webview) {
           context.clearRect(0, 0, message.width, message.height);
           context.drawImage(image, 0, 0, message.width, message.height);
           renderedSequence = message.sequence;
+          stopLoading();
           frame.hidden = false;
           empty.hidden = true;
           updateFrameSize();
           status.textContent = 'Frame ' + message.sequence + ' · ' + message.width + 'x' + message.height;
         };
         image.onerror = () => {
-          if (token === renderToken) status.textContent = 'Frame ' + message.sequence + ' failed to decode';
+          if (token === renderToken) {
+            stopLoading();
+            status.textContent = 'Frame ' + message.sequence + ' failed to decode';
+            if (!renderedSequence) empty.textContent = status.textContent;
+          }
         };
         image.src = message.dataUri;
       } else if (message.type === 'status') {
@@ -2832,11 +2886,12 @@ function embeddedDebugHtml(webview) {
         const height = Number(message.height) || 0;
         setViewportConfig(width, height, true);
       } else if (message.type === 'reset-frame') {
+        renderToken += 1;
         latestSequence = 0;
         renderedSequence = 0;
         frame.hidden = true;
         empty.hidden = false;
-        empty.textContent = 'Waiting for the first frame...';
+        startLoading();
       }
     });
   </script>
@@ -3185,19 +3240,25 @@ async function deliverEmbeddedFrame(session, frame, runId = session.runId) {
   }
   try {
     const bytes = await fs.promises.readFile(frame.path);
-    if (session.runId !== runId || !session.active || frame.sequence !== session.latestAnnouncedSequence || frame.sequence <= session.lastDeliveredSequence) {
+    if (session.disposed || session.runId !== runId || !session.active || frame.sequence !== session.latestAnnouncedSequence || frame.sequence <= session.lastDeliveredSequence) {
       return;
     }
     session.lastDeliveredSequence = frame.sequence;
     session.deliveredFrames += 1;
     session.viewport = { width: frame.width, height: frame.height };
-    postEmbeddedMessage(session, {
+    const message = {
       type: 'frame',
       sequence: frame.sequence,
       width: frame.width,
       height: frame.height,
       dataUri: `data:image/bmp;base64,${bytes.toString('base64')}`
-    });
+    };
+    if (session.webviewReady) {
+      session.pendingFrame = undefined;
+      postEmbeddedMessage(session, message);
+    } else {
+      session.pendingFrame = message;
+    }
     scheduleEmbeddedDiagnostics(session);
   } catch (error) {
     if (error?.code === 'ENOENT') {
@@ -3235,6 +3296,7 @@ function requestedEmbeddedViewport(options) {
 }
 
 function resetEmbeddedRunState(session) {
+  session.pendingFrame = undefined;
   session.active = true;
   session.stopping = false;
   session.exited = false;
@@ -3487,6 +3549,10 @@ async function debugApp(context, resourceUri, options = {}) {
       postEmbeddedMessage(session, { type: 'trace-state', recording: session.traceRecording });
       postEmbeddedMessage(session, { type: 'viewport-config', ...session.requestedViewport });
       for (const entry of session.logLines) postEmbeddedMessage(session, { type: 'log', ...entry });
+      if (session.pendingFrame) {
+        postEmbeddedMessage(session, session.pendingFrame);
+        session.pendingFrame = undefined;
+      }
     } else if (message?.type === 'stop') {
       postEmbeddedMessage(session, { type: 'session-state', state: 'stopping' });
       void stopEmbeddedDebugSession(session, 'Stopping desktop shell...');
@@ -3543,6 +3609,7 @@ async function debugApp(context, resourceUri, options = {}) {
   }, undefined, context.subscriptions);
   panel.onDidDispose(() => {
     session.disposed = true;
+    session.pendingFrame = undefined;
     if (embeddedDebugSession === session) embeddedDebugSession = undefined;
     void stopEmbeddedDebugSession(session, 'Debug tab closed.');
   }, undefined, context.subscriptions);
