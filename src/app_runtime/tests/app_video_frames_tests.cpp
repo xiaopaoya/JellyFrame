@@ -114,6 +114,39 @@ void video_frame_keeps_displayed_frame_when_replacement_has_no_handle_budget() {
     check(provider.release_frame(host, old_handle), "old frame released after budget failure");
 }
 
+void video_frame_repeated_replacement_returns_storage_to_baseline() {
+    AppRuntimeHost host = make_host(2, 64);
+    host.launch("org.example.preview", AppRole::App);
+    AppVideoFrameProviderMock provider = ready_provider();
+    std::uint32_t previous_handle = 0;
+
+    for (int index = 0; index < 100; ++index) {
+        check(provider.request_next_frame(host, {"/preview.mjpg", AppVideoFrameCodec::Mjpeg,
+                                                 static_cast<std::uint32_t>(index)}).accepted(),
+              "repeated frame request accepted");
+        check(provider.complete_next(host), "repeated frame completed");
+        const auto completed = pump(host);
+        check(completed.size() == 1 && completed[0].status == HostServiceStatus::Completed &&
+                  completed[0].result_handle != 0,
+              "repeated frame completion is successful");
+        const std::uint32_t handle = completed[0].result_handle;
+        check(provider.frame(handle) != nullptr && provider.frame(handle)->pixels.size() == 8,
+              "repeated frame keeps copied payload readable");
+        check(host.handles().active_count() == 1 && host.handles().used_bytes() == 8,
+              "repeated replacement keeps one bounded host allocation");
+        if (previous_handle != 0) {
+            check(!host.handles().contains(previous_handle),
+                  "repeated replacement releases the previous host handle");
+        }
+        previous_handle = handle;
+    }
+
+    check(provider.release_frame(host, previous_handle), "repeated frame final release succeeds");
+    check(host.handles().active_count() == 0 && host.handles().used_bytes() == 0,
+          "repeated frame release returns storage to baseline");
+    check(provider.frame(previous_handle) == nullptr, "repeated frame record is removed at baseline");
+}
+
 void video_frame_cleans_stale_worker_requests_and_maps_policy() {
     AppRuntimeHost host = make_host();
     host.launch("org.example.preview.one", AppRole::App);
@@ -152,6 +185,7 @@ int main() {
     video_frame_requires_policy_and_bounds_codec();
     video_frame_returns_latest_surface_and_drops_old_one();
     video_frame_keeps_displayed_frame_when_replacement_has_no_handle_budget();
+    video_frame_repeated_replacement_returns_storage_to_baseline();
     video_frame_cleans_stale_worker_requests_and_maps_policy();
     return 0;
 }

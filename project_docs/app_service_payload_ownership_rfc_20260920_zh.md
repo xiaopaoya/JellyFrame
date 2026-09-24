@@ -1,6 +1,6 @@
 # App Service 载荷所有权与零拷贝 RFC
 
-> 最后更新：2026-09-20；适用版本：0.6.0-dev
+> 最后更新：2026-09-24；适用版本：0.6.0-dev
 >
 > 状态：Deferred RFC；不改变当前 `0.6.0-dev` API。
 >
@@ -51,3 +51,15 @@
 
 在上述证据和独立 API review 之前，`AppVideoFrameRecord::pixels` 的复制保持不变，
 不新增硬件 A/B，也不更新 Runtime/Core ABI 或 SDK。
+
+## 2026-09-24 基线复测
+
+新增 `app_video_frames` 回归覆盖同一 source 连续完成 100 帧替换，使用 2 个 handle
+槽位和 64 字节总预算，验证每一帧都能完成、旧 handle 在新帧发布时释放，且运行期间
+始终只有一个 8 字节视频帧资源。最后显式释放当前帧后，active handle 数和已用字节均
+回到 0，记录也被移除。
+
+该测试只证明当前“完成时复制 payload、旧帧替换释放”的基线没有随重复提交泄漏；它不证明
+复制成本可以忽略，也不满足零拷贝 API 的证据门槛。fixture 清理/重排、stale completion
+和替换分配失败仍由现有定向回归覆盖；在没有真实 workload 证明复制成为帧预算或内存门槛
+前，继续保持 Deferred RFC，不改变公开 API。

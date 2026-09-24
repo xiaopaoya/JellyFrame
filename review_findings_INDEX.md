@@ -1,6 +1,6 @@
 # jellyframe 0.6.1 代码审查 — 汇总与交叉核对
 
-> 最后更新：2026-09-18；适用版本：0.6.0-dev
+> 最后更新：2026-09-24；适用版本：0.6.0-dev
 
 审查范围：`render_core`（`src/render_core/`，42 个 `.cpp`）与 `app_runtime`（`src/app_runtime/`）。
 当前主线同步点：`1e796bd7`；历史处置段落保留其当时的基线引用，新增结论以当前主线为准。
@@ -78,7 +78,7 @@
 这些项目没有被上述提交完整关闭，后续应按收益和风险单独处理：
 
 1. flex 非 wrap 的多次 intrinsic layout（报告 H6）：已补 `flex_nonwrap_intrinsic_layout` 基准；8/32/80 个柔性文本子项桌面 Release 约为 20/66/192 us，测量次数受探测/最终/拉伸分支影响。暂不做全局缓存，后续仅评估纯叶子文本等可证明安全的快路径。
-2. app service 的 fixture/response 仍有少数非必要复制（报告 services #5/#7）：NetworkFetch 已由 `7e671eba` 处理；compute result 和 audio URL 已确认完成路径使用移动语义，不需要新增改动。视频帧、解码 surface 仍保留整洁的公开 `std::vector` 记录接口，因此像素载荷的共享/零拷贝需要单独的 API 设计；约束与验收门槛已记录于 `project_docs/app_service_payload_ownership_rfc_20260920_zh.md`，本轮不以破坏兼容性的方式处理。
+2. app service 的 fixture/response 仍有少数非必要复制（报告 services #5/#7）：NetworkFetch 已由 `7e671eba` 处理；compute result 和 audio URL 已确认完成路径使用移动语义，不需要新增改动。视频帧、解码 surface 仍保留整洁的公开 `std::vector` 记录接口，因此像素载荷的共享/零拷贝需要单独的 API 设计；2026-09-24 新增同 source 连续 100 帧替换回归，确认旧 handle 释放且 active bytes 回到基线。约束与验收门槛已记录于 `project_docs/app_service_payload_ownership_rfc_20260920_zh.md`，本轮不以破坏兼容性的方式处理。
 3. 文本规范化报告 M9 已完成评估，当前不需要新增代码；后续仅在文本缓存失效模型扩展时重新验证。
 4. Low 级可读性条目和未逐条复核的历史条目：不作为当前发布阻断项，修改时必须附局部测试或基准。
 
