@@ -310,7 +310,10 @@ provider executable. The extension does not bundle the board-specific provider.
 `JellyFrame: Install Provider` reads the repository's curated
 catalog, lists compatible Windows x64 board packages, downloads the
 selected GitHub Release asset, verifies its pinned SHA-256, safely extracts it,
-and configures both provider and Developer Image manifest paths. It never scans
+and configures both provider and Developer Image manifest paths. For the bundled
+WS147 provider, it then asks for the COM port shown in Windows Device Manager
+and creates `provider/jellyframe-device.config.json` (115200 baud). In a VM,
+attach the USB device to the guest and use the guest's COM port. It never scans
 serial ports or executes an unlisted archive.
 The provider picker is always shown, even for a single entry; dismissing it stops
 before choosing an installation folder or downloading a package.
@@ -318,12 +321,19 @@ For WS147, install the versioned
 `jellyframe-ws147-developer-0.6.2-ws147.2-provider-0.1.1-dev.zip` delivery
 package. It does not infer serial or USB endpoints. Run `JellyFrame: Configure
 Provider` and select the installed `jellyframe-device.cmd` (or another
-provider executable). The command writes its absolute path to the global
-setting and automatically selects the only `developer-image/*.manifest.json`
+provider executable). The command updates the effective path setting (global
+unless a workspace override exists) and automatically selects the only `developer-image/*.manifest.json`
 next to the standard provider delivery when one is present. You can still
 override both paths in JellyFrame settings. Missing or invalid paths are
 reported directly. Run Discover Device first, then use Device Info to validate
 the selected endpoint against the configured Developer Image manifest.
+Configure Provider also lets you change the bundled provider's COM port.
+Discover Device opens the same setup when its connection file is missing or
+invalid; cancellation stops discovery. Existing valid configurations are reused.
+Invalid files require confirmation and are backed up before replacement.
+`JELLYFRAME_DEVICE_CONFIG`, if set, must be absolute and takes precedence over
+the adjacent configuration file. Restart VS Code after changing that environment
+variable. Other providers retain their own configuration procedures.
 Deployment selects the one App target whose viewport matches the attested device
 display. Target names may differ from the device profile, but every same-size
 target must still be unique. An App without that unambiguous declaration is not

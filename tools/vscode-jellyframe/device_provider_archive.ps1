@@ -65,7 +65,7 @@ try {
     if (-not (Test-Path -LiteralPath $provider -PathType Leaf) -or $manifest.Count -ne 1) {
         throw 'provider archive is missing exactly one provider executable or Developer Image manifest'
     }
-    @{ root = $rootName; provider = 'provider\jellyframe-device.cmd'; manifest = $manifest[0].FullName } | ConvertTo-Json -Compress
+    @{ root = $rootName; provider = 'provider\jellyframe-device.cmd'; manifest = ('developer-image\' + $manifest[0].Name) } | ConvertTo-Json -Compress
 } catch {
     [Console]::Error.WriteLine($_.Exception.Message)
     exit 1

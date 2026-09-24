@@ -127,6 +127,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Provider download tests failed' }
           node tests\tool_regression\vscode_provider_ui_tests.js
           if ($LASTEXITCODE -ne 0) { throw 'Provider UI tests failed' }
+          node tests\tool_regression\vscode_provider_connection_tests.js
+          if ($LASTEXITCODE -ne 0) { throw 'Provider connection tests failed' }
           node tests\tool_regression\vscode_author_environment_tests.js
           if ($LASTEXITCODE -ne 0) { throw 'Author environment tests failed' }
           node tests\tool_regression\vscode_startup_feedback_tests.js

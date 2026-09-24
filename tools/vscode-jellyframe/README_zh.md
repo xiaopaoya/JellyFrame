@@ -210,6 +210,9 @@ provider；WS147 请安装版本化交付包
 也可以执行“JellyFrame：安装 Provider”：它读取仓库中的官方列表，列出兼容当前
 Windows x64 的板卡包，下载 GitHub Release 资产，校验固定 SHA-256 后安全解压，并自动配置
 provider 与 Developer Image manifest 路径。它不会扫描串口，也不会执行未列入列表的压缩包。
+WS147 安装后会要求填写当前 Windows 设备管理器中的 COM 端口，并创建实际使用的
+`provider/jellyframe-device.config.json`，默认波特率为 115200。虚拟机需先接入 USB 设备，
+填写的是虚拟机内的端口号，而不是宿主机端口号。
 即使列表只有一项，也会先显示选择列表；取消选择不会打开安装目录对话框或下载包。
 手动配置时执行“JellyFrame：配置 Provider”，选择解压目录中的
 `provider/jellyframe-device.cmd`。扩展会写入可执行文件绝对路径，并在标准交付目录中只有一个
@@ -217,6 +220,10 @@ provider 与 Developer Image manifest 路径。它不会扫描串口，也不会
 缺失或无效时，命令会直接给出配置提示。先执行“发现设备”，再使用“读取设备身份”按配置的
 Developer Image manifest 校验所选端点；“列出已安装 App”会显示同一端点的 registry generation、版本、
 状态和回滚可用性。这三项均为只读操作，不会安装、启动、删除或刷写设备。
+“配置 Provider”也可以修改已有 WS147 配置的串口；“发现设备”在连接配置缺失或无效时
+会启动相同引导，取消则不执行发现。有效配置会直接复用，无效配置仅在确认后备份重建。
+若设置了 `JELLYFRAME_DEVICE_CONFIG`，引导会使用该绝对路径；更改环境变量后需重启 VS Code。
+设置中已有的工作区路径覆盖项会同步更新。其他 Provider 仍使用各自的连接配置流程。
 部署时会选择 viewport 与已验证设备 display 匹配的唯一 App target；target 名称可以不同于设备 profile，
 但所有同尺寸 target 仍必须唯一。没有这个无歧义声明的 App 不会针对该设备打包或安装。
 

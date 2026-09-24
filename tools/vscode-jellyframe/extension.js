@@ -40,6 +40,7 @@ const {
   fetchProviderCatalog,
   downloadProvider
 } = require("./device_provider_download");
+const { configureConnection } = require("./device_provider_connection");
 const { parseRenderTrace, renderTraceHtml } = require("./render_trace_viewer");
 const {
   appKeyForRoot,
@@ -911,6 +912,30 @@ function deviceManifestPath(context, configured) {
     : path.resolve(repoRoot(context), configured);
 }
 
+async function configureProviderConnection(context, provider, edit = false) {
+  const configuredManifest = String(config().get("deviceManifest", "") || "").trim();
+  const candidates = deviceProviderManifestCandidates(provider);
+  let manifest = configuredManifest ? deviceManifestPath(context, configuredManifest) : undefined;
+  let validManifest = false;
+  try { validManifest = Boolean(manifest && fs.statSync(manifest).isFile()); } catch (_) { /* Repair old staging paths. */ }
+  if (!validManifest && candidates.length === 1) {
+    manifest = candidates[0];
+    await updateDeviceSetting("deviceManifest", manifest);
+  }
+  return configureConnection(provider, {
+    window: vscode.window, chinese: isChinese(), edit, manifest,
+    log: (message) => ensureOutputChannel().appendLine(message)
+  });
+}
+
+async function updateDeviceSetting(key, value) {
+  const settings = config();
+  const inspected = settings.inspect(key);
+  const target = inspected?.workspaceFolderValue !== undefined ? vscode.ConfigurationTarget.WorkspaceFolder
+    : inspected?.workspaceValue !== undefined ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global;
+  await settings.update(key, value, target);
+}
+
 async function configureDeviceProvider(context) {
   const chinese = isChinese();
   const picked = await vscode.window.showOpenDialog({
@@ -940,7 +965,7 @@ async function configureDeviceProvider(context) {
     return undefined;
   }
 
-  await config().update("deviceProvider", provider, vscode.ConfigurationTarget.Global);
+  await updateDeviceSetting("deviceProvider", provider);
 
   const configuredManifest = String(config().get("deviceManifest", "") || "").trim();
   const currentManifest = configuredManifest ? deviceManifestPath(context, configuredManifest) : "";
@@ -955,7 +980,7 @@ async function configureDeviceProvider(context) {
   const candidates = deviceProviderManifestCandidates(provider);
   if (!selectedManifest && candidates.length === 1) {
     selectedManifest = candidates[0];
-    await config().update("deviceManifest", selectedManifest, vscode.ConfigurationTarget.Global);
+    await updateDeviceSetting("deviceManifest", selectedManifest);
   }
 
   ensureOutputChannel().appendLine(`Device Provider configured: ${provider}`);
@@ -964,6 +989,7 @@ async function configureDeviceProvider(context) {
   }
   statusProvider?.refresh();
 
+  if (!await configureProviderConnection(context, provider, true)) return undefined;
   const message = selectedManifest
     ? (chinese
       ? `Device Provider 已配置，并已自动选择 Developer Image manifest：${selectedManifest}`
@@ -1069,11 +1095,19 @@ async function installDeviceProvider(context) {
     if (record.root !== rootName || !record.provider || !record.manifest) {
       throw new Error("provider archive extraction returned an invalid installation record");
     }
+    for (const relative of [record.provider, record.manifest]) {
+      if (path.isAbsolute(relative) || !isInside(path.resolve(destinationRoot, relative), destinationRoot)) {
+        throw new Error("provider installation paths must be relative to the archive root");
+      }
+    }
     const extractedRoot = path.join(extractionDirectory, record.root);
     fs.renameSync(extractedRoot, destinationRoot);
-    await config().update("deviceProvider", path.join(destinationRoot, record.provider), vscode.ConfigurationTarget.Global);
-    await config().update("deviceManifest", path.resolve(destinationRoot, record.manifest), vscode.ConfigurationTarget.Global);
+    const provider = path.join(destinationRoot, record.provider);
+    await updateDeviceSetting("deviceProvider", provider);
+    await updateDeviceSetting("deviceManifest", path.resolve(destinationRoot, record.manifest));
     ensureOutputChannel().appendLine(`Device Provider installed: ${destinationRoot}`);
+    statusProvider?.refresh();
+    if (!await configureProviderConnection(context, provider)) return destinationRoot;
     const message = chinese
       ? `Device Provider 已安装并配置：${path.join(destinationRoot, record.provider)}`
       : `Device Provider installed and configured: ${path.join(destinationRoot, record.provider)}`;
@@ -1256,6 +1290,7 @@ async function discoverDevice(context) {
   if (!provider) {
     return;
   }
+  if (!await configureProviderConnection(context, provider)) return;
   const args = deviceCliArguments(context, provider);
   args.push("discover");
   const outcome = await runDeviceCommand(context, isChinese() ? "发现设备" : "Discover device", args, {
