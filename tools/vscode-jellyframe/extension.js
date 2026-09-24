@@ -1012,14 +1012,12 @@ async function installDeviceProvider(context) {
       : "The official catalog has no Device Provider for the current Windows x64 host.");
     return undefined;
   }
-  const picked = choices.length === 1
-    ? choices[0]
-    : await vscode.window.showQuickPick(choices, {
-      title: chinese ? "选择官方 Device Provider" : "Select an official Device Provider",
-      placeHolder: chinese ? "选择目标板卡和 Developer Image" : "Choose a target board and Developer Image",
-      matchOnDescription: true,
-      matchOnDetail: true
-    });
+  const picked = await vscode.window.showQuickPick(choices, {
+    title: chinese ? "选择官方 Device Provider" : "Select an official Device Provider",
+    placeHolder: chinese ? "选择目标板卡和 Developer Image" : "Choose a target board and Developer Image",
+    matchOnDescription: true,
+    matchOnDetail: true
+  });
   if (!picked) {
     return undefined;
   }
@@ -4104,10 +4102,9 @@ class JellyFrameStatusProvider {
     const supportedDeviceOperations = advertisedDeviceOperations(selectedDevice);
     const labels = chinese ? {
       currentApp: "当前 App",
-      workflow: "工作流",
       packageChecks: "检查与预览",
       interactiveDebugging: "交互式调试",
-      authoring: "创建与自动化",
+      authoring: "创建与打包",
       reports: "报告与日志",
       environment: "环境",
       authorEnvironment: "作者环境",
@@ -4117,12 +4114,12 @@ class JellyFrameStatusProvider {
       scriptSupport: "脚本支持",
       createDesktopBuild: "创建兼容桌面构建",
       desktopBuildInProgress: "正在创建桌面构建",
-      device: "设备",
+      device: "设备连接",
       deviceActions: "设备操作",
-      deviceLifecycle: "App 生命周期与调试",
+      deviceLifecycle: "设备 App",
       deviceStatus: "设备状态",
-      installDeviceProvider: "安装官方 Device Provider",
-      configureDeviceProvider: "配置 Device Provider",
+      installDeviceProvider: "安装 Provider",
+      configureDeviceProvider: "配置 Provider",
       discoverDevice: "发现设备",
       selectDevice: "选择当前设备",
       inspectDevice: "读取设备身份",
@@ -4197,7 +4194,7 @@ class JellyFrameStatusProvider {
         visualEditor: "用受 JellyFrame 特性约束的拖放画布编辑当前 App，并生成可读源码。",
         packageResources: "生成供固件或 App Runtime 使用的资源包。",
         packageMissingFonts: `选择已授权 BDF，为 ${missingFontCount} 个缺失 manifest 字体资源生成 subset 并写入 .jfapp。`,
-        installDeviceProvider: "从官方列表下载并校验板卡专属 provider、Developer Image 和恢复资源。",
+        installDeviceProvider: "选择官方 Device Provider，下载并校验板卡专属包、Developer Image 和恢复资源。",
         configureDeviceProvider: "选择 provider 可执行文件，并自动识别同一交付包中的 Developer Image manifest。",
         discoverDevice: "通过已配置的 Provider 列出可连接设备。",
         selectDevice: "在已发现设备中切换本次操作的目标。",
@@ -4213,10 +4210,9 @@ class JellyFrameStatusProvider {
       }
     } : {
       currentApp: "Current App",
-      workflow: "Workflow",
       packageChecks: "Check & Preview",
       interactiveDebugging: "Interactive Debugging",
-      authoring: "Create & Automate",
+      authoring: "Create & Package",
       reports: "Reports & Logs",
       environment: "Environment",
       authorEnvironment: "Author environment",
@@ -4226,12 +4222,12 @@ class JellyFrameStatusProvider {
       scriptSupport: "Script support",
       createDesktopBuild: "Create compatible desktop build",
       desktopBuildInProgress: "Creating desktop build",
-      device: "Device",
+      device: "Device Connection",
       deviceActions: "Device actions",
-      deviceLifecycle: "App Lifecycle & Debug",
+      deviceLifecycle: "Device Apps",
       deviceStatus: "Device status",
-      installDeviceProvider: "Install Official Device Provider",
-      configureDeviceProvider: "Configure Device Provider",
+      installDeviceProvider: "Install Provider",
+      configureDeviceProvider: "Configure Provider",
       discoverDevice: "Discover device",
       selectDevice: "Select device",
       inspectDevice: "Device info",
@@ -4306,7 +4302,7 @@ class JellyFrameStatusProvider {
         visualEditor: "Edit the current App on a JellyFrame-constrained drag-and-drop canvas and generate readable source.",
         packageResources: "Generate a resource package for firmware or App Runtime use.",
         packageMissingFonts: `Choose a licensed BDF, generate a subset for ${missingFontCount} missing manifest font resource(s), and write it into a .jfapp.`,
-        installDeviceProvider: "Download and verify a board-specific provider, Developer Image and recovery resources from the official catalog.",
+        installDeviceProvider: "Choose an official Device Provider; download and verify its board package, Developer Image and recovery resources.",
         configureDeviceProvider: "Choose the provider executable and detect a matching Developer Image manifest in the same delivery package.",
         discoverDevice: "List connectable devices through the configured Provider.",
         selectDevice: "Change the target for subsequent device operations.",
@@ -4327,15 +4323,21 @@ class JellyFrameStatusProvider {
           hasPackage ? labels.package : labels.noPackage,
           hasPackage ? root : labels.noPackage, "folder-opened"),
       ]),
-      this.group(labels.workflow, "rocket", [
+      this.group(labels.packageChecks, "check-all", [
         ...(hasPackage ? [
           this.commandItem(labels.validate, labels.actionHints.validate, "jellyframe.validate", "check", root),
           this.commandItem(labels.check, labels.actionHints.check, "jellyframe.check", "check-all", root),
           this.commandItem(labels.preview, labels.actionHints.preview, "jellyframe.preview", "preview", root),
+        ] : []),
+      ]),
+      this.group(labels.interactiveDebugging, "debug-alt", [
+        ...(hasPackage ? [
           this.commandItem(labels.debug, labels.actionHints.debug, "jellyframe.debug", "debug-alt", root),
           this.commandItem(labels.debugExternal, labels.actionHints.debugExternal, "jellyframe.debugExternal", "link-external", root),
           this.commandItem(labels.playback, labels.actionHints.playback, "jellyframe.runFrameScript", "play-circle", root),
         ] : []),
+      ]),
+      this.group(labels.authoring, "new-file", [
         this.commandItem(labels.create, labels.actionHints.create, "jellyframe.newFromTemplate", "new-file"),
         ...(visualEditorAvailable
           ? [this.commandItem(labels.visualEditor, labels.actionHints.visualEditor, "jellyframe.visualEditor", "layout", root)]
@@ -4404,8 +4406,12 @@ class JellyFrameStatusProvider {
         ...(lastDeviceEndpoint
           ? [
             this.commandItem(labels.inspectDevice, labels.actionHints.inspectDevice, "jellyframe.deviceInfo", "info"),
-            this.commandItem(labels.listDeviceApps, labels.actionHints.listDeviceApps, "jellyframe.deviceList", "list-tree")
           ]
+          : []),
+      ]),
+      this.group(labels.deviceLifecycle, "package", [
+        ...(lastDeviceEndpoint
+          ? [this.commandItem(labels.listDeviceApps, labels.actionHints.listDeviceApps, "jellyframe.deviceList", "list-tree")]
           : []),
         ...(selectedDevice && supportedDeviceOperations.size > 0 ? [
           ...(hasPackage && supportedDeviceOperations.has("install")
@@ -4430,6 +4436,13 @@ class JellyFrameStatusProvider {
             ? [this.commandItem(labels.readDeviceRecovery, labels.actionHints.readDeviceRecovery, "jellyframe.deviceRecovery", "heart")]
             : []),
         ] : []),
+        ...(lastDeviceApps?.apps || []).map((app) => this.statusItem(
+          app.appId || "unknown app",
+          `${app.versionName || "?"} · ${app.state || "?"}${app.rollbackAvailable ? " · rollback" : ""}`,
+          app.appId || "unknown app", "package"
+        )),
+      ]),
+      this.group(labels.deviceStatus, "device-mobile", [
         this.statusItem(labels.connectedDevices,
           Array.isArray(lastDeviceDiscovery)
             ? `${lastDeviceDiscovery.filter((device) => device.connected).length}/${lastDeviceDiscovery.length}`
@@ -4467,8 +4480,8 @@ class JellyFrameStatusProvider {
             : labels.lifecycleReadOnly,
           supportedDeviceOperations.size > 0
             ? (isChinese()
-              ? "Provider 已声明的操作显示在“App 生命周期与调试”中。"
-              : "Provider-declared actions are shown in App Lifecycle & Debug.")
+              ? "Provider 已声明的操作显示在“设备 App”中。"
+              : "Provider-declared actions are shown in Device Apps.")
             : (isChinese()
               ? "更新 Provider 并在发现结果中声明 supportedOperations 后，才会显示部署、启动、日志和恢复等操作。"
               : "Deploy, launch, logs and recovery appear only after an updated Provider declares supportedOperations."),
@@ -4480,13 +4493,8 @@ class JellyFrameStatusProvider {
             : labels.noLifecycleResult,
           lastDeviceLifecycle?.message || labels.noLifecycleResult,
           lastDeviceLifecycle?.resultCode === "ok" || lastDeviceLifecycle?.resultCode === "accepted" ? "pass" : "history"),
-        ...(lastDeviceApps?.apps || []).map((app) => this.statusItem(
-          app.appId || "unknown app",
-          `${app.versionName || "?"} · ${app.state || "?"}${app.rollbackAvailable ? " · rollback" : ""}`,
-          app.appId || "unknown app", "package"
-        )),
       ]),
-    ];
+    ].filter((group) => group.children.length > 0);
   }
 
   group(label, icon, children) {

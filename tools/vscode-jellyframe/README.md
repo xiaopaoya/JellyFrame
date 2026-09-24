@@ -205,6 +205,9 @@ offers to open the manifest; the extension does not download or silently bundle
 system fonts.
 
 The `JellyFrame` Activity Bar uses one level of top-level sections. Each App action, build status and device status appears directly below its section, avoiding misleading multi-level indentation in VS Code's native tree control.
+Check & Preview, Interactive Debugging and Create & Package separate the authoring
+actions; Device Connection, Device Apps and Device status separate device setup,
+lifecycle commands and results. Empty action sections are hidden.
 Commands have icons and functional tooltips; build, device and report results remain read-only status entries.
 It is always contributed, including when no workspace file is open. After
 installing an updated VSIX, run `Developer: Reload Window` once if the old
@@ -304,15 +307,17 @@ separate so one command does not overwrite another command's result.
 
 `JellyFrame: Discover Device` uses only an explicitly configured Device OS
 provider executable. The extension does not bundle the board-specific provider.
-`JellyFrame: Install Official Device Provider` reads the repository's curated
+`JellyFrame: Install Provider` reads the repository's curated
 catalog, lists compatible Windows x64 board packages, downloads the
 selected GitHub Release asset, verifies its pinned SHA-256, safely extracts it,
 and configures both provider and Developer Image manifest paths. It never scans
 serial ports or executes an unlisted archive.
+The provider picker is always shown, even for a single entry; dismissing it stops
+before choosing an installation folder or downloading a package.
 For WS147, install the versioned
 `jellyframe-ws147-developer-0.6.2-ws147.2-provider-0.1.1-dev.zip` delivery
 package. It does not infer serial or USB endpoints. Run `JellyFrame: Configure
-Device Provider` and select the installed `jellyframe-device.cmd` (or another
+Provider` and select the installed `jellyframe-device.cmd` (or another
 provider executable). The command writes its absolute path to the global
 setting and automatically selects the only `developer-image/*.manifest.json`
 next to the standard provider delivery when one is present. You can still

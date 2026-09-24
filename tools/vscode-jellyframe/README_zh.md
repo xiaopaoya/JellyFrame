@@ -138,7 +138,8 @@ SDK 安装不会覆盖已有目录；Windows 的短暂权限或文件占用会�
 缺少 `license.name` / `license.source` 时操作会中止并提供打开 manifest 的入口；插件不会下载
 或擅自打包系统字体。
 
-`JellyFrame` 活动栏视图只使用一层顶级分区；每个 App 操作、构建状态和设备状态直接显示在对应分区下，
+`JellyFrame` 活动栏视图只使用一层顶级分区：作者操作分为“检查与预览”“交互式调试”“创建与打包”，
+设备操作分为“设备连接”“设备 App”“设备状态”；空功能分区隐藏。每个操作或状态直接显示在对应分区下，
 避免 VS Code 树控件的多层缩进造成层级误读。命令以图标和功能提示表示，构建、设备与报告结果则为只读状态，避免混淆。它不依赖当前是否打开编辑器
 或工作区文件。安装新版 VSIX 后，如果旧扩展实例仍在运行，请执行一次“Developer: Reload Window”
 （开发人员：重新加载窗口）。资源管理器中
@@ -206,10 +207,11 @@ JSON 报告并自动打开截图。验证、检查和预览分别保留自己的
 “发现设备”只连接已配置的 Device OS provider，不会猜测串口或 USB 端点。扩展不捆绑板卡专属
 provider；WS147 请安装版本化交付包
 `jellyframe-ws147-developer-0.6.2-ws147.2-provider-0.1.1-dev.zip`。
-也可以执行“JellyFrame：安装官方 Device Provider”：它读取仓库中的官方列表，列出兼容当前
+也可以执行“JellyFrame：安装 Provider”：它读取仓库中的官方列表，列出兼容当前
 Windows x64 的板卡包，下载 GitHub Release 资产，校验固定 SHA-256 后安全解压，并自动配置
 provider 与 Developer Image manifest 路径。它不会扫描串口，也不会执行未列入列表的压缩包。
-首次使用时执行“JellyFrame：配置 Device Provider”，选择解压目录中的
+即使列表只有一项，也会先显示选择列表；取消选择不会打开安装目录对话框或下载包。
+手动配置时执行“JellyFrame：配置 Provider”，选择解压目录中的
 `provider/jellyframe-device.cmd`。扩展会写入可执行文件绝对路径，并在标准交付目录中只有一个
 `developer-image/*.manifest.json` 时自动配置它；也可以在 JellyFrame 设置中手动覆盖。路径
 缺失或无效时，命令会直接给出配置提示。先执行“发现设备”，再使用“读取设备身份”按配置的

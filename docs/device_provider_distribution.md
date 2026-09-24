@@ -52,8 +52,8 @@ Developer Image manifest.
 
 ## Extension Workflow
 
-1. Run `JellyFrame: Install Official Device Provider`.
-2. Select a catalog entry and an installation parent directory.
+1. Run `JellyFrame: Install Provider`.
+2. Select a catalog entry (required even for a single entry), then an installation parent directory.
 3. The extension downloads the exact Release asset, checks SHA-256 and safely
    extracts it without Python.
 4. It writes absolute `jellyframe.deviceProvider` and
