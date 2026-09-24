@@ -1,5 +1,7 @@
 # Device Provider Distribution
 
+Last updated: 2026-09-23; Applies to: 0.6.0-dev.
+
 ## Decision
 
 Device Providers are distributed as separate, board-specific Developer Image
@@ -58,8 +60,20 @@ Developer Image manifest.
    extracts it without Python.
 4. It writes absolute `jellyframe.deviceProvider` and
    `jellyframe.deviceManifest` settings.
-5. Copy the provider configuration example to the provider configuration file,
-   set the physical port, and run `JellyFrame: Discover Device`.
+5. For the bundled WS147 provider, enter the COM port shown in the current
+   Windows Device Manager when prompted. The extension creates the connection
+   configuration with a default baud rate of 115200. In a VM, attach the USB
+   device to the guest and use the guest's port number.
+6. Run `JellyFrame: Discover Device`. Missing or invalid connection configuration
+   opens the same setup; cancelling stops discovery. Valid configurations are
+   reused, and invalid files are backed up before replacement only after
+   confirmation. `JellyFrame: Configure Provider` also allows changing the port.
+
+An absolute `JELLYFRAME_DEVICE_CONFIG` environment override takes precedence
+over the adjacent configuration file. Restart VS Code after changing that
+variable. Providers other than the bundled WS147 adapter retain their own
+configuration procedures. For command-line-only setup, copy the provider's
+configuration example and set the physical port explicitly.
 
 The provider executable still requires its documented host dependency when run
 outside the SDK-managed CLI. The extension does not embed board-specific Python
