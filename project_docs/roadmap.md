@@ -1,6 +1,6 @@
 # JellyFrame Active Roadmap
 
-> Last updated: 2026-09-15; Applies to: 0.6.0-dev; this is the single active plan.
+> Last updated: 2026-09-24; Applies to: 0.6.0-dev; this is the single active plan.
 
 ## Governing Decision
 
@@ -25,7 +25,7 @@ Parallel work may not change the exit condition of an earlier item.
 
 1. **Review-finding governance:** the two review rounds and the new performance review have an initial item-by-item disposition in the review index and closure matrix. Continue only with residual evidence, targeted work or explicit RFC items; confirmed P0/P1 findings need a fix and regression evidence, and report headings alone are not proof.
 2. **Render performance observability:** desktop trace production, bounded command/owner attribution, the practical frame-viewer workflow and Device Profile V0 are delivered. The WS147 `13264bcd` candidate passed its quantitative four-workload OFF/ON matrix and operator visual-equivalence review; pixel comparison is waived for this candidate because no display-readback fixture exists. Real touch-correlated drag/scroll windows and fair library baselines remain open. Aggregate device data must not be presented as per-element timing.
-3. **A2 evidence, active on the author machine:** use the accepted Core `0.6.2` WS147 image and SDK to complete the clean-machine VS Code lifecycle and installed-App panel/input evidence. A 2026-09-08 user-supplemented manual observation reports normal physical interaction response, but the archived `posted=0` sample and missing panel record keep the formal panel/input exit open. The physical Developer Image gate is closed; these author-tool exits remain independent.
+3. **A2 evidence, functionally passed and awaiting archive:** on 2026-09-24 the user confirmed the clean-author-machine `new -> check -> package -> install -> launch -> logs -> update -> rollback -> stop -> remove` flow, successful hardware connection, and button/slider/restart-input checks on a real installed App. A2 remains `partial / evidence-pending` until the original Output, JSON/JSONL, version hashes and available input counters are archived. The physical Developer Image gate is closed; these author-tool exits remain independent.
 4. **R1 Core-only maintenance, active on main:** retain the completed bounded arithmetic, text handoff, dirty/clip hot-path and callback-scheduling fixes as gates. Re-read remaining performance findings before changing hot paths; do not expand browser CSS scope or reopen closed O1 micro-optimisation work without a stable workload.
    The follow-up review also closed timer-batch ordering, same-frame rAF cancellation and queued XHR provider-payload cleanup. These are covered by focused Debug and scripting MinSizeRel regressions; worker-owned XHR requests still use the late-completion release path.
    The 2026-09-10 low-risk batch additionally closed layout-owned text handoff reuse, rounded-clip and bitmap fallback hot paths, bounded dirty-rect candidate coalescing, shared flex ordering, transformed opacity sampling and trace capture directory lookup. Remaining work is limited to explicitly deferred structural or semantic items and must not reopen the closed O1 performance stage.
@@ -63,10 +63,10 @@ CLI and VS Code select a real device and expose profile, storage, capabilities, 
 
 The WS147 provider handoff sub-gate is closed by `provider-handoff-afdcf75-20260821`: identity, in-flight cancellation,
 durable lifecycle and 30 mixed cycles pass on one published image. The versioned `0.1.1-dev` provider,
-capability-gated lifecycle UI and local candidate smoke are complete. The wider author-tool gate has two remaining
-formal evidence items: a clean machine must complete `new -> check -> device install -> live log -> update -> rollback
--> stop -> remove` from VS Code, and a real installed App must provide panel/input evidence with actionable failure
-ownership across package, transport, registry, Runtime and port.
+capability-gated lifecycle UI and local candidate smoke are complete. The user has now confirmed both wider author-tool
+functional exits on a clean machine and a real installed App. The remaining A2 action is evidence archiving and review;
+available counters must be recorded as unavailable rather than inferred, and visual acceptance does not require pixel
+readback when no anomaly is observed.
 
 The ongoing value-frame-v4 port acceptance is a prerequisite for the installed script-App portion when that flow uses
 worker-to-UI rendering. It verifies transform/source-clip correctness and recovery in an isolated profile; it does not

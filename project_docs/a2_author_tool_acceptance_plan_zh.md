@@ -1,12 +1,24 @@
 # A2 作者工具与设备流程验收方案
 
-> 最后更新：2026-09-20；适用版本：0.6.0-dev
-> 状态：执行方案；A2 当前仍为 partial
+> 最后更新：2026-09-24；适用版本：0.6.0-dev
+> 状态：功能验收通过；证据归档待补；A2 当前为 partial / evidence-pending
 
 本文是 A2 的总验收入口，统一串联 VS Code/CLI 作者流程、WS147 Developer Image、
 provider、已安装 App 的运行与输入证据。它不重复实现 provider lifecycle；已有的
 provider、JFDP 和 storage 报告只能作为前置证据，不能替代本方案要求的作者工具和
 真实 App 验收。
+
+## 0. 2026-09-24 阶段性结果
+
+操作者确认：在干净作者机中，Provider/Developer Image 安装与硬件连接成功；
+`new -> check -> package -> install -> launch -> logs -> update -> rollback -> stop -> remove`
+流程执行通过；真实已安装 App 的按钮点击、slider 拖动、重启后再次输入均正常。
+本轮暂记为**功能验收通过**，但尚未形成完整证据包，因此不将 A2 标记为关闭。
+
+待补材料仅包括：VS Code JellyFrame Output、`discover/info/list` 原始 JSON、生命周期
+JSON/JSONL 或等价操作时间线、App-scoped logs、版本与 SHA-256、以及可用时的
+`posted/worker_seq/mutation_seq/published_seq/accepted_seq` 计数。没有计数时必须标记
+`unavailable`，不得补造；没有视觉异常时不要求逐像素图片比对。
 
 ## 1. 目标与边界
 

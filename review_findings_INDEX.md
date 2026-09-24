@@ -3,7 +3,7 @@
 > 最后更新：2026-09-18；适用版本：0.6.0-dev
 
 审查范围：`render_core`（`src/render_core/`，42 个 `.cpp`）与 `app_runtime`（`src/app_runtime/`）。
-当前主线同步点：`272d66bd`；历史处置段落保留其当时的基线引用，新增结论以当前主线为准。
+当前主线同步点：`1e796bd7`；历史处置段落保留其当时的基线引用，新增结论以当前主线为准。
 审查口径：性能、实现正确性、可读性。**不含安全审查**（按用户说明，这些是善意代码）；不提出重写方案，只给最小、局部的修复。
 
 五份分册报告：
@@ -121,6 +121,13 @@ failure、稳定性错误或内存回归；固定状态检查无异常。归档�
 状态目检均正常，比较器均为 `PASS (visual-equivalent-only)`。归档位于
 `D:\JellyFramePerf\profile-range-pair\embedded-ui-three-workload-range-retest`。至此该 pair 的
 四 workload 非回归验收关闭；结果不证明 candidate 带来设备端显著加速。
+
+### 2026-09-24 A2 作者机与实机功能验收
+
+操作者确认在干净作者机完成 `new -> check -> package -> install -> launch -> logs -> update -> rollback -> stop -> remove`，
+并完成 `discover -> info -> list` 只读 smoke。真实已安装 App 的按钮点击、slider 拖动、重启后再次输入均正常，
+硬件连接成功。当前只登记为**功能通过、证据待补**：原始 VS Code Output、设备 JSON/JSONL、版本/hash、App-scoped logs
+和可用的 input-to-present 计数尚未归档；缺失计数不得推断，缺少 display-readback 时不要求逐像素图片。
 
 ### 验证出口
 

@@ -1,6 +1,6 @@
 # JellyFrame 主线路线图
 
-> 最后更新：2026-09-15；适用版本：0.6.0-dev；状态：活动计划的唯一来源
+> 最后更新：2026-09-24；适用版本：0.6.0-dev；状态：活动计划的唯一来源
 
 ## 先决判断
 
@@ -40,7 +40,7 @@
 
 1. **审查缺陷治理：**两轮审查和新一轮性能审查已经在审查索引与关闭矩阵中完成初步逐条处置。后续只处理仍需证据、目标修复或明确 RFC 的项目；确认成立的 P0/P1 必须绑定修复与回归证据，不能以报告标题代替结论。
 2. **渲染性能观测闭环：**桌面 trace producer、bounded command/owner 归因和 Device Profile V0 契约已交付。WS147 `13264bcd` 候选已通过四个 workload、每侧三次重复的 Profile OFF/ON 定量矩阵和人工视觉等价验收；因缺少 display-readback 治具，本候选豁免逐像素比较。真实触摸拖动/滚动窗口和公平库对照仍未关闭。设备 aggregate 不得推导逐元素耗时。
-3. **A2 作者工具证据，实机继续：**WS147 Device OS/provider、已安装脚本 App、触摸诊断和 touch-latency 样例已合入主线。干净机器 VS Code 完整生命周期，以及真实已安装 App 的 panel/input 证据仍按独立报告验收，不能由源码 CI 或 provider lifecycle PASS 替代。
+3. **A2 作者工具证据，功能验收已通过、材料待补：**2026-09-24 用户确认干净作者机已完成 `new -> check -> package -> install -> launch -> logs -> update -> rollback -> stop -> remove`，硬件连接成功，真实已安装 App 的按钮、slider、重启后再次输入均正常。当前只剩原始 Output、JSON/JSONL、版本 hash 和结构化输入计数的归档；在材料补齐前 A2 保持 `partial / evidence-pending`，不宣称已关闭。
 4. **R1 Core-only 维护：**已完成的有界算术、文本交接、dirty/clip 热路径和回调调度修复继续作为门禁；剩余审查项按第 1 项治理，不重新开启无证据的全屏微优化或浏览器兼容扩张。
    后续审查还关闭了 timer 批次顺序、同帧 rAF 取消和排队 XHR 的 provider payload 清理问题；均已有 Debug 与 scripting MinSizeRel 定向回归，已被 worker 取走的 XHR 仍走迟到 completion 释放路径。
    2026-09-10 低风险批次又完成了 LayoutBox 文本交接复用、圆角裁剪与 bitmap fallback 热路径、dirty rect 有界候选合并、共享 flex 排序、变换 opacity 采样和 trace 目录快照。剩余项目仅包括明确延后的结构性或语义问题，不重新开启已经关闭的 O1 性能阶段。
@@ -83,7 +83,7 @@ storage/recovery 与 image-identity slice 已关闭：受保护 launcher/fallbac
 2. VS Code 增加设备视图和连接、部署、更新、启动、停止、删除、日志及错误入口；桌面壳调试与设备调试保持不同会话与报告。
 3. 设备 telemetry 是唯一的设备性能来源；Win32 预览只用于视觉和流程预检。
 
-WS147 provider handoff 子 gate 已由 `provider-handoff-afdcf75-20260821` 关闭：同镜像 identity、in-flight cancellation、durable lifecycle 与 30 次 mixed cycle 均通过。版本化 `0.1.1-dev` provider、capability-gated lifecycle UI 与本机候选 smoke 已完成。更宽范围作者工具出口只剩两项正式证据：干净机器从 VS Code 完成 `new -> check -> device install -> live log -> update -> rollback -> stop -> remove`，以及真实已安装 App 的 panel/input 证据；错误信息必须能定位到 package、transport、registry、Runtime 或 port。
+WS147 provider handoff 子 gate 已由 `provider-handoff-afdcf75-20260821` 关闭：同镜像 identity、in-flight cancellation、durable lifecycle 与 30 次 mixed cycle 均通过。版本化 `0.1.1-dev` provider、capability-gated lifecycle UI 与本机候选 smoke 已完成。2026-09-24 的干净作者机与真实 App 测试已由操作者确认功能通过；正式出口现在只剩材料归档和可复核的版本/日志关联，错误信息仍必须能定位到 package、transport、registry、Runtime 或 port。
 
 正在执行的 value-frame v4 移植验收，是 worker-to-UI 渲染路径下已安装脚本 App 的 panel/input 证据前置。它只验证独立 profile 的 transform/source-clip 正确性与恢复，不能代替从 VS Code install/launch 或设备生命周期的作者流程证据。
 
