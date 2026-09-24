@@ -46,7 +46,7 @@
 
 ## 2026-09-14 处置状态
 
-以下状态以当前 `master`（`16307862`）源码、本地测试和已归档实机证据为准。审查报告本身保留为历史发现记录，不把历史严重级别直接当作当前未修复数。
+以下状态以当前 `master`（`1d537894`）源码、本地测试和已归档实机证据为准。审查报告本身保留为历史发现记录，不把历史严重级别直接当作当前未修复数。
 
 ### 已有代码修复，等待 CI/实机证据闭环
 
@@ -131,7 +131,7 @@ failure、稳定性错误或内存回归；固定状态检查无异常。归档�
 
 ### 验证出口
 
-- CI：`16307862` 的 master CI 已通过，包含 sanitizer、Windows scripting、standalone Render Core consumer 和 documentation freshness。
+- CI：`1d537894` 对应的 master CI `36037800496` 已通过，包含 Linux ASan/UBSan、Windows scripting、Windows build/smoke、standalone Render Core consumer 和 documentation freshness；仅有 GitHub Actions Node 20/Ubuntu runner 迁移提示。
 - 桌面：当前本地 Release 全套 `57/57` CTest 通过；新增性能改动不得降低既有文本、圆角、flex 与 clip 回归覆盖。
 - 设备：panel-scroll 实验文件仍不入主线；只有 TE/vblank 同步、真实 input-to-present 和恢复证据齐备后才重新评估。普通 framebuffer scroll-blit 归档可作为当前安全路径证据。性能 A/B 不再要求设备逐像素 readback；固定状态检查、稳定性日志、present 成功和内存门槛是必需条件，可靠 readback 仅作为增强证据。
 - 任何“已修复”项在缺少对应 CI/设备证据时只能标为“代码已落地，验证待闭环”。
