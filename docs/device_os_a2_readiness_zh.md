@@ -1,11 +1,19 @@
 # Device OS A2 就绪度与实现要求
 
-> 最后更新：2026-09-08；适用版本：0.6.0-dev；状态：实现前置阶段
+> 最后更新：2026-09-26；适用版本：0.6.0-dev；状态：功能验收通过，证据归档待补（partial / evidence-pending）
 
 ## 当前结论
 
-**WS147 provider handoff 已对已发布镜像关闭；更宽范围的 A2 仍不能交付验收，
-也不能开始外部开发者试用。**
+**WS147 provider handoff 已对已发布镜像关闭；A2 功能流程已经完成，正式关闭仍等待证据归档，
+在此之前不开始外部开发者试用。**
+
+2026-09-24 至 2026-09-26 的阶段性结果：干净作者机已完成
+`new -> check -> package -> install -> launch -> logs -> update -> rollback -> stop -> remove`，
+并完成 `discover -> info -> list` 只读 smoke；真实已安装 App 的按钮点击、slider 拖动、重启后再次输入正常，
+硬件连接与安装流程通过。当前不再存在已知的 provider 配置或主线 CI 阻断项。
+
+该结果仍登记为 **partial / evidence-pending**，因为尚未归档原始 VS Code Output、设备 JSON/JSONL、版本与
+SHA-256、App-scoped logs 及可用的 input-to-present 计数。缺少计数不得推断；无显示读回治具时不要求逐像素图片比对。
 
 当前主线已完成平台无关控制面：JFDP/1、typed Identity/Logs payload、安装契约、Developer Image manifest、严格
 provider JSON/JSONL parser、显式 provider host client、对应 CLI operation 与 VS Code device session 状态。最初的
@@ -29,24 +37,23 @@ inspection workspace、4 KiB sector cache 和 1 KiB transport scratch 放在 dev
 minimum free stack 为 14,468 bytes。
 
 A2 provider handoff 对 `jellyframe-device@0.1.1-dev`、firmware `ee5604a` 与已发布 WS147 manifest 为 **PASS**：
-identity cross-match、in-flight cancellation、durable lifecycle 和 30 次 mixed cycle 均通过。更宽范围的 A2 仍为 **partial**，因为该证据尚未关闭
-干净机器上的 VS Code 产品流程，以及真实已安装 App 的 panel/input 验收。这份 provider handoff 报告不是外部试用
-发布签字。
+identity cross-match、in-flight cancellation、durable lifecycle 和 30 次 mixed cycle 均通过。该历史 handoff 报告不是外部试用
+发布签字；当前 A2 的剩余事项是把最新作者机与实机结果整理成可复核证据包。
 
 2026-09-08 的 first-run 归档记录了已验收的 `0.6.2-ws147.1` 镜像、
 `app-sdk-v0.6.0-dev.2`、`0.1.1-dev` provider、三个已安装脚本 App 以及成功的帧接收。
 用户另行确认实机操作响应正常。这属于有价值的人工输入观察，但还不是按 App 可追溯的
 input-to-present 结构化记录：归档中的采样 `posted` 计数仍为 0，也没有面板目检记录。
-因此它只能补充，不能关闭正式的 panel/input 或干净机器 VS Code 出口。
+因此它只能作为历史补充，不能替代当前归档要求中的 panel/input 与干净机器 VS Code 原始证据。
 
 ## 所有权与完成度
 
-| 层 | 已完成 | 必须完成后才能进入 A2 验收 |
+| 层 | 已完成 | A2 关闭前的复核重点 |
 | --- | --- | --- |
 | Render Core | 独立 Core package、profile/ABI、平台无关渲染与输入契约 | 无 A2 阻塞项；不得在 provider 中复制渲染逻辑 |
-| JellyFrame Runtime/Tools | `.jfapp`、bundle 检查、manifest/provider contract、CLI host client、provider handoff contract | 干净机器 VS Code 部署/日志会话、用户可读错误映射与端到端 tool regression |
-| Device OS | A1 的 launcher/registry/staging/recovery 基础；WS147 provider handoff 与版本化 provider 交付 | 安装/配置真正的 `jellyframe-device` provider，并完成已安装 bundle 到 AppHost/renderer/input/log 的绑定 |
-| WS147 port | JFDP wire、持久 lifecycle、factory recovery、真实 resource commit、已测 profile 的 provider handoff | 真实已安装 App 的 panel/input 证据；该镜像不再有 provider lifecycle blocker |
+| JellyFrame Runtime/Tools | `.jfapp`、bundle 检查、manifest/provider contract、CLI host client、provider handoff contract | 归档干净机器 VS Code Output、版本/hash 与错误映射证据 |
+| Device OS | A1 的 launcher/registry/staging/recovery 基础；WS147 provider handoff 与版本化 provider 交付；已安装 bundle 的 AppHost/renderer/input/log 流程已实测 | 归档设备 JSON/JSONL、App-scoped logs 与可用的序列计数 |
+| WS147 port | JFDP wire、持久 lifecycle、factory recovery、真实 resource commit、已测 profile 的 provider handoff；真实 App panel/input 已完成功能验收 | 补齐可复核的 panel/input 证据包；该镜像不再有 provider lifecycle blocker |
 
 ## Device OS 必需实现
 
@@ -77,7 +84,7 @@ LayerNode、arena 地址均不得跨任务/跨进程传递。
 
 ### 3. 已安装 App 执行闭环
 
-这是 A2 当前最大的缺口。完成 `AppInstalledBundleBinding` 到实际运行时的绑定：
+这是历史实现要求。当前绑定和运行闭环已用于真实 App 验收；以下条目保留作实现边界与复核清单：
 
 1. launcher 从已发布 registry 选择 bundle，并用 bundle reader 加载资源。
 2. 创建 App Runtime（需要时 script worker）与 Render Core document；资源、frame、input 和 service 仍只通过
@@ -116,9 +123,9 @@ fixtures 必须可在无板卡 host 上运行；它们测试 provider contract�
 5. 读取 app-scoped logs，确认诊断不污染 provider stdout，且不存在 watchdog、reset loop、DMA/SPI/panel 错误。
 6. 完成至少 30 次混合生命周期循环，再以版本化 report/summary/raw log/flash log 归档。
 
-步骤 1-4 已由 `provider-handoff-afdcf75-20260821` 报告覆盖，但该报告不宣称 panel/input 行为。没有真实安装 App
-的 panel/input 证据和干净机器 VS Code 流程时，更宽范围 A2 仍必须标为 `partial`，不得用 A1 或 desktop reference
-填补。
+步骤 1-4 已由 `provider-handoff-afdcf75-20260821` 报告覆盖，但该报告不宣称 panel/input 行为。最新干净机器与真实 App
+功能验收已补上执行结果；在原始 VS Code、设备和 App-scoped 证据归档前，A2 仍标为 `partial`，不得用 A1 或 desktop
+reference 替代归档。
 
 ## A2 出口
 

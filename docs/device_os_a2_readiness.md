@@ -1,12 +1,25 @@
 # Device OS A2 Readiness And Implementation Requirements
 
-> Last updated: 2026-09-08; Applies to: 0.6.0-dev; Status: implementation prerequisite stage
+> Last updated: 2026-09-26; Applies to: 0.6.0-dev; Status: functional acceptance passed; evidence archive pending (partial / evidence-pending)
 
 ## Current Conclusion
 
-**The WS147 provider handoff is closed for the published image. Wider A2 is
-not yet ready for delivery acceptance and must not open an external developer
-trial.**
+**The WS147 provider handoff is closed for the published image. The A2
+functional workflow is complete; formal closure still waits for an evidence
+archive, and the external developer trial remains closed until then.**
+
+As of 2026-09-24 through 2026-09-26, a clean author machine completed
+`new -> check -> package -> install -> launch -> logs -> update -> rollback -> stop -> remove`,
+and the read-only `discover -> info -> list` smoke passed. A real installed App
+accepted button clicks, slider drags, and input again after restart; hardware
+connection and installation also passed. There is no known provider
+configuration or mainline CI blocker.
+
+The result remains **partial / evidence-pending** because the raw VS Code
+Output, device JSON/JSONL, version/SHA-256 records, App-scoped logs, and any
+available input-to-present counters have not yet been archived. Missing
+counters must remain unavailable rather than inferred; pixel-by-pixel image
+comparison is not required when no reliable display-readback fixture exists.
 
 The mainline now supplies the hardware-neutral control plane: JFDP/1, typed
 Identity and Logs payloads, install contracts, Developer Image manifests, a
@@ -42,10 +55,10 @@ byte configured stack.
 
 A2 provider handoff is **PASS** for `jellyframe-device@0.1.1-dev`, firmware
 `ee5604a`, and its published WS147 manifest: identity cross-match, in-flight
-cancellation, durable lifecycle and 30 mixed cycles all passed. Wider A2 remains **partial** because the evidence
-does not close the clean-machine VS Code product workflow or real installed-App
-panel/input acceptance. The provider handoff report is not an external-trial
-release signoff.
+cancellation, durable lifecycle and 30 mixed cycles all passed. That historical
+handoff report is not an external-trial release signoff; the remaining A2 work
+is to package the latest author-machine and hardware results as reviewable
+evidence.
 
 The 2026-09-08 first-run archive records the accepted `0.6.2-ws147.1` image,
 SDK `app-sdk-v0.6.0-dev.2`, provider `0.1.1-dev`, three installed script Apps,
@@ -53,17 +66,17 @@ and successful frame reception. The user additionally confirmed that the
 physical device interaction responded normally. This is useful manual input
 observation, but it is not yet a structured per-App input-to-present record:
 the archive's sampled `posted` counters remain zero and it does not contain a
-panel inspection record. It therefore supplements, but does not close, the
-formal panel/input or clean-machine VS Code gates.
+panel inspection record. It therefore supplements the current archive, but
+does not replace the formal raw panel/input and clean-machine VS Code evidence.
 
 ## Ownership And Completion
 
-| Layer | Completed | Required before A2 acceptance |
+| Layer | Completed | Review focus before A2 closure |
 | --- | --- | --- |
 | Render Core | Independent Core package, profiles/ABI, hardware-neutral render and input contracts | No A2 blocker; a provider must not duplicate renderer logic |
-| JellyFrame Runtime/Tools | `.jfapp`, bundle checks, manifest/provider contracts, CLI host client, provider handoff contract | Clean-machine VS Code deployment/log session, readable error mapping and end-to-end tool regressions |
-| Device OS | A1 launcher/registry/staging/recovery foundation; WS147 provider handoff and versioned provider delivery | Install/configure the real `jellyframe-device` provider and bind installed bundles to AppHost, renderer, input and logs |
-| WS147 port | JFDP wire, persistent lifecycle, factory recovery, bounded real-resource commit and provider handoff for the measured profile | Real installed-App panel/input evidence; no provider lifecycle blocker remains for this image |
+| JellyFrame Runtime/Tools | `.jfapp`, bundle checks, manifest/provider contracts, CLI host client, provider handoff contract | Archive clean-machine VS Code Output, version/hash records, and readable error evidence |
+| Device OS | A1 launcher/registry/staging/recovery foundation; WS147 provider handoff and versioned provider delivery; installed-bundle AppHost/renderer/input/log flow exercised | Archive device JSON/JSONL, App-scoped logs, and available sequence counters |
+| WS147 port | JFDP wire, persistent lifecycle, factory recovery, bounded real-resource commit, provider handoff, and real installed-App panel/input functional acceptance | Complete reviewable panel/input evidence; no provider lifecycle blocker remains for this image |
 
 ## Required Device OS Implementation
 
@@ -105,8 +118,9 @@ never cross tasks or processes.
 
 ### 3. Installed-App Execution Closure
 
-This is the largest A2 gap. Bind `AppInstalledBundleBinding` to the actual
-runtime:
+This is the historical implementation requirement. The binding and runtime
+loop have now been exercised by the real-App acceptance; the following list is
+retained as the implementation boundary and review checklist:
 
 1. The launcher selects a published-registry bundle and loads resources through
    the bundle reader.
@@ -164,9 +178,10 @@ not claim physical evidence.
 
 Steps 1-4 are covered for the WS147 provider handoff by the
 `provider-handoff-afdcf75-20260821` report, except that this report does not
-claim panel/input behavior. Without panel/input evidence from a real installed
-App and a clean-machine VS Code run, wider A2 remains `partial`; A1 or a
-desktop reference cannot fill that gap.
+claim panel/input behavior. The latest clean-machine and real-App functional
+acceptance closes that execution gap; A2 remains `partial` only until its raw
+VS Code, device, App-scoped log, version/hash, and available counter evidence
+is archived. A1 or a desktop reference cannot substitute for that archive.
 
 ## A2 Exit
 
