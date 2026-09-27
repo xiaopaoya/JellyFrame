@@ -1011,11 +1011,10 @@ body.panning #canvas-wrap {
 }
 
 .field > label {
-  overflow: hidden;
   color: var(--muted);
   font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .field input,

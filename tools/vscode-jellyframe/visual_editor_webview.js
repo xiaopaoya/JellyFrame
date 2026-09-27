@@ -34,6 +34,15 @@
   let suppressClick = false;
 
   const t = initial.chinese ? {
+    wearableGroup: "穿戴设备组合",
+    panelGroup: "面板设备导航",
+    functionList: "纵向功能入口", functionListHelp: "可滚动的纵向按钮列表，每项有独立 ID",
+    metricScreen: "指标页", metricScreenHelp: "数值、目标、进度与详情入口",
+    roundAction: "圆屏操作区", roundActionHelp: "居中数值与主操作，保留边缘留白",
+    notificationDetail: "通知详情", notificationDetailHelp: "纵向信息与底部操作，可滚动",
+    contentHorizontal: "内容水平对齐", contentVertical: "内容垂直对齐",
+    paddingX: "左右内边距", paddingY: "上下内边距", overflowY: "纵向溢出",
+    horizontalChildren: "子项水平对齐", verticalChildren: "子项垂直对齐",
     components: "组件",
     outline: "结构",
     layoutGroup: "布局",
@@ -167,6 +176,15 @@
     imageEmpty: "选择包内图片",
     error: "编辑器错误"
   } : {
+    wearableGroup: "Wearable recipes",
+    panelGroup: "Panel navigation",
+    functionList: "Function list", functionListHelp: "Scrollable vertical buttons with individual IDs",
+    metricScreen: "Metric screen", metricScreenHelp: "Value, goal, progress and detail action",
+    roundAction: "Round action", roundActionHelp: "Centered value and action with edge insets",
+    notificationDetail: "Notification detail", notificationDetailHelp: "Scrollable message and action",
+    contentHorizontal: "Horizontal content", contentVertical: "Vertical content",
+    paddingX: "Horizontal padding", paddingY: "Vertical padding", overflowY: "Vertical overflow",
+    horizontalChildren: "Horizontal children", verticalChildren: "Vertical children",
     components: "Components",
     outline: "Outline",
     layoutGroup: "Layout",
@@ -569,7 +587,7 @@
     } else if (payload.kind === "recipe") {
       const recipe = recipes.find((candidate) => candidate.type === payload.type);
       if (!recipe) return { error: t.invalidDrop };
-      const node = clone(recipe.template);
+      const node = recipeNode(recipe);
       if (nodeCount() + nodeCount(node) > maxNodes) return { error: t.nodeLimit };
       const used = new Set();
       walk(model.root, (candidate) => used.add(candidate.id));
@@ -685,8 +703,17 @@
     renderAll();
   }
 
+  function recipeNode(recipe) {
+    const node = clone(model.viewport.shape === "round" && recipe.roundTemplate ? recipe.roundTemplate : recipe.template);
+    if (recipe.roundSafeInset && model.viewport.shape === "round") {
+      node.paddingX = Math.ceil(model.viewport.width * (1 - Math.SQRT1_2) / 2);
+      node.paddingY = Math.ceil(model.viewport.height * (1 - Math.SQRT1_2) / 2);
+    }
+    return node;
+  }
+
   function addRecipe(recipe) {
-    const node = clone(recipe.template);
+    const node = recipeNode(recipe);
     const subtreeSize = nodeCount(node);
     if (nodeCount() + subtreeSize > maxNodes) return report(t.nodeLimit, "error");
     const selected = find(selectedId);
@@ -792,6 +819,13 @@
       element.style.flexDirection = node.layout === "row" ? "row" : "column";
       element.style.gap = `${Number(node.gap) || 0}px`;
       element.style.padding = `${Number(node.padding) || 0}px`;
+      if (node.paddingX !== undefined || node.paddingY !== undefined) {
+        element.style.padding = `${node.paddingY ?? node.padding ?? 0}px ${node.paddingX ?? node.padding ?? 0}px`;
+      }
+      if (node.overflowY) {
+        element.style.overflow = node.overflowY === "visible" ? "visible" : "hidden";
+        if (node.overflowY === "auto") element.style.overflowY = "auto";
+      }
       element.style.alignItems = ({ start: "flex-start", end: "flex-end" })[node.align] || node.align || "stretch";
       element.style.justifyContent = ({ start: "flex-start", end: "flex-end" })[node.justify] || node.justify || "flex-start";
       element.style.background = node.background || "transparent";
@@ -805,14 +839,14 @@
       element.style.textAlign = node.align || "left";
       element.style.overflowWrap = "anywhere";
     } else if (node.type === "button" || node.type === "input") {
-      element.style.fontSize = "16px";
+      element.style.fontSize = `${node.fontSize ?? 16}px`;
       element.style.lineHeight = visualLineHeight(node.fontSize);
       element.style.background = node.background;
       element.style.color = node.color;
       element.style.borderRadius = `${Number(node.radius) || 0}px`;
       element.style.border = "0";
-      element.style.padding = "0 12px";
-      element.style.textAlign = node.type === "button" ? "center" : "left";
+      element.style.padding = `${node.paddingY ?? 0}px ${node.paddingX ?? 12}px`;
+      element.style.textAlign = node.textAlign || (node.type === "button" ? "center" : "left");
     } else if (node.type === "image") {
       element.style.objectFit = node.fit || "cover";
       element.style.borderRadius = `${Number(node.radius) || 0}px`;
@@ -863,6 +897,12 @@
       element.style.borderRadius = `${Number(node.radius) || 14}px`;
       element.style.boxSizing = "border-box";
     }
+    if ((node.type === "text" || node.type === "button") && node.verticalAlign !== undefined) {
+      element.style.display = "flex";
+      element.style.flexDirection = "column";
+      element.style.alignItems = "stretch";
+      element.style.justifyContent = ({ start: "flex-start", center: "center", end: "flex-end" })[node.verticalAlign];
+    }
   }
 
   function bindDropTarget(element, node) {
@@ -895,7 +935,11 @@
         empty.className = "designer-empty";
         empty.textContent = t.emptyContainer;
         element.append(empty);
-      } else node.children.forEach((child) => element.append(renderNode(child, preview)));
+      } else node.children.forEach((child) => {
+        const rendered = renderNode(child, preview);
+        if (node.overflowY === "auto") rendered.style.flexShrink = "0";
+        element.append(rendered);
+      });
       return element;
     },
     text(node) {
@@ -903,13 +947,13 @@
       element.contentEditable = "true";
       element.setAttribute("role", "textbox");
       element.spellcheck = false;
-      element.textContent = node.text;
+      appendAlignedText(element, node);
       return element;
     },
     button(node) {
       const element = document.createElement("button");
       element.type = "button";
-      element.textContent = node.text;
+      appendAlignedText(element, node);
       return element;
     },
     image(node) {
@@ -968,11 +1012,20 @@
       const element = document.createElement("ul");
       node.items.forEach((item) => {
         const row = document.createElement("li");
-        row.textContent = item;
+        const content = document.createElement("span");
+        content.style.display = "block";
+        content.style.width = "100%";
+        content.textContent = item;
+        row.append(content);
         row.style.minHeight = `${Number(node.itemHeight) || 36}px`;
         row.style.display = "flex";
-        row.style.alignItems = "center";
-        row.style.padding = "0 10px";
+        row.style.flexDirection = "column";
+        row.style.justifyContent = ({ start: "flex-start", center: "center", end: "flex-end" })[node.verticalAlign || "center"];
+        row.style.padding = `${node.paddingY ?? 0}px ${node.paddingX ?? 10}px`;
+        row.style.textAlign = node.textAlign || "left";
+        row.style.fontSize = `${node.fontSize ?? 16}px`;
+        row.style.lineHeight = visualLineHeight(node.fontSize);
+        row.style.boxSizing = "border-box";
         element.append(row);
       });
       return element;
@@ -1014,6 +1067,18 @@
       return element;
     }
   };
+
+  function appendAlignedText(element, node) {
+    if (node.verticalAlign === undefined) {
+      element.textContent = node.text;
+      return;
+    }
+    const span = document.createElement("span");
+    span.style.display = "block";
+    span.style.width = "100%";
+    span.textContent = node.text;
+    element.append(span);
+  }
 
   function renderNode(node, preview = false) {
     const rendererKey = registryByType.get(node.type)?.renderKey;
@@ -1190,14 +1255,14 @@
       });
       list.append(section);
     });
-    if (recipes.length) {
+    for (const group of [...new Set(recipes.map((recipe) => recipe.group))]) {
       const section = document.createElement("section");
       section.className = "palette-group palette-recipes";
       const heading = document.createElement("h3");
       heading.className = "group-label";
-      heading.textContent = t.recipesGroup;
+      heading.textContent = t[group] || group;
       section.append(heading);
-      recipes.forEach((recipe) => {
+      recipes.filter((recipe) => recipe.group === group).forEach((recipe) => {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "palette-item recipe-item";
@@ -1219,7 +1284,7 @@
         button.addEventListener("click", (event) => { if (allowClick(event)) addRecipe(recipe); });
         section.append(button);
       });
-      list.append(section);
+      if (group === "wearableGroup") list.prepend(section); else list.append(section);
     }
   }
 
@@ -1424,7 +1489,9 @@
     const error = validate?.(value);
     if (error) return error;
     const changes = [[key, value]];
-    if (key === "options" && node.type === "select") {
+    if (key === "padding" && node.type === "container") {
+      changes.push(["paddingX", value], ["paddingY", value]);
+    } else if (key === "options" && node.type === "select") {
       changes.push(["selected", clamp(Number(node.selected) || 0, 0, Math.max(0, value.length - 1))]);
     } else if (key === "items" && node.type === "navigation") {
       changes.push(["active", clamp(Number(node.active) || 0, 0, Math.max(0, value.length - 1))]);
@@ -1550,7 +1617,7 @@
     input.min = String(minimum);
     input.max = String(maximum);
     input.step = "1";
-    input.value = String(node[key] ?? minimum);
+    input.value = String(fieldValue(node, key) ?? minimum);
     input.addEventListener("change", () => {
       const value = clamp(Number(input.value), minimum, maximum);
       commitValue(node, key, value);
@@ -1568,7 +1635,7 @@
       option.textContent = name;
       select.append(option);
     });
-    select.value = node[key];
+    select.value = fieldValue(node, key);
     select.addEventListener("change", () => commitValue(node, key, select.value));
     row.append(select);
     return row;
@@ -1581,7 +1648,7 @@
     choices.forEach(([value, name]) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = node[key] === value ? "active" : "";
+      button.className = fieldValue(node, key) === value ? "active" : "";
       button.textContent = name;
       button.title = name;
       button.addEventListener("click", () => commitValue(node, key, value));
@@ -1678,8 +1745,17 @@
     return labels[value] || t[value] || value;
   }
 
+  function fieldValue(node, key) {
+    const field = registryByType.get(node.type)?.fields.find((candidate) => candidate.key === key);
+    return node[key] ?? node[field?.fallbackKey] ?? field?.default;
+  }
+
   function registryField(node, field) {
-    const label = t[field.label] || field.label || field.key;
+    let label = t[field.label] || field.label || field.key;
+    if (node.type === "container" && (field.key === "align" || field.key === "justify")) {
+      const horizontal = (node.layout === "row") === (field.key === "justify");
+      label = horizontal ? t.horizontalChildren : t.verticalChildren;
+    }
     if (field.kind === "text") return textField(node, field.key, label);
     if (field.kind === "number") return numberField(node, field.key, label, field.min ?? 0, field.max ?? 100);
     if (field.kind === "length") return lengthField(node, field.key, label);
@@ -1688,7 +1764,16 @@
     if (field.kind === "string-list") return stringListField(node, field, label);
     if (field.kind === "boolean") return booleanField(node, field.key, label);
     if (field.kind === "enum") {
-      const choices = (field.values || []).map((value) => [value, registryChoiceLabel(value)]);
+      const vertical = field.key === "verticalAlign" || label === t.verticalChildren;
+      const horizontal = label === t.horizontalChildren;
+      const choices = (field.values || []).map((value) => {
+        let name = registryChoiceLabel(value);
+        if (value === "start" || value === "end") {
+          if (vertical) name = value === "start" ? (initial.chinese ? "上" : "Top") : (initial.chinese ? "下" : "Bottom");
+          if (horizontal) name = value === "start" ? t.left : t.right;
+        }
+        return [value, name];
+      });
       return field.control === "segmented"
         ? segmentedField(node, field.key, label, choices)
         : selectField(node, field.key, label, choices);

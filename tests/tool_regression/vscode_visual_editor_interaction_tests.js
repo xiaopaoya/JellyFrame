@@ -13,7 +13,7 @@ Module._load = function(request, parent, isMain) {
 };
 const { visualEditorHtml } = require("../../tools/vscode-jellyframe/visual_editor");
 Module._load = originalLoad;
-const { createDefaultModel, defaultNode, componentRegistry, recipeRegistry } = require("../../tools/vscode-jellyframe/visual_editor_model");
+const { createDefaultModel, defaultNode, componentRegistry, recipeRegistry, instantiateRecipe } = require("../../tools/vscode-jellyframe/visual_editor_model");
 const editor = path.resolve(__dirname, "../../tools/vscode-jellyframe");
 const output = path.resolve(process.env.JELLYFRAME_UI_TEST_OUTPUT || "build/test_outputs/visual_editor");
 const errors = [];
@@ -190,6 +190,49 @@ async function main() {
     await page.keyboard.press("End");
     await page.keyboard.press("Backspace");
     assert.equal(await canvasNode(page, "editable").count(), 1);
+
+    const alignment = fixture();
+    alignment.root.children = [{ ...defaultNode("button", "aligned"), height: "100px" }];
+    await mount(page, alignment);
+    await row(page, "aligned").click();
+    const field = (label) => page.locator("#inspector .field").filter({ has: page.locator("label", { hasText: label }) });
+    assert.equal(await field("Vertical content").locator("button.active").textContent(), "Center");
+    assert.equal(await field("Horizontal padding").locator("input").inputValue(), "12");
+    await field("Horizontal content").getByRole("button", { name: "Right", exact: true }).click();
+    await field("Vertical content").getByRole("button", { name: "Bottom", exact: true }).click();
+    await field("Font size").locator("input").fill("24");
+    await field("Font size").locator("input").press("Tab");
+    const style = await canvasNode(page, "aligned").evaluate((node) => {
+      const s = getComputedStyle(node);
+      return [s.textAlign, s.justifyContent, s.fontSize];
+    });
+    assert.deepEqual(style, ["right", "flex-end", "24px"]);
+    await page.screenshot({ path: path.join(output, "content-alignment.png") });
+
+    for (const viewport of [{ width: 172, height: 320, shape: "rect" }, { width: 300, height: 300, shape: "round" }, { width: 320, height: 240, shape: "rect" }]) {
+      for (const recipe of recipeRegistry().filter((item) => item.group === "wearableGroup")) {
+        const model = createDefaultModel(viewport);
+        model.root = { ...instantiateRecipe(recipe, viewport), id: "page" };
+        await mount(page, model, { activePanel: "components" });
+        assert.equal(await page.locator(".palette-group h3").first().textContent(), "Wearable recipes");
+        await page.locator("#canvas-shell").screenshot({ path: path.join(output, `${recipe.type}-${viewport.width}x${viewport.height}.png`) });
+        assert(await page.locator("#canvas .designer-node").evaluateAll((nodes) => nodes.every((node) => {
+          const rect = node.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        })));
+      }
+    }
+
+    const round = createDefaultModel({ width: 300, height: 300, shape: "round" });
+    round.root.children = [];
+    round.root.padding = 0;
+    await mount(page, round, { activePanel: "components" });
+    await page.locator('[data-recipe-type="function-list"]').click();
+    const insets = await page.locator('#canvas .jf-visual-container > .jf-visual-container').first().evaluate((node) => {
+      const style = getComputedStyle(node);
+      return [style.paddingLeft, style.paddingTop];
+    });
+    assert.deepEqual(insets, ["44px", "44px"]);
 
     const large = fixture();
     let parent = large.root;

@@ -1,6 +1,37 @@
 # JellyFrame Visual App Editor Plan
 
-> Last updated: 2026-08-30; Applies to: 0.6.0-dev; status: Stage 3 complete, Stage 4 active.
+> Last updated: 2026-09-28; Applies to: 0.6.0-dev; status: Stage 1/2 acceptance pending, Stage 3 bridge implemented, Stage 4 active.
+
+## Wearable-first Checkpoint
+
+Extension 0.4.74 adds button/text/list content alignment, control font sizes and
+horizontal/vertical padding, explicit container alignment axes, and vertical
+overflow controls. Four wearable recipes now precede the generic palette:
+function list, metric screen, round action, and notification detail. They expand
+into ordinary editable nodes; their buttons do not implicitly implement routing.
+Bottom navigation remains available in the panel-device group.
+
+Round function lists and notifications use an inset scroll container. Insets are
+chosen at insertion from the viewport shape and remain editable. Changing the
+viewport does not rewrite existing layouts or imply responsive target overrides.
+Browser tests cover property editing, keyboard interaction and preview/drop
+geometry. Native tests exercise twelve recipe/viewport combinations, nine text
+alignment cases and scrolling, with zero pipeline diagnostics. Device acceptance
+is separate; these are desktop results.
+
+Next slices, in order:
+
+1. Bounded page collection, stable page IDs, active page, previous/next commands
+   and indicators, with generated behavior isolated from author scripts.
+2. Horizontal swipe navigation with direction locking, cancellation and control
+   priority, followed by device touch testing without photographic pixel diffs.
+   CSS scroll-snap is not supported and must not stand in for this implementation.
+3. Range controls, icon/text function rows, label/value/action settings rows and
+   richer metrics, gated on actual Runtime support and touch/font budgets.
+4. Target-specific layouts, round safe-area guides, font coverage/size integration
+   and packaged icons.
+
+The Chinese plan contains the detailed acceptance checkpoint and boundaries.
 
 The editor is a constrained, code-friendly JellyFrame App designer embedded in
 VS Code. It is not a full-browser page builder. It emits readable HTML/CSS,

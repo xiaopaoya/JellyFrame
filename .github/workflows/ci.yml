@@ -154,6 +154,8 @@ jobs:
           $env:NODE_PATH = Join-Path $PWD 'build/visual-editor-browser/node_modules'
           node tests/tool_regression/vscode_visual_editor_interaction_tests.js
           if ($LASTEXITCODE -ne 0) { throw 'Visual editor browser interactions failed' }
+          node tests/tool_regression/vscode_visual_editor_runtime_tests.js build/desktop-release/Release/jellyframe_desktop_shell.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Visual editor Runtime fixtures failed' }
 
       - name: Upload visual editor screenshots
         if: always()

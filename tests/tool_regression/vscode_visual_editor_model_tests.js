@@ -11,6 +11,7 @@ const {
   renderBody,
   renderCss,
   recipeRegistry,
+  instantiateRecipe,
   updateCss,
   updateHtml,
   validateModel
@@ -24,7 +25,13 @@ const registry = require("../../tools/vscode-jellyframe/visual_editor_model").co
 assert(registry.every((component) => component.renderKey && component.fields.every((field) => field.group && field.kind)), "registry fields and renderers must be declared");
 assert(registry.find((component) => component.type === "button").fields.some((field) => field.key === "height" && field.kind === "length"));
 const recipes = recipeRegistry();
-assert.equal(recipes.length, 3);
+assert.equal(recipes.length, 7);
+assert.equal(recipes.filter((recipe) => recipe.group === "wearableGroup").length, 4);
+const functionRecipe = recipes.find((recipe) => recipe.type === "function-list");
+const roundRecipe = instantiateRecipe(functionRecipe, { width: 300, height: 300, shape: "round" });
+assert.equal(roundRecipe.paddingX, 44);
+assert.equal(roundRecipe.paddingY, 44);
+assert.equal(functionRecipe.template.paddingX, undefined, "recipe source remains unchanged");
 recipes.forEach((recipe) => {
   const recipeModel = createDefaultModel();
   recipeModel.root.children.push(recipe.template);
@@ -124,5 +131,33 @@ assert.throws(() => validateModel(invalidItems), /Invalid items/);
 const invalidSelection = createDefaultModel();
 invalidSelection.root.children.push({ ...defaultNode("select", "invalid-select"), selected: 4 });
 assert.throws(() => validateModel(invalidSelection), /selected option/);
+
+for (const type of ["button", "text", "list"]) {
+  for (const verticalAlign of ["start", "center", "end"]) {
+    const aligned = createDefaultModel();
+    aligned.root.children = [{ ...defaultNode(type, "aligned"), verticalAlign, textAlign: "right", paddingX: 7, paddingY: 3, fontSize: 20 }];
+    const html = renderBody(aligned);
+    assert(html.includes(`justify-content: ${{ start: "flex-start", center: "center", end: "flex-end" }[verticalAlign]}`));
+    assert(html.includes('width: 100%">'), "full-width text child preserves horizontal alignment");
+    assert(html.includes("font-size: 20px"));
+    aligned.root.children[0].verticalAlign = "baseline";
+    assert.throws(() => validateModel(aligned), /Invalid verticalAlign/);
+  }
+}
+const padded = createDefaultModel();
+padded.root.paddingX = 0;
+padded.root.paddingY = 20;
+padded.root.overflowY = "auto";
+assert(renderBody(padded).includes("padding: 20px 0px"));
+assert(renderBody(padded).includes("overflow-y: auto"));
+assert(renderBody(padded).includes("flex-shrink: 0"));
+padded.root.children = [{ ...defaultNode("input", "input"), textAlign: "right", fontSize: 20, paddingX: 0, paddingY: 4 }];
+assert(renderBody(padded).includes("text-align: right"));
+assert(renderBody(padded).includes("padding: 4px 0px"));
+padded.root.children[0].textAlign = "justify";
+assert.throws(() => validateModel(padded), /Invalid textAlign/);
+padded.root.children[0].textAlign = "left";
+padded.root.children[0].paddingX = -1;
+assert.throws(() => validateModel(padded), /Invalid paddingX/);
 
 console.log("VS Code visual-editor model tests passed");

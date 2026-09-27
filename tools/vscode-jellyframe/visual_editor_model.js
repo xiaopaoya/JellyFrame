@@ -7,6 +7,13 @@ const BODY_END = "<!-- jellyframe-visual-editor:body:end -->";
 const CSS_START = "/* jellyframe-visual-editor:styles:start */";
 const CSS_END = "/* jellyframe-visual-editor:styles:end */";
 const MAX_NODES = 128;
+const CONTENT_ALIGN = { key: "textAlign", group: "layout", label: "contentHorizontal", kind: "enum", control: "segmented", values: ["left", "center", "right"] };
+const CONTENT_VERTICAL = { key: "verticalAlign", group: "layout", label: "contentVertical", kind: "enum", control: "segmented", values: ["start", "center", "end"] };
+const FONT_SIZE = { key: "fontSize", group: "appearance", label: "fontSize", kind: "number", min: 8, max: 72, default: 16 };
+const CONTENT_PADDING = [
+  { key: "paddingX", group: "layout", label: "paddingX", kind: "number", min: 0, max: 64, default: 12 },
+  { key: "paddingY", group: "layout", label: "paddingY", kind: "number", min: 0, max: 64, default: 0 }
+];
 const NODE_TYPES = new Set(["container", "text", "button", "image", "input", "progress", "divider", "spacer", "select", "list", "navigation", "switch"]);
 
 // This is the editor's serializable component contract. Rendering remains
@@ -18,6 +25,8 @@ const COMPONENT_REGISTRY = Object.freeze([
       { key: "layout", group: "layout", label: "direction", kind: "enum", control: "segmented", values: ["column", "row"] },
       { key: "gap", group: "layout", label: "gap", kind: "number", min: 0, max: 64 },
       { key: "padding", group: "layout", label: "padding", kind: "number", min: 0, max: 64 },
+      ...CONTENT_PADDING.map((field) => ({ ...field, fallbackKey: "padding" })),
+      { key: "overflowY", group: "layout", label: "overflowY", kind: "enum", values: ["visible", "hidden", "auto"], default: "visible" },
       { key: "align", group: "layout", label: "align", kind: "enum", values: ["stretch", "start", "center", "end"] },
       { key: "justify", group: "layout", label: "justify", kind: "enum", values: ["start", "center", "end", "space-between", "space-around"] },
       { key: "width", group: "layout", label: "width", kind: "length" },
@@ -28,6 +37,8 @@ const COMPONENT_REGISTRY = Object.freeze([
   { type: "text", renderKey: "text", group: "contentGroup", label: "text", help: "textHelp", icon: "T", fields: [
     { key: "text", group: "content", label: "textValue", kind: "text" },
     { key: "width", group: "layout", label: "width", kind: "length" },
+    { key: "height", group: "layout", label: "height", kind: "length", default: "auto" },
+    { ...CONTENT_VERTICAL, default: "start" },
     { key: "color", group: "appearance", label: "color", kind: "color" },
     { key: "fontSize", group: "appearance", label: "fontSize", kind: "number", min: 8, max: 72 },
     { key: "weight", group: "appearance", label: "weight", kind: "enum", control: "segmented", values: ["normal", "bold"] },
@@ -43,6 +54,10 @@ const COMPONENT_REGISTRY = Object.freeze([
   ] },
   { type: "button", renderKey: "button", group: "controlsGroup", label: "button", help: "buttonHelp", icon: "B", fields: [
     { key: "text", group: "content", label: "textValue", kind: "text" },
+    { ...CONTENT_ALIGN, default: "center" },
+    { ...CONTENT_VERTICAL, default: "center" },
+    ...CONTENT_PADDING,
+    FONT_SIZE,
     { key: "width", group: "layout", label: "width", kind: "length" },
     { key: "height", group: "layout", label: "height", kind: "length" },
     { key: "background", group: "appearance", label: "background", kind: "color" },
@@ -52,6 +67,9 @@ const COMPONENT_REGISTRY = Object.freeze([
   { type: "input", renderKey: "input", group: "controlsGroup", label: "input", help: "inputHelp", icon: "I", fields: [
     { key: "placeholder", group: "content", label: "placeholder", kind: "text" },
     { key: "value", group: "content", label: "value", kind: "text" },
+    { ...CONTENT_ALIGN, default: "left" },
+    ...CONTENT_PADDING,
+    FONT_SIZE,
     { key: "width", group: "layout", label: "width", kind: "length" },
     { key: "height", group: "layout", label: "height", kind: "length" },
     { key: "background", group: "appearance", label: "background", kind: "color" },
@@ -86,6 +104,10 @@ const COMPONENT_REGISTRY = Object.freeze([
   ] },
   { type: "list", renderKey: "list", group: "contentGroup", label: "list", help: "listHelp", icon: "☷", fields: [
     { key: "items", group: "content", label: "items", kind: "string-list", minItems: 1, maxItems: 8, maxLength: 40 },
+    { ...CONTENT_ALIGN, default: "left" },
+    { ...CONTENT_VERTICAL, default: "center" },
+    ...CONTENT_PADDING.map((field) => ({ ...field, default: field.key === "paddingX" ? 10 : 0 })),
+    FONT_SIZE,
     { key: "width", group: "layout", label: "width", kind: "length" },
     { key: "height", group: "layout", label: "height", kind: "length" },
     { key: "itemHeight", group: "layout", label: "itemHeight", kind: "number", min: 20, max: 96 },
@@ -94,7 +116,7 @@ const COMPONENT_REGISTRY = Object.freeze([
     { key: "color", group: "appearance", label: "color", kind: "color" },
     { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 }
   ] },
-  { type: "navigation", renderKey: "navigation", group: "controlsGroup", label: "navigation", help: "navigationHelp", icon: "≡", fields: [
+  { type: "navigation", renderKey: "navigation", group: "panelGroup", label: "navigation", help: "navigationHelp", icon: "≡", fields: [
     { key: "items", group: "content", label: "items", kind: "string-list", minItems: 2, maxItems: 4, maxLength: 16 },
     { key: "active", group: "content", label: "activeItem", kind: "number", min: 0, max: 3, integer: true },
     { key: "width", group: "layout", label: "width", kind: "length" },
@@ -120,6 +142,36 @@ const COMPONENT_REGISTRY = Object.freeze([
 // Recipes are insertion templates only. They expand into the same ordinary
 // nodes as the component palette before entering the model.
 const RECIPE_REGISTRY = Object.freeze([
+  { type: "function-list", group: "wearableGroup", label: "functionList", help: "functionListHelp", icon: "☷", roundSafeInset: true, template: {
+    ...defaultNode("container", "functions"), height: "100%", padding: 12, gap: 8, overflowY: "auto", background: "#000000", children: [
+      { ...defaultNode("text", "functions-title"), text: "Activities", width: "100%", align: "center", weight: "bold", fontSize: 20 },
+      ...["Walk", "Run", "Cycle", "Swim"].map((text, index) => ({ ...defaultNode("button", `function-${index}`), text, textAlign: "left", verticalAlign: "center", fontSize: 18, height: "48px", background: "#202226", color: "#ffffff" }))
+    ]
+  } },
+  { type: "metric-screen", group: "wearableGroup", label: "metricScreen", help: "metricScreenHelp", icon: "▤", template: {
+    ...defaultNode("container", "metric-screen"), height: "100%", padding: 12, gap: 6, justify: "center", align: "center", background: "#000000", children: [
+      { ...defaultNode("text", "metric-title"), text: "Steps", fontSize: 16, width: "100%", align: "center", color: "#b5bac1" },
+      { ...defaultNode("text", "metric-value"), text: "6420", fontSize: 36, weight: "bold", width: "100%", align: "center", color: "#40d49a" },
+      { ...defaultNode("text", "metric-goal"), text: "Goal 8000", fontSize: 14, width: "100%", align: "center" },
+      { ...defaultNode("progress", "metric-progress"), width: "72%", height: "8px", value: 80 },
+      { ...defaultNode("button", "metric-action"), text: "Details", width: "72%", height: "40px", background: "#25272c", color: "#ffffff" }
+    ]
+  } },
+  { type: "round-action", group: "wearableGroup", label: "roundAction", help: "roundActionHelp", icon: "●", template: {
+    ...defaultNode("container", "round-action"), height: "100%", padding: 32, gap: 6, align: "center", justify: "center", background: "#000000", children: [
+      { ...defaultNode("text", "action-title"), text: "Workout", width: "100%", align: "center", fontSize: 18 },
+      { ...defaultNode("text", "action-value"), text: "00:00", width: "100%", align: "center", fontSize: 28, weight: "bold" },
+      { ...defaultNode("button", "action-start"), text: "Start", width: "84%", height: "44px", radius: 22, textAlign: "center", verticalAlign: "center" }
+    ]
+  } },
+  { type: "notification-detail", group: "wearableGroup", label: "notificationDetail", help: "notificationDetailHelp", icon: "T", roundSafeInset: true, template: {
+    ...defaultNode("container", "notification"), height: "100%", padding: 16, gap: 8, overflowY: "auto", background: "#000000", children: [
+      { ...defaultNode("text", "notification-source"), text: "Reminder", fontSize: 14, color: "#b5bac1", width: "100%" },
+      { ...defaultNode("text", "notification-title"), text: "Time to move", fontSize: 20, weight: "bold", width: "100%" },
+      { ...defaultNode("text", "notification-body"), text: "Take a short walk and stretch.", fontSize: 18, width: "100%" },
+      { ...defaultNode("button", "notification-dismiss"), text: "Dismiss", textAlign: "center", verticalAlign: "center", height: "44px", background: "#25272c", color: "#ffffff" }
+    ]
+  } },
   { type: "status-card", group: "recipesGroup", label: "statusCard", help: "statusCardHelp", icon: "▤", template: {
     id: "status-card", type: "container", layout: "column", gap: 6, padding: 12, width: "100%", height: "104px", background: "#18212b", radius: 10, align: "stretch", justify: "start", children: [
       { id: "status-title", type: "text", text: "Status", fontSize: 16, color: "#f4f7fb", weight: "bold", align: "left", width: "100%" },
@@ -173,7 +225,27 @@ function componentRegistry() {
 }
 
 function recipeRegistry() {
-  return JSON.parse(JSON.stringify(RECIPE_REGISTRY));
+  return JSON.parse(JSON.stringify(RECIPE_REGISTRY)).map((recipe) => {
+    if (recipe.roundSafeInset) {
+      const outer = JSON.parse(JSON.stringify(recipe.template));
+      const scroll = { ...defaultNode("container", `${outer.id}-scroll`), height: "100%", padding: 0,
+        gap: outer.gap, overflowY: "auto", children: outer.children };
+      outer.children = [scroll];
+      outer.overflowY = "hidden";
+      outer.gap = 0;
+      recipe.roundTemplate = outer;
+    }
+    return recipe;
+  });
+}
+
+function instantiateRecipe(recipe, viewport) {
+  const node = JSON.parse(JSON.stringify(viewport.shape === "round" && recipe.roundTemplate ? recipe.roundTemplate : recipe.template));
+  if (recipe.roundSafeInset && viewport.shape === "round") {
+    node.paddingX = Math.ceil(viewport.width * (1 - Math.SQRT1_2) / 2);
+    node.paddingY = Math.ceil(viewport.height * (1 - Math.SQRT1_2) / 2);
+  }
+  return node;
 }
 
 function migrateModel(input) {
@@ -337,9 +409,10 @@ function boundedModelCheck(model) {
   };
 }
 
-function nodeStyle(node) {
+function nodeStyle(node, parent) {
   const declarations = [];
   const add = (name, value) => declarations.push(`${name}: ${value}`);
+  if (parent?.overflowY === "auto") add("flex-shrink", "0");
   if (node.width && node.width !== "auto") add("width", cssLength(node.width));
   if (node.height && node.height !== "auto") add("height", cssLength(node.height));
   if (node.type === "container") {
@@ -347,6 +420,13 @@ function nodeStyle(node) {
     add("flex-direction", node.layout === "row" ? "row" : "column");
     add("gap", `${cssNumber(node.gap, 0, 0, 64)}px`);
     add("padding", `${cssNumber(node.padding, 0, 0, 64)}px`);
+    if (node.paddingX !== undefined || node.paddingY !== undefined) {
+      add("padding", `${cssNumber(node.paddingY, node.padding || 0, 0, 64)}px ${cssNumber(node.paddingX, node.padding || 0, 0, 64)}px`);
+    }
+    if (node.overflowY) {
+      add("overflow", node.overflowY === "visible" ? "visible" : "hidden");
+      if (node.overflowY === "auto") add("overflow-y", "auto");
+    }
     add("align-items", ["start", "center", "end", "stretch"].includes(node.align) ? node.align.replace("start", "flex-start").replace("end", "flex-end") : "stretch");
     add("justify-content", ["start", "center", "end", "space-between", "space-around"].includes(node.justify) ? node.justify.replace("start", "flex-start").replace("end", "flex-end") : "flex-start");
     add("background", cssText(node.background, "transparent"));
@@ -359,14 +439,14 @@ function nodeStyle(node) {
     add("text-align", ["left", "center", "right"].includes(node.align) ? node.align : "left");
     add("overflow-wrap", "anywhere");
   } else if (node.type === "button" || node.type === "input") {
-    add("font-size", "16px");
+    add("font-size", `${cssNumber(node.fontSize, 16, 8, 72)}px`);
     add("line-height", `${defaultLineHeight(node.fontSize)}px`);
     add("background", cssText(node.background, "#202a34"));
     add("color", cssText(node.color, "#ffffff"));
     add("border-radius", `${cssNumber(node.radius, 0, 0, 64)}px`);
     add("border", "0");
-    add("padding", "0 12px");
-    add("text-align", node.type === "button" ? "center" : "left");
+    add("padding", `${cssNumber(node.paddingY, 0, 0, 64)}px ${cssNumber(node.paddingX, 12, 0, 64)}px`);
+    add("text-align", node.textAlign || (node.type === "button" ? "center" : "left"));
   } else if (node.type === "image") {
     add("object-fit", ["cover", "contain", "fill"].includes(node.fit) ? node.fit : "cover");
     add("border-radius", `${cssNumber(node.radius, 0, 0, 150)}px`);
@@ -416,19 +496,30 @@ function nodeStyle(node) {
     add("border", "0");
     add("border-radius", `${cssNumber(node.radius, 14, 0, 64)}px`);
   }
+  if ((node.type === "button" || node.type === "text") && node.verticalAlign !== undefined) {
+    add("display", "flex");
+    add("flex-direction", "column");
+    add("align-items", "stretch");
+    add("justify-content", ({ start: "flex-start", center: "center", end: "flex-end" })[node.verticalAlign]);
+  }
   return declarations.join("; ");
+}
+
+function alignedText(node) {
+  const text = escapeHtml(node.text);
+  return node.verticalAlign === undefined ? text : `<span style="display: block; width: 100%">${text}</span>`;
 }
 
 const sourceRenderers = {
   container(node, indent, id, style) {
-    const children = node.children.map((child) => renderNode(child, `${indent}  `)).join("\n");
+    const children = node.children.map((child) => renderNode(child, `${indent}  `, node)).join("\n");
     return `${indent}<section id="${id}" class="jf-visual-container" style="${style}">${children ? `\n${children}\n${indent}` : ""}</section>`;
   },
   text(node, indent, id, style) {
-    return `${indent}<div id="${id}" class="jf-visual-text" style="${style}">${escapeHtml(node.text)}</div>`;
+    return `${indent}<div id="${id}" class="jf-visual-text" style="${style}">${alignedText(node)}</div>`;
   },
   button(node, indent, id, style) {
-    return `${indent}<button id="${id}" class="jf-visual-button" type="button" style="${style}">${escapeHtml(node.text)}</button>`;
+    return `${indent}<button id="${id}" class="jf-visual-button" type="button" style="${style}">${alignedText(node)}</button>`;
   },
   image(node, indent, id, style) {
     return `${indent}<img id="${id}" class="jf-visual-image" src="${escapeHtml(node.src)}" alt="${escapeHtml(node.alt)}" style="${style}">`;
@@ -452,8 +543,9 @@ const sourceRenderers = {
     return `${indent}<select id="${id}" class="jf-visual-select" style="${style}">${options}</select>`;
   },
   list(node, indent, id, style) {
-    const itemStyle = `min-height: ${cssNumber(node.itemHeight, 36, 20, 96)}px; display: flex; align-items: center; padding: 0 10px;`;
-    const items = node.items.map((item) => `${indent}  <li style="${itemStyle}">${escapeHtml(item)}</li>`).join("\n");
+    const align = ({ start: "flex-start", center: "center", end: "flex-end" })[node.verticalAlign || "center"];
+    const itemStyle = `min-height: ${cssNumber(node.itemHeight, 36, 20, 96)}px; display: flex; flex-direction: column; justify-content: ${align}; padding: ${cssNumber(node.paddingY, 0, 0, 64)}px ${cssNumber(node.paddingX, 10, 0, 64)}px; text-align: ${node.textAlign || "left"}; font-size: ${cssNumber(node.fontSize, 16, 8, 72)}px; line-height: ${defaultLineHeight(node.fontSize)}px;`;
+    const items = node.items.map((item) => `${indent}  <li style="${itemStyle}"><span style="display: block; width: 100%">${escapeHtml(item)}</span></li>`).join("\n");
     return `${indent}<ul id="${id}" class="jf-visual-list" style="${style}">${items ? `\n${items}\n${indent}` : ""}</ul>`;
   },
   navigation(node, indent, id, style) {
@@ -468,11 +560,11 @@ const sourceRenderers = {
   }
 };
 
-function renderNode(node, indent = "    ") {
+function renderNode(node, indent = "    ", parent) {
   const definition = COMPONENT_REGISTRY.find((component) => component.type === node.type);
   const renderer = sourceRenderers[definition?.renderKey];
   if (!renderer) throw new Error(`No source renderer registered for visual-editor node type: ${node.type}`);
-  return renderer(node, indent, escapeHtml(node.id), escapeHtml(nodeStyle(node)));
+  return renderer(node, indent, escapeHtml(node.id), escapeHtml(nodeStyle(node, parent)));
 }
 
 function renderBody(model) {
@@ -531,6 +623,7 @@ module.exports = {
   renderBody,
   renderCss,
   recipeRegistry,
+  instantiateRecipe,
   updateCss,
   updateHtml,
   validateModel,
