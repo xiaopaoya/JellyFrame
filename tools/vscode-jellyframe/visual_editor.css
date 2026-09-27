@@ -358,6 +358,12 @@ body.right-collapsed #right-resizer {
   background: var(--hover);
 }
 
+.outline-row:focus-visible {
+  z-index: 1;
+  outline: 1px solid var(--focus);
+  outline-offset: -1px;
+}
+
 .outline-row.selected {
   background: var(--selection);
 }

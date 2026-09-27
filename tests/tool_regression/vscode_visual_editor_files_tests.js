@@ -136,6 +136,14 @@ assert(webviewHtml.includes('"recipes"'), "recipe registry is passed to the webv
   const visualEditorCss = fs.readFileSync(path.join(__dirname, "../../tools/vscode-jellyframe/visual_editor.css"), "utf8");
   const visualEditorWebview = fs.readFileSync(path.join(__dirname, "../../tools/vscode-jellyframe/visual_editor_webview.js"), "utf8");
   assert(visualEditorWebview.includes("bindCanvasPan"), "canvas must support panning");
+  assert(visualEditorWebview.includes('row.setAttribute("role", "treeitem")'), "outline rows must expose treeitem semantics");
+  assert(visualEditorWebview.includes('row.setAttribute("aria-level", String(depth + 1))'), "outline rows must expose nesting level");
+  assert(visualEditorWebview.includes('row.tabIndex = node.id === selectedId ? 0 : -1'), "outline tree must use roving tabindex");
+  assert(visualEditorWebview.includes('row.setAttribute("aria-expanded", String(!collapsedNodes.has(node.id)))'), "expandable outline rows must expose expanded state");
+  assert(visualEditorWebview.includes('children.setAttribute("role", "group")'), "expanded outline children must expose a tree group");
+  assert(visualEditorWebview.includes("function handleOutlineKeydown(event)"), "outline tree must implement keyboard navigation");
+  assert(visualEditorWebview.includes('event.key === "ArrowRight"'), "outline tree must support expanding and entering children");
+  assert(visualEditorWebview.includes('event.key === "ArrowLeft"'), "outline tree must support collapsing and moving to parents");
   assert(visualEditorWebview.includes("showDropPreview"), "dragging a new component must show a live preview");
   assert(visualEditorWebview.includes("source.style.display = \"none\""), "moving nodes must remove their original layout slot");
   assert(visualEditorWebview.includes("source.cloneNode(true)"), "moving nodes must preview the original control shape");

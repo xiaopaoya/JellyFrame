@@ -777,11 +777,12 @@
     return t[node.type] || node.type;
   }
 
-  function selectNode(id) {
+  function selectNode(id, options = {}) {
     if (!find(id)) return;
     if (selectedId === id) return;
     selectedId = id;
     renderAll();
+    if (options.focusOutline) focusOutlineRow(id);
   }
 
   function styleLength(value) {
@@ -1239,12 +1240,16 @@
     row.setAttribute("role", "treeitem");
     row.setAttribute("aria-level", String(depth + 1));
     row.setAttribute("aria-selected", String(node.id === selectedId));
+    row.setAttribute("aria-label", nodeLabel(node));
+    row.tabIndex = node.id === selectedId ? 0 : -1;
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "outline-toggle";
     const hasChildren = node.type === "container" && node.children.length > 0;
     toggle.textContent = hasChildren ? (collapsedNodes.has(node.id) ? "›" : "⌄") : "";
     toggle.disabled = !hasChildren;
+    toggle.tabIndex = -1;
+    if (hasChildren) row.setAttribute("aria-expanded", String(!collapsedNodes.has(node.id)));
     toggle.addEventListener("pointerdown", (event) => event.stopPropagation());
     toggle.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -1262,7 +1267,7 @@
     kind.className = "outline-kind";
     kind.textContent = node.id;
     row.append(toggle, icon, name, kind);
-    row.addEventListener("click", (event) => { if (allowClick(event)) selectNode(node.id); });
+    row.addEventListener("click", (event) => { if (allowClick(event)) selectNode(node.id, { focusOutline: true }); });
     if (node.id !== model.root.id) {
       bindPointerDrag(row, { kind: "move", id: node.id }, nodeLabel(node));
     }
@@ -1273,7 +1278,11 @@
     bindDropTarget(row, node);
     branch.append(row);
     if (hasChildren && !collapsedNodes.has(node.id)) {
-      node.children.forEach((child) => branch.append(renderOutlineBranch(child, depth + 1)));
+      const children = document.createElement("div");
+      children.className = "outline-children";
+      children.setAttribute("role", "group");
+      node.children.forEach((child) => children.append(renderOutlineBranch(child, depth + 1)));
+      branch.append(children);
     }
     return branch;
   }
@@ -1281,6 +1290,68 @@
   function renderOutline() {
     const tree = $("outline-tree");
     tree.replaceChildren(renderOutlineBranch(model.root, 0));
+  }
+
+  function visibleOutlineRows() {
+    return [...document.querySelectorAll("#outline-tree .outline-row")];
+  }
+
+  function focusOutlineRow(id = selectedId) {
+    const row = visibleOutlineRows().find((candidate) => candidate.dataset.nodeId === id);
+    row?.focus();
+  }
+
+  function moveOutlineSelection(id) {
+    if (!id || !find(id)) return;
+    selectNode(id, { focusOutline: true });
+  }
+
+  function handleOutlineKeydown(event) {
+    const row = event.target.closest?.("#outline-tree .outline-row");
+    if (!row || event.target.closest("input, select, textarea")) return false;
+    const node = find(row.dataset.nodeId);
+    if (!node) return false;
+    const rows = visibleOutlineRows();
+    const index = rows.indexOf(row);
+    if (index < 0) return false;
+    const hasChildren = node.type === "container" && node.children.length > 0;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      const nextIndex = event.key === "ArrowDown" ? index + 1 : index - 1;
+      if (rows[nextIndex]) moveOutlineSelection(rows[nextIndex].dataset.nodeId);
+      event.preventDefault();
+      return true;
+    }
+    if (event.key === "ArrowRight") {
+      if (hasChildren && collapsedNodes.has(node.id)) {
+        collapsedNodes.delete(node.id);
+        persistUi();
+        renderAll();
+        focusOutlineRow(node.id);
+      } else if (hasChildren) {
+        moveOutlineSelection(node.children[0].id);
+      }
+      event.preventDefault();
+      return true;
+    }
+    if (event.key === "ArrowLeft") {
+      if (hasChildren && !collapsedNodes.has(node.id)) {
+        collapsedNodes.add(node.id);
+        persistUi();
+        renderAll();
+        focusOutlineRow(node.id);
+      } else {
+        const parent = parentOf(node.id);
+        if (parent) moveOutlineSelection(parent.id);
+      }
+      event.preventDefault();
+      return true;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      moveOutlineSelection(node.id);
+      event.preventDefault();
+      return true;
+    }
+    return false;
   }
 
   function section(title) {
@@ -1911,6 +1982,7 @@
 
   document.addEventListener("keydown", (event) => {
     const editing = ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName);
+    if (!editing && handleOutlineKeydown(event)) return;
     const command = event.ctrlKey || event.metaKey;
     if (command && event.key.toLowerCase() === "s") {
       event.preventDefault();
