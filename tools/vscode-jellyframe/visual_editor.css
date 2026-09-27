@@ -723,35 +723,25 @@ body.panning #canvas-wrap {
 .designer-node.drop-after::after { bottom: 0; }
 
 .designer-drop-preview {
-  display: flex;
-  min-height: 34px;
-  align-items: center;
-  justify-content: center;
-  margin: 4px;
-  padding: 5px 8px;
-  color: var(--focus);
-  background: color-mix(in srgb, var(--focus) 12%, transparent);
-  border: 1px dashed var(--focus);
-  border-radius: 3px;
+  outline: 2px dashed var(--focus);
+  outline-offset: -2px;
+  opacity: 0.65;
   pointer-events: none;
-  font-size: 12px;
-}
-
-.designer-drop-preview-move {
-  display: block;
-  color: var(--text);
-  background: color-mix(in srgb, var(--selection) 58%, transparent);
-  border-style: solid;
-  border-color: var(--focus);
-  opacity: 0.45;
 }
 
 .designer-empty {
+  position: absolute;
+  inset: 2px;
   display: grid;
-  min-height: 42px;
   place-items: center;
   color: #9aa9b8;
   border: 1px dashed #546170;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.pointer-dragging .designer-empty {
+  display: none;
 }
 
 .image-placeholder {

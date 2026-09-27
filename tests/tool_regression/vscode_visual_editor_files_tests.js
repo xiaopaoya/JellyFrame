@@ -145,9 +145,8 @@ assert(webviewHtml.includes('"recipes"'), "recipe registry is passed to the webv
   assert(visualEditorWebview.includes('event.key === "ArrowRight"'), "outline tree must support expanding and entering children");
   assert(visualEditorWebview.includes('event.key === "ArrowLeft"'), "outline tree must support collapsing and moving to parents");
   assert(visualEditorWebview.includes("showDropPreview"), "dragging a new component must show a live preview");
-  assert(visualEditorWebview.includes("source.style.display = \"none\""), "moving nodes must remove their original layout slot");
-  assert(visualEditorWebview.includes("source.cloneNode(true)"), "moving nodes must preview the original control shape");
-assert(visualEditorWebview.includes("designer-drop-preview-move"), "moving nodes must use a dedicated preview class");
+  assert(visualEditorWebview.includes("function prepareDrop(payload, targetId, mode)"), "preview and drop must share the same tree insertion");
+  assert(visualEditorWebview.includes("renderNode(result.root, true)"), "preview must render the projected tree with the canvas renderer");
 assert(visualEditorWebview.includes("stringListField"), "list-valued fields use the bounded inspector control");
 assert(visualEditorWebview.includes("canvas-tool-outline"), "canvas toolbar can open the structure panel");
 assert(!visualEditorWebview.includes("element.style.minHeight = \"8px\""), "structural nodes must preserve their declared runtime height");
@@ -169,7 +168,8 @@ assert(!visualEditorWebview.includes('button.style.font = "inherit"'), "canvas m
   assert(visualEditorWebview.includes("element.draggable = false"), "pointer drag must be the single drag path");
   assert(visualEditorCss.includes("pointer-events: none"), "drag ghost must not block hit testing");
   assert(visualEditorCss.includes("designer-drop-preview"), "live drop preview must have a visible style");
-  assert(visualEditorCss.includes("opacity: 0.45"), "moving nodes must use a translucent preview");
+  assert(visualEditorCss.includes(".pointer-dragging .designer-empty"), "empty hints must disappear throughout a drag");
+  assert(visualEditorCss.includes("opacity: 0.65"), "drop preview must be translucent without changing layout");
   assert(visualEditorCss.includes("#source-notice[hidden]"), "hidden source notice keeps its grid row");
   assert.doesNotThrow(() => new Function(visualEditorWebview));
 

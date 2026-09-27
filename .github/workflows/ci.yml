@@ -146,6 +146,23 @@ jobs:
           python tests\tool_regression\benchmark_compare_tests.py
           node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('tools/vscode-jellyframe/package.json','utf8')); const s=fs.readFileSync('tools/vscode-jellyframe/extension.js','utf8'); if(!p.contributes?.viewsContainers?.activitybar?.some(v=>v.id==='jellyframe'&&v.icon==='media/jellyframe.svg')) throw new Error('JellyFrame Activity Bar container is missing'); if(!p.contributes?.views?.jellyframe?.some(v=>v.id==='jellyframe.status')) throw new Error('JellyFrame status view is missing'); if(p.contributes?.menus?.['menubar/main']) throw new Error('unsupported custom menubar contribution remains'); if(!fs.existsSync('tools/vscode-jellyframe/media/jellyframe.svg')) throw new Error('JellyFrame Activity Bar icon is missing'); if(!s.includes('function currentPackageRoot()') || !s.includes('onDidChangeActiveTextEditor')) throw new Error('JellyFrame status view does not follow the active package');"
 
+      - name: Test visual editor browser interactions
+        shell: pwsh
+        run: |
+          npm install --prefix build/visual-editor-browser --no-package-lock --ignore-scripts playwright@1.58.2
+          if ($LASTEXITCODE -ne 0) { throw 'Playwright setup failed' }
+          $env:NODE_PATH = Join-Path $PWD 'build/visual-editor-browser/node_modules'
+          node tests/tool_regression/vscode_visual_editor_interaction_tests.js
+          if ($LASTEXITCODE -ne 0) { throw 'Visual editor browser interactions failed' }
+
+      - name: Upload visual editor screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-editor-browser-screenshots
+          path: build/test_outputs/visual_editor
+          if-no-files-found: warn
+
       - name: Run package diagnostics smoke tests
         shell: pwsh
         run: |

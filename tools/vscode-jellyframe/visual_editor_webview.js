@@ -18,9 +18,7 @@
   let saving = false;
   let modelCheckTimer;
   let modelCheckRevision = 0;
-  let dropPreview;
-  let draggedSourceElement;
-  let draggedSourceDisplay;
+  let previewCanvasChildren;
   let zoom = persisted.zoom === undefined || persisted.zoom === "fit"
     ? "fit"
     : clamp(Number(persisted.zoom) || 1, 0.2, 2);
@@ -328,17 +326,17 @@
     }
   }
 
-  function find(id) {
+  function find(id, root = model.root) {
     let found;
-    walk(model.root, (node) => {
+    walk(root, (node) => {
       if (!found && node.id === id) found = node;
     });
     return found;
   }
 
-  function parentOf(id) {
+  function parentOf(id, root = model.root) {
     let result;
-    walk(model.root, (node, parent) => {
+    walk(root, (node, parent) => {
       if (!result && node.id === id) result = parent;
     });
     return result;
@@ -461,8 +459,8 @@
     });
   }
 
-  function insertNode(node, parentId, index) {
-    const parent = find(parentId);
+  function insertNode(node, parentId, index, root = model.root) {
+    const parent = find(parentId, root);
     if (!parent || parent.type !== "container" || !Array.isArray(parent.children)) return false;
     const bounded = clamp(Number(index), 0, parent.children.length);
     parent.children.splice(bounded, 0, node);
@@ -477,12 +475,12 @@
     return { node: parent.children.splice(index, 1)[0], parent, index };
   }
 
-  function moveNode(id, parentId, index) {
-    if (id === model.root.id) return false;
-    const node = find(id);
-    const targetParent = find(parentId);
+  function moveNode(id, parentId, index, root = model.root) {
+    if (id === root.id) return false;
+    const node = find(id, root);
+    const targetParent = find(parentId, root);
     if (!node || !targetParent || targetParent.type !== "container" || containsId(node, parentId)) return false;
-    const oldParent = parentOf(id);
+    const oldParent = parentOf(id, root);
     const oldIndex = oldParent.children.findIndex((child) => child.id === id);
     let nextIndex = clamp(Number(index), 0, targetParent.children.length);
     if (oldParent.id === targetParent.id && oldIndex < nextIndex) nextIndex -= 1;
@@ -529,85 +527,71 @@
     document.querySelectorAll(".drop-before,.drop-after,.drop-inside").forEach((element) => {
       element.classList.remove("drop-before", "drop-after", "drop-inside");
     });
-    dropPreview?.remove();
-    dropPreview = undefined;
-    if (draggedSourceElement) {
-      draggedSourceElement.style.display = draggedSourceDisplay;
-      draggedSourceElement = undefined;
-      draggedSourceDisplay = undefined;
+    if (previewCanvasChildren) {
+      $("canvas").replaceChildren(...previewCanvasChildren);
+      previewCanvasChildren = undefined;
     }
   }
 
-  function showDropPreview(payload, target, mode) {
-    if (!payload || !target) return;
-    const moving = payload.kind === "move";
-    const dragged = moving ? find(payload.id) : undefined;
-    const type = moving ? dragged?.type : payload.type;
-    if (!type) return;
-    const definition = registryByType.get(type);
-    const recipe = recipes.find((candidate) => candidate.type === type);
-    const label = t[definition?.label] || t[recipe?.label] || type;
-    let preview;
-    if (moving) {
-      const source = [...document.querySelectorAll(".designer-node")]
-        .find((element) => element.dataset.nodeId === payload.id);
-      if (!source) return;
-      preview = source.cloneNode(true);
-      preview.classList.add("designer-drop-preview", "designer-drop-preview-move");
-      preview.classList.remove("selected");
-      preview.querySelectorAll(".selected").forEach((element) => element.classList.remove("selected"));
-      preview.dataset.previewType = type;
-      preview.removeAttribute("data-node-id");
-      draggedSourceElement = source;
-      draggedSourceDisplay = source.style.display;
-      source.style.display = "none";
-    } else {
-      preview = document.createElement("div");
-      preview.className = "designer-drop-preview";
-      preview.dataset.previewType = type;
-      preview.textContent = `+ ${label}`;
-    }
-    if (mode === "inside") target.append(preview);
-    else if (mode === "before") target.before(preview);
-    else target.after(preview);
-    dropPreview = preview;
+  function showDropPreview(payload, targetId, mode) {
+    const result = prepareDrop(payload, targetId, mode);
+    if (!result || result.error) return;
+    const canvas = $("canvas");
+    previewCanvasChildren = [...canvas.childNodes];
+    // Render the projected tree so flex sizing and sibling layout match the drop.
+    canvas.replaceChildren(renderNode(result.root, true));
+    const preview = [...canvas.querySelectorAll(".designer-node")]
+      .find((element) => element.dataset.nodeId === result.id);
+    preview?.classList.add("designer-drop-preview");
   }
 
   function dropMode(event, element, node) {
     const rect = element.getBoundingClientRect();
-    const relative = (event.clientY - rect.top) / Math.max(1, rect.height);
+    const horizontal = !element.classList.contains("outline-row") && parentOf(node.id)?.layout === "row";
+    const relative = horizontal
+      ? (event.clientX - rect.left) / Math.max(1, rect.width)
+      : (event.clientY - rect.top) / Math.max(1, rect.height);
     if (relative < 0.25 && node.id !== model.root.id) return "before";
     if (relative > 0.75 && node.id !== model.root.id) return "after";
     return node.type === "container" ? "inside" : (relative < 0.5 ? "before" : "after");
   }
 
-  function performDrop(payload, targetId, mode) {
+  function prepareDrop(payload, targetId, mode) {
     const insertion = insertionFor(targetId, mode);
     if (!payload || !insertion) return;
+    const root = clone(model.root);
+    let id;
     if (payload.kind === "new") {
-      if (nodeCount() >= maxNodes) return report(t.nodeLimit, "error");
+      if (nodeCount() >= maxNodes) return { error: t.nodeLimit };
       const node = defaultNode(payload.type);
-      snapshot();
-      if (!insertNode(node, insertion.parentId, insertion.index)) return history.pop();
-      selectedId = node.id;
+      if (!insertNode(node, insertion.parentId, insertion.index, root)) return;
+      id = node.id;
     } else if (payload.kind === "recipe") {
       const recipe = recipes.find((candidate) => candidate.type === payload.type);
-      if (!recipe) return report(t.invalidDrop, "error");
+      if (!recipe) return { error: t.invalidDrop };
       const node = clone(recipe.template);
-      if (nodeCount() + nodeCount(node) > maxNodes) return report(t.nodeLimit, "error");
+      if (nodeCount() + nodeCount(node) > maxNodes) return { error: t.nodeLimit };
       const used = new Set();
       walk(model.root, (candidate) => used.add(candidate.id));
       remapIds(node, used);
-      snapshot();
-      if (!insertNode(node, insertion.parentId, insertion.index)) return history.pop();
-      selectedId = node.id;
+      if (!insertNode(node, insertion.parentId, insertion.index, root)) return;
+      id = node.id;
     } else if (payload.kind === "move") {
       const node = find(payload.id);
-      if (!node || containsId(node, insertion.parentId)) return report(t.invalidDrop, "error");
-      snapshot();
-      if (!moveNode(payload.id, insertion.parentId, insertion.index)) return history.pop();
-      selectedId = payload.id;
+      if (!node || containsId(node, insertion.parentId)) return { error: t.invalidDrop };
+      if (!moveNode(payload.id, insertion.parentId, insertion.index, root)) return;
+      id = payload.id;
     } else return;
+    return { root, id };
+  }
+
+  function performDrop(payload, targetId, mode) {
+    const result = prepareDrop(payload, targetId, mode);
+    if (!result) return;
+    if (result.error) return report(result.error, "error");
+    snapshot();
+    model.root = result.root;
+    selectedId = result.id;
     markDirty();
     renderAll();
   }
@@ -641,7 +625,7 @@
             targetId = node.id;
             targetMode = dropMode(moveEvent, candidate, node);
             if (payload.kind !== "move") candidate.classList.add(`drop-${targetMode}`);
-            showDropPreview(payload, candidate, targetMode);
+            showDropPreview(payload, targetId, targetMode);
             return;
           }
         }
@@ -649,7 +633,7 @@
           targetId = model.root.id;
           targetMode = "inside";
           $("canvas").classList.add("drop-inside");
-          showDropPreview(payload, $("canvas"), targetMode);
+          showDropPreview(payload, targetId, targetMode);
         }
       };
       const move = (moveEvent) => {
@@ -669,17 +653,18 @@
         document.removeEventListener("pointermove", move, true);
         document.removeEventListener("pointerup", finish, true);
         document.removeEventListener("pointercancel", finish, true);
-        document.body.classList.remove("pointer-dragging");
-        if (dragging && upEvent) {
+        const cancelled = upEvent?.type === "pointercancel";
+        if (dragging && upEvent && !cancelled) {
           lastX = upEvent.clientX;
           lastY = upEvent.clientY;
           updateTarget({ clientX: lastX, clientY: lastY });
         }
         ghost.remove();
+        document.body.classList.remove("pointer-dragging");
         if (!dragging) return;
         suppressClick = true;
         clearDropIndicators();
-        if (targetId && targetMode) performDrop(payload, targetId, targetMode);
+        if (!cancelled && targetId && targetMode) performDrop(payload, targetId, targetMode);
       };
       document.addEventListener("pointermove", move, true);
       document.addEventListener("pointerup", finish, true);
@@ -779,9 +764,10 @@
 
   function selectNode(id, options = {}) {
     if (!find(id)) return;
-    if (selectedId === id) return;
-    selectedId = id;
-    renderAll();
+    if (selectedId !== id) {
+      selectedId = id;
+      renderAll();
+    }
     if (options.focusOutline) focusOutlineRow(id);
   }
 
@@ -902,14 +888,14 @@
   }
 
   const designRenderers = {
-    container(node) {
+    container(node, preview) {
       const element = document.createElement("section");
       if (!node.children.length) {
         const empty = document.createElement("div");
         empty.className = "designer-empty";
         empty.textContent = t.emptyContainer;
         element.append(empty);
-      } else node.children.forEach((child) => element.append(renderNode(child)));
+      } else node.children.forEach((child) => element.append(renderNode(child, preview)));
       return element;
     },
     text(node) {
@@ -1029,15 +1015,21 @@
     }
   };
 
-  function renderNode(node) {
+  function renderNode(node, preview = false) {
     const rendererKey = registryByType.get(node.type)?.renderKey;
     const renderer = designRenderers[rendererKey];
     if (!renderer) throw new Error(`Unsupported visual-editor node type: ${node.type}`);
-    const element = renderer(node);
+    const element = renderer(node, preview);
     element.classList.add(`jf-visual-${node.type}`, "designer-node");
     element.dataset.nodeId = node.id;
-    if (node.id === selectedId) element.classList.add("selected");
+    if (!preview && node.id === selectedId) element.classList.add("selected");
     applyCommonStyle(element, node);
+    if (preview) {
+      element.contentEditable = "false";
+      element.tabIndex = -1;
+      element.inert = true;
+      return element;
+    }
     // Use one pointer-drag path so the browser's native drag lifecycle cannot
     // interrupt the target calculation inside the webview.
     element.draggable = false;
@@ -1178,6 +1170,7 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = "palette-item";
+        button.dataset.componentType = definition.type;
         button.draggable = false;
         const icon = document.createElement("span");
         icon.className = "palette-icon";
@@ -1208,6 +1201,7 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = "palette-item recipe-item";
+        button.dataset.recipeType = recipe.type;
         button.draggable = false;
         const icon = document.createElement("span");
         icon.className = "palette-icon";
@@ -1222,7 +1216,7 @@
         button.append(icon, copy);
         button.title = help.textContent;
         bindPointerDrag(button, { kind: "recipe", type: recipe.type }, t[recipe.label] || recipe.type);
-        button.addEventListener("click", () => addRecipe(recipe));
+        button.addEventListener("click", (event) => { if (allowClick(event)) addRecipe(recipe); });
         section.append(button);
       });
       list.append(section);
@@ -1249,6 +1243,7 @@
     toggle.textContent = hasChildren ? (collapsedNodes.has(node.id) ? "›" : "⌄") : "";
     toggle.disabled = !hasChildren;
     toggle.tabIndex = -1;
+    toggle.setAttribute("aria-hidden", "true");
     if (hasChildren) row.setAttribute("aria-expanded", String(!collapsedNodes.has(node.id)));
     toggle.addEventListener("pointerdown", (event) => event.stopPropagation());
     toggle.addEventListener("click", (event) => {
@@ -1256,6 +1251,7 @@
       if (collapsedNodes.has(node.id)) collapsedNodes.delete(node.id); else collapsedNodes.add(node.id);
       persistUi();
       renderOutline();
+      focusOutlineRow(node.id);
     });
     const icon = document.createElement("span");
     icon.className = "outline-icon";
@@ -1280,7 +1276,9 @@
     if (hasChildren && !collapsedNodes.has(node.id)) {
       const children = document.createElement("div");
       children.className = "outline-children";
+      children.id = `outline-children-${node.id}`;
       children.setAttribute("role", "group");
+      row.setAttribute("aria-owns", children.id);
       node.children.forEach((child) => children.append(renderOutlineBranch(child, depth + 1)));
       branch.append(children);
     }
@@ -1289,7 +1287,14 @@
 
   function renderOutline() {
     const tree = $("outline-tree");
+    const hadFocus = tree.contains(document.activeElement);
     tree.replaceChildren(renderOutlineBranch(model.root, 0));
+    const rows = visibleOutlineRows();
+    const visibleIds = new Set(rows.map((row) => row.dataset.nodeId));
+    // A selected canvas node can be inside a collapsed branch. Keep a Tab entry.
+    const entry = pathNodes(selectedId).reverse().find((node) => visibleIds.has(node.id));
+    rows.forEach((row) => { row.tabIndex = row.dataset.nodeId === entry?.id ? 0 : -1; });
+    if (hadFocus) focusOutlineRow(entry?.id);
   }
 
   function visibleOutlineRows() {
@@ -1297,7 +1302,9 @@
   }
 
   function focusOutlineRow(id = selectedId) {
-    const row = visibleOutlineRows().find((candidate) => candidate.dataset.nodeId === id);
+    const rows = visibleOutlineRows();
+    const row = rows.find((candidate) => candidate.dataset.nodeId === id);
+    if (row) rows.forEach((candidate) => { candidate.tabIndex = candidate === row ? 0 : -1; });
     row?.focus();
   }
 
@@ -1307,6 +1314,7 @@
   }
 
   function handleOutlineKeydown(event) {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) return false;
     const row = event.target.closest?.("#outline-tree .outline-row");
     if (!row || event.target.closest("input, select, textarea")) return false;
     const node = find(row.dataset.nodeId);
@@ -1315,6 +1323,11 @@
     const index = rows.indexOf(row);
     if (index < 0) return false;
     const hasChildren = node.type === "container" && node.children.length > 0;
+    if (event.key === "Home" || event.key === "End") {
+      moveOutlineSelection(rows[event.key === "Home" ? 0 : rows.length - 1].dataset.nodeId);
+      event.preventDefault();
+      return true;
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       const nextIndex = event.key === "ArrowDown" ? index + 1 : index - 1;
       if (rows[nextIndex]) moveOutlineSelection(rows[nextIndex].dataset.nodeId);
@@ -1981,7 +1994,8 @@
   new ResizeObserver(() => { if (zoom === "fit") applyZoom(); }).observe($("canvas-wrap"));
 
   document.addEventListener("keydown", (event) => {
-    const editing = ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName);
+    const editing = ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName)
+      || document.activeElement?.isContentEditable;
     if (!editing && handleOutlineKeydown(event)) return;
     const command = event.ctrlKey || event.metaKey;
     if (command && event.key.toLowerCase() === "s") {

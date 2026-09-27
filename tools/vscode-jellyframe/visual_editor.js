@@ -485,7 +485,7 @@ function visualEditorHtml(webview, root, model, assets, resources = {}) {
         <button class="panel-tab" id="outline-tab" data-panel="outline" type="button" role="tab" aria-selected="false"></button>
       </div>
       <section id="components-panel" class="panel-view" role="tabpanel"><div id="palette-list"></div></section>
-      <section id="outline-panel" class="panel-view" role="tabpanel" hidden><div id="outline-tree" role="tree"></div></section>
+      <section id="outline-panel" class="panel-view" role="tabpanel" hidden><div id="outline-tree" role="tree" aria-labelledby="outline-tab"></div></section>
     </aside>
     <div id="left-resizer" class="panel-resizer" role="separator" aria-label="Resize left panel"></div>
     <main id="stage">
