@@ -49,7 +49,11 @@ HTML round-trip importer. Use **Save & debug** to verify the result in the real
 desktop shell, because the editor canvas is only an authoring approximation.
 
 Selecting a non-root canvas node exposes eight resize handles for width and height. A `%` or `auto` dimension is
-materialized as the current canvas pixel size when resizing starts, and the operation is undoable. The editor's
+converted to pixels only for the dimension actually changed, when the resize is committed on release. Undo restores
+the original units. Handles live outside controls and editable text, including images and inputs; numeric heights
+retain registry types and bounds. Escape, pointer cancellation or focus loss cancels the preview without adding
+history or dirty state. This changes flex dimensions, not free positioning; parent layout constraints still apply.
+Shift+F10 opens the context menu; arrows/Home/End select, Enter executes, and Escape/Tab closes with focus restored. The editor's
 context menu contains only supported model actions such as select, duplicate, reorder, delete, undo/redo, copy ID,
 and reveal in the outline; it does not expose the browser/template context menu. The palette also includes wearable
 building blocks for icon detail rows, value rows, metric blocks, and button-based segmented controls. These expand to

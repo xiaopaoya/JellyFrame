@@ -633,6 +633,7 @@ body.panning #canvas-wrap {
 }
 
 #canvas-shell {
+  position: relative;
   flex: 0 0 auto;
   overflow: hidden;
   transform-origin: center;
@@ -698,12 +699,22 @@ body.panning #canvas-wrap {
 }
 
 .designer-node.selected {
-  z-index: 2;
-}
-
-.designer-node.selected {
   outline: 2px solid #4daafc;
   outline-offset: -2px;
+}
+
+.selection-overlay {
+  position: absolute;
+  z-index: 30;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.selection-frame {
+  position: absolute;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  pointer-events: none;
 }
 
 .resize-handle {
@@ -711,6 +722,10 @@ body.panning #canvas-wrap {
   z-index: 30;
   width: 8px;
   height: 8px;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  touch-action: none;
   margin: -4px;
   background: var(--focus);
   border: 1px solid var(--canvas-bg);
@@ -730,7 +745,6 @@ body.panning #canvas-wrap {
 
 body.resizing-node,
 body.resizing-node * {
-  cursor: grabbing !important;
   user-select: none !important;
 }
 
@@ -739,6 +753,9 @@ body.resizing-node * {
   z-index: 100;
   display: grid;
   min-width: 184px;
+  max-width: calc(100vw - 12px);
+  max-height: calc(100vh - 12px);
+  overflow-y: auto;
   padding: 4px;
   background: var(--surface-raised);
   border: 1px solid var(--focus);

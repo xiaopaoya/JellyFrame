@@ -175,3 +175,18 @@ This order supersedes starting immediately with paging. Later independent work
 includes target-specific overrides, visible round-screen safe areas, package
 icon/font browsing and reusable subtrees. Stage 4 and A2 evidence remain open;
 recipe count alone is not an acceptance criterion.
+
+Slice 1 delivered in `0.4.77` (2026-09-28): selection chrome now lives in an
+external layer, follows zoom/scroll and clips to scrolling ancestors without
+entering controls or editable text. Resize uses registry types/bounds and the
+element's box-sizing contract; flex constraints remain unchanged. Projected
+trees do not mutate the model until release. No-op/return-to-origin, Escape,
+pointer cancellation and focus loss preserve history/dirty state; cancellation
+also preserves redo and pre-preview scroll. Menus support Shift+F10, arrows,
+Home/End, Enter and Escape/Tab with focus restoration.
+
+Automated coverage includes all 12 types, valid saved models and reopened
+geometry, eight handles at 50/100/150% zoom, auto/percent conversion, cancellation,
+redo, nested scroll and keyboard menus. Real VS Code interaction acceptance
+awaits user retesting; no hardware claim is added. Next is slice 2's capability
+audit and fine-grained fields, not page/gesture implementation yet.

@@ -13,7 +13,7 @@ Module._load = function(request, parent, isMain) {
 };
 const { visualEditorHtml } = require("../../tools/vscode-jellyframe/visual_editor");
 Module._load = originalLoad;
-const { createDefaultModel, defaultNode, componentRegistry, recipeRegistry, instantiateRecipe } = require("../../tools/vscode-jellyframe/visual_editor_model");
+const { createDefaultModel, defaultNode, componentRegistry, recipeRegistry, instantiateRecipe, validateModel, renderBody } = require("../../tools/vscode-jellyframe/visual_editor_model");
 const editor = path.resolve(__dirname, "../../tools/vscode-jellyframe");
 const output = path.resolve(process.env.JELLYFRAME_UI_TEST_OUTPUT || "build/test_outputs/visual_editor");
 const errors = [];
@@ -31,8 +31,8 @@ function fixture() {
   return model;
 }
 
-async function mount(page, model, state = {}) {
-  const html = visualEditorHtml({ cspSource: "", asWebviewUri: (uri) => uri }, "interaction-test", model, {})
+async function mount(page, model, state = {}, assets = {}) {
+  const html = visualEditorHtml({ cspSource: "", asWebviewUri: (uri) => uri }, "interaction-test", model, assets)
     .replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/g, "")
     .replace(/<link[^>]*>/g, "")
     .replace(/<script[^>]*src=[^>]*><\/script>/g, "");
@@ -53,6 +53,32 @@ async function mount(page, model, state = {}) {
 
 const row = (page, id) => page.locator(`#outline-tree .outline-row[data-node-id="${id}"]`);
 const canvasNode = (page, id) => page.locator(`#canvas .designer-node[data-node-id="${id}"]`);
+const handle = (page, edge) => page.locator(`.selection-overlay [data-resize-edge="${edge}"]`);
+async function resizeBy(page, edge, dx, dy, end = "up") {
+  const box = await handle(page, edge).evaluate((item) => {
+    const { x, y, width, height } = item.getBoundingClientRect();
+    return { x, y, width, height };
+  });
+  assert(box, `visible ${edge} handle`);
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + dx, y + dy, { steps: 4 });
+  if (end === "return") await page.mouse.move(x, y, { steps: 4 });
+  if (end === "escape") await page.keyboard.press("Escape");
+  if (end === "cancel") await page.evaluate(() => document.dispatchEvent(new PointerEvent("pointercancel", { pointerId: 1, bubbles: true })));
+  if (end === "blur") await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await page.mouse.up();
+}
+async function savedModel(page) {
+  await page.locator("#save").click();
+  const model = await page.evaluate(() => window.messages.filter((item) => item.type === "save").at(-1).model);
+  validateModel(model);
+  assert(!/resize-handle|selection-overlay/.test(renderBody(model)));
+  await page.evaluate(() => window.dispatchEvent(new MessageEvent("message", { data: { type: "saved" } })));
+  return model;
+}
 async function activeId(page) { return page.evaluate(() => document.activeElement?.dataset.nodeId); }
 async function selectedId(page) { return page.locator(".outline-row.selected").getAttribute("data-node-id"); }
 async function geometry(page) {
@@ -182,7 +208,7 @@ async function main() {
     const clamped = await canvasNode(page, "inner-scroll").evaluate((node) =>
       ({ top: node.scrollTop, maximum: node.scrollHeight - node.clientHeight }));
     assert.equal(clamped.top, clamped.maximum, "offset clamps to the resized container's scroll range");
-    assert(clamped.top < 10, "only editor selection chrome may extend past the enlarged content");
+    assert.equal(clamped.top, 0, "selection chrome does not extend the scroll range");
     await page.locator("#undo").click();
     // The last viewport position, not an outdated scroll snapshot, is retained.
     assert.equal(await canvasNode(page, "inner-scroll").evaluate((node) => node.scrollTop), clamped.top);
@@ -275,12 +301,12 @@ async function main() {
     resizable.root.children = [{ ...defaultNode("button", "resizable"), width: "50%", height: "60px" }];
     await mount(page, resizable, { zoom: 1 });
     await row(page, "resizable").click();
-    assert.equal(await canvasNode(page, "resizable").locator("[data-resize-edge]").count(), 8);
+    assert.equal(await page.locator(".selection-overlay [data-resize-edge]").count(), 8);
     await row(page, "page").click();
     assert.equal(await page.locator("[data-resize-edge]").count(), 0, "root selection has no resize handles");
     await row(page, "resizable").click();
     const widthBefore = (await canvasNode(page, "resizable").boundingBox()).width;
-    const east = await canvasNode(page, "resizable").locator('[data-resize-edge="e"]').boundingBox();
+    const east = await handle(page, "e").boundingBox();
     await page.mouse.move(east.x + east.width / 2, east.y + east.height / 2);
     await page.mouse.down();
     await page.mouse.move(east.x + east.width / 2 + 24, east.y + east.height / 2, { steps: 4 });
@@ -307,6 +333,118 @@ async function main() {
     await page.keyboard.press("Escape");
     assert.equal(await page.getByRole("menu").count(), 0, "Escape closes the editor menu");
     console.log("Resize handles and context menu passed");
+
+    // Every registry type, including real replaced images/inputs/selects, uses
+    // external chrome and commits dimensions accepted by the source validator.
+    const png = "data:image/png;base64," + fs.readFileSync(path.join(editor, "media/jellyframe.png")).toString("base64");
+    for (const definition of componentRegistry()) {
+      const model = fixture();
+      const node = { ...defaultNode(definition.type, "sized"), width: "100px" };
+      if (node.type === "image") node.src = "/icon.png";
+      model.root.children = [node];
+      await mount(page, model, {}, { "/icon.png": png });
+      await row(page, "sized").click();
+      if (node.type === "image") assert.equal(await canvasNode(page, "sized").evaluate((item) => item.tagName), "IMG");
+      assert.equal(await canvasNode(page, "sized").locator("[data-resize-edge]").count(), 0);
+      const before = await canvasNode(page, "sized").boundingBox();
+      if (node.type === "input" || node.type === "image") {
+        await page.screenshot({ path: path.join(output, `resize-${node.type}.png`) });
+      }
+      await resizeBy(page, "se", 20, 20);
+      const changed = await savedModel(page);
+      const result = changed.root.children[0];
+      assert.equal(result.width, "120px", definition.type);
+      const heightField = definition.fields.find((item) => item.key === "height");
+      if (heightField.kind === "number") {
+        assert.equal(typeof result.height, "number");
+        assert(result.height >= heightField.min && result.height <= heightField.max);
+      } else assert.match(result.height, /^\d+px$/);
+      if (node.type === "text") assert.equal(result.text, node.text);
+      const after = await canvasNode(page, "sized").boundingBox();
+      await mount(page, changed, {}, { "/icon.png": png });
+      const reopened = await canvasNode(page, "sized").boundingBox();
+      assert(Math.abs(reopened.width - after.width) < 0.1 && Math.abs(reopened.height - after.height) < 0.1,
+        `${definition.type}: saved/reopened dimensions match`);
+      assert(after.width > before.width);
+    }
+    for (const zoom of [0.5, 1, 1.5]) {
+      for (const edge of ["n", "ne", "e", "se", "s", "sw", "w", "nw"]) {
+        const model = fixture();
+        model.root.children = [{ ...defaultNode("button", "sized"), width: "100px", height: "60px" }];
+        await mount(page, model, { zoom });
+        await row(page, "sized").click();
+        const x = edge.includes("e") ? 20 : edge.includes("w") ? -20 : 0;
+        const y = edge.includes("s") ? 20 : edge.includes("n") ? -20 : 0;
+        await resizeBy(page, edge, x * zoom, y * zoom);
+        const changed = await savedModel(page);
+        assert.equal(changed.root.children[0].width, x ? "120px" : "100px", `${edge} at ${zoom}`);
+        assert.equal(changed.root.children[0].height, y ? "80px" : "60px", `${edge} at ${zoom}`);
+      }
+    }
+    for (const end of ["up", "return", "escape", "cancel", "blur"]) {
+      await mount(page, resizable);
+      await row(page, "resizable").click();
+      await resizeBy(page, "se", end === "up" ? 0 : 25, end === "up" ? 0 : 25, end);
+      assert.equal(await page.locator("body").getAttribute("data-save-state"), "ready");
+      assert(await page.locator("#undo").isDisabled(), "no-op/cancel creates no history");
+      assert.deepEqual(await savedModel(page), resizable, "cancel preserves units and model");
+    }
+    const autoSized = fixture();
+    autoSized.root.layout = "row";
+    autoSized.root.children = [{ ...defaultNode("text", "auto-sized"), text: "Size", width: "auto", height: "auto" }];
+    await mount(page, autoSized, { zoom: 0.5 });
+    await row(page, "auto-sized").click();
+    const autoBefore = await canvasNode(page, "auto-sized").boundingBox();
+    await resizeBy(page, "e", 10, 0);
+    const autoResult = await savedModel(page);
+    assert.equal(autoResult.root.children[0].width, `${Math.round(autoBefore.width / 0.5 + 20)}px`);
+    assert.equal(autoResult.root.children[0].height, "auto", "only the dragged dimension converts to px");
+    await page.locator("#undo").click();
+    assert.deepEqual(await savedModel(page), autoSized);
+    await mount(page, scrolling);
+    await canvasNode(page, "outer-scroll").evaluate((item) => { item.scrollTop = 160; });
+    await canvasNode(page, "inner-scroll").evaluate((item) => { item.scrollTop = 176; });
+    await row(page, "inner-scroll").click();
+    await resizeBy(page, "s", 0, 400, "escape");
+    assert.deepEqual(await scrollOffsets(), savedOffsets, "cancelling a resize restores pre-preview scrolling");
+    await mount(page, resizable);
+    await row(page, "resizable").click();
+    await resizeBy(page, "e", 20, 0);
+    await page.locator("#undo").click();
+    await resizeBy(page, "e", 20, 0, "escape");
+    assert.equal(await page.locator("#redo").isDisabled(), false, "cancel preserves redo");
+    await page.locator("#redo").click();
+    const redone = await savedModel(page);
+    assert.equal(redone.root.children[0].width, "172px");
+    console.log("All node sizing, eight edges, three zooms, cancellation and reopen passed");
+
+    await mount(page, fixture());
+    await row(page, "page").focus();
+    await page.keyboard.press("Shift+F10");
+    assert.equal(await page.getByRole("menuitem", { name: "Duplicate", exact: true }).isDisabled(), true);
+    await page.keyboard.press("End");
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), "Show in outline",
+      "menu skips root-only disabled actions");
+    await page.keyboard.press("ArrowDown");
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), "Select");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    assert.deepEqual(await page.evaluate(() => window.messages.at(-1)), { type: "copy-node-id", text: "page" });
+    assert.equal(await activeId(page), "page");
+    await page.keyboard.press("Shift+F10");
+    await page.keyboard.press("Escape");
+    assert.equal(await activeId(page), "page");
+    await page.keyboard.press("Shift+F10");
+    await page.keyboard.press("Tab");
+    assert.equal(await page.getByRole("menu").count(), 0);
+    await row(page, "moving").click({ button: "right" });
+    await page.screenshot({ path: path.join(output, "canvas-menu-keyboard.png") });
+    await page.getByRole("menuitem", { name: "Duplicate", exact: true }).click();
+    assert.equal(await page.locator("#canvas .jf-visual-button").count(), 2);
+    await page.keyboard.press("Shift+F10");
+    await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+    assert.equal(await page.locator("#canvas .jf-visual-button").count(), 1);
+    console.log("Keyboard context menu navigation and focus passed");
 
     for (const viewport of [{ width: 172, height: 320, shape: "rect" }, { width: 300, height: 300, shape: "round" }, { width: 320, height: 240, shape: "rect" }]) {
       for (const recipe of recipeRegistry().filter((item) => item.group === "wearableGroup")) {

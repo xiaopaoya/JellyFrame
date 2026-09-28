@@ -34,6 +34,8 @@
   const maxNodes = Number(initial.maxNodes) || 128;
   let suppressClick = false;
   let contextMenu;
+  let resizeSession;
+  let selectionOverlay;
 
   const t = initial.chinese ? {
     wearableGroup: "穿戴设备组合",
@@ -582,6 +584,7 @@
       restoreCanvasScroll(previewCanvasScroll);
       previewCanvasChildren = undefined;
       previewCanvasScroll = undefined;
+      renderSelectionOverlay();
     }
   }
 
@@ -592,6 +595,7 @@
     const scrollPositions = captureCanvasScroll();
     previewCanvasScroll = scrollPositions;
     previewCanvasChildren = [...canvas.childNodes];
+    renderSelectionOverlay();
     // Render the projected tree so flex sizing and sibling layout match the drop.
     canvas.replaceChildren(renderNode(result.root, true));
     restoreCanvasScroll(scrollPositions);
@@ -851,6 +855,15 @@
     if (!node) return;
     if (selectedId !== node.id) selectNode(node.id);
     closeContextMenu();
+    const fromOutline = Boolean(event.target?.closest?.(".outline-row"));
+    const restoreFocus = () => {
+      const selector = fromOutline ? "#outline-tree .outline-row" : "#canvas .designer-node";
+      const target = [...document.querySelectorAll(selector)].find((item) => item.dataset.nodeId === selectedId);
+      if (target) {
+        if (!fromOutline && !target.hasAttribute("tabindex")) target.tabIndex = -1;
+        target.focus({ preventScroll: true });
+      }
+    };
 
     const menu = document.createElement("div");
     menu.className = "editor-context-menu";
@@ -861,12 +874,14 @@
       item.type = "button";
       item.className = "editor-context-menu-item";
       item.setAttribute("role", "menuitem");
+      item.tabIndex = -1;
       item.textContent = label;
       item.disabled = Boolean(options.disabled);
       item.addEventListener("click", () => {
         if (item.disabled) return;
         closeContextMenu();
         handler();
+        if (label !== t.showInOutline) restoreFocus();
       });
       menu.append(item);
       return item;
@@ -886,10 +901,10 @@
     separator.className = "editor-context-menu-separator";
     separator.setAttribute("role", "separator");
     menu.append(separator);
-    addItem(t.duplicate, duplicateSelected, { disabled: node.id === model.root.id });
-    addItem(t.moveUp, () => moveSelected(-1), { disabled: node.id === model.root.id || !parentOf(node.id)?.children?.length || parentOf(node.id).children[0]?.id === node.id });
-    addItem(t.moveDown, () => moveSelected(1), { disabled: node.id === model.root.id || !parentOf(node.id)?.children?.length || parentOf(node.id).children.at(-1)?.id === node.id });
-    addItem(t.remove, removeSelected, { disabled: node.id === model.root.id });
+    addItem(t.duplicate, duplicateSelected, { disabled: saving || node.id === model.root.id || nodeCount() + nodeCount(node) > maxNodes });
+    addItem(t.moveUp, () => moveSelected(-1), { disabled: saving || node.id === model.root.id || !parentOf(node.id)?.children?.length || parentOf(node.id).children[0]?.id === node.id });
+    addItem(t.moveDown, () => moveSelected(1), { disabled: saving || node.id === model.root.id || !parentOf(node.id)?.children?.length || parentOf(node.id).children.at(-1)?.id === node.id });
+    addItem(t.remove, removeSelected, { disabled: saving || node.id === model.root.id });
     const historySeparator = document.createElement("div");
     historySeparator.className = "editor-context-menu-separator";
     historySeparator.setAttribute("role", "separator");
@@ -903,81 +918,153 @@
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
     contextMenu = menu;
-    menu.focus();
+    const enabledItems = () => [...menu.querySelectorAll("button:not(:disabled)")];
+    const focusItem = (item) => {
+      menu.querySelectorAll("button").forEach((button) => { button.tabIndex = button === item ? 0 : -1; });
+      item?.focus({ preventScroll: true });
+    };
+    menu.addEventListener("keydown", (keyEvent) => {
+      keyEvent.stopPropagation();
+      const items = enabledItems();
+      const index = items.indexOf(document.activeElement);
+      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(keyEvent.key)) {
+        keyEvent.preventDefault();
+        const next = keyEvent.key === "Home" ? 0 : keyEvent.key === "End" ? items.length - 1
+          : (index + (keyEvent.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+        focusItem(items[next]);
+      } else if (keyEvent.key === "Escape" || keyEvent.key === "Tab") {
+        keyEvent.preventDefault();
+        closeContextMenu();
+        restoreFocus();
+      }
+    });
+    focusItem(enabledItems()[0]);
   }
 
-  function minimumResizeSize(node, axis) {
-    if (node.type === "divider") return axis === "width" ? 16 : 1;
-    if (node.type === "spacer") return 0;
-    return axis === "width" ? 16 : 16;
-  }
-
-  function appendResizeHandles(element, node) {
-    if (node.id === model.root.id || node.id !== selectedId) return;
-    ["nw", "n", "ne", "e", "se", "s", "sw", "w"].forEach((edge) => {
-      const handle = document.createElement("span");
+  function renderSelectionOverlay() {
+    const node = find(selectedId);
+    const element = [...$("canvas").querySelectorAll(".designer-node")].find((item) => item.dataset.nodeId === node?.id);
+    if (!node || node.id === model.root.id || previewCanvasChildren || saving || !element) {
+      selectionOverlay?.remove();
+      selectionOverlay = undefined;
+      return;
+    }
+    const shell = $("canvas-shell").getBoundingClientRect();
+    const scale = shell.width / model.viewport.width;
+    const rect = element.getBoundingClientRect();
+    const clip = { left: shell.left, top: shell.top, right: shell.right, bottom: shell.bottom };
+    // Clip editor chrome to the same scrolling ancestors without putting it
+    // inside controls, editable text, or the generated app layout.
+    for (let parent = element.parentElement; parent && parent !== $("canvas-shell"); parent = parent.parentElement) {
+      const style = getComputedStyle(parent);
+      const bounds = parent.getBoundingClientRect();
+      if (style.overflowX !== "visible") {
+        clip.left = Math.max(clip.left, bounds.left);
+        clip.right = Math.min(clip.right, bounds.right);
+      }
+      if (style.overflowY !== "visible") {
+        clip.top = Math.max(clip.top, bounds.top);
+        clip.bottom = Math.min(clip.bottom, bounds.bottom);
+      }
+    }
+    const layer = selectionOverlay || document.createElement("div");
+    layer.className = "selection-overlay";
+    Object.assign(layer.style, {
+      left: `${(clip.left - shell.left) / scale}px`, top: `${(clip.top - shell.top) / scale}px`,
+      width: `${Math.max(0, clip.right - clip.left) / scale}px`, height: `${Math.max(0, clip.bottom - clip.top) / scale}px`
+    });
+    const frame = layer.firstElementChild || document.createElement("div");
+    frame.className = "selection-frame";
+    Object.assign(frame.style, {
+      left: `${(rect.left - clip.left) / scale}px`, top: `${(rect.top - clip.top) / scale}px`,
+      width: `${rect.width / scale}px`, height: `${rect.height / scale}px`
+    });
+    if (!selectionOverlay) ["nw", "n", "ne", "e", "se", "s", "sw", "w"].forEach((edge) => {
+      const handle = document.createElement("button");
+      handle.type = "button";
+      handle.tabIndex = -1;
       handle.className = `resize-handle resize-handle-${edge}`;
       handle.dataset.resizeEdge = edge;
       const horizontal = edge === "e" || edge === "w";
       const vertical = edge === "n" || edge === "s";
       handle.title = horizontal ? t.resizeWidth : vertical ? t.resizeHeight : t.resize;
       handle.setAttribute("aria-label", horizontal ? t.resizeWidth : vertical ? t.resizeHeight : t.resize);
-      handle.addEventListener("pointerdown", (event) => bindResizeHandle(event, node, element, edge));
-      element.append(handle);
+      handle.addEventListener("pointerdown", (event) => {
+        const current = find(selectedId);
+        const target = [...$("canvas").querySelectorAll(".designer-node")].find((item) => item.dataset.nodeId === selectedId);
+        if (current && target) bindResizeHandle(event, current, target, edge);
+      });
+      handle.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); });
+      frame.append(handle);
     });
+    if (!selectionOverlay) {
+      layer.append(frame);
+      $("canvas-shell").append(layer);
+    }
+    selectionOverlay = layer;
   }
 
   function bindResizeHandle(event, node, element, edge) {
-    if (event.button !== 0 || node.id === model.root.id) return;
+    if (event.button !== 0 || node.id === model.root.id || saving || resizeSession) return;
     event.preventDefault();
     event.stopPropagation();
     closeContextMenu();
     const rect = element.getBoundingClientRect();
-    const scaleX = rect.width / Math.max(1, element.offsetWidth);
-    const scaleY = rect.height / Math.max(1, element.offsetHeight);
-    const startWidth = rect.width / Math.max(0.01, scaleX);
-    const startHeight = rect.height / Math.max(0.01, scaleY);
-    const original = { width: node.width, height: node.height };
+    const scale = $("canvas-shell").getBoundingClientRect().width / model.viewport.width;
+    const style = getComputedStyle(element);
+    const extra = (axis) => style.boxSizing === "border-box" ? 0
+      : (axis === "width" ? ["paddingLeft", "paddingRight", "borderLeftWidth", "borderRightWidth"]
+        : ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"])
+        .reduce((sum, key) => sum + (parseFloat(style[key]) || 0), 0);
+    const startWidth = rect.width / scale - extra("width");
+    const startHeight = rect.height / scale - extra("height");
     const resizeWidth = edge.includes("e") || edge.includes("w");
     const resizeHeight = edge.includes("n") || edge.includes("s");
     const startX = event.clientX;
     const startY = event.clientY;
-    const futureBefore = future;
-    snapshot();
-    if (resizeWidth) node.width = `${Math.round(startWidth)}px`;
-    if (resizeHeight) node.height = `${Math.round(startHeight)}px`;
-    markDirty();
+    const originalScroll = captureCanvasScroll();
+    let changes = {};
     document.body.classList.add("resizing-node");
 
     const move = (moveEvent) => {
-      const dx = (moveEvent.clientX - startX) / Math.max(0.01, scaleX);
-      const dy = (moveEvent.clientY - startY) / Math.max(0.01, scaleY);
-      if (resizeWidth) {
-        const width = clamp(startWidth + dx * (edge.includes("w") ? -1 : 1), minimumResizeSize(node, "width"), 10000);
-        node.width = `${Math.round(width)}px`;
-        element.style.width = node.width;
-      }
-      if (resizeHeight) {
-        const height = clamp(startHeight + dy * (edge.includes("n") ? -1 : 1), minimumResizeSize(node, "height"), 10000);
-        node.height = `${Math.round(height)}px`;
-        element.style.height = node.height;
-      }
+      if (moveEvent.pointerId !== event.pointerId) return;
+      changes = {};
+      const setDimension = (key, start, delta) => {
+        if (Math.abs(delta) < 1) return;
+        const field = registryByType.get(node.type)?.fields.find((item) => item.key === key);
+        if (!field) return;
+        const pixels = Math.round(clamp(start + delta, field.min ?? 0, field.max ?? 10000));
+        const typed = typedValue(node, key, field.kind === "number" ? pixels : `${pixels}px`);
+        if (!typed.error && typed.value !== node[key]) changes[key] = typed.value;
+      };
+      if (resizeWidth) setDimension("width", startWidth, (moveEvent.clientX - startX) / scale * (edge.includes("w") ? -1 : 1));
+      if (resizeHeight) setDimension("height", startHeight, (moveEvent.clientY - startY) / scale * (edge.includes("n") ? -1 : 1));
+      const projected = clone(model.root);
+      Object.assign(find(node.id, projected), changes);
+      renderCanvas(projected, true);
     };
     const finish = (finishEvent) => {
+      if (finishEvent?.pointerId !== undefined && finishEvent.pointerId !== event.pointerId) return;
       document.removeEventListener("pointermove", move, true);
       document.removeEventListener("pointerup", finish, true);
       document.removeEventListener("pointercancel", finish, true);
+      window.removeEventListener("blur", cancel);
+      resizeSession = undefined;
       document.body.classList.remove("resizing-node");
-      if (finishEvent?.type === "pointercancel") {
-        node.width = original.width;
-        node.height = original.height;
-        history.pop();
-        future = futureBefore;
-      } else {
-        scheduleModelCheck();
+      if (finishEvent?.type === "pointerup" && Object.keys(changes).length) {
+        snapshot();
+        Object.assign(node, changes);
+        markDirty();
       }
       renderAll();
+      if (finishEvent?.type !== "pointerup" || !Object.keys(changes).length) {
+        restoreCanvasScroll(originalScroll);
+        renderSelectionOverlay();
+      }
     };
+    const cancel = () => finish();
+    resizeSession = { cancel };
+    window.addEventListener("blur", cancel);
     document.addEventListener("pointermove", move, true);
     document.addEventListener("pointerup", finish, true);
     document.addEventListener("pointercancel", finish, true);
@@ -1315,7 +1402,6 @@
     }
     element.addEventListener("contextmenu", (event) => openContextMenu(event, node.id));
     bindDropTarget(element, node);
-    appendResizeHandles(element, node);
     return element;
   }
 
@@ -1335,16 +1421,17 @@
     });
   }
 
-  function renderCanvas() {
+  function renderCanvas(root = model.root, preview = false) {
     const canvas = $("canvas");
     const scrollPositions = captureCanvasScroll();
-    canvas.replaceChildren(renderNode(model.root));
+    canvas.replaceChildren(renderNode(root, preview));
     const round = model.viewport.shape === "round";
     canvas.classList.toggle("round", round);
     $("canvas-shell").classList.toggle("round", round);
     $("canvas-shell").style.width = `${model.viewport.width}px`;
     $("canvas-shell").style.height = `${model.viewport.height}px`;
     restoreCanvasScroll(scrollPositions);
+    renderSelectionOverlay();
     $("device-caption").textContent = `${model.viewport.width} x ${model.viewport.height}${round ? " · round" : ""}`;
     requestAnimationFrame(applyZoom);
   }
@@ -2116,6 +2203,7 @@
   }
 
   function renderAll() {
+    if (resizeSession) { resizeSession.cancel(); return; }
     renderPanels();
     renderSourceNotice();
     renderCanvas();
@@ -2143,6 +2231,7 @@
     wrap.style.setProperty("--pan-y", `${panY}px`);
     $("canvas-shell").style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${scale})`;
     $("zoom-label").textContent = `${Math.round(scale * 100)}%`;
+    renderSelectionOverlay();
   }
 
   function adjustZoom(delta) {
@@ -2188,6 +2277,7 @@
   }
 
   function requestSave(debug) {
+    resizeSession?.cancel();
     if (saving) return;
     saving = true;
     setSaveState("saving", t.saving);
@@ -2285,13 +2375,31 @@
   new ResizeObserver(() => { if (zoom === "fit") applyZoom(); }).observe($("canvas-wrap"));
 
   document.addEventListener("pointerdown", (event) => {
+    resizeSession?.cancel();
     if (contextMenu && !contextMenu.contains(event.target)) closeContextMenu();
   }, true);
-  document.addEventListener("scroll", closeContextMenu, true);
+  document.addEventListener("scroll", (event) => {
+    if (!contextMenu?.contains(event.target)) closeContextMenu();
+  }, true);
+  $("canvas-wrap").addEventListener("scroll", renderSelectionOverlay, true);
 
   document.addEventListener("keydown", (event) => {
+    if (resizeSession) {
+      if (event.key === "Escape") resizeSession.cancel();
+      event.preventDefault();
+      return;
+    }
     const editing = ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName)
       || document.activeElement?.isContentEditable;
+    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+      const target = event.target.closest?.(".outline-row, .designer-node");
+      if (target) {
+        const bounds = target.getBoundingClientRect();
+        openContextMenu({ target, clientX: bounds.left, clientY: bounds.top,
+          preventDefault: () => event.preventDefault(), stopPropagation: () => event.stopPropagation() }, target.dataset.nodeId);
+        return;
+      }
+    }
     if (event.key === "Escape" && contextMenu) {
       closeContextMenu();
       event.preventDefault();
