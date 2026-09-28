@@ -182,9 +182,18 @@ now expose bounded `line-height`, `white-space: normal/nowrap`,
 `text-overflow: clip/ellipsis`, and `border-width`/`border-color`. Missing fields
 retain the old automatic line-height, breakable text and borderless defaults;
 invalid enum, range and color values are rejected before entering the model.
-Browser and Native Runtime coverage includes positive/negative models and all
-three target viewports, with a no-diagnostic fixture. The next slice audits icon
-assets and touch sizing for detail rows; arbitrary CSS remains out of scope.
+Browser and Native Runtime coverage includes positive/negative models, all three
+target viewports, a no-diagnostic fixture, and a browser-baseline alignment
+conformance matrix for text, button, and list controls. Default alignment values
+are materialized for new nodes and resolved for older models that omit them.
+The next slice audits icon assets and touch sizing for detail rows; arbitrary CSS
+remains out of scope.
+
+The alignment parity fix is in plugin `0.4.79` (2026-09-28): new button,
+text, and list nodes persist their documented alignment defaults, while legacy
+models receive the same defaults during source and design rendering. The new
+browser-versus-Native Runtime conformance test covers all three horizontal and
+vertical alignment values without relying on hardware image comparison.
 
 Slice 1 delivered in `0.4.77` (2026-09-28): selection chrome now lives in an
 external layer, follows zoom/scroll and clips to scrolling ancestors without

@@ -359,10 +359,10 @@ function defaultNode(type, id) {
     return { ...common, layout: "column", gap: 10, padding: 12, width: "100%", height: "96px", background: "transparent", radius: 0, align: "stretch", justify: "start", children: [] };
   }
   if (type === "text") {
-    return { ...common, text: "Text", fontSize: 18, color: "#f4f7fb", weight: "normal", align: "left", width: "auto" };
+    return { ...common, text: "Text", fontSize: 18, color: "#f4f7fb", weight: "normal", align: "left", verticalAlign: "start", width: "auto" };
   }
   if (type === "button") {
-    return { ...common, text: "Button", width: "100%", height: "44px", background: "#20b486", color: "#071712", radius: 6 };
+    return { ...common, text: "Button", textAlign: "center", verticalAlign: "center", width: "100%", height: "44px", background: "#20b486", color: "#071712", radius: 6 };
   }
   if (type === "image") {
     return { ...common, src: "", alt: "", width: "100%", height: "96px", fit: "cover", radius: 6 };
@@ -376,7 +376,7 @@ function defaultNode(type, id) {
   if (type === "divider") return { ...common, width: "100%", height: 1, color: "#344250" };
   if (type === "spacer") return { ...common, width: "100%", height: 12 };
   if (type === "select") return { ...common, options: ["Option 1", "Option 2", "Option 3"], selected: 0, width: "100%", height: "40px", background: "#18212b", color: "#f4f7fb", radius: 4 };
-  if (type === "list") return { ...common, items: ["List item 1", "List item 2", "List item 3"], width: "100%", height: "auto", itemHeight: 36, gap: 4, background: "#18212b", color: "#f4f7fb", radius: 6 };
+  if (type === "list") return { ...common, items: ["List item 1", "List item 2", "List item 3"], textAlign: "left", verticalAlign: "center", width: "100%", height: "auto", itemHeight: 36, gap: 4, background: "#18212b", color: "#f4f7fb", radius: 6 };
   if (type === "navigation") return { ...common, items: ["Home", "Stats", "More"], active: 0, width: "100%", height: "48px", gap: 4, background: "#18212b", color: "#9aa9b8", activeColor: "#20b486", fontSize: 9, radius: 6 };
   if (type === "switch") return { ...common, checked: true, width: "52px", height: "28px", onColor: "#20b486", offColor: "#26313d", thumbColor: "#f4f7fb", radius: 14 };
   throw new Error(`Unsupported visual-editor node type: ${type}`);
@@ -526,7 +526,7 @@ function nodeStyle(node, parent) {
     add("border-radius", `${cssNumber(node.radius, 0, 0, 64)}px`);
     addBorder(declarations, node, "#344250");
     add("padding", `${cssNumber(node.paddingY, 0, 0, 64)}px ${cssNumber(node.paddingX, 12, 0, 64)}px`);
-    add("text-align", node.textAlign || (node.type === "button" ? "center" : "left"));
+    add("text-align", ["left", "center", "right"].includes(node.textAlign) ? node.textAlign : (node.type === "button" ? "center" : "left"));
     addTextFlow(declarations, node);
   } else if (node.type === "image") {
     add("object-fit", ["cover", "contain", "fill"].includes(node.fit) ? node.fit : "cover");
@@ -581,18 +581,24 @@ function nodeStyle(node, parent) {
     addBorder(declarations, node, "#344250");
     add("border-radius", `${cssNumber(node.radius, 14, 0, 64)}px`);
   }
-  if ((node.type === "button" || node.type === "text") && node.verticalAlign !== undefined) {
+  const verticalAlign = ["start", "center", "end"].includes(node.verticalAlign)
+    ? node.verticalAlign
+    : node.type === "button" ? "center" : node.type === "text" ? "start" : undefined;
+  if ((node.type === "button" || node.type === "text") && verticalAlign !== undefined) {
     add("display", "flex");
     add("flex-direction", "column");
     add("align-items", "stretch");
-    add("justify-content", ({ start: "flex-start", center: "center", end: "flex-end" })[node.verticalAlign]);
+    add("justify-content", ({ start: "flex-start", center: "center", end: "flex-end" })[verticalAlign]);
   }
   return declarations.join("; ");
 }
 
 function alignedText(node) {
   const text = escapeHtml(node.text);
-  return node.verticalAlign === undefined ? text : `<span style="display: block; width: 100%">${text}</span>`;
+  const verticalAlign = ["start", "center", "end"].includes(node.verticalAlign)
+    ? node.verticalAlign
+    : node.type === "button" ? "center" : node.type === "text" ? "start" : undefined;
+  return verticalAlign === undefined ? text : `<span style="display: block; width: 100%">${text}</span>`;
 }
 
 const sourceRenderers = {
@@ -628,7 +634,8 @@ const sourceRenderers = {
     return `${indent}<select id="${id}" class="jf-visual-select" style="${style}">${options}</select>`;
   },
   list(node, indent, id, style) {
-    const align = ({ start: "flex-start", center: "center", end: "flex-end" })[node.verticalAlign || "center"];
+    const verticalAlign = ["start", "center", "end"].includes(node.verticalAlign) ? node.verticalAlign : "center";
+    const align = ({ start: "flex-start", center: "center", end: "flex-end" })[verticalAlign];
     const flow = `white-space: ${node.whiteSpace === "nowrap" ? "nowrap" : "normal"}; text-overflow: ${node.textOverflow === "ellipsis" ? "ellipsis" : "clip"}; ${node.textOverflow === "ellipsis" ? "overflow: hidden;" : node.whiteSpace === "nowrap" ? "" : "overflow-wrap: anywhere;"}`;
     const itemStyle = `min-height: ${cssNumber(node.itemHeight, 36, 20, 96)}px; display: flex; flex-direction: column; justify-content: ${align}; padding: ${cssNumber(node.paddingY, 0, 0, 64)}px ${cssNumber(node.paddingX, 10, 0, 64)}px; text-align: ${node.textAlign || "left"}; font-size: ${cssNumber(node.fontSize, 16, 8, 72)}px; line-height: ${resolvedLineHeight(node)}px; ${flow}`;
     const items = node.items.map((item) => `${indent}  <li style="${itemStyle}"><span style="display: block; width: 100%">${escapeHtml(item)}</span></li>`).join("\n");

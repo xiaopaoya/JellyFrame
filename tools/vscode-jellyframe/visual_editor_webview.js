@@ -445,15 +445,15 @@
   function defaultNode(type) {
     const id = nextId(type);
     if (type === "container") return { id, type, layout: "column", gap: 10, padding: 12, width: "100%", height: "96px", background: "transparent", radius: 0, align: "stretch", justify: "start", children: [] };
-    if (type === "text") return { id, type, text: t.text, fontSize: 18, color: "#f4f7fb", weight: "normal", align: "left", width: "auto" };
-    if (type === "button") return { id, type, text: t.button, width: "100%", height: "44px", background: "#20b486", color: "#071712", radius: 6 };
+    if (type === "text") return { id, type, text: t.text, fontSize: 18, color: "#f4f7fb", weight: "normal", align: "left", verticalAlign: "start", width: "auto" };
+    if (type === "button") return { id, type, text: t.button, textAlign: "center", verticalAlign: "center", width: "100%", height: "44px", background: "#20b486", color: "#071712", radius: 6 };
     if (type === "image") return { id, type, src: "", alt: "", width: "100%", height: "96px", fit: "cover", radius: 6 };
     if (type === "input") return { id, type, placeholder: t.input, value: "", width: "100%", height: "40px", background: "#18212b", color: "#f4f7fb", radius: 4 };
     if (type === "progress") return { id, type: "progress", value: 50, width: "100%", height: "12px", track: "#26313d", fill: "#ffb84d", radius: 6 };
     if (type === "divider") return { id, type, width: "100%", height: 1, color: "#344250" };
     if (type === "spacer") return { id, type, width: "100%", height: 12 };
     if (type === "select") return { id, type, options: ["Option 1", "Option 2", "Option 3"], selected: 0, width: "100%", height: "40px", background: "#18212b", color: "#f4f7fb", radius: 4 };
-    if (type === "list") return { id, type, items: ["List item 1", "List item 2", "List item 3"], width: "100%", height: "auto", itemHeight: 36, gap: 4, background: "#18212b", color: "#f4f7fb", radius: 6 };
+    if (type === "list") return { id, type, items: ["List item 1", "List item 2", "List item 3"], textAlign: "left", verticalAlign: "center", width: "100%", height: "auto", itemHeight: 36, gap: 4, background: "#18212b", color: "#f4f7fb", radius: 6 };
     if (type === "navigation") return { id, type, items: ["Home", "Stats", "Settings"], active: 0, width: "100%", height: "48px", gap: 4, background: "#18212b", color: "#9aa9b8", activeColor: "#20b486", radius: 6 };
     if (type === "switch") return { id, type, checked: true, width: "52px", height: "28px", onColor: "#20b486", offColor: "#26313d", thumbColor: "#f4f7fb", radius: 14 };
     throw new Error(`Unsupported visual-editor node type: ${type}`);
@@ -1097,6 +1097,13 @@
     return `${size + Math.max(6, Math.floor(size / 3))}px`;
   }
 
+  function resolvedVerticalAlign(node) {
+    if (["start", "center", "end"].includes(node.verticalAlign)) return node.verticalAlign;
+    if (node.type === "button" || node.type === "list") return "center";
+    if (node.type === "text") return "start";
+    return undefined;
+  }
+
   function nodeLineHeight(node, fallback = visualLineHeight(node.fontSize)) {
     return `${Number(node.lineHeight) || Number.parseFloat(fallback) || 16}px`;
   }
@@ -1208,11 +1215,12 @@
       element.style.borderRadius = `${Number(node.radius) || 14}px`;
       element.style.boxSizing = "border-box";
     }
-    if ((node.type === "text" || node.type === "button") && node.verticalAlign !== undefined) {
+    const verticalAlign = resolvedVerticalAlign(node);
+    if ((node.type === "text" || node.type === "button") && verticalAlign !== undefined) {
       element.style.display = "flex";
       element.style.flexDirection = "column";
       element.style.alignItems = "stretch";
-      element.style.justifyContent = ({ start: "flex-start", center: "center", end: "flex-end" })[node.verticalAlign];
+      element.style.justifyContent = ({ start: "flex-start", center: "center", end: "flex-end" })[verticalAlign];
     }
   }
 
@@ -1331,7 +1339,7 @@
         row.style.minHeight = `${Number(node.itemHeight) || 36}px`;
         row.style.display = "flex";
         row.style.flexDirection = "column";
-        row.style.justifyContent = ({ start: "flex-start", center: "center", end: "flex-end" })[node.verticalAlign || "center"];
+        row.style.justifyContent = ({ start: "flex-start", center: "center", end: "flex-end" })[resolvedVerticalAlign(node) || "center"];
         row.style.padding = `${node.paddingY ?? 0}px ${node.paddingX ?? 10}px`;
         row.style.textAlign = node.textAlign || "left";
         row.style.fontSize = `${node.fontSize ?? 16}px`;
@@ -1384,7 +1392,7 @@
   };
 
   function appendAlignedText(element, node) {
-    if (node.verticalAlign === undefined) {
+    if (resolvedVerticalAlign(node) === undefined) {
       element.textContent = node.text;
       return;
     }
