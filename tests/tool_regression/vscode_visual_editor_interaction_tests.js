@@ -129,6 +129,65 @@ async function main() {
     assert.equal(await selectedId(page), "moving");
     console.log("Outline navigation, focus restoration and reorder passed");
 
+    // Rebuilding the design DOM must not reset nested scrolling viewports.
+    const scrolling = fixture();
+    const inner = { ...defaultNode("container", "inner-scroll"), height: "160px", padding: 4, gap: 4, overflowY: "auto",
+      children: Array.from({ length: 12 }, (_, i) => ({ ...defaultNode("button", `scroll-item-${i}`), height: "40px" })) };
+    const outer = { ...defaultNode("container", "outer-scroll"), height: "260px", padding: 4, gap: 4, overflowY: "auto",
+      children: [{ ...defaultNode("container", "scroll-header"), height: "200px", children: [] }, inner,
+        { ...defaultNode("container", "scroll-footer"), height: "200px", children: [] }] };
+    scrolling.root.children = [outer];
+    await mount(page, scrolling);
+    const scrollOffsets = () => page.locator('#canvas [data-node-id$="-scroll"]').evaluateAll((nodes) =>
+      nodes.map((node) => [node.dataset.nodeId, node.scrollTop, node.scrollLeft]));
+    await canvasNode(page, "outer-scroll").evaluate((node) => { node.scrollTop = 160; });
+    await canvasNode(page, "inner-scroll").evaluate((node) => { node.scrollTop = 176; });
+    const savedOffsets = await scrollOffsets();
+    assert(savedOffsets.every(([, top]) => top > 0), "fixture scrolls both containers");
+    await canvasNode(page, "scroll-item-5").click();
+    assert.equal(await selectedId(page), "scroll-item-5");
+    assert.deepEqual(await scrollOffsets(), savedOffsets, "canvas selection preserves nested scrolling");
+    await row(page, "scroll-item-6").click();
+    assert.deepEqual(await scrollOffsets(), savedOffsets, "outline selection preserves canvas scrolling");
+    const fontField = page.locator('#inspector .field').filter({ has: page.locator('label', { hasText: 'Font size' }) });
+    await fontField.locator("input").fill("18");
+    await fontField.locator("input").press("Tab");
+    assert.deepEqual(await scrollOffsets(), savedOffsets, "property redraw preserves scrolling");
+    await page.locator("#undo").click();
+    assert.deepEqual(await scrollOffsets(), savedOffsets, "undo preserves scrolling");
+    await page.locator("#redo").click();
+    assert.deepEqual(await scrollOffsets(), savedOffsets, "redo preserves scrolling");
+    await canvasNode(page, "scroll-item-5").click({ button: "right" });
+    assert.deepEqual(await scrollOffsets(), savedOffsets, "context-menu selection preserves scrolling");
+    await page.keyboard.press("Escape");
+    await page.screenshot({ path: path.join(output, "nested-scroll-selection.png") });
+    await page.locator("#components-tab").click();
+    await dragTo(page, page.locator('[data-component-type="button"]'), canvasNode(page, "scroll-item-5"));
+    assert.deepEqual(await scrollOffsets(), savedOffsets, "drop projection preserves scrolling");
+    await page.mouse.up();
+    assert.deepEqual(await scrollOffsets(), savedOffsets, "committed drop preserves scrolling");
+    await page.locator("#undo").click();
+    assert.deepEqual(await scrollOffsets(), savedOffsets);
+    await dragTo(page, page.locator('[data-component-type="button"]'), canvasNode(page, "scroll-item-5"));
+    await page.evaluate(() => document.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true })));
+    await page.mouse.up();
+    assert.deepEqual(await scrollOffsets(), savedOffsets, "cancelled projection restores original scrolling");
+    await page.locator("#outline-tab").click();
+    await row(page, "inner-scroll").click();
+    await row(page, "inner-scroll").click();
+    assert.equal(await selectedId(page), "inner-scroll");
+    const heightField = page.locator('#inspector .field').filter({ has: page.locator('label', { hasText: /^Height$/ }) });
+    await heightField.locator("input").fill("600");
+    await heightField.locator("input").press("Tab");
+    const clamped = await canvasNode(page, "inner-scroll").evaluate((node) =>
+      ({ top: node.scrollTop, maximum: node.scrollHeight - node.clientHeight }));
+    assert.equal(clamped.top, clamped.maximum, "offset clamps to the resized container's scroll range");
+    assert(clamped.top < 10, "only editor selection chrome may extend past the enlarged content");
+    await page.locator("#undo").click();
+    // The last viewport position, not an outdated scroll snapshot, is retained.
+    assert.equal(await canvasNode(page, "inner-scroll").evaluate((node) => node.scrollTop), clamped.top);
+    console.log("Nested canvas scroll retention passed");
+
     for (const definition of [...componentRegistry(), ...recipeRegistry()]) {
       await mount(page, fixture(), { activePanel: "components" });
       const attribute = definition.template ? "recipe-type" : "component-type";

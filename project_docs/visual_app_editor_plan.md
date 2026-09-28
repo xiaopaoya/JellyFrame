@@ -135,3 +135,43 @@ The inspector now reports statically recognizable listeners for stable IDs from
 package-local scripts and can copy a minimal event skeleton without changing
 author JavaScript. Target-specific overrides remain open; Stage 4 is not
 closed.
+
+## Trial Follow-Up: 2026-09-28
+
+Plugin `0.4.75` (`b08f42e2`) added canvas resize handles, a dedicated context
+menu, and four expandable wearable recipes: icon detail row, value row, metric
+block and segmented control (11 recipes total, eight wearable). The user reports
+normal operation except that selecting a control resets its scrolling page.
+
+`0.4.76` preserves scroll offsets by stable node ID when rebuilding the design
+DOM, including selection, property edits, undo/redo and drop projections. Nested
+viewports restore independently; browsers clamp offsets when content shrinks.
+These offsets are transient editor view state, not model/source/history data.
+Browser regressions are not device scrolling or performance acceptance.
+
+Upcoming slices, in execution order:
+
+1. **Direct manipulation and sizing contracts:** audit handles on all types,
+   including replaced elements such as inputs/images; use registry bounds and
+   number/length types consistently. Test cancellation/no-op history, keyboard
+   menus, focus, 50/100/150% zoom, save/reopen and undo. Handles must not enter
+   editable text; resizing flex children is not arbitrary positioning.
+2. **Fine-grained fields and wearable materials:** verify Core support before
+   adding bounded line height, wrapping/truncation and borders. Refine icon/title/
+   subtitle/value rows and segmented-button spacing. Use package assets rather
+   than assuming symbol glyph availability. Keep registry, validation, design,
+   source and Runtime aligned; check three target sizes and old-model defaults.
+3. **Page navigation model:** bounded pages, stable IDs, initial page and explicit
+   previous/next actions. Review ownership of generated navigation code before
+   implementation; never overwrite author scripts. Test deletion/reordering,
+   migration and real Runtime input/lifecycle behavior before claiming navigation.
+4. **Gestures and hardware:** direction lock, thresholds, cancellation and child
+   input priority on the existing input path. Vertical scrolling, horizontal
+   paging and slider drags must coexist. Issue a device test brief only after
+   desktop replay passes; structured logs and visual inspection suffice, without
+   photographic pixel-by-pixel comparisons.
+
+This order supersedes starting immediately with paging. Later independent work
+includes target-specific overrides, visible round-screen safe areas, package
+icon/font browsing and reusable subtrees. Stage 4 and A2 evidence remain open;
+recipe count alone is not an acceptance criterion.

@@ -19,6 +19,7 @@
   let modelCheckTimer;
   let modelCheckRevision = 0;
   let previewCanvasChildren;
+  let previewCanvasScroll;
   let zoom = persisted.zoom === undefined || persisted.zoom === "fit"
     ? "fit"
     : clamp(Number(persisted.zoom) || 1, 0.2, 2);
@@ -578,7 +579,9 @@
     });
     if (previewCanvasChildren) {
       $("canvas").replaceChildren(...previewCanvasChildren);
+      restoreCanvasScroll(previewCanvasScroll);
       previewCanvasChildren = undefined;
+      previewCanvasScroll = undefined;
     }
   }
 
@@ -586,9 +589,12 @@
     const result = prepareDrop(payload, targetId, mode);
     if (!result || result.error) return;
     const canvas = $("canvas");
+    const scrollPositions = captureCanvasScroll();
+    previewCanvasScroll = scrollPositions;
     previewCanvasChildren = [...canvas.childNodes];
     // Render the projected tree so flex sizing and sibling layout match the drop.
     canvas.replaceChildren(renderNode(result.root, true));
+    restoreCanvasScroll(scrollPositions);
     const preview = [...canvas.querySelectorAll(".designer-node")]
       .find((element) => element.dataset.nodeId === result.id);
     preview?.classList.add("designer-drop-preview");
@@ -1313,14 +1319,32 @@
     return element;
   }
 
+  function captureCanvasScroll() {
+    return new Map([...$("canvas").querySelectorAll(".designer-node")].map((element) =>
+      [element.dataset.nodeId, { top: element.scrollTop, left: element.scrollLeft }]));
+  }
+
+  function restoreCanvasScroll(positions) {
+    // Scroll is editor-only view state. Restore after attachment/layout so the
+    // browser can clamp each offset if the content or viewport became smaller.
+    $("canvas").querySelectorAll(".designer-node").forEach((element) => {
+      const position = positions.get(element.dataset.nodeId);
+      if (!position) return;
+      element.scrollTop = position.top;
+      element.scrollLeft = position.left;
+    });
+  }
+
   function renderCanvas() {
     const canvas = $("canvas");
+    const scrollPositions = captureCanvasScroll();
     canvas.replaceChildren(renderNode(model.root));
     const round = model.viewport.shape === "round";
     canvas.classList.toggle("round", round);
     $("canvas-shell").classList.toggle("round", round);
     $("canvas-shell").style.width = `${model.viewport.width}px`;
     $("canvas-shell").style.height = `${model.viewport.height}px`;
+    restoreCanvasScroll(scrollPositions);
     $("device-caption").textContent = `${model.viewport.width} x ${model.viewport.height}${round ? " · round" : ""}`;
     requestAnimationFrame(applyZoom);
   }
