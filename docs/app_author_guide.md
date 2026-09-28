@@ -58,6 +58,9 @@ context menu contains only supported model actions such as select, duplicate, re
 and reveal in the outline; it does not expose the browser/template context menu. The palette also includes wearable
 building blocks for icon detail rows, value rows, metric blocks, and button-based segmented controls. These expand to
 ordinary containers, text, and buttons, while application behavior remains in author-maintained JavaScript.
+Text and text-bearing controls also expose bounded line height, normal/no-wrap flow, ellipsis clipping, and border
+width/color. Ellipsis is a no-wrap clipped mode; when diagnostics report truncation, shorten the content, enlarge
+the box, or adjust the target layout.
 
 Then read the final `developerAdvice[]` section in the JSON report. It is the
 app-author view of the lower-level diagnostics. Package reports also include

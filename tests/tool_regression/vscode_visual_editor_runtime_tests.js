@@ -57,4 +57,12 @@ const scrolling = createDefaultModel({ width: 172, height: 160 });
 scrolling.root = { ...structuredClone(recipeRegistry().find((item) => item.type === "function-list").template), id: "page" };
 const scrollRoot = capture("function-list-scroll", scrolling, ["--frame-count", "3", "--frame-event", "1:wheel:80:80:-120"]);
 assert(/scroll_containers scrolls=[1-9]/.test(fs.readFileSync(path.join(scrollRoot, "runtime.log"), "utf8")), "function list must actually scroll in Runtime");
+const advanced = createDefaultModel({ width: 172, height: 320 });
+advanced.root.children = [
+  { ...defaultNode("text", "advanced-text"), text: "Status", width: "120px", height: "32px", lineHeight: 26, whiteSpace: "nowrap", textOverflow: "ellipsis", borderWidth: 2, borderColor: "#40d49a" },
+  { ...defaultNode("button", "advanced-button"), text: "Open", width: "100px", height: "40px", lineHeight: 28, borderWidth: 1, borderColor: "#344250" }
+];
+const advancedRoot = capture("advanced-text-fields", advanced);
+const advancedTrace = fs.readFileSync(path.join(advancedRoot, "trace.jsonl"), "utf8");
+assert(renderBody(advanced).includes("line-height: 26px") && advancedTrace.includes("advanced-text"), "advanced fields reach generated Runtime input");
 console.log("Native visual editor runtime tests passed");

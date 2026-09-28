@@ -46,6 +46,28 @@ model.root.children.push(row);
 validateModel(model);
 assert.equal(migrateModel({ ...model, formatVersion: 1 }).formatVersion, 2);
 
+const advanced = createDefaultModel({ width: 172, height: 320 });
+advanced.root.children = [
+  { ...defaultNode("text", "advanced-text"), text: "A compact status label", lineHeight: 26, whiteSpace: "nowrap", textOverflow: "ellipsis", borderWidth: 2, borderColor: "#40d49a" },
+  { ...defaultNode("button", "advanced-button"), lineHeight: 32, whiteSpace: "normal", textOverflow: "clip", borderWidth: 1, borderColor: "#344250" }
+];
+validateModel(advanced);
+const advancedBody = renderBody(advanced);
+assert(advancedBody.includes("line-height: 26px"));
+assert(advancedBody.includes("white-space: nowrap"));
+assert(advancedBody.includes("text-overflow: ellipsis"));
+assert(advancedBody.includes("border: 2px solid #40d49a"));
+assert(advancedBody.includes("border: 1px solid #344250"));
+const invalidAdvanced = createDefaultModel();
+invalidAdvanced.root.children.push({ ...defaultNode("text", "bad-text"), lineHeight: 7 });
+assert.throws(() => validateModel(invalidAdvanced), /Invalid lineHeight/);
+invalidAdvanced.root.children[0].lineHeight = 16;
+invalidAdvanced.root.children[0].whiteSpace = "balance";
+assert.throws(() => validateModel(invalidAdvanced), /Invalid whiteSpace/);
+invalidAdvanced.root.children[0].whiteSpace = "normal";
+invalidAdvanced.root.children[0].borderWidth = 9;
+assert.throws(() => validateModel(invalidAdvanced), /Invalid borderWidth/);
+
 const body = renderBody(model);
 assert(body.includes(BODY_START));
 assert(body.includes("flex-direction: row"));

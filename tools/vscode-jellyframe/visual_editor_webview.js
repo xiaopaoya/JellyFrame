@@ -147,7 +147,15 @@
     background: "背景",
     color: "文字颜色",
     radius: "圆角",
+    borderWidth: "边框宽度",
+    borderColor: "边框颜色",
     fontSize: "字号",
+    lineHeight: "行高",
+    whiteSpace: "换行",
+    textOverflow: "溢出显示",
+    nowrap: "不换行",
+    clip: "裁剪",
+    ellipsis: "省略号",
     weight: "字重",
     normal: "常规",
     bold: "加粗",
@@ -304,7 +312,15 @@
     background: "Background",
     color: "Text color",
     radius: "Radius",
+    borderWidth: "Border width",
+    borderColor: "Border color",
     fontSize: "Font size",
+    lineHeight: "Line height",
+    whiteSpace: "Wrapping",
+    textOverflow: "Text overflow",
+    nowrap: "No wrap",
+    clip: "Clip",
+    ellipsis: "Ellipsis",
     weight: "Weight",
     normal: "Normal",
     bold: "Bold",
@@ -1081,6 +1097,22 @@
     return `${size + Math.max(6, Math.floor(size / 3))}px`;
   }
 
+  function nodeLineHeight(node, fallback = visualLineHeight(node.fontSize)) {
+    return `${Number(node.lineHeight) || Number.parseFloat(fallback) || 16}px`;
+  }
+
+  function applyTextFlow(element, node) {
+    element.style.whiteSpace = node.whiteSpace === "nowrap" ? "nowrap" : "normal";
+    element.style.textOverflow = node.textOverflow === "ellipsis" ? "ellipsis" : "clip";
+    if (node.textOverflow === "ellipsis") element.style.overflow = "hidden";
+    else if (node.whiteSpace !== "nowrap") element.style.overflowWrap = "anywhere";
+  }
+
+  function applyBorder(element, node, fallback = "transparent") {
+    const width = clamp(Number(node.borderWidth) || 0, 0, 8);
+    element.style.border = width > 0 ? `${width}px solid ${node.borderColor || fallback}` : "0";
+  }
+
   function applyCommonStyle(element, node) {
     const width = styleLength(node.width);
     const height = styleLength(node.height);
@@ -1102,30 +1134,35 @@
       element.style.justifyContent = ({ start: "flex-start", end: "flex-end" })[node.justify] || node.justify || "flex-start";
       element.style.background = node.background || "transparent";
       element.style.borderRadius = `${Number(node.radius) || 0}px`;
+      applyBorder(element, node);
       element.style.boxSizing = "border-box";
     } else if (node.type === "text") {
       element.style.fontSize = `${Number(node.fontSize) || 16}px`;
-      element.style.lineHeight = visualLineHeight(node.fontSize);
+      element.style.lineHeight = nodeLineHeight(node);
       element.style.color = node.color;
       element.style.fontWeight = node.weight === "bold" ? "bold" : "normal";
       element.style.textAlign = node.align || "left";
-      element.style.overflowWrap = "anywhere";
+      applyTextFlow(element, node);
+      applyBorder(element, node);
     } else if (node.type === "button" || node.type === "input") {
       element.style.fontSize = `${node.fontSize ?? 16}px`;
-      element.style.lineHeight = visualLineHeight(node.fontSize);
+      element.style.lineHeight = nodeLineHeight(node);
       element.style.background = node.background;
       element.style.color = node.color;
       element.style.borderRadius = `${Number(node.radius) || 0}px`;
-      element.style.border = "0";
+      applyBorder(element, node, "#344250");
       element.style.padding = `${node.paddingY ?? 0}px ${node.paddingX ?? 12}px`;
       element.style.textAlign = node.textAlign || (node.type === "button" ? "center" : "left");
+      applyTextFlow(element, node);
     } else if (node.type === "image") {
       element.style.objectFit = node.fit || "cover";
       element.style.borderRadius = `${Number(node.radius) || 0}px`;
+      applyBorder(element, node);
     } else if (node.type === "progress") {
       element.style.background = node.track;
       element.style.borderRadius = `${Number(node.radius) || 0}px`;
       element.style.overflow = "hidden";
+      applyBorder(element, node, "#344250");
     } else if (node.type === "divider") {
       element.style.background = "transparent";
       element.style.setProperty("--divider-color", node.color);
@@ -1134,7 +1171,7 @@
     } else if (node.type === "select") {
       element.style.background = node.background;
       element.style.color = node.color;
-      element.style.border = "0";
+      applyBorder(element, node, "#344250");
       element.style.borderRadius = `${Number(node.radius) || 0}px`;
       element.style.padding = "0 10px";
     } else if (node.type === "list") {
@@ -1148,6 +1185,7 @@
       element.style.color = node.color;
       element.style.borderRadius = `${Number(node.radius) || 0}px`;
       element.style.overflow = "hidden";
+      applyBorder(element, node, "#344250");
     } else if (node.type === "navigation") {
       element.style.display = "flex";
       element.style.alignItems = "stretch";
@@ -1156,16 +1194,17 @@
       element.style.borderRadius = `${Number(node.radius) || 0}px`;
       element.style.padding = "4px";
       element.style.fontSize = `${Number(node.fontSize) || 9}px`;
-      element.style.lineHeight = visualLineHeight(node.fontSize || 9);
+      element.style.lineHeight = nodeLineHeight(node, visualLineHeight(node.fontSize || 9));
       element.style.boxSizing = "border-box";
       element.style.overflow = "hidden";
+      applyBorder(element, node, "#344250");
     } else if (node.type === "switch") {
       element.style.display = "inline-flex";
       element.style.alignItems = "center";
       element.style.justifyContent = node.checked ? "flex-end" : "flex-start";
       element.style.padding = "3px";
       element.style.background = node.checked ? node.onColor : node.offColor;
-      element.style.border = "0";
+      applyBorder(element, node, "#344250");
       element.style.borderRadius = `${Number(node.radius) || 14}px`;
       element.style.boxSizing = "border-box";
     }
@@ -1296,7 +1335,11 @@
         row.style.padding = `${node.paddingY ?? 0}px ${node.paddingX ?? 10}px`;
         row.style.textAlign = node.textAlign || "left";
         row.style.fontSize = `${node.fontSize ?? 16}px`;
-        row.style.lineHeight = visualLineHeight(node.fontSize);
+        row.style.lineHeight = nodeLineHeight(node);
+        row.style.whiteSpace = node.whiteSpace === "nowrap" ? "nowrap" : "normal";
+        row.style.textOverflow = node.textOverflow === "ellipsis" ? "ellipsis" : "clip";
+        if (node.textOverflow === "ellipsis") row.style.overflow = "hidden";
+        else if (node.whiteSpace !== "nowrap") row.style.overflowWrap = "anywhere";
         row.style.boxSizing = "border-box";
         element.append(row);
       });

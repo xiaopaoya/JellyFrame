@@ -176,6 +176,16 @@ includes target-specific overrides, visible round-screen safe areas, package
 icon/font browsing and reusable subtrees. Stage 4 and A2 evidence remain open;
 recipe count alone is not an acceptance criterion.
 
+The first slice of Stage 2's fine-field work is complete in plugin `0.4.78`
+(2026-09-28): the registry, typed setter, design renderer and source renderer
+now expose bounded `line-height`, `white-space: normal/nowrap`,
+`text-overflow: clip/ellipsis`, and `border-width`/`border-color`. Missing fields
+retain the old automatic line-height, breakable text and borderless defaults;
+invalid enum, range and color values are rejected before entering the model.
+Browser and Native Runtime coverage includes positive/negative models and all
+three target viewports, with a no-diagnostic fixture. The next slice audits icon
+assets and touch sizing for detail rows; arbitrary CSS remains out of scope.
+
 Slice 1 delivered in `0.4.77` (2026-09-28): selection chrome now lives in an
 external layer, follows zoom/scroll and clips to scrolling ancestors without
 entering controls or editable text. Resize uses registry types/bounds and the

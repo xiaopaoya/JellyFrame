@@ -14,6 +14,15 @@ const CONTENT_PADDING = [
   { key: "paddingX", group: "layout", label: "paddingX", kind: "number", min: 0, max: 64, default: 12 },
   { key: "paddingY", group: "layout", label: "paddingY", kind: "number", min: 0, max: 64, default: 0 }
 ];
+const TEXT_LINE_HEIGHT = { key: "lineHeight", group: "appearance", label: "lineHeight", kind: "number", min: 8, max: 144 };
+const TEXT_FLOW = [
+  { key: "whiteSpace", group: "appearance", label: "whiteSpace", kind: "enum", values: ["normal", "nowrap"] },
+  { key: "textOverflow", group: "appearance", label: "textOverflow", kind: "enum", values: ["clip", "ellipsis"] }
+];
+const BORDER_FIELDS = [
+  { key: "borderWidth", group: "appearance", label: "borderWidth", kind: "number", min: 0, max: 8 },
+  { key: "borderColor", group: "appearance", label: "borderColor", kind: "color" }
+];
 const NODE_TYPES = new Set(["container", "text", "button", "image", "input", "progress", "divider", "spacer", "select", "list", "navigation", "switch"]);
 
 // This is the editor's serializable component contract. Rendering remains
@@ -32,7 +41,8 @@ const COMPONENT_REGISTRY = Object.freeze([
       { key: "width", group: "layout", label: "width", kind: "length" },
       { key: "height", group: "layout", label: "height", kind: "length" },
       { key: "background", group: "appearance", label: "background", kind: "color" },
-      { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 150 }
+      { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 150 },
+      ...BORDER_FIELDS
     ] },
   { type: "text", renderKey: "text", group: "contentGroup", label: "text", help: "textHelp", icon: "T", fields: [
     { key: "text", group: "content", label: "textValue", kind: "text" },
@@ -42,7 +52,10 @@ const COMPONENT_REGISTRY = Object.freeze([
     { key: "color", group: "appearance", label: "color", kind: "color" },
     { key: "fontSize", group: "appearance", label: "fontSize", kind: "number", min: 8, max: 72 },
     { key: "weight", group: "appearance", label: "weight", kind: "enum", control: "segmented", values: ["normal", "bold"] },
-    { key: "align", group: "appearance", label: "textAlign", kind: "enum", control: "segmented", values: ["left", "center", "right"] }
+    { key: "align", group: "appearance", label: "textAlign", kind: "enum", control: "segmented", values: ["left", "center", "right"] },
+    TEXT_LINE_HEIGHT,
+    ...TEXT_FLOW,
+    ...BORDER_FIELDS
   ] },
   { type: "image", renderKey: "image", group: "contentGroup", label: "image", help: "imageHelp", icon: "▧", fields: [
     { key: "src", group: "content", label: "source", kind: "resource" },
@@ -50,7 +63,8 @@ const COMPONENT_REGISTRY = Object.freeze([
     { key: "width", group: "layout", label: "width", kind: "length" },
     { key: "height", group: "layout", label: "height", kind: "length" },
     { key: "fit", group: "appearance", label: "fitMode", kind: "enum", values: ["cover", "contain", "fill"] },
-    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 150 }
+    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 150 },
+    ...BORDER_FIELDS
   ] },
   { type: "button", renderKey: "button", group: "controlsGroup", label: "button", help: "buttonHelp", icon: "B", fields: [
     { key: "text", group: "content", label: "textValue", kind: "text" },
@@ -62,7 +76,10 @@ const COMPONENT_REGISTRY = Object.freeze([
     { key: "height", group: "layout", label: "height", kind: "length" },
     { key: "background", group: "appearance", label: "background", kind: "color" },
     { key: "color", group: "appearance", label: "color", kind: "color" },
-    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 }
+    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 },
+    ...BORDER_FIELDS,
+    TEXT_LINE_HEIGHT,
+    ...TEXT_FLOW
   ] },
   { type: "input", renderKey: "input", group: "controlsGroup", label: "input", help: "inputHelp", icon: "I", fields: [
     { key: "placeholder", group: "content", label: "placeholder", kind: "text" },
@@ -74,7 +91,10 @@ const COMPONENT_REGISTRY = Object.freeze([
     { key: "height", group: "layout", label: "height", kind: "length" },
     { key: "background", group: "appearance", label: "background", kind: "color" },
     { key: "color", group: "appearance", label: "color", kind: "color" },
-    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 }
+    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 },
+    ...BORDER_FIELDS,
+    TEXT_LINE_HEIGHT,
+    ...TEXT_FLOW
   ] },
   { type: "progress", renderKey: "progress", group: "controlsGroup", label: "progress", help: "progressHelp", icon: "▬", fields: [
     { key: "value", group: "content", label: "value", kind: "number", min: 0, max: 100 },
@@ -82,7 +102,8 @@ const COMPONENT_REGISTRY = Object.freeze([
     { key: "height", group: "layout", label: "height", kind: "length" },
     { key: "track", group: "appearance", label: "track", kind: "color" },
     { key: "fill", group: "appearance", label: "fillColor", kind: "color" },
-    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 }
+    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 },
+    ...BORDER_FIELDS
   ] },
   { type: "divider", renderKey: "divider", group: "layoutGroup", label: "divider", help: "dividerHelp", icon: "—", fields: [
     { key: "width", group: "layout", label: "width", kind: "length" },
@@ -100,7 +121,8 @@ const COMPONENT_REGISTRY = Object.freeze([
     { key: "height", group: "layout", label: "height", kind: "length" },
     { key: "background", group: "appearance", label: "background", kind: "color" },
     { key: "color", group: "appearance", label: "color", kind: "color" },
-    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 }
+    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 },
+    ...BORDER_FIELDS
   ] },
   { type: "list", renderKey: "list", group: "contentGroup", label: "list", help: "listHelp", icon: "☷", fields: [
     { key: "items", group: "content", label: "items", kind: "string-list", minItems: 1, maxItems: 8, maxLength: 40 },
@@ -114,7 +136,10 @@ const COMPONENT_REGISTRY = Object.freeze([
     { key: "gap", group: "layout", label: "gap", kind: "number", min: 0, max: 24 },
     { key: "background", group: "appearance", label: "background", kind: "color" },
     { key: "color", group: "appearance", label: "color", kind: "color" },
-    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 }
+    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 },
+    ...BORDER_FIELDS,
+    TEXT_LINE_HEIGHT,
+    ...TEXT_FLOW
   ] },
   { type: "navigation", renderKey: "navigation", group: "panelGroup", label: "navigation", help: "navigationHelp", icon: "≡", fields: [
     { key: "items", group: "content", label: "items", kind: "string-list", minItems: 2, maxItems: 4, maxLength: 16 },
@@ -126,7 +151,9 @@ const COMPONENT_REGISTRY = Object.freeze([
     { key: "color", group: "appearance", label: "color", kind: "color" },
     { key: "activeColor", group: "appearance", label: "activeColor", kind: "color" },
     { key: "fontSize", group: "appearance", label: "fontSize", kind: "number", min: 8, max: 24 },
-    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 }
+    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 },
+    ...BORDER_FIELDS,
+    TEXT_LINE_HEIGHT
   ] },
   { type: "switch", renderKey: "switch", group: "controlsGroup", label: "switch", help: "switchHelp", icon: "●", fields: [
     { key: "checked", group: "content", label: "checked", kind: "boolean" },
@@ -135,7 +162,8 @@ const COMPONENT_REGISTRY = Object.freeze([
     { key: "onColor", group: "appearance", label: "onColor", kind: "color" },
     { key: "offColor", group: "appearance", label: "offColor", kind: "color" },
     { key: "thumbColor", group: "appearance", label: "thumbColor", kind: "color" },
-    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 }
+    { key: "radius", group: "appearance", label: "radius", kind: "number", min: 0, max: 64 },
+    ...BORDER_FIELDS
   ] }
 ]);
 
@@ -295,6 +323,26 @@ function migrateModel(input) {
 function defaultLineHeight(fontSize) {
   const size = Math.max(1, Math.round(cssNumber(fontSize, 16, 8, 72)));
   return size + Math.max(6, Math.floor(size / 3));
+}
+
+function resolvedLineHeight(node) {
+  return cssNumber(node.lineHeight, defaultLineHeight(node.fontSize), 8, 144);
+}
+
+function addTextFlow(declarations, node) {
+  const wrap = node.whiteSpace === "nowrap" ? "nowrap" : "normal";
+  const overflow = node.textOverflow === "ellipsis" ? "ellipsis" : "clip";
+  declarations.push(`white-space: ${wrap}`);
+  declarations.push(`text-overflow: ${overflow}`);
+  if (overflow === "ellipsis") declarations.push("overflow: hidden");
+  else if (wrap === "normal") declarations.push("overflow-wrap: anywhere");
+}
+
+function addBorder(declarations, node, fallbackColor = "transparent") {
+  const width = cssNumber(node.borderWidth, 0, 0, 8);
+  declarations.push(width > 0
+    ? `border: ${width}px solid ${cssText(node.borderColor, fallbackColor)}`
+    : "border: 0");
 }
 
 function nextId(model, prefix = "node") {
@@ -461,29 +509,34 @@ function nodeStyle(node, parent) {
     add("justify-content", ["start", "center", "end", "space-between", "space-around"].includes(node.justify) ? node.justify.replace("start", "flex-start").replace("end", "flex-end") : "flex-start");
     add("background", cssText(node.background, "transparent"));
     add("border-radius", `${cssNumber(node.radius, 0, 0, 150)}px`);
+    addBorder(declarations, node);
   } else if (node.type === "text") {
     add("font-size", `${cssNumber(node.fontSize, 16, 8, 72)}px`);
-    add("line-height", `${defaultLineHeight(node.fontSize)}px`);
+    add("line-height", `${resolvedLineHeight(node)}px`);
     add("color", cssText(node.color, "#ffffff"));
     add("font-weight", node.weight === "bold" ? "bold" : "normal");
     add("text-align", ["left", "center", "right"].includes(node.align) ? node.align : "left");
-    add("overflow-wrap", "anywhere");
+    addTextFlow(declarations, node);
+    addBorder(declarations, node);
   } else if (node.type === "button" || node.type === "input") {
     add("font-size", `${cssNumber(node.fontSize, 16, 8, 72)}px`);
-    add("line-height", `${defaultLineHeight(node.fontSize)}px`);
+    add("line-height", `${resolvedLineHeight(node)}px`);
     add("background", cssText(node.background, "#202a34"));
     add("color", cssText(node.color, "#ffffff"));
     add("border-radius", `${cssNumber(node.radius, 0, 0, 64)}px`);
-    add("border", "0");
+    addBorder(declarations, node, "#344250");
     add("padding", `${cssNumber(node.paddingY, 0, 0, 64)}px ${cssNumber(node.paddingX, 12, 0, 64)}px`);
     add("text-align", node.textAlign || (node.type === "button" ? "center" : "left"));
+    addTextFlow(declarations, node);
   } else if (node.type === "image") {
     add("object-fit", ["cover", "contain", "fill"].includes(node.fit) ? node.fit : "cover");
     add("border-radius", `${cssNumber(node.radius, 0, 0, 150)}px`);
+    addBorder(declarations, node);
   } else if (node.type === "progress") {
     add("background", cssText(node.track, "#26313d"));
     add("border-radius", `${cssNumber(node.radius, 0, 0, 64)}px`);
     add("overflow", "hidden");
+    addBorder(declarations, node, "#344250");
   } else if (node.type === "divider") {
     add("background", cssText(node.color, "#344250"));
     add("min-height", `${cssNumber(node.height, 1, 1, 8)}px`);
@@ -492,7 +545,7 @@ function nodeStyle(node, parent) {
   } else if (node.type === "select") {
     add("background", cssText(node.background, "#18212b"));
     add("color", cssText(node.color, "#f4f7fb"));
-    add("border", "0");
+    addBorder(declarations, node, "#344250");
     add("border-radius", `${cssNumber(node.radius, 0, 0, 64)}px`);
     add("padding", "0 10px");
   } else if (node.type === "list") {
@@ -506,6 +559,7 @@ function nodeStyle(node, parent) {
     add("color", cssText(node.color, "#f4f7fb"));
     add("border-radius", `${cssNumber(node.radius, 0, 0, 64)}px`);
     add("overflow", "hidden");
+    addBorder(declarations, node, "#344250");
   } else if (node.type === "navigation") {
     add("display", "flex");
     add("align-items", "stretch");
@@ -514,16 +568,17 @@ function nodeStyle(node, parent) {
     add("border-radius", `${cssNumber(node.radius, 0, 0, 64)}px`);
     add("padding", "4px");
     add("font-size", `${cssNumber(node.fontSize, 9, 8, 24)}px`);
-    add("line-height", `${defaultLineHeight(node.fontSize ?? 9)}px`);
+    add("line-height", `${resolvedLineHeight({ ...node, fontSize: node.fontSize ?? 9 })}px`);
     add("box-sizing", "border-box");
     add("overflow", "hidden");
+    addBorder(declarations, node, "#344250");
   } else if (node.type === "switch") {
     add("display", "inline-flex");
     add("align-items", "center");
     add("justify-content", node.checked ? "flex-end" : "flex-start");
     add("padding", "3px");
     add("background", cssText(node.checked ? node.onColor : node.offColor, "#26313d"));
-    add("border", "0");
+    addBorder(declarations, node, "#344250");
     add("border-radius", `${cssNumber(node.radius, 14, 0, 64)}px`);
   }
   if ((node.type === "button" || node.type === "text") && node.verticalAlign !== undefined) {
@@ -574,13 +629,14 @@ const sourceRenderers = {
   },
   list(node, indent, id, style) {
     const align = ({ start: "flex-start", center: "center", end: "flex-end" })[node.verticalAlign || "center"];
-    const itemStyle = `min-height: ${cssNumber(node.itemHeight, 36, 20, 96)}px; display: flex; flex-direction: column; justify-content: ${align}; padding: ${cssNumber(node.paddingY, 0, 0, 64)}px ${cssNumber(node.paddingX, 10, 0, 64)}px; text-align: ${node.textAlign || "left"}; font-size: ${cssNumber(node.fontSize, 16, 8, 72)}px; line-height: ${defaultLineHeight(node.fontSize)}px;`;
+    const flow = `white-space: ${node.whiteSpace === "nowrap" ? "nowrap" : "normal"}; text-overflow: ${node.textOverflow === "ellipsis" ? "ellipsis" : "clip"}; ${node.textOverflow === "ellipsis" ? "overflow: hidden;" : node.whiteSpace === "nowrap" ? "" : "overflow-wrap: anywhere;"}`;
+    const itemStyle = `min-height: ${cssNumber(node.itemHeight, 36, 20, 96)}px; display: flex; flex-direction: column; justify-content: ${align}; padding: ${cssNumber(node.paddingY, 0, 0, 64)}px ${cssNumber(node.paddingX, 10, 0, 64)}px; text-align: ${node.textAlign || "left"}; font-size: ${cssNumber(node.fontSize, 16, 8, 72)}px; line-height: ${resolvedLineHeight(node)}px; ${flow}`;
     const items = node.items.map((item) => `${indent}  <li style="${itemStyle}"><span style="display: block; width: 100%">${escapeHtml(item)}</span></li>`).join("\n");
     return `${indent}<ul id="${id}" class="jf-visual-list" style="${style}">${items ? `\n${items}\n${indent}` : ""}</ul>`;
   },
   navigation(node, indent, id, style) {
     const fontSize = cssNumber(node.fontSize, 9, 8, 24);
-    const lineHeight = defaultLineHeight(fontSize);
+    const lineHeight = resolvedLineHeight({ ...node, fontSize });
     const items = node.items.map((item, index) => `${indent}  <button type="button" data-jf-navigation-index="${index}" style="color: ${escapeHtml(index === node.active ? cssText(node.activeColor, "#20b486") : cssText(node.color, "#9aa9b8"))}; font-size: ${fontSize}px; line-height: ${lineHeight}px">${escapeHtml(item)}</button>`).join("\n");
     return `${indent}<nav id="${id}" class="jf-visual-navigation" aria-label="Navigation" style="${style}">${items ? `\n${items}\n${indent}` : ""}</nav>`;
   },

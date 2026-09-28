@@ -183,6 +183,12 @@
 
 下一轮进入第 2 轮的能力核对与精细属性切片。页面/手势仍按第 3/4 轮独立推进。
 
+第 2 轮首片已完成（插件 `0.4.78`，2026-09-28）：根据 Core 已支持且文档化的子集，registry、typed
+setter、画布 renderer 和源码 renderer 已加入 `line-height`、`white-space: normal/nowrap`、
+`text-overflow: clip/ellipsis` 以及受限 `border-width/border-color`。旧模型缺省值保持原有自动行高、可断行
+和无边框行为；非法枚举、范围和颜色会在进入模型前拒绝。Browser 与 Native Runtime 已覆盖正负模型、
+172x320/300x300/320x240 和无诊断 fixture。下一片是图文行资源字段与触控尺寸审查，不立即扩展任意 CSS。
+
 截至 2026-08-30，第一批物料已经接入 registry 和画布/源码两套 renderer：新增 `divider`、`spacer`、受限 `select`（1 到 6 个选项）、受限 `list`（1 到 8 个项目）和受限 `navigation`（2 到 4 个项目）。列表属性在右侧面板中使用增删项目控件，并在进入模型前统一检查数量、长度和安全文本。生成结果只是普通的 `div`、`select`、`ul`/`li`、`nav`/`button`，不引入私有运行时组件。`select` 仍受 App target 声明的 forms 能力约束，编辑器不宣称提供不受限的浏览器选择器。画布增加了包含历史、适应、缩放、结构和保存的简洁图标浮动工具栏。组件库还提供状态卡、设置行和底部导航三个透明模板组合，插入后会展开为带新稳定 ID 的普通可编辑节点子树；设置行使用受限开关，设备导向默认物料使用黑色或近黑色表面。属性面板会从包内脚本中显示可静态识别的稳定 ID 监听器，并可复制最小事件骨架，不会改写作者 JavaScript。target-specific override 仍未完成，阶段 4 尚未关闭。
 
 ## 近期展示门槛

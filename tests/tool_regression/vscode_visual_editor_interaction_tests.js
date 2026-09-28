@@ -294,6 +294,33 @@ async function main() {
     assert.deepEqual(style, ["right", "flex-end", "24px"]);
     await page.screenshot({ path: path.join(output, "content-alignment.png") });
 
+    const advancedModel = fixture();
+    advancedModel.root.children = [{ ...defaultNode("text", "advanced-text"), text: "Long wearable status", width: "120px", height: "40px" }];
+    await mount(page, advancedModel);
+    await row(page, "advanced-text").click();
+    const advancedField = (label) => page.locator("#inspector .field").filter({ has: page.locator("label", { hasText: label }) });
+    await advancedField("Line height").locator("input").fill("26");
+    await advancedField("Line height").locator("input").press("Tab");
+    await advancedField("Wrapping").locator("select").selectOption("nowrap");
+    await advancedField("Text overflow").locator("select").selectOption("ellipsis");
+    await advancedField("Border width").locator("input").fill("2");
+    await advancedField("Border width").locator("input").press("Tab");
+    await advancedField("Border color").locator("input[type=text]").fill("#40d49a");
+    await advancedField("Border color").locator("input[type=text]").press("Tab");
+    const advancedStyle = await canvasNode(page, "advanced-text").evaluate((node) => {
+      const style = getComputedStyle(node);
+      return { lineHeight: style.lineHeight, whiteSpace: style.whiteSpace, overflow: style.overflow,
+        textOverflow: style.textOverflow, borderWidth: style.borderWidth, borderColor: style.borderColor };
+    });
+    assert.deepEqual(advancedStyle, { lineHeight: "26px", whiteSpace: "nowrap", overflow: "hidden",
+      textOverflow: "ellipsis", borderWidth: "2px", borderColor: "rgb(64, 212, 154)" });
+    const advancedSave = await savedModel(page);
+    assert.equal(advancedSave.root.children[0].lineHeight, 26);
+    assert.equal(advancedSave.root.children[0].whiteSpace, "nowrap");
+    assert.equal(advancedSave.root.children[0].textOverflow, "ellipsis");
+    assert.equal(advancedSave.root.children[0].borderWidth, 2);
+    await page.screenshot({ path: path.join(output, "advanced-text-fields.png") });
+
     // Canvas selection exposes editor-only resize handles. The root remains
     // protected, while percentage/auto dimensions become concrete px values
     // when a drag starts and survive the normal model-check path.
@@ -313,10 +340,11 @@ async function main() {
     await page.mouse.up();
     const widthAfter = (await canvasNode(page, "resizable").boundingBox()).width;
     assert(widthAfter > widthBefore + 15, "east handle increases width");
-    assert.equal(await field("Width").locator("select").inputValue(), "px", "resize materializes a px width");
+    const exactWidthField = page.locator("#inspector .field").filter({ has: page.locator("label", { hasText: /^Width$/ }) });
+    assert.equal(await exactWidthField.locator("select").inputValue(), "px", "resize materializes a px width");
     await page.keyboard.press("Control+z");
-    assert.equal(await field("Width").locator("input").inputValue(), "50", "resize is undoable");
-    assert.equal(await field("Width").locator("select").inputValue(), "%", "resize restores the original unit");
+    assert.equal(await exactWidthField.locator("input").inputValue(), "50", "resize is undoable");
+    assert.equal(await exactWidthField.locator("select").inputValue(), "%", "resize restores the original unit");
 
     await row(page, "resizable").click({ button: "right" });
     const menu = page.getByRole("menu");
