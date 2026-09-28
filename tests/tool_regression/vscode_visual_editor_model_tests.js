@@ -25,8 +25,8 @@ const registry = require("../../tools/vscode-jellyframe/visual_editor_model").co
 assert(registry.every((component) => component.renderKey && component.fields.every((field) => field.group && field.kind)), "registry fields and renderers must be declared");
 assert(registry.find((component) => component.type === "button").fields.some((field) => field.key === "height" && field.kind === "length"));
 const recipes = recipeRegistry();
-assert.equal(recipes.length, 7);
-assert.equal(recipes.filter((recipe) => recipe.group === "wearableGroup").length, 4);
+assert.equal(recipes.length, 11);
+assert.equal(recipes.filter((recipe) => recipe.group === "wearableGroup").length, 8);
 const functionRecipe = recipes.find((recipe) => recipe.type === "function-list");
 const roundRecipe = instantiateRecipe(functionRecipe, { width: 300, height: 300, shape: "round" });
 assert.equal(roundRecipe.paddingX, 44);

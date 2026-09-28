@@ -185,6 +185,36 @@ const RECIPE_REGISTRY = Object.freeze([
       { id: "setting-toggle", type: "switch", checked: true, width: "52px", height: "28px", onColor: "#20b486", offColor: "#26313d", thumbColor: "#f4f7fb", radius: 14 }
     ]
   } },
+  { type: "icon-text-row", group: "wearableGroup", label: "iconTextRow", help: "iconTextRowHelp", icon: "◉", template: {
+    id: "icon-text-row", type: "container", layout: "row", gap: 8, padding: 8, width: "100%", height: "56px", background: "#18212b", radius: 8, align: "center", justify: "space-between", children: [
+      { id: "icon-text-row-symbol", type: "text", text: "◉", fontSize: 18, color: "#40d49a", align: "center", width: "24px", height: "24px", verticalAlign: "center" },
+      { id: "icon-text-row-copy", type: "container", layout: "column", gap: 1, padding: 0, width: "auto", height: "auto", background: "transparent", radius: 0, align: "start", justify: "center", children: [
+        { id: "icon-text-row-title", type: "text", text: "Activity", fontSize: 15, color: "#f4f7fb", weight: "bold", align: "left", width: "auto" },
+        { id: "icon-text-row-subtitle", type: "text", text: "Ready to start", fontSize: 12, color: "#9aa9b8", align: "left", width: "auto" }
+      ] },
+      { id: "icon-text-row-value", type: "text", text: "›", fontSize: 20, color: "#9aa9b8", align: "right", width: "20px", height: "24px", verticalAlign: "center" }
+    ]
+  } },
+  { type: "value-row", group: "wearableGroup", label: "valueRow", help: "valueRowHelp", icon: "=", template: {
+    id: "value-row", type: "container", layout: "row", gap: 8, padding: 8, width: "100%", height: "44px", background: "transparent", radius: 0, align: "center", justify: "space-between", children: [
+      { id: "value-row-label", type: "text", text: "Battery", fontSize: 15, color: "#f4f7fb", align: "left", width: "auto" },
+      { id: "value-row-value", type: "text", text: "82%", fontSize: 15, color: "#40d49a", weight: "bold", align: "right", width: "auto" }
+    ]
+  } },
+  { type: "metric-block", group: "wearableGroup", label: "metricBlock", help: "metricBlockHelp", icon: "▥", template: {
+    id: "metric-block", type: "container", layout: "column", gap: 3, padding: 12, width: "100%", height: "112px", background: "#18212b", radius: 10, align: "center", justify: "center", children: [
+      { id: "metric-block-label", type: "text", text: "Heart rate", fontSize: 13, color: "#9aa9b8", align: "center", width: "100%" },
+      { id: "metric-block-value", type: "text", text: "72", fontSize: 34, color: "#40d49a", weight: "bold", align: "center", width: "100%" },
+      { id: "metric-block-unit", type: "text", text: "BPM", fontSize: 12, color: "#b5bac1", align: "center", width: "100%" }
+    ]
+  } },
+  { type: "segmented-control", group: "wearableGroup", label: "segmentedControl", help: "segmentedControlHelp", icon: "▤", template: {
+    id: "segmented-control", type: "container", layout: "row", gap: 4, padding: 4, width: "100%", height: "42px", background: "#18212b", radius: 8, align: "stretch", justify: "start", children: [
+      { id: "segment-day", type: "button", text: "Day", width: "auto", height: "100%", background: "#20b486", color: "#071712", radius: 5, fontSize: 12, textAlign: "center", verticalAlign: "center" },
+      { id: "segment-week", type: "button", text: "Wk", width: "auto", height: "100%", background: "transparent", color: "#9aa9b8", radius: 5, fontSize: 12, textAlign: "center", verticalAlign: "center" },
+      { id: "segment-month", type: "button", text: "Mo", width: "auto", height: "100%", background: "transparent", color: "#9aa9b8", radius: 5, fontSize: 12, textAlign: "center", verticalAlign: "center" }
+    ]
+  } },
   { type: "bottom-navigation", group: "recipesGroup", label: "bottomNavigation", help: "bottomNavigationHelp", icon: "≡", template: {
     id: "bottom-navigation-page", type: "container", layout: "column", gap: 8, padding: 12, width: "100%", height: "100%", background: "#000000", radius: 0, align: "stretch", justify: "start", children: [
       { id: "bottom-navigation-title", type: "text", text: "Overview", fontSize: 20, color: "#f4f7fb", weight: "bold", align: "left", width: "100%" },

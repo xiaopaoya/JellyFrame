@@ -48,6 +48,13 @@ of the entry-page body with timestamped source backups; it is not an arbitrary
 HTML round-trip importer. Use **Save & debug** to verify the result in the real
 desktop shell, because the editor canvas is only an authoring approximation.
 
+Selecting a non-root canvas node exposes eight resize handles for width and height. A `%` or `auto` dimension is
+materialized as the current canvas pixel size when resizing starts, and the operation is undoable. The editor's
+context menu contains only supported model actions such as select, duplicate, reorder, delete, undo/redo, copy ID,
+and reveal in the outline; it does not expose the browser/template context menu. The palette also includes wearable
+building blocks for icon detail rows, value rows, metric blocks, and button-based segmented controls. These expand to
+ordinary containers, text, and buttons, while application behavior remains in author-maintained JavaScript.
+
 Then read the final `developerAdvice[]` section in the JSON report. It is the
 app-author view of the lower-level diagnostics. Package reports also include
 `animationDiagnostics`, which catches common costly or unsupported CSS animation

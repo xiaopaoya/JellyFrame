@@ -32,6 +32,7 @@
   const assets = { ...(initial.assets || {}) };
   const maxNodes = Number(initial.maxNodes) || 128;
   let suppressClick = false;
+  let contextMenu;
 
   const t = initial.chinese ? {
     wearableGroup: "穿戴设备组合",
@@ -64,6 +65,14 @@
     statusCard: "状态卡",
     settingsRow: "设置行",
     bottomNavigation: "底部导航组合",
+    iconTextRow: "图标信息行",
+    iconTextRowHelp: "图标、标题、副标题与右侧值组成的紧凑信息行",
+    valueRow: "标签数值行",
+    valueRowHelp: "适合设置页和状态页的标签与数值行",
+    metricBlock: "指标块",
+    metricBlockHelp: "适合手表屏幕的数值、单位与说明组合",
+    segmentedControl: "分段选择",
+    segmentedControlHelp: "由普通按钮组成的横向选项组，业务切换由脚本维护",
     containerHelp: "横向或纵向排列内容",
     textHelp: "标题、标签或说明文字",
     buttonHelp: "可绑定事件的操作按钮",
@@ -161,6 +170,13 @@
     moveDown: "下移",
     duplicate: "复制",
     remove: "删除",
+    select: "选择",
+    copyId: "复制稳定 ID",
+    showInOutline: "在结构树中显示",
+    close: "关闭",
+    resize: "调整尺寸",
+    resizeWidth: "调整宽度",
+    resizeHeight: "调整高度",
     toggleLeft: "显示或隐藏组件面板",
     toggleRight: "显示或隐藏属性面板",
     undo: "撤销",
@@ -206,6 +222,14 @@
     statusCard: "Status card",
     settingsRow: "Settings row",
     bottomNavigation: "Bottom navigation",
+    iconTextRow: "Icon detail row",
+    iconTextRowHelp: "A compact icon, title, subtitle and trailing value row",
+    valueRow: "Value row",
+    valueRowHelp: "A label and value row for settings and status screens",
+    metricBlock: "Metric block",
+    metricBlockHelp: "A wearable-friendly value, unit and supporting label block",
+    segmentedControl: "Segmented control",
+    segmentedControlHelp: "A button-based option group; switching stays in author JavaScript",
     containerHelp: "Arrange content in a row or column",
     textHelp: "Heading, label, or supporting copy",
     buttonHelp: "Action control with a stable event target",
@@ -303,6 +327,13 @@
     moveDown: "Move down",
     duplicate: "Duplicate",
     remove: "Delete",
+    select: "Select",
+    copyId: "Copy stable ID",
+    showInOutline: "Show in outline",
+    close: "Close",
+    resize: "Resize",
+    resizeWidth: "Resize width",
+    resizeHeight: "Resize height",
     toggleLeft: "Toggle components panel",
     toggleRight: "Toggle inspector",
     undo: "Undo",
@@ -798,6 +829,154 @@
     if (options.focusOutline) focusOutlineRow(id);
   }
 
+  function closeContextMenu() {
+    contextMenu?.remove();
+    contextMenu = undefined;
+  }
+
+  function copyNodeId(id) {
+    vscode.postMessage({ type: "copy-node-id", text: id });
+  }
+
+  function openContextMenu(event, nodeId) {
+    event.preventDefault();
+    event.stopPropagation();
+    const node = find(nodeId);
+    if (!node) return;
+    if (selectedId !== node.id) selectNode(node.id);
+    closeContextMenu();
+
+    const menu = document.createElement("div");
+    menu.className = "editor-context-menu";
+    menu.setAttribute("role", "menu");
+    menu.tabIndex = -1;
+    const addItem = (label, handler, options = {}) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "editor-context-menu-item";
+      item.setAttribute("role", "menuitem");
+      item.textContent = label;
+      item.disabled = Boolean(options.disabled);
+      item.addEventListener("click", () => {
+        if (item.disabled) return;
+        closeContextMenu();
+        handler();
+      });
+      menu.append(item);
+      return item;
+    };
+    addItem(t.select, () => selectNode(node.id));
+    addItem(t.copyId, () => copyNodeId(node.id));
+    addItem(t.showInOutline, () => {
+      leftCollapsed = false;
+      activePanel = "outline";
+      pathNodes(node.id).forEach((ancestor) => collapsedNodes.delete(ancestor.id));
+      persistUi();
+      renderPanels();
+      renderOutline();
+      focusOutlineRow(node.id);
+    });
+    const separator = document.createElement("div");
+    separator.className = "editor-context-menu-separator";
+    separator.setAttribute("role", "separator");
+    menu.append(separator);
+    addItem(t.duplicate, duplicateSelected, { disabled: node.id === model.root.id });
+    addItem(t.moveUp, () => moveSelected(-1), { disabled: node.id === model.root.id || !parentOf(node.id)?.children?.length || parentOf(node.id).children[0]?.id === node.id });
+    addItem(t.moveDown, () => moveSelected(1), { disabled: node.id === model.root.id || !parentOf(node.id)?.children?.length || parentOf(node.id).children.at(-1)?.id === node.id });
+    addItem(t.remove, removeSelected, { disabled: node.id === model.root.id });
+    const historySeparator = document.createElement("div");
+    historySeparator.className = "editor-context-menu-separator";
+    historySeparator.setAttribute("role", "separator");
+    menu.append(historySeparator);
+    addItem(t.undo, undo, { disabled: !history.length || saving });
+    addItem(t.redo, redo, { disabled: !future.length || saving });
+    document.body.append(menu);
+    const margin = 6;
+    const x = clamp(event.clientX, margin, Math.max(margin, window.innerWidth - menu.offsetWidth - margin));
+    const y = clamp(event.clientY, margin, Math.max(margin, window.innerHeight - menu.offsetHeight - margin));
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    contextMenu = menu;
+    menu.focus();
+  }
+
+  function minimumResizeSize(node, axis) {
+    if (node.type === "divider") return axis === "width" ? 16 : 1;
+    if (node.type === "spacer") return 0;
+    return axis === "width" ? 16 : 16;
+  }
+
+  function appendResizeHandles(element, node) {
+    if (node.id === model.root.id || node.id !== selectedId) return;
+    ["nw", "n", "ne", "e", "se", "s", "sw", "w"].forEach((edge) => {
+      const handle = document.createElement("span");
+      handle.className = `resize-handle resize-handle-${edge}`;
+      handle.dataset.resizeEdge = edge;
+      const horizontal = edge === "e" || edge === "w";
+      const vertical = edge === "n" || edge === "s";
+      handle.title = horizontal ? t.resizeWidth : vertical ? t.resizeHeight : t.resize;
+      handle.setAttribute("aria-label", horizontal ? t.resizeWidth : vertical ? t.resizeHeight : t.resize);
+      handle.addEventListener("pointerdown", (event) => bindResizeHandle(event, node, element, edge));
+      element.append(handle);
+    });
+  }
+
+  function bindResizeHandle(event, node, element, edge) {
+    if (event.button !== 0 || node.id === model.root.id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeContextMenu();
+    const rect = element.getBoundingClientRect();
+    const scaleX = rect.width / Math.max(1, element.offsetWidth);
+    const scaleY = rect.height / Math.max(1, element.offsetHeight);
+    const startWidth = rect.width / Math.max(0.01, scaleX);
+    const startHeight = rect.height / Math.max(0.01, scaleY);
+    const original = { width: node.width, height: node.height };
+    const resizeWidth = edge.includes("e") || edge.includes("w");
+    const resizeHeight = edge.includes("n") || edge.includes("s");
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const futureBefore = future;
+    snapshot();
+    if (resizeWidth) node.width = `${Math.round(startWidth)}px`;
+    if (resizeHeight) node.height = `${Math.round(startHeight)}px`;
+    markDirty();
+    document.body.classList.add("resizing-node");
+
+    const move = (moveEvent) => {
+      const dx = (moveEvent.clientX - startX) / Math.max(0.01, scaleX);
+      const dy = (moveEvent.clientY - startY) / Math.max(0.01, scaleY);
+      if (resizeWidth) {
+        const width = clamp(startWidth + dx * (edge.includes("w") ? -1 : 1), minimumResizeSize(node, "width"), 10000);
+        node.width = `${Math.round(width)}px`;
+        element.style.width = node.width;
+      }
+      if (resizeHeight) {
+        const height = clamp(startHeight + dy * (edge.includes("n") ? -1 : 1), minimumResizeSize(node, "height"), 10000);
+        node.height = `${Math.round(height)}px`;
+        element.style.height = node.height;
+      }
+    };
+    const finish = (finishEvent) => {
+      document.removeEventListener("pointermove", move, true);
+      document.removeEventListener("pointerup", finish, true);
+      document.removeEventListener("pointercancel", finish, true);
+      document.body.classList.remove("resizing-node");
+      if (finishEvent?.type === "pointercancel") {
+        node.width = original.width;
+        node.height = original.height;
+        history.pop();
+        future = futureBefore;
+      } else {
+        scheduleModelCheck();
+      }
+      renderAll();
+    };
+    document.addEventListener("pointermove", move, true);
+    document.addEventListener("pointerup", finish, true);
+    document.addEventListener("pointercancel", finish, true);
+  }
+
   function styleLength(value) {
     if (typeof value === "number" && Number.isFinite(value) && value >= 0) return `${value}px`;
     const text = String(value ?? "").trim();
@@ -1128,7 +1307,9 @@
         }
       });
     }
+    element.addEventListener("contextmenu", (event) => openContextMenu(event, node.id));
     bindDropTarget(element, node);
+    appendResizeHandles(element, node);
     return element;
   }
 
@@ -1329,6 +1510,7 @@
     kind.textContent = node.id;
     row.append(toggle, icon, name, kind);
     row.addEventListener("click", (event) => { if (allowClick(event)) selectNode(node.id, { focusOutline: true }); });
+    row.addEventListener("contextmenu", (event) => openContextMenu(event, node.id));
     if (node.id !== model.root.id) {
       bindPointerDrag(row, { kind: "move", id: node.id }, nodeLabel(node));
     }
@@ -2078,9 +2260,19 @@
   bindCanvasPan();
   new ResizeObserver(() => { if (zoom === "fit") applyZoom(); }).observe($("canvas-wrap"));
 
+  document.addEventListener("pointerdown", (event) => {
+    if (contextMenu && !contextMenu.contains(event.target)) closeContextMenu();
+  }, true);
+  document.addEventListener("scroll", closeContextMenu, true);
+
   document.addEventListener("keydown", (event) => {
     const editing = ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName)
       || document.activeElement?.isContentEditable;
+    if (event.key === "Escape" && contextMenu) {
+      closeContextMenu();
+      event.preventDefault();
+      return;
+    }
     if (!editing && handleOutlineKeydown(event)) return;
     const command = event.ctrlKey || event.metaKey;
     if (command && event.key.toLowerCase() === "s") {

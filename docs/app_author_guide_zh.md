@@ -42,6 +42,11 @@ JellyFrame 已支持的控件生成普通 HTML/CSS，JavaScript 仍由作者维�
 是否接管入口页面 `body`，并按时间戳备份原始源码；它不是任意 HTML 的双向导入器。
 完成后使用“保存并实际调试”交给真实桌面壳验证，编辑器画布只作为编排时的近似视图。
 
+画布中选中非根节点后可使用八方向抓手调整宽高；如果原尺寸是 `%` 或 `auto`，开始拖动时会
+转换为当前画布中的像素值，并可用撤销恢复。右键菜单只提供编辑器实际支持的选择、复制、排序、删除、
+撤销/重做和结构树定位操作，不会调用浏览器模板菜单。组件面板还提供图标信息行、标签数值行、指标块
+和分段选择等可穿戴物料；这些物料会展开为普通容器、文本和按钮节点，保存后仍由作者脚本负责业务切换。
+
 然后优先读 JSON report 末尾的 `developerAdvice[]`。它是低层 diagnostics 面向 app 作者的解释和修复建议。
 Package report 还会包含 `animationDiagnostics`，在 runtime parser 实际处理样式表前提前识别常见的高成本或不支持 CSS 动画写法。
 部分建议会带 `recipe` 字段，指向 [app_author_recipes_zh.md](app_author_recipes_zh.md)

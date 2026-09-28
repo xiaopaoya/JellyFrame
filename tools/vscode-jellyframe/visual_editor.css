@@ -698,8 +698,74 @@ body.panning #canvas-wrap {
 }
 
 .designer-node.selected {
+  z-index: 2;
+}
+
+.designer-node.selected {
   outline: 2px solid #4daafc;
   outline-offset: -2px;
+}
+
+.resize-handle {
+  position: absolute;
+  z-index: 30;
+  width: 8px;
+  height: 8px;
+  margin: -4px;
+  background: var(--focus);
+  border: 1px solid var(--canvas-bg);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 35%);
+  pointer-events: auto;
+}
+
+.resize-handle-nw { top: 2px; left: 2px; cursor: nwse-resize; }
+.resize-handle-n { top: 2px; left: 50%; cursor: ns-resize; }
+.resize-handle-ne { top: 2px; right: 2px; cursor: nesw-resize; }
+.resize-handle-e { top: 50%; right: 2px; cursor: ew-resize; }
+.resize-handle-se { right: 2px; bottom: 2px; cursor: nwse-resize; }
+.resize-handle-s { bottom: 2px; left: 50%; cursor: ns-resize; }
+.resize-handle-sw { bottom: 2px; left: 2px; cursor: nesw-resize; }
+.resize-handle-w { top: 50%; left: 2px; cursor: ew-resize; }
+
+body.resizing-node,
+body.resizing-node * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.editor-context-menu {
+  position: fixed;
+  z-index: 100;
+  display: grid;
+  min-width: 184px;
+  padding: 4px;
+  background: var(--surface-raised);
+  border: 1px solid var(--focus);
+  border-radius: 3px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 42%);
+}
+
+.editor-context-menu-item {
+  min-height: 28px;
+  padding: 3px 9px;
+  color: var(--text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+}
+
+.editor-context-menu-item:hover:not(:disabled),
+.editor-context-menu-item:focus-visible {
+  background: var(--hover);
+  outline: 0;
+}
+
+.editor-context-menu-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
 }
 
 .designer-node.drop-inside {

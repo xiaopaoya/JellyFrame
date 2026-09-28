@@ -209,6 +209,46 @@ async function main() {
     assert.deepEqual(style, ["right", "flex-end", "24px"]);
     await page.screenshot({ path: path.join(output, "content-alignment.png") });
 
+    // Canvas selection exposes editor-only resize handles. The root remains
+    // protected, while percentage/auto dimensions become concrete px values
+    // when a drag starts and survive the normal model-check path.
+    const resizable = fixture();
+    resizable.root.children = [{ ...defaultNode("button", "resizable"), width: "50%", height: "60px" }];
+    await mount(page, resizable, { zoom: 1 });
+    await row(page, "resizable").click();
+    assert.equal(await canvasNode(page, "resizable").locator("[data-resize-edge]").count(), 8);
+    await row(page, "page").click();
+    assert.equal(await page.locator("[data-resize-edge]").count(), 0, "root selection has no resize handles");
+    await row(page, "resizable").click();
+    const widthBefore = (await canvasNode(page, "resizable").boundingBox()).width;
+    const east = await canvasNode(page, "resizable").locator('[data-resize-edge="e"]').boundingBox();
+    await page.mouse.move(east.x + east.width / 2, east.y + east.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(east.x + east.width / 2 + 24, east.y + east.height / 2, { steps: 4 });
+    await page.mouse.up();
+    const widthAfter = (await canvasNode(page, "resizable").boundingBox()).width;
+    assert(widthAfter > widthBefore + 15, "east handle increases width");
+    assert.equal(await field("Width").locator("select").inputValue(), "px", "resize materializes a px width");
+    await page.keyboard.press("Control+z");
+    assert.equal(await field("Width").locator("input").inputValue(), "50", "resize is undoable");
+    assert.equal(await field("Width").locator("select").inputValue(), "%", "resize restores the original unit");
+
+    await row(page, "resizable").click({ button: "right" });
+    const menu = page.getByRole("menu");
+    await menu.waitFor();
+    assert.equal(await menu.getByRole("menuitem", { name: "Delete", exact: true }).isDisabled(), false);
+    await menu.getByRole("menuitem", { name: "Copy stable ID", exact: true }).click();
+    assert.deepEqual(await page.evaluate(() => window.messages.at(-1)), { type: "copy-node-id", text: "resizable" });
+    await canvasNode(page, "resizable").click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Show in outline", exact: true }).click();
+    assert.equal(await page.locator("#outline-panel").isVisible(), true);
+    assert.equal(await activeId(page), "resizable");
+    await row(page, "page").click({ button: "right" });
+    assert.equal(await page.getByRole("menuitem", { name: "Delete", exact: true }).isDisabled(), true);
+    await page.keyboard.press("Escape");
+    assert.equal(await page.getByRole("menu").count(), 0, "Escape closes the editor menu");
+    console.log("Resize handles and context menu passed");
+
     for (const viewport of [{ width: 172, height: 320, shape: "rect" }, { width: 300, height: 300, shape: "round" }, { width: 320, height: 240, shape: "rect" }]) {
       for (const recipe of recipeRegistry().filter((item) => item.group === "wearableGroup")) {
         const model = createDefaultModel(viewport);

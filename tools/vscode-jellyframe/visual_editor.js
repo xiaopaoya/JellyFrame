@@ -592,6 +592,10 @@ async function openVisualEditor(context, root) {
         if (message.code.length > 4096) throw new Error("Visual-editor event skeleton is too large to copy");
         await vscode.env.clipboard.writeText(message.code);
         vscode.window.showInformationMessage(isChinese() ? "事件骨架已复制到剪贴板。" : "Event skeleton copied to the clipboard.");
+      } else if (message?.type === "copy-node-id" && typeof message.text === "string") {
+        if (!/^[A-Za-z][A-Za-z0-9_-]{0,47}$/.test(message.text)) throw new Error("Invalid visual-editor node ID");
+        await vscode.env.clipboard.writeText(message.text);
+        vscode.window.showInformationMessage(isChinese() ? "稳定 ID 已复制到剪贴板。" : "Stable ID copied to the clipboard.");
       } else if (message?.type === "show-source-diff") {
         await showSourceDiff(root, files, model);
       } else if (message?.type === "restore-backup") {
