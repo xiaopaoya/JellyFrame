@@ -19,17 +19,28 @@ void check(bool condition, const char* message) {
     }
 }
 
-LayerNodePtr build_layer_tree(const char* html, const char* css) {
+struct LayerFixture {
+    std::unique_ptr<Node> document;
+    RenderObjectPtr render_tree;
+    LayoutBoxPtr layout_tree;
+    LayerNodePtr layer_tree;
+
+    const LayerNode& operator*() const { return *layer_tree; }
+};
+
+LayerFixture build_layer_tree(const char* html, const char* css) {
+    LayerFixture fixture;
     HtmlParser html_parser;
     CssParser css_parser;
-    auto document = html_parser.parse(html);
+    fixture.document = html_parser.parse(html);
     StyleResolver resolver(css_parser.parse(css));
     RenderTreeBuilder render_builder(resolver);
-    auto render_tree = render_builder.build(*document);
+    fixture.render_tree = render_builder.build(*fixture.document);
     LayoutEngine layout_engine(resolver);
-    auto layout_tree = layout_engine.layout(*render_tree, 240);
+    fixture.layout_tree = layout_engine.layout(*fixture.render_tree, 240);
     LayerTreeBuilder layer_builder;
-    return layer_builder.build(*layout_tree);
+    fixture.layer_tree = layer_builder.build(*fixture.layout_tree);
+    return fixture;
 }
 
 void empty_dirty_rects_report_no_work() {

@@ -1969,8 +1969,7 @@
         value = value.trim();
         if (!/^[A-Za-z][A-Za-z0-9_-]{0,47}$/.test(value)) error = t.invalidId;
         else {
-          const existing = find(value);
-          if (existing && existing !== node) error = t.duplicateId;
+          if (value !== node.id && allNodeIds().has(value)) error = t.duplicateId;
         }
       }
       showFieldError(row, error);
@@ -2350,7 +2349,7 @@
     add.type = "button";
     add.className = "quiet list-item-add";
     add.textContent = `+ ${t.addPage}`;
-    add.disabled = pageModel.pages.length >= 8;
+    add.disabled = pageModel.pages.length >= 8 || totalNodeCount() + nodeCount(activeRoot()) > maxNodes;
     add.addEventListener("click", addPage);
     element.append(add);
     const initialRow = fieldRow(t.initialPage);
@@ -2440,6 +2439,7 @@
 
   function addPage() {
     if (model.pageModel.pages.length >= 8) return;
+    if (totalNodeCount() + nodeCount(activeRoot()) > maxNodes) return report(t.nodeLimit, "error");
     snapshot();
     const id = nextPageId();
     const root = clonePageRoot(activeRoot(), id);
@@ -2544,7 +2544,7 @@
     renderBreadcrumbs();
     $("undo").disabled = !history.length || saving;
     $("redo").disabled = !future.length || saving;
-    $("node-count").textContent = `${nodeCount()} / ${maxNodes} ${t.nodes}`;
+    $("node-count").textContent = `${totalNodeCount()} / ${maxNodes} ${t.nodes}`;
   }
 
   function applyZoom() {
