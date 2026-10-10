@@ -146,6 +146,17 @@ void scroll_container_hit_test_uses_scrolled_content_coordinates() {
           "scroll container hit test targets visible scrolled child");
 }
 
+void transformed_layer_hit_test_matches_visual_scale() {
+    auto pipeline = build_pipeline(
+        "<body><button id='scaled'>Scale</button></body>",
+        "body { margin: 0; } button { display: block; width: 40px; height: 40px; "
+        "transform-origin: 0% 0%; transform: scale(2); }");
+    HitTester hit_tester;
+    const HitTestResult result = hit_tester.hit_test(*pipeline.layer_tree, 60, 20);
+    check(result.node != nullptr && result.node->attribute("id") == "scaled",
+          "scaled visual bounds remain hittable");
+}
+
 } // namespace
 
 int main() {
@@ -155,6 +166,7 @@ int main() {
         overflow_clip_blocks_outside_hits();
         rounded_overflow_clip_blocks_corner_hits();
         scroll_container_hit_test_uses_scrolled_content_coordinates();
+        transformed_layer_hit_test_matches_visual_scale();
     } catch (const std::exception& error) {
         std::cerr << "hit test failed: " << error.what() << '\n';
         return 1;

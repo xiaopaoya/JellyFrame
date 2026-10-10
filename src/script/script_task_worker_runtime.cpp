@@ -170,6 +170,12 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::strin
     return ScriptTaskWorkerRuntimeInitStatus::Accepted;
 }
 
+void ScriptTaskWorkerRuntime::set_host_time_ms(std::uint64_t now_ms) {
+    if (runtime_ != nullptr) {
+        runtime_->set_host_time_ms(now_ms);
+    }
+}
+
 ScriptEvaluationResult ScriptTaskWorkerRuntime::eval(std::string_view source, std::string_view source_name) {
     if (!initialized_ || fatal()) {
         return {false, {}, "worker runtime is not active", ScriptEvaluationStatus::Exception};

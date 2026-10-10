@@ -1,4 +1,5 @@
 #include <iostream>
+#include "render_core/feature_config.h"
 
 #if defined(JELLYFRAME_TEST_ASSERTS_ENABLED) && defined(NDEBUG)
 #error "JellyFrame test targets must run with assert() enabled."
@@ -12,6 +13,7 @@ int canvas2d_tests_main();
 int dom_mutation_tests_main();
 int dom_owner_tests_main();
 int document_script_tests_main();
+int display_invalidation_tests_main();
 int dirty_region_tests_main();
 int embedded_framebuffer_tests_main();
 int css_parser_tests_main();
@@ -33,6 +35,9 @@ int style_repaint_tests_main();
 int text_adapter_tests_main();
 int text_repaint_tests_main();
 int text_scan_tests_main();
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+int modern_paint_tests_main();
+#endif
 
 namespace {
 
@@ -59,6 +64,7 @@ int main() {
     failed += run_test("dom_mutation", dom_mutation_tests_main);
     failed += run_test("dom_owner", dom_owner_tests_main);
     failed += run_test("document_script", document_script_tests_main);
+    failed += run_test("display_invalidation", display_invalidation_tests_main);
     failed += run_test("dirty_region", dirty_region_tests_main);
     failed += run_test("embedded_framebuffer", embedded_framebuffer_tests_main);
     failed += run_test("css_parser", css_parser_tests_main);
@@ -80,6 +86,9 @@ int main() {
     failed += run_test("text_adapter", text_adapter_tests_main);
     failed += run_test("text_repaint", text_repaint_tests_main);
     failed += run_test("text_scan", text_scan_tests_main);
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    failed += run_test("modern_paint", modern_paint_tests_main);
+#endif
 
     if (failed != 0) {
         std::cerr << failed << " test group(s) failed\n";

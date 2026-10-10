@@ -102,6 +102,10 @@ public:
     bool fatal() const { return fatal_record_.reason != ScriptTaskWorkerRuntimeFatalReason::None; }
     ScriptTaskWorkerRuntimeFatalRecord fatal_record() const { return fatal_record_; }
 
+    // Establish the worker's monotonic host clock before author scripts run.
+    // The same value source must be passed to pump_callbacks later.
+    void set_host_time_ms(std::uint64_t now_ms);
+
     ScriptEvaluationResult eval(std::string_view source, std::string_view source_name = {});
     ScriptEvaluationResult eval_with_supervisor(ScriptTaskSupervisor& supervisor,
                                                 std::string_view source,

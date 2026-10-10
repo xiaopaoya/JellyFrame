@@ -499,6 +499,26 @@ async function main() {
     });
     assert.deepEqual(insets, ["44px", "44px"]);
 
+    const paged = fixture();
+    const details = { ...defaultNode("container", "details-root"), height: "100%", children: [defaultNode("text", "details-label")] };
+    paged.pageModel.pages.push({ id: "page-2", label: "Details", rootId: details.id, root: details });
+    await mount(page, paged);
+    const pageSelect = page.locator('#inspector-body select').filter({ has: page.locator('option[value="page-2"]') });
+    await pageSelect.last().selectOption("page-2");
+    assert.equal(await canvasNode(page, "details-label").count(), 1);
+    assert.equal(await canvasNode(page, "moving").count(), 0);
+    await page.locator('#components-tab').click();
+    await page.locator('[data-component-type="button"]').click();
+    await page.locator('#undo').click();
+    assert.equal(await canvasNode(page, "button-1").count(), 0);
+    await page.locator('#redo').click();
+    assert.equal(await canvasNode(page, "button-1").count(), 1);
+    await page.locator('#save').click();
+    const saved = await page.evaluate(() => window.messages.findLast((message) => message.type === "save").model);
+    assert.equal(saved.pageModel.pages[0].root.children.length, 2);
+    assert.equal(saved.pageModel.pages[1].root.children.length, 2);
+    validateModel(saved);
+
     const large = fixture();
     let parent = large.root;
     for (let level = 0; level < 6; level++) {

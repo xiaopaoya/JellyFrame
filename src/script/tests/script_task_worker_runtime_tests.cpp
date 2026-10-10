@@ -341,6 +341,18 @@ void worker_interval_rotation_publishes_transformed_value_frame() {
     check(runtime.telemetry().timer_callbacks == 1, "interval rotation timer telemetry increments");
 }
 
+void worker_host_time_is_initialized_before_author_script_runs() {
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(21);
+    ScriptTaskWorkerRuntime runtime(session, runtime_options());
+    check(runtime.initialize("<body><p>clock</p></body>", "p { display: block; }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "clock fixture initializes");
+    runtime.set_host_time_ms(123456);
+    const ScriptEvaluationResult result = runtime.eval("String(Date.now())");
+    check(result.ok && result.value == "123456", "worker exposes the established host time");
+}
+
 void worker_service_completion_reaches_js_as_copied_value() {
     ScriptTaskSupervisor supervisor = make_supervisor();
     const ScriptAppSession session = supervisor.begin(11);
@@ -829,6 +841,7 @@ int script_task_worker_runtime_tests_main() {
         worker_eval_failure_becomes_value_fatal();
         worker_timer_publishes_value_frame();
         worker_interval_rotation_publishes_transformed_value_frame();
+        worker_host_time_is_initialized_before_author_script_runs();
         worker_service_completion_reaches_js_as_copied_value();
         worker_service_payload_lease_failure_completes_callback_as_error();
         worker_service_callback_budget_rejects_before_queueing();

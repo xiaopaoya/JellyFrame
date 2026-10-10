@@ -1,0 +1,11 @@
+# Deterministic workout selection, target and metric pager.
+frames 18
+step-ms 100
+start-ms 1700000000000
+viewport 300 300
+event 2 click-id workout-0
+event 5 set-value target-range 35
+event 7 click-id start-workout
+event 10 click-id next-page
+event 13 click-id next-page
+event 16 click-id session-back

@@ -1,0 +1,11 @@
+# Deterministic alarm list and edit flow.
+frames 18
+step-ms 100
+start-ms 1700000000000
+viewport 300 300
+event 2 click-id alarm-1-toggle
+event 5 click-id alarm-1-main
+event 8 click-id repeat-button
+event 10 click-id save-alarm
+event 13 click-id add-alarm
+event 15 click-id save-alarm

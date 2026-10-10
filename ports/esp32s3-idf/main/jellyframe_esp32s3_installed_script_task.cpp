@@ -219,6 +219,7 @@ void worker_entry(void* raw) {
     state->init_status.store(static_cast<std::uint8_t>(initialized));
     state->initialized.store(initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted);
     if (initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted) {
+        runtime.set_host_time_ms(static_cast<std::uint64_t>(esp_timer_get_time() / 1000));
         for (const jellyframe::DocumentScript& script : state->scripts) {
             if (state->stop.load()) break;
             const auto result = runtime.eval_with_supervisor(*state->protocol, script.source, script.name);

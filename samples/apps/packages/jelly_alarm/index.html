@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Alarm</title><link rel="stylesheet" href="styles/app.css"></head>
+<body>
+<main id="app" class="screen">
+  <section id="home-page" class="page">
+    <header class="topbar"><div><span class="eyebrow">ALARM</span><h1>Wake up</h1></div><button id="add-alarm" class="round-button" aria-label="Add alarm">+</button></header>
+    <p class="subtle">Swipe left to remove</p>
+    <section id="alarm-list" class="list" aria-label="Alarms"></section>
+  </section>
+  <section id="edit-page" class="page hidden">
+    <header class="topbar"><button id="edit-back" class="text-button">Back</button><div class="page-title" id="edit-title">New alarm</div><button id="save-alarm" class="text-button accent">Save</button></header>
+    <section class="editor-card"><label class="field-label" for="alarm-time">Time</label><input id="alarm-time" class="time-input" value="07:00" maxlength="5"><button id="repeat-button" class="setting-row"><span>Repeat</span><strong id="repeat-value">Weekdays</strong></button><button id="sound-button" class="setting-row"><span>Sound</span><strong id="sound-value">Chime</strong></button></section>
+    <p class="subtle">Use short labels and large touch targets.</p>
+  </section>
+</main>
+<script src="scripts/app.js"></script>
+</body>
+</html>

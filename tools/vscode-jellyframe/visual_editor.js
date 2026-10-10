@@ -78,7 +78,8 @@ function localScriptEntries(root, entryPath, html) {
 
 function scriptListenerSummary(root, files, model) {
   const knownIds = new Set();
-  walkNodes(model.root, (node) => knownIds.add(node.id));
+  const roots = model.pageModel?.pages?.map((page) => page.root).filter(Boolean) || [model.root].filter(Boolean);
+  roots.forEach((pageRoot) => walkNodes(pageRoot, (node) => knownIds.add(node.id)));
   const byId = {};
   const add = (id, event, source) => {
     if (!knownIds.has(id)) return;
@@ -294,7 +295,8 @@ async function replaceDocuments(entries, api = vscode) {
 }
 
 function validatePackageAssets(root, model) {
-  walkNodes(model.root, (node) => {
+  const roots = model.pageModel?.pages?.map((page) => page.root).filter(Boolean) || [model.root];
+  roots.forEach((pageRoot) => walkNodes(pageRoot, (node) => {
     if (node.type !== "image") return;
     const filename = path.resolve(root, String(node.src).replace(/^[/\\]+/, ""));
     if (!isPathInside(root, filename) || !fs.existsSync(filename) || !fs.statSync(filename).isFile()) {
@@ -302,11 +304,14 @@ function validatePackageAssets(root, model) {
         ? `图片 ${node.id} 必须引用当前 App 包内已存在的文件。`
         : `Image ${node.id} must reference an existing file inside the current App package.`);
     }
-  });
+  }));
 }
 
 async function saveModel(root, files, model, state = {}) {
-  validateModel(model);
+  model = validateModel(model);
+  if (model.pageModel.pages.length > 1 && files.manifest.runtime?.script !== "classic") {
+    throw new Error(isChinese() ? '多页面运行需要 manifest 的 runtime.script 设置为 classic。' : 'Multi-page navigation requires runtime.script: classic in the manifest.');
+  }
   validatePackageAssets(root, model);
   const currentHtml = workspaceText(files.entryPath);
   const currentCss = workspaceText(files.stylesheetPath);
@@ -425,13 +430,14 @@ function createBlankStarterModel(viewport) {
 
 function assetMap(webview, root, model) {
   const assets = {};
-  walkNodes(model.root, (node) => {
+  const roots = model.pageModel?.pages?.map((page) => page.root).filter(Boolean) || [model.root];
+  roots.forEach((pageRoot) => walkNodes(pageRoot, (node) => {
     if (node.type !== "image" || typeof node.src !== "string") return;
     const filename = path.resolve(root, node.src.replace(/^[/\\]+/, ""));
     if (isPathInside(root, filename) && fs.existsSync(filename)) {
       assets[node.src] = webview.asWebviewUri(vscode.Uri.file(filename)).toString();
     }
-  });
+  }));
   return assets;
 }
 
@@ -440,6 +446,7 @@ function nonce() {
 }
 
 function visualEditorHtml(webview, root, model, assets, resources = {}) {
+  model = validateModel(model);
   const token = nonce();
   const payload = JSON.stringify({
     model,

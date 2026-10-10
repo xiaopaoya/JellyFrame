@@ -3,6 +3,8 @@
 namespace jellyframe {
 namespace {
 
+constexpr std::uint32_t kServiceErrorInvalidCompletion = 4001;
+
 HostServiceCompletion normalize_completion(const HostServiceRequest& request,
                                            HostServiceCompletion completion) {
     completion.job_id = request.job_id;
@@ -40,9 +42,20 @@ AppHostServiceWorkerPumpResult pump_app_host_service_worker(
         if (!host.push_completion(completion)) {
             ++result.completions_rejected;
             result.completion_rejected = true;
-            break;
+            // A malformed provider result must not strand the request in its
+            // in-flight slot. Publish a sanitized terminal failure with the
+            // original request identity and no provider-owned handle.
+            HostServiceCompletion failure = normalize_completion(request, {});
+            failure.status = HostServiceStatus::Failed;
+            failure.error_code = kServiceErrorInvalidCompletion;
+            if (!host.push_completion(failure)) {
+                break;
+            }
+            ++result.completions_posted;
         }
-        ++result.completions_posted;
+        else {
+            ++result.completions_posted;
+        }
     }
     return result;
 }

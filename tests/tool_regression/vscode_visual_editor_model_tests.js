@@ -6,6 +6,9 @@ const {
   CSS_START,
   createDefaultModel,
   defaultNode,
+  defaultGestureModel,
+  classifySwipe,
+  defaultPageModel,
   migrateModel,
   nextId,
   renderBody,
@@ -14,12 +17,24 @@ const {
   instantiateRecipe,
   updateCss,
   updateHtml,
-  validateModel
+  validateModel,
+  resolvePageIndex
 } = require("../../tools/vscode-jellyframe/visual_editor_model");
 
 const model = createDefaultModel({ width: 172, height: 320, shape: "rect" }, "Visual Test");
 assert.equal(model.viewport.width, 172);
 assert.equal(model.viewport.height, 320);
+assert.equal(model.pageModel.initialPageId, "page-1");
+assert.equal(model.pageModel.pages[0].rootId, "page");
+assert.equal(model.gestureModel.swipe.directionLock, true);
+assert.equal(model.gestureModel.swipe.threshold, 30);
+const enabledSwipe = { swipe: { ...defaultGestureModel().swipe, enabled: true } };
+assert.deepEqual(classifySwipe(enabledSwipe, -40, 3), { accepted: true, direction: "next" });
+assert.equal(classifySwipe(enabledSwipe, -40, 40).reason, "direction");
+assert.equal(classifySwipe(enabledSwipe, -20, 0).reason, "threshold");
+assert.equal(classifySwipe(enabledSwipe, -40, 0, { childActive: true }).reason, "child-control");
+assert.equal(resolvePageIndex(0, "previous", 3, "clamp"), 0);
+assert.equal(resolvePageIndex(2, "next", 3, "wrap"), 0);
 assert.equal(nextId(model, "text"), "text-1");
 const registry = require("../../tools/vscode-jellyframe/visual_editor_model").componentRegistry();
 assert(registry.every((component) => component.renderKey && component.fields.every((field) => field.group && field.kind)), "registry fields and renderers must be declared");
@@ -44,8 +59,8 @@ const legacyListModel = createDefaultModel();
 legacyListModel.root.children = [legacyList];
 assert(renderBody(legacyListModel).includes("justify-content: center"));
 const recipes = recipeRegistry();
-assert.equal(recipes.length, 11);
-assert.equal(recipes.filter((recipe) => recipe.group === "wearableGroup").length, 8);
+assert.equal(recipes.length, 14);
+assert.equal(recipes.filter((recipe) => recipe.group === "wearableGroup").length, 11);
 const functionRecipe = recipes.find((recipe) => recipe.type === "function-list");
 const roundRecipe = instantiateRecipe(functionRecipe, { width: 300, height: 300, shape: "round" });
 assert.equal(roundRecipe.paddingX, 44);
@@ -63,7 +78,16 @@ row.children.push({ ...defaultNode("button", "confirm-button"), text: "Save & go
 row.children.push({ ...defaultNode("text", "escaped-text"), text: "<safe> & readable" });
 model.root.children.push(row);
 validateModel(model);
-assert.equal(migrateModel({ ...model, formatVersion: 1 }).formatVersion, 2);
+assert.equal(migrateModel({ ...model, formatVersion: 1 }).formatVersion, 4);
+const pageModel = defaultPageModel("page", "Main");
+pageModel.pages.push({ id: "page-2", label: "Details", rootId: "page" });
+pageModel.initialPageId = "page-2";
+const paged = { ...createDefaultModel(), pageModel };
+validateModel(paged);
+assert.notEqual(migrateModel(paged).pageModel.pages[1].root.id, migrateModel(paged).pageModel.pages[0].root.id);
+assert.throws(() => validateModel({ ...paged, pageModel: { ...pageModel, initialPageId: "missing" } }), /initial page/);
+assert.throws(() => validateModel({ ...paged, pageModel: { ...pageModel, pages: [{ ...pageModel.pages[0], id: "bad id" }, pageModel.pages[1] ] } }), /page id/);
+assert.throws(() => validateModel({ ...model, gestureModel: { swipe: { ...defaultGestureModel().swipe, threshold: 3 } } }), /gesture contract/);
 
 const advanced = createDefaultModel({ width: 172, height: 320 });
 advanced.root.children = [
@@ -124,7 +148,9 @@ const invalid = createDefaultModel();
 invalid.root.children.push(defaultNode("text", "page"));
 assert.throws(() => validateModel(invalid), /Duplicate/);
 assert.throws(() => validateModel({ ...model, formatVersion: 99 }), /Unsupported/);
-assert.throws(() => validateModel({ ...createDefaultModel(), root: { ...createDefaultModel().root, children: [{ ...defaultNode("image", "remote-image"), src: "https://example.invalid/image.bmp" }] } }), /package-local resource/);
+const invalidImage = createDefaultModel();
+invalidImage.pageModel.pages[0].root.children = [{ ...defaultNode("image", "remote-image"), src: "https://example.invalid/image.bmp" }];
+assert.throws(() => validateModel(invalidImage), /package-local resource/);
 const invalidProgressModel = createDefaultModel();
 invalidProgressModel.root.children.push({ ...defaultNode("progress", "bad-progress"), height: "50%" });
 assert.throws(() => validateModel(invalidProgressModel), /pixel length/);
@@ -157,6 +183,10 @@ assert(stage4Body.includes("height: 1px"));
 assert(stage4Body.includes("height: 12px"));
 assert(stage4Body.includes("font-size: 9px; line-height: 15px"));
 assert(recipes.find((recipe) => recipe.type === "settings-row").template.children.some((node) => node.type === "switch"));
+const alarmRecipe = recipes.find((recipe) => recipe.type === "alarm-list");
+assert(alarmRecipe.template.children.some((node) => node.children?.some((child) => child.type === "switch")));
+assert(recipes.find((recipe) => recipe.type === "workout-dashboard").template.children.some((node) => node.id === "workout-start"));
+assert(recipes.find((recipe) => recipe.type === "message-inbox").template.children.some((node) => node.type === "list"));
 const bottomNavigationRecipe = recipes.find((recipe) => recipe.type === "bottom-navigation");
 assert.equal(bottomNavigationRecipe.template.type, "container");
 assert(bottomNavigationRecipe.template.children.some((node) => node.type === "list"));

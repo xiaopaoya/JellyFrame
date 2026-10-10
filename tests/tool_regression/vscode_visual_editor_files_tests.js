@@ -162,7 +162,7 @@ assert(visualEditorWebview.includes("button.style.fontSize"), "navigation button
 assert(!visualEditorWebview.includes('button.style.font = "inherit"'), "canvas must not depend on browser-only font inheritance");
   assert(visualEditorWebview.includes("targetId = undefined"), "leaving a drop target must clear stale focus");
   assert(visualEditorWebview.includes("event.stopPropagation();"), "nested pointer drags must not start ancestor drags");
-  assert(visualEditorWebview.includes("if (node.id !== model.root.id) {\n      bindPointerDrag"), "the page root must not be draggable");
+  assert(visualEditorWebview.includes("if (node.id !== activeRoot().id) {\n      bindPointerDrag"), "the page root must not be draggable");
   assert(visualEditorWebview.includes("--pan-x"), "canvas grid must follow the viewport pan");
   assert(visualEditorWebview.includes("panX,\n      panY"), "canvas pan position must persist");
   assert(visualEditorWebview.includes("element.draggable = false"), "pointer drag must be the single drag path");

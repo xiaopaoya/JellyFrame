@@ -45,10 +45,10 @@ void local_dirty_rect_reports_intersecting_commands_and_layers() {
         "<body><section class='a'>A</section><section class='b'>B</section></body>",
         "body { margin: 0; } section { width: 80px; height: 30px; margin: 0; } "
         ".a { background: #000000; } .b { background: #777777; }");
-    const Rect dirty{0, 0, 90, 35};
+    const Rect dirty{0, 0, 90, 25};
     const DisplayInvalidationResult result = analyze_display_invalidation(*layer_tree, &dirty, 1);
     check(result.dirty_rect_count == 1, "dirty rect count");
-    check(result.dirty_area == 3150, "dirty area is accumulated");
+    check(result.dirty_area == 2250, "dirty area is accumulated");
     check(result.layers_visited >= 1, "layers are visited");
     check(result.layers_intersecting >= 1, "root layer intersects dirty rect");
     check(result.commands_visited >= 2, "display commands are counted");
@@ -63,14 +63,14 @@ void contained_dirty_rects_are_normalized_for_diagnostics() {
         "body { margin: 0; } section { width: 80px; height: 30px; margin: 0; } "
         ".a { background: #000000; } .b { background: #777777; }");
     const Rect dirty_rects[] = {
-        Rect{0, 0, 90, 35},
+        Rect{0, 0, 90, 25},
         Rect{10, 10, 8, 8},
-        Rect{0, 0, 90, 35},
+        Rect{0, 0, 90, 25},
     };
     const DisplayInvalidationResult result =
         analyze_display_invalidation(*layer_tree, dirty_rects, 3);
     check(result.dirty_rect_count == 1, "contained dirty rects are dropped");
-    check(result.dirty_area == 3150, "diagnostic dirty area uses normalized rects");
+    check(result.dirty_area == 2250, "diagnostic dirty area uses normalized rects");
     check(result.commands_intersecting > 0, "normalized dirty rect still intersects commands");
 }
 

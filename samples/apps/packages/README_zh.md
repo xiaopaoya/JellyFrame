@@ -22,6 +22,9 @@ python tools\jellyframe_cli.py check --root samples\apps\packages\watch_weather 
 - `jelly_controls`：原生表单控件、focus/pressed 状态和本地 UI 状态。
 - `jelly_motion_lab`：当前 paint-safe CSS 与脚本化动画回放。
 - `jelly_route_tabs`：不引入导航的有界 app-local route state。
+- `jelly_alarm`：闹钟列表、开关、编辑和左划删除的穿戴设备场景。
+- `jelly_workout`：运动选择、目标设置、开始和指标分页的穿戴设备场景。
+- `jelly_messages`：未读优先、详情已读、左划删除和快捷回复的信息场景。
 
 四个展示包都必须保持可读、经过目检，并可在当前桌面壳中确定性运行。`doctor --trial`
 仍可在需要特定契约时使用针对性验收包。

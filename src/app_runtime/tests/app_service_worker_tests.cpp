@@ -223,12 +223,18 @@ void worker_pump_reports_rejected_completion_without_claiming_backpressure() {
         AppHostServiceWorkerPumpOptions{HostServiceJobKind::NetworkFetch, 1},
         worker);
     assert(result.requests_processed == 1);
-    assert(result.completions_posted == 0);
+    assert(result.completions_posted == 1);
     assert(result.completions_rejected == 1);
     assert(result.completion_rejected);
     assert(!result.completion_queue_full);
-    assert(host.requests().in_flight_size() == 1);
-    assert(host.completions().empty());
+    assert(host.requests().in_flight_size() == 0);
+    assert(host.completions().size() == 1);
+    std::vector<HostServiceCompletion> accepted;
+    assert(host.pump_frame_completions(accepted).accepted == 1);
+    assert(accepted.size() == 1);
+    assert(accepted.front().status == HostServiceStatus::Failed);
+    assert(accepted.front().result_handle == 0);
+    assert(accepted.front().error_code == 4001);
 }
 
 void worker_pump_does_not_pop_when_completion_queue_is_full() {

@@ -1,12 +1,13 @@
 "use strict";
 
 const MODEL_FORMAT = "jellyframe.visual-editor";
-const MODEL_VERSION = 2;
+const MODEL_VERSION = 4;
 const BODY_START = "<!-- jellyframe-visual-editor:body:start -->";
 const BODY_END = "<!-- jellyframe-visual-editor:body:end -->";
 const CSS_START = "/* jellyframe-visual-editor:styles:start */";
 const CSS_END = "/* jellyframe-visual-editor:styles:end */";
 const MAX_NODES = 128;
+const MAX_PAGES = 8;
 const CONTENT_ALIGN = { key: "textAlign", group: "layout", label: "contentHorizontal", kind: "enum", control: "segmented", values: ["left", "center", "right"] };
 const CONTENT_VERTICAL = { key: "verticalAlign", group: "layout", label: "contentVertical", kind: "enum", control: "segmented", values: ["start", "center", "end"] };
 const FONT_SIZE = { key: "fontSize", group: "appearance", label: "fontSize", kind: "number", min: 8, max: 72, default: 16 };
@@ -67,6 +68,7 @@ const COMPONENT_REGISTRY = Object.freeze([
     ...BORDER_FIELDS
   ] },
   { type: "button", renderKey: "button", group: "controlsGroup", label: "button", help: "buttonHelp", icon: "B", fields: [
+    { key: "pageAction", group: "interaction", label: "pageAction", kind: "enum", values: ["none", "previous", "next"] },
     { key: "text", group: "content", label: "textValue", kind: "text" },
     { ...CONTENT_ALIGN, default: "center" },
     { ...CONTENT_VERTICAL, default: "center" },
@@ -243,6 +245,38 @@ const RECIPE_REGISTRY = Object.freeze([
       { id: "segment-month", type: "button", text: "Mo", width: "auto", height: "100%", background: "transparent", color: "#9aa9b8", radius: 5, fontSize: 12, textAlign: "center", verticalAlign: "center" }
     ]
   } },
+  { type: "alarm-list", group: "wearableGroup", label: "alarmList", help: "alarmListHelp", icon: "◷", roundSafeInset: true, template: {
+    ...defaultNode("container", "alarm-list"), height: "100%", padding: 12, gap: 8, overflowY: "auto", background: "#000000", children: [
+      { ...defaultNode("text", "alarm-list-title"), text: "Alarms", width: "100%", align: "center", weight: "bold", fontSize: 20 },
+      { ...defaultNode("container", "alarm-row-1"), layout: "row", width: "100%", height: "56px", padding: 8, gap: 6, background: "#17191d", radius: 12, align: "center", justify: "space-between", children: [
+        { ...defaultNode("text", "alarm-row-1-copy"), text: "07:00  Weekdays", width: "auto", fontSize: 15, align: "left" },
+        { ...defaultNode("switch", "alarm-row-1-switch"), checked: true, width: "48px", height: "26px" }
+      ] },
+      { ...defaultNode("container", "alarm-row-2"), layout: "row", width: "100%", height: "56px", padding: 8, gap: 6, background: "#17191d", radius: 12, align: "center", justify: "space-between", children: [
+        { ...defaultNode("text", "alarm-row-2-copy"), text: "22:45  Every day", width: "auto", fontSize: 15, align: "left" },
+        { ...defaultNode("switch", "alarm-row-2-switch"), checked: false, width: "48px", height: "26px" }
+      ] }
+    ]
+  } },
+  { type: "workout-dashboard", group: "wearableGroup", label: "workoutDashboard", help: "workoutDashboardHelp", icon: "↗", template: {
+    ...defaultNode("container", "workout-dashboard"), height: "100%", padding: 12, gap: 8, background: "#000000", children: [
+      { ...defaultNode("text", "workout-title"), text: "Run", width: "100%", align: "center", weight: "bold", fontSize: 20 },
+      { ...defaultNode("text", "workout-status"), text: "Ready", width: "100%", align: "center", color: "#9aa9b8", fontSize: 13 },
+      { ...defaultNode("container", "workout-metrics"), layout: "row", width: "100%", height: "96px", gap: 6, align: "stretch", justify: "space-between", children: [
+        { ...defaultNode("text", "workout-time"), text: "00:00", width: "auto", align: "center", verticalAlign: "center", fontSize: 20 },
+        { ...defaultNode("text", "workout-load"), text: "5:42", width: "auto", align: "center", verticalAlign: "center", fontSize: 20 },
+        { ...defaultNode("text", "workout-heart"), text: "128", width: "auto", align: "center", verticalAlign: "center", fontSize: 20 }
+      ] },
+      { ...defaultNode("button", "workout-start"), text: "Start", width: "100%", height: "44px", radius: 22, background: "#9be564", color: "#071008", textAlign: "center", verticalAlign: "center" }
+    ]
+  } },
+  { type: "message-inbox", group: "wearableGroup", label: "messageInbox", help: "messageInboxHelp", icon: "✉", roundSafeInset: true, template: {
+    ...defaultNode("container", "message-inbox"), height: "100%", padding: 12, gap: 8, overflowY: "auto", background: "#000000", children: [
+      { ...defaultNode("text", "message-inbox-title"), text: "Messages", width: "100%", align: "center", weight: "bold", fontSize: 20 },
+      { ...defaultNode("list", "message-inbox-list"), items: ["Maya  Coffee?", "Owen  Route changed", "Sam  All set"], width: "100%", height: "auto", itemHeight: 48, gap: 4, background: "#17191d", color: "#f4f7fb", radius: 8 },
+      { ...defaultNode("button", "message-reply"), text: "Quick reply", width: "100%", height: "40px", radius: 20, background: "#6de6ff", color: "#071318", textAlign: "center", verticalAlign: "center" }
+    ]
+  } },
   { type: "bottom-navigation", group: "recipesGroup", label: "bottomNavigation", help: "bottomNavigationHelp", icon: "≡", template: {
     id: "bottom-navigation-page", type: "container", layout: "column", gap: 8, padding: 12, width: "100%", height: "100%", background: "#000000", radius: 0, align: "stretch", justify: "start", children: [
       { id: "bottom-navigation-title", type: "text", text: "Overview", fontSize: 20, color: "#f4f7fb", weight: "bold", align: "left", width: "100%" },
@@ -312,12 +346,80 @@ function migrateModel(input) {
   }
   const model = JSON.parse(JSON.stringify(input));
   const version = Number(model.formatVersion);
-  if (version === 1) {
+  if (version === 1 || version === 2 || version === 3) {
     model.formatVersion = MODEL_VERSION;
   } else if (version !== MODEL_VERSION) {
     throw new Error("Unsupported JellyFrame visual-editor model");
   }
+  if (!model.pageModel) model.pageModel = defaultPageModel(model.root?.id || "page", "JellyFrame App");
+  if (!model.gestureModel) model.gestureModel = defaultGestureModel();
+  if (!model.pageModel.pages.some((page) => page.root)) {
+    const pages = model.pageModel.pages;
+    pages.forEach((page, index) => {
+      const root = index === 0 ? model.root : cloneNodeTree(model.root, `${page.id}-`);
+      page.root = root;
+      page.rootId = root.id;
+    });
+  }
+  if (model.root && model.pageModel.pages[0]) {
+    model.pageModel.pages[0].root = model.root;
+    model.pageModel.pages[0].rootId = model.root.id;
+  }
   return model;
+}
+
+function cloneNodeTree(node, prefix) {
+  const copy = JSON.parse(JSON.stringify(node));
+  let index = 0;
+  walkNodes(copy, (candidate) => { candidate.id = `${prefix}node-${++index}`; });
+  return copy;
+}
+
+function defaultPageModel(rootId, label) {
+  return {
+    initialPageId: "page-1",
+    pages: [{ id: "page-1", label: String(label || "Page"), rootId, root: undefined }],
+    indicator: { visible: true, style: "dots" },
+    actions: { previous: "previous", next: "next" }
+  };
+}
+
+function defaultGestureModel() {
+  return {
+    swipe: {
+      enabled: false,
+      axis: "horizontal",
+      threshold: 30,
+      directionLock: true,
+      cancelDistance: 12,
+      edgeBehavior: "clamp",
+      childPriority: true
+    }
+  };
+}
+
+// Shared, side-effect-free gesture semantics for desktop replay and future
+// touch hosts. A negative delta means the content was dragged left.
+function classifySwipe(gestureModel, dx, dy, options = {}) {
+  const swipe = gestureModel?.swipe;
+  if (!swipe?.enabled) return { accepted: false, reason: "disabled" };
+  if (options.childActive && swipe.childPriority) return { accepted: false, reason: "child-control" };
+  const horizontal = Math.abs(Number(dx) || 0);
+  const vertical = Math.abs(Number(dy) || 0);
+  if (swipe.directionLock && vertical + swipe.cancelDistance >= horizontal) return { accepted: false, reason: "direction" };
+  if (horizontal < swipe.threshold) return { accepted: false, reason: "threshold" };
+  return { accepted: true, direction: dx < 0 ? "next" : "previous" };
+}
+
+function resolvePageIndex(current, direction, count, edgeBehavior = "clamp") {
+  const size = Math.max(0, Math.floor(Number(count) || 0));
+  if (!size) return 0;
+  const step = direction === "next" ? 1 : direction === "previous" ? -1 : 0;
+  const base = Math.min(size - 1, Math.max(0, Math.floor(Number(current) || 0)));
+  const candidate = base + step;
+  if (candidate >= 0 && candidate < size) return candidate;
+  if (edgeBehavior === "wrap") return (candidate + size) % size;
+  return base;
 }
 
 function defaultLineHeight(fontSize) {
@@ -347,7 +449,7 @@ function addBorder(declarations, node, fallbackColor = "transparent") {
 
 function nextId(model, prefix = "node") {
   const used = new Set();
-  walkNodes(model.root, (node) => used.add(node.id));
+  migrateModel(model).pageModel.pages.forEach((page) => walkNodes(page.root, (node) => used.add(node.id)));
   let index = 1;
   while (used.has(`${prefix}-${index}`)) index += 1;
   return `${prefix}-${index}`;
@@ -399,7 +501,9 @@ function createDefaultModel(viewport = {}, appName = "JellyFrame App") {
     format: MODEL_FORMAT,
     formatVersion: MODEL_VERSION,
     viewport: { width, height, shape: viewport.shape === "round" ? "round" : "rect" },
-    root
+    root,
+    pageModel: { ...defaultPageModel(root.id, appName), pages: [{ id: "page-1", label: appName, rootId: root.id, root }] },
+    gestureModel: defaultGestureModel()
   };
 }
 
@@ -452,10 +556,13 @@ function validateModel(model) {
   if (!migrated.root || migrated.root.type !== "container") {
     throw new Error("Visual-editor model must have a container root");
   }
+  const roots = migrated.pageModel.pages.map((page) => page.root || (page.id === migrated.pageModel.pages[0].id ? migrated.root : undefined));
+  if (roots.some((root) => !root || root.type !== "container")) throw new Error("Every visual-editor page must have a container root");
   const ids = new Set();
   let count = 0;
-  walkNodes(migrated.root, (node) => {
-    count += 1;
+  roots.forEach((root) => {
+    walkNodes(root, (node) => {
+      count += 1;
     if (count > MAX_NODES) throw new Error(`Visual-editor model exceeds ${MAX_NODES} nodes`);
     if (!NODE_TYPES.has(node.type)) throw new Error(`Unsupported visual-editor node type: ${node.type}`);
     if (!/^[A-Za-z][A-Za-z0-9_-]{0,47}$/.test(String(node.id || ""))) throw new Error(`Invalid visual-editor node id: ${node.id || "missing"}`);
@@ -469,8 +576,41 @@ function validateModel(model) {
       throw new Error(`Progress ${node.id} height must be a non-negative pixel length`);
     }
     validateRegistryFields(node);
+    });
   });
+  validatePageModel(migrated.pageModel, roots[0].id);
+  validateGestureModel(migrated.gestureModel);
   return migrated;
+}
+
+function validatePageModel(pageModel, rootId) {
+  if (!pageModel || !Array.isArray(pageModel.pages) || pageModel.pages.length < 1 || pageModel.pages.length > MAX_PAGES) {
+    throw new Error(`Visual-editor page model must contain 1-${MAX_PAGES} pages`);
+  }
+  const pageIds = new Set();
+  for (const page of pageModel.pages) {
+    if (!page || !/^[A-Za-z][A-Za-z0-9_-]{0,31}$/.test(String(page.id || ""))) throw new Error("Invalid visual-editor page id");
+    if (pageIds.has(page.id)) throw new Error(`Duplicate visual-editor page id: ${page.id}`);
+    if (typeof page.label !== "string" || !page.label.trim() || page.label.length > 32 || /[{};\r\n]/.test(page.label)) throw new Error(`Invalid visual-editor page label: ${page.id}`);
+    if (!page.root || page.root.type !== "container" || page.rootId !== page.root.id) throw new Error(`Page ${page.id} must reference its page root`);
+    pageIds.add(page.id);
+  }
+  if (!pageIds.has(pageModel.initialPageId)) throw new Error("Visual-editor initial page must reference a page");
+  if (!pageModel.indicator || typeof pageModel.indicator.visible !== "boolean" || !["dots", "fraction", "none"].includes(pageModel.indicator.style)) throw new Error("Invalid visual-editor page indicator");
+  if (!pageModel.actions || pageModel.actions.previous !== "previous" || pageModel.actions.next !== "next") throw new Error("Invalid visual-editor page actions");
+  return pageModel;
+}
+
+function validateGestureModel(gestureModel) {
+  const swipe = gestureModel?.swipe;
+  if (!swipe || typeof swipe.enabled !== "boolean" || swipe.axis !== "horizontal" ||
+      typeof swipe.directionLock !== "boolean" || typeof swipe.childPriority !== "boolean" ||
+      !["clamp", "wrap", "cancel"].includes(swipe.edgeBehavior) ||
+      !Number.isInteger(swipe.threshold) || swipe.threshold < 8 || swipe.threshold > 120 ||
+      !Number.isInteger(swipe.cancelDistance) || swipe.cancelDistance < 0 || swipe.cancelDistance > 64) {
+    throw new Error("Invalid visual-editor swipe gesture contract");
+  }
+  return gestureModel;
 }
 
 // Editor edits are checked locally and remain bounded by the same model limit;
@@ -478,7 +618,7 @@ function validateModel(model) {
 function boundedModelCheck(model) {
   const validated = validateModel(model);
   let nodeCount = 0;
-  walkNodes(validated.root, () => { nodeCount += 1; });
+  validated.pageModel.pages.forEach((page) => walkNodes(page.root, () => { nodeCount += 1; }));
   const generated = renderBody(validated);
   return {
     model: validated,
@@ -610,7 +750,8 @@ const sourceRenderers = {
     return `${indent}<div id="${id}" class="jf-visual-text" style="${style}">${alignedText(node)}</div>`;
   },
   button(node, indent, id, style) {
-    return `${indent}<button id="${id}" class="jf-visual-button" type="button" style="${style}">${alignedText(node)}</button>`;
+    const action = ["previous", "next"].includes(node.pageAction) ? ` data-jf-page-action="${node.pageAction}"` : "";
+    return `${indent}<button id="${id}" class="jf-visual-button" type="button"${action} style="${style}">${alignedText(node)}</button>`;
   },
   image(node, indent, id, style) {
     return `${indent}<img id="${id}" class="jf-visual-image" src="${escapeHtml(node.src)}" alt="${escapeHtml(node.alt)}" style="${style}">`;
@@ -661,11 +802,81 @@ function renderNode(node, indent = "    ", parent) {
 }
 
 function renderBody(model) {
-  validateModel(model);
-  return `${BODY_START}\n${renderNode(model.root, "  ")}\n${BODY_END}`;
+  const validated = validateModel(model);
+  const page = validated.pageModel.pages.find((candidate) => candidate.id === validated.pageModel.initialPageId) || validated.pageModel.pages[0];
+  if (validated.pageModel.pages.length === 1) return `${BODY_START}\n${renderNode(page.root, "  ")}\n${BODY_END}`;
+  const pages = validated.pageModel.pages.map((candidate) => {
+    const hidden = candidate.id === page.id ? "" : " jf-page-hidden";
+    return `  <section class="jf-page${hidden}" data-jf-page="${candidate.id}" style="width: 100%; height: 100%">\n${renderNode(candidate.root, "    ")}\n  </section>`;
+  }).join("\n");
+  return `${BODY_START}\n${pages}\n  <script>${renderPageRuntime(validated)}</script>\n${BODY_END}`;
+}
+
+function renderPageRuntime(model) {
+  const settings = JSON.stringify({ ids: model.pageModel.pages.map((page) => page.id), initial: model.pageModel.initialPageId, swipe: model.gestureModel.swipe });
+  return `(function () {
+  var config = ${settings};
+  var pages = document.querySelectorAll('[data-jf-page]');
+  var index = config.ids.indexOf(config.initial);
+  var sequence = null;
+  function show(next) {
+    if (next < 0 || next >= pages.length || next === index) return false;
+    index = next;
+    pages.forEach(function (page, i) { page.classList.toggle('jf-page-hidden', i !== index); });
+    return true;
+  }
+  function move(delta) {
+    var next = index + delta;
+    if (config.swipe.edgeBehavior === 'wrap') next = (next + pages.length) % pages.length;
+    return show(next);
+  }
+  window.JellyFramePages = {
+    current: function () { return config.ids[index]; },
+    go: function (id) { return show(config.ids.indexOf(id)); },
+    next: function () { return move(1); },
+    previous: function () { return move(-1); }
+  };
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-jf-page-action]');
+    if (!button) return;
+    move(button.dataset.jfPageAction === 'next' ? 1 : -1);
+  });
+  if (!config.swipe.enabled) return;
+  function isChildControl(target) {
+    if (!target || typeof target.closest !== 'function') return false;
+    return !!(target.closest('button') || target.closest('input') ||
+      target.closest('select') || target.closest('textarea'));
+  }
+  document.addEventListener('pointerdown', function (event) {
+    sequence = null;
+    if (config.swipe.childPriority && isChildControl(event.target)) return;
+    sequence = { x: event.clientX, y: event.clientY, cancelled: false };
+  });
+  document.addEventListener('mousemove', function (event) {
+    if (!sequence) return;
+    if (event.buttons === 0) { sequence = null; return; }
+    var dx = Math.abs(event.clientX - sequence.x);
+    var dy = Math.abs(event.clientY - sequence.y);
+    if (config.swipe.directionLock && dy >= config.swipe.cancelDistance && dy >= dx) sequence.cancelled = true;
+  });
+  document.addEventListener('pointerup', function (event) {
+    var start = sequence;
+    sequence = null;
+    if (!start || start.cancelled) return;
+    var dx = event.clientX - start.x;
+    var dy = Math.abs(event.clientY - start.y);
+    if (Math.abs(dx) < config.swipe.threshold) return;
+    if (config.swipe.directionLock && dy + config.swipe.cancelDistance >= Math.abs(dx)) return;
+    move(dx < 0 ? 1 : -1);
+  });
+})();`;
 }
 
 function renderCss() {
+  return renderBaseCss().replace(CSS_END, `.jf-page-hidden { display: none !important; }\n${CSS_END}`);
+}
+
+function renderBaseCss() {
   return `${CSS_START}\nhtml, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }\n.jf-visual-container { box-sizing: border-box; min-width: 0; }\n.jf-visual-container:first-child { overflow: hidden; }\n.jf-visual-text { box-sizing: border-box; min-width: 0; }\n.jf-visual-button, .jf-visual-input { box-sizing: border-box; }\n.jf-visual-button { text-align: center; }\n.jf-visual-input { text-align: left; }\n.jf-visual-image { display: block; }\n.jf-visual-progress > span { display: block; }\n.jf-visual-list li { box-sizing: border-box; }\n.jf-visual-navigation { box-sizing: border-box; overflow: hidden; }\n.jf-visual-navigation button { box-sizing: border-box; flex: 1 1 0; min-width: 0; min-height: 0; margin: 0; padding: 0; background: transparent; border: 0; }\n.jf-visual-switch { box-sizing: border-box; }\n.jf-visual-switch > span { display: block; }\n${CSS_END}`;
 }
 
@@ -704,6 +915,7 @@ module.exports = {
   RECIPE_REGISTRY,
   CSS_START,
   MAX_NODES,
+  MAX_PAGES,
   MODEL_FORMAT,
   MODEL_VERSION,
   NODE_TYPES,
@@ -711,14 +923,20 @@ module.exports = {
   boundedModelCheck,
   componentRegistry,
   defaultNode,
+  defaultGestureModel,
+  defaultPageModel,
+  classifySwipe,
   nextId,
   migrateModel,
   renderBody,
   renderCss,
+  resolvePageIndex,
   recipeRegistry,
   instantiateRecipe,
   updateCss,
   updateHtml,
+  validateGestureModel,
+  validatePageModel,
   validateModel,
   walkNodes
 };

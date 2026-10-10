@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Workout</title><link rel="stylesheet" href="styles/app.css"></head>
+<body>
+<main id="app" class="screen">
+  <section id="home-page" class="page"><p class="eyebrow">ACTIVITY</p><h1>Choose workout</h1><section id="workout-list" class="activity-list"></section></section>
+  <section id="prepare-page" class="page hidden"><header class="topbar"><button id="prepare-back" class="text-button">Back</button><span id="prepare-title" class="page-title">Run</span><span></span></header><section class="prepare-card"><span id="prepare-icon" class="activity-icon">RUN</span><strong id="prepare-goal" class="prepare-goal">20 min</strong><p id="prepare-copy" class="subtle">A steady effort with a light finish.</p><label class="field-label" for="target-range">Target</label><input id="target-range" type="range" min="5" max="60" step="5" value="20"><div class="range-value"><span>5 min</span><strong id="target-value">20 min</strong><span>60 min</span></div></section><button id="start-workout" class="primary-action">Start</button></section>
+  <section id="session-page" class="page hidden"><header class="topbar"><button id="session-back" class="text-button">Stop</button><span id="session-title" class="page-title">Run</span><span id="page-label" class="subtle">1 / 3</span></header><section id="metric-pages" class="metric-pages"><article class="metric-page is-active"><span class="metric-icon">TIME</span><strong id="elapsed" class="metric-value">00:12</strong><span class="metric-label">Elapsed</span></article><article class="metric-page"><span class="metric-icon">PACE</span><strong id="pace" class="metric-value">5:42</strong><span class="metric-label">Min / km</span></article><article class="metric-page"><span class="metric-icon">HEART</span><strong id="heart" class="metric-value">128</strong><span class="metric-label">BPM</span></article></section><div class="pager"><button id="prev-page" class="page-button">Prev</button><span id="page-dots">o o o</span><button id="next-page" class="page-button">Next</button></div></section>
+</main>
+<script src="scripts/app.js"></script>
+</body>
+</html>

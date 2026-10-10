@@ -11,7 +11,9 @@
   const persisted = vscode.getState() || {};
   const clone = (value) => JSON.parse(JSON.stringify(value));
   let model = clone(initial.model);
-  let selectedId = model.root.id;
+  if (model.pageModel?.pages?.[0]?.root) model.root = model.pageModel.pages[0].root;
+  let activePageId = model.pageModel?.initialPageId || model.pageModel?.pages?.[0]?.id || "page-1";
+  let selectedId = activeRoot().id;
   let history = [];
   let future = [];
   let dirty = false;
@@ -36,6 +38,23 @@
   let contextMenu;
   let resizeSession;
   let selectionOverlay;
+
+  function activePage() {
+    return model.pageModel?.pages?.find((page) => page.id === activePageId) || model.pageModel?.pages?.[0];
+  }
+
+  function activeRoot() {
+    return activePage()?.root || model.root;
+  }
+
+  function setActiveRoot(root) {
+    const page = activePage();
+    if (page) {
+      page.root = root;
+      page.rootId = root.id;
+      if (page === model.pageModel.pages[0]) model.root = root;
+    }
+  }
 
   const t = initial.chinese ? {
     wearableGroup: "穿戴设备组合",
@@ -76,6 +95,12 @@
     metricBlockHelp: "适合手表屏幕的数值、单位与说明组合",
     segmentedControl: "分段选择",
     segmentedControlHelp: "由普通按钮组成的横向选项组，业务切换由脚本维护",
+    alarmList: "闹钟列表",
+    alarmListHelp: "时间、重复规则与开关组成的闹钟列表骨架，删除和编辑由脚本维护",
+    workoutDashboard: "锻炼指标页",
+    workoutDashboardHelp: "运动标题、状态、指标与开始操作组成的页面骨架",
+    messageInbox: "信息收件箱",
+    messageInboxHelp: "未读优先的消息列表和快捷回复入口，状态由脚本维护",
     containerHelp: "横向或纵向排列内容",
     textHelp: "标题、标签或说明文字",
     buttonHelp: "可绑定事件的操作按钮",
@@ -119,6 +144,26 @@
     layout: "布局",
     appearance: "外观",
     interaction: "交互",
+    pageAction: "页面动作",
+    none: "无",
+    previous: "上一页",
+    next: "下一页",
+    pageModel: "页面模型",
+    initialPage: "初始页面",
+    currentPage: "当前编辑页面",
+    pageLabel: "页面名称",
+    addPage: "添加页面",
+    removePage: "删除页面",
+    lastPage: "至少保留一个页面",
+    pageIndicator: "页码指示器",
+    pageIndicatorDots: "圆点",
+    pageIndicatorFraction: "分数",
+    pageIndicatorNone: "不显示",
+    swipeGesture: "水平滑动",
+    swipeEnabled: "启用滑动契约",
+    swipeThreshold: "触发阈值",
+    directionLock: "方向锁定",
+    childPriority: "子控件优先",
     detectedListeners: "已检测到的监听器",
     noListeners: "未检测到本地监听器",
     copyEventSkeleton: "复制事件骨架",
@@ -241,6 +286,12 @@
     metricBlockHelp: "A wearable-friendly value, unit and supporting label block",
     segmentedControl: "Segmented control",
     segmentedControlHelp: "A button-based option group; switching stays in author JavaScript",
+    alarmList: "Alarm list",
+    alarmListHelp: "A time, repeat and switch list skeleton; edit and delete stay in author JavaScript",
+    workoutDashboard: "Workout dashboard",
+    workoutDashboardHelp: "A workout title, status, metrics and start-action page skeleton",
+    messageInbox: "Message inbox",
+    messageInboxHelp: "An unread-first message list with a quick-reply entry point",
     containerHelp: "Arrange content in a row or column",
     textHelp: "Heading, label, or supporting copy",
     buttonHelp: "Action control with a stable event target",
@@ -284,6 +335,26 @@
     layout: "Layout",
     appearance: "Appearance",
     interaction: "Interaction",
+    pageAction: "Page action",
+    none: "None",
+    previous: "Previous page",
+    next: "Next page",
+    pageModel: "Page model",
+    initialPage: "Initial page",
+    currentPage: "Current page",
+    pageLabel: "Page name",
+    addPage: "Add page",
+    removePage: "Remove page",
+    lastPage: "Keep at least one page",
+    pageIndicator: "Page indicator",
+    pageIndicatorDots: "Dots",
+    pageIndicatorFraction: "Fraction",
+    pageIndicatorNone: "None",
+    swipeGesture: "Horizontal swipe",
+    swipeEnabled: "Enable gesture contract",
+    swipeThreshold: "Trigger threshold",
+    directionLock: "Direction lock",
+    childPriority: "Child-control priority",
     detectedListeners: "Detected listeners",
     noListeners: "No local listener detected",
     copyEventSkeleton: "Copy event skeleton",
@@ -394,7 +465,7 @@
     }
   }
 
-  function find(id, root = model.root) {
+  function find(id, root = activeRoot()) {
     let found;
     walk(root, (node) => {
       if (!found && node.id === id) found = node;
@@ -402,7 +473,7 @@
     return found;
   }
 
-  function parentOf(id, root = model.root) {
+  function parentOf(id, root = activeRoot()) {
     let result;
     walk(root, (node, parent) => {
       if (!result && node.id === id) result = parent;
@@ -410,10 +481,24 @@
     return result;
   }
 
-  function nodeCount(node = model.root) {
+  function nodeCount(node = activeRoot()) {
     let count = 0;
     walk(node, () => { count += 1; });
     return count;
+  }
+
+  function pageRoots() {
+    return model.pageModel?.pages?.map((page) => page.root).filter(Boolean) || [model.root].filter(Boolean);
+  }
+
+  function totalNodeCount() {
+    return pageRoots().reduce((count, root) => count + nodeCount(root), 0);
+  }
+
+  function allNodeIds() {
+    const used = new Set();
+    pageRoots().forEach((root) => walk(root, (node) => used.add(node.id)));
+    return used;
   }
 
   function containsId(node, id) {
@@ -436,7 +521,7 @@
 
   function nextId(prefix) {
     const used = new Set();
-    walk(model.root, (node) => used.add(node.id));
+    model.pageModel.pages.forEach((page) => walk(page.root, (node) => used.add(node.id)));
     let index = 1;
     while (used.has(`${prefix}-${index}`)) index += 1;
     return `${prefix}-${index}`;
@@ -467,7 +552,9 @@
 
   function restore(serialized) {
     model = JSON.parse(serialized);
-    if (!find(selectedId)) selectedId = model.root.id;
+    model.root = model.pageModel.pages[0].root;
+    if (!model.pageModel?.pages?.some((page) => page.id === activePageId)) activePageId = model.pageModel?.initialPageId || model.pageModel?.pages?.[0]?.id;
+    if (!find(selectedId)) selectedId = activeRoot().id;
     markDirty();
     renderAll();
   }
@@ -527,7 +614,7 @@
     });
   }
 
-  function insertNode(node, parentId, index, root = model.root) {
+  function insertNode(node, parentId, index, root = activeRoot()) {
     const parent = find(parentId, root);
     if (!parent || parent.type !== "container" || !Array.isArray(parent.children)) return false;
     const bounded = clamp(Number(index), 0, parent.children.length);
@@ -543,7 +630,7 @@
     return { node: parent.children.splice(index, 1)[0], parent, index };
   }
 
-  function moveNode(id, parentId, index, root = model.root) {
+  function moveNode(id, parentId, index, root = activeRoot()) {
     if (id === root.id) return false;
     const node = find(id, root);
     const targetParent = find(parentId, root);
@@ -626,18 +713,18 @@
     const relative = horizontal
       ? (event.clientX - rect.left) / Math.max(1, rect.width)
       : (event.clientY - rect.top) / Math.max(1, rect.height);
-    if (relative < 0.25 && node.id !== model.root.id) return "before";
-    if (relative > 0.75 && node.id !== model.root.id) return "after";
+    if (relative < 0.25 && node.id !== activeRoot().id) return "before";
+    if (relative > 0.75 && node.id !== activeRoot().id) return "after";
     return node.type === "container" ? "inside" : (relative < 0.5 ? "before" : "after");
   }
 
   function prepareDrop(payload, targetId, mode) {
     const insertion = insertionFor(targetId, mode);
     if (!payload || !insertion) return;
-    const root = clone(model.root);
+    const root = clone(activeRoot());
     let id;
     if (payload.kind === "new") {
-      if (nodeCount() >= maxNodes) return { error: t.nodeLimit };
+      if (totalNodeCount() >= maxNodes) return { error: t.nodeLimit };
       const node = defaultNode(payload.type);
       if (!insertNode(node, insertion.parentId, insertion.index, root)) return;
       id = node.id;
@@ -645,9 +732,8 @@
       const recipe = recipes.find((candidate) => candidate.type === payload.type);
       if (!recipe) return { error: t.invalidDrop };
       const node = recipeNode(recipe);
-      if (nodeCount() + nodeCount(node) > maxNodes) return { error: t.nodeLimit };
-      const used = new Set();
-      walk(model.root, (candidate) => used.add(candidate.id));
+      if (totalNodeCount() + nodeCount(node) > maxNodes) return { error: t.nodeLimit };
+      const used = allNodeIds();
       remapIds(node, used);
       if (!insertNode(node, insertion.parentId, insertion.index, root)) return;
       id = node.id;
@@ -665,7 +751,7 @@
     if (!result) return;
     if (result.error) return report(result.error, "error");
     snapshot();
-    model.root = result.root;
+    setActiveRoot(result.root);
     selectedId = result.id;
     markDirty();
     renderAll();
@@ -705,7 +791,7 @@
           }
         }
         if (hit && $("canvas").contains(hit)) {
-          targetId = model.root.id;
+          targetId = activeRoot().id;
           targetMode = "inside";
           $("canvas").classList.add("drop-inside");
           showDropPreview(payload, targetId, targetMode);
@@ -748,9 +834,9 @@
   }
 
   function addNode(type) {
-    if (nodeCount() >= maxNodes) return report(t.nodeLimit, "error");
+    if (totalNodeCount() >= maxNodes) return report(t.nodeLimit, "error");
     const selected = find(selectedId);
-    const parent = selected?.type === "container" ? selected : parentOf(selectedId) || model.root;
+    const parent = selected?.type === "container" ? selected : parentOf(selectedId) || activeRoot();
     const index = selected?.type === "container" ? parent.children.length : parent.children.findIndex((node) => node.id === selectedId) + 1;
     const node = defaultNode(type);
     snapshot();
@@ -772,12 +858,11 @@
   function addRecipe(recipe) {
     const node = recipeNode(recipe);
     const subtreeSize = nodeCount(node);
-    if (nodeCount() + subtreeSize > maxNodes) return report(t.nodeLimit, "error");
+    if (totalNodeCount() + subtreeSize > maxNodes) return report(t.nodeLimit, "error");
     const selected = find(selectedId);
-    const parent = selected?.type === "container" ? selected : parentOf(selectedId) || model.root;
+    const parent = selected?.type === "container" ? selected : parentOf(selectedId) || activeRoot();
     const index = selected?.type === "container" ? parent.children.length : parent.children.findIndex((child) => child.id === selectedId) + 1;
-    const used = new Set();
-    walk(model.root, (candidate) => used.add(candidate.id));
+    const used = allNodeIds();
     remapIds(node, used);
     snapshot();
     if (!insertNode(node, parent.id, index)) return history.pop();
@@ -787,7 +872,7 @@
   }
 
   function removeSelected() {
-    if (selectedId === model.root.id) return report(t.rootProtected, "error");
+    if (selectedId === activeRoot().id) return report(t.rootProtected, "error");
     const parent = parentOf(selectedId);
     snapshot();
     removeNode(selectedId);
@@ -805,13 +890,12 @@
   }
 
   function duplicateSelected() {
-    if (nodeCount() >= maxNodes || nodeCount(find(selectedId)) + nodeCount() > maxNodes) return report(t.nodeLimit, "error");
     const source = find(selectedId);
     const parent = parentOf(selectedId);
     if (!source || !parent) return;
+    if (totalNodeCount() + nodeCount(source) > maxNodes) return report(t.nodeLimit, "error");
     const duplicate = clone(source);
-    const used = new Set();
-    walk(model.root, (node) => used.add(node.id));
+    const used = allNodeIds();
     remapIds(duplicate, used);
     const index = parent.children.findIndex((node) => node.id === source.id) + 1;
     snapshot();
@@ -840,7 +924,7 @@
   }
 
   function nodeLabel(node) {
-    if (node.id === model.root.id) return t.page;
+    if (node.id === activeRoot().id) return t.page;
     if (node.type === "text" || node.type === "button") return String(node.text || t[node.type]);
     if (node.type === "input") return String(node.placeholder || t.input);
     return t[node.type] || node.type;
@@ -917,10 +1001,10 @@
     separator.className = "editor-context-menu-separator";
     separator.setAttribute("role", "separator");
     menu.append(separator);
-    addItem(t.duplicate, duplicateSelected, { disabled: saving || node.id === model.root.id || nodeCount() + nodeCount(node) > maxNodes });
-    addItem(t.moveUp, () => moveSelected(-1), { disabled: saving || node.id === model.root.id || !parentOf(node.id)?.children?.length || parentOf(node.id).children[0]?.id === node.id });
-    addItem(t.moveDown, () => moveSelected(1), { disabled: saving || node.id === model.root.id || !parentOf(node.id)?.children?.length || parentOf(node.id).children.at(-1)?.id === node.id });
-    addItem(t.remove, removeSelected, { disabled: saving || node.id === model.root.id });
+    addItem(t.duplicate, duplicateSelected, { disabled: saving || node.id === activeRoot().id || totalNodeCount() + nodeCount(node) > maxNodes });
+    addItem(t.moveUp, () => moveSelected(-1), { disabled: saving || node.id === activeRoot().id || !parentOf(node.id)?.children?.length || parentOf(node.id).children[0]?.id === node.id });
+    addItem(t.moveDown, () => moveSelected(1), { disabled: saving || node.id === activeRoot().id || !parentOf(node.id)?.children?.length || parentOf(node.id).children.at(-1)?.id === node.id });
+    addItem(t.remove, removeSelected, { disabled: saving || node.id === activeRoot().id });
     const historySeparator = document.createElement("div");
     historySeparator.className = "editor-context-menu-separator";
     historySeparator.setAttribute("role", "separator");
@@ -960,7 +1044,7 @@
   function renderSelectionOverlay() {
     const node = find(selectedId);
     const element = [...$("canvas").querySelectorAll(".designer-node")].find((item) => item.dataset.nodeId === node?.id);
-    if (!node || node.id === model.root.id || previewCanvasChildren || saving || !element) {
+    if (!node || node.id === activeRoot().id || previewCanvasChildren || saving || !element) {
       selectionOverlay?.remove();
       selectionOverlay = undefined;
       return;
@@ -1021,7 +1105,7 @@
   }
 
   function bindResizeHandle(event, node, element, edge) {
-    if (event.button !== 0 || node.id === model.root.id || saving || resizeSession) return;
+    if (event.button !== 0 || node.id === activeRoot().id || saving || resizeSession) return;
     event.preventDefault();
     event.stopPropagation();
     closeContextMenu();
@@ -1055,7 +1139,7 @@
       };
       if (resizeWidth) setDimension("width", startWidth, (moveEvent.clientX - startX) / scale * (edge.includes("w") ? -1 : 1));
       if (resizeHeight) setDimension("height", startHeight, (moveEvent.clientY - startY) / scale * (edge.includes("n") ? -1 : 1));
-      const projected = clone(model.root);
+      const projected = clone(activeRoot());
       Object.assign(find(node.id, projected), changes);
       renderCanvas(projected, true);
     };
@@ -1431,7 +1515,7 @@
       event.stopPropagation();
       if (allowClick(event)) selectNode(node.id);
     });
-    if (node.id !== model.root.id) {
+    if (node.id !== activeRoot().id) {
       bindPointerDrag(element, { kind: "move", id: node.id }, nodeLabel(node));
     }
     if (node.type === "text") {
@@ -1472,7 +1556,7 @@
     });
   }
 
-  function renderCanvas(root = model.root, preview = false) {
+  function renderCanvas(root = activeRoot(), preview = false) {
     const canvas = $("canvas");
     const scrollPositions = captureCanvasScroll();
     canvas.replaceChildren(renderNode(root, preview));
@@ -1504,7 +1588,7 @@
       clearDropIndicators();
       const target = event.target.closest?.(".designer-node");
       const node = target?.dataset.nodeId ? find(target.dataset.nodeId) : undefined;
-      performDrop(payload, node?.id || model.root.id, node ? dropMode(event, target, node) : "inside");
+      performDrop(payload, node?.id || activeRoot().id, node ? dropMode(event, target, node) : "inside");
     });
   }
 
@@ -1673,7 +1757,7 @@
     row.append(toggle, icon, name, kind);
     row.addEventListener("click", (event) => { if (allowClick(event)) selectNode(node.id, { focusOutline: true }); });
     row.addEventListener("contextmenu", (event) => openContextMenu(event, node.id));
-    if (node.id !== model.root.id) {
+    if (node.id !== activeRoot().id) {
       bindPointerDrag(row, { kind: "move", id: node.id }, nodeLabel(node));
     }
     row.addEventListener("dragstart", (event) => {
@@ -1697,7 +1781,7 @@
   function renderOutline() {
     const tree = $("outline-tree");
     const hadFocus = tree.contains(document.activeElement);
-    tree.replaceChildren(renderOutlineBranch(model.root, 0));
+    tree.replaceChildren(renderOutlineBranch(activeRoot(), 0));
     const rows = visibleOutlineRows();
     const visibleIds = new Set(rows.map((row) => row.dataset.nodeId));
     // A selected canvas node can be inside a collapsed branch. Keep a Tab entry.
@@ -1845,6 +1929,7 @@
     const oldId = node.id;
     changes.forEach(([changeKey, changeValue]) => { node[changeKey] = changeValue; });
     if (key === "id") {
+      if (node === activeRoot()) activePage().rootId = value;
       if (selectedId === oldId) selectedId = value;
       if (collapsedNodes.delete(oldId)) collapsedNodes.add(value);
     }
@@ -2189,7 +2274,7 @@
       body.append(empty);
       return;
     }
-    if (node.id !== model.root.id) {
+    if (node.id !== activeRoot().id) {
       [["↑", t.moveUp, () => moveSelected(-1)], ["↓", t.moveDown, () => moveSelected(1)], ["⧉", t.duplicate, duplicateSelected], ["×", t.remove, removeSelected]].forEach(([label, title, handler]) => {
         const button = document.createElement("button");
         button.type = "button";
@@ -2219,6 +2304,202 @@
       body.append(element);
     }
     body.append(interactionSection(node));
+    body.append(pageModelSection());
+  }
+
+  function pageModelSection() {
+    const element = section(t.pageModel);
+    const pageModel = model.pageModel;
+    const gesture = model.gestureModel?.swipe;
+    if (!pageModel || !gesture) return element;
+    const pagesHeading = document.createElement("h4");
+    pagesHeading.textContent = t.pageModel;
+    element.append(pagesHeading);
+    pageModel.pages.forEach((page) => {
+      const row = fieldRow(`${t.pageLabel} · ${page.id}`);
+      const input = document.createElement("input");
+      input.type = "text";
+      input.maxLength = "32";
+      input.value = page.label;
+      input.addEventListener("change", () => {
+        const value = input.value.trim();
+        if (!value || /[{};\r\n]/.test(value)) {
+          showFieldError(row, t.invalidValue);
+          input.value = page.label;
+          return;
+        }
+        if (value === page.label) return;
+        snapshot();
+        page.label = value;
+        markDirty();
+        renderAll();
+      });
+      row.append(input);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "icon-button quiet list-item-remove";
+      remove.textContent = "×";
+      remove.title = t.removePage;
+      remove.setAttribute("aria-label", t.removePage);
+      remove.disabled = pageModel.pages.length <= 1;
+      remove.addEventListener("click", () => removePage(page.id));
+      row.append(remove);
+      element.append(row);
+    });
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "quiet list-item-add";
+    add.textContent = `+ ${t.addPage}`;
+    add.disabled = pageModel.pages.length >= 8;
+    add.addEventListener("click", addPage);
+    element.append(add);
+    const initialRow = fieldRow(t.initialPage);
+    const initialSelect = document.createElement("select");
+    pageModel.pages.forEach((page) => {
+      const option = document.createElement("option");
+      option.value = page.id;
+      option.textContent = page.label;
+      initialSelect.append(option);
+    });
+    initialSelect.value = pageModel.initialPageId;
+    initialSelect.addEventListener("change", () => {
+      if (initialSelect.value === pageModel.initialPageId) return;
+      snapshot();
+      pageModel.initialPageId = initialSelect.value;
+      markDirty();
+      renderAll();
+    });
+    initialRow.append(initialSelect);
+    element.append(initialRow);
+    const currentRow = fieldRow(t.currentPage);
+    const currentSelect = document.createElement("select");
+    pageModel.pages.forEach((page) => {
+      const option = document.createElement("option");
+      option.value = page.id;
+      option.textContent = page.label;
+      currentSelect.append(option);
+    });
+    currentSelect.value = activePageId;
+    currentSelect.addEventListener("change", () => {
+      if (currentSelect.value === activePageId) return;
+      activePageId = currentSelect.value;
+      selectedId = activeRoot().id;
+      renderAll();
+    });
+    currentRow.append(currentSelect);
+    element.append(currentRow);
+    const indicatorRow = fieldRow(t.pageIndicator);
+    const indicatorSelect = document.createElement("select");
+    [["dots", t.pageIndicatorDots], ["fraction", t.pageIndicatorFraction], ["none", t.pageIndicatorNone]].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      indicatorSelect.append(option);
+    });
+    indicatorSelect.value = pageModel.indicator.style;
+    indicatorSelect.addEventListener("change", () => {
+      const value = indicatorSelect.value;
+      snapshot();
+      pageModel.indicator.style = value;
+      pageModel.indicator.visible = value !== "none";
+      markDirty();
+      renderAll();
+    });
+    indicatorRow.append(indicatorSelect);
+    element.append(indicatorRow);
+    const gestureHeading = document.createElement("h4");
+    gestureHeading.textContent = t.swipeGesture;
+    element.append(gestureHeading);
+    element.append(booleanContractField(t.swipeEnabled, gesture.enabled, (value) => { gesture.enabled = value; }));
+    element.append(numberContractField(t.swipeThreshold, gesture.threshold, 8, 120, (value) => { gesture.threshold = value; }));
+    element.append(booleanContractField(t.directionLock, gesture.directionLock, (value) => { gesture.directionLock = value; }));
+    element.append(booleanContractField(t.childPriority, gesture.childPriority, (value) => { gesture.childPriority = value; }));
+    return element;
+  }
+
+  function nextPageId() {
+    const used = new Set(model.pageModel.pages.map((page) => page.id));
+    let index = 1;
+    while (used.has(`page-${index}`)) index += 1;
+    return `page-${index}`;
+  }
+
+  function clonePageRoot(root, pageId) {
+    const copy = clone(root);
+    const used = new Set();
+    model.pageModel.pages.forEach((page) => walk(page.root, (node) => used.add(node.id)));
+    let index = 0;
+    walk(copy, (node) => {
+      let id;
+      do { id = `${pageId}-node-${++index}`; } while (used.has(id));
+      node.id = id;
+      used.add(id);
+    });
+    return copy;
+  }
+
+  function addPage() {
+    if (model.pageModel.pages.length >= 8) return;
+    snapshot();
+    const id = nextPageId();
+    const root = clonePageRoot(activeRoot(), id);
+    model.pageModel.pages.push({ id, label: `${initial.chinese ? "页面" : "Page"} ${model.pageModel.pages.length + 1}`, rootId: root.id, root });
+    markDirty();
+    renderAll();
+  }
+
+  function removePage(pageId) {
+    if (model.pageModel.pages.length <= 1) {
+      report(t.lastPage, "error");
+      return;
+    }
+    const index = model.pageModel.pages.findIndex((page) => page.id === pageId);
+    if (index < 0) return;
+    snapshot();
+    model.pageModel.pages.splice(index, 1);
+    model.root = model.pageModel.pages[0].root;
+    if (model.pageModel.initialPageId === pageId) {
+      model.pageModel.initialPageId = model.pageModel.pages[Math.max(0, index - 1)].id;
+    }
+    if (activePageId === pageId) {
+      activePageId = model.pageModel.pages[Math.max(0, index - 1)].id;
+      selectedId = activeRoot().id;
+    }
+    markDirty();
+    renderAll();
+  }
+
+  function commitContract(change) {
+    snapshot();
+    change();
+    markDirty();
+    renderAll();
+  }
+
+  function booleanContractField(label, value, change) {
+    const row = fieldRow(label);
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "inspector-toggle";
+    toggle.setAttribute("role", "switch");
+    toggle.setAttribute("aria-checked", String(Boolean(value)));
+    toggle.textContent = value ? (initial.chinese ? "开" : "On") : (initial.chinese ? "关" : "Off");
+    toggle.addEventListener("click", () => commitContract(() => change(!value)));
+    row.append(toggle);
+    return row;
+  }
+
+  function numberContractField(label, value, minimum, maximum, change) {
+    const row = fieldRow(label);
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = String(minimum);
+    input.max = String(maximum);
+    input.step = "1";
+    input.value = String(value);
+    input.addEventListener("change", () => commitContract(() => change(clamp(Number(input.value), minimum, maximum))));
+    row.append(input);
+    return row;
   }
 
   function renderBreadcrumbs() {
@@ -2331,6 +2612,7 @@
     resizeSession?.cancel();
     if (saving) return;
     saving = true;
+    model.root = model.pageModel.pages[0].root;
     setSaveState("saving", t.saving);
     renderAll();
     vscode.postMessage({ type: debug ? "save-debug" : "save", model });

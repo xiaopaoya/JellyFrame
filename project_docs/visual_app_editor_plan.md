@@ -1,6 +1,6 @@
 # JellyFrame Visual App Editor Plan
 
-> Last updated: 2026-09-28; Applies to: 0.6.0-dev; status: Stage 1/2 acceptance pending, Stage 3 bridge implemented, Stage 4 active.
+> Last updated: 2026-10-07; Applies to: 0.6.0-dev; status: Stage 1/2 acceptance pending, Stage 3 bridge implemented, Stage 4 active.
 
 ## Wearable-first Checkpoint
 
@@ -22,16 +22,60 @@ is separate; these are desktop results.
 Next slices, in order:
 
 1. Bounded page collection, stable page IDs, active page, previous/next commands
-   and indicators, with generated behavior isolated from author scripts.
+   and indicators, with generated behavior isolated from author scripts. The
+   model is now format version 4: every page owns a bounded container root, while old
+   version 1-3 models are migrated by cloning their former root for additional
+   pages. The editor can switch the active page, edit its tree, and export the
+   configured initial page on launch. Multi-page HTML exports retain every page
+   and include a generated classic-script controller inside the managed body
+   region. Buttons expose `pageAction` (none/previous/next). Author scripts can
+   call `window.JellyFramePages.current/go/next/previous`. The existing Save & run
+   command opens the interactive desktop Runtime in a separate VS Code tab.
+   Multi-page saving requires `runtime.script: classic`; single-page output
+   remains script-free. IDs and the 128-node limit apply across the page set.
+   Indicator metadata is retained, but indicator painting is still pending.
 2. Horizontal swipe navigation with direction locking, cancellation and control
    priority, followed by device touch testing without photographic pixel diffs.
+   The model now also carries a disabled-by-default swipe contract with bounded
+   threshold, cancellation distance, edge behavior and child-control priority;
+   generated Runtime handlers use the supported pointer coordinate contract:
+   pointerdown starts a sequence, mousemove samples it while the button is held,
+   and pointerup completes it. They intentionally do not depend on TouchList,
+   touchmove or touchcancel, which are not part of JellyFrame's native event
+   contract. Vertical cancellation persists through the sequence; child
+   controls retain priority.
+   The shared model module now exposes side-effect-free swipe classification
+   and page-index resolution for desktop replay and future touch hosts. These
+   functions cover disabled gestures, direction cancellation, threshold,
+   child-control priority, clamped edges and wrapped edges.
    CSS scroll-snap is not supported and must not stand in for this implementation.
+   `tests/tool_regression/visual_editor_gesture_replay.js` now provides a
+   deterministic JSON replay for the contract; it is not a Runtime or hardware
+   result.
 3. Range controls, icon/text function rows, label/value/action settings rows and
    richer metrics, gated on actual Runtime support and touch/font budgets.
 4. Target-specific layouts, round safe-area guides, font coverage/size integration
    and packaged icons.
 
 The Chinese plan contains the detailed acceptance checkpoint and boundaries.
+
+### Runtime Acceptance, 2026-10-07
+
+`tests/tool_regression/visual_editor_pages_runtime_tests.js` exercises exported
+navigation code and optionally the scripting shell. Trace assertions require
+only the first page on initial paint, the second page after Next, and the first
+after Back. Sequence tests cover threshold, pointer cancellation, child priority
+and vertical cancellation followed by horizontal movement.
+
+Hardware execution remains pending. Use a matching scripting developer image
+and provider, a two-page package with previous/next buttons and a range control,
+and the available 172x320/round-300 targets. Verify launch, button navigation,
+horizontal swipe, sub-threshold movement, vertical scrolling, pointer cancellation,
+child-control drag, edge clamping and repeat after restart. Record package/image
+identity, script errors and input/frame telemetry. Visual inspection is sufficient
+for unexpected page changes, clipping or stuck content; photographic pixel
+comparison is not required. All cancelled gestures must leave the page unchanged,
+and each completed gesture must cause at most one transition.
 
 The editor is a constrained, code-friendly JellyFrame App designer embedded in
 VS Code. It is not a full-browser page builder. It emits readable HTML/CSS,
@@ -209,3 +253,19 @@ geometry, eight handles at 50/100/150% zoom, auto/percent conversion, cancellati
 redo, nested scroll and keyboard menus. Real VS Code interaction acceptance
 awaits user retesting; no hardware claim is added. Next is slice 2's capability
 audit and fine-grained fields, not page/gesture implementation yet.
+
+### Scenario review slice (2026-09-29)
+
+Three scripting-enabled wearable scenario packages were added under
+`samples/apps/packages`: `jelly_alarm`, `jelly_workout`, and `jelly_messages`.
+They pass package/responsive preflight for round-300, rect-320x240 and
+rect-172x320, and each has an 18-frame deterministic desktop capture. The
+editor registry also gained static `alarm-list`, `workout-dashboard` and
+`message-inbox` recipes. These recipes intentionally stop at ordinary nodes;
+page state, swipe gestures, host activity/audio/storage and business logic
+remain author-owned.
+
+The review is recorded in
+`project_docs/wearable_scenario_render_editor_review_20260929.md`. The next
+editor slice is now a bounded page model, followed by a gesture contract and
+device replay requirements. Recipe count is not an acceptance criterion.
