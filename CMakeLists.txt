@@ -9,6 +9,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(JELLYFRAME_BUILD_EXAMPLES "Build JellyFrame native validation and dump tools" ON)
 option(JELLYFRAME_BUILD_TESTS "Build JellyFrame regression tests" ON)
 option(JELLYFRAME_BUILD_BENCHMARKS "Build JellyFrame microbenchmarks" ON)
+option(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER
+       "Build the optional LVGL software-fill comparison adapter" OFF)
+set(JELLYFRAME_LVGL_SOURCE_DIR "" CACHE PATH "LVGL source tree used by the CPU comparison adapter")
+set(JELLYFRAME_LVGL_LIBRARY "" CACHE FILEPATH "Prebuilt LVGL static library used by the CPU comparison adapter")
 option(JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS "Register sample and external-trial CTest coverage" ON)
 option(JELLYFRAME_BUILD_APP_RUNTIME "Build the JellyFrame App Runtime layer" ON)
 if(JELLYFRAME_BUILD_APP_RUNTIME)
@@ -311,6 +315,23 @@ if(JELLYFRAME_BUILD_BENCHMARKS)
         target_link_libraries(jellyframe_cpu2d_compare PRIVATE gdi32 msimg32 gdiplus bcrypt)
         target_compile_definitions(jellyframe_cpu2d_compare PRIVATE
             JELLYFRAME_CPU2D_CORE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
+        if(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
+            if(NOT JELLYFRAME_LVGL_SOURCE_DIR OR NOT EXISTS "${JELLYFRAME_LVGL_SOURCE_DIR}/include/lvgl/lvgl.h")
+                message(FATAL_ERROR "JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER requires JELLYFRAME_LVGL_SOURCE_DIR")
+            endif()
+            if(NOT JELLYFRAME_LVGL_LIBRARY OR NOT EXISTS "${JELLYFRAME_LVGL_LIBRARY}")
+                message(FATAL_ERROR "JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER requires JELLYFRAME_LVGL_LIBRARY")
+            endif()
+            target_include_directories(jellyframe_cpu2d_compare PRIVATE
+                "${JELLYFRAME_LVGL_SOURCE_DIR}/include"
+                "${JELLYFRAME_LVGL_SOURCE_DIR}/src")
+            target_compile_definitions(jellyframe_cpu2d_compare PRIVATE LV_CONF_SKIP=1 LV_LVGL_H_INCLUDE_SIMPLE=1
+                JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER=1)
+            target_link_libraries(jellyframe_cpu2d_compare PRIVATE "${JELLYFRAME_LVGL_LIBRARY}")
+            if(MSVC)
+                target_compile_options(jellyframe_cpu2d_compare PRIVATE /utf-8)
+            endif()
+        endif()
     endif()
     if(JELLYFRAME_BUILD_APP_RUNTIME)
         add_executable(jellyframe_app_runtime_microbench src/app_runtime/benchmarks/app_runtime_bench.cpp)
@@ -367,6 +388,20 @@ if(JELLYFRAME_BUILD_TESTS)
                  COMMAND jellyframe_cpu2d_compare
                          "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_smoke"
                          3)
+        if(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
+            add_test(NAME jellyframe_cpu2d_compare_lvgl_full_fill_smoke
+                     COMMAND jellyframe_cpu2d_compare
+                             "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_lvgl_full_fill_smoke"
+                             3 opaque-fill lvgl)
+            set_tests_properties(jellyframe_cpu2d_compare_lvgl_full_fill_smoke PROPERTIES
+                PASS_REGULAR_EXPRESSION "output_validation=pass")
+            add_test(NAME jellyframe_cpu2d_compare_lvgl_dirty_fill_smoke
+                     COMMAND jellyframe_cpu2d_compare
+                             "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_lvgl_dirty_fill_smoke"
+                             3 opaque-dirty-fill lvgl)
+            set_tests_properties(jellyframe_cpu2d_compare_lvgl_dirty_fill_smoke PROPERTIES
+                PASS_REGULAR_EXPRESSION "output_validation=pass")
+        endif()
         add_test(NAME jellyframe_cpu2d_compare_dirty_output_smoke
                  COMMAND jellyframe_cpu2d_compare
                          "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_dirty_smoke"

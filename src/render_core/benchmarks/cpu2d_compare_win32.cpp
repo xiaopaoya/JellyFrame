@@ -22,6 +22,15 @@
 #include <string>
 #include <vector>
 
+#if defined(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
+#include "lvgl.h"
+#include "draw/lv_draw_private.h"
+#include "draw/sw/lv_draw_sw.h"
+#if LVGL_VERSION_MAJOR != 9 || LVGL_VERSION_MINOR != 6 || LVGL_VERSION_PATCH != 0
+#error "The LVGL software-fill adapter is qualified against LVGL v9.6.0 only"
+#endif
+#endif
+
 using namespace jellyframe;
 
 namespace {
@@ -63,6 +72,7 @@ enum class Backend {
     Gdi,
     Sdl2,
     Cairo,
+    Lvgl,
 };
 
 struct OutputComparison {
@@ -393,6 +403,57 @@ private:
     }
 };
 
+#if defined(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
+struct LvglSurface {
+    std::vector<std::uint8_t> storage =
+        std::vector<std::uint8_t>(static_cast<std::size_t>(kWidth) * kHeight * 3U);
+    std::vector<std::uint8_t> normalized_bgra =
+        std::vector<std::uint8_t>(static_cast<std::size_t>(kWidth) * kHeight * 4U);
+    lv_draw_buf_t draw_buf{};
+    lv_layer_t layer{};
+    lv_draw_task_t task{};
+    lv_draw_fill_dsc_t fill_dsc{};
+
+    LvglSurface() {
+        if (lv_draw_buf_init(&draw_buf, kWidth, kHeight, LV_COLOR_FORMAT_RGB888,
+                             kWidth * 3, storage.data(),
+                             static_cast<std::uint32_t>(storage.size())) != LV_RESULT_OK) {
+            throw std::runtime_error("LVGL RGB888 draw buffer initialization failed");
+        }
+        layer.draw_buf = &draw_buf;
+        layer.buf_area = lv_area_t{0, 0, kWidth - 1, kHeight - 1};
+        layer.color_format = LV_COLOR_FORMAT_RGB888;
+        task.target_layer = &layer;
+        lv_draw_fill_dsc_init(&fill_dsc);
+        fill_dsc.color = lv_color_make(kFillColor.r, kFillColor.g, kFillColor.b);
+        fill_dsc.opa = LV_OPA_COVER;
+        fill_dsc.radius = 0;
+    }
+
+    void reset() {
+        std::fill(storage.begin(), storage.end(), 0);
+    }
+
+    void fill(Rect rect) {
+        const lv_area_t area{rect.x, rect.y, rect.x + rect.width - 1,
+                             rect.y + rect.height - 1};
+        task.area = area;
+        task.clip_area = area;
+        lv_draw_sw_fill(&task, &fill_dsc, &area);
+    }
+
+    const std::uint8_t* pixels_bgra() {
+        for (std::size_t index = 0; index < normalized_bgra.size() / 4U; ++index) {
+            normalized_bgra[index * 4U + 0U] = storage[index * 3U + 0U];
+            normalized_bgra[index * 4U + 1U] = storage[index * 3U + 1U];
+            normalized_bgra[index * 4U + 2U] = storage[index * 3U + 2U];
+            normalized_bgra[index * 4U + 3U] = 255;
+        }
+        return normalized_bgra.data();
+    }
+};
+#endif
+
 #ifndef JELLYFRAME_CPU2D_CORE_VERSION
 #define JELLYFRAME_CPU2D_CORE_VERSION "unknown"
 #endif
@@ -606,7 +667,8 @@ Backend parse_backend(const char* raw) {
     if (name == "gdi") return Backend::Gdi;
     if (name == "sdl2") return Backend::Sdl2;
     if (name == "cairo") return Backend::Cairo;
-    throw std::runtime_error("backend must be gdi, sdl2, or cairo");
+    if (name == "lvgl") return Backend::Lvgl;
+    throw std::runtime_error("backend must be gdi, sdl2, cairo, or lvgl");
 }
 
 const char* workload_id(Workload workload) {
@@ -1370,9 +1432,19 @@ int main(int argc, char** argv) {
             throw std::runtime_error(
                 "Cairo adapter currently supports opaque-fill and opaque-dirty-fill only");
         }
-        if (backend == Backend::Gdi && argc == 6) {
+        if (backend == Backend::Lvgl && !is_fill_workload(workload)) {
+            throw std::runtime_error(
+                "LVGL software adapter currently supports opaque-fill and opaque-dirty-fill only");
+        }
+        if (backend != Backend::Sdl2 && backend != Backend::Cairo && argc == 6) {
             throw std::runtime_error("library path is valid only with the sdl2 or cairo backend");
         }
+#if !defined(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
+        if (backend == Backend::Lvgl) {
+            throw std::runtime_error(
+                "LVGL adapter is disabled; configure with JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER=ON");
+        }
+#endif
         const std::filesystem::path output_directory(argv[1]);
         if (workload == Workload::RoundedCoreProbes) {
             if (samples > 10000) throw std::runtime_error("rounded core probes permit at most 10000 samples");
@@ -1419,7 +1491,8 @@ int main(int argc, char** argv) {
             command.rect = alpha_grid_rect(operation);
             rasterizer.rasterize(command, jellyframe_surface, command.rect);
         };
-        if (workload != Workload::AlphaGrid && workload != Workload::BitmapText) {
+        if (backend != Backend::Lvgl && workload != Workload::AlphaGrid &&
+            workload != Workload::BitmapText) {
             jellyframe_samples = measure(samples, operations_per_sample, [&] {
                 rasterizer.rasterize(command, jellyframe_surface, command.rect);
             });
@@ -1513,7 +1586,7 @@ int main(int argc, char** argv) {
             reference_name = "sdl2-software-renderer";
             reference_version = sdl_surface.version;
             reference_file = "sdl2.json";
-        } else {
+        } else if (backend == Backend::Cairo) {
             const std::filesystem::path library_path = argc == 6
                 ? std::filesystem::path(argv[5])
                 : std::filesystem::path(L"cairo.dll");
@@ -1530,6 +1603,31 @@ int main(int argc, char** argv) {
             reference_version = cairo_surface.version;
             reference_file = "cairo.json";
         }
+#if defined(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
+        else {
+            lv_init();
+            {
+                LvglSurface lvgl_surface;
+                const Rect rect = workload_rect(workload);
+                const bool reset_surface = workload == Workload::OpaqueDirtyFill;
+                auto pair = benchmark::measure_interleaved(samples, kWarmupIterations,
+                    operations_per_sample,
+                    [&] { if (reset_surface) reset_jellyframe(); },
+                    [&](int) { rasterizer.rasterize(command, jellyframe_surface, rect); }, [] {},
+                    [&] { if (reset_surface) lvgl_surface.reset(); },
+                    [&](int) { lvgl_surface.fill(rect); }, [] {});
+                jellyframe_samples = std::move(pair.first);
+                reference_samples = std::move(pair.second);
+                comparison = compare_output(jellyframe_surface, lvgl_surface.pixels_bgra(), workload);
+            }
+            lv_deinit();
+            reference_name = "lvgl-software-renderer";
+            reference_version = std::to_string(LVGL_VERSION_MAJOR) + "." +
+                std::to_string(LVGL_VERSION_MINOR) + "." +
+                std::to_string(LVGL_VERSION_PATCH);
+            reference_file = "lvgl.json";
+        }
+#endif
         const double tolerance = is_fill_workload(workload) || workload == Workload::AlphaGrid ||
             workload == Workload::BitmapText ? 0.0 : 1.0;
         const bool output_matches = comparison.rmse <= tolerance;
