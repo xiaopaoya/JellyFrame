@@ -27,8 +27,8 @@ workload 边界。目的不是给 JellyFrame、Cairo、SDL、LVGL 或浏览器�
 
 | workload | 当前状态 | 固定内容 | 可回答的问题 |
 | --- | --- | --- | --- |
-| `opaque-fill-rgb-v1` | 已接受；GDI/SDL2/Cairo adapter | 172x320、RGB888、全屏不透明填充、无 AA、exact RGB | 纯矩形写入和像素吞吐 |
-| `opaque-dirty-fill-rgb-v1` | 已接受；GDI/SDL2/Cairo adapter | 172x320 黑底、固定 96x48 脏矩形、RGB888、无 AA、exact RGB、每样本 64 次 | 局部不透明写入和 dirty 像素吞吐 |
+| `opaque-fill-rgb-v1` | 已接受；GDI/SDL2/Cairo/LVGL 9.6.0 software adapter | 172x320、RGB888、全屏不透明填充、无 AA、exact RGB | 纯矩形写入和像素吞吐 |
+| `opaque-dirty-fill-rgb-v1` | 已接受；GDI/SDL2/Cairo/LVGL 9.6.0 software adapter | 172x320 黑底、固定 96x48 脏矩形、RGB888、无 AA、exact RGB、每样本 64 次 | 局部不透明写入和 dirty 像素吞吐 |
 | `alpha-grid-rgb-v2` | 已接受；GDI/SDL2 adapter | 172x320 黑底、8x8 个 16x12 不重叠矩形、RGBA `50b4dc80`、source-over、exact RGB、计时内完成同步 | 半透明 source-over 的批平均单块成本 |
 | `horizontal-gradient-rgb-v1` | 已接受 | 同上、横向不透明线性渐变、无 AA、RMSE <= 1 | 线性渐变的每像素计算成本 |
 | `vertical-gradient-rgb-v1` | 已接受 | 同上、纵向不透明线性渐变、无 AA、RMSE <= 1 | 另一种渐变访问方向的成本 |
@@ -50,6 +50,8 @@ exact RGB。Alpha、圆角、渐变、文本都不在此 adapter 的支持范围
 全屏填充的重复 p95 中位数为 Core 4.35 us、Cairo 3.25 us（Cairo 低 25.3%）；96x48 局部填充为 Core 0.488 us、
 Cairo 0.694 us（Cairo 高 42.1%）。六组配对变化在各自 workload 内方向一致。该比较器只作描述性统计，不检验统计显著性；
 结果仅适用于这两个 primitive，原始 manifest 与报告归档在 `D:/JellyFramePerf/cairo-comparison-20261105/`。
+
+LVGL v9.6.0 的可选 adapter 直接调用同步 software fill primitive，和 Core 使用同进程交错计时；它绕过 LVGL display/task dispatch、flush 与 present。RGB888 逻辑颜色在两侧逐像素 exact，LVGL little-endian buffer 的 BGR 字节在校验时归一化。2026-11-05 本机各运行六轮、每轮每侧 500 个样本：全屏填充重复 p95 中位数为 Core 3.90 us、LVGL 4.50 us（LVGL 高 15.38%）；96x48 局部填充为 Core 0.487 us、LVGL 0.373 us（LVGL 低 23.46%）。六轮配对差值方向一致，但比较器只提供描述性统计，不检验统计显著性。结果只适用于这两个桌面软件栅格 primitive；完整 UI、嵌入式性能和 LVGL 显示管线仍未比较。原始 manifests 与报告归档在 `D:/JellyFramePerf/lvgl-qualification-20261105/paired/`。
 
 局部填充的 64 次批处理只用于降低亚微秒单次操作的计时噪声；manifest 记录
 `operationsPerSample: 64`，比较器会拒绝批处理数量不同的结果。报告中的 `paint_us` 已除以 64，

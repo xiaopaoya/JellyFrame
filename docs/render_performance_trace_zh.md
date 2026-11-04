@@ -330,8 +330,9 @@ renderer 也不能提供等价圆角 AA，因此 `rounded-card-rgb-v1` 继续保
 - port 以该显式 profiling 配置提供阶段窗口 aggregate；逐元素、逐 command 或每帧 wire
   trace 不是第三阶段的前提，也不能由 aggregate 推断；
 - 以真实 developer-image workload 复核 Core/Runtime 优化收益；
-- CPU 2D 的 full/dirty opaque-fill、alpha-grid、horizontal-gradient 与 vertical-gradient GDI 基础对照已交付，
-  full/dirty opaque-fill 与 alpha-grid 另有 SDL2 software renderer 对照；这些 primitive 尚不足以代表完整库；
+- CPU 2D 的 full/dirty opaque-fill、alpha-grid、horizontal-gradient 与 vertical-gradient GDI 基础对照已交付；
+  full/dirty opaque-fill 与 alpha-grid 另有 SDL2 对照，full/dirty opaque-fill 另有 Cairo 和 LVGL 9.6.0
+  software-fill 对照；LVGL 结果只覆盖同步软件栅格 primitive，不包含 display/task dispatch、flush 或 present；
 - 桌面 CPU 对照的 workload 边界已冻结，见
   [CPU workload 矩阵](render_performance_cpu_workload_matrix_zh.md)。当前五个矩形
   primitive 已可 comparable；另有共享字体的固定 bitmap 文本/GDI glyph-blit 子集。
