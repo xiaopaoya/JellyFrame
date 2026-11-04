@@ -1,6 +1,6 @@
 # JellyFrame Active TODO
 
-> Last updated: 2026-11-04; Applies to: 0.6.0-dev
+> Last updated: 2026-11-05; Applies to: 0.6.0-dev
 >
 > This is the near-term execution queue for the [active roadmap](roadmap.md). It does not repeat closed acceptance, performance micro-experiments or historical port work.
 
@@ -54,9 +54,14 @@ performance tooling nor editor work substitutes for A2 hardware evidence.
   regression. Pixel comparison is waived only for this candidate because no display-readback
   fixture exists; this does not establish an automated pixel gate. Shared drag-fixture
   green-text clipping remains a separate limitation.
-- [ ] Only after those measurements stabilize, compare aligned workloads with Cairo/
-  SDL software rendering and LVGL. Do not claim a general “faster/slower” result
-  beforehand.
+- [x] Add the optional Cairo 1.18.4 software-image adapter for exact-RGB full and
+  dirty opaque fills. Six interleaved repeats show opposite results by workload;
+  the narrow descriptive comparison is archived under
+  `D:/JellyFramePerf/cairo-comparison-20261105/`. Existing SDL2/GDI results remain
+  limited to their accepted primitive matrix.
+- [ ] Evaluate an LVGL CPU adapter only if it can meet a fixed workload's output,
+  pixel-format and completion contract. Do not turn primitive results into a
+  whole-library ranking.
 
 ### 3. Short-term interaction performance and device exit
 
@@ -66,10 +71,10 @@ performance tooling nor editor work substitutes for A2 hardware evidence.
 - [ ] Complete the VS Code device workflow on the same clean author machine: `new -> check -> package -> deploy -> launch -> live log -> update -> rollback -> stop -> remove`. Keep desktop and device sessions distinct and preserve actionable ownership in the final report.
 - [ ] Run real installed-App panel/input acceptance through the provider workflow. A 2026-09-08 user observation reports normal physical interaction response, but the archived `posted=0` sample is not structured input evidence. Record per-App launch marker, touch/input response, panel/present errors and recovery behavior; do not treat provider lifecycle PASS or an informal observation as complete visual/input evidence.
 - [x] WS147 physical-GRAM panel-scroll performance and fallback retest completed, but visual acceptance failed; commit `eaa52a67` added an acceptance gate and removed it from the default-usable path. Investigate TE/vblank synchronization only; do not re-enable release configuration.
-- [ ] Maintain B1 as a release gate. Signed Core `v0.7.0` / ABI `2` is published; its Runtime lock-update PR must pass standalone, package-consumer and source-override tests before merge. Future bumps must authenticate the reviewed artifact, verify its archive SHA-256 and update the exact version/ABI/source lock. The default in-tree provider and accepted WS147 image remain on Core `0.6.2` / ABI `1`.
+- [x] Integrate the signed Core `v0.7.0` / ABI `2` Runtime package lock through PR #36. Linux sanitizer, Windows Release/Debug, Windows scripting bridge, standalone Core/package consumer and source-override CI passed before merge. Keep the release gate for future bumps: authenticate the reviewed artifact, verify its archive SHA-256 and update the exact version/ABI/source lock. The default in-tree provider and accepted WS147 image remain on Core `0.6.2` / ABI `1`.
 - [x] Build and accept the WS147 Developer Image `0.6.2-ws147.1` from the merged Runtime Core `0.6.2` lock. Keep the historical `0.6.1` manifest and evidence immutable; the complete R1-R17, host/provider and package-smoke report is `core062-developer-image-final-20260905`.
 - [x] Publish the App Author SDK `app-sdk-v0.6.0-dev.2` from Runtime `ca747011`; standard and scripting desktop runtimes consume Core `0.6.2`, and the release archive SHA-256 is `c3245edd...7dc8a9f`.
-- [ ] Execute [the 0.6 engineering review plan](engineering_review_plan_20260819_zh.md): begin with R0 package/profile/provenance, then R1 document/style, layout/dirty and renderer/text. Change an interface only for a demonstrated semantic or safety defect, never as a mechanical rename.
+- [x] Complete the scheduled first R0/R1 checks in [the 0.6 engineering review plan](engineering_review_plan_20260819_zh.md): package/profile/provenance, style/layout/dirty, renderer/text and deterministic capture now have corresponding regressions. Fix interfaces only for demonstrated semantic or safety defects, never as a mechanical rename.
 - [ ] Continue the R1 Core-only audit after the responsive-layout foundation delivery: review parser/style ownership, malformed-input budgets, cache invalidation and deterministic capture behavior. The `300x300`, `320x240` and `172x320` matrix and Flex cross-axis regressions are now maintained as gates; prioritize demonstrated semantic defects over new controls or browser-only declarations.
 - [x] Close the focused 2026-09-07 review findings: Flex sizing skips an unchanged probe layout, generic workers preserve nonzero `client_token`, worker pipeline rebuilds restore autofocus state without replaying `focus`, and worker layout uses host budgets. Debug, scripting MinSizeRel and ASan/UBSan regressions pass; the review probe confirms linear `anywhere` measurement on the current baseline.
 - [x] Close the follow-up callback/service findings: timer cleanup is deferred during a timer pump so callbacks added by a callback cannot reorder the current batch; rAF callbacks remain cancellable until their turn and are reclaimed after the batch; queued XHR cancellation drops provider-owned fixture copies while worker-owned requests retain late-completion cleanup. Debug and scripting MinSizeRel focused tests pass. The `client_token` finding is already covered above and is not counted twice.

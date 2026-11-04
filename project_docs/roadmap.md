@@ -1,6 +1,6 @@
 # JellyFrame Active Roadmap
 
-> Last updated: 2026-11-04; Applies to: 0.6.0-dev; this is the single active plan.
+> Last updated: 2026-11-05; Applies to: 0.6.0-dev; this is the single active plan.
 
 ## Governing Decision
 
@@ -12,7 +12,7 @@ Only unfinished work appears below. Completed work belongs in changelogs, tests 
 
 ## Current Baseline
 
-- The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository owns the physical Core branch. Its independent `v0.7.0` release is signed, published and declares ABI `2`, source identity `609927a3...c7c521fb55`, and archive SHA-256 `93038feb...cfaf290f`. A Runtime PR is updating the package lock, consumer CI and app manifest line to that release; it must pass CI before merge. The Runtime's default in-tree provider and accepted WS147 firmware remain at Core `0.6.2` / ABI `1` for synchronized development and historical device evidence. For ABI `2`, the installed `render_core/` headers are the C++ consumer surface; there is no hidden header tier or C ABI.
+- The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository owns the physical Core branch. Its independent `v0.7.0` release is signed, published and declares ABI `2`, source identity `609927a3...c7c521fb55`, and archive SHA-256 `93038feb...cfaf290f`. Runtime consumes that exact release in package mode through merged PR #36; Linux sanitizer, Windows Release/Debug, scripting bridge, standalone package-consumer and source-override CI passed before merge. The Runtime's default in-tree provider and accepted WS147 firmware remain at Core `0.6.2` / ABI `1` for synchronized development and historical device evidence. For ABI `2`, the installed `render_core/` headers are the C++ consumer surface; there is no hidden header tier or C ABI.
 - App Runtime has `.jfapp` lifecycle, registry reference semantics, an optional selected script backend and the script-worker session/generation/epoch, value-only frame/input/service/fatal protocol. WS147 P3 worker, service, recovery and mixed-soak evidence is closed.
 - WS147 value-frame-v2 dirty/recovery passes. The full-screen rounded-gradient workload is not 30 FPS. Canvas has no real host binding and remains `not-tested`.
 - Script Task value-frame v4 is merged on the Runtime line. It preserves bounded fixed-point transforms and separates source-space from destination-space clip chains, including nested clips below a transformed layer. The v4 ESP32-S3 acceptance profile is now being implemented under a dedicated requirement; it is not a default Developer Image profile and cannot yet close A2 panel/input evidence.
