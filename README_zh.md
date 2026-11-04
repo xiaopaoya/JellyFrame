@@ -9,10 +9,10 @@
 <p align="center">
   <a href="https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml"><img src="https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg?style=flat-square" alt="CI 状态"></a>
   <img src="https://img.shields.io/badge/Runtime-0.6.0--dev-1680C7?style=flat-square" alt="Runtime 0.6.0-dev">
-  <img src="https://img.shields.io/badge/Render%20Core-0.6.2-1680C7?style=flat-square" alt="Render Core 0.6.2">
+  <img src="https://img.shields.io/badge/Render%20Core-0.7.0-1680C7?style=flat-square" alt="Render Core 0.7.0">
 </p>
 
-> 最后更新：2026-09-14；适用版本：0.6.0-dev
+> 最后更新：2026-11-04；适用版本：0.6.0-dev
 
 JellyFrame 是一个面向低功耗可穿戴和嵌入式设备的紧凑 C++ HTML/CSS/JS UI
 运行时。它保留本地 app UI 真正有价值的浏览器管线部分，同时裁掉对小目标设备过重、
@@ -58,7 +58,7 @@ CSS 描述表现，平台无关 C++ 代码负责布局和渲染，可选 JerrySc
 `tools/templates/apps` 中的 Jelly 风可穿戴 UI 模板实际渲染生成，展示的是
 JellyFrame 自己轻盈、明快的界面表达。
 
-**渲染管线：** 当前 Runtime 锁定 JellyFrame Render Core `0.6.2`；下方图库于
+**渲染管线：** 当前 Runtime package 锁定 JellyFrame Render Core `0.7.0` / ABI 2；下方图库于
 `2026-08-26` 使用 Core `0.6.1` 记录；当前启用 JerryScript 的
 Win32 capture shell；视口 `300x300`；生成日期 `2026-08-26`；源码修订
 `0ffdbf0`。精确的生成记录和命令位于图片旁的
@@ -232,7 +232,7 @@ cmake --build build/desktop-scripting-release --config Release
 ## 版本
 
 - 当前 Runtime 开发版本：`0.6.0-dev`，见 [VERSION](VERSION)。包必须声明此 Runtime
-  开发线以及锁定的 Render Core `0.6.2`；历史开发产物不构成兼容基线。
+  开发线以及锁定的 Render Core `0.7.0`；历史开发产物不构成兼容基线。
 - 变更记录：[CHANGELOG.md](CHANGELOG.md) 和 [CHANGELOG_zh.md](CHANGELOG_zh.md)。
 - 版本规则：[docs/versioning_zh.md](docs/versioning_zh.md)。
 

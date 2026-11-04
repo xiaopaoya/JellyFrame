@@ -1,6 +1,6 @@
 # Render Core Release And Extraction Policy
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev
+> Last updated: 2026-11-04; Applies to: 0.6.0-dev
 
 This policy governs the transition from the current monorepo boundary to an independently governed `jellyframe-render-core` project. It complements [engine_architecture.md](engine_architecture.md); it is not a user-facing app compatibility promise.
 
@@ -17,12 +17,13 @@ This policy governs the transition from the current monorepo boundary to an inde
 The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository retains
 the existing license and contributor history unchanged. Its first signed
 `v0.6.0` release established the deterministic source archive and SHA-256
-sidecar; the Runtime currently accepts signed `v0.6.2`. Its `master` now contains
+sidecar; the Runtime now accepts signed `v0.7.0` / ABI 2. Its `master` still contains
 the reviewed `0.6.2-dev` synchronization from JellyFrame `7735b9a1` at merge
 `769ec5d`; this development head is not a Runtime dependency. No license change,
 contributor-policy change or open-source intent is implied. The Runtime
 accepts a release only through an explicit dependency-lock update;
-its in-tree provider remains the default for synchronized development only.
+its in-tree provider remains the default for synchronized development at
+`0.6.2` / ABI 1.
 The Runtime CI downloads the published archive, verifies the reviewed
 SHA-256, installs it and runs the locked package-consumer regression; this
 prevents a monorepo export from being mistaken for the released dependency.
@@ -139,7 +140,7 @@ actual signed repository publication.
 ## Extraction Gate
 
 Core physical extraction is complete: the first signed `v0.6.0` release, the
-currently locked `v0.6.2` package and Runtime package-consumer CI close that
+currently locked `v0.7.0` / ABI 2 package and Runtime package-consumer CI close that
 boundary. Before Device OS migration,
 the remaining profile-consumer/provenance check must be green and no private
 Runtime/port include may enter Core. The next high-value Core capability pack

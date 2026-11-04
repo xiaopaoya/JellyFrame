@@ -127,7 +127,7 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
         run(command, cwd=self.source_root)
 
     def runtime_consumer_checkout(
-        self, root: Path, source_hash: str, package_version: str
+        self, root: Path, source_hash: str, package_version: str, engine_abi: int
     ) -> Path:
         """Stage a consumer fixture whose lock accepts this test archive only."""
         checkout = root / "runtime-consumer-source"
@@ -152,6 +152,14 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
             flags=re.VERBOSE,
         )
         self.assertEqual(substitutions, 1, "runtime dependency lock has one package version")
+        updated_lock, substitutions = re.subn(
+            r'(set\(JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI\s+)("?[0-9]+"?)',
+            rf'\1"{engine_abi}"',
+            updated_lock,
+            count=1,
+            flags=re.VERBOSE,
+        )
+        self.assertEqual(substitutions, 1, "runtime dependency lock has one engine ABI")
         lock_path.write_text(updated_lock, encoding="utf-8")
         return checkout
 
@@ -297,6 +305,11 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
+            source_profile = json.loads(
+                (core_build / "generated" / "jellyframe_render_core_profile.json").read_text(
+                    encoding="utf-8"
+                )
+            )
             self.assertTrue(source_manifest["files"])
             for entry in source_manifest["files"]:
                 self.assertIn(f"{root_name}/{entry['path']}", members)
@@ -337,7 +350,7 @@ class RenderCoreSourceArchiveTests(unittest.TestCase):
                 return
 
             runtime_consumer_source = self.runtime_consumer_checkout(
-                root, source_manifest["sourceHash"], package_version
+                root, source_manifest["sourceHash"], package_version, source_profile["engineAbi"]
             )
 
             # A downstream Core host must consume only the installed CMake

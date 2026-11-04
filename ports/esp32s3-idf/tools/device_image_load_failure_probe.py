@@ -23,7 +23,7 @@ def package_fixture(repo, output):
     manifest = {
         "format": "jellyframe.app", "formatVersion": 0,
         "id": APP_ID, "name": "Load Failure", "version": {"name": "1.0.0", "code": 1},
-        "entry": "/index.html", "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "none"},
+        "entry": "/index.html", "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "none"},
         "viewport": {"designWidth": 172, "designHeight": 320, "shape": "rect"},
         "budgets": {"maxResourceBytes": 4096, "maxDomNodes": 16, "maxCssRules": 4,
                     "maxDisplayCommands": 16, "maxTimers": 0, "maxEventListeners": 0},

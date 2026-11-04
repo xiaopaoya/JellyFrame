@@ -103,6 +103,8 @@ else()
             "JellyFrameRenderCore source manifest does not match its exported source identity")
     endif()
     add_library(jellyframe_render_core ALIAS JellyFrame::jellyframe_render_core)
+    get_target_property(JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS
+        JellyFrame::jellyframe_render_core INTERFACE_INCLUDE_DIRECTORIES)
     set(JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
     file(MAKE_DIRECTORY "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}")
     configure_file("${JellyFrameRenderCore_PROFILE_FILE}"

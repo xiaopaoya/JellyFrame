@@ -1,6 +1,6 @@
 # JellyFrame 主线路线图
 
-> 最后更新：2026-09-24；适用版本：0.6.0-dev；状态：活动计划的唯一来源
+> 最后更新：2026-11-04；适用版本：0.6.0-dev；状态：活动计划的唯一来源
 
 ## 先决判断
 
@@ -12,14 +12,14 @@
 
 ## 当前基线
 
-- 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库已完成物理拆分，远端 `master` 当前为 `687e467a`；签名的 `v0.6.2` release 是 Runtime 依赖，Runtime `0.6.0-dev` 精确锁定 Core `0.6.2`、ABI `1` 和对应 source identity。CI 会下载 release artifact、校验 archive SHA-256、安装后运行 Runtime package-consumer tests。in-tree provider 只保留给同步本地开发；Core ABI `1` 明确以安装后的 `render_core/` headers 作为 C++ consumer surface，当前没有隐藏 header tier 或 C ABI。Core-only、Device contracts、source archive/install/package/source-override 闭环均已复核。
+- 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库已发布带签名的 `v0.7.0`，声明 ABI `2`、source identity `609927a3...c7c521fb55` 和 archive SHA-256 `93038feb...cfaf290f`。Runtime 正在通过 PR 更新 package lock、consumer CI 和 app manifest 版本线；CI 通过后再合并。Runtime 默认源码内 provider 与已验收 WS147 固件仍为 Core `0.6.2` / ABI `1`，分别用于同步开发和历史设备证据。ABI `2` 以安装后的 `render_core/` headers 作为 C++ consumer surface，没有隐藏 header tier 或 C ABI。
 - App Runtime 已具备 `.jfapp` 生命周期、registry 参考语义、可选的选定脚本后端，以及 script worker 的 session/generation/epoch、value-only frame/input/service/fatal 协议。P3 的 WS147 worker、service、恢复与 mixed soak 验收已关闭。
 - WS147 的 value-frame v2 dirty/recovery fixture 已通过；全屏 rounded/gradient workload 的优化归因已完成，但仍不能达到 30 FPS。Canvas 还没有真实 host binding，保持 `not-tested`。
 - Script Task value-frame v4 已合入 Runtime 主线。它保留有界定点 transform，并分离变换源空间与目标空间的 clip chain，覆盖变换层下的嵌套裁剪。ESP32-S3 的 v4 验收 profile 正在按独立要求接入；它不是 Developer Image 默认 profile，也尚不能单独关闭 A2 的 panel/input 证据。
 - `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。Developer Image 已具有严格 manifest 与 hash 验证的 factory recovery image；这仍不等于干净机器 VS Code 产品流程或已安装 App 的 panel/input 行为已完成。
 - `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。已验收的 `0.6.2-ws147.1` Developer Image 归档于 `core062-developer-image-final-20260905`，R1-R17、host/provider 和 package-smoke 证据均通过，firmware/recovery/manifest provenance 匹配，panic、watchdog、reset、DMA、SPI、panel、present 错误均为 0。受控拒绝和 load-failure 镜像仅为测试 fixture。
 - App Author SDK `app-sdk-v0.6.0-dev.2` 已从 Runtime `ca747011` 发布，包含标准与 scripting 桌面运行时，并按 Core `0.6.2` 验证，archive SHA-256 为 `c3245edd...7dc8a9f`。它是作者工具产物，不能替代设备或干净机器证据。
-- 当前消费线是 Runtime `0.6.0-dev` / 锁定 Core `v0.6.2`；独立 Core 的后续开发头仍不自动进入 Runtime lock。1.0 前不维护历史 package 兼容线。
+- 当前 Runtime package 消费线正在升级为 Core `v0.7.0` / ABI `2`；默认源码内 Core 与历史固件仍是 `0.6.2` / ABI `1`。独立 Core 的后续开发头仍不自动进入 Runtime lock。1.0 前不维护历史 package 兼容线。
 
 ## 当前执行顺序
 
@@ -113,7 +113,7 @@ WS147 provider handoff 子 gate 已由 `provider-handoff-afdcf75-20260821` 关�
 
 | 工程 | 初始独立线 | 更新规则 | 依赖规则 |
 | --- | --- | --- | --- |
-| `jellyframe-render-core` | 已发布 `0.6.2`；开发头 `0.6.2-dev` / Core ABI `1` | feature/性能/兼容性可独立发布 | Runtime 精确 pin `0.6.2`；开发头仍需独立完成 candidate evidence 和 release gate |
+| `jellyframe-render-core` | 已签名发布 `0.7.0` / ABI `2`；源码内版本 `0.6.2` / ABI `1` | feature/性能/兼容性可独立发布 | Runtime package 模式精确 pin `0.7.0`；源码内 Core 继续用于同步开发 |
 | `jellyframe` | `0.6.0` | App 格式、Runtime、脚本运行时绑定、桌面工具缓慢发布 | 只在明确的 dependency bump 中升级 Core |
 | `jellyframe-device-os` | `0.1.0-dev` | 板卡与产品镜像快速迭代 | pin JellyFrame release 与 board feature profile |
 | JFDP | `JFDP/1` | 协议独立版本 | 破坏性 wire change 只能升 major |

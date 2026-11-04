@@ -1,6 +1,6 @@
 # timer
 
-> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
+> Last updated: 2026-11-04; Applies to: 0.6.0-dev; Render Core baseline: 0.7.0
 
 A one-minute deadline-based focus timer with start, pause, reset, completion and restart. The two-segment conic ring follows the remaining time.
 

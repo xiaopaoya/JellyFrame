@@ -5,7 +5,7 @@
   "name": "WS147 Touch Drag Latency",
   "version": {"name": "1.0.0", "code": 1},
   "entry": "/index.html",
-  "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.6.2", "script": "none"},
+  "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "none"},
   "viewport": {"designWidth": 172, "designHeight": 320, "shape": "rect"},
   "budgets": {
     "maxResourceBytes": 12288,
