@@ -1,6 +1,6 @@
 # JellyFrame 主线路线图
 
-> 最后更新：2026-11-04；适用版本：0.6.0-dev；状态：活动计划的唯一来源
+> 最后更新：2026-11-05；适用版本：0.6.0-dev；状态：活动计划的唯一来源
 
 ## 先决判断
 
@@ -12,14 +12,14 @@
 
 ## 当前基线
 
-- 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库已发布带签名的 `v0.7.0`，声明 ABI `2`、source identity `609927a3...c7c521fb55` 和 archive SHA-256 `93038feb...cfaf290f`。Runtime 正在通过 PR 更新 package lock、consumer CI 和 app manifest 版本线；CI 通过后再合并。Runtime 默认源码内 provider 与已验收 WS147 固件仍为 Core `0.6.2` / ABI `1`，分别用于同步开发和历史设备证据。ABI `2` 以安装后的 `render_core/` headers 作为 C++ consumer surface，没有隐藏 header tier 或 C ABI。
+- 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库已发布带签名的 `v0.7.0`，声明 ABI `2`、source identity `609927a3...c7c521fb55` 和 archive SHA-256 `93038feb...cfaf290f`。Runtime 已通过合并的 PR #36 在 package 模式精确消费该 release；Linux sanitizer、Windows Release/Debug、scripting bridge、standalone package consumer 与 source-override CI 均在合并前通过。Runtime 默认源码内 provider 与已验收 WS147 固件仍为 Core `0.6.2` / ABI `1`，分别用于同步开发和历史设备证据。ABI `2` 以安装后的 `render_core/` headers 作为 C++ consumer surface，没有隐藏 header tier 或 C ABI。
 - App Runtime 已具备 `.jfapp` 生命周期、registry 参考语义、可选的选定脚本后端，以及 script worker 的 session/generation/epoch、value-only frame/input/service/fatal 协议。P3 的 WS147 worker、service、恢复与 mixed soak 验收已关闭。
 - WS147 的 value-frame v2 dirty/recovery fixture 已通过；全屏 rounded/gradient workload 的优化归因已完成，但仍不能达到 30 FPS。Canvas 还没有真实 host binding，保持 `not-tested`。
 - Script Task value-frame v4 已合入 Runtime 主线。它保留有界定点 transform，并分离变换源空间与目标空间的 clip chain，覆盖变换层下的嵌套裁剪。ESP32-S3 的 v4 验收 profile 正在按独立要求接入；它不是 Developer Image 默认 profile，也尚不能单独关闭 A2 的 panel/input 证据。
 - `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。Developer Image 已具有严格 manifest 与 hash 验证的 factory recovery image；这仍不等于干净机器 VS Code 产品流程或已安装 App 的 panel/input 行为已完成。
 - `device_*` 的 JFDP/1 framing、capability、typed status/progress payload 与 staged-install controller 已有独立的 `device_runtime_contracts` source owner。WS147 native USB Serial/JTAG wire、A1-2 persistent lifecycle 与 provider handoff 均已关闭。`provider-handoff-afdcf75-20260821` 通过同镜像 Identity matching、真实 in-flight cancellation、durable update/rollback/remove 与 30 次 mixed cycle；版本化 `jellyframe-device@0.1.1-dev` provider 已交付，并声明 lifecycle UI 所需 capability。`0.1.0-dev` 仅保留为 `discover/info/list` read-only 基线。已验收的 `0.6.2-ws147.1` Developer Image 归档于 `core062-developer-image-final-20260905`，R1-R17、host/provider 和 package-smoke 证据均通过，firmware/recovery/manifest provenance 匹配，panic、watchdog、reset、DMA、SPI、panel、present 错误均为 0。受控拒绝和 load-failure 镜像仅为测试 fixture。
 - App Author SDK `app-sdk-v0.6.0-dev.2` 已从 Runtime `ca747011` 发布，包含标准与 scripting 桌面运行时，并按 Core `0.6.2` 验证，archive SHA-256 为 `c3245edd...7dc8a9f`。它是作者工具产物，不能替代设备或干净机器证据。
-- 当前 Runtime package 消费线正在升级为 Core `v0.7.0` / ABI `2`；默认源码内 Core 与历史固件仍是 `0.6.2` / ABI `1`。独立 Core 的后续开发头仍不自动进入 Runtime lock。1.0 前不维护历史 package 兼容线。
+- 当前 Runtime package 消费线锁定 Core `v0.7.0` / ABI `2`；默认源码内 Core 与历史固件仍是 `0.6.2` / ABI `1`。独立 Core 的后续开发头仍不自动进入 Runtime lock。1.0 前不维护历史 package 兼容线。
 
 ## 当前执行顺序
 

@@ -347,6 +347,22 @@ if(JELLYFRAME_BUILD_TESTS)
                          "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_sdl2_text_rejected"
                          1 bitmap-text sdl2)
         set_tests_properties(jellyframe_cpu2d_compare_sdl2_text_rejected PROPERTIES WILL_FAIL TRUE)
+        add_test(NAME jellyframe_cpu2d_compare_cairo_text_rejected
+                 COMMAND jellyframe_cpu2d_compare
+                         "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_cairo_text_rejected"
+                         1 bitmap-text cairo)
+        set_tests_properties(jellyframe_cpu2d_compare_cairo_text_rejected PROPERTIES WILL_FAIL TRUE)
+        add_test(NAME jellyframe_cpu2d_compare_cairo_alpha_rejected
+                 COMMAND jellyframe_cpu2d_compare
+                         "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_cairo_alpha_rejected"
+                         1 alpha-grid cairo)
+        set_tests_properties(jellyframe_cpu2d_compare_cairo_alpha_rejected PROPERTIES WILL_FAIL TRUE)
+        add_test(NAME jellyframe_cpu2d_compare_cairo_missing_dll
+                 COMMAND jellyframe_cpu2d_compare
+                         "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_cairo_missing_dll"
+                         1 opaque-fill cairo
+                         "${CMAKE_CURRENT_BINARY_DIR}/missing-cairo.dll")
+        set_tests_properties(jellyframe_cpu2d_compare_cairo_missing_dll PROPERTIES WILL_FAIL TRUE)
         add_test(NAME jellyframe_cpu2d_compare_output_smoke
                  COMMAND jellyframe_cpu2d_compare
                          "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_smoke"

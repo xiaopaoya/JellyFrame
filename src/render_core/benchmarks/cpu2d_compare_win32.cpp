@@ -62,6 +62,7 @@ enum class Workload {
 enum class Backend {
     Gdi,
     Sdl2,
+    Cairo,
 };
 
 struct OutputComparison {
@@ -246,6 +247,144 @@ private:
         if (initialized && quit != nullptr) {
             quit();
             initialized = false;
+        }
+        if (library != nullptr) {
+            FreeLibrary(library);
+            library = nullptr;
+        }
+    }
+};
+
+struct CairoSurface {
+    using ImageSurfaceCreateFn = void*(__cdecl*)(int, int, int);
+    using CreateFn = void*(__cdecl*)(void*);
+    using DestroyFn = void(__cdecl*)(void*);
+    using SetOperatorFn = void(__cdecl*)(void*, int);
+    using SetAntialiasFn = void(__cdecl*)(void*, int);
+    using SetSourceRgbFn = void(__cdecl*)(void*, double, double, double);
+    using RectangleFn = void(__cdecl*)(void*, double, double, double, double);
+    using FillFn = void(__cdecl*)(void*);
+    using SurfaceFlushFn = void(__cdecl*)(void*);
+    using ImageSurfaceGetDataFn = unsigned char*(__cdecl*)(void*);
+    using ImageSurfaceGetStrideFn = int(__cdecl*)(void*);
+    using VersionStringFn = const char*(__cdecl*)();
+    using StatusFn = int(__cdecl*)(void*);
+    using StatusToStringFn = const char*(__cdecl*)(int);
+
+    HMODULE library = nullptr;
+    ImageSurfaceCreateFn image_surface_create = nullptr;
+    CreateFn create = nullptr;
+    DestroyFn destroy = nullptr;
+    DestroyFn surface_destroy = nullptr;
+    SetOperatorFn set_operator = nullptr;
+    SetAntialiasFn set_antialias = nullptr;
+    SetSourceRgbFn set_source_rgb = nullptr;
+    RectangleFn rectangle = nullptr;
+    FillFn fill = nullptr;
+    SurfaceFlushFn surface_flush = nullptr;
+    ImageSurfaceGetDataFn image_surface_get_data = nullptr;
+    ImageSurfaceGetStrideFn image_surface_get_stride = nullptr;
+    VersionStringFn version_string = nullptr;
+    StatusFn status = nullptr;
+    StatusFn surface_status = nullptr;
+    StatusToStringFn status_to_string = nullptr;
+    void* surface = nullptr;
+    void* context = nullptr;
+    std::string version;
+
+    explicit CairoSurface(const std::filesystem::path& library_path) {
+        library = LoadLibraryExW(library_path.c_str(), nullptr,
+                                 LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        if (library == nullptr) {
+            throw std::runtime_error("failed to load Cairo library: " + library_path.string());
+        }
+        try {
+            image_surface_create = symbol<ImageSurfaceCreateFn>("cairo_image_surface_create");
+            create = symbol<CreateFn>("cairo_create");
+            destroy = symbol<DestroyFn>("cairo_destroy");
+            surface_destroy = symbol<DestroyFn>("cairo_surface_destroy");
+            set_operator = symbol<SetOperatorFn>("cairo_set_operator");
+            set_antialias = symbol<SetAntialiasFn>("cairo_set_antialias");
+            set_source_rgb = symbol<SetSourceRgbFn>("cairo_set_source_rgb");
+            rectangle = symbol<RectangleFn>("cairo_rectangle");
+            fill = symbol<FillFn>("cairo_fill");
+            surface_flush = symbol<SurfaceFlushFn>("cairo_surface_flush");
+            image_surface_get_data = symbol<ImageSurfaceGetDataFn>("cairo_image_surface_get_data");
+            image_surface_get_stride = symbol<ImageSurfaceGetStrideFn>("cairo_image_surface_get_stride");
+            version_string = symbol<VersionStringFn>("cairo_version_string");
+            status = symbol<StatusFn>("cairo_status");
+            surface_status = symbol<StatusFn>("cairo_surface_status");
+            status_to_string = symbol<StatusToStringFn>("cairo_status_to_string");
+            surface = image_surface_create(1, kWidth, kHeight); // CAIRO_FORMAT_RGB24
+            if (surface == nullptr) fail("cairo_image_surface_create failed");
+            context = create(surface);
+            if (context == nullptr) fail("cairo_create failed");
+            set_operator(context, 1); // CAIRO_OPERATOR_SOURCE
+            set_antialias(context, 1); // CAIRO_ANTIALIAS_NONE
+            version = version_string();
+            if (version.empty()) fail("cairo_version_string returned an empty version");
+            set_source_rgb(context, 0.0, 0.0, 0.0);
+            rectangle(context, 0.0, 0.0, kWidth, kHeight);
+            fill(context);
+            surface_flush(surface);
+            set_source_rgb(context, kFillColor.r / 255.0, kFillColor.g / 255.0,
+                           kFillColor.b / 255.0);
+            if (image_surface_get_data(surface) == nullptr ||
+                image_surface_get_stride(surface) != kWidth * 4) {
+                fail("Cairo image surface has an unexpected layout");
+            }
+        } catch (...) {
+            release();
+            throw;
+        }
+    }
+
+    ~CairoSurface() { release(); }
+
+    CairoSurface(const CairoSurface&) = delete;
+    CairoSurface& operator=(const CairoSurface&) = delete;
+
+    void fill_rect(Rect rect) const {
+        rectangle(context, rect.x, rect.y, rect.width, rect.height);
+        fill(context);
+        surface_flush(surface);
+    }
+
+    const std::uint8_t* pixels() const {
+        return image_surface_get_data(surface);
+    }
+
+    void validate() const {
+        const int context_status = status(context);
+        const int image_status = surface_status(surface);
+        if (context_status != 0 || image_status != 0) {
+            const int error = context_status != 0 ? context_status : image_status;
+            throw std::runtime_error(std::string("Cairo drawing failed: ") + status_to_string(error));
+        }
+    }
+
+private:
+    template <typename Fn>
+    Fn symbol(const char* name) const {
+        const FARPROC address = GetProcAddress(library, name);
+        if (address == nullptr) {
+            throw std::runtime_error(std::string("Cairo library is missing ") + name);
+        }
+        return reinterpret_cast<Fn>(address);
+    }
+
+    [[noreturn]] static void fail(const char* operation) {
+        throw std::runtime_error(operation);
+    }
+
+    void release() {
+        if (context != nullptr && destroy != nullptr) {
+            destroy(context);
+            context = nullptr;
+        }
+        if (surface != nullptr && surface_destroy != nullptr) {
+            surface_destroy(surface);
+            surface = nullptr;
         }
         if (library != nullptr) {
             FreeLibrary(library);
@@ -466,7 +605,8 @@ Backend parse_backend(const char* raw) {
     const std::string name(raw);
     if (name == "gdi") return Backend::Gdi;
     if (name == "sdl2") return Backend::Sdl2;
-    throw std::runtime_error("backend must be gdi or sdl2");
+    if (name == "cairo") return Backend::Cairo;
+    throw std::runtime_error("backend must be gdi, sdl2, or cairo");
 }
 
 const char* workload_id(Workload workload) {
@@ -1216,7 +1356,7 @@ int main(int argc, char** argv) {
     try {
         if (argc < 2 || argc > 6) {
             std::cout << "usage: jellyframe_cpu2d_compare <output-directory> [samples=100] "
-                         "[workload=opaque-fill] [backend=gdi] [SDL2.dll]\n";
+                         "[workload=opaque-fill] [backend=gdi|sdl2|cairo] [backend.dll]\n";
             return argc < 2 ? 2 : 0;
         }
         const int samples = argc >= 3 ? positive_int(argv[2], "samples") : 100;
@@ -1226,8 +1366,12 @@ int main(int argc, char** argv) {
             throw std::runtime_error(
                 "SDL2 adapter currently supports opaque-fill, opaque-dirty-fill, and alpha-grid");
         }
+        if (backend == Backend::Cairo && !is_fill_workload(workload)) {
+            throw std::runtime_error(
+                "Cairo adapter currently supports opaque-fill and opaque-dirty-fill only");
+        }
         if (backend == Backend::Gdi && argc == 6) {
-            throw std::runtime_error("SDL2 library path is valid only with the sdl2 backend");
+            throw std::runtime_error("library path is valid only with the sdl2 or cairo backend");
         }
         const std::filesystem::path output_directory(argv[1]);
         if (workload == Workload::RoundedCoreProbes) {
@@ -1347,7 +1491,7 @@ int main(int argc, char** argv) {
             reference_name = workload == Workload::BitmapText ? "windows-gdi-bitmap-glyph-blit" : "windows-gdi";
             reference_version = "system";
             reference_file = "gdi.json";
-        } else {
+        } else if (backend == Backend::Sdl2) {
             const std::filesystem::path library_path = argc == 6
                 ? std::filesystem::path(argv[5])
                 : std::filesystem::path(L"SDL2.dll");
@@ -1369,6 +1513,22 @@ int main(int argc, char** argv) {
             reference_name = "sdl2-software-renderer";
             reference_version = sdl_surface.version;
             reference_file = "sdl2.json";
+        } else {
+            const std::filesystem::path library_path = argc == 6
+                ? std::filesystem::path(argv[5])
+                : std::filesystem::path(L"cairo.dll");
+            CairoSurface cairo_surface(library_path);
+            auto pair = benchmark::measure_interleaved(samples, kWarmupIterations,
+                operations_per_sample, reset_jellyframe,
+                [&](int) { rasterizer.rasterize(command, jellyframe_surface, command.rect); }, [] {},
+                [] {}, [&](int) { cairo_surface.fill_rect(workload_rect(workload)); }, [] {});
+            jellyframe_samples = std::move(pair.first);
+            reference_samples = std::move(pair.second);
+            cairo_surface.validate();
+            comparison = compare_output(jellyframe_surface, cairo_surface.pixels(), workload);
+            reference_name = "cairo-image-surface";
+            reference_version = cairo_surface.version;
+            reference_file = "cairo.json";
         }
         const double tolerance = is_fill_workload(workload) || workload == Workload::AlphaGrid ||
             workload == Workload::BitmapText ? 0.0 : 1.0;

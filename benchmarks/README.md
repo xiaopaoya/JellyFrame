@@ -1,6 +1,6 @@
 # Benchmarks
 
-> Last updated: 2026-09-19; Applies to: 0.6.0-dev
+> Last updated: 2026-11-05; Applies to: 0.6.0-dev
 
 Root-level benchmarks are reserved for future cross-subproject and app-lifecycle
 benchmarks.
@@ -40,6 +40,14 @@ dependency to JellyFrame builds or packages. The adapter deliberately rejects
 gradient workloads because SDL2's software renderer has no equivalent gradient
 primitive.
 
+The executable can also load a Cairo DLL at runtime for `opaque-fill` and
+`opaque-dirty-fill`. It uses an RGB24 image surface, integral rectangles,
+`CAIRO_OPERATOR_SOURCE`, no antialiasing and `cairo_surface_flush` inside the
+timed draw. Cairo setup and source-color selection are outside the timer. Cairo
+is not a build or package dependency; pass its DLL path explicitly when it is
+not on the normal Windows DLL search path. The adapter rejects alpha, text and
+gradient workloads whose semantics are not implemented here.
+
 `alpha-grid` draws 64 non-overlapping 16x12 source-over tiles on black. Every
 sample resets the surface outside the timed interval, then reports per-tile time
 and 192 pixels. JellyFrame, GDI `AlphaBlend` and SDL2 software blending must
@@ -58,6 +66,8 @@ build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-vertical-
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-sdl2 100 opaque-fill sdl2 C:\path\to\SDL2.dll
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-dirty-sdl2 100 opaque-dirty-fill sdl2 C:\path\to\SDL2.dll
 build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-alpha-sdl2 100 alpha-grid sdl2 C:\path\to\SDL2.dll
+build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-cairo 100 opaque-fill cairo C:\path\to\cairo.dll
+build\desktop-release\Release\jellyframe_cpu2d_compare.exe build\cpu2d-dirty-cairo 100 opaque-dirty-fill cairo C:\path\to\cairo.dll
 ```
 
 The SDL2 run writes `jellyframe.json` and `sdl2.json`. Compare them with
@@ -65,6 +75,19 @@ The SDL2 run writes `jellyframe.json` and `sdl2.json`. Compare them with
 validation before timing or throughput is comparable. The result describes only
 the declared full or local opaque fill, not layout, dirty-region planning,
 window present, complete UI performance or GPU rendering.
+
+The Cairo run writes `jellyframe.json` and `cairo.json` under the same contract.
+Its accepted scope is opaque rectangular fill only; it does not establish Cairo
+performance for alpha compositing, rounded geometry, text or a complete UI.
+
+The 2026-11-05 local comparison used Cairo 1.18.4, six paired repeats and 500
+samples per repeat on each of the two accepted workloads. Every output was exact.
+Median repeat p95 was 4.35 us for JellyFrame versus 3.25 us for Cairo on full
+fill (-25.3%), and 0.488 us versus 0.694 us on the 96x48 dirty fill (+42.1%).
+All six paired deltas had the same direction within each workload. These are
+descriptive timings without a statistical significance test, limited to the
+declared primitives; raw manifests and reports are archived locally under
+`D:/JellyFramePerf/cairo-comparison-20261105/`.
 
 Cross-library comparisons use the fixed-condition manifest consumed by
 `../tools/benchmark_compare.py`. Each adapter must provide the same workload,
