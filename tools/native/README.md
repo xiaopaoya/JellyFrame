@@ -25,7 +25,10 @@ CMake emits the corresponding executable. Use
 - `pseudo_browser.cpp` runs the platform-neutral pipeline in a desktop shell and
   can emit structured pipeline diagnostics with `--diagnostics-json`, including
   development-time visual hints for horizontal overflow, scroll-needed content
-  and high display-command density.
+  and high display-command density. Text output is geometry-only: this tool does
+  not provide Core font metrics or glyph painting and is not product text-rendering evidence.
+- `pipeline_dump.cpp` also reports geometry-only text and does not provide Core
+  font metrics or glyph painting.
 - `win32_browser.cpp` is the Windows validation shell with OS input and capture
   support. It can open either loose HTML/CSS files or a source package via
   `--app`. Use `--frame-script PATH` for hidden deterministic animation capture

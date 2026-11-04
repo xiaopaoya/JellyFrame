@@ -37,7 +37,10 @@ def run_pseudo_browser(exe: Path, html: str, css: str, width: int, height: int) 
         )
         require(result.returncode == 0, result.stdout)
         require(report_path.is_file(), "pseudo browser did not write diagnostics JSON")
-        return json.loads(report_path.read_text(encoding="utf-8-sig"))
+        report = json.loads(report_path.read_text(encoding="utf-8-sig"))
+        require(report.get("textPolicy") == "geometry-only",
+                "diagnostics must identify missing font metrics and glyph painting")
+        return report
 
 
 def diagnostic_codes(report: dict) -> set[str]:
@@ -49,12 +52,14 @@ def diagnostic_codes(report: dict) -> set[str]:
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: pipeline_visual_diagnostics_tests.py PATH_TO_PSEUDO_BROWSER")
+    if len(sys.argv) != 3:
+        print("usage: pipeline_visual_diagnostics_tests.py PATH_TO_PSEUDO_BROWSER PATH_TO_PIPELINE_DUMP")
         return 2
 
     exe = Path(sys.argv[1])
+    pipeline_dump = Path(sys.argv[2])
     require(exe.exists(), f"missing executable: {exe}")
+    require(pipeline_dump.exists(), f"missing executable: {pipeline_dump}")
     repo_root = Path(__file__).resolve().parents[2]
 
     overflow_report = run_pseudo_browser(
@@ -199,6 +204,23 @@ def main() -> int:
                 f"responsive fixture report must preserve viewport width {width}")
         require(responsive_report.get("pipeline", {}).get("displayCommands", 0) > 0,
                 f"responsive fixture must produce paint commands at width {width}")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-pipeline-dump-") as directory:
+        root = Path(directory)
+        html_path = root / "index.html"
+        css_path = root / "style.css"
+        html_path.write_text("<body><p>diagnostic text</p></body>", encoding="utf-8")
+        css_path.write_text("body { margin: 0; } p { font-size: 20px; }", encoding="utf-8")
+        result = subprocess.run(
+            [str(pipeline_dump), str(html_path), str(css_path), "120"],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        require(result.returncode == 0, result.stdout)
+        require("text_policy=geometry-only (no font metrics or glyph painting)" in result.stdout,
+                "pipeline dump must identify its geometry-only text contract")
 
     print("pipeline visual diagnostics tests passed")
     return 0
