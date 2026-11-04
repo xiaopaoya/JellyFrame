@@ -1,6 +1,7 @@
 ﻿#include "render_core/html_parser.h"
 #include "render_core/html_tokenizer.h"
 
+#include <algorithm>
 #include <array>
 #include <iostream>
 #include <stdexcept>
