@@ -1,6 +1,6 @@
 # JellyFrame Active TODO
 
-> Last updated: 2026-09-24; Applies to: 0.6.0-dev
+> Last updated: 2026-11-04; Applies to: 0.6.0-dev
 >
 > This is the near-term execution queue for the [active roadmap](roadmap.md). It does not repeat closed acceptance, performance micro-experiments or historical port work.
 
@@ -66,7 +66,7 @@ performance tooling nor editor work substitutes for A2 hardware evidence.
 - [ ] Complete the VS Code device workflow on the same clean author machine: `new -> check -> package -> deploy -> launch -> live log -> update -> rollback -> stop -> remove`. Keep desktop and device sessions distinct and preserve actionable ownership in the final report.
 - [ ] Run real installed-App panel/input acceptance through the provider workflow. A 2026-09-08 user observation reports normal physical interaction response, but the archived `posted=0` sample is not structured input evidence. Record per-App launch marker, touch/input response, panel/present errors and recovery behavior; do not treat provider lifecycle PASS or an informal observation as complete visual/input evidence.
 - [x] WS147 physical-GRAM panel-scroll performance and fallback retest completed, but visual acceptance failed; commit `eaa52a67` added an acceptance gate and removed it from the default-usable path. Investigate TE/vblank synchronization only; do not re-enable release configuration.
-- [ ] Maintain B1 as a release gate. The signed Core `v0.6.2` release is the current Runtime dependency; any Core bump must download or otherwise authenticate the reviewed release artifact, verify its archive SHA-256, update the exact version/ABI/source lock and pass standalone, package-consumer and source-override tests.
+- [ ] Maintain B1 as a release gate. Signed Core `v0.7.0` / ABI `2` is published; its Runtime lock-update PR must pass standalone, package-consumer and source-override tests before merge. Future bumps must authenticate the reviewed artifact, verify its archive SHA-256 and update the exact version/ABI/source lock. The default in-tree provider and accepted WS147 image remain on Core `0.6.2` / ABI `1`.
 - [x] Build and accept the WS147 Developer Image `0.6.2-ws147.1` from the merged Runtime Core `0.6.2` lock. Keep the historical `0.6.1` manifest and evidence immutable; the complete R1-R17, host/provider and package-smoke report is `core062-developer-image-final-20260905`.
 - [x] Publish the App Author SDK `app-sdk-v0.6.0-dev.2` from Runtime `ca747011`; standard and scripting desktop runtimes consume Core `0.6.2`, and the release archive SHA-256 is `c3245edd...7dc8a9f`.
 - [ ] Execute [the 0.6 engineering review plan](engineering_review_plan_20260819_zh.md): begin with R0 package/profile/provenance, then R1 document/style, layout/dirty and renderer/text. Change an interface only for a demonstrated semantic or safety defect, never as a mechanical rename.

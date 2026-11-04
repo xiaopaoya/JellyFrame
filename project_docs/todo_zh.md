@@ -1,6 +1,6 @@
 # JellyFrame 活动待办
 
-> 最后更新：2026-09-27；适用版本：0.6.0-dev
+> 最后更新：2026-11-04；适用版本：0.6.0-dev
 >
 > 本清单是 [路线图](roadmap_zh.md) 的近期执行队列，不记录已经关闭的验收、性能微实验或历史移植任务。
 
@@ -18,7 +18,7 @@
    WS147 TE/vblank 仅在具备同步证据时继续。
 3. **审查矩阵残项治理**：在 A2 材料补充并行进行，优先处理仍确认成立的边界/生命周期问题，
    每项绑定回归，不重新开启已关闭的全屏微优化。
-4. **发布门禁复核**：复跑 Debug/Release/scripting/tool 全套门禁，核对 Core `0.6.2` lock、
+4. **发布门禁复核**：复跑 Debug/Release/scripting/tool 全套门禁，核对 Core `0.7.0` package lock、
    SDK、Developer Image、provider 和 A2 报告身份；任何失败先归属到 package、transport、
    registry、Runtime 或 port。
 5. **A3 筹备与编辑器隔离推进**：只有 A2 两项正式证据关闭后才准备外部试用；可视化编辑器继续
@@ -137,7 +137,7 @@
 - [x] 通过 provider 流程完成真实已安装 App 的 panel/input 功能验收：用户确认按钮、slider、重启后再次输入正常；结构化输入计数和 App-scoped logs 待补。没有视觉异常时不要求逐像素图片证据。
 - [ ] 归档本轮 A2 证据包，并将 `summary.json` 状态从 `evidence-pending` 更新为正式 `pass` 或保留 `partial`。
 - [x] WS147 物理 GRAM panel-scroll 已完成性能与 fallback 复测，但视觉验收失败；已由 `eaa52a67` 增加视觉接受门并从默认可用路径隔离。后续仅调查 TE/vblank 同步，不得重新启用发布配置。
-- [ ] 将 B1 作为持续 release gate 维护。带签名的 Core `v0.6.2` release 是当前 Runtime 依赖，Runtime 锁定 Core `0.6.2`、ABI `1` 和 source identity；以后每次 Core bump 必须下载或以其他方式认证已审阅的 release artifact、校验 archive SHA-256、更新精确 version/ABI/source lock，并通过 standalone、package-consumer 与 source-override tests。
+- [ ] 将 B1 作为持续 release gate 维护。带签名的 Core `v0.7.0` / ABI `2` 已发布；Runtime lock 更新 PR 必须通过 standalone、package-consumer 与 source-override tests 后才能合并。以后每次 Core bump 都要认证已审阅的 artifact、校验 archive SHA-256 并更新精确 version/ABI/source lock。默认源码内 provider 与已验收 WS147 image 仍为 Core `0.6.2` / ABI `1`。
 - [x] 基于已合入的 Runtime Core `0.6.2` lock 构建并验收 WS147 Developer Image `0.6.2-ws147.1`。历史 `0.6.1` manifest 与证据保持不可变；R1-R17、host/provider 与 package-smoke 完整报告为 `core062-developer-image-final-20260905`，物理 Developer Image gate 已关闭。
 - [x] 从 Runtime `ca747011` 发布 App Author SDK `app-sdk-v0.6.0-dev.2`；标准与 scripting 桌面运行时均消费 Core `0.6.2`，release archive SHA-256 为 `c3245edd...7dc8a9f`。
 - [x] 完成 [0.6 工程维护审查计划](engineering_review_plan_20260819_zh.md) 中已安排的 R0/R1 首轮检查：package/profile/provenance、style/layout/dirty、renderer/text 和确定性 capture 均有对应回归；只修复有明确语义或安全缺陷的接口，不做机械式改名。

@@ -1,6 +1,6 @@
 # Component Compatibility Matrix
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev
+> Last updated: 2026-11-04; Applies to: 0.6.0-dev
 
 This matrix records compatibility evidence across the three planned product
 boundaries. It is intentionally narrower than the HTML/CSS capability tables:
@@ -14,11 +14,12 @@ build artifact may consume which other artifact.
 | JellyFrame App Runtime | in-tree `jellyframe_render_core` | same checkout | `verified` | Default desktop Release/Debug and non-scripting CI CTest. Use for synchronized Core/Runtime changes. |
 | JellyFrame App Runtime | unpacked Core source archive | `0.6.2` source profile | `verified` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` selects the unpacked archive for a separate Runtime build and App Runtime CTest; package mode remains mutually exclusive. |
 | Render Core standalone tests | no Runtime or JerryScript | `0.6.2` / ABI `1` | `verified` | Standalone configure, build, CTest and install path. The package contains the Core target, headers and capability profile only. |
+| Render Core source archive | no Runtime or JerryScript | `0.7.0` / ABI `2` | `released` | Signed `v0.7.0` source archive; SHA-256 `93038feb0694cec9630fb3fae848d0ac187767fa578ad4c0ea8226c6cfaf290f`. |
 | Render Core independent `master` | no Runtime or JerryScript | `0.6.2-dev` / ABI `1` | `verified standalone only` | JellyFrame mainline `7735b9a1` is synchronized at independent merge `769ec5d`; PR CI verifies build, CTest, install, archive and source distribution. This is not a signed Runtime dependency. |
 | Render Core source archive | no Runtime or JerryScript | `0.6.2` / ABI `1` | `released` | Signed `v0.6.2` release archive plus SHA-256 sidecar. Declared text members are normalized to LF while binary members remain opaque; CI proves equal archive bytes from equivalent CRLF/LF trees, then extracts, builds, runs CTest, installs and configures the Runtime package consumer. |
-| JellyFrame App Runtime | installed Render Core package | `0.6.2` / ABI `1` / normalized locked source manifest identity | `verified` | Runtime uses `JELLYFRAME_RENDER_CORE_PROVIDER=package`; it validates the package manifest against the exact locked source hash and copies it into build provenance. The identity normalizes text line endings, so Windows and Unix checkouts of the same sources resolve identically. |
+| JellyFrame App Runtime | installed Render Core package | `0.7.0` / ABI `2` / normalized locked source manifest identity | `verified` | Runtime uses `JELLYFRAME_RENDER_CORE_PROVIDER=package`; it validates the package manifest against the exact locked source hash and copies it into build provenance. The identity normalizes text line endings, so Windows and Unix checkouts of the same sources resolve identically. |
 | JellyFrame App Runtime | installed Render Core package | wrong version, ABI or source identity | `rejected` | Configure-time exact version, engine-ABI and source-hash checks. No fallback to source Core is allowed in package mode. |
-| App package preflight | generated Render Core capability profile | schema `1` / engine ABI `1` | `verified` | `package_app.py` validates profile schema, known feature IDs and dependency closure before resources are read; missing required families reject the package. |
+| App package preflight | generated Render Core capability profile | schema `1` / selected Core engine ABI | `verified` | `package_app.py` validates profile schema, known feature IDs and dependency closure before resources are read; missing required families reject the package. |
 | JellyFrame Script bridge | in-tree Render Core | `0.6.0-dev` source line | `verified separately` | One script backend is selected at build time; the current implementation is JerryScript and remains an optional App Runtime dependency. This does not prove a package-mode scripting build. |
 | App Runtime / future Device OS host | `jellyframe_device_runtime_contracts` | `JFDP/1` | `verified` | The target independently tests framing, typed payloads and staging, without an App Runtime or Render Core implementation dependency. Its monorepo location is transitional; this is not a Device OS release. |
 | Device Runtime / launcher | Render Core package | port-selected | `port-owned` | Requires a port-owned toolchain, memory profile, panel path and hardware report. Desktop package evidence is not a device claim. |
@@ -30,9 +31,9 @@ The Runtime package consumer reads these values from
 `cmake/jellyframe_dependency_lock.cmake`:
 
 ```text
-JELLYFRAME_RENDER_CORE_LOCKED_VERSION   = 0.6.2
-JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI = 1
-JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = 539a894519d3251f02c8b3aee8d0d0fb715bf49a732fc74126ccb2188462e3f0
+JELLYFRAME_RENDER_CORE_LOCKED_VERSION   = 0.7.0
+JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI = 2
+JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = 609927a3cb5307c9c9f33314cc2638b8aae4bec8c71d91208c2f9eb7c521fb55
 ```
 
 The lock is a consumer policy, not a claim that every future Render Core build
@@ -41,10 +42,10 @@ Runtime must update the lock, run the package-consumer build, and review the
 capability profile before accepting it.
 
 The first independent release was `v0.6.0`. The independent development head is
-`0.6.2-dev`, but the Runtime currently accepts
-[`v0.6.2`](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.6.2).
+still based on `0.6.2-dev`, while Runtime package mode accepts signed
+[`v0.7.0`](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.7.0).
 Its deterministic source archive SHA-256 is
-`d136a0d7fd7ab58436a5f2fa9c7eb27a497e08bad384a96cd93689ba6898f43e`.
+`93038feb0694cec9630fb3fae848d0ac187767fa578ad4c0ea8226c6cfaf290f`.
 This release-artifact identity is recorded separately from the source manifest
 because an installed CMake package cannot prove which archive produced it.
 

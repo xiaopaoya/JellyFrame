@@ -4,11 +4,11 @@
 # version. An extracted Render Core may iterate more frequently while the
 # Runtime only accepts an explicitly reviewed package/ABI pair.
 
-set(JELLYFRAME_RENDER_CORE_LOCKED_VERSION "0.6.2")
-set(JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI "1")
-# This is the deterministic source identity exported by the reviewed 0.6.2
+set(JELLYFRAME_RENDER_CORE_LOCKED_VERSION "0.7.0")
+set(JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI "2")
+# This is the deterministic source identity exported by the reviewed 0.7.0
 # package. Package consumers must match it exactly; archive checksums remain
 # release-artifact metadata because they are not available from an installed
 # CMake package.
 set(JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH
-    "539a894519d3251f02c8b3aee8d0d0fb715bf49a732fc74126ccb2188462e3f0")
+    "609927a3cb5307c9c9f33314cc2638b8aae4bec8c71d91208c2f9eb7c521fb55")

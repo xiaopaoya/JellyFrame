@@ -1,6 +1,6 @@
 # weather
 
-> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
+> Last updated: 2026-11-04; Applies to: 0.6.0-dev; Render Core baseline: 0.7.0
 
 A local-only weather starter with three deterministic datasets, BMP icons and responsive cards. No network or storage service is required.
 

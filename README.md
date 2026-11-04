@@ -9,10 +9,10 @@
 <p align="center">
   <a href="https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml"><img src="https://github.com/xiaopaoya/JellyFrame/actions/workflows/ci.yml/badge.svg?style=flat-square" alt="CI status"></a>
   <img src="https://img.shields.io/badge/Runtime-0.6.0--dev-1680C7?style=flat-square" alt="Runtime 0.6.0-dev">
-  <img src="https://img.shields.io/badge/Render%20Core-0.6.2-1680C7?style=flat-square" alt="Render Core 0.6.2">
+  <img src="https://img.shields.io/badge/Render%20Core-0.7.0-1680C7?style=flat-square" alt="Render Core 0.7.0">
 </p>
 
-> Last updated: 2026-09-14; Applies to: 0.6.0-dev
+> Last updated: 2026-11-04; Applies to: 0.6.0-dev
 
 JellyFrame is a compact C++ HTML/CSS/JS UI runtime for low-power wearable and
 embedded devices. It keeps the parts of a browser pipeline that are useful for
@@ -70,7 +70,7 @@ These 300x300 screenshots are rendered through the current Win32 capture shell
 from Jelly-style wearable templates in `tools/templates/apps`. They show
 JellyFrame's own light, lively visual language.
 
-**Render pipeline:** the current Runtime lock is JellyFrame Render Core `0.6.2`;
+**Render pipeline:** the current Runtime package lock is JellyFrame Render Core `0.7.0` / ABI 2;
 the gallery capture below was recorded against Core `0.6.1` on
 `2026-08-26`; current
 JerryScript-enabled Win32 capture shell; viewport `300x300`; generated
@@ -265,7 +265,7 @@ Chinese documentation uses the `_zh` suffix, for example
 ## Versioning
 
 - Current Runtime development version: `0.6.0-dev` in [VERSION](VERSION).
-  Packages must target this Runtime line and the locked Render Core `0.6.2`;
+  Packages must target this Runtime line and the locked Render Core `0.7.0`;
   historical development artifacts are intentionally not a compatibility
   baseline.
 - Changelog: [CHANGELOG.md](CHANGELOG.md) and
