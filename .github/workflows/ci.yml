@@ -79,15 +79,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Render Core configure failed' }
           cmake --build build\released-render-core-build --config Release --parallel
           if ($LASTEXITCODE -ne 0) { throw 'Render Core build failed' }
-          cmake --install build\released-render-core-build --config Release --prefix build\render-core-install
-          if ($LASTEXITCODE -ne 0) { throw 'Render Core install failed' }
+          cmake --install build\released-render-core-build --config Release --prefix build\render-core-install-release
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core Release install failed' }
+          cmake --build build\released-render-core-build --config Debug --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core Debug build failed' }
+          cmake --install build\released-render-core-build --config Debug --prefix build\render-core-install-debug
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core Debug install failed' }
 
       - name: Configure
         shell: pwsh
         run: >
           cmake -S . -B build/desktop-release
           -DJELLYFRAME_RENDER_CORE_PROVIDER=package
-          -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=${{ github.workspace }}/build/render-core-install
+          -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=${{ github.workspace }}/build/render-core-install-release
           -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
           -DJELLYFRAME_BUILD_EXAMPLES=ON
           -DJELLYFRAME_BUILD_TESTS=ON
@@ -115,7 +119,7 @@ jobs:
         run: >
           cmake -S . -B build/desktop-debug
           -DJELLYFRAME_RENDER_CORE_PROVIDER=package
-          -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=${{ github.workspace }}/build/render-core-install
+          -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=${{ github.workspace }}/build/render-core-install-debug
           -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
           -DJELLYFRAME_BUILD_EXAMPLES=ON
           -DJELLYFRAME_BUILD_TESTS=ON
@@ -303,15 +307,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Render Core configure failed' }
           cmake --build build\released-render-core-build --config Release --parallel
           if ($LASTEXITCODE -ne 0) { throw 'Render Core build failed' }
-          cmake --install build\released-render-core-build --config Release --prefix build\render-core-install
-          if ($LASTEXITCODE -ne 0) { throw 'Render Core install failed' }
+          cmake --install build\released-render-core-build --config Release --prefix build\render-core-install-release
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core Release install failed' }
+          cmake --build build\released-render-core-build --config Debug --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core Debug build failed' }
+          cmake --install build\released-render-core-build --config Debug --prefix build\render-core-install-debug
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core Debug install failed' }
 
       - name: Configure scripting build
         shell: pwsh
         run: >
           cmake -S . -B build/desktop-scripting-release
           -DJELLYFRAME_RENDER_CORE_PROVIDER=package
-          -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=${{ github.workspace }}/build/render-core-install
+          -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=${{ github.workspace }}/build/render-core-install-release
           -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
           -DJELLYFRAME_BUILD_EXAMPLES=ON
           -DJELLYFRAME_BUILD_TESTS=ON

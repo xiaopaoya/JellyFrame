@@ -229,10 +229,6 @@ private:
     void notify_dom_mutation(const Node& node,
                              DomDirtyFlags flags,
                              std::uint64_t mutation_generation);
-    static void dom_mutation_observer(Node& node,
-                                      DomDirtyFlags flags,
-                                      std::uint64_t mutation_generation,
-                                      void* context);
 };
 
 } // namespace jellyframe

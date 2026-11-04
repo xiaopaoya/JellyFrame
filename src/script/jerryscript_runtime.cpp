@@ -179,6 +179,14 @@ struct ScriptLocalStorageBinding {
 };
 
 struct ScriptRuntimeAccess {
+    static void notify_dom_mutation(JerryScriptRuntime& runtime, const Node& node, DomDirtyFlags flags) {
+        const Node* root = &node;
+        while (root->parent != nullptr) {
+            root = root->parent;
+        }
+        runtime.notify_dom_mutation(node, flags, root->mutation_generation);
+    }
+
     static bool can_adopt_detached_node(const JerryScriptRuntime& runtime) {
         return runtime.can_adopt_detached_node();
     }
@@ -1990,6 +1998,7 @@ jerry_value_t node_set_text_content(const jerry_call_info_t* call_info_p,
         return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM budget exceeded");
     }
     node->set_text_content(value);
+    ScriptRuntimeAccess::notify_dom_mutation(*runtime, *node, DomDirtyText);
     return jerry_undefined();
 }
 
@@ -2002,6 +2011,7 @@ jerry_value_t set_script_dom_attribute(const jerry_call_info_t* call_info_p,
         return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM attribute budget exceeded");
     }
     node.set_attribute(std::string(name), std::move(value));
+    ScriptRuntimeAccess::notify_dom_mutation(*runtime, node, DomDirtyAttributes);
     return jerry_undefined();
 }
 
@@ -2013,6 +2023,7 @@ jerry_value_t set_script_dom_text_content(const jerry_call_info_t* call_info_p,
         return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM budget exceeded");
     }
     node.set_text_content(std::move(value));
+    ScriptRuntimeAccess::notify_dom_mutation(*runtime, node, DomDirtyText);
     return jerry_undefined();
 }
 
@@ -5440,11 +5451,16 @@ Node& insert_or_move_child(JerryScriptRuntime& runtime, Node& parent, Node& chil
         if (!detached) {
             throw std::runtime_error("node insertion could not detach existing child");
         }
-        return parent.insert_child(std::move(detached), index);
+        ScriptRuntimeAccess::notify_dom_mutation(runtime, *old_parent, DomDirtyTree);
+        Node& inserted = parent.insert_child(std::move(detached), index);
+        ScriptRuntimeAccess::notify_dom_mutation(runtime, parent, DomDirtyTree);
+        return inserted;
     }
 
     if (auto detached = ScriptRuntimeAccess::release_detached_node(runtime, child)) {
-        return parent.insert_child(std::move(detached), index);
+        Node& inserted = parent.insert_child(std::move(detached), index);
+        ScriptRuntimeAccess::notify_dom_mutation(runtime, parent, DomDirtyTree);
+        return inserted;
     }
 
     throw std::runtime_error("node insertion received a node outside this runtime");
@@ -5507,6 +5523,7 @@ jerry_value_t node_append(const jerry_call_info_t* call_info_p,
                 append_or_move_child(*runtime, *parent, *child);
             } else {
                 parent->append_child(make_text(std::move(text_values[text_index++])));
+                ScriptRuntimeAccess::notify_dom_mutation(*runtime, *parent, DomDirtyTree);
             }
         }
     } catch (const std::exception& error) {
@@ -5549,6 +5566,7 @@ jerry_value_t node_prepend(const jerry_call_info_t* call_info_p,
                 insert_or_move_child(*runtime, *parent, *child, insertion_index);
             } else {
                 parent->insert_child(make_text(std::move(text_values[text_index++])), insertion_index);
+                ScriptRuntimeAccess::notify_dom_mutation(*runtime, *parent, DomDirtyTree);
             }
         }
     } catch (const std::exception& error) {
@@ -5577,6 +5595,7 @@ jerry_value_t node_remove_child(const jerry_call_info_t* call_info_p,
     if (!detached) {
         return jerry_throw_sz(JERRY_ERROR_TYPE, "removeChild failed");
     }
+    ScriptRuntimeAccess::notify_dom_mutation(*runtime, *parent, DomDirtyTree);
     Node* adopted = ScriptRuntimeAccess::adopt_detached_node(*runtime, std::move(detached));
     if (adopted == nullptr) {
         return jerry_throw_sz(JERRY_ERROR_RANGE, "detached node budget exceeded");
@@ -6559,9 +6578,6 @@ void JerryScriptRuntime::install_script_service_gateway() {
 
 JerryScriptRuntime::~JerryScriptRuntime() {
     if (initialized_) {
-        if (bound_document_ != nullptr) {
-            bound_document_->clear_mutation_observer(dom_mutation_observer, this);
-        }
         clear_xml_http_requests();
         clear_audio_elements();
         clear_geolocation_requests();
@@ -6584,9 +6600,6 @@ JerryScriptRuntime::~JerryScriptRuntime() {
 }
 
 void JerryScriptRuntime::bind_document(Node& document) {
-    if (bound_document_ != nullptr) {
-        bound_document_->clear_mutation_observer(dom_mutation_observer, this);
-    }
     callback_failure_ = {};
     clear_xml_http_requests();
     clear_audio_elements();
@@ -6611,9 +6624,6 @@ void JerryScriptRuntime::bind_document(Node& document) {
         canvas_2d_->clear();
     }
     bound_document_ = &document;
-    if (dom_mutation_callback_ != nullptr) {
-        bound_document_->set_mutation_observer(dom_mutation_observer, this);
-    }
     dom_statistics_cached_document_ = nullptr;
     dom_statistics_cached_generation_ = 0;
     dom_statistics_cached_document_stats_ = {};
@@ -6716,14 +6726,8 @@ void JerryScriptRuntime::bind_document(Node& document) {
 }
 
 void JerryScriptRuntime::set_dom_mutation_observer(ScriptDomMutationCallback callback, void* user) {
-    if (bound_document_ != nullptr) {
-        bound_document_->clear_mutation_observer(dom_mutation_observer, this);
-    }
     dom_mutation_callback_ = callback;
     dom_mutation_callback_user_ = user;
-    if (bound_document_ != nullptr && dom_mutation_callback_ != nullptr) {
-        bound_document_->set_mutation_observer(dom_mutation_observer, this);
-    }
 }
 
 void JerryScriptRuntime::notify_dom_mutation(const Node& node,
@@ -6733,16 +6737,6 @@ void JerryScriptRuntime::notify_dom_mutation(const Node& node,
         return;
     }
     dom_mutation_callback_(dom_mutation_callback_user_, node, flags, mutation_generation);
-}
-
-void JerryScriptRuntime::dom_mutation_observer(Node& node,
-                                               DomDirtyFlags flags,
-                                               std::uint64_t mutation_generation,
-                                               void* context) {
-    auto* runtime = static_cast<JerryScriptRuntime*>(context);
-    if (runtime != nullptr) {
-        runtime->notify_dom_mutation(node, flags, mutation_generation);
-    }
 }
 
 bool JerryScriptRuntime::submit_script_service_request(std::uint8_t kind,

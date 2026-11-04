@@ -173,6 +173,8 @@ target_link_libraries(jellyframe_app_runtime
     PUBLIC jellyframe_render_core
     PRIVATE jellyframe_device_runtime_contracts)
 target_include_directories(jellyframe_app_runtime
+    BEFORE PUBLIC
+        ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
@@ -212,6 +214,8 @@ if(JELLYFRAME_BUILD_SCRIPTING)
         )
         target_link_libraries(jellyframe_script_task_runtime PUBLIC jellyframe_app_runtime)
         target_include_directories(jellyframe_script_task_runtime
+            BEFORE PUBLIC
+                ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
             PUBLIC
                 ${CMAKE_CURRENT_SOURCE_DIR}/src
         )
@@ -237,6 +241,8 @@ if(JELLYFRAME_BUILD_SCRIPTING)
         target_link_libraries(jellyframe_script PUBLIC jellyframe_script_task_runtime)
     endif()
     target_include_directories(jellyframe_script
+        BEFORE PUBLIC
+            ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/src
         PRIVATE
