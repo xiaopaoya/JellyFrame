@@ -1348,7 +1348,10 @@ std::string inline_style_property(const Node& node, const std::string& property)
     return output;
 }
 
-void set_inline_style_property(Node& node, const std::string& property, const std::string& value) {
+void set_inline_style_property(JerryScriptRuntime& runtime,
+                              Node& node,
+                              const std::string& property,
+                              const std::string& value) {
     std::vector<CssDeclaration> declarations = inline_declarations_for(node);
     bool updated = false;
     for (CssDeclaration& declaration : declarations) {
@@ -1375,6 +1378,7 @@ void set_inline_style_property(Node& node, const std::string& property, const st
         style += ';';
     }
     node.set_attribute("style", std::move(style));
+    ScriptRuntimeAccess::notify_dom_mutation(runtime, node, DomDirtyAttributes);
 }
 
 bool simple_selector_matches(const Node& node, std::string_view selector) {
@@ -2308,6 +2312,7 @@ bool set_class_tokens(JerryScriptRuntime& runtime, Node& node, const std::vector
         return false;
     }
     node.set_attribute("class", std::move(value));
+    ScriptRuntimeAccess::notify_dom_mutation(runtime, node, DomDirtyAttributes);
     return true;
 }
 
@@ -4471,6 +4476,7 @@ jerry_value_t dataset_proxy_set(const jerry_call_info_t*,
         return jerry_boolean(false);
     }
     node->set_attribute(attribute, value);
+    ScriptRuntimeAccess::notify_dom_mutation(*runtime, *node, DomDirtyAttributes);
     return jerry_boolean(true);
 }
 
@@ -4486,6 +4492,9 @@ jerry_value_t dataset_proxy_delete_property(const jerry_call_info_t*,
         return jerry_boolean(false);
     }
     node->remove_attribute(dataset_key_to_data_attribute(key));
+    if (JerryScriptRuntime* runtime = native_runtime(args_p[0])) {
+        ScriptRuntimeAccess::notify_dom_mutation(*runtime, *node, DomDirtyAttributes);
+    }
     return jerry_boolean(true);
 }
 
@@ -4531,8 +4540,10 @@ jerry_value_t style_set_named(const jerry_call_info_t* call_info_p,
                               const jerry_length_t args_count,
                               const char* property) {
     Node* node = style_node(call_info_p);
-    if (node != nullptr) {
-        set_inline_style_property(*node, property, args_count > 0 ? value_to_string(args_p[0]) : std::string());
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node != nullptr && runtime != nullptr) {
+        set_inline_style_property(*runtime, *node, property,
+                                  args_count > 0 ? value_to_string(args_p[0]) : std::string());
     }
     return jerry_undefined();
 }
@@ -4541,14 +4552,15 @@ jerry_value_t style_set_property(const jerry_call_info_t* call_info_p,
                                  const jerry_value_t args_p[],
                                  const jerry_length_t args_count) {
     Node* node = style_node(call_info_p);
-    if (node == nullptr || args_count < 2) {
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (node == nullptr || runtime == nullptr || args_count < 2) {
         return jerry_undefined();
     }
     const std::string property = ascii_lowercase(value_to_string(args_p[0]));
     if (!is_script_writable_style_property(property)) {
         return jerry_undefined();
     }
-    set_inline_style_property(*node, property, value_to_string(args_p[1]));
+    set_inline_style_property(*runtime, *node, property, value_to_string(args_p[1]));
     return jerry_undefined();
 }
 
@@ -4578,7 +4590,9 @@ jerry_value_t style_remove_property(const jerry_call_info_t* call_info_p,
         return jerry_string_sz("");
     }
     const std::string previous = inline_style_property(*node, property);
-    set_inline_style_property(*node, property, std::string());
+    if (JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value)) {
+        set_inline_style_property(*runtime, *node, property, std::string());
+    }
     return jerry_string_sz(previous.c_str());
 }
 
@@ -5618,6 +5632,7 @@ jerry_value_t element_set_attribute(const jerry_call_info_t* call_info_p,
         return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM attribute budget exceeded");
     }
     node->set_attribute(name, value);
+    ScriptRuntimeAccess::notify_dom_mutation(*runtime, *node, DomDirtyAttributes);
     return jerry_undefined();
 }
 
@@ -5643,7 +5658,12 @@ jerry_value_t element_remove_attribute(const jerry_call_info_t* call_info_p,
     if (node == nullptr || node->type != NodeType::Element || args_count < 1) {
         return throw_type_error("removeAttribute requires an element and attribute name");
     }
-    node->remove_attribute(ascii_lowercase(value_to_string(args_p[0])));
+    const bool removed = node->remove_attribute(ascii_lowercase(value_to_string(args_p[0])));
+    if (removed) {
+        if (JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value)) {
+            ScriptRuntimeAccess::notify_dom_mutation(*runtime, *node, DomDirtyAttributes);
+        }
+    }
     return jerry_undefined();
 }
 
@@ -5677,8 +5697,12 @@ jerry_value_t element_toggle_attribute(const jerry_call_info_t* call_info_p,
             return jerry_throw_sz(JERRY_ERROR_RANGE, "DOM attribute budget exceeded");
         }
         node->set_attribute(name, "");
+        ScriptRuntimeAccess::notify_dom_mutation(*runtime, *node, DomDirtyAttributes);
     } else if (!should_be_present && present) {
         node->remove_attribute(name);
+        if (JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value)) {
+            ScriptRuntimeAccess::notify_dom_mutation(*runtime, *node, DomDirtyAttributes);
+        }
     }
     return jerry_boolean(should_be_present);
 }

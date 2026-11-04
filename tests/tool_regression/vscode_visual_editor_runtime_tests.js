@@ -14,7 +14,7 @@ function capture(name, model, extra = []) {
   fs.writeFileSync(path.join(root, "jellyframe.app.json"), JSON.stringify({
     format: "jellyframe.app", formatVersion: 0, id: "org.jellyframe.editor-test", name,
     version: { name: "0.1.0", code: 1 }, entry: "/index.html",
-    runtime: { minJellyFrame: "0.6.0", minRenderCore: "0.6.2", script: "none" },
+    runtime: { minJellyFrame: "0.6.0", minRenderCore: "0.7.0", script: "none" },
     viewport: { designWidth: model.viewport.width, designHeight: model.viewport.height, shape: model.viewport.shape }
   }));
   fs.writeFileSync(path.join(root, "index.html"), `<!doctype html><html><head><link rel="stylesheet" href="app.css"></head><body>${renderBody(model)}</body></html>`);
