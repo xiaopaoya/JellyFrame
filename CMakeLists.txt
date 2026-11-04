@@ -10,7 +10,7 @@ option(JELLYFRAME_BUILD_EXAMPLES "Build JellyFrame native validation and dump to
 option(JELLYFRAME_BUILD_TESTS "Build JellyFrame regression tests" ON)
 option(JELLYFRAME_BUILD_BENCHMARKS "Build JellyFrame microbenchmarks" ON)
 option(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER
-       "Build the optional LVGL software-fill comparison adapter" OFF)
+       "Build the optional LVGL software raster comparison adapter" OFF)
 set(JELLYFRAME_LVGL_SOURCE_DIR "" CACHE PATH "LVGL source tree used by the CPU comparison adapter")
 set(JELLYFRAME_LVGL_LIBRARY "" CACHE FILEPATH "Prebuilt LVGL static library used by the CPU comparison adapter")
 option(JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS "Register sample and external-trial CTest coverage" ON)
@@ -400,6 +400,12 @@ if(JELLYFRAME_BUILD_TESTS)
                              "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_lvgl_dirty_fill_smoke"
                              3 opaque-dirty-fill lvgl)
             set_tests_properties(jellyframe_cpu2d_compare_lvgl_dirty_fill_smoke PROPERTIES
+                PASS_REGULAR_EXPRESSION "output_validation=pass")
+            add_test(NAME jellyframe_cpu2d_compare_lvgl_alpha_grid_smoke
+                     COMMAND jellyframe_cpu2d_compare
+                             "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_lvgl_alpha_grid_smoke"
+                             3 alpha-grid lvgl)
+            set_tests_properties(jellyframe_cpu2d_compare_lvgl_alpha_grid_smoke PROPERTIES
                 PASS_REGULAR_EXPRESSION "output_validation=pass")
         endif()
         add_test(NAME jellyframe_cpu2d_compare_dirty_output_smoke

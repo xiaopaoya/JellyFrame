@@ -80,8 +80,8 @@ The Cairo run writes `jellyframe.json` and `cairo.json` under the same contract.
 Its accepted scope is opaque rectangular fill only; it does not establish Cairo
 performance for alpha compositing, rounded geometry, text or a complete UI.
 
-An optional LVGL v9.6.0 software-fill adapter can be enabled for the same two
-opaque-fill workloads when a matching LVGL static library is available:
+An optional LVGL v9.6.0 software adapter can be enabled for the two opaque-fill
+workloads and `alpha-grid` when a matching LVGL static library is available:
 
 ```powershell
 cmake -S . -B build/desktop-lvgl `
@@ -92,6 +92,7 @@ cmake -S . -B build/desktop-lvgl `
 cmake --build build/desktop-lvgl --config Release --target jellyframe_cpu2d_compare
 build/desktop-lvgl/Release/jellyframe_cpu2d_compare.exe build/lvgl-fill 500 opaque-fill lvgl
 build/desktop-lvgl/Release/jellyframe_cpu2d_compare.exe build/lvgl-dirty 500 opaque-dirty-fill lvgl
+build/desktop-lvgl/Release/jellyframe_cpu2d_compare.exe build/lvgl-alpha 500 alpha-grid lvgl
 ```
 
 This qualification calls LVGL's synchronous software fill primitive directly
@@ -100,8 +101,17 @@ bytes on little-endian Windows; validation normalizes channel order and requires
 exact RGB output. Core and LVGL are sampled interleaved in one process, with
 surface reset outside the timer. The comparison excludes LVGL display dispatch,
 flush, and presentation, so it describes only the software raster primitive.
+For `alpha-grid`, each timed batch draws the same 64 non-overlapping 16x12
+source-over tiles as the other adapters, with the reset completed before timing.
 LVGL remains an optional benchmark-only dependency and is not linked into the
 runtime, SDK, or application packages.
+
+The 2026-11-05 alpha-grid qualification used six paired repeats of 500 samples.
+All outputs were exact. Median repeat p95 was 1.846 us per tile for JellyFrame
+and 0.132 us per tile for LVGL; all six paired deltas favored LVGL. This is
+descriptive desktop primitive data, not a significance test or a whole-library,
+display-pipeline, or device performance claim. Raw manifests and the report are
+archived under `D:/JellyFramePerf/lvgl-alpha-grid-qualification-20261105/`.
 
 The 2026-11-05 local comparison used Cairo 1.18.4, six paired repeats and 500
 samples per repeat on each of the two accepted workloads. Every output was exact.

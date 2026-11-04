@@ -414,7 +414,7 @@ struct LvglSurface {
     lv_draw_task_t task{};
     lv_draw_fill_dsc_t fill_dsc{};
 
-    LvglSurface() {
+    explicit LvglSurface(bool alpha_grid) {
         if (lv_draw_buf_init(&draw_buf, kWidth, kHeight, LV_COLOR_FORMAT_RGB888,
                              kWidth * 3, storage.data(),
                              static_cast<std::uint32_t>(storage.size())) != LV_RESULT_OK) {
@@ -425,8 +425,9 @@ struct LvglSurface {
         layer.color_format = LV_COLOR_FORMAT_RGB888;
         task.target_layer = &layer;
         lv_draw_fill_dsc_init(&fill_dsc);
-        fill_dsc.color = lv_color_make(kFillColor.r, kFillColor.g, kFillColor.b);
-        fill_dsc.opa = LV_OPA_COVER;
+        const Color color = alpha_grid ? kAlphaColor : kFillColor;
+        fill_dsc.color = lv_color_make(color.r, color.g, color.b);
+        fill_dsc.opa = alpha_grid ? color.a : LV_OPA_COVER;
         fill_dsc.radius = 0;
     }
 
@@ -1432,9 +1433,10 @@ int main(int argc, char** argv) {
             throw std::runtime_error(
                 "Cairo adapter currently supports opaque-fill and opaque-dirty-fill only");
         }
-        if (backend == Backend::Lvgl && !is_fill_workload(workload)) {
+        if (backend == Backend::Lvgl && !is_fill_workload(workload) &&
+            workload != Workload::AlphaGrid) {
             throw std::runtime_error(
-                "LVGL software adapter currently supports opaque-fill and opaque-dirty-fill only");
+                "LVGL software adapter currently supports opaque fills and alpha-grid only");
         }
         if (backend != Backend::Sdl2 && backend != Backend::Cairo && argc == 6) {
             throw std::runtime_error("library path is valid only with the sdl2 or cairo backend");
@@ -1607,15 +1609,22 @@ int main(int argc, char** argv) {
         else {
             lv_init();
             {
-                LvglSurface lvgl_surface;
+                LvglSurface lvgl_surface(workload == Workload::AlphaGrid);
                 const Rect rect = workload_rect(workload);
-                const bool reset_surface = workload == Workload::OpaqueDirtyFill;
+                const bool reset_surface = workload == Workload::OpaqueDirtyFill ||
+                    workload == Workload::AlphaGrid;
                 auto pair = benchmark::measure_interleaved(samples, kWarmupIterations,
                     operations_per_sample,
                     [&] { if (reset_surface) reset_jellyframe(); },
-                    [&](int) { rasterizer.rasterize(command, jellyframe_surface, rect); }, [] {},
+                    [&](int operation) {
+                        if (workload == Workload::AlphaGrid) paint_jellyframe(operation);
+                        else rasterizer.rasterize(command, jellyframe_surface, rect);
+                    }, [] {},
                     [&] { if (reset_surface) lvgl_surface.reset(); },
-                    [&](int) { lvgl_surface.fill(rect); }, [] {});
+                    [&](int operation) {
+                        lvgl_surface.fill(workload == Workload::AlphaGrid
+                            ? alpha_grid_rect(operation) : rect);
+                    }, [] {});
                 jellyframe_samples = std::move(pair.first);
                 reference_samples = std::move(pair.second);
                 comparison = compare_output(jellyframe_surface, lvgl_surface.pixels_bgra(), workload);
