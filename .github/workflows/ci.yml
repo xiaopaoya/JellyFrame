@@ -63,10 +63,32 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
+      - name: Install released Render Core package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build\released-render-core-source | Out-Null
+          curl.exe --fail --location --retry 3 `
+            --output build\jellyframe-render-core-0.7.0.tar.gz `
+            https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v0.7.0/jellyframe-render-core-0.7.0.tar.gz
+          $hash = (Get-FileHash build\jellyframe-render-core-0.7.0.tar.gz -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '93038feb0694cec9630fb3fae848d0ac187767fa578ad4c0ea8226c6cfaf290f') { throw "Render Core archive SHA-256 mismatch: $hash" }
+          tar -xzf build\jellyframe-render-core-0.7.0.tar.gz -C build\released-render-core-source
+          cmake -S build\released-render-core-source\jellyframe-render-core-0.7.0 `
+            -B build\released-render-core-build `
+            -DJELLYFRAME_BUILD_TESTS=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core configure failed' }
+          cmake --build build\released-render-core-build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core build failed' }
+          cmake --install build\released-render-core-build --config Release --prefix build\render-core-install
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core install failed' }
+
       - name: Configure
         shell: pwsh
         run: >
           cmake -S . -B build/desktop-release
+          -DJELLYFRAME_RENDER_CORE_PROVIDER=package
+          -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=${{ github.workspace }}/build/render-core-install
+          -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
           -DJELLYFRAME_BUILD_EXAMPLES=ON
           -DJELLYFRAME_BUILD_TESTS=ON
           -DJELLYFRAME_BUILD_BENCHMARKS=ON
@@ -92,6 +114,9 @@ jobs:
         shell: pwsh
         run: >
           cmake -S . -B build/desktop-debug
+          -DJELLYFRAME_RENDER_CORE_PROVIDER=package
+          -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=${{ github.workspace }}/build/render-core-install
+          -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
           -DJELLYFRAME_BUILD_EXAMPLES=ON
           -DJELLYFRAME_BUILD_TESTS=ON
           -DJELLYFRAME_BUILD_BENCHMARKS=ON
@@ -262,10 +287,32 @@ jobs:
         shell: pwsh
         run: python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
 
+      - name: Install released Render Core package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build\released-render-core-source | Out-Null
+          curl.exe --fail --location --retry 3 `
+            --output build\jellyframe-render-core-0.7.0.tar.gz `
+            https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v0.7.0/jellyframe-render-core-0.7.0.tar.gz
+          $hash = (Get-FileHash build\jellyframe-render-core-0.7.0.tar.gz -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '93038feb0694cec9630fb3fae848d0ac187767fa578ad4c0ea8226c6cfaf290f') { throw "Render Core archive SHA-256 mismatch: $hash" }
+          tar -xzf build\jellyframe-render-core-0.7.0.tar.gz -C build\released-render-core-source
+          cmake -S build\released-render-core-source\jellyframe-render-core-0.7.0 `
+            -B build\released-render-core-build `
+            -DJELLYFRAME_BUILD_TESTS=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core configure failed' }
+          cmake --build build\released-render-core-build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core build failed' }
+          cmake --install build\released-render-core-build --config Release --prefix build\render-core-install
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core install failed' }
+
       - name: Configure scripting build
         shell: pwsh
         run: >
           cmake -S . -B build/desktop-scripting-release
+          -DJELLYFRAME_RENDER_CORE_PROVIDER=package
+          -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=${{ github.workspace }}/build/render-core-install
+          -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
           -DJELLYFRAME_BUILD_EXAMPLES=ON
           -DJELLYFRAME_BUILD_TESTS=ON
           -DJELLYFRAME_BUILD_BENCHMARKS=ON
