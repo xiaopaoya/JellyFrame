@@ -537,6 +537,7 @@ void write_diagnostics_json(const std::string& path,
     output << "  \"formatVersion\": 0,\n";
     output << "  \"tool\": \"jellyframe_pseudo_browser\",\n";
     output << "  \"mode\": \"render_core\",\n";
+    output << "  \"textPolicy\": \"geometry-only\",\n";
     output << "  \"html\": \"" << json_escape(options.html_path) << "\",\n";
     output << "  \"css\": \"" << json_escape(options.css_path) << "\",\n";
     output << "  \"output\": \"" << json_escape(options.output_path) << "\",\n";

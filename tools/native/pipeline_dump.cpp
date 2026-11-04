@@ -104,6 +104,7 @@ int main(int argc, char** argv) {
         });
 
         std::cout << "Pipeline summary\n";
+        std::cout << "  text_policy=geometry-only (no font metrics or glyph painting)\n";
         std::cout << "  dom_nodes=" << pipeline_statistics.dom.node_count << '\n';
         std::cout << "  dom_max_depth=" << pipeline_statistics.dom.max_depth << '\n';
         std::cout << "  dom_attributes=" << pipeline_statistics.dom.attribute_count << '\n';

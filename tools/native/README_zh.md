@@ -21,6 +21,8 @@
 - `*_dump.cpp` 工具用于输出 parser、DOM、CSSOM、render tree、layer tree 或完整管线结果。
 - `pseudo_browser.cpp` 运行平台无关渲染管线，并可通过 `--diagnostics-json` 输出结构化 diagnostics，
   包括横向溢出、需要滚动、display command 密度过高等开发期视觉提示。
+- `pseudo_browser.cpp` 和 `pipeline_dump.cpp` 的文本输出仅表示几何信息，不提供 Core 字体度量或字形绘制，
+  不能作为产品文字渲染效果的验证依据。
 - `win32_browser.cpp` 是 Windows 验收壳，支持系统输入和截图。它可以打开散文件 HTML/CSS，
   也可以通过 `--app` 打开 source package。
 - 动画验收推荐使用隐藏帧脚本：

@@ -594,6 +594,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/pipeline_visual_diagnostics_tests.py
                         $<TARGET_FILE:jellyframe_pseudo_browser>
+                        $<TARGET_FILE:jellyframe_pipeline_dump>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
