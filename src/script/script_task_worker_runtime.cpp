@@ -493,8 +493,11 @@ bool ScriptTaskWorkerRuntime::rebuild_pipeline() {
     const Node* focused = input_controller_ != nullptr ? input_controller_->focused_node() : nullptr;
     // Rebuilding the layer tree must restore the existing focus silently;
     // autofocus is an initialization action, not a layout-change event.
+    const auto interaction_hints = style_resolver_->interaction_invalidation_hints();
     std::unique_ptr<InputController> input_controller = std::make_unique<InputController>(
-        *layer_tree, InteractionInvalidationOptions{}, input_controller_ == nullptr);
+        *layer_tree, InteractionInvalidationOptions{
+            interaction_hints.hover, interaction_hints.active, interaction_hints.focus},
+        input_controller_ == nullptr);
     if (input_controller_) {
         input_controller->set_interaction_state(hovered, active, focused);
     }

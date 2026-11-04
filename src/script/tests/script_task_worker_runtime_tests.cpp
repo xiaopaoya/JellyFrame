@@ -114,10 +114,8 @@ void worker_input_publishes_value_frame() {
                                  input_options).accepted(),
           "pointer down enters worker mailbox");
     const ScriptTaskWorkerRuntimeStepResult down = runtime.process_one(supervisor);
-    check(down.frame_published, "pointer down publishes interaction frame");
-    check(take_script_task_app_frame(supervisor, session, runtime_options().frame_codec, frame) ==
-              ScriptTaskAppFrameTakeStatus::Accepted,
-          "UI consumes pointer-down frame before pointer-up");
+    check(down.input_accepted && !down.dom_mutated && !down.frame_published,
+          "pointer down without interaction CSS or DOM mutation needs no frame");
     check(post_script_task_input(supervisor, session, 2,
                                  {ScriptTaskInputKind::PointerUp, 1, 1, 0, 0, 0, 0, 0, 0, {}},
                                  input_options).accepted(),
@@ -137,13 +135,59 @@ void worker_input_publishes_value_frame() {
           "worker exposes monotonic value sequence telemetry");
 }
 
+void worker_interaction_hints_preserve_css_and_dom_events() {
+    struct Case { const char* css; const char* script; ScriptTaskInputKind input; bool changes; };
+    const Case cases[] = {
+        {"button:hover { background-color: #ff0000; }", "", ScriptTaskInputKind::PointerMove, true},
+        {"button:is(:active) { background-color: #ff0000; }", "", ScriptTaskInputKind::PointerDown, true},
+        {"body:focus-within button { background-color: #ff0000; }", "", ScriptTaskInputKind::PointerDown, true},
+        {"", "button.addEventListener('focus', function () { button.textContent = 'focused'; });",
+         ScriptTaskInputKind::PointerDown, true},
+        {"", "button.addEventListener('mousedown', function () { button.textContent = 'pressed'; });",
+         ScriptTaskInputKind::PointerDown, true},
+        {"", "", ScriptTaskInputKind::PointerMove, false},
+    };
+    for (const auto& fixture : cases) {
+        ScriptTaskSupervisor supervisor = make_supervisor();
+        const ScriptAppSession session = supervisor.begin(75);
+        const auto options = runtime_options();
+        ScriptTaskWorkerRuntime runtime(session, options);
+        check(runtime.initialize("<body><button id='button'>idle</button></body>",
+                  std::string("body { margin: 0; } button { display: block; width: 120px; height: 40px; "
+                              "margin: 0; background-color: #0000ff; }") + fixture.css) ==
+                  ScriptTaskWorkerRuntimeInitStatus::Accepted, "interaction hint fixture initializes");
+        check(runtime.eval(std::string("var button = document.getElementById('button');") + fixture.script).ok,
+              "interaction listeners evaluate");
+        check(runtime.publish_frame(supervisor).accepted(), "interaction initial frame publishes");
+        ScriptTaskAppFrame frame;
+        check(take_script_task_app_frame(supervisor, session, options.frame_codec, frame) ==
+                  ScriptTaskAppFrameTakeStatus::Accepted, "interaction initial frame consumed");
+        check(post_script_task_input(supervisor, session, 1,
+                  {fixture.input, 1, 1, 0, 0, 0, 1, 0, 0, {}}, options.input_codec).accepted(),
+              "interaction input posts");
+        const auto step = runtime.process_one(supervisor);
+        check(step.input_accepted && !step.fatal && step.frame_published == fixture.changes,
+              "only effective interaction styles or event mutations publish frames");
+        if (!fixture.changes) continue;
+        check(take_script_task_app_frame(supervisor, session, options.frame_codec, frame) ==
+                  ScriptTaskAppFrameTakeStatus::Accepted, "interaction replacement frame consumed");
+        bool saw_change = false;
+        for (const auto& command : frame.display_list) {
+            saw_change = saw_change || command.text == "focused" || command.text == "pressed" ||
+                (command.type == DisplayCommandType::FillRect && command.color.r == 255 && command.color.b == 0);
+        }
+        check(saw_change, "replacement carries actual pseudo CSS or event output");
+    }
+}
+
 void worker_retries_dirty_frame_after_ui_mailbox_backpressure() {
     ScriptTaskSupervisor supervisor = make_frame_backpressure_supervisor();
     const ScriptAppSession session = supervisor.begin(71);
     ScriptTaskWorkerRuntime runtime(session, runtime_options());
     check(runtime.initialize(
               "<body><button id='button'>idle</button></body>",
-              "button { display: block; width: 120px; height: 40px; margin: 0; }") ==
+              "button { display: block; width: 120px; height: 40px; margin: 0; } "
+              "button:active { background-color: #ff0000; }") ==
               ScriptTaskWorkerRuntimeInitStatus::Accepted,
           "backpressure worker fixture initializes");
     check(runtime.publish_frame(supervisor).accepted(), "initial frame fills the one-slot UI mailbox");
@@ -833,6 +877,7 @@ void worker_input_node_destruction_clears_interaction_state() {
 int script_task_worker_runtime_tests_main() {
     try {
         worker_input_publishes_value_frame();
+        worker_interaction_hints_preserve_css_and_dom_events();
         worker_retries_dirty_frame_after_ui_mailbox_backpressure();
         worker_v2_publishes_clip_metadata_without_cross_task_objects();
         worker_resolves_media_queries_against_its_runtime_viewport();
