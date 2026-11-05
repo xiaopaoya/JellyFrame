@@ -124,8 +124,10 @@
   六轮交错对照显示两种 workload 方向相反；窄范围描述性结果归档于
   `D:/JellyFramePerf/cairo-comparison-20261105/`。已有 SDL2/GDI 结果仍仅适用于各自已接受的
   primitive 矩阵。
-- [ ] 仅在能满足固定 workload 的输出、像素格式和完成同步契约时评估 LVGL CPU adapter。
-  不从 primitive 结果推导整库排名；圆角、通用文本和完整 UI 仍无满足等价语义的对照 adapter。
+- [x] 完成 LVGL v9.6.0 CPU adapter 的固定 workload 评估：PR #38/#39 合入全屏/局部不透明填充
+  与 alpha-grid。alpha-grid 六轮、每侧每轮 500 样本均 exact；重复 p95 中位数 Core 为
+  1.8455 us/tile、LVGL 为 0.132 us/tile。结果仅描述桌面软件栅格 primitive，不从中推导整库、
+  显示管线或设备排名；圆角、通用文本和完整 UI 仍无满足等价语义的对照 adapter。
 
 ### 3. 近期交互性能与设备出口
 
