@@ -1,9 +1,11 @@
 # WS147 Panel Scroll Synchronization Fix and Port Acceptance
 
 > Last updated: 2026-11-05; Applies to: 0.6.0-dev
-> Status: board-level TE input is not present in the published WS147 schematic; experimental path remains disabled pending a verified non-TE synchronization design and hardware acceptance.
+> Status: deferred by owner on 2026-11-05; board-level TE input is not present in the published WS147 schematic; experimental path remains disabled.
 
 This task is limited to the WS147 experimental physical-GRAM panel-scroll path. It does not change Render Core scrolling and does not treat desktop auto-scroll timing as touch-latency evidence.
+
+The owner has paused further panel-scroll synchronization work after sufficient independent attempts. Do not investigate TE, `DISPOFF`, or alternative synchronization paths unless the owner restarts this work. Keep physical-GRAM panel-scroll disabled and retain the full-frame/fallback path. The qualification criteria below are historical requirements if the work is resumed.
 
 The path has a measured auto-scroll throughput benefit, but the latest device retest showed human-visible lower-edge row displacement. Keep `JELLYFRAME_WS147_PANEL_SCROLL_VISUAL_ACCEPTED` disabled until this document's exit criteria pass.
 
