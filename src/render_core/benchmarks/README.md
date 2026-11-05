@@ -19,6 +19,16 @@ differ by at most one channel value in the current fixture. The runner writes
 `jellyframe.json` and `gdi.json` manifests for
 `tools/benchmark_compare.py`.
 
+The optional LVGL 9.6.0 software adapter also supports these two gradient
+workloads with matching endpoint colors and axis. Its output must pass the same
+RMSE <= 1.0 validation before timing is comparable. On this Windows machine,
+six repeats of 500 samples per side passed with maximum channel error 1; median
+repeat p95 was 4.30 us for Core vs 17.80 us for LVGL horizontally, and 7.55 us
+for Core vs 13.50 us vertically. The LVGL adapter invokes the synchronous
+software fill primitive directly and excludes display/task dispatch, flush and
+present. Raw manifests and reports are archived under
+`D:/JellyFramePerf/lvgl-gradient-qualification-20261105/`.
+
 For `opaque-fill`, `opaque-dirty-fill` and `alpha-grid`, the runner can instead load an SDL2
 DLL and use `SDL_CreateSoftwareRenderer` against the same caller-owned 172x320
 RGB surface. The dirty workload writes a fixed 96x48 region and batches 64

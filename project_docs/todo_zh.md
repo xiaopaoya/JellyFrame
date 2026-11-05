@@ -128,6 +128,10 @@
   与 alpha-grid。alpha-grid 六轮、每侧每轮 500 样本均 exact；重复 p95 中位数 Core 为
   1.8455 us/tile、LVGL 为 0.132 us/tile。结果仅描述桌面软件栅格 primitive，不从中推导整库、
   显示管线或设备排名；圆角、通用文本和完整 UI 仍无满足等价语义的对照 adapter。
+- [x] 扩展 LVGL 9.6.0 CPU adapter 支持水平/垂直不透明渐变；两项均通过 RMSE <= 1.0 的
+  输出门槛并完成六轮配对计时。LVGL 在两个渐变 workload 上均慢于 Core，结果只登记可比性与
+  性能差值，不构成 LVGL 整库或设备排名；原始 manifests 和报告位于
+  `D:/JellyFramePerf/lvgl-gradient-qualification-20261105/`。
 
 ### 3. 近期交互性能与设备出口
 

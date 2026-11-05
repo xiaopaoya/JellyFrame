@@ -414,7 +414,7 @@ struct LvglSurface {
     lv_draw_task_t task{};
     lv_draw_fill_dsc_t fill_dsc{};
 
-    explicit LvglSurface(bool alpha_grid) {
+    explicit LvglSurface(Workload workload) {
         if (lv_draw_buf_init(&draw_buf, kWidth, kHeight, LV_COLOR_FORMAT_RGB888,
                              kWidth * 3, storage.data(),
                              static_cast<std::uint32_t>(storage.size())) != LV_RESULT_OK) {
@@ -425,10 +425,23 @@ struct LvglSurface {
         layer.color_format = LV_COLOR_FORMAT_RGB888;
         task.target_layer = &layer;
         lv_draw_fill_dsc_init(&fill_dsc);
-        const Color color = alpha_grid ? kAlphaColor : kFillColor;
+        const Color color = workload == Workload::AlphaGrid ? kAlphaColor : kFillColor;
         fill_dsc.color = lv_color_make(color.r, color.g, color.b);
-        fill_dsc.opa = alpha_grid ? color.a : LV_OPA_COVER;
+        fill_dsc.opa = workload == Workload::AlphaGrid ? color.a : LV_OPA_COVER;
         fill_dsc.radius = 0;
+        if (workload == Workload::HorizontalGradient ||
+            workload == Workload::VerticalGradient) {
+            const lv_color_t colors[] = {
+                lv_color_make(kGradientFirst.r, kGradientFirst.g, kGradientFirst.b),
+                lv_color_make(kGradientSecond.r, kGradientSecond.g, kGradientSecond.b),
+            };
+            lv_grad_init_stops(&fill_dsc.grad, colors, nullptr, nullptr, 2);
+            if (workload == Workload::HorizontalGradient) {
+                lv_grad_horizontal_init(&fill_dsc.grad);
+            } else {
+                lv_grad_vertical_init(&fill_dsc.grad);
+            }
+        }
     }
 
     void reset() {
@@ -1433,10 +1446,12 @@ int main(int argc, char** argv) {
             throw std::runtime_error(
                 "Cairo adapter currently supports opaque-fill and opaque-dirty-fill only");
         }
+        const bool lvgl_gradient = workload == Workload::HorizontalGradient ||
+            workload == Workload::VerticalGradient;
         if (backend == Backend::Lvgl && !is_fill_workload(workload) &&
-            workload != Workload::AlphaGrid) {
+            workload != Workload::AlphaGrid && !lvgl_gradient) {
             throw std::runtime_error(
-                "LVGL software adapter currently supports opaque fills and alpha-grid only");
+                "LVGL software adapter currently supports opaque fills, alpha-grid, and linear gradients only");
         }
         if (backend != Backend::Sdl2 && backend != Backend::Cairo && argc == 6) {
             throw std::runtime_error("library path is valid only with the sdl2 or cairo backend");
@@ -1609,7 +1624,7 @@ int main(int argc, char** argv) {
         else {
             lv_init();
             {
-                LvglSurface lvgl_surface(workload == Workload::AlphaGrid);
+                LvglSurface lvgl_surface(workload);
                 const Rect rect = workload_rect(workload);
                 const bool reset_surface = workload == Workload::OpaqueDirtyFill ||
                     workload == Workload::AlphaGrid;

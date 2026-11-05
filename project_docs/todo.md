@@ -59,9 +59,11 @@ performance tooling nor editor work substitutes for A2 hardware evidence.
   the narrow descriptive comparison is archived under
   `D:/JellyFramePerf/cairo-comparison-20261105/`. Existing SDL2/GDI results remain
   limited to their accepted primitive matrix.
-- [ ] Evaluate an LVGL CPU adapter only if it can meet a fixed workload's output,
-  pixel-format and completion contract. Do not turn primitive results into a
-  whole-library ranking.
+- [x] Extend the optional LVGL 9.6.0 CPU adapter to horizontal and vertical
+  opaque gradients after both passed the fixed RMSE <= 1 output gate. Six paired
+  repeats per direction show LVGL slower than Core for these two primitives;
+  results do not rank either full library or device pipeline. Manifests and
+  reports: `D:/JellyFramePerf/lvgl-gradient-qualification-20261105/`.
 
 ### 3. Short-term interaction performance and device exit
 
