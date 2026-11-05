@@ -208,3 +208,16 @@ with the reference renderer. Qualification compares coverage before RGB rounding
 there are no timing samples, even when all outputs qualify. GDI+ is a dependency
 of the Windows benchmark only. See `../../../benchmarks/README.md` for invocation
 and the rejected-adapter boundary.
+
+With the optional LVGL adapter enabled, `rounded-lvgl-qualification` applies the
+same eight fixtures to LVGL 9.6.0 software fill and writes per-fixture Core,
+LVGL and difference BMPs plus a coverage report. This is a diagnostic only and
+never records timing. On 2026-11-05 the zero-radius rectangle matched exactly;
+the seven rounded fixtures had 675 differing coverage pixels in total, with a
+maximum error of 112/255. The exact 4x4 coverage gate therefore remains closed.
+Artifacts are archived under
+`D:/JellyFramePerf/lvgl-rounded-qualification-20261105-final/`.
+
+```powershell
+jellyframe_cpu2d_compare <output-directory> 1 rounded-lvgl-qualification lvgl
+```

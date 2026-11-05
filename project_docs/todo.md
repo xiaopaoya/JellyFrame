@@ -64,6 +64,10 @@ performance tooling nor editor work substitutes for A2 hardware evidence.
   repeats per direction show LVGL slower than Core for these two primitives;
   results do not rank either full library or device pipeline. Manifests and
   reports: `D:/JellyFramePerf/lvgl-gradient-qualification-20261105/`.
+- [x] Qualify LVGL 9.6.0 rounded-fill coverage against the independent eight-case
+  4x4 oracle without timing. The rectangle matched, but rounded shapes differed
+  in 675 pixels (maximum coverage error 112/255); keep rounded performance
+  comparisons blocked. Captures: `D:/JellyFramePerf/lvgl-rounded-qualification-20261105-final/`.
 
 ### 3. Short-term interaction performance and device exit
 

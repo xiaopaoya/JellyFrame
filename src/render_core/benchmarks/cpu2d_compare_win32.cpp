@@ -60,6 +60,7 @@ enum class Workload {
     AlphaGrid,
     BitmapText,
     RoundedQualification,
+    RoundedLvglQualification,
     RoundedSupersampleQualification,
     RoundedQualityMasks,
     RoundedQualityCost,
@@ -405,23 +406,26 @@ private:
 
 #if defined(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
 struct LvglSurface {
-    std::vector<std::uint8_t> storage =
-        std::vector<std::uint8_t>(static_cast<std::size_t>(kWidth) * kHeight * 3U);
-    std::vector<std::uint8_t> normalized_bgra =
-        std::vector<std::uint8_t>(static_cast<std::size_t>(kWidth) * kHeight * 4U);
+    int width;
+    int height;
+    std::vector<std::uint8_t> storage;
+    std::vector<std::uint8_t> normalized_bgra;
     lv_draw_buf_t draw_buf{};
     lv_layer_t layer{};
     lv_draw_task_t task{};
     lv_draw_fill_dsc_t fill_dsc{};
 
-    explicit LvglSurface(Workload workload) {
-        if (lv_draw_buf_init(&draw_buf, kWidth, kHeight, LV_COLOR_FORMAT_RGB888,
-                             kWidth * 3, storage.data(),
+    explicit LvglSurface(Workload workload, int surface_width = kWidth, int surface_height = kHeight)
+        : width(surface_width), height(surface_height),
+          storage(static_cast<std::size_t>(surface_width) * surface_height * 3U),
+          normalized_bgra(static_cast<std::size_t>(surface_width) * surface_height * 4U) {
+        if (lv_draw_buf_init(&draw_buf, width, height, LV_COLOR_FORMAT_RGB888,
+                             width * 3, storage.data(),
                              static_cast<std::uint32_t>(storage.size())) != LV_RESULT_OK) {
             throw std::runtime_error("LVGL RGB888 draw buffer initialization failed");
         }
         layer.draw_buf = &draw_buf;
-        layer.buf_area = lv_area_t{0, 0, kWidth - 1, kHeight - 1};
+        layer.buf_area = lv_area_t{0, 0, width - 1, height - 1};
         layer.color_format = LV_COLOR_FORMAT_RGB888;
         task.target_layer = &layer;
         lv_draw_fill_dsc_init(&fill_dsc);
@@ -448,7 +452,8 @@ struct LvglSurface {
         std::fill(storage.begin(), storage.end(), 0);
     }
 
-    void fill(Rect rect) {
+    void fill(Rect rect, int radius = 0) {
+        fill_dsc.radius = radius;
         const lv_area_t area{rect.x, rect.y, rect.x + rect.width - 1,
                              rect.y + rect.height - 1};
         task.area = area;
@@ -666,6 +671,7 @@ Workload parse_workload(const char* raw) {
     if (name == "alpha-grid") return Workload::AlphaGrid;
     if (name == "bitmap-text") return Workload::BitmapText;
     if (name == "rounded-qualification") return Workload::RoundedQualification;
+    if (name == "rounded-lvgl-qualification") return Workload::RoundedLvglQualification;
     if (name == "rounded-supersample-qualification") return Workload::RoundedSupersampleQualification;
     if (name == "rounded-quality-masks") return Workload::RoundedQualityMasks;
     if (name == "rounded-quality-cost") return Workload::RoundedQualityCost;
@@ -673,7 +679,7 @@ Workload parse_workload(const char* raw) {
     if (name == "horizontal-gradient") return Workload::HorizontalGradient;
     if (name == "vertical-gradient") return Workload::VerticalGradient;
     throw std::runtime_error(
-        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, rounded-qualification, rounded-supersample-qualification, rounded-quality-masks, rounded-quality-cost, rounded-core-probes, horizontal-gradient, or vertical-gradient");
+        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, rounded-qualification, rounded-lvgl-qualification, rounded-supersample-qualification, rounded-quality-masks, rounded-quality-cost, rounded-core-probes, horizontal-gradient, or vertical-gradient");
 }
 
 Backend parse_backend(const char* raw) {
@@ -692,6 +698,7 @@ const char* workload_id(Workload workload) {
     case Workload::AlphaGrid: return "alpha-grid-rgb-v2";
     case Workload::BitmapText: return "bitmap-clock-text-rgb-v1";
     case Workload::RoundedQualification: return "rounded-card-qualification-v0";
+    case Workload::RoundedLvglQualification: return "rounded-card-lvgl-qualification-v0";
     case Workload::RoundedSupersampleQualification: return "rounded-supersample-qualification-v0";
     case Workload::RoundedQualityMasks: return "rounded-native-aa-quality-v0";
     case Workload::RoundedQualityCost: return "rounded-native-aa-quality-cost-v0";
@@ -972,6 +979,105 @@ int qualify_native_rounded_card(const std::filesystem::path& directory) {
     std::cout << "rounded_qualification=not-comparable different_pixels=" << different_pixels
               << " core_oracle=pass performance_measured=false\n";
     return 0;
+}
+
+int qualify_lvgl_rounded_cards(const std::filesystem::path& directory) {
+#if defined(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
+    constexpr Color white{255, 255, 255, 255};
+    lv_init();
+    constexpr int padding = 64;
+    const int surface_width = kWidth + padding * 2;
+    const int surface_height = kHeight + padding * 2;
+    LvglSurface lvgl_surface(Workload::OpaqueFill, surface_width, surface_height);
+    lvgl_surface.fill_dsc.color = lv_color_white();
+    std::filesystem::create_directories(directory);
+    std::ostringstream cases;
+    std::size_t total_mismatches = 0;
+    int global_max_coverage_error = 0;
+    for (const auto& fixture : benchmark::kRoundedFixtures) {
+        FrameBuffer core(kWidth, kHeight, Color{0, 0, 0, 255});
+        FrameBuffer lvgl(kWidth, kHeight, Color{0, 0, 0, 255});
+        FrameBuffer difference(kWidth, kHeight, Color{0, 0, 0, 255});
+        DisplayCommand command;
+        command.type = DisplayCommandType::FillRect;
+        command.rect = fixture.rect;
+        command.color = white;
+        command.border_radius = fixture.radius;
+        SoftwareRasterizer{}.rasterize(command, core, kFullRect);
+
+        lvgl_surface.reset();
+        const Rect translated{fixture.rect.x + padding, fixture.rect.y + padding,
+                              fixture.rect.width, fixture.rect.height};
+        lvgl_surface.fill(translated, fixture.radius);
+        int coverage_mismatches = 0;
+        int max_coverage_error = 0;
+        std::uint64_t total_coverage_error = 0;
+        for (int y = 0; y < kHeight; ++y) {
+            for (int x = 0; x < kWidth; ++x) {
+                const int expected = benchmark::rounded_fixture_coverage(fixture, x, y);
+                const auto& core_pixel = core.pixel(x, y);
+                if (core_pixel.r != expected || core_pixel.g != expected || core_pixel.b != expected) {
+                    throw std::runtime_error(std::string("Core rounded output failed independent oracle: ") +
+                                             fixture.name);
+                }
+                const std::size_t pixel_index =
+                    static_cast<std::size_t>(y + padding) * surface_width + x + padding;
+                const int actual = lvgl_surface.storage[pixel_index * 3U];
+                lvgl.pixel(x, y) = Color{static_cast<std::uint8_t>(actual),
+                                         static_cast<std::uint8_t>(actual),
+                                         static_cast<std::uint8_t>(actual), 255};
+                const int error = std::abs(expected - actual);
+                if (error != 0) {
+                    ++coverage_mismatches;
+                    total_coverage_error += static_cast<std::uint64_t>(error);
+                    max_coverage_error = std::max(max_coverage_error, error);
+                    difference.pixel(x, y) = Color{255, 64, 64, 255};
+                }
+            }
+        }
+        total_mismatches += static_cast<std::size_t>(coverage_mismatches);
+        global_max_coverage_error = std::max(global_max_coverage_error, max_coverage_error);
+        const auto case_directory = directory / fixture.name;
+        std::filesystem::create_directories(case_directory);
+        write_bmp(core, (case_directory / "core.bmp").string());
+        write_bmp(lvgl, (case_directory / "lvgl.bmp").string());
+        write_bmp(difference, (case_directory / "difference.bmp").string());
+        if (cases.tellp() > 0) cases << ",\n";
+        const std::uint64_t pixel_count = static_cast<std::uint64_t>(kWidth) * kHeight;
+        cases << "    {\"name\":\"" << fixture.name << "\",\"coverageMismatches\":"
+              << coverage_mismatches << ",\"maxCoverageError\":" << max_coverage_error
+              << ",\"meanAbsoluteCoverageError\":"
+              << std::fixed << std::setprecision(6)
+              << static_cast<double>(total_coverage_error) / static_cast<double>(pixel_count)
+              << ",\"coreDigest\":\"" << rgb_hash(core) << "\",\"lvglDigest\":\""
+              << rgb_hash(lvgl) << "\"}";
+    }
+    lv_deinit();
+    const bool exact = total_mismatches == 0;
+    std::ofstream output(directory / "qualification.json", std::ios::binary);
+    output << "{\n  \"format\":\"jellyframe.benchmark.qualification.v0\",\n"
+           << "  \"workload\":\"rounded-card-lvgl-qualification-v0\",\n"
+           << "  \"status\":\"" << (exact ? "output-qualified" : "not-comparable") << "\",\n"
+           << "  \"performanceMeasured\":false,\n"
+           << "  \"backend\":\"lvgl-software-renderer\",\"version\":\"9.6.0\",\n"
+           << "  \"viewport\":{\"width\":172,\"height\":320},\n"
+           << "  \"requiredCoverage\":\"4x4-quarter-pixel-grid-exact\",\n"
+           << "  \"sourceRgb\":\"ffffff\",\"backgroundRgb\":\"000000\",\n"
+           << "  \"fixtures\":[\n" << cases.str() << "\n  ],\n"
+           << "  \"coverageMismatches\":" << total_mismatches << ",\n"
+           << "  \"maxCoverageError\":" << global_max_coverage_error << "\n}\n";
+    output.close();
+    if (!output) throw std::runtime_error("LVGL rounded qualification report write failed");
+    std::cout << "lvgl_rounded_qualification=" << (exact ? "output-qualified" : "not-comparable")
+              << " coverage_mismatches=" << total_mismatches
+              << " max_coverage_error=" << global_max_coverage_error
+              << " core_oracle=pass performance_measured=false\n";
+    return 0;
+#else
+    (void)directory;
+    throw std::runtime_error(
+        "LVGL rounded qualification requires JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER=ON");
+#endif
 }
 
 int qualify_supersampled_rounded_cards(const std::filesystem::path& directory) {
@@ -1438,6 +1544,11 @@ int main(int argc, char** argv) {
         const int samples = argc >= 3 ? positive_int(argv[2], "samples") : 100;
         const Workload workload = argc >= 4 ? parse_workload(argv[3]) : Workload::OpaqueFill;
         const Backend backend = argc >= 5 ? parse_backend(argv[4]) : Backend::Gdi;
+        const bool lvgl_rounded_qualification = workload == Workload::RoundedLvglQualification;
+        if (lvgl_rounded_qualification && (backend != Backend::Lvgl || samples != 1)) {
+            throw std::runtime_error(
+                "rounded-lvgl-qualification requires samples=1 and the lvgl backend");
+        }
         if (backend == Backend::Sdl2 && !is_fill_workload(workload) && workload != Workload::AlphaGrid) {
             throw std::runtime_error(
                 "SDL2 adapter currently supports opaque-fill, opaque-dirty-fill, and alpha-grid");
@@ -1449,9 +1560,9 @@ int main(int argc, char** argv) {
         const bool lvgl_gradient = workload == Workload::HorizontalGradient ||
             workload == Workload::VerticalGradient;
         if (backend == Backend::Lvgl && !is_fill_workload(workload) &&
-            workload != Workload::AlphaGrid && !lvgl_gradient) {
+            workload != Workload::AlphaGrid && !lvgl_gradient && !lvgl_rounded_qualification) {
             throw std::runtime_error(
-                "LVGL software adapter currently supports opaque fills, alpha-grid, and linear gradients only");
+                "LVGL software adapter supports opaque fills, alpha-grid, linear gradients, and rounded qualification only");
         }
         if (backend != Backend::Sdl2 && backend != Backend::Cairo && argc == 6) {
             throw std::runtime_error("library path is valid only with the sdl2 or cairo backend");
@@ -1463,6 +1574,9 @@ int main(int argc, char** argv) {
         }
 #endif
         const std::filesystem::path output_directory(argv[1]);
+        if (lvgl_rounded_qualification) {
+            return qualify_lvgl_rounded_cards(output_directory);
+        }
         if (workload == Workload::RoundedCoreProbes) {
             if (samples > 10000) throw std::runtime_error("rounded core probes permit at most 10000 samples");
             return export_rounded_core_probes(output_directory, samples);
