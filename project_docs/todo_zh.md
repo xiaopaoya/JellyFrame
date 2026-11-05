@@ -132,6 +132,10 @@
   输出门槛并完成六轮配对计时。LVGL 在两个渐变 workload 上均慢于 Core，结果只登记可比性与
   性能差值，不构成 LVGL 整库或设备排名；原始 manifests 和报告位于
   `D:/JellyFramePerf/lvgl-gradient-qualification-20261105/`。
+- [x] 对 LVGL 9.6.0 rounded software fill 完成八种固定几何的 coverage 资格诊断，不计时。
+  零半径矩形 exact；圆角形状共有 675 个 coverage 像素不一致，最大误差 112/255，故圆角
+  跨库性能对照仍禁止。截图与逐例报告位于
+  `D:/JellyFramePerf/lvgl-rounded-qualification-20261105-final/`。
 
 ### 3. 近期交互性能与设备出口
 

@@ -32,7 +32,7 @@ workload 边界。目的不是给 JellyFrame、Cairo、SDL、LVGL 或浏览器�
 | `alpha-grid-rgb-v2` | 已接受；GDI/SDL2/LVGL 9.6.0 software adapter | 172x320 黑底、8x8 个 16x12 不重叠矩形、RGBA `50b4dc80`、source-over、exact RGB、计时内完成同步 | 半透明 source-over 的批平均单块成本 |
 | `horizontal-gradient-rgb-v1` | 已接受；GDI/LVGL 9.6.0 software adapter | 同上、横向不透明线性渐变、无 AA、RMSE <= 1 | 线性渐变的每像素计算成本 |
 | `vertical-gradient-rgb-v1` | 已接受；GDI/LVGL 9.6.0 software adapter | 同上、纵向不透明线性渐变、无 AA、RMSE <= 1 | 另一种渐变访问方向的成本 |
-| `rounded-card-rgb-v1` | Core probe 已有；GDI/GDI+ 超采样资格检查不等价，AA adapter 待适配 | 172x320 黑底、固定卡片矩形/四角半径/颜色、明确 AA 和 source-over | 圆角 coverage、边框和裁剪成本 |
+| `rounded-card-rgb-v1` | Core probe 已有；GDI/GDI+ 超采样与 LVGL 9.6.0 coverage 资格检查均不等价，AA adapter 待适配 | 172x320 黑底、固定卡片矩形/四角半径/颜色、明确 AA 和 source-over | 圆角 coverage、边框和裁剪成本 |
 | `bitmap-clock-text-rgb-v1` | 已接受；GDI bitmap-glyph blit adapter | 共享 clock-5x7-v1 字形，2x 最近邻缩放，8 行固定 ASCII 时间串，黑底，exact RGB | 固定 bitmap 文本的命令与字形绘制成本，不包括系统字体/shaping/自动换行 |
 | `text-lines-v1` | Core probe 已有；跨库待适配 | 固定字体包、family/hash、字号、weight、文本、宽度和换行模式 | 文本测量、换行和绘制成本 |
 | `embedded-ui-v1` | fixture 及两项候选的四 workload 非回归矩阵已通过 | 黑底可穿戴页面、设置行、状态卡、导航、文本更新、滚动、全屏重绘 | 已测 repaint/aggregate 阶段成本，不代表完整脚本/布局路径 |
@@ -90,6 +90,12 @@ digest 和误差，固定标记 `not-comparable` / `performanceMeasured: false`�
 这里直接比较颜色量化前的 coverage，避免低对比颜色掩盖差异。报告、分例截图和差异图在
 `D:/JellyFramePerf/rounded-supersample-qualification-20260919/`，不包含耗时。
 这些是本机资格检查结果，不把差异数量固定为跨 Windows 版本的 API 承诺。
+
+2026-11-05 对 LVGL 9.6.0 software fill 执行了同一组八种固定形状的 coverage 资格诊断。
+矩形对照 exact；七个圆角用例累计 675 个 coverage 像素不一致，最大 coverage 差为 112/255，
+差异位于圆弧边缘，裁剪形状也未通过。Core 每个像素均先通过独立 4x4 oracle。结果标记
+`not-comparable`，没有计时，也没有放宽 exact coverage 条件。Core、LVGL 和差异 BMP、逐例
+coverage 统计位于 `D:/JellyFramePerf/lvgl-rounded-qualification-20261105-final/`。
 
 圆角后续工作明确区分两条路线：
 

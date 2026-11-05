@@ -419,6 +419,13 @@ if(JELLYFRAME_BUILD_TESTS)
                              3 vertical-gradient lvgl)
             set_tests_properties(jellyframe_cpu2d_compare_lvgl_vertical_gradient_smoke PROPERTIES
                 PASS_REGULAR_EXPRESSION "output_validation=pass")
+            add_test(NAME jellyframe_cpu2d_compare_lvgl_rounded_qualification
+                     COMMAND jellyframe_cpu2d_compare
+                             "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_lvgl_rounded_qualification"
+                             1 rounded-lvgl-qualification lvgl)
+            set_tests_properties(jellyframe_cpu2d_compare_lvgl_rounded_qualification PROPERTIES
+                PASS_REGULAR_EXPRESSION
+                    "lvgl_rounded_qualification=not-comparable coverage_mismatches=[1-9][0-9]*.*core_oracle=pass performance_measured=false")
         endif()
         add_test(NAME jellyframe_cpu2d_compare_dirty_output_smoke
                  COMMAND jellyframe_cpu2d_compare
