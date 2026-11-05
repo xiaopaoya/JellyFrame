@@ -73,6 +73,12 @@ performance tooling nor editor work substitutes for A2 hardware evidence.
   2.9875 us/line p95 for Core and 2.469 for LVGL (descriptive LVGL delta -17.36%).
   This closes only the ASCII bitmap subset, not general text, shaping, CJK or UI.
   Corrected manifests: `D:/JellyFramePerf/lvgl-bitmap-text-qualification-20261105/corrected-no-fixture-rebuild/`.
+- [x] Add a separate UTF-8 mixed-width fixture from the repository `tiny.bdf` masks
+  and qualify/measure it against LVGL 9.6.0. Exact output passed; six paired runs
+  measured Core 0.4625 us/line and LVGL 0.5125 us/line p95 medians (descriptive,
+  sub-microsecond result; no significance test). This covers fixed glyph lookup
+  and UTF-8 decoding only, not shaping or general CJK. Artifacts:
+  `D:/JellyFramePerf/lvgl-bitmap-text-qualification-20261105/tiny-cjk-utf8/`.
 
 ### 3. Short-term interaction performance and device exit
 

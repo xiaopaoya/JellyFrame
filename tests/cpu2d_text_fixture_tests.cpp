@@ -1,4 +1,5 @@
 #include "../src/render_core/benchmarks/cpu2d_text_fixture.h"
+#include "../src/render_core/benchmarks/cpu2d_tiny_text_fixture.h"
 
 #include <stdexcept>
 
@@ -48,4 +49,30 @@ int main() {
     if (matches_oracle(frame, ink)) throw std::runtime_error("oracle ignored alignment change");
     frame.clear(Color{0, 0, 0, 255});
     if (matches_oracle(frame, ink)) throw std::runtime_error("oracle accepted blank output");
+
+    FrameBuffer tiny_frame(172, 320, Color{0, 0, 0, 255});
+    BitmapFontContext tiny_context{&benchmark::kTinyFont, benchmark::kTinyTextScale};
+    SoftwareRasterizer tiny_rasterizer(TextPainter{bitmap_font_paint_callback, &tiny_context, nullptr, true});
+    constexpr int expected_advances[]{6, 22, 24, 22};
+    const auto tiny_commands = benchmark::tiny_text_commands(ink);
+    std::size_t tiny_ink_pixels = 0;
+    for (std::size_t index = 0; index < benchmark::kTinyTextLineCount; ++index) {
+        const auto& command = tiny_commands[index];
+        if (measure_bitmap_text(tiny_context, command.text, 8, 400).width != expected_advances[index]) {
+            throw std::runtime_error("tiny UTF-8 fixture advance changed");
+        }
+        tiny_rasterizer.rasterize(command, tiny_frame, command.rect);
+    }
+    for (int y = 0; y < tiny_frame.height; ++y) {
+        for (int x = 0; x < tiny_frame.width; ++x) {
+            const bool ink_pixel = benchmark::tiny_text_ink(x, y);
+            const Color expected = ink_pixel ? ink : Color{0, 0, 0, 255};
+            const Color actual = tiny_frame.pixel(x, y);
+            if (actual.r != expected.r || actual.g != expected.g || actual.b != expected.b) {
+                throw std::runtime_error("tiny UTF-8 fixture differs from mask oracle");
+            }
+            if (ink_pixel) ++tiny_ink_pixels;
+        }
+    }
+    if (tiny_ink_pixels == 0) throw std::runtime_error("tiny UTF-8 oracle accepted blank output");
 }
