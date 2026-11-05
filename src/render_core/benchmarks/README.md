@@ -44,7 +44,7 @@ V2 includes end-of-batch completion in the timer and completes reset beforehand.
 It alternates paired sample order and checks an independent pixel oracle.
 V1 lacked completion barriers; its timing rankings must not be reused.
 
-`bitmap-text` is a GDI-only shared-font probe (`bitmap-clock-text-rgb-v1`).
+`bitmap-text` is a shared-font probe (`bitmap-clock-text-rgb-v1`).
 The existing Core `BitmapFont` painter and GDI cached-glyph `TransparentBlt`
 draw the same 1bpp clock font at 2x scale with identical advance measurement.
 Eight fixed centered lines alternate two ASCII strings. Full-surface exact RGB
@@ -53,6 +53,26 @@ allowed. Measurement includes completion and shared advance lookup, excludes
 font/atlas creation and reset, and reports batch-average us/line and 548 ink
 pixels/line. This is not a benchmark of GDI `DrawText`, TTF/CJK shaping, wrapping,
 antialiased text, font loading or complete UI. SDL2 does not support this mode.
+
+With the optional LVGL 9.6.0 adapter enabled, the same fixture can also be
+qualified and timed against LVGL's synchronous software label renderer. The
+font masks and 2x glyphs are shared, so LVGL output must match Core exactly
+before timing. Each measured operation draws one of eight fixed lines; surface
+reset, fixture construction and font setup are outside the timed region. The
+LVGL callback reads static text and geometry directly, without constructing the
+Core command array during a draw. This comparison excludes LVGL display/task
+dispatch, flush and present, and says nothing about system fonts, shaping,
+CJK, wrapping, antialiasing or full text/UI cost.
+
+On 2026-11-05 the Windows Release run used six interleaved repeats of 500
+samples per side with 30 warmups. All outputs matched exactly with digest
+`464c5cd1e8b7b543`. Median repeat p95 was 2.9875 us/line for Core and 2.469
+us/line for LVGL (LVGL lower by 17.36%); all six paired repeats had the same
+direction. The comparison utility reports descriptive repeat statistics and
+does not test statistical significance. Results are limited to this fixed
+bitmap-font software workload, not a general renderer or font-library ranking.
+Corrected raw manifests and the report are archived under
+`D:/JellyFramePerf/lvgl-bitmap-text-qualification-20261105/corrected-no-fixture-rebuild/`.
 
 The 2026-09-19 Windows Release run used six sequential repeats, 500 samples and
 30 warmups each. Median repeat p95 was 2.888 us/line for Core and 49.9565 us/line

@@ -33,7 +33,7 @@ workload 边界。目的不是给 JellyFrame、Cairo、SDL、LVGL 或浏览器�
 | `horizontal-gradient-rgb-v1` | 已接受；GDI/LVGL 9.6.0 software adapter | 同上、横向不透明线性渐变、无 AA、RMSE <= 1 | 线性渐变的每像素计算成本 |
 | `vertical-gradient-rgb-v1` | 已接受；GDI/LVGL 9.6.0 software adapter | 同上、纵向不透明线性渐变、无 AA、RMSE <= 1 | 另一种渐变访问方向的成本 |
 | `rounded-card-rgb-v1` | Core probe 已有；GDI/GDI+ 超采样与 LVGL 9.6.0 coverage 资格检查均不等价，AA adapter 待适配 | 172x320 黑底、固定卡片矩形/四角半径/颜色、明确 AA 和 source-over | 圆角 coverage、边框和裁剪成本 |
-| `bitmap-clock-text-rgb-v1` | 已接受；GDI bitmap-glyph blit adapter | 共享 clock-5x7-v1 字形，2x 最近邻缩放，8 行固定 ASCII 时间串，黑底，exact RGB | 固定 bitmap 文本的命令与字形绘制成本，不包括系统字体/shaping/自动换行 |
+| `bitmap-clock-text-rgb-v1` | 已接受；GDI bitmap-glyph blit 与 LVGL 9.6.0 software label adapter | 共享 clock-5x7-v1 字形，2x 最近邻缩放，8 行固定 ASCII 时间串，黑底，exact RGB | 固定 bitmap 文本的命令与字形绘制成本，不包括系统字体/shaping/自动换行 |
 | `text-lines-v1` | Core probe 已有；跨库待适配 | 固定字体包、family/hash、字号、weight、文本、宽度和换行模式 | 文本测量、换行和绘制成本 |
 | `embedded-ui-v1` | fixture 及两项候选的四 workload 非回归矩阵已通过 | 黑底可穿戴页面、设置行、状态卡、导航、文本更新、滚动、全屏重绘 | 已测 repaint/aggregate 阶段成本，不代表完整脚本/布局路径 |
 
@@ -54,6 +54,8 @@ Cairo 0.694 us（Cairo 高 42.1%）。六组配对变化在各自 workload 内�
 LVGL v9.6.0 的可选 adapter 直接调用同步 software fill primitive，和 Core 使用同进程交错计时；它绕过 LVGL display/task dispatch、flush 与 present。RGB888 逻辑颜色在两侧逐像素 exact，LVGL little-endian buffer 的 BGR 字节在校验时归一化。2026-11-05 本机各运行六轮、每轮每侧 500 个样本：全屏填充重复 p95 中位数为 Core 3.90 us、LVGL 4.50 us（LVGL 高 15.38%）；96x48 局部填充为 Core 0.487 us、LVGL 0.373 us（LVGL 低 23.46%）；alpha-grid 每 tile 为 Core 1.846 us、LVGL 0.132 us（LVGL 低 92.85%）。六轮配对差值在各自 workload 内方向一致，但比较器只提供描述性统计，不检验统计显著性。结果仅适用于这些桌面软件栅格 primitive；完整 UI、嵌入式性能和 LVGL 显示管线仍未比较。填充测试归档在 `D:/JellyFramePerf/lvgl-qualification-20261105/paired/`，alpha-grid 原始 manifests 与报告在 `D:/JellyFramePerf/lvgl-alpha-grid-qualification-20261105/`。
 
 同日增加水平与垂直渐变 adapter 后，六轮、每侧每轮 500 样本均通过 RMSE <= 1.0 的既定输出门槛，最大通道误差均为 1。重复 p95 中位数：水平 Core 4.30 us、LVGL 17.80 us（LVGL 高 313.95%）；垂直 Core 7.55 us、LVGL 13.50 us（LVGL 高 78.81%）。每轮配对方向一致；这些是描述性统计而非显著性检验。LVGL 两项均明显较慢，因此这次扩展只证明 workload 语义可由 LVGL 9.6.0 software fill 表达并通过输出资格，不支持性能优势或库级排名。归档在 `D:/JellyFramePerf/lvgl-gradient-qualification-20261105/`。
+
+同日将固定 bitmap 文本扩展到 LVGL 9.6.0 software label，并先通过 exact RGB 资格检查（最大通道误差 0，digest `464c5cd1e8b7b543`），再进行六轮交错计时，每轮每侧 500 样本。修正后 Core 重复 p95 中位数为 2.9875 us/行，LVGL 为 2.469 us/行（LVGL 低 17.36%），六组配对方向一致。比较器提供描述性统计，不执行显著性检验。LVGL 计时回调直接读取静态文本与几何，不在绘制中重建 Core 命令数组；初始化、fixture 构建和表面重置不计时。结果仅代表共享 clock-5x7-v1 的 8 行 ASCII bitmap 文本软件绘制，排除 LVGL display/task dispatch、flush、present，也不代表系统字体、CJK、shaping、换行、抗锯齿或完整 UI。修正后的原始 manifest 与报告在 `D:/JellyFramePerf/lvgl-bitmap-text-qualification-20261105/corrected-no-fixture-rebuild/`。
 
 局部填充的 64 次批处理只用于降低亚微秒单次操作的计时噪声；manifest 记录
 `operationsPerSample: 64`，比较器会拒绝批处理数量不同的结果。报告中的 `paint_us` 已除以 64，

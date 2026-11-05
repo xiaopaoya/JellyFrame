@@ -68,6 +68,11 @@ performance tooling nor editor work substitutes for A2 hardware evidence.
   4x4 oracle without timing. The rectangle matched, but rounded shapes differed
   in 675 pixels (maximum coverage error 112/255); keep rounded performance
   comparisons blocked. Captures: `D:/JellyFramePerf/lvgl-rounded-qualification-20261105-final/`.
+- [x] Extend the shared fixed-bitmap text fixture to LVGL 9.6.0 software labels.
+  Exact RGB qualification passed, then six interleaved 500-sample repeats measured
+  2.9875 us/line p95 for Core and 2.469 for LVGL (descriptive LVGL delta -17.36%).
+  This closes only the ASCII bitmap subset, not general text, shaping, CJK or UI.
+  Corrected manifests: `D:/JellyFramePerf/lvgl-bitmap-text-qualification-20261105/corrected-no-fixture-rebuild/`.
 
 ### 3. Short-term interaction performance and device exit
 

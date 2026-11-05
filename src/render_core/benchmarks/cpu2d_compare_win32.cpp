@@ -20,6 +20,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #if defined(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
@@ -61,6 +62,7 @@ enum class Workload {
     BitmapText,
     RoundedQualification,
     RoundedLvglQualification,
+    BitmapTextLvglQualification,
     RoundedSupersampleQualification,
     RoundedQualityMasks,
     RoundedQualityCost,
@@ -405,6 +407,53 @@ private:
 };
 
 #if defined(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
+struct LvglClockFont {
+    lv_font_t font{};
+    std::array<std::array<std::uint8_t, 140>, std::size(benchmark::kClockGlyphs)> glyphs{};
+
+    LvglClockFont() {
+        for (std::size_t glyph_index = 0; glyph_index < std::size(benchmark::kClockGlyphs); ++glyph_index) {
+            const auto& glyph = benchmark::kClockGlyphs[glyph_index];
+            for (int y = 0; y < 14; ++y) {
+                for (int x = 0; x < 10; ++x) {
+                    const bool ink = (glyph.rows[y / 2] & (0x80U >> (x / 2))) != 0;
+                    glyphs[glyph_index][static_cast<std::size_t>(y * 10 + x)] = ink ? 255 : 0;
+                }
+            }
+        }
+        font.get_glyph_dsc = get_glyph_dsc;
+        font.get_glyph_bitmap = get_glyph_bitmap;
+        font.user_data = this;
+        font.line_height = benchmark::kClockLineHeight;
+        font.base_line = 0;
+        font.static_bitmap = 1;
+    }
+
+    static bool get_glyph_dsc(const lv_font_t* font, lv_font_glyph_dsc_t* output,
+                              std::uint32_t letter, std::uint32_t) {
+        (void)font;
+        for (std::size_t index = 0; index < std::size(benchmark::kClockGlyphs); ++index) {
+            if (benchmark::kClockGlyphs[index].codepoint != letter) continue;
+            output->gid.index = static_cast<std::uint32_t>(index);
+            output->format = LV_FONT_GLYPH_FORMAT_A8;
+            output->adv_w = 12;
+            output->box_w = 10;
+            output->box_h = 14;
+            output->ofs_x = 0;
+            output->ofs_y = 3;
+            output->stride = 10;
+            return true;
+        }
+        return false;
+    }
+
+    static const void* get_glyph_bitmap(lv_font_glyph_dsc_t* glyph, lv_draw_buf_t*) {
+        if (glyph->gid.index >= std::size(benchmark::kClockGlyphs)) return nullptr;
+        const auto* self = static_cast<const LvglClockFont*>(glyph->resolved_font->user_data);
+        return self->glyphs[glyph->gid.index].data();
+    }
+};
+
 struct LvglSurface {
     int width;
     int height;
@@ -459,6 +508,38 @@ struct LvglSurface {
         task.area = area;
         task.clip_area = area;
         lv_draw_sw_fill(&task, &fill_dsc, &area);
+    }
+
+    void draw_clock_text_line(const LvglClockFont& font, int line) {
+        static constexpr std::array<std::string_view, 2> kClockLines{
+            "08:42 20:48", "24:00 08:42"};
+        const std::string_view text = kClockLines[static_cast<std::size_t>(line % 2)];
+        task.clip_area = lv_area_t{0, 0, width - 1, height - 1};
+        lv_draw_label_dsc_t dsc;
+        lv_draw_label_dsc_init(&dsc);
+        dsc.text = text.data();
+        dsc.text_length = static_cast<std::uint32_t>(text.size());
+        dsc.font = &font.font;
+        dsc.color = lv_color_make(kFillColor.r, kFillColor.g, kFillColor.b);
+        dsc.align = LV_TEXT_ALIGN_CENTER;
+        dsc.bidi_dir = LV_BASE_DIR_LTR;
+        dsc.opa = LV_OPA_COVER;
+        dsc.flag = LV_TEXT_FLAG_NONE;
+        constexpr int x = 14;
+        constexpr int y = 20;
+        constexpr int box_width = benchmark::kClockLineWidth;
+        constexpr int box_height = benchmark::kClockLineHeight;
+        const lv_area_t area{x, y + line * 32, x + box_width - 1,
+                             y + line * 32 + box_height - 1};
+        task.area = area;
+        task.draw_dsc = &dsc.base;
+        lv_draw_sw_label(&task, &dsc, &area);
+    }
+
+    void draw_clock_text(const LvglClockFont& font) {
+        for (int line = 0; line < benchmark::kClockLineCount; ++line) {
+            draw_clock_text_line(font, line);
+        }
     }
 
     const std::uint8_t* pixels_bgra() {
@@ -672,6 +753,7 @@ Workload parse_workload(const char* raw) {
     if (name == "bitmap-text") return Workload::BitmapText;
     if (name == "rounded-qualification") return Workload::RoundedQualification;
     if (name == "rounded-lvgl-qualification") return Workload::RoundedLvglQualification;
+    if (name == "bitmap-text-lvgl-qualification") return Workload::BitmapTextLvglQualification;
     if (name == "rounded-supersample-qualification") return Workload::RoundedSupersampleQualification;
     if (name == "rounded-quality-masks") return Workload::RoundedQualityMasks;
     if (name == "rounded-quality-cost") return Workload::RoundedQualityCost;
@@ -679,7 +761,7 @@ Workload parse_workload(const char* raw) {
     if (name == "horizontal-gradient") return Workload::HorizontalGradient;
     if (name == "vertical-gradient") return Workload::VerticalGradient;
     throw std::runtime_error(
-        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, rounded-qualification, rounded-lvgl-qualification, rounded-supersample-qualification, rounded-quality-masks, rounded-quality-cost, rounded-core-probes, horizontal-gradient, or vertical-gradient");
+        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, bitmap-text-lvgl-qualification, rounded-qualification, rounded-lvgl-qualification, rounded-supersample-qualification, rounded-quality-masks, rounded-quality-cost, rounded-core-probes, horizontal-gradient, or vertical-gradient");
 }
 
 Backend parse_backend(const char* raw) {
@@ -699,6 +781,7 @@ const char* workload_id(Workload workload) {
     case Workload::BitmapText: return "bitmap-clock-text-rgb-v1";
     case Workload::RoundedQualification: return "rounded-card-qualification-v0";
     case Workload::RoundedLvglQualification: return "rounded-card-lvgl-qualification-v0";
+    case Workload::BitmapTextLvglQualification: return "bitmap-clock-text-lvgl-qualification-v0";
     case Workload::RoundedSupersampleQualification: return "rounded-supersample-qualification-v0";
     case Workload::RoundedQualityMasks: return "rounded-native-aa-quality-v0";
     case Workload::RoundedQualityCost: return "rounded-native-aa-quality-cost-v0";
@@ -1077,6 +1160,64 @@ int qualify_lvgl_rounded_cards(const std::filesystem::path& directory) {
     (void)directory;
     throw std::runtime_error(
         "LVGL rounded qualification requires JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER=ON");
+#endif
+}
+
+int qualify_lvgl_bitmap_text(const std::filesystem::path& directory) {
+#if defined(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
+    lv_init();
+    LvglClockFont font;
+    FrameBuffer core(kWidth, kHeight, Color{0, 0, 0, 255});
+    BitmapFontContext font_context{&benchmark::kClockFont, benchmark::kClockScale};
+    TextPainter text_painter{bitmap_font_paint_callback, &font_context, nullptr, true};
+    SoftwareRasterizer rasterizer(text_painter);
+    for (const auto& command : benchmark::clock_text_commands(kFillColor)) {
+        rasterizer.rasterize(command, core, command.rect);
+    }
+
+    LvglSurface lvgl_surface(Workload::OpaqueFill);
+    lvgl_surface.reset();
+    lvgl_surface.draw_clock_text(font);
+    const auto comparison = compare_output(core, lvgl_surface.pixels_bgra(), Workload::BitmapText);
+    std::filesystem::create_directories(directory);
+    FrameBuffer lvgl(kWidth, kHeight, Color{0, 0, 0, 255});
+    FrameBuffer difference(kWidth, kHeight, Color{0, 0, 0, 255});
+    const auto pixels = lvgl_surface.pixels_bgra();
+    for (int y = 0; y < kHeight; ++y) {
+        for (int x = 0; x < kWidth; ++x) {
+            const std::size_t offset = (static_cast<std::size_t>(y) * kWidth + x) * 4U;
+            const Color value{pixels[offset + 2], pixels[offset + 1], pixels[offset], 255};
+            lvgl.pixel(x, y) = value;
+            const auto& expected = core.pixel(x, y);
+            if (value.r != expected.r || value.g != expected.g || value.b != expected.b) {
+                difference.pixel(x, y) = Color{255, 64, 64, 255};
+            }
+        }
+    }
+    write_bmp(core, (directory / "core.bmp").string());
+    write_bmp(lvgl, (directory / "lvgl.bmp").string());
+    write_bmp(difference, (directory / "difference.bmp").string());
+    std::ofstream output(directory / "qualification.json", std::ios::binary);
+    output << "{\n  \"format\":\"jellyframe.benchmark.qualification.v0\",\n"
+           << "  \"workload\":\"bitmap-clock-text-lvgl-qualification-v0\",\n"
+           << "  \"status\":\"output-qualified\",\n"
+           << "  \"performanceMeasured\":false,\n"
+           << "  \"backend\":\"lvgl-software-renderer\",\"version\":\"9.6.0\",\n"
+           << "  \"viewport\":{\"width\":172,\"height\":320},\n"
+           << "  \"fontIdentity\":\"clock-5x7-v1\",\"scale\":2,\n"
+           << "  \"digest\":\"" << comparison.jellyframe_digest << "\",\n"
+           << "  \"maxChannelError\":" << comparison.max_channel_error << "\n}\n";
+    output.close();
+    lv_deinit();
+    if (!output) throw std::runtime_error("LVGL bitmap-text qualification report write failed");
+    std::cout << "lvgl_bitmap_text_qualification=output-qualified output_validation=pass"
+              << " max_channel_error=" << comparison.max_channel_error
+              << " performance_measured=false\n";
+    return 0;
+#else
+    (void)directory;
+    throw std::runtime_error(
+        "LVGL bitmap-text qualification requires JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER=ON");
 #endif
 }
 
@@ -1545,9 +1686,11 @@ int main(int argc, char** argv) {
         const Workload workload = argc >= 4 ? parse_workload(argv[3]) : Workload::OpaqueFill;
         const Backend backend = argc >= 5 ? parse_backend(argv[4]) : Backend::Gdi;
         const bool lvgl_rounded_qualification = workload == Workload::RoundedLvglQualification;
-        if (lvgl_rounded_qualification && (backend != Backend::Lvgl || samples != 1)) {
+        const bool lvgl_bitmap_text_qualification = workload == Workload::BitmapTextLvglQualification;
+        if ((lvgl_rounded_qualification || lvgl_bitmap_text_qualification) &&
+            (backend != Backend::Lvgl || samples != 1)) {
             throw std::runtime_error(
-                "rounded-lvgl-qualification requires samples=1 and the lvgl backend");
+                "LVGL qualification workloads require samples=1 and the lvgl backend");
         }
         if (backend == Backend::Sdl2 && !is_fill_workload(workload) && workload != Workload::AlphaGrid) {
             throw std::runtime_error(
@@ -1559,10 +1702,12 @@ int main(int argc, char** argv) {
         }
         const bool lvgl_gradient = workload == Workload::HorizontalGradient ||
             workload == Workload::VerticalGradient;
+        const bool lvgl_bitmap_text = workload == Workload::BitmapText;
         if (backend == Backend::Lvgl && !is_fill_workload(workload) &&
-            workload != Workload::AlphaGrid && !lvgl_gradient && !lvgl_rounded_qualification) {
+            workload != Workload::AlphaGrid && !lvgl_gradient && !lvgl_rounded_qualification &&
+            !lvgl_bitmap_text_qualification && !lvgl_bitmap_text) {
             throw std::runtime_error(
-                "LVGL software adapter supports opaque fills, alpha-grid, linear gradients, and rounded qualification only");
+                "LVGL software adapter supports opaque fills, alpha-grid, linear gradients, rounded qualification, and bitmap text");
         }
         if (backend != Backend::Sdl2 && backend != Backend::Cairo && argc == 6) {
             throw std::runtime_error("library path is valid only with the sdl2 or cairo backend");
@@ -1576,6 +1721,9 @@ int main(int argc, char** argv) {
         const std::filesystem::path output_directory(argv[1]);
         if (lvgl_rounded_qualification) {
             return qualify_lvgl_rounded_cards(output_directory);
+        }
+        if (lvgl_bitmap_text_qualification) {
+            return qualify_lvgl_bitmap_text(output_directory);
         }
         if (workload == Workload::RoundedCoreProbes) {
             if (samples > 10000) throw std::runtime_error("rounded core probes permit at most 10000 samples");
@@ -1621,6 +1769,10 @@ int main(int argc, char** argv) {
         const auto paint_jellyframe = [&](int operation) {
             command.rect = alpha_grid_rect(operation);
             rasterizer.rasterize(command, jellyframe_surface, command.rect);
+        };
+        const auto paint_jellyframe_text = [&](int line) {
+            const auto& text = text_commands[static_cast<std::size_t>(line)];
+            rasterizer.rasterize(text, jellyframe_surface, text.rect);
         };
         if (backend != Backend::Lvgl && workload != Workload::AlphaGrid &&
             workload != Workload::BitmapText) {
@@ -1738,21 +1890,27 @@ int main(int argc, char** argv) {
         else {
             lv_init();
             {
+                LvglClockFont lvgl_clock_font;
                 LvglSurface lvgl_surface(workload);
                 const Rect rect = workload_rect(workload);
                 const bool reset_surface = workload == Workload::OpaqueDirtyFill ||
-                    workload == Workload::AlphaGrid;
+                    workload == Workload::AlphaGrid || workload == Workload::BitmapText;
                 auto pair = benchmark::measure_interleaved(samples, kWarmupIterations,
                     operations_per_sample,
                     [&] { if (reset_surface) reset_jellyframe(); },
                     [&](int operation) {
                         if (workload == Workload::AlphaGrid) paint_jellyframe(operation);
+                        else if (workload == Workload::BitmapText) paint_jellyframe_text(operation);
                         else rasterizer.rasterize(command, jellyframe_surface, rect);
                     }, [] {},
                     [&] { if (reset_surface) lvgl_surface.reset(); },
                     [&](int operation) {
-                        lvgl_surface.fill(workload == Workload::AlphaGrid
-                            ? alpha_grid_rect(operation) : rect);
+                        if (workload == Workload::BitmapText) {
+                            lvgl_surface.draw_clock_text_line(lvgl_clock_font, operation);
+                        } else {
+                            lvgl_surface.fill(workload == Workload::AlphaGrid
+                                ? alpha_grid_rect(operation) : rect);
+                        }
                     }, [] {});
                 jellyframe_samples = std::move(pair.first);
                 reference_samples = std::move(pair.second);

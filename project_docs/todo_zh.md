@@ -83,7 +83,7 @@
   但当前没有证据证明引入行元数据缓存能抵偿分配和状态复杂度，因此保留生产算法；clip
   链输出等价、统计与预算回归通过，不增加硬件 A/B。后续仅在真实 workload 显示该阶段
   成为帧预算瓶颈时重新开启。
-  通用文本/shaping、完整 UI 和 LVGL 对照仍单列待办。
+  通用文本/shaping、完整 UI 和满足等价覆盖语义的圆角对照仍单列待办。
 - [x] 修正半透明对照的计时边界：`a4faa1c6` 在计时内完成 SDL2/GDI batch，
   在计时外完成 reset，并交错执行两侧；`alpha-grid-rgb-v1` 的旧排名已撤回。
 - [x] `1e375e5b` 为不透明目标增加逐字节等价的 source-over 快路径；Release/Debug Core
@@ -136,6 +136,11 @@
   零半径矩形 exact；圆角形状共有 675 个 coverage 像素不一致，最大误差 112/255，故圆角
   跨库性能对照仍禁止。截图与逐例报告位于
   `D:/JellyFramePerf/lvgl-rounded-qualification-20261105-final/`。
+- [x] 将共享固定 bitmap 文本 workload 扩展到 LVGL 9.6.0 software label。exact RGB 资格通过后，
+  完成六轮交错计时、每轮每侧 500 样本：Core 重复 p95 中位数 2.9875 us/行，LVGL 为
+  2.469 us/行（描述性差值 -17.36%）。只关闭固定 ASCII bitmap 子集，不代表通用文本、shaping、
+  CJK 或完整 UI。修正后原始数据位于
+  `D:/JellyFramePerf/lvgl-bitmap-text-qualification-20261105/corrected-no-fixture-rebuild/`。
 
 ### 3. 近期交互性能与设备出口
 
