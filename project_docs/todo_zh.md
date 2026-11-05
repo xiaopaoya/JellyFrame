@@ -15,7 +15,7 @@
    接下来只处理仍成立的 app service 载荷 API 设计或明确的低优先级条目，不重复修改已关闭项目。
 2. **A2 材料归档与出口复核**：功能测试已由用户确认通过；补齐干净作者机只读 smoke、完整 VS Code
    生命周期、设备 identity、App logs 和 panel/input 结构化材料。材料补齐前保持 `partial / evidence-pending`；
-   WS147 TE/vblank 仅在具备同步证据时继续。
+   WS147 panel-scroll 同步研究由用户暂缓，不列为当前执行项。
 3. **审查矩阵残项治理**：在 A2 材料补充并行进行，优先处理仍确认成立的边界/生命周期问题，
    每项绑定回归，不重新开启已关闭的全屏微优化。
 4. **发布门禁复核**：复跑 Debug/Release/scripting/tool 全套门禁，核对 Core `0.7.0` package lock、
@@ -149,13 +149,13 @@
 
 ### 3. 近期交互性能与设备出口
 
-- [ ] 继续保持 WS147 physical-GRAM panel-scroll 关闭，并完成同步/回退验收。2026-11-05 检查的 Waveshare 公开原理图未将 LCD TE 接到 ESP32-S3，因此该板无法通过 TE GPIO 等待；只评估有文档和实测依据的 `DISPOFF` 事务，否则保留 full-frame/fallback。不得猜测 TE 引脚或使用固定延时。后续实机复测须在同一固件/profile 关联 input、dispatch、mutation/frame、paint-end 与 DMA-complete；没有 TE/latch 或光学测量时只报告 input-to-DMA-complete。见[移植验收文档](../docs/ws147_panel_scroll_te_acceptance_zh.md)。
+- 用户于 2026-11-05 暂缓 WS147 physical-GRAM panel-scroll 后续研究。继续保持该路径关闭并使用 full-frame/fallback；除非用户重新启动，不调查 TE、`DISPOFF` 或其他同步方案。公开原理图未将 LCD TE 接到 ESP32-S3。见[移植验收文档](../docs/ws147_panel_scroll_te_acceptance_zh.md)。
 
 - [x] 在干净作者机完成 WS147 VS Code 的只读 smoke：用户确认 `discover -> info -> list` 通过；原始 JSON 和版本关联材料待补。该项不执行安装或刷写。
 - [x] 在同一干净作者机完成 VS Code 设备流程：用户确认 `new -> check -> package -> install -> launch -> logs -> update -> rollback -> stop -> remove` 通过；Output、生命周期 JSON/JSONL 和 hash 材料待补。
 - [x] 通过 provider 流程完成真实已安装 App 的 panel/input 功能验收：用户确认按钮、slider、重启后再次输入正常；结构化输入计数和 App-scoped logs 待补。没有视觉异常时不要求逐像素图片证据。
 - [ ] 归档本轮 A2 证据包，并将 `summary.json` 状态从 `evidence-pending` 更新为正式 `pass` 或保留 `partial`。
-- [x] WS147 物理 GRAM panel-scroll 已完成性能与 fallback 复测，但视觉验收失败；已由 `eaa52a67` 增加视觉接受门并从默认可用路径隔离。后续仅调查 TE/vblank 同步，不得重新启用发布配置。
+- [x] WS147 物理 GRAM panel-scroll 已完成性能与 fallback 复测，但视觉验收失败；已由 `eaa52a67` 增加视觉接受门并从默认可用路径隔离。后续 TE/vblank 同步研究由用户暂缓；不得重新启用发布配置。
 - [x] 通过 PR #36 将带签名的 Core `v0.7.0` / ABI `2` 锁定到 Runtime package 消费线。Linux sanitizer、Windows Release/Debug、Windows scripting bridge、standalone Core/package consumer 与 source-override CI 均在合并前通过。后续 bump 仍须遵守 release gate：认证已审阅的 artifact、校验 archive SHA-256，并更新精确 version/ABI/source lock。默认源码内 provider 与已验收 WS147 image 仍为 Core `0.6.2` / ABI `1`。
 - [x] 基于已合入的 Runtime Core `0.6.2` lock 构建并验收 WS147 Developer Image `0.6.2-ws147.1`。历史 `0.6.1` manifest 与证据保持不可变；R1-R17、host/provider 与 package-smoke 完整报告为 `core062-developer-image-final-20260905`，物理 Developer Image gate 已关闭。
 - [x] 从 Runtime `ca747011` 发布 App Author SDK `app-sdk-v0.6.0-dev.2`；标准与 scripting 桌面运行时均消费 Core `0.6.2`，release archive SHA-256 为 `c3245edd...7dc8a9f`。
