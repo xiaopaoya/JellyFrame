@@ -407,6 +407,18 @@ if(JELLYFRAME_BUILD_TESTS)
                              3 alpha-grid lvgl)
             set_tests_properties(jellyframe_cpu2d_compare_lvgl_alpha_grid_smoke PROPERTIES
                 PASS_REGULAR_EXPRESSION "output_validation=pass")
+            add_test(NAME jellyframe_cpu2d_compare_lvgl_horizontal_gradient_smoke
+                     COMMAND jellyframe_cpu2d_compare
+                             "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_lvgl_horizontal_gradient_smoke"
+                             3 horizontal-gradient lvgl)
+            set_tests_properties(jellyframe_cpu2d_compare_lvgl_horizontal_gradient_smoke PROPERTIES
+                PASS_REGULAR_EXPRESSION "output_validation=pass")
+            add_test(NAME jellyframe_cpu2d_compare_lvgl_vertical_gradient_smoke
+                     COMMAND jellyframe_cpu2d_compare
+                             "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_lvgl_vertical_gradient_smoke"
+                             3 vertical-gradient lvgl)
+            set_tests_properties(jellyframe_cpu2d_compare_lvgl_vertical_gradient_smoke PROPERTIES
+                PASS_REGULAR_EXPRESSION "output_validation=pass")
         endif()
         add_test(NAME jellyframe_cpu2d_compare_dirty_output_smoke
                  COMMAND jellyframe_cpu2d_compare
