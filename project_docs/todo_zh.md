@@ -149,10 +149,7 @@
 
 ### 3. 近期交互性能与设备出口
 
-- [ ] 完成 [WS147 Panel Scroll 同步修复与移植验收](../docs/ws147_panel_scroll_te_acceptance_zh.md)：先确认 JD9853 实际 TE 能力并修复 VSCSAD/strip 时序；在相同固件/profile 下复核 input-to-DMA-complete p50/p95；
-  当前自动滚动 profile 只能证明 render-to-present 路径，不能证明真实手势延迟。每个真实输入必须关联 sample、
-  dispatch、mutation/frame、paint-end 与 DMA-complete；只有加入 TE/latch 或光学测量后才能声明 input-to-present。
-  若未形成证据，继续处理输入采样、队列合并、脚本更新和重绘范围，而不是凭手感扩展功能。
+- [ ] 继续保持 WS147 physical-GRAM panel-scroll 关闭，并完成同步/回退验收。2026-11-05 检查的 Waveshare 公开原理图未将 LCD TE 接到 ESP32-S3，因此该板无法通过 TE GPIO 等待；只评估有文档和实测依据的 `DISPOFF` 事务，否则保留 full-frame/fallback。不得猜测 TE 引脚或使用固定延时。后续实机复测须在同一固件/profile 关联 input、dispatch、mutation/frame、paint-end 与 DMA-complete；没有 TE/latch 或光学测量时只报告 input-to-DMA-complete。见[移植验收文档](../docs/ws147_panel_scroll_te_acceptance_zh.md)。
 
 - [x] 在干净作者机完成 WS147 VS Code 的只读 smoke：用户确认 `discover -> info -> list` 通过；原始 JSON 和版本关联材料待补。该项不执行安装或刷写。
 - [x] 在同一干净作者机完成 VS Code 设备流程：用户确认 `new -> check -> package -> install -> launch -> logs -> update -> rollback -> stop -> remove` 通过；Output、生命周期 JSON/JSONL 和 hash 材料待补。
