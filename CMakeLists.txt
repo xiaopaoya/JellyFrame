@@ -438,6 +438,18 @@ if(JELLYFRAME_BUILD_TESTS)
                              3 bitmap-text lvgl)
             set_tests_properties(jellyframe_cpu2d_compare_lvgl_bitmap_text_smoke PROPERTIES
                 PASS_REGULAR_EXPRESSION "output_validation=pass.*max_channel_error=0")
+            add_test(NAME jellyframe_cpu2d_compare_lvgl_tiny_bitmap_text_qualification
+                     COMMAND jellyframe_cpu2d_compare
+                             "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_lvgl_tiny_bitmap_text_qualification"
+                             1 tiny-bitmap-text-lvgl-qualification lvgl)
+            set_tests_properties(jellyframe_cpu2d_compare_lvgl_tiny_bitmap_text_qualification PROPERTIES
+                PASS_REGULAR_EXPRESSION "lvgl_tiny_bitmap_text_qualification=output-qualified output_validation=pass max_channel_error=0.*performance_measured=false")
+            add_test(NAME jellyframe_cpu2d_compare_lvgl_tiny_bitmap_text_smoke
+                     COMMAND jellyframe_cpu2d_compare
+                             "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_compare_lvgl_tiny_bitmap_text_smoke"
+                             3 tiny-bitmap-text lvgl)
+            set_tests_properties(jellyframe_cpu2d_compare_lvgl_tiny_bitmap_text_smoke PROPERTIES
+                PASS_REGULAR_EXPRESSION "output_validation=pass.*max_channel_error=0")
         endif()
         add_test(NAME jellyframe_cpu2d_compare_dirty_output_smoke
                  COMMAND jellyframe_cpu2d_compare

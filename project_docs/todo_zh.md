@@ -141,6 +141,11 @@
   2.469 us/行（描述性差值 -17.36%）。只关闭固定 ASCII bitmap 子集，不代表通用文本、shaping、
   CJK 或完整 UI。修正后原始数据位于
   `D:/JellyFramePerf/lvgl-bitmap-text-qualification-20261105/corrected-no-fixture-rebuild/`。
+- [x] 基于仓库 `tiny.bdf` 六个 glyph mask 增加独立 UTF-8 混合字宽文本 fixture，并对 LVGL 9.6.0
+  完成 exact qualification 和六轮配对计时。Core/LVGL 的重复 p95 中位数分别为 0.4625/0.5125
+  us/行（LVGL 高 10.81%）；这是亚微秒级描述性结果，不构成显著性检验或通用 CJK 性能结论。
+  仅覆盖固定字形查找和 UTF-8 解码，不包含 shaping/fallback。原始数据：
+  `D:/JellyFramePerf/lvgl-bitmap-text-qualification-20261105/tiny-cjk-utf8/`。
 
 ### 3. 近期交互性能与设备出口
 

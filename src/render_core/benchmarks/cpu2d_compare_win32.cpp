@@ -1,6 +1,7 @@
 #include "render_core/software_renderer.h"
 #include "cpu2d_sampling.h"
 #include "cpu2d_text_fixture.h"
+#include "cpu2d_tiny_text_fixture.h"
 #include "render_core/raster_primitives.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -63,6 +64,8 @@ enum class Workload {
     RoundedQualification,
     RoundedLvglQualification,
     BitmapTextLvglQualification,
+    TinyBitmapText,
+    TinyBitmapTextLvglQualification,
     RoundedSupersampleQualification,
     RoundedQualityMasks,
     RoundedQualityCost,
@@ -454,6 +457,54 @@ struct LvglClockFont {
     }
 };
 
+struct LvglTinyFont {
+    lv_font_t font{};
+    std::array<std::array<std::uint8_t, 64>, std::size(benchmark::kTinyGlyphs)> glyphs{};
+
+    LvglTinyFont() {
+        for (std::size_t glyph_index = 0; glyph_index < std::size(benchmark::kTinyGlyphs); ++glyph_index) {
+            const auto& glyph = benchmark::kTinyGlyphs[glyph_index];
+            for (int y = 0; y < glyph.height; ++y) {
+                for (int x = 0; x < glyph.width; ++x) {
+                    glyphs[glyph_index][static_cast<std::size_t>(y * glyph.width + x)] =
+                        (glyph.rows[y] & (0x80U >> x)) != 0 ? 255 : 0;
+                }
+            }
+        }
+        font.get_glyph_dsc = get_glyph_dsc;
+        font.get_glyph_bitmap = get_glyph_bitmap;
+        font.user_data = this;
+        font.line_height = benchmark::kTinyFont.line_height;
+        font.base_line = 0;
+        font.static_bitmap = 1;
+    }
+
+    static bool get_glyph_dsc(const lv_font_t* font, lv_font_glyph_dsc_t* output,
+                              std::uint32_t letter, std::uint32_t) {
+        (void)font;
+        for (std::size_t index = 0; index < std::size(benchmark::kTinyGlyphs); ++index) {
+            const auto& glyph = benchmark::kTinyGlyphs[index];
+            if (glyph.codepoint != letter) continue;
+            output->gid.index = static_cast<std::uint32_t>(index);
+            output->format = LV_FONT_GLYPH_FORMAT_A8;
+            output->adv_w = glyph.advance;
+            output->box_w = glyph.width;
+            output->box_h = glyph.height;
+            output->ofs_x = 0;
+            output->ofs_y = benchmark::kTinyFont.line_height - glyph.height;
+            output->stride = glyph.width;
+            return true;
+        }
+        return false;
+    }
+
+    static const void* get_glyph_bitmap(lv_font_glyph_dsc_t* glyph, lv_draw_buf_t*) {
+        if (glyph->gid.index >= std::size(benchmark::kTinyGlyphs)) return nullptr;
+        const auto* self = static_cast<const LvglTinyFont*>(glyph->resolved_font->user_data);
+        return self->glyphs[glyph->gid.index].data();
+    }
+};
+
 struct LvglSurface {
     int width;
     int height;
@@ -540,6 +591,30 @@ struct LvglSurface {
         for (int line = 0; line < benchmark::kClockLineCount; ++line) {
             draw_clock_text_line(font, line);
         }
+    }
+
+    void draw_tiny_text_line(const LvglTinyFont& font, int line) {
+        const auto text = benchmark::kTinyTextLines[static_cast<std::size_t>(line)];
+        task.clip_area = lv_area_t{0, 0, width - 1, height - 1};
+        lv_draw_label_dsc_t dsc;
+        lv_draw_label_dsc_init(&dsc);
+        dsc.text = text.data();
+        dsc.text_length = static_cast<std::uint32_t>(text.size());
+        dsc.font = &font.font;
+        dsc.color = lv_color_make(kFillColor.r, kFillColor.g, kFillColor.b);
+        dsc.align = LV_TEXT_ALIGN_CENTER;
+        dsc.bidi_dir = LV_BASE_DIR_LTR;
+        dsc.opa = LV_OPA_COVER;
+        dsc.flag = LV_TEXT_FLAG_NONE;
+        constexpr int x = 14;
+        constexpr int y = 20;
+        constexpr int box_width = benchmark::kTinyTextLineWidth;
+        constexpr int box_height = benchmark::kTinyTextLineHeight;
+        const lv_area_t area{x, y + line * 32, x + box_width - 1,
+                             y + line * 32 + box_height - 1};
+        task.area = area;
+        task.draw_dsc = &dsc.base;
+        lv_draw_sw_label(&task, &dsc, &area);
     }
 
     const std::uint8_t* pixels_bgra() {
@@ -751,9 +826,11 @@ Workload parse_workload(const char* raw) {
     if (name == "opaque-dirty-fill") return Workload::OpaqueDirtyFill;
     if (name == "alpha-grid") return Workload::AlphaGrid;
     if (name == "bitmap-text") return Workload::BitmapText;
+    if (name == "tiny-bitmap-text") return Workload::TinyBitmapText;
     if (name == "rounded-qualification") return Workload::RoundedQualification;
     if (name == "rounded-lvgl-qualification") return Workload::RoundedLvglQualification;
     if (name == "bitmap-text-lvgl-qualification") return Workload::BitmapTextLvglQualification;
+    if (name == "tiny-bitmap-text-lvgl-qualification") return Workload::TinyBitmapTextLvglQualification;
     if (name == "rounded-supersample-qualification") return Workload::RoundedSupersampleQualification;
     if (name == "rounded-quality-masks") return Workload::RoundedQualityMasks;
     if (name == "rounded-quality-cost") return Workload::RoundedQualityCost;
@@ -761,7 +838,7 @@ Workload parse_workload(const char* raw) {
     if (name == "horizontal-gradient") return Workload::HorizontalGradient;
     if (name == "vertical-gradient") return Workload::VerticalGradient;
     throw std::runtime_error(
-        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, bitmap-text-lvgl-qualification, rounded-qualification, rounded-lvgl-qualification, rounded-supersample-qualification, rounded-quality-masks, rounded-quality-cost, rounded-core-probes, horizontal-gradient, or vertical-gradient");
+        "workload must be opaque-fill, opaque-dirty-fill, alpha-grid, bitmap-text, tiny-bitmap-text, bitmap-text-lvgl-qualification, tiny-bitmap-text-lvgl-qualification, rounded-qualification, rounded-lvgl-qualification, rounded-supersample-qualification, rounded-quality-masks, rounded-quality-cost, rounded-core-probes, horizontal-gradient, or vertical-gradient");
 }
 
 Backend parse_backend(const char* raw) {
@@ -779,9 +856,11 @@ const char* workload_id(Workload workload) {
     case Workload::OpaqueDirtyFill: return "opaque-dirty-fill-rgb-v1";
     case Workload::AlphaGrid: return "alpha-grid-rgb-v2";
     case Workload::BitmapText: return "bitmap-clock-text-rgb-v1";
+    case Workload::TinyBitmapText: return "tiny-cjk-bitmap-text-rgb-v1";
     case Workload::RoundedQualification: return "rounded-card-qualification-v0";
     case Workload::RoundedLvglQualification: return "rounded-card-lvgl-qualification-v0";
     case Workload::BitmapTextLvglQualification: return "bitmap-clock-text-lvgl-qualification-v0";
+    case Workload::TinyBitmapTextLvglQualification: return "tiny-cjk-bitmap-text-lvgl-qualification-v0";
     case Workload::RoundedSupersampleQualification: return "rounded-supersample-qualification-v0";
     case Workload::RoundedQualityMasks: return "rounded-native-aa-quality-v0";
     case Workload::RoundedQualityCost: return "rounded-native-aa-quality-cost-v0";
@@ -795,8 +874,13 @@ bool is_fill_workload(Workload workload) {
     return workload == Workload::OpaqueFill || workload == Workload::OpaqueDirtyFill;
 }
 
+bool is_bitmap_text_workload(Workload workload) {
+    return workload == Workload::BitmapText || workload == Workload::TinyBitmapText;
+}
+
 Rect workload_rect(Workload workload) {
     if (workload == Workload::BitmapText) return Rect{14, 20, 144, 20};
+    if (workload == Workload::TinyBitmapText) return Rect{14, 20, 144, 8};
     return workload == Workload::OpaqueDirtyFill ? kDirtyRect : kFullRect;
 }
 
@@ -811,7 +895,7 @@ Rect alpha_grid_rect(int index) {
 
 const char* workload_mode(Workload workload) {
     return workload == Workload::OpaqueDirtyFill || workload == Workload::AlphaGrid ||
-        workload == Workload::BitmapText ? "dirty" : "full";
+        is_bitmap_text_workload(workload) ? "dirty" : "full";
 }
 
 int workload_pixels(Workload workload) {
@@ -824,12 +908,22 @@ int workload_pixels(Workload workload) {
         }
         return pixels / benchmark::kClockLineCount;
     }
+    if (workload == Workload::TinyBitmapText) {
+        int pixels = 0;
+        for (int y = 0; y < kHeight; ++y) {
+            for (int x = 0; x < kWidth; ++x) {
+                if (benchmark::tiny_text_ink(x, y)) ++pixels;
+            }
+        }
+        return pixels / benchmark::kTinyTextLineCount;
+    }
     const Rect rect = workload == Workload::AlphaGrid ? alpha_grid_rect(0) : workload_rect(workload);
     return rect.width * rect.height;
 }
 
 int workload_operations_per_sample(Workload workload) {
     if (workload == Workload::BitmapText) return benchmark::kClockLineCount;
+    if (workload == Workload::TinyBitmapText) return benchmark::kTinyTextLineCount;
     return workload == Workload::OpaqueDirtyFill || workload == Workload::AlphaGrid ? 64 : 1;
 }
 
@@ -872,6 +966,22 @@ std::string workload_parameters_json(Workload workload) {
                << "\"timing\":\"completed-batch-per-line\",\"sampleOrder\":\"alternating-pairs\","
                << "\"reset\":\"completed-before-timer\",\"atlasSetup\":\"excluded\","
                << "\"measurement\":\"shared-bitmap-advance-in-timer\"";
+    } else if (workload == Workload::TinyBitmapText) {
+        output << "\"operation\":\"utf8-bitmap-text-lines\","
+               << "\"fontIdentity\":\"jellyframe-tiny-bdf-v1\","
+               << "\"fontSource\":\"src/render_core/samples/fonts/bitmap/tiny.bdf\","
+               << "\"fontSize\":8,\"fontWeight\":400,\"scale\":1,"
+               << "\"lineHeight\":8,\"wrapWidth\":144,\"fallback\":\"forbidden\","
+               << "\"glyphCodepoints\":[65,8451,9733,9829,20013,23567],"
+               << "\"fontRasterizer\":\"shared-fixed-1bpp-mask\","
+               << "\"lineBreakMode\":\"fixed-lines-no-wrap\",\"align\":\"center\","
+               << "\"texts\":[\"A\",\"A\\u4e2d\\u5c0f\",\"\\u4e2d\\u5c0f\\u2103\",\"\\u2605\\u2665A\"],"
+               << "\"lineCount\":4,\"stepY\":32,\"sourceRgb\":\"164757\","
+               << "\"blend\":\"opaque-ink-transparent-background\","
+               << "\"pixelAccounting\":\"mean-ink-pixels-per-line\","
+               << "\"timing\":\"completed-batch-per-line\","
+               << "\"sampleOrder\":\"alternating-pairs\",\"reset\":\"completed-before-timer\","
+               << "\"atlasSetup\":\"excluded\",\"measurement\":\"shared-bitmap-advance-in-timer\"";
     } else if (is_fill_workload(workload)) {
         output << "\"operation\":\"fill-rect\","
                << "\"sourceRgb\":\"164757\","
@@ -936,6 +1046,15 @@ OutputComparison compare_output(const FrameBuffer& frame, const std::uint8_t* re
             if (actual.r != expected.r || actual.g != expected.g || actual.b != expected.b ||
                 expected_bgra[2] != expected.r || expected_bgra[1] != expected.g || expected_bgra[0] != expected.b) {
                 throw std::runtime_error("bitmap-text output failed independent pixel oracle");
+            }
+        }
+        if (workload == Workload::TinyBitmapText) {
+            const bool ink = benchmark::tiny_text_ink(static_cast<int>(index % kWidth),
+                                                      static_cast<int>(index / kWidth));
+            const Color expected = ink ? kFillColor : Color{0, 0, 0, 255};
+            if (actual.r != expected.r || actual.g != expected.g || actual.b != expected.b ||
+                expected_bgra[2] != expected.r || expected_bgra[1] != expected.g || expected_bgra[0] != expected.b) {
+                throw std::runtime_error("tiny-bitmap-text output failed independent pixel oracle");
             }
         }
         if (workload == Workload::AlphaGrid) {
@@ -1218,6 +1337,67 @@ int qualify_lvgl_bitmap_text(const std::filesystem::path& directory) {
     (void)directory;
     throw std::runtime_error(
         "LVGL bitmap-text qualification requires JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER=ON");
+#endif
+}
+
+int qualify_lvgl_tiny_bitmap_text(const std::filesystem::path& directory) {
+#if defined(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
+    lv_init();
+    LvglTinyFont font;
+    FrameBuffer core(kWidth, kHeight, Color{0, 0, 0, 255});
+    BitmapFontContext font_context{&benchmark::kTinyFont, benchmark::kTinyTextScale};
+    TextPainter text_painter{bitmap_font_paint_callback, &font_context, nullptr, true};
+    SoftwareRasterizer rasterizer(text_painter);
+    for (const auto& command : benchmark::tiny_text_commands(kFillColor)) {
+        rasterizer.rasterize(command, core, command.rect);
+    }
+
+    LvglSurface lvgl_surface(Workload::OpaqueFill);
+    lvgl_surface.reset();
+    for (int line = 0; line < benchmark::kTinyTextLineCount; ++line) {
+        lvgl_surface.draw_tiny_text_line(font, line);
+    }
+    const auto pixels = lvgl_surface.pixels_bgra();
+    const auto comparison = compare_output(core, pixels, Workload::TinyBitmapText);
+    FrameBuffer lvgl(kWidth, kHeight, Color{0, 0, 0, 255});
+    FrameBuffer difference(kWidth, kHeight, Color{0, 0, 0, 255});
+    for (int y = 0; y < kHeight; ++y) {
+        for (int x = 0; x < kWidth; ++x) {
+            const std::size_t offset = (static_cast<std::size_t>(y) * kWidth + x) * 4U;
+            const Color value{pixels[offset + 2], pixels[offset + 1], pixels[offset], 255};
+            lvgl.pixel(x, y) = value;
+            const auto& expected = core.pixel(x, y);
+            if (value.r != expected.r || value.g != expected.g || value.b != expected.b) {
+                difference.pixel(x, y) = Color{255, 64, 64, 255};
+            }
+        }
+    }
+    std::filesystem::create_directories(directory);
+    write_bmp(core, (directory / "core.bmp").string());
+    write_bmp(lvgl, (directory / "lvgl.bmp").string());
+    write_bmp(difference, (directory / "difference.bmp").string());
+    std::ofstream output(directory / "qualification.json", std::ios::binary);
+    output << "{\n  \"format\":\"jellyframe.benchmark.qualification.v0\",\n"
+           << "  \"workload\":\"tiny-cjk-bitmap-text-lvgl-qualification-v0\",\n"
+           << "  \"status\":\"output-qualified\",\n"
+           << "  \"performanceMeasured\":false,\n"
+           << "  \"backend\":\"lvgl-software-renderer\",\"version\":\"9.6.0\",\n"
+           << "  \"viewport\":{\"width\":172,\"height\":320},\n"
+           << "  \"fontIdentity\":\"jellyframe-tiny-bdf-v1\","
+           << "\"codepoints\":[65,8451,9733,9829,20013,23567],\n"
+           << "  \"digest\":\"" << comparison.jellyframe_digest << "\",\n"
+           << "  \"maxChannelError\":" << comparison.max_channel_error << "\n}\n";
+    output.close();
+    lv_deinit();
+    if (!output) throw std::runtime_error("LVGL tiny bitmap-text qualification report write failed");
+    std::cout << "lvgl_tiny_bitmap_text_qualification=output-qualified"
+              << " output_validation=pass max_channel_error=" << comparison.max_channel_error
+              << " performance_measured=false\n";
+    return 0;
+#else
+    (void)directory;
+    throw std::runtime_error(
+        "LVGL tiny bitmap-text qualification requires JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER=ON");
 #endif
 }
 
@@ -1687,7 +1867,8 @@ int main(int argc, char** argv) {
         const Backend backend = argc >= 5 ? parse_backend(argv[4]) : Backend::Gdi;
         const bool lvgl_rounded_qualification = workload == Workload::RoundedLvglQualification;
         const bool lvgl_bitmap_text_qualification = workload == Workload::BitmapTextLvglQualification;
-        if ((lvgl_rounded_qualification || lvgl_bitmap_text_qualification) &&
+        const bool lvgl_tiny_text_qualification = workload == Workload::TinyBitmapTextLvglQualification;
+        if ((lvgl_rounded_qualification || lvgl_bitmap_text_qualification || lvgl_tiny_text_qualification) &&
             (backend != Backend::Lvgl || samples != 1)) {
             throw std::runtime_error(
                 "LVGL qualification workloads require samples=1 and the lvgl backend");
@@ -1703,9 +1884,14 @@ int main(int argc, char** argv) {
         const bool lvgl_gradient = workload == Workload::HorizontalGradient ||
             workload == Workload::VerticalGradient;
         const bool lvgl_bitmap_text = workload == Workload::BitmapText;
+        const bool lvgl_tiny_bitmap_text = workload == Workload::TinyBitmapText;
+        if (lvgl_tiny_bitmap_text && backend != Backend::Lvgl) {
+            throw std::runtime_error("tiny-bitmap-text currently requires the lvgl backend");
+        }
         if (backend == Backend::Lvgl && !is_fill_workload(workload) &&
             workload != Workload::AlphaGrid && !lvgl_gradient && !lvgl_rounded_qualification &&
-            !lvgl_bitmap_text_qualification && !lvgl_bitmap_text) {
+            !lvgl_bitmap_text_qualification && !lvgl_tiny_text_qualification &&
+            !lvgl_bitmap_text && !lvgl_tiny_bitmap_text) {
             throw std::runtime_error(
                 "LVGL software adapter supports opaque fills, alpha-grid, linear gradients, rounded qualification, and bitmap text");
         }
@@ -1724,6 +1910,9 @@ int main(int argc, char** argv) {
         }
         if (lvgl_bitmap_text_qualification) {
             return qualify_lvgl_bitmap_text(output_directory);
+        }
+        if (lvgl_tiny_text_qualification) {
+            return qualify_lvgl_tiny_bitmap_text(output_directory);
         }
         if (workload == Workload::RoundedCoreProbes) {
             if (samples > 10000) throw std::runtime_error("rounded core probes permit at most 10000 samples");
@@ -1756,10 +1945,19 @@ int main(int argc, char** argv) {
         command.gradient_axis = workload == Workload::VerticalGradient
             ? GradientAxis::Vertical
             : GradientAxis::Horizontal;
-        BitmapFontContext font_context{&benchmark::kClockFont, benchmark::kClockScale};
+        BitmapFontContext font_context = lvgl_tiny_bitmap_text
+            ? BitmapFontContext{&benchmark::kTinyFont, benchmark::kTinyTextScale}
+            : BitmapFontContext{&benchmark::kClockFont, benchmark::kClockScale};
         TextPainter text_painter{bitmap_font_paint_callback, &font_context, nullptr, true};
-        SoftwareRasterizer rasterizer(workload == Workload::BitmapText ? text_painter : TextPainter{});
-        const auto text_commands = benchmark::clock_text_commands(kFillColor);
+        SoftwareRasterizer rasterizer(is_bitmap_text_workload(workload) ? text_painter : TextPainter{});
+        std::vector<DisplayCommand> text_commands;
+        if (workload == Workload::BitmapText) {
+            const auto fixture_commands = benchmark::clock_text_commands(kFillColor);
+            text_commands.assign(fixture_commands.begin(), fixture_commands.end());
+        } else if (workload == Workload::TinyBitmapText) {
+            const auto fixture_commands = benchmark::tiny_text_commands(kFillColor);
+            text_commands.assign(fixture_commands.begin(), fixture_commands.end());
+        }
         const int operations_per_sample = workload_operations_per_sample(workload);
         std::vector<double> jellyframe_samples;
         const auto reset_jellyframe = [&] {
@@ -1775,7 +1973,7 @@ int main(int argc, char** argv) {
             rasterizer.rasterize(text, jellyframe_surface, text.rect);
         };
         if (backend != Backend::Lvgl && workload != Workload::AlphaGrid &&
-            workload != Workload::BitmapText) {
+            !is_bitmap_text_workload(workload)) {
             jellyframe_samples = measure(samples, operations_per_sample, [&] {
                 rasterizer.rasterize(command, jellyframe_surface, command.rect);
             });
@@ -1894,19 +2092,22 @@ int main(int argc, char** argv) {
                 LvglSurface lvgl_surface(workload);
                 const Rect rect = workload_rect(workload);
                 const bool reset_surface = workload == Workload::OpaqueDirtyFill ||
-                    workload == Workload::AlphaGrid || workload == Workload::BitmapText;
+                    workload == Workload::AlphaGrid || is_bitmap_text_workload(workload);
+                LvglTinyFont lvgl_tiny_font;
                 auto pair = benchmark::measure_interleaved(samples, kWarmupIterations,
                     operations_per_sample,
                     [&] { if (reset_surface) reset_jellyframe(); },
                     [&](int operation) {
                         if (workload == Workload::AlphaGrid) paint_jellyframe(operation);
-                        else if (workload == Workload::BitmapText) paint_jellyframe_text(operation);
+                        else if (is_bitmap_text_workload(workload)) paint_jellyframe_text(operation);
                         else rasterizer.rasterize(command, jellyframe_surface, rect);
                     }, [] {},
                     [&] { if (reset_surface) lvgl_surface.reset(); },
                     [&](int operation) {
                         if (workload == Workload::BitmapText) {
                             lvgl_surface.draw_clock_text_line(lvgl_clock_font, operation);
+                        } else if (workload == Workload::TinyBitmapText) {
+                            lvgl_surface.draw_tiny_text_line(lvgl_tiny_font, operation);
                         } else {
                             lvgl_surface.fill(workload == Workload::AlphaGrid
                                 ? alpha_grid_rect(operation) : rect);
@@ -1925,7 +2126,7 @@ int main(int argc, char** argv) {
         }
 #endif
         const double tolerance = is_fill_workload(workload) || workload == Workload::AlphaGrid ||
-            workload == Workload::BitmapText ? 0.0 : 1.0;
+            is_bitmap_text_workload(workload) ? 0.0 : 1.0;
         const bool output_matches = comparison.rmse <= tolerance;
         write_manifest(output_directory / "jellyframe.json", "jellyframe-render-core",
                        JELLYFRAME_CPU2D_CORE_VERSION, workload, jellyframe_samples,

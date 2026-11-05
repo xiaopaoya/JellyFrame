@@ -74,6 +74,24 @@ bitmap-font software workload, not a general renderer or font-library ranking.
 Corrected raw manifests and the report are archived under
 `D:/JellyFramePerf/lvgl-bitmap-text-qualification-20261105/corrected-no-fixture-rebuild/`.
 
+`tiny-bitmap-text` is a separate UTF-8 fixture based on the repository's
+`tiny.bdf` masks. Four centered lines cover ASCII plus mixed-width `中`, `小`,
+`℃`, `★` and `♥` glyphs. Core and LVGL share the same six 1bpp masks and exact
+advance values; an independent per-pixel mask oracle rejects missing glyphs,
+blank output and placement changes before timing. This exercises UTF-8 decoding
+and fixed bitmap glyph lookup, not shaping, fallback, gray coverage or general
+CJK text. LVGL 9.6.0 is the only external adapter currently enabled for this
+fixture.
+
+The 2026-11-05 Windows Release run used six interleaved repeats of 500 samples
+per side with 30 warmups. All outputs matched exactly with digest
+`d8031ab782f56747`. Median repeat p95 was 0.4625 us/line for Core and 0.5125
+us/line for LVGL (LVGL higher by 10.81%); all six paired repeats had that
+direction. These sub-microsecond timings and the comparison tool's descriptive
+statistics do not establish statistical significance or a general text-engine
+ranking. Manifests and report are archived under
+`D:/JellyFramePerf/lvgl-bitmap-text-qualification-20261105/tiny-cjk-utf8/`.
+
 The 2026-09-19 Windows Release run used six sequential repeats, 500 samples and
 30 warmups each. Median repeat p95 was 2.888 us/line for Core and 49.9565 us/line
 for this GDI glyph-blit adapter; all RGB digests were `464c5cd1e8b7b543`.
