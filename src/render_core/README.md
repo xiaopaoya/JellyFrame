@@ -1,6 +1,6 @@
 # Render Core
 
-> Last updated: 2026-09-04; Applies to: 0.6.0-dev
+> Last updated: 2026-11-06; Applies to: 0.8.0 / ABI 3 development line
 
 `render_core` is JellyFrame's platform-neutral Living Standard/CSS subset and
 software rendering pipeline.
@@ -17,6 +17,8 @@ It owns:
 - Render tree, layout tree, layer tree, display list and frame update planning.
 - CPU software rasterization/compositing, antialiased rounded geometry and
   embedded framebuffer conversion with optional RGB565/BGR565 dithering.
+- Core-owned font resources, text selection/measurement, prepared glyph packets
+  and software text painting through a single bounded text service.
 - Dirty-rect and scroll-blit planning for host-owned incremental presentation.
 - Text measurement/painting contracts and bitmap font helpers.
 - Neutral host contracts such as device capabilities, frame sink callbacks,
@@ -45,7 +47,7 @@ the public headers and the generated capability profile. The package is a
 build artifact boundary; it does not include App Runtime, JerryScript, ports or
 device protocols.
 
-For Core ABI `1`, all installed `render_core/*.h` headers are the C++ consumer
+For Core ABI `3`, all installed `render_core/*.h` headers are the C++ consumer
 surface. Consumers include those installed paths and link the exported target;
 they must not reach into a checkout through `src/` paths or compile Core source
 files themselves. There is currently no separate C ABI or private-header tier.
@@ -58,8 +60,8 @@ configuration, maintainers can create a standalone source archive:
 
 ```powershell
 python project_tools\package_render_core_source.py --output-dir build\dist
-tar -xzf build\dist\jellyframe-render-core-0.6.2.tar.gz -C build\unpacked
-cmake -S build\unpacked\jellyframe-render-core-0.6.2 -B build\core-from-archive
+tar -xzf build\dist\jellyframe-render-core-0.8.0.tar.gz -C build\unpacked
+cmake -S build\unpacked\jellyframe-render-core-0.8.0 -B build\core-from-archive
 cmake --build build\core-from-archive --config Release --parallel
 ctest --test-dir build\core-from-archive -C Release --output-on-failure
 ```

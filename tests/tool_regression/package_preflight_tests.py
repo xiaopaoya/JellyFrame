@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
+import hashlib
 import json
 import re
 import struct
 import sys
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -57,7 +59,82 @@ def tiny_png_header(width: int = 2, height: int = 2) -> bytes:
     )
 
 
+def tiny_jffont2() -> bytes:
+    data = bytearray(128 + 40)
+    data[:8] = b"JFFONT2\0"
+    struct.pack_into("<HHHH", data, 8, 2, 128, 40, 1)
+    struct.pack_into("<IIIII", data, 16, len(data), 1, 128, len(data), 0)
+    struct.pack_into("<HHHBB", data, 36, 1000, 16, 400, 4, 0)
+    struct.pack_into("<iii", data, 44, 800, 200, 0)
+    struct.pack_into("<I", data, 56, 65)
+    data[64] = 1
+    struct.pack_into("<IH", data, 100, 1, 1)
+    struct.pack_into("<IIiiiHHIIII", data, 128, 65, 1, 500, 0, 0, 0, 0, 0, 0, 0, 0)
+    struct.pack_into("<I", data, 96, zlib.crc32(data) & 0xffffffff)
+    return bytes(data)
+
+
 class PackagePreflightTests(unittest.TestCase):
+    def test_embedded_core_default_font_matches_prepared_resource_contract(self):
+        resource = REPO_ROOT / "ports" / "esp32s3-idf" / "font" / "core-system-noto-regular-16.jffont2"
+        data = resource.read_bytes()
+        parsed = package_app.parse_jffont(data)
+        self.assertTrue(parsed["ok"], parsed)
+        self.assertEqual(parsed["format"], "jffont2-scalar-bitmap-v1")
+        self.assertEqual(parsed["glyphCount"], 4539)
+        self.assertEqual(hashlib.sha256(data).hexdigest(),
+                         "7454e5a35c99e1bfbeb0cf226c0e9c128c1d9520b40ec9037a293a2a6c43a320")
+
+    def test_jffont2_preflight_validates_core_format_and_crc(self):
+        parsed = package_app.parse_jffont(tiny_jffont2())
+        self.assertTrue(parsed["ok"], parsed)
+        self.assertEqual(parsed["format"], "jffont2-scalar-bitmap-v1")
+        self.assertEqual(parsed["glyphs"], {65})
+        self.assertEqual(parsed["rasterPixelSize"], 16)
+
+        damaged = bytearray(tiny_jffont2())
+        damaged[-1] ^= 1
+        self.assertEqual(package_app.parse_jffont(bytes(damaged))["error"], "crc-mismatch")
+
+    def test_jffont2_font_diagnostics_do_not_apply_legacy_integer_scaling(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-core-font-diagnostics-") as directory:
+            root = Path(directory)
+            css = root / "app.css"
+            font_path = root / "font.jffont2"
+            css.write_text('.title { font-family: "Core Face"; font-size: 13px; }\n', encoding="utf-8")
+            font_path.write_bytes(tiny_jffont2())
+            resources = [
+                {"path": "/app.css", "kind": "jellyframe::HostResourceKind::Stylesheet",
+                 "file": css, "size": css.stat().st_size},
+                {"path": "/font.jffont2", "kind": "jellyframe::HostResourceKind::Font",
+                 "file": font_path, "size": font_path.stat().st_size},
+            ]
+            diagnostics, warnings = package_app.collect_font_diagnostics(
+                {"fonts": [{"id": "core", "source": "/font.jffont2", "family": "Core Face",
+                            "profile": "global-product", "license": {"name": "Test", "source": "test"},
+                            "sizes": [13], "weights": [400]}]},
+                resources, {"fontProfile": "tiny"}, {})
+
+        font = diagnostics["manifestFonts"][0]
+        self.assertEqual(font["status"], "usable")
+        self.assertTrue(font["scalable"])
+        self.assertEqual(font["unavailableUsedSizes"], [])
+        self.assertFalse(any(warning["code"] == "font-size-unavailable" for warning in warnings))
+
+    def test_external_jffont2_overlay_is_packaged_at_declared_manifest_source(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-core-font-overlay-") as directory:
+            root = Path(directory)
+            source = root / "core-font.jffont2"
+            source.write_bytes(tiny_jffont2())
+            manifest = {"fonts": [{"source": "/fonts/core.jffont2"}]}
+            resources, imports = package_app.apply_imported_font_resources(
+                [], manifest, [f"/fonts/core.jffont2={source}"], 4096)
+
+        self.assertEqual(len(imports), 1)
+        self.assertEqual(resources[0]["path"], "/fonts/core.jffont2")
+        self.assertEqual(resources[0]["kind"], "jellyframe::HostResourceKind::Font")
+        self.assertEqual(resources[0]["size"], len(tiny_jffont2()))
+
     def test_first_party_manifests_match_active_runtime_and_core_lines(self):
         runtime_version = package_app.active_runtime_release_version()
         render_core_version = package_app.active_render_core_release_version()
@@ -176,7 +253,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.profile",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["graphics.canvas2d"],
@@ -198,14 +275,14 @@ class PackagePreflightTests(unittest.TestCase):
                 "id": "org.test.historical-runtime",
                 "entry": "/index.html",
                 "version": {"name": "0.1.0", "code": 1},
-                "runtime": {"minJellyFrame": "0.5.0", "minRenderCore": "0.7.0", "script": "none"},
+                "runtime": {"minJellyFrame": "0.5.0", "minRenderCore": "0.8.0", "script": "none"},
                 "viewport": {"designWidth": 10, "designHeight": 10},
                 "budgets": {"maxResourceBytes": 1024},
                 "targets": {"test": {"viewport": {"width": 10, "height": 10}, "output": "jfapp"}},
             })
 
     def test_manifest_rejects_a_historical_pre_release_render_core_line(self):
-        with self.assertRaisesRegex(SystemExit, "must target the active pre-1.0 Render Core line 0.7.0"):
+        with self.assertRaisesRegex(SystemExit, "must target the active pre-1.0 Render Core line 0.8.0"):
             package_app.validate_manifest({
                 "format": "jellyframe.app",
                 "formatVersion": 0,
@@ -227,7 +304,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.profile",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["graphics.canvas2d"],
@@ -249,7 +326,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.modern-paint",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["css.modern-paint"],
@@ -1021,7 +1098,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.services",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "permissions": ["network"],
@@ -1160,7 +1237,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.file.manager",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "capabilities": ["file.read", "file.write", "file.manage"],
@@ -1180,7 +1257,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.strict",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
@@ -1208,7 +1285,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.strict",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
@@ -2119,7 +2196,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.fonts",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "fonts": [

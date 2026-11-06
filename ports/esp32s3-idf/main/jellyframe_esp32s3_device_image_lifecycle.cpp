@@ -1,5 +1,8 @@
 #include "jellyframe_esp32s3_device_image_store.h"
 #include "jellyframe_esp32s3_jfdp_transport.h"
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+#include "jellyframe_esp32s3_core_system_font.h"
+#endif
 #include "jellyframe_esp32s3_ui_task.h"
 
 #include "app_runtime/app_installed_bundle.h"
@@ -159,7 +162,14 @@ class DeviceImageEndpoint final : public JfdpStreamSink {
 public:
     explicit DeviceImageEndpoint(DeviceImageStore& store)
         : store_(store), transaction_(DeviceInstallLimits{DeviceImageStore::kMaxBundleBytes, 4096}),
-          host_(AppRuntimeHostOptions{2, 2, 4, 4096, 1}), binding_(store_, &launcher_) {}
+          host_(AppRuntimeHostOptions{2, 2, 4, 4096, 1}), binding_(store_, &launcher_) {
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+        if (!host_.attach_core_system_font_view(jellyframe_esp32s3_generated::kCoreSystemFont,
+                                                jellyframe_esp32s3_generated::kCoreSystemFontBytes)) {
+            ESP_LOGE("device_image", "Core default font resource failed validation");
+        }
+#endif
+    }
 
     void on_jfdp_frame(const std::uint8_t* frame, std::size_t frame_size) override {
         DeviceFrameHeader request;

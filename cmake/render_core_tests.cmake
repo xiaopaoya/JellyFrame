@@ -74,3 +74,23 @@ add_test(
     NAME jellyframe_render_core_tests
     COMMAND jellyframe_render_core_tests
     WORKING_DIRECTORY "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}")
+
+add_executable(jellyframe_font_resource_tests
+    "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/src/render_core/tests/font_resource_tests.cpp")
+target_link_libraries(jellyframe_font_resource_tests PRIVATE jellyframe_render_core)
+if(MSVC)
+    target_compile_options(jellyframe_font_resource_tests PRIVATE /UNDEBUG)
+else()
+    target_compile_options(jellyframe_font_resource_tests PRIVATE -UNDEBUG)
+endif()
+add_test(NAME jellyframe_font_resource_tests COMMAND jellyframe_font_resource_tests)
+
+add_executable(jellyframe_text_system_tests
+    "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/src/render_core/tests/text_system_tests.cpp")
+target_link_libraries(jellyframe_text_system_tests PRIVATE jellyframe_render_core)
+if(MSVC)
+    target_compile_options(jellyframe_text_system_tests PRIVATE /UNDEBUG)
+else()
+    target_compile_options(jellyframe_text_system_tests PRIVATE -UNDEBUG)
+endif()
+add_test(NAME jellyframe_text_system_tests COMMAND jellyframe_text_system_tests)

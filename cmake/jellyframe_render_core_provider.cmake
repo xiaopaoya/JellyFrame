@@ -10,6 +10,11 @@ set(_jellyframe_runtime_cmake_dir "${CMAKE_CURRENT_LIST_DIR}")
 if(JELLYFRAME_RENDER_CORE_SOURCE_DIR)
     get_filename_component(JELLYFRAME_RENDER_CORE_SOURCE_ROOT
         "${JELLYFRAME_RENDER_CORE_SOURCE_DIR}" ABSOLUTE)
+    # A reused build tree may retain the in-tree Core's cached identity. An
+    # explicit source override must take version and ABI from that checkout.
+    unset(JELLYFRAME_RENDER_CORE_PACKAGE_VERSION CACHE)
+    unset(JELLYFRAME_RENDER_CORE_CMAKE_VERSION CACHE)
+    unset(JELLYFRAME_RENDER_CORE_ENGINE_ABI CACHE)
 else()
     set(JELLYFRAME_RENDER_CORE_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
@@ -28,6 +33,13 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
         set(JELLYFRAME_RENDER_CORE_PROVENANCE_PROVIDER "in-tree")
     endif()
     set(JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_ENFORCED false)
+    if(JELLYFRAME_RENDER_CORE_SOURCE_DIR)
+        # Runtime consumers also have a legacy src/render_core tree. Put the
+        # selected Core's public headers ahead of that tree so source overrides
+        # cannot compile consumers against a different ABI than the linked Core.
+        set(JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS
+            "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/include")
+    endif()
 endif()
 
 include("${_jellyframe_runtime_cmake_dir}/jellyframe_dependency_lock.cmake")
@@ -42,6 +54,10 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
     endif()
     include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_build.cmake")
 else()
+    # Core package headers intentionally replace the bundled src/render_core
+    # headers during an ABI migration. Keep imported includes in normal search
+    # order so the consumer's explicit package-first ordering is respected.
+    set(CMAKE_NO_SYSTEM_FROM_IMPORTED ON)
     if(JELLYFRAME_RENDER_CORE_PACKAGE_DIR)
         find_package(JellyFrameRenderCore ${JELLYFRAME_RENDER_CORE_LOCKED_VERSION} EXACT CONFIG REQUIRED
             PATHS "${JELLYFRAME_RENDER_CORE_PACKAGE_DIR}" NO_DEFAULT_PATH)
@@ -105,6 +121,20 @@ else()
     add_library(jellyframe_render_core ALIAS JellyFrame::jellyframe_render_core)
     get_target_property(JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS
         JellyFrame::jellyframe_render_core INTERFACE_INCLUDE_DIRECTORIES)
+    get_target_property(_jellyframe_render_core_package_definitions
+        JellyFrame::jellyframe_render_core INTERFACE_COMPILE_DEFINITIONS)
+    foreach(_jellyframe_render_core_package_definition IN LISTS
+            _jellyframe_render_core_package_definitions)
+        if(_jellyframe_render_core_package_definition MATCHES
+           "^JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED=([01])$")
+            set(JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED "${CMAKE_MATCH_1}")
+            break()
+        endif()
+    endforeach()
+    if(NOT "${JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED}" MATCHES "^[01]$")
+        message(FATAL_ERROR
+            "JellyFrameRenderCore package does not export its Canvas2D feature state")
+    endif()
     set(JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
     file(MAKE_DIRECTORY "${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}")
     configure_file("${JellyFrameRenderCore_PROFILE_FILE}"
@@ -125,6 +155,8 @@ else()
     unset(_jellyframe_render_core_package_source_manifest)
     unset(_jellyframe_render_core_package_source_hash_position)
     unset(_jellyframe_render_core_package_source_count_position)
+    unset(_jellyframe_render_core_package_definitions)
+    unset(_jellyframe_render_core_package_definition)
 endif()
 
 set(JELLYFRAME_RENDER_CORE_PROVENANCE_FILE

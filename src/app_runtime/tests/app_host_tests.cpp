@@ -4,6 +4,7 @@
 #include "render_core/software_renderer.h"
 
 #include <cassert>
+#include <array>
 #include <string>
 #include <vector>
 
@@ -34,6 +35,49 @@ const std::vector<std::uint8_t>& tiny_jffont_bytes() {
         0x20, 0x50, 0x88, 0xf8, 0x88, 0x88, 0x88,
         0x10, 0x10, 0xfe, 0x92, 0x92, 0xfe, 0x10, 0x10,
     };
+    return bytes;
+}
+
+void write_u16(std::vector<std::uint8_t>& bytes,std::size_t at,std::uint16_t value) {
+    bytes[at]=static_cast<std::uint8_t>(value&0xffU);
+    bytes[at+1]=static_cast<std::uint8_t>(value>>8U);
+}
+void write_u32(std::vector<std::uint8_t>& bytes,std::size_t at,std::uint32_t value) {
+    for (unsigned i=0;i<4;++i) bytes[at+i]=static_cast<std::uint8_t>((value>>(8U*i))&0xffU);
+}
+std::vector<std::uint8_t> tiny_core_font_bytes() {
+    constexpr std::array<std::uint32_t,3> codepoints={0x20U,0x41U,0x42U};
+    constexpr std::size_t header=128,record=40;
+    const std::size_t bitmap=header+codepoints.size()*record;
+    std::vector<std::uint8_t> bytes(bitmap,0);
+    const char magic[]="JFFONT2";
+    for (unsigned i=0;i<8;++i) bytes[i]=static_cast<std::uint8_t>(magic[i]);
+    write_u16(bytes,8,2);write_u16(bytes,10,header);write_u16(bytes,12,record);write_u16(bytes,14,1);
+    write_u32(bytes,24,header);write_u32(bytes,28,static_cast<std::uint32_t>(bitmap));
+    write_u16(bytes,36,1000);write_u16(bytes,38,16);write_u16(bytes,40,400);bytes[42]=4;
+    write_u32(bytes,44,800);write_u32(bytes,48,200);bytes[64]=1;
+    write_u32(bytes,100,1);write_u16(bytes,104,1);
+    for (std::size_t index=0;index<codepoints.size();++index) {
+        const auto at=header+index*record;
+        write_u32(bytes,at,codepoints[index]);write_u32(bytes,at+4,static_cast<std::uint32_t>(index+1));
+        write_u32(bytes,at+8,codepoints[index]==0x20U?250U:500U);
+        write_u32(bytes,at+28,static_cast<std::uint32_t>(bytes.size()-bitmap));
+        if (codepoints[index]!=0x20U) {
+            write_u32(bytes,at+12,static_cast<std::uint32_t>(-1));
+            write_u32(bytes,at+16,static_cast<std::uint32_t>(-2));
+            write_u16(bytes,at+20,1);write_u16(bytes,at+22,2);write_u32(bytes,at+24,1);write_u32(bytes,at+32,2);
+            bytes.push_back(0xf0);bytes.push_back(0xf0);
+        }
+    }
+    write_u32(bytes,16,static_cast<std::uint32_t>(bytes.size()));
+    write_u32(bytes,20,static_cast<std::uint32_t>(codepoints.size()));
+    write_u32(bytes,32,static_cast<std::uint32_t>(bytes.size()-bitmap));
+    std::uint32_t crc=0xffffffffU;
+    for (const auto byte:bytes) {
+        crc^=byte;
+        for (unsigned bit=0;bit<8;++bit) crc=(crc>>1U)^((crc&1U)?0xedb88320U:0U);
+    }
+    write_u32(bytes,96,~crc);
     return bytes;
 }
 
@@ -217,6 +261,63 @@ void app_font_set_can_attach_borrowed_jffont_view() {
     assert(teardown.released_font_resources == 1);
     assert(host.fonts().empty());
 }
+
+void core_font_catalog_tracks_app_lifetime_and_family_identity() {
+    AppRuntimeHost host=make_host();
+    const auto app=host.launch("org.example.core-fonts",AppRole::App);
+    const auto bytes=tiny_core_font_bytes();
+    const auto family_hash=normalized_font_family_hash("Core App Font");
+    assert(host.load_current_core_font(bytes.data(),bytes.size(),"Core App Font").status==
+           AppFontLoadStatus::InvalidFont);
+    assert(host.fonts().core_text_system()==nullptr && host.fonts().empty());
+    assert(host.set_core_system_font(bytes.data(),bytes.size()));
+    const TextSystem* copied_system=host.fonts().core_text_system();
+    assert(copied_system && copied_system->ready());
+    const auto copied_generation=copied_system->generation();
+    assert(host.attach_core_system_font_view(bytes.data(),bytes.size()));
+    const TextSystem* borrowed_system=host.fonts().core_text_system();
+    assert(borrowed_system && borrowed_system->generation()>copied_generation);
+    assert(host.load_current_core_font(bytes.data(),bytes.size(),"Core App Font").loaded());
+    const TextSystem* system=host.fonts().core_text_system();
+    assert(system && system->ready());
+    const auto app_catalog_generation=system->generation();
+    std::uint32_t family_id=0;
+    assert(system->resolve_family_hash(family_hash,family_id) && family_id!=0);
+    TextFontRequest request;
+    request.families=&family_id;
+    request.family_count=1;
+    TextRunMetrics metrics;
+    assert(system->measure("AB",request,metrics)==TextSystemStatus::Ok);
+    assert(metrics.primary_resource_id!=0 && metrics.glyph_count==2 && metrics.advance>0);
+
+    const auto teardown=host.exit_current();
+    assert(teardown.app_instance_id==app.id && teardown.released_font_resources==1);
+    system=host.fonts().core_text_system();
+    assert(system && system->ready());
+    assert(system->generation()>app_catalog_generation);
+    family_id=999;
+    assert(!system->resolve_family_hash(family_hash,family_id) && family_id==999);
+    assert(system->resolve_family_hash(0,family_id) && family_id==0);
+    TextRunMetrics default_metrics;
+    assert(system->measure("AB",TextFontRequest{},default_metrics)==TextSystemStatus::Ok);
+    const auto previous_system_resource=default_metrics.primary_resource_id;
+    auto replacement=bytes;
+    replacement.back()=0xe0;
+    std::fill(replacement.begin()+96,replacement.begin()+100,0);
+    std::uint32_t replacement_crc=0xffffffffU;
+    for (const auto byte:replacement) {
+        replacement_crc^=byte;
+        for (unsigned bit=0;bit<8;++bit)
+            replacement_crc=(replacement_crc>>1U)^((replacement_crc&1U)?0xedb88320U:0U);
+    }
+    write_u32(replacement,96,~replacement_crc);
+    assert(host.set_core_system_font(replacement.data(),replacement.size()));
+    system=host.fonts().core_text_system();
+    assert(system && system->generation()>app_catalog_generation);
+    assert(system && system->measure("AB",TextFontRequest{},default_metrics)==TextSystemStatus::Ok);
+    assert(default_metrics.primary_resource_id!=previous_system_resource);
+}
+
 
 void crash_current_tears_down_active_instance_state() {
     AppRuntimeHost host = make_host();
@@ -720,6 +821,7 @@ int main() {
     app_font_set_uses_system_font_before_app_supplement();
     app_font_set_selects_named_app_family_before_system_font();
     app_font_set_can_attach_borrowed_jffont_view();
+    core_font_catalog_tracks_app_lifetime_and_family_identity();
     crash_current_tears_down_active_instance_state();
     terminate_current_supports_watchdog_and_user_kill_reasons();
     frame_pump_limits_completions_and_filters_stale_instances();

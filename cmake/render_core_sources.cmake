@@ -25,6 +25,7 @@ set(JELLYFRAME_RENDER_CORE_CORE_DOCUMENT_SOURCES
     src/render_core/input.cpp
     src/render_core/text_normalization.cpp
     src/render_core/text_scan.cpp
+    src/render_core/text_system.cpp
 )
 
 set(JELLYFRAME_RENDER_CORE_CORE_PAINT_SOURCES
@@ -32,6 +33,8 @@ set(JELLYFRAME_RENDER_CORE_CORE_PAINT_SOURCES
     src/render_core/animation_timeline.cpp
     src/render_core/bitmap_font.cpp
     src/render_core/bitmap_font_resource.cpp
+    src/render_core/font_resource.cpp
+    src/render_core/prepared_text.cpp
     src/render_core/display_invalidation.cpp
     src/render_core/dirty_region.cpp
     src/render_core/embedded_framebuffer.cpp
@@ -44,6 +47,7 @@ set(JELLYFRAME_RENDER_CORE_CORE_PAINT_SOURCES
     src/render_core/render_tree.cpp
     src/render_core/scroll_blit.cpp
     src/render_core/software_renderer.cpp
+    src/render_core/text_system_paint.cpp
     src/render_core/style.cpp
     src/render_core/style_repaint.cpp
     src/render_core/text_adapter.cpp

@@ -262,6 +262,15 @@ config JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
         that do not render images so they do not link the decoder or retain an
         image cache. This does not enable PNG, JPEG, GIF, WebP, audio or video.
 
+config JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+    bool "Use Core TextSystem in the retained device UI"
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK
+    default n
+    help
+        Opt in to Core-owned font selection, text measurement, layout packets
+        and software painting for the retained UI task. The default remains
+        the existing port bitmap backend until board visuals are accepted.
+
 config JELLYFRAME_ESP32S3_RUN_FLEX_GRID_ACCEPTANCE
     bool "Run Flex/Grid ON/OFF acceptance fixture"
     default n

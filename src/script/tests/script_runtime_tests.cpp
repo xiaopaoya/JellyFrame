@@ -30,6 +30,74 @@ void check(bool condition, const char* message) {
     }
 }
 
+void write_font_u16(std::vector<std::uint8_t>& bytes, std::size_t at, std::uint16_t value) {
+    bytes[at] = static_cast<std::uint8_t>(value & 0xffU);
+    bytes[at + 1] = static_cast<std::uint8_t>(value >> 8U);
+}
+
+void write_font_u32(std::vector<std::uint8_t>& bytes, std::size_t at, std::uint32_t value) {
+    for (unsigned i = 0; i < 4; ++i) {
+        bytes[at + i] = static_cast<std::uint8_t>((value >> (8U * i)) & 0xffU);
+    }
+}
+
+std::vector<std::uint8_t> script_test_font_bytes() {
+    constexpr std::uint32_t codepoints[] = {0x20U, 0x41U, 0x42U};
+    constexpr std::size_t header_size = 128;
+    constexpr std::size_t record_size = 40;
+    const std::size_t bitmap_offset = header_size + 3 * record_size;
+    std::vector<std::uint8_t> bytes(bitmap_offset, 0);
+    const char magic[] = "JFFONT2";
+    for (unsigned i = 0; i < 8; ++i) {
+        bytes[i] = static_cast<std::uint8_t>(magic[i]);
+    }
+    write_font_u16(bytes, 8, 2);
+    write_font_u16(bytes, 10, static_cast<std::uint16_t>(header_size));
+    write_font_u16(bytes, 12, static_cast<std::uint16_t>(record_size));
+    write_font_u16(bytes, 14, 1);
+    write_font_u32(bytes, 24, static_cast<std::uint32_t>(header_size));
+    write_font_u32(bytes, 28, static_cast<std::uint32_t>(bitmap_offset));
+    write_font_u16(bytes, 36, 1000);
+    write_font_u16(bytes, 38, 16);
+    write_font_u16(bytes, 40, 400);
+    bytes[42] = 4;
+    write_font_u32(bytes, 44, 800);
+    write_font_u32(bytes, 48, 200);
+    bytes[64] = 1;
+    write_font_u32(bytes, 100, 1);
+    write_font_u16(bytes, 104, 1);
+    for (std::size_t index = 0; index < 3; ++index) {
+        const std::size_t record = header_size + index * record_size;
+        const bool is_space = codepoints[index] == 0x20U;
+        write_font_u32(bytes, record, codepoints[index]);
+        write_font_u32(bytes, record + 4, static_cast<std::uint32_t>(index + 1));
+        write_font_u32(bytes, record + 8, is_space ? 250U : 500U);
+        write_font_u32(bytes, record + 28, static_cast<std::uint32_t>(bytes.size() - bitmap_offset));
+        if (!is_space) {
+            write_font_u32(bytes, record + 12, static_cast<std::uint32_t>(-1));
+            write_font_u32(bytes, record + 16, static_cast<std::uint32_t>(-2));
+            write_font_u16(bytes, record + 20, 1);
+            write_font_u16(bytes, record + 22, 2);
+            write_font_u32(bytes, record + 24, 1);
+            write_font_u32(bytes, record + 32, 2);
+            bytes.push_back(0xf0);
+            bytes.push_back(0xf0);
+        }
+    }
+    write_font_u32(bytes, 16, static_cast<std::uint32_t>(bytes.size()));
+    write_font_u32(bytes, 20, 3);
+    write_font_u32(bytes, 32, static_cast<std::uint32_t>(bytes.size() - bitmap_offset));
+    std::uint32_t crc = 0xffffffffU;
+    for (const std::uint8_t byte : bytes) {
+        crc ^= byte;
+        for (unsigned bit = 0; bit < 8; ++bit) {
+            crc = (crc >> 1U) ^ ((crc & 1U) != 0 ? 0xedb88320U : 0U);
+        }
+    }
+    write_font_u32(bytes, 96, ~crc);
+    return bytes;
+}
+
 Node* find_first_by_tag(Node& node, const std::string& tag_name) {
     if (node.type == NodeType::Element && node.tag_name == tag_name) {
         return &node;
@@ -552,7 +620,7 @@ void javascript_cached_destroyed_node_wrappers_are_invalidated() {
         "try { gone.setAttribute('data-x', '1'); } catch (e) { attrResult = 'invalid'; }"
         "oldStyle.display = 'none';"
         "oldClasses.add('new');"
-        "ctx.fillRect(0, 0, 2, 2);"
+        "if (ctx) ctx.fillRect(0, 0, 2, 2);"
         "textResult + ':' + attrResult + ':' + String(gone.parentElement === null)");
 
     check(result.ok, "destroyed cached wrappers script succeeds");
@@ -2414,6 +2482,17 @@ void javascript_canvas_2d_is_optional_and_lazy() {
     }
 
     Canvas2DRegistry registry(Canvas2DPolicy{true, 1, 64, 64, 8, 8});
+    const std::vector<std::uint8_t> font_bytes = script_test_font_bytes();
+    TextFontFace font_face;
+    font_face.resource_id = 1;
+    font_face.family_id = 0;
+    font_face.css_family_hash = normalized_font_family_hash("system-ui");
+    check(font_face.resource.load(font_bytes.data(), font_bytes.size()) == FontResourceStatus::Loaded,
+          "script canvas test font resource loads");
+    TextSystem text_system;
+    check(text_system.bind(&font_face, 1) == TextSystemStatus::Ok,
+          "script canvas test text system binds");
+    registry.set_text_system(&text_system);
     JerryScriptRuntime runtime;
     runtime.bind_canvas_2d(registry);
     runtime.bind_document(*document);
@@ -2432,9 +2511,9 @@ void javascript_canvas_2d_is_optional_and_lazy() {
         "ctx.fillRect(0, 6, 1, 1);"
         "ctx.restore();"
         "ctx.font = 'bold 10px system-ui';"
-        "var textWidth = ctx.measureText('Hi').width;"
+        "var textWidth = ctx.measureText('AB').width;"
         "ctx.fillStyle = '#00ff00';"
-        "ctx.fillText('Hi', 1, 5);"
+        "ctx.fillText('AB', 1, 5);"
         "var gradient = ctx.createLinearGradient(0, 0, 8, 0);"
         "gradient.addColorStop(0, '#000000');"
         "gradient.addColorStop(1, '#ffffff');"
@@ -2475,6 +2554,21 @@ void javascript_canvas_2d_is_optional_and_lazy() {
           "canvas arc and fill are bound to script");
     check((subtree_dirty_flags(*document) & DomDirtyPaint) != 0U, "canvas drawing marks paint dirty");
 }
+
+#if !JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED
+void javascript_canvas_get_context_is_unavailable_when_disabled() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><canvas id='chart'></canvas></body>");
+    Canvas2DRegistry registry;
+    JerryScriptRuntime runtime;
+    runtime.bind_canvas_2d(registry);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "document.getElementById('chart').getContext('2d') === null");
+    check(result.ok && result.value == "true",
+          "disabled Core Canvas2D package exposes no script context");
+}
+#endif
 
 void javascript_canvas_bezier_curve_to_strokes_path() {
     HtmlParser parser;
@@ -2821,6 +2915,7 @@ int main() {
 #else
         javascript_advanced_form_apis_are_absent_when_disabled();
 #endif
+#if JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED
         javascript_canvas_2d_is_optional_and_lazy();
         javascript_canvas_quadratic_curve_to_strokes_path();
         javascript_canvas_bezier_curve_to_strokes_path();
@@ -2829,6 +2924,9 @@ int main() {
         javascript_canvas_radial_gradient_uses_concentric_two_stop_subset();
         javascript_retained_canvas_gradient_is_safe_after_canvas_clear();
         javascript_canvas_draw_image_copies_and_scales_canvas_source();
+#else
+        javascript_canvas_get_context_is_unavailable_when_disabled();
+#endif
         javascript_dialog_modal_subset_is_bounded_and_cancellable();
         javascript_dom_budget_ledger_rejects_growth_atomically();
     } catch (const std::exception& error) {

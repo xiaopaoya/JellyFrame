@@ -7,6 +7,7 @@
 #include "render_core/render_tree.h"
 #include "render_core/style.h"
 #include "render_core/text_backend.h"
+#include "render_core/text_system.h"
 
 #include <memory>
 #include <string>
@@ -21,6 +22,13 @@ struct LayoutBoxDeleter {
     void operator()(LayoutBox* box) const;
 };
 
+struct PreparedTextLine {
+    std::string packet;
+    int origin_x = 0;
+    int baseline_y = 0;
+    int width = 0;
+};
+
 using LayoutBoxPtr = std::unique_ptr<LayoutBox, LayoutBoxDeleter>;
 
 // This is intentionally owned by the layout box: a layout tree and its layer
@@ -31,8 +39,17 @@ struct TextLayoutCache {
     std::string rendered_text;
     std::vector<std::string> lines;
     TextMeasureProvider text_measure;
+    const TextSystem* text_system = nullptr;
+    std::uint64_t text_system_generation = 0;
+    bool prepared_text = false;
+    std::string prepared_packet;
+    std::vector<PreparedTextLine> prepared_lines;
+    int prepared_origin_x = 0;
+    int prepared_baseline_y = 0;
     int available_width = 0;
     int content_width = 0;
+    int rect_x = 0;
+    int rect_y = 0;
     int rect_width = 0;
     int rect_height = 0;
     int viewport_width = 0;
@@ -64,6 +81,8 @@ struct LayoutEngineOptions {
     std::size_t max_layout_boxes = 4096;
     DiagnosticSink* diagnostics = nullptr;
     std::size_t max_layout_depth = 64;
+    const TextSystem* text_system = nullptr;
+    std::size_t max_prepared_text_glyphs = 128;
 };
 
 class LayoutEngine {

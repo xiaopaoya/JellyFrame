@@ -175,7 +175,7 @@ desktop tools, not by the MCU runtime:
 
 Before `1.0`, `runtime.minJellyFrame` must equal the active release line derived
 from `VERSION`, and `runtime.minRenderCore` must equal the Render Core version
-locked by this Runtime (`0.7.0` for the current package contract). Together they
+locked by this Runtime (`0.8.0` for the current package contract). Together they
 identify the current app contract; they are not a promise that historical
 pre-release apps remain supported.
 
@@ -194,7 +194,7 @@ pre-release apps remain supported.
   "entry": "/index.html",
   "runtime": {
     "minJellyFrame": "0.6.0",
-    "minRenderCore": "0.7.0",
+    "minRenderCore": "0.8.0",
     "script": "classic"
   },
   "viewport": {
@@ -269,12 +269,14 @@ Runtime support is optional and bounded: pixels are allocated only after
   fills remain deferred. Gradient text is currently approximated to one sampled
   text color so Canvas can keep using the host text backend.
 
-`fonts` is a deployment/runtime declaration for the JellyFrame bitmap font
-path, not a full CSS `@font-face` implementation. The packer records `.jffont`,
-`.bdf`, `.ttf`, `.otf`, `.woff` and related files as ordinary `Font` resources
-in resource tables or `.jfapp` bundles. `.jffont` V0/V1 can be parsed by
-runtime code and held per app instance. `AppFontSet` provides a bitmap fallback
-chain: generic/no-family text tries the system font profile first and app
+`fonts` is a deployment/runtime declaration for JellyFrame prepared bitmap
+fonts, not a full CSS `@font-face` implementation. The packer records `.jffont`,
+`.jffont2`, `.bdf`, `.ttf`, `.otf`, `.woff` and related files as ordinary `Font`
+resources in resource tables or `.jfapp` bundles. `.jffont` V0/V1 and Core-owned
+JFFONT2 can be parsed by runtime code and held per app instance. Win32
+`--use-app-fonts` selects Core TextSystem for JFFONT2 catalogs with a family-0
+face; otherwise the legacy bitmap backend remains available. `AppFontSet`
+provides a bitmap fallback chain: generic/no-family text tries the system font profile first and app
 `.jffont` supplements fill missing glyphs; a CSS `font-family` whose first
 custom family matches manifest `fonts[].family` tries that app font first. The
 Win32 shell can explicitly switch to this validation path with `--use-app-fonts`.

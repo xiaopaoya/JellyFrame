@@ -1,13 +1,20 @@
 set(JELLYFRAME_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../..")
-set(JELLYFRAME_SOURCE_ROOT "${JELLYFRAME_ROOT}")
-include("${JELLYFRAME_ROOT}/cmake/render_core_sources.cmake")
-include("${JELLYFRAME_ROOT}/cmake/render_core_feature_profile.cmake")
+if(JELLYFRAME_RENDER_CORE_SOURCE_DIR)
+    get_filename_component(JELLYFRAME_RENDER_CORE_SOURCE_ROOT
+        "${JELLYFRAME_RENDER_CORE_SOURCE_DIR}" ABSOLUTE)
+else()
+    set(JELLYFRAME_RENDER_CORE_SOURCE_ROOT "${JELLYFRAME_ROOT}")
+endif()
+set(JELLYFRAME_SOURCE_ROOT "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}")
+include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_sources.cmake")
+include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_profile.cmake")
 
 idf_component_register(
     SRCS
         ${JELLYFRAME_RENDER_CORE_SOURCES_ABSOLUTE}
     INCLUDE_DIRS
-        "${JELLYFRAME_ROOT}/src"
+        "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/include"
+        "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/src"
 )
 
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)

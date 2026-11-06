@@ -123,7 +123,7 @@ my_app/
 
 `1.0` 前，`runtime.minJellyFrame` 必须等于由 `VERSION` 推导出的活跃 release line，
 `runtime.minRenderCore` 必须等于此 Runtime 锁定的 Render Core 版本（当前 checkout 均为
-`0.7.0`）。两者共同标识当前 app 契约，不承诺继续支持历史预发布 app。
+`0.8.0`）。两者共同标识当前 app 契约，不承诺继续支持历史预发布 app。
 
 ```json
 {
@@ -140,7 +140,7 @@ my_app/
   "entry": "/index.html",
   "runtime": {
     "minJellyFrame": "0.6.0",
-    "minRenderCore": "0.7.0",
+    "minRenderCore": "0.8.0",
     "script": "classic"
   },
   "viewport": {
@@ -206,10 +206,10 @@ Canvas 2D 的标准能力名是 `graphics.canvas2d`。它用于声明 app 需要
   和 pattern fill 仍延后。gradient 文本目前会退化为一个采样色，以便 Canvas 继续复用宿主
   text backend。
 
-`fonts` 是 JellyFrame bitmap font 路径的部署/runtime 声明，不是完整 CSS `@font-face`
-实现。打包器会把 `.jffont`、`.bdf`、`.ttf`、`.otf`、`.woff` 等文件作为普通 `Font`
-资源写入资源表或 `.jfapp`。其中 `.jffont` V0/V1 已可由 runtime 解析并随 app instance
-持有；`AppFontSet` 提供 bitmap fallback chain：generic/未指定 family 的文本先尝试系统字体
+`fonts` 是 JellyFrame 预制位图字体路径的部署/runtime 声明，不是完整 CSS `@font-face`
+实现。打包器会把 `.jffont`、`.jffont2`、`.bdf`、`.ttf`、`.otf`、`.woff` 等文件作为普通 `Font`
+资源写入资源表或 `.jfapp`。`.jffont` V0/V1 与 Core-owned JFFONT2 均可由 runtime 解析并随 app instance
+持有。Win32 `--use-app-fonts` 在 JFFONT2 catalog 含 family-0 字体时使用 Core TextSystem；否则仍可走旧 bitmap backend。`AppFontSet` 提供 bitmap fallback chain：generic/未指定 family 的文本先尝试系统字体
 profile，再用 app `.jffont` supplement 补缺字；CSS `font-family` 的首个自定义 family 若匹配
 manifest `fonts[].family`，则优先尝试对应 app 字体。Win32 壳可用 `--use-app-fonts`
 显式切到这条验收路径。

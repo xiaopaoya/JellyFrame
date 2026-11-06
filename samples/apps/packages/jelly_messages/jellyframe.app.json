@@ -6,7 +6,7 @@
   "name": "Wearable Messages",
   "version": { "name": "0.1.0", "code": 1 },
   "entry": "/index.html",
-  "runtime": { "minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "classic" },
+  "runtime": { "minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "classic" },
   "viewport": { "designWidth": 300, "designHeight": 300, "shape": "round" },
   "budgets": { "maxResourceBytes": 65536, "maxDomNodes": 224, "maxCssRules": 176, "maxDisplayCommands": 384, "maxTimers": 0, "maxEventListeners": 16 },
   "capabilities": [],

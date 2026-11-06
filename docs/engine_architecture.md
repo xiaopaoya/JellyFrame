@@ -45,8 +45,8 @@ The first history-preserving Render Core repository now exists at
 [`xiaopaoya/JellyFrame-Render-Core`](https://github.com/xiaopaoya/JellyFrame-Render-Core).
 This JellyFrame checkout retains the in-tree Core provider for synchronized
 development. The first signed Core release, `v0.6.0`, established the
-boundary. Runtime package mode accepts signed `v0.7.0` / ABI 2 through its
-package lock. The default in-tree provider remains at `0.6.2` / ABI 1 for
+boundary. Runtime package mode accepts signed `v0.8.0` / ABI 3 through its
+package lock. The default in-tree provider remains at `0.8.0` / ABI 3 for
 synchronized development.
 The Render Core target has an extraction boundary. Configure with
 `JELLYFRAME_BUILD_APP_RUNTIME=OFF`, `JELLYFRAME_BUILD_SCRIPTING=OFF` and the
@@ -74,7 +74,7 @@ the Device contracts have a separate explicit build mode for Device OS work.
 The packer
 normalizes declared text members to LF, member order and archive metadata,
 writes a SHA-256 sidecar. CI separately validates this monorepo export and
-downloads the published `v0.7.0` artifact, verifies its recorded archive
+downloads the published `v0.8.0` artifact, verifies its recorded archive
 SHA-256, then builds, installs and consumes that released package through the
 Runtime package-provider configuration. The Standalone Core CI job retains the
 monorepo archive and sidecar as workflow artifacts; consumers still accept the
@@ -138,7 +138,7 @@ ownership model:
 
 | Future repository | Owns | Release rhythm | Current state |
 | --- | --- | --- | --- |
-| `jellyframe-render-core` | HTML/CSS/DOM, layout, paint, input and opt-in feature families | Frequent optimization and compatibility releases | Physical repository created; signed `v0.7.0` / ABI 2 is locked for package mode; standalone CI, install/export and package-consumer boundaries are verified. |
+| `jellyframe-render-core` | HTML/CSS/DOM, layout, paint, input and opt-in feature families | Frequent optimization and compatibility releases | Physical repository created; signed `v0.8.0` / ABI 3 is locked for package mode; standalone CI, install/export and package-consumer boundaries are verified. |
 | `jellyframe` | App Runtime, Japp format, script-runtime binding, desktop shell and author tools | Slower releases with App compatibility discipline | Current Runtime source boundary; accepts a locked Core package or in-tree Core |
 | `jellyframe-device-os` | Launcher, registry, Device Runtime, JFDP, board ports and official images | Experimental hardware-driven releases | Not physically extracted; D0 contracts remain in transitional locations |
 | Current script backend | Third-party engine selected at build time | Upstream commit/tag cadence | Current implementation is JerryScript; it is an optional dependency locked by the Runtime/port build owner |
@@ -168,7 +168,7 @@ defined in [render_core_release_policy.md](render_core_release_policy.md).
 Repository modularity and internal feature modularity are separate claims.
 The Core/Runtime package boundary is closed: Core has an independent,
 history-preserving repository, first signed `v0.6.0` release and currently
-locked package `v0.7.0` / ABI 2, standalone
+locked package `v0.8.0` / ABI 3, standalone
 archive/install path, locked Runtime package consumer, provenance record and
 local source override. The in-tree Core-only configuration is independently
 checked to ensure it does not create Device contracts targets or tests. The

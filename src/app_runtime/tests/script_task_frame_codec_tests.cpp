@@ -31,6 +31,12 @@ ScriptTaskAppFrameCodecOptions v4_limits() {
     return result;
 }
 
+ScriptTaskAppFrameCodecOptions v5_limits() {
+    ScriptTaskAppFrameCodecOptions result = v4_limits();
+    result.version = 5;
+    return result;
+}
+
 ScriptTaskAppFrame fixture() {
     ScriptTaskAppFrame frame;
     frame.viewport = {0, 0, 172, 320};
@@ -107,6 +113,28 @@ void frame_codec_rejects_budget_and_wire_integrity_failures() {
     bytes[0] = 0;
     ScriptTaskAppFrame decoded;
     assert(decode_script_task_app_frame(bytes, limits(), decoded) == ScriptTaskAppFrameCodecStatus::Malformed);
+}
+
+void v5_frame_round_trips_prepared_text_as_opaque_core_packet() {
+    ScriptTaskAppFrame frame = fixture();
+    DisplayCommand& text = frame.display_list[1];
+    text.type = DisplayCommandType::PreparedText;
+    text.text.assign("JFTP\0\1packet", 12);
+    const std::string prepared_packet = text.text;
+    DisplayCommand image;
+    image.type = DisplayCommandType::Image;
+    image.rect = {10, 20, 30, 40};
+    image.image_handle = 17;
+    frame.display_list.push_back(image);
+    std::vector<std::uint8_t> bytes;
+    assert(encode_script_task_app_frame(frame, v5_limits(), bytes) == ScriptTaskAppFrameCodecStatus::Accepted);
+    ScriptTaskAppFrame decoded;
+    assert(decode_script_task_app_frame(bytes, v5_limits(), decoded) == ScriptTaskAppFrameCodecStatus::Accepted);
+    assert(decoded.display_list[1].type == DisplayCommandType::PreparedText);
+    assert(decoded.display_list[1].text == prepared_packet);
+    assert(decoded.display_list[2].type == DisplayCommandType::Image);
+    assert(decoded.display_list[2].image_handle == 17);
+    assert(encode_script_task_app_frame(frame, v4_limits(), bytes) == ScriptTaskAppFrameCodecStatus::InvalidValue);
 }
 
 void v2_frame_round_trip_preserves_nested_clips_and_target_references() {
@@ -401,6 +429,7 @@ void worker_frame_producer_preserves_layer_rotation_for_v3_consumers() {
 int script_task_frame_codec_tests_main() {
     frame_round_trip_preserves_render_values_and_target_order();
     frame_codec_rejects_budget_and_wire_integrity_failures();
+    v5_frame_round_trips_prepared_text_as_opaque_core_packet();
     v2_frame_round_trip_preserves_nested_clips_and_target_references();
     v2_frame_rejects_invalid_clip_chain_and_v1_clip_downgrade();
     v3_frame_round_trip_preserves_fixed_point_command_transform();

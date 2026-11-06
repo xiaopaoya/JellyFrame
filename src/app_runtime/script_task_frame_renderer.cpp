@@ -444,7 +444,10 @@ ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
                   SoftwareRasterizerOptions{
                       options.max_temporary_pixels,
                       options.rasterizer_statistics,
-                      options.rasterizer_timing}),
+                      options.rasterizer_timing,
+                      {},
+                      options.text_system,
+                      options.text_limits}),
       options_(options),
       text_painter_(text_painter) {}
 
@@ -457,12 +460,22 @@ ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
                   SoftwareRasterizerOptions{
                       options.max_temporary_pixels,
                       options.rasterizer_statistics,
-                      options.rasterizer_timing}),
+                      options.rasterizer_timing,
+                      {},
+                      options.text_system,
+                      options.text_limits}),
       options_(options),
       text_painter_(text_painter),
       image_painter_(image_painter) {}
 
 bool ScriptTaskFrameRenderer::command_visual_bounds(const DisplayCommand& command, Rect& output) const {
+    if (command.type == DisplayCommandType::PreparedText) {
+        if (options_.text_system == nullptr || command.rect.width <= 0 || command.rect.height <= 0) {
+            output = {};
+            return false;
+        }
+        return transform_bounds(command, output);
+    }
     if (command.type == DisplayCommandType::Text) {
         if (!text_painter_.writes_only_within_rect || command.rect.width <= 0 || command.rect.height <= 0) {
             output = {};

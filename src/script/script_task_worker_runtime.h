@@ -16,6 +16,8 @@
 
 namespace jellyframe {
 
+class TextSystem;
+
 enum class ScriptTaskWorkerRuntimeInitStatus : std::uint8_t {
     Accepted,
     InvalidSession,
@@ -52,6 +54,7 @@ struct ScriptTaskWorkerRuntimeOptions {
     ScriptTaskAppFrameCodecOptions frame_codec;
     ScriptTaskInputCodecOptions input_codec;
     ScriptTaskServiceRequestCodecOptions service_request_codec;
+    const TextSystem* text_system = nullptr;
 };
 
 struct ScriptTaskWorkerRuntimeTelemetry {

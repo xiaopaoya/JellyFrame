@@ -14,6 +14,7 @@ constexpr std::uint8_t kVersionV1 = 1;
 constexpr std::uint8_t kVersionV2 = 2;
 constexpr std::uint8_t kVersionV3 = 3;
 constexpr std::uint8_t kVersionV4 = 4;
+constexpr std::uint8_t kVersionV5 = 5;
 constexpr std::size_t kHeaderBytesV1 = 32;
 constexpr std::size_t kHeaderBytesV2 = 36;
 constexpr std::size_t kCommandBytesV1V2 = 72;
@@ -37,7 +38,7 @@ int get_int(const std::vector<std::uint8_t>& in, std::size_t at) {
     return static_cast<int>(static_cast<std::int32_t>(get_u32(in, at)));
 }
 std::size_t command_bytes_for(std::uint8_t version) {
-    return version == kVersionV4 ? kCommandBytesV4 :
+    return version >= kVersionV4 ? kCommandBytesV4 :
         (version == kVersionV3 ? kCommandBytesV3 : kCommandBytesV1V2);
 }
 bool has_transform(const DisplayCommand& command) {
@@ -74,8 +75,9 @@ bool valid_transform(const DisplayCommandTransform& transform) {
     }
     return true;
 }
-bool valid_command(const DisplayCommand& c) {
+bool valid_command(const DisplayCommand& c, std::uint8_t version) {
     return static_cast<std::uint8_t>(c.type) <= static_cast<std::uint8_t>(DisplayCommandType::Image) &&
+           (c.type != DisplayCommandType::PreparedText || version >= kVersionV5) &&
            static_cast<std::uint8_t>(c.text_align) <= static_cast<std::uint8_t>(TextCommandAlign::End) &&
            static_cast<std::uint8_t>(c.gradient_axis) <= static_cast<std::uint8_t>(GradientAxis::RadialPosition) &&
            static_cast<std::uint8_t>(c.object_fit) <= static_cast<std::uint8_t>(ObjectFit::ScaleDown) &&
@@ -137,7 +139,7 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
                                                             const ScriptTaskAppFrameCodecOptions& options,
                                                             std::vector<std::uint8_t>& output) {
     if (options.version != kVersionV1 && options.version != kVersionV2 && options.version != kVersionV3 &&
-        options.version != kVersionV4) {
+        options.version != kVersionV4 && options.version != kVersionV5) {
         return ScriptTaskAppFrameCodecStatus::UnsupportedVersion;
     }
     const bool has_clip_values = !frame.clips.empty() || !frame.display_clip_indices.empty();
@@ -203,7 +205,8 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
         }
     }
     for (const DisplayCommand& command : frame.display_list) {
-        if (!valid_command(command) || !checked_total(text_bytes, command.text.size(), text_bytes) ||
+        if (!valid_command(command, options.version) ||
+            !checked_total(text_bytes, command.text.size(), text_bytes) ||
             !checked_total(total, command_bytes_for(options.version), total) ||
             !checked_total(total, command.text.size(), total)) {
             return ScriptTaskAppFrameCodecStatus::InvalidValue;
@@ -291,7 +294,8 @@ ScriptTaskAppFrameCodecStatus decode_script_task_app_frame(const std::vector<std
         return ScriptTaskAppFrameCodecStatus::Malformed;
     }
     const std::uint8_t version = input[4];
-    if (version != kVersionV1 && version != kVersionV2 && version != kVersionV3 && version != kVersionV4) {
+    if (version != kVersionV1 && version != kVersionV2 && version != kVersionV3 &&
+        version != kVersionV4 && version != kVersionV5) {
         return ScriptTaskAppFrameCodecStatus::UnsupportedVersion;
     }
     if (options.version != version) return ScriptTaskAppFrameCodecStatus::UnsupportedVersion;
@@ -378,7 +382,7 @@ ScriptTaskAppFrameCodecStatus decode_script_task_app_frame(const std::vector<std
             }
         }
         at += command_bytes;
-        if (!valid_command(c) || !valid_clip_index(c.transform.source_clip_index, decoded.clips.size()) ||
+        if (!valid_command(c, version) || !valid_clip_index(c.transform.source_clip_index, decoded.clips.size()) ||
             text_length > input.size() - at || !checked_total(text_bytes, text_length, text_bytes) ||
             text_bytes > options.max_text_bytes) return ScriptTaskAppFrameCodecStatus::Malformed;
         c.text.assign(reinterpret_cast<const char*>(input.data() + at), text_length); at += text_length;

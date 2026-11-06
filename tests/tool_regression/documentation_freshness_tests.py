@@ -15,6 +15,16 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CURRENT_VERSION = (REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+CORE_VERSION_SOURCE = (REPO_ROOT / "cmake" / "render_core_version.cmake").read_text(
+    encoding="utf-8")
+CORE_VERSION_MATCH = re.search(
+    r'^set\(JELLYFRAME_RENDER_CORE_PACKAGE_VERSION "([0-9]+\.[0-9]+\.[0-9]+)"',
+    CORE_VERSION_SOURCE,
+    re.MULTILINE,
+)
+if CORE_VERSION_MATCH is None:
+    raise RuntimeError("Render Core version metadata is missing")
+CORE_VERSION = CORE_VERSION_MATCH.group(1)
 EXCLUDED_PREFIXES = ("third_party/",)
 
 
@@ -45,7 +55,8 @@ class DocumentationFreshnessTests(unittest.TestCase):
             text=True,
         )
         version_pattern = "|".join(
-            re.escape(version) for version in accepted_document_versions(CURRENT_VERSION))
+            re.escape(version)
+            for version in (*accepted_document_versions(CURRENT_VERSION), CORE_VERSION))
         metadata_patterns = (
             re.compile(rf"Last updated: \d{{4}}-\d{{2}}-\d{{2}}; Applies to: (?:{version_pattern})(?=$|[\s.,;:。；，])"),
             re.compile(rf"最后更新：\d{{4}}-\d{{2}}-\d{{2}}；适用版本：(?:{version_pattern})(?=$|[\s.,;:。；，])"),

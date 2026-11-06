@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 BASE_FEATURES = ("core.document", "core.paint")
-LOCKED_SOURCE_HASH = "609927a3cb5307c9c9f33314cc2638b8aae4bec8c71d91208c2f9eb7c521fb55"
+LOCKED_SOURCE_HASH = "fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795"
 TEST_ARGS: argparse.Namespace | None = None
 
 PROFILE_CASES = (
@@ -120,17 +120,17 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                         expected_features.append("graphics.canvas2d")
 
                     self.assertEqual(profile["schemaVersion"], 1)
-                    self.assertEqual(profile["packageVersion"], "0.6.2")
+                    self.assertEqual(profile["packageVersion"], "0.8.0")
                     self.assertEqual(profile["profileId"], profile_id)
                     self.assertEqual(profile["features"], expected_features)
                     self.assertEqual(provenance["schemaVersion"], 1)
                     self.assertEqual(provenance["consumer"], "jellyframe-runtime")
                     self.assertEqual(provenance["provider"], "in-tree")
-                    self.assertEqual(provenance["packageVersion"], "0.6.2")
-                    self.assertEqual(provenance["engineAbi"], 1)
+                    self.assertEqual(provenance["packageVersion"], "0.8.0")
+                    self.assertEqual(provenance["engineAbi"], 3)
                     self.assertEqual(provenance["profileFile"], "jellyframe_render_core_profile.json")
-                    self.assertEqual(provenance["lockedVersion"], "0.7.0")
-                    self.assertEqual(provenance["lockedEngineAbi"], 2)
+                    self.assertEqual(provenance["lockedVersion"], "0.8.0")
+                    self.assertEqual(provenance["lockedEngineAbi"], 3)
                     self.assertEqual(provenance["lockedSourceHash"], LOCKED_SOURCE_HASH)
                     self.assertFalse(provenance["lockEnforced"])
                     self.assertEqual(provenance["sourceManifestFile"],
@@ -169,6 +169,7 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                             "src/render_core/dom_owner.cpp",
                             "src/render_core/embedded_framebuffer.cpp",
                             "src/render_core/event.cpp",
+                            "src/render_core/font_resource.cpp",
                             "src/render_core/form_control.cpp",
                             "src/render_core/frame_loop.cpp",
                             "src/render_core/frame_update.cpp",
@@ -180,6 +181,7 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                             "src/render_core/layer_tree.cpp",
                             "src/render_core/layout.cpp",
                             "src/render_core/pipeline_statistics.cpp",
+                            "src/render_core/prepared_text.cpp",
                             "src/render_core/render_tree.cpp",
                             "src/render_core/scroll_blit.cpp",
                             "src/render_core/software_renderer.cpp",
@@ -191,6 +193,8 @@ class RenderCoreFeatureProfileTests(unittest.TestCase):
                             "src/render_core/text_normalization.cpp",
                             "src/render_core/text_repaint.cpp",
                             "src/render_core/text_scan.cpp",
+                            "src/render_core/text_system.cpp",
+                            "src/render_core/text_system_paint.cpp",
                         },
                     )
                     self.assertFalse(

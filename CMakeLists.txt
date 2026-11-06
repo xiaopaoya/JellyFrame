@@ -176,12 +176,14 @@ add_library(jellyframe_app_runtime
 target_link_libraries(jellyframe_app_runtime
     PUBLIC jellyframe_render_core
     PRIVATE jellyframe_device_runtime_contracts)
-target_include_directories(jellyframe_app_runtime
-    BEFORE PUBLIC
+if(JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS)
+    target_include_directories(jellyframe_app_runtime PUBLIC
         ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+else()
+    target_include_directories(jellyframe_app_runtime PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+endif()
 target_compile_definitions(jellyframe_app_runtime
     PUBLIC
         JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION="${JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION}"
@@ -217,12 +219,14 @@ if(JELLYFRAME_BUILD_SCRIPTING)
             src/app_runtime/script_task_fatal_codec.cpp
         )
         target_link_libraries(jellyframe_script_task_runtime PUBLIC jellyframe_app_runtime)
-        target_include_directories(jellyframe_script_task_runtime
-            BEFORE PUBLIC
+        if(JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS)
+            target_include_directories(jellyframe_script_task_runtime PUBLIC
                 ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
-            PUBLIC
-                ${CMAKE_CURRENT_SOURCE_DIR}/src
-        )
+                ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        else()
+            target_include_directories(jellyframe_script_task_runtime
+                PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        endif()
         target_compile_features(jellyframe_script_task_runtime PUBLIC cxx_std_17)
         if(MSVC)
             target_compile_options(jellyframe_script_task_runtime PRIVATE /W4)
@@ -244,14 +248,16 @@ if(JELLYFRAME_BUILD_SCRIPTING)
     if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         target_link_libraries(jellyframe_script PUBLIC jellyframe_script_task_runtime)
     endif()
-    target_include_directories(jellyframe_script
-        BEFORE PUBLIC
+    if(JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS)
+        target_include_directories(jellyframe_script PUBLIC
             ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
-        PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/src
-        PRIVATE
-            ${JELLYFRAME_SCRIPT_BACKEND_INCLUDE_DIRS}
-    )
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    else()
+        target_include_directories(jellyframe_script
+            PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    endif()
+    target_include_directories(jellyframe_script
+        PRIVATE ${JELLYFRAME_SCRIPT_BACKEND_INCLUDE_DIRS})
     target_compile_features(jellyframe_script PUBLIC cxx_std_17)
     target_compile_definitions(jellyframe_script
         PUBLIC JELLYFRAME_ENABLE_SCRIPTING=1
@@ -1012,22 +1018,24 @@ if(JELLYFRAME_BUILD_TESTS)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         if(JELLYFRAME_BUILD_SCRIPTING)
-            add_test(
-                NAME jellyframe_win32_canvas_smoke_frame_script
-                COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_smoke
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_smoke/capture_canvas_smoke.jfcapture
-                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-            set_tests_properties(jellyframe_win32_canvas_smoke_frame_script PROPERTIES
-                PASS_REGULAR_EXPRESSION
-                    "layer_tree layers=2 display_commands=15")
+            if(JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED)
+                add_test(
+                    NAME jellyframe_win32_canvas_smoke_frame_script
+                    COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
+                            --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_smoke
+                            --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_smoke/capture_canvas_smoke.jfcapture
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+                set_tests_properties(jellyframe_win32_canvas_smoke_frame_script PROPERTIES
+                    PASS_REGULAR_EXPRESSION
+                        "layer_tree layers=2 display_commands=15")
 
-            add_test(
-                NAME jellyframe_win32_canvas_gauges_frame_script
-                COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_gauges
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_gauges/capture_canvas_gauges.jfcapture
-                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+                add_test(
+                    NAME jellyframe_win32_canvas_gauges_frame_script
+                    COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
+                            --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_gauges
+                            --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_gauges/capture_canvas_gauges.jfcapture
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            endif()
 
             add_test(
                 NAME jellyframe_win32_route_tabs_frame_script

@@ -306,6 +306,8 @@ const char* frame_trace_command_type_name(DisplayCommandType type) {
         return "BoxShadow";
     case DisplayCommandType::Text:
         return "Text";
+    case DisplayCommandType::PreparedText:
+        return "PreparedText";
     case DisplayCommandType::Image:
         return "Image";
     }
@@ -2486,16 +2488,27 @@ bool measure_text_with_gdi(const std::string& text,
 struct BrowserTextBackend {
     TextMeasureProvider measure;
     TextPainter painter;
+    const TextSystem* text_system = nullptr;
 };
 
 BrowserTextBackend make_browser_text_backend(const BrowserOptions& options, AppRuntimeHost* runtime) {
-    if (options.use_app_fonts && runtime != nullptr && runtime->fonts().primary_font() != nullptr) {
-        return BrowserTextBackend{runtime->fonts().measure_provider(), runtime->fonts().painter()};
+    if (options.use_app_fonts && runtime != nullptr) {
+        if (const TextSystem* text_system = runtime->fonts().core_text_system()) {
+            return BrowserTextBackend{{}, {}, text_system};
+        }
+        if (runtime->fonts().primary_font() != nullptr) {
+            return BrowserTextBackend{runtime->fonts().measure_provider(), runtime->fonts().painter(), nullptr};
+        }
     }
     return BrowserTextBackend{
         TextMeasureProvider{measure_text_with_gdi, nullptr},
         TextPainter{draw_text_with_gdi, nullptr},
+        nullptr,
     };
+}
+
+void bind_browser_text_backend(Canvas2DRegistry& canvas, const BrowserTextBackend& backend) {
+    canvas.set_text_system(backend.text_system);
 }
 
 InputModifiers modifiers_from_keys(WPARAM wparam) {
@@ -3248,7 +3261,7 @@ void print_win32_browser_usage(std::ostream& output, const std::string& program_
         << "                                 set-checked, select-index.\n"
         << "  --viewport-width N             Override viewport width.\n"
         << "  --viewport-height N            Override viewport height.\n"
-        << "  --use-app-fonts                Use package .jffont resources when available.\n"
+        << "  --use-app-fonts                Use package .jffont/.jffont2 fonts when available.\n"
         << "  --audio-smoke SOURCE           Win32-only host audio smoke test. SOURCE can\n"
         << "                                 be a local file, or /path in --app package.\n"
         << "  --audio-smoke-ms N             Playback duration for --audio-smoke, default 1000.\n"
@@ -3580,10 +3593,15 @@ void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifes
         const std::string& source = manifest.font_sources[index];
         const std::string_view family =
             index < manifest.font_families.size() ? std::string_view(manifest.font_families[index]) : std::string_view{};
+        const auto is_core_font = [](const std::uint8_t* data, std::size_t size) {
+            return data != nullptr && size >= 8 && std::memcmp(data, "JFFONT2\0", 8) == 0;
+        };
         jellyframe_example::PackageResourceView view;
         if (jellyframe_example::load_package_resource_view(source, manifest.entry, view, &package_context) &&
             view.stable) {
-            const AppFontLoadResult result = app_runtime->attach_current_jffont_view(view.data, view.size, family);
+            const AppFontLoadResult result = is_core_font(view.data, view.size)
+                ? app_runtime->attach_current_core_font_view(view.data, view.size, family)
+                : app_runtime->attach_current_jffont_view(view.data, view.size, family);
             if (result.loaded()) {
                 continue;
             }
@@ -3591,7 +3609,7 @@ void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifes
                               DiagnosticStage::Package,
                               DiagnosticSeverity::Warning,
                               "app-font-resource-invalid",
-                              "Manifest font resource is not a supported .jffont supplement",
+                              "Manifest font resource is invalid or its Core font catalog has no default face",
                               source);
             continue;
         }
@@ -3606,14 +3624,16 @@ void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifes
                               source);
             continue;
         }
-        const AppFontLoadResult result = app_runtime->load_current_jffont(
-            reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size(), family);
+        const auto* data = reinterpret_cast<const std::uint8_t*>(bytes.data());
+        const AppFontLoadResult result = is_core_font(data, bytes.size())
+            ? app_runtime->load_current_core_font(data, bytes.size(), family)
+            : app_runtime->load_current_jffont(data, bytes.size(), family);
         if (!result.loaded()) {
             report_diagnostic(diagnostics,
                               DiagnosticStage::Package,
                               DiagnosticSeverity::Warning,
                               "app-font-resource-invalid",
-                              "Manifest font resource is not a supported .jffont supplement",
+                              "Manifest font resource is invalid or its Core font catalog has no default face",
                               source);
         }
     }
@@ -3716,7 +3736,7 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     }
     AppImageSurfaceCache image_cache(AppImageSurfaceCacheOptions{8, 512 * 1024});
     Canvas2DRegistry debug_canvas;
-    debug_canvas.set_text_backend(text_backend.measure, text_backend.painter);
+    bind_browser_text_backend(debug_canvas, text_backend);
     BrowserImageResolveContext image_resolve_context{&app_runtime, &debug_images, &image_cache, &debug_canvas, &diagnostics};
     BrowserImageContext image_context{&debug_images, &debug_canvas};
     StyleResolverOptions style_options;
@@ -3735,11 +3755,13 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     auto render_tree = render_builder.build(*page.document);
     LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
     layout_options.diagnostics = &diagnostics;
+    layout_options.text_system = text_backend.text_system;
     LayoutEngine layout_engine(resolver, text_backend.measure, layout_options);
     auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     layer_options.diagnostics = &diagnostics;
     layer_options.text_measure = text_backend.measure;
+    layer_options.text_system = text_backend.text_system;
     layer_options.paint_scroll_indicators = true;
     layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
     LayerTreeBuilder layer_builder(layer_options);
@@ -3772,6 +3794,7 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
 
     SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
     compositor_options.diagnostics = &diagnostics;
+    compositor_options.text_system = text_backend.text_system;
     SoftwareCompositor compositor(text_backend.painter, ImagePainter{paint_image_surface, &image_context}, compositor_options);
     FrameBuffer frame_buffer = compositor.render(*layer_tree,
                                                  options.viewport_width,
@@ -6098,7 +6121,7 @@ private:
                     script_runtime_->bind_audio_host(ScriptAudioHost{play_script_audio_callback, this});
                 }
                 const BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
-                debug_canvas_.set_text_backend(text_backend.measure, text_backend.painter);
+                bind_browser_text_backend(debug_canvas_, text_backend);
                 script_runtime_->bind_canvas_2d(debug_canvas_);
                 script_runtime_->set_system_state(ScriptSystemState{
                     !debug_system_state_.screen_on || debug_system_state_.low_power_mode,
@@ -6326,6 +6349,7 @@ private:
         layer_options.paint_scroll_indicators = true;
         BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
         layer_options.text_measure = text_backend.measure;
+        layer_options.text_system = text_backend.text_system;
         BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &debug_canvas_, &diagnostics_};
         image_resolve_context.style_resolver = style_resolver_.get();
         layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
@@ -6348,6 +6372,7 @@ private:
 
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);
         compositor_options.diagnostics = &diagnostics_;
+        compositor_options.text_system = text_backend.text_system;
         if (trace_live_frame) {
             compositor_options.rasterizer_timing = SoftwareRasterizerTiming{steady_clock_microseconds, nullptr};
             compositor_options.command_observer =
@@ -6895,6 +6920,7 @@ private:
         layer_options.diagnostics = &diagnostics_;
         layer_options.paint_scroll_indicators = true;
         layer_options.text_measure = text_backend.measure;
+        layer_options.text_system = text_backend.text_system;
         BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &debug_canvas_, &diagnostics_};
         image_resolve_context.style_resolver = style_resolver_.get();
         layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
@@ -6906,6 +6932,7 @@ private:
         LayerTreeBuilder layer_builder(layer_options);
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets_);
         compositor_options.diagnostics = &diagnostics_;
+        compositor_options.text_system = text_backend.text_system;
         if (trace_timing_enabled) {
             compositor_options.rasterizer_timing = SoftwareRasterizerTiming{steady_clock_microseconds, nullptr};
             compositor_options.command_observer =
@@ -7147,6 +7174,7 @@ private:
         LayoutBoxPtr previous_layout = update_plan.needs_previous_layout ? std::move(layout_tree_) : LayoutBoxPtr{};
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets_);
         layout_options.diagnostics = &diagnostics_;
+        layout_options.text_system = text_backend.text_system;
         LayoutEngine layout_engine(*style_resolver_, text_backend.measure, layout_options);
         auto next_layout_tree = layout_engine.layout(*next_render_tree, viewport_width_, viewport_height_);
         finish_trace_stage(FrameTraceStage::Layout);

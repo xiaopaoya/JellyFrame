@@ -481,10 +481,14 @@ bool ScriptTaskWorkerRuntime::rebuild_pipeline() {
     RenderTreeBuilder render_builder(*style_resolver_, render_options);
     RenderObjectPtr render_tree = render_builder.build(*document_owner_.root());
     if (!render_tree) return false;
-    LayoutEngine layout_engine(*style_resolver_, {}, layout_engine_options_from_budgets(options_.budgets));
+    LayoutEngineOptions layout_options = layout_engine_options_from_budgets(options_.budgets);
+    layout_options.text_system = options_.text_system;
+    LayoutEngine layout_engine(*style_resolver_, {}, layout_options);
     LayoutBoxPtr layout_tree = layout_engine.layout(*render_tree, options_.viewport.width, options_.viewport.height);
     if (!layout_tree) return false;
-    LayerTreeBuilder layer_builder(layer_tree_options_from_budgets(options_.budgets));
+    LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(options_.budgets);
+    layer_options.text_system = options_.text_system;
+    LayerTreeBuilder layer_builder(layer_options);
     LayerNodePtr layer_tree = layer_builder.build(*layout_tree);
     if (!layer_tree) return false;
 
