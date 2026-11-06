@@ -1,5 +1,7 @@
 # Core-Owned Font Package Consumer Validation (2026-11-06)
 
+> Last updated: 2026-11-06; Applies to: 0.8.0
+
 The Runtime package provider was validated against an installed Core package,
 not a Core source override:
 

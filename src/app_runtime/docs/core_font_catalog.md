@@ -1,5 +1,7 @@
 # Core Font Catalog
 
+> Last updated: 2026-11-06; Applies to: 0.8.0
+
 `AppFontSet` can hold both the existing bitmap supplement set and a Core-owned
 JFFONT2 catalog. The Core path is exposed through `set_core_system_font`,
 `load_core_font`, `attach_core_font_view`, and `core_text_system`.

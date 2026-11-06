@@ -2124,7 +2124,9 @@ SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, ImagePainter im
                   SoftwareRasterizerOptions{options.max_offscreen_pixels,
                                             nullptr,
                                             options.rasterizer_timing,
-                                            options.command_observer}),
+                                            options.command_observer,
+                                            options.text_system,
+                                            options.text_limits}),
       options_(options) {}
 
 FrameBuffer SoftwareCompositor::render(const LayerNode& root,

@@ -268,6 +268,8 @@ public:
         bool smooth_scaled_layers = true;
         SoftwareRasterizerTiming rasterizer_timing;
         SoftwareRasterizerCommandObserver command_observer;
+        const TextSystem* text_system = nullptr;
+        TextPaintLimits text_limits;
     };
 
     struct Scratch {
