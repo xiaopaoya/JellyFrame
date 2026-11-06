@@ -422,6 +422,8 @@ const TextLayoutCache* valid_text_layout_cache(const LayoutBox& box,
         cache.viewport_height != box.viewport_height ||
         cache.rect_width != box.rect.width ||
         cache.rect_height != box.rect.height ||
+        cache.rect_x != box.rect.x ||
+        cache.rect_y != box.rect.y ||
         cache.font_size != box.style.font_size ||
         cache.font_weight != box.style.font_weight ||
         cache.font_family_hash != box.style.font_family_hash ||
@@ -435,10 +437,35 @@ const TextLayoutCache* valid_text_layout_cache(const LayoutBox& box,
         cache.white_space_nowrap != box.style.white_space_nowrap ||
         cache.text_overflow_ellipsis != box.style.text_overflow_ellipsis ||
         cache.text_align != box.style.text_align ||
-        !same_text_measure_provider(cache.text_measure, options.text_measure)) {
+        cache.text_system != options.text_system ||
+        cache.text_system_generation != (options.text_system != nullptr
+            ? options.text_system->generation() : 0) ||
+        (cache.text_system == nullptr && !same_text_measure_provider(cache.text_measure, options.text_measure))) {
         return nullptr;
     }
     return &cache;
+}
+
+void push_prepared_text(DisplayList& display_list, Rect rect, Color color,
+                        const TextLayoutCache& cache, int offset_x = 0, int offset_y = 0) {
+    if (!cache.prepared_text || rect.width <= 0 || rect.height <= 0 || color.a == 0) return;
+    const auto push = [&](const std::string& packet, int origin_x, int baseline_y) {
+        if (packet.empty()) return;
+        DisplayCommand command;
+        command.type = DisplayCommandType::PreparedText;
+        command.rect = rect;
+        command.color = color;
+        command.color2 = color;
+        command.text = packet;
+        set_prepared_text_origin(command, safe_add(origin_x, offset_x), safe_add(baseline_y, offset_y));
+        display_list.push_back(std::move(command));
+    };
+    if (!cache.prepared_lines.empty()) {
+        for (const auto& line : cache.prepared_lines)
+            push(line.packet, line.origin_x, line.baseline_y);
+    } else {
+        push(cache.prepared_packet, cache.prepared_origin_x, cache.prepared_baseline_y);
+    }
 }
 
 void push_text_with_layout(DisplayList& display_list,
@@ -1240,28 +1267,41 @@ void paint_box_self(const LayoutBox& box, DisplayList& display_list, const Layer
         const std::string text = cached_layout != nullptr
             ? cached_layout->rendered_text
             : transformed_render_text(*box.node, box.style.text_transform);
-        if (has_text_shadow(box.style)) {
-            const TextShadowStyle& shadow = box.style.text_shadow;
-            Rect shadow_rect = box.rect;
-            shadow_rect.x = safe_add(shadow_rect.x, shadow.offset_x);
-            shadow_rect.y = safe_add(shadow_rect.y, shadow.offset_y);
+        if (cached_layout != nullptr && cached_layout->prepared_text) {
+            if (has_text_shadow(box.style)) {
+                const TextShadowStyle& shadow = box.style.text_shadow;
+                Rect shadow_rect = box.rect;
+                shadow_rect.x = safe_add(shadow_rect.x, shadow.offset_x);
+                shadow_rect.y = safe_add(shadow_rect.y, shadow.offset_y);
+                push_prepared_text(display_list, shadow_rect,
+                    shadow.uses_current_color ? box.style.color : shadow.color,
+                    *cached_layout, shadow.offset_x, shadow.offset_y);
+            }
+            push_prepared_text(display_list, box.rect, box.style.color, *cached_layout);
+        } else if (options.text_system == nullptr) {
+            if (has_text_shadow(box.style)) {
+                const TextShadowStyle& shadow = box.style.text_shadow;
+                Rect shadow_rect = box.rect;
+                shadow_rect.x = safe_add(shadow_rect.x, shadow.offset_x);
+                shadow_rect.y = safe_add(shadow_rect.y, shadow.offset_y);
+                push_text_with_layout(display_list,
+                                      shadow_rect,
+                                      shadow.uses_current_color ? box.style.color : shadow.color,
+                                      text,
+                                      box.style,
+                                      text_command_align(box.style.text_align),
+                                      options.text_measure,
+                                      cached_layout);
+            }
             push_text_with_layout(display_list,
-                                  shadow_rect,
-                                  shadow.uses_current_color ? box.style.color : shadow.color,
+                                  box.rect,
+                                  box.style.color,
                                   text,
                                   box.style,
                                   text_command_align(box.style.text_align),
                                   options.text_measure,
                                   cached_layout);
         }
-        push_text_with_layout(display_list,
-                              box.rect,
-                              box.style.color,
-                              text,
-                              box.style,
-                              text_command_align(box.style.text_align),
-                              options.text_measure,
-                              cached_layout);
         push_text_decorations(display_list, box, box.rect);
     }
 }

@@ -1,43 +1,57 @@
 #include "render_core/canvas2d.h"
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <limits>
 #include <iostream>
+#include <vector>
 
 using namespace jellyframe;
 
 namespace {
 
-bool fixed_measure(const std::string& text,
-                   int font_size,
-                   int,
-                   TextMetrics* metrics,
-                   void*) {
-    if (metrics == nullptr) {
-        return false;
-    }
-    metrics->width = static_cast<int>(text.size()) * std::max(1, font_size / 2);
-    metrics->line_height = font_size + 4;
-    return true;
+void put_u16(std::vector<std::uint8_t>& bytes,std::size_t at,std::uint16_t value) {
+    bytes[at]=static_cast<std::uint8_t>(value&0xffU);
+    bytes[at+1]=static_cast<std::uint8_t>(value>>8U);
 }
-
-bool marker_paint(FrameBuffer& target,
-                  Rect rect,
-                  Color color,
-                  const std::string&,
-                  int,
-                  int,
-                  TextCommandAlign,
-                  bool,
-                  void*) {
-    if (target.contains(rect.x, rect.y)) {
-        target.pixel(rect.x, rect.y) = color;
-        return true;
-    }
-    return false;
+void put_u32(std::vector<std::uint8_t>& bytes,std::size_t at,std::uint32_t value) {
+    for (unsigned i=0;i<4;++i) bytes[at+i]=static_cast<std::uint8_t>((value>>(8U*i))&0xffU);
 }
-
+std::vector<std::uint8_t> canvas_test_font_bytes() {
+    const std::array<std::uint32_t,3> codepoints={0x20U,0x41U,0x42U};
+    constexpr std::size_t header=128, record=40;
+    const std::size_t bitmap=header+codepoints.size()*record;
+    std::vector<std::uint8_t> bytes(bitmap,0);
+    const char magic[]="JFFONT2";
+    for (unsigned i=0;i<8;++i) bytes[i]=static_cast<std::uint8_t>(magic[i]);
+    put_u16(bytes,8,2);put_u16(bytes,10,header);put_u16(bytes,12,record);put_u16(bytes,14,1);
+    put_u32(bytes,24,header);put_u32(bytes,28,static_cast<std::uint32_t>(bitmap));
+    put_u16(bytes,36,1000);put_u16(bytes,38,16);put_u16(bytes,40,400);bytes[42]=4;
+    put_u32(bytes,44,800);put_u32(bytes,48,200);bytes[64]=1;put_u32(bytes,100,1);put_u16(bytes,104,1);
+    for (std::size_t i=0;i<codepoints.size();++i) {
+        const std::size_t at=header+i*record;
+        put_u32(bytes,at,codepoints[i]);put_u32(bytes,at+4,static_cast<std::uint32_t>(i+1));
+        put_u32(bytes,at+8,codepoints[i]==0x20U?250U:500U);
+        put_u32(bytes,at+28,static_cast<std::uint32_t>(bytes.size()-bitmap));
+        if (codepoints[i]!=0x20U) {
+            put_u32(bytes,at+12,static_cast<std::uint32_t>(-1));
+            put_u32(bytes,at+16,static_cast<std::uint32_t>(-2));
+            put_u16(bytes,at+20,1);put_u16(bytes,at+22,2);put_u32(bytes,at+24,1);put_u32(bytes,at+32,2);
+            bytes.push_back(0xf0);bytes.push_back(0xf0);
+        }
+    }
+    put_u32(bytes,16,static_cast<std::uint32_t>(bytes.size()));
+    put_u32(bytes,20,static_cast<std::uint32_t>(codepoints.size()));
+    put_u32(bytes,32,static_cast<std::uint32_t>(bytes.size()-bitmap));
+    std::uint32_t crc=0xffffffffU;
+    for (const auto byte:bytes) {
+        crc^=byte;
+        for (unsigned bit=0;bit<8;++bit) crc=(crc>>1U)^((crc&1U)?0xedb88320U:0U);
+    }
+    put_u32(bytes,96,~crc);
+    return bytes;
+}
 void canvas_surface_is_lazy_and_budgeted() {
     Canvas2DRegistry registry(Canvas2DPolicy{
         true,
@@ -485,34 +499,34 @@ void draw_image_copies_canvas_surface_without_new_allocation() {
     assert(!registry.draw_image(*destination, *destination, 0, 0, 1, 1, 0, 0, 1, 1));
 }
 
-void text_metrics_and_fill_text_use_bound_backend() {
-    Canvas2DRegistry registry(Canvas2DPolicy{
-        true,
-        1,
-        768,
-        768,
-        32,
-        24,
-    });
-    registry.set_text_backend(TextMeasureProvider{fixed_measure, nullptr},
-                              TextPainter{marker_paint, nullptr});
-    auto canvas = make_element("canvas");
-    assert(registry.set_font(*canvas, "bold 16px system-ui"));
-    assert(registry.font(*canvas) == "bold 16px system-ui");
-    const Canvas2DTextMetrics metrics = registry.measure_text(*canvas, "Hi");
-    assert(metrics.width == 16.0);
-    assert(registry.set_fill_style(*canvas, "#abcdef"));
-    assert(registry.fill_text(*canvas, "Hi", 3.0, 22.0));
-    const Canvas2DSurface* surface = registry.surface(registry.handle_for(*canvas));
-    assert(surface != nullptr);
-    bool found_marker = false;
-    for (const Color& color : surface->pixels) {
-        if (color.r == 0xab && color.g == 0xcd && color.b == 0xef) {
-            found_marker = true;
-            break;
-        }
-    }
-    assert(found_marker);
+void canvas_text_system_uses_core_metrics_and_does_not_fall_back() {
+    auto bytes=canvas_test_font_bytes();
+    FontResource font;
+    assert(font.load(bytes.data(),bytes.size())==FontResourceStatus::Loaded);
+    TextFontFace face{51,0,font,0};
+    TextSystem system;
+    assert(system.bind(&face,1)==TextSystemStatus::Ok);
+
+    Canvas2DRegistry unbound_registry;
+    auto unbound_canvas=make_element("canvas");
+    assert(unbound_registry.measure_text(*unbound_canvas,"AB").width==0.0);
+    assert(!unbound_registry.fill_text(*unbound_canvas,"AB",3.0,22.0));
+
+    Canvas2DRegistry registry;
+    registry.set_text_system(&system);
+    auto canvas=make_element("canvas");
+    assert(registry.set_font(*canvas,"16px sans-serif"));
+    assert(registry.measure_text(*canvas,"AB").width==16.0);
+    assert(registry.set_fill_style(*canvas,"#abcdef"));
+    assert(registry.fill_text(*canvas,"AB",3.0,22.0));
+    const auto* surface=registry.surface(registry.handle_for(*canvas));
+    assert(surface!=nullptr);
+    bool found_ink=false;
+    for (const auto& pixel:surface->pixels)
+        found_ink|=pixel.r==0xab && pixel.g==0xcd && pixel.b==0xef;
+    assert(found_ink);
+    assert(registry.measure_text(*canvas,"\xc3\xa9").width==0.0);
+    assert(!registry.fill_text(*canvas,"\xc3\xa9",3.0,22.0));
 }
 
 } // namespace
@@ -538,7 +552,7 @@ int main() {
     bezier_curve_to_generates_bounded_smooth_path();
     radial_gradient_fills_rect_with_two_stop_concentric_subset();
     draw_image_copies_canvas_surface_without_new_allocation();
-    text_metrics_and_fill_text_use_bound_backend();
+    canvas_text_system_uses_core_metrics_and_does_not_fall_back();
     std::cout << "canvas2d tests passed\n";
     return 0;
 }
