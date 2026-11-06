@@ -1,5 +1,16 @@
+if(NOT JELLYFRAME_BUILD_SCRIPTING)
+    return()
+endif()
+
 set(JELLYFRAME_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../..")
-set(JERRY_ROOT "${JELLYFRAME_ROOT}/third_party/jerryscript")
+if(NOT JELLYFRAME_JERRYSCRIPT_ROOT)
+    set(JELLYFRAME_JERRYSCRIPT_ROOT "${JELLYFRAME_ROOT}/third_party/jerryscript")
+endif()
+get_filename_component(JERRY_ROOT "${JELLYFRAME_JERRYSCRIPT_ROOT}" ABSOLUTE)
+if(NOT EXISTS "${JERRY_ROOT}/jerry-core/config.h" OR
+   NOT EXISTS "${JERRY_ROOT}/jerry-core/include/jerryscript.h")
+    message(FATAL_ERROR "JELLYFRAME_JERRYSCRIPT_ROOT is not a JerryScript source tree: ${JERRY_ROOT}")
+endif()
 
 file(GLOB_RECURSE JELLYFRAME_JERRY_CORE_SOURCES
     "${JERRY_ROOT}/jerry-core/*.c")

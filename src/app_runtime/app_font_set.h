@@ -2,7 +2,9 @@
 
 #include "render_core/bitmap_font.h"
 #include "render_core/bitmap_font_resource.h"
+#include "render_core/font_resource.h"
 #include "render_core/text_backend.h"
+#include "render_core/text_system.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -46,11 +48,22 @@ public:
                                          const std::uint8_t* data,
                                          std::size_t size,
                                          std::string_view family);
+    AppFontLoadResult load_core_font(std::uint32_t app_instance_id,
+                                     const std::uint8_t* data,
+                                     std::size_t size,
+                                     std::string_view family = {});
+    AppFontLoadResult attach_core_font_view(std::uint32_t app_instance_id,
+                                            const std::uint8_t* data,
+                                            std::size_t size,
+                                            std::string_view family = {});
+    bool set_core_system_font(const std::uint8_t* data, std::size_t size);
+    bool attach_core_system_font_view(const std::uint8_t* data, std::size_t size);
+    const TextSystem* core_text_system() const;
     std::size_t clear_app_instance(std::uint32_t app_instance_id);
     void clear();
 
     std::size_t size() const {
-        return fonts_.size();
+        return fonts_.size() + core_fonts_.size();
     }
 
     std::size_t capacity() const {
@@ -58,7 +71,7 @@ public:
     }
 
     bool empty() const {
-        return fonts_.empty();
+        return fonts_.empty() && core_fonts_.empty();
     }
 
     void set_system_font(const BitmapFont* font);
@@ -96,11 +109,25 @@ private:
         BitmapFontResource resource;
     };
 
+    struct CoreFont {
+        std::uint32_t family_hash = 0;
+        std::uint64_t resource_id = 0;
+        std::vector<std::uint8_t> bytes;
+        FontResource resource;
+    };
+
     AppFontLoadResult add_jffont(std::uint32_t app_instance_id,
                                  const std::uint8_t* data,
                                  std::size_t size,
                                  bool copy_bytes,
                                  std::string_view family);
+    AppFontLoadResult add_core_font(std::uint32_t app_instance_id,
+                                    const std::uint8_t* data,
+                                    std::size_t size,
+                                    bool copy_bytes,
+                                    std::string_view family);
+    bool bind_core_system_font(const std::uint8_t* data, std::size_t size, bool copy_bytes);
+    bool rebuild_core_text_system();
     void refresh_context();
     const BitmapFontFallbackContext* context_for_family(std::uint32_t font_family_hash);
 
@@ -108,6 +135,14 @@ private:
     std::uint32_t app_instance_id_ = 0;
     const BitmapFont* system_font_ = nullptr;
     std::vector<LoadedFont> fonts_;
+    std::vector<std::uint8_t> core_system_font_bytes_;
+    FontResource core_system_font_;
+    std::vector<CoreFont> core_fonts_;
+    std::vector<TextFontFace> core_faces_;
+    TextSystem core_text_system_;
+    std::uint64_t core_system_resource_id_ = 1;
+    std::uint64_t next_core_resource_id_ = 2;
+    bool core_text_system_ready_ = false;
     BitmapFontContext primary_context_{};
     std::vector<const BitmapFont*> fallback_fonts_;
     BitmapFontFallbackContext fallback_context_{};

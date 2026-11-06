@@ -1,6 +1,6 @@
 # Versioning
 
-> Last updated: 2026-11-04; Applies to: 0.6.0-dev
+> Last updated: 2026-11-06; Applies to: 0.6.0-dev
 
 JellyFrame Engine uses a lightweight semantic versioning scheme:
 
@@ -41,7 +41,7 @@ The planned repositories do not share one release number:
 
 | Stream | Example | Contract owner |
 | --- | --- | --- |
-| Render Core | `0.7.0` (released; first release was `0.6.0`) | Core API/ABI, feature profile schema and renderer behavior |
+| Render Core | `0.8.0` (released; first release was `0.6.0`) | Core API/ABI, feature profile schema and renderer behavior |
 | JellyFrame Runtime | `0.6.x-dev` | Japp format, App Runtime and JerryScript binding |
 | JellyFrame Device OS | `0.1.x-dev` | launcher, registry, device lifecycle, images and ports |
 | JFDP | `JFDP/1` | device control framing and result-code compatibility |
@@ -93,7 +93,7 @@ Runtime parser enforce the pair together.
   broader real-device validation.
 - `0.6.x`: device-path and engine-boundary closure. The first signed Render
   Core `0.6.0` release is historical; Runtime package mode currently locks
-  `0.7.0` / ABI 2, while the default in-tree provider remains `0.6.2` / ABI 1. This
+  `0.8.0` / ABI 3, while the default in-tree provider also uses `0.8.0` / ABI 3. This
   line owns JFDP/Device
   Runtime contracts and only the capability packs that meet their profile and
   evidence gates. Desktop preflight evidence does not by itself permit an

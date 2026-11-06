@@ -4,6 +4,7 @@
 #include "render_core/geometry.h"
 #include "render_core/layout.h"
 #include "render_core/style.h"
+#include "render_core/text_system.h"
 
 #include <cstdint>
 #include <memory>
@@ -131,6 +132,7 @@ struct LayerTreeBuilderOptions {
     ImageHandleResolver image_resolver;
     ScrollOffsetResolver scroll_resolver;
     TextMeasureProvider text_measure;
+    const TextSystem* text_system = nullptr;
     DisplayCommandTraceOwnerResolver trace_owner_resolver;
     bool paint_scroll_indicators = false;
 };

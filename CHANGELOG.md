@@ -38,13 +38,13 @@ The project uses lightweight semantic versioning. See `docs/versioning.md`.
   dirty-region metrics and available paint-command attribution. The panel clearly
   states that this data is not a real-device FPS measurement.
 
-- Runtime package mode now locks the signed Render Core `0.7.0` release (ABI `2`,
-  source identity `609927a3...c7c521fb55`) and verifies its deterministic archive
+- Runtime package mode now locks the signed Render Core `0.8.0` release (ABI `3`,
+  source identity `fa5914ce...3f84cd795`) and verifies its deterministic archive
   in package-consumer CI. The default in-tree provider remains at Core `0.6.2` /
   ABI `1`; app manifests and author templates follow the package lock.
 
 - First-party app manifests, templates and App Packaging guide examples now follow
-  the locked Render Core `0.7.0` package line. Regression tests
+  the locked Render Core `0.8.0` package line. Regression tests
   verify these author-facing inputs against the active Runtime/Core versions.
 
 - CSS custom-property expansion now has a bounded resolved-value budget

@@ -14,7 +14,9 @@ void Canvas2DRegistry::set_policy(Canvas2DPolicy policy) {
     policy_.enabled = false;
 }
 
-void Canvas2DRegistry::set_text_backend(TextMeasureProvider, TextPainter) {}
+void Canvas2DRegistry::set_text_system(const TextSystem* text_system) {
+    text_system_ = text_system;
+}
 
 void Canvas2DRegistry::clear() {}
 

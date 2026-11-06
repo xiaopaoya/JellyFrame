@@ -147,7 +147,7 @@
             ]
           },
           "family": {
-            "description": "Runtime font-family label for this .jffont supplement. When CSS selects the same custom family and the host uses the app-font backend, this supplement is tried before the normal fallback chain.",
+            "description": "Runtime font-family label for this .jffont or .jffont2 resource. JFFONT2 is consumed by Core TextSystem.",
             "type": "string",
             "minLength": 1
           },
@@ -171,7 +171,7 @@
             }
           },
           "sizes": {
-            "description": "Exact CSS pixel sizes validated for this bitmap font. Packaging checks these values against the .jffont native line height and its supported integer scales.",
+            "description": "CSS pixel sizes used for diagnostics. JFFONT uses integer scaling from its native bitmap height; JFFONT2 uses Core metrics and supports scaled sizes.",
             "type": "array",
             "items": {
               "type": "integer",

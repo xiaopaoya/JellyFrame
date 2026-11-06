@@ -85,6 +85,14 @@ public:
     AppFontLoadResult load_current_jffont(const std::uint8_t* data, std::size_t size, std::string_view family);
     AppFontLoadResult attach_current_jffont_view(const std::uint8_t* data, std::size_t size);
     AppFontLoadResult attach_current_jffont_view(const std::uint8_t* data, std::size_t size, std::string_view family);
+    AppFontLoadResult load_current_core_font(const std::uint8_t* data,
+                                             std::size_t size,
+                                             std::string_view family = {});
+    AppFontLoadResult attach_current_core_font_view(const std::uint8_t* data,
+                                                    std::size_t size,
+                                                    std::string_view family = {});
+    bool set_core_system_font(const std::uint8_t* data, std::size_t size);
+    bool attach_core_system_font_view(const std::uint8_t* data, std::size_t size);
     std::size_t clear_current_fonts();
 
     // A zero job_id is a host-originated event with no worker request. Every

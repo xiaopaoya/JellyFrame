@@ -1,4 +1,5 @@
 #include "render_core/canvas2d.h"
+#include "render_core/prepared_text.h"
 
 #include <algorithm>
 #include <cctype>
@@ -719,9 +720,8 @@ void Canvas2DRegistry::set_policy(Canvas2DPolicy policy) {
     policy_ = policy;
 }
 
-void Canvas2DRegistry::set_text_backend(TextMeasureProvider measure, TextPainter painter) {
-    text_measure_ = measure;
-    text_painter_ = painter;
+void Canvas2DRegistry::set_text_system(const TextSystem* text_system) {
+    text_system_ = text_system;
 }
 
 void Canvas2DRegistry::clear() {
@@ -1229,14 +1229,28 @@ Canvas2DTextMetrics Canvas2DRegistry::measure_text(Node& node, std::string_view 
     if (surface == nullptr) {
         return Canvas2DTextMetrics{};
     }
-    const std::string owned_text(text);
-    const TextMetrics metrics =
-        jellyframe::measure_text(text_measure_,
-                                 owned_text,
-                                 surface->state.font_size,
-                                 surface->state.font_weight,
-                                 surface->state.font_family_hash);
-    return Canvas2DTextMetrics{static_cast<double>(metrics.width)};
+    if (text_system_ != nullptr) {
+        if (surface->state.font_size < 0 ||
+            surface->state.font_size > std::numeric_limits<std::int32_t>::max() / 1000) {
+            return Canvas2DTextMetrics{};
+        }
+        std::uint32_t family_id = 0;
+        if (!text_system_->resolve_family_hash(surface->state.font_family_hash, family_id))
+            return Canvas2DTextMetrics{};
+        TextFontRequest request;
+        request.families = &family_id;
+        request.family_count = 1;
+        request.size_q1000 = surface->state.font_size * 1000;
+        request.weight = static_cast<std::uint16_t>(std::clamp(surface->state.font_weight, 1, 1000));
+        TextRunMetrics metrics;
+        if (text_system_->measure(text, request, metrics) != TextSystemStatus::Ok ||
+            metrics.glyph_count > policy_.max_text_glyphs)
+            return Canvas2DTextMetrics{};
+        return Canvas2DTextMetrics{static_cast<double>(
+            std::max<std::int32_t>(0, static_cast<std::int32_t>(
+                (static_cast<std::int64_t>(metrics.advance) + 999) / 1000)))};
+    }
+    return Canvas2DTextMetrics{};
 }
 
 bool Canvas2DRegistry::fill_text(Node& node, std::string_view text, double x, double y, double max_width) {
@@ -1245,58 +1259,68 @@ bool Canvas2DRegistry::fill_text(Node& node, std::string_view text, double x, do
         (max_width != 0.0 && !std::isfinite(max_width))) {
         return false;
     }
-    const std::string owned_text(text);
-    const TextMetrics metrics =
-        jellyframe::measure_text(text_measure_,
-                                 owned_text,
-                                 surface->state.font_size,
-                                 surface->state.font_weight,
-                                 surface->state.font_family_hash);
-    int text_x = 0;
-    int text_y = 0;
-    int left = 0;
-    int baseline = 0;
-    if (!rounded_coordinate(x, text_x) || !rounded_coordinate(y, text_y) ||
-        !translated_coordinate(text_x, surface->state.translate_x, left) ||
-        !translated_coordinate(text_y, surface->state.translate_y, baseline)) {
-        return false;
+    if (text_system_ != nullptr) {
+        if (surface->state.font_size < 0 ||
+            surface->state.font_size > std::numeric_limits<std::int32_t>::max() / 1000) return false;
+        std::uint32_t family_id = 0;
+        if (!text_system_->resolve_family_hash(surface->state.font_family_hash, family_id)) return false;
+        TextFontRequest request;
+        request.families = &family_id;
+        request.family_count = 1;
+        request.size_q1000 = surface->state.font_size * 1000;
+        request.weight = static_cast<std::uint16_t>(std::clamp(surface->state.font_weight, 1, 1000));
+        TextRunMetrics metrics;
+        if (text_system_->measure(text, request, metrics) != TextSystemStatus::Ok ||
+            metrics.glyph_count > policy_.max_text_glyphs) return false;
+        int text_x = 0;
+        int text_y = 0;
+        int left = 0;
+        int baseline = 0;
+        if (!rounded_coordinate(x, text_x) || !rounded_coordinate(y, text_y) ||
+            !translated_coordinate(text_x, surface->state.translate_x, left) ||
+            !translated_coordinate(text_y, surface->state.translate_y, baseline)) return false;
+        int width = std::max(1, static_cast<int>(
+            (static_cast<std::int64_t>(metrics.advance) + 999) / 1000));
+        if (max_width > 0.0) {
+            int rounded_max_width = 0;
+            if (!rounded_coordinate(max_width, rounded_max_width)) return false;
+            width = rounded_max_width;
+        }
+        if (width <= 0) width = std::max(1, static_cast<int>(
+            (static_cast<std::int64_t>(metrics.advance) + 999) / 1000));
+        const int available_width = safe_span(left, surface->width);
+        if (available_width <= 0) return false;
+        width = std::max(1, std::min(width, available_width));
+        const int line_height = std::max(1, static_cast<int>(
+            (static_cast<std::int64_t>(std::max<std::int32_t>(0, metrics.natural_height)) + 999) / 1000));
+        std::vector<PreparedTextGlyph> glyphs(metrics.glyph_count);
+        TextRunMetrics prepared;
+        if (text_system_->prepare(text, request, glyphs.data(), glyphs.size(), prepared) != TextSystemStatus::Ok)
+            return false;
+        std::string packet;
+        if (!encode_prepared_text(glyphs.data(), prepared.glyph_count, request.size_q1000,
+                                  static_cast<std::uint32_t>(text.size()), packet)) return false;
+        FrameBuffer target;
+        target.width = surface->width;
+        target.height = surface->height;
+        target.pixels.swap(surface->pixels);
+        DisplayCommand command;
+        command.type = DisplayCommandType::PreparedText;
+        command.rect = Rect{left, safe_add(baseline, -line_height), width, line_height};
+        command.color = with_global_alpha(
+            color_for_style(surface->state.fill_style, gradients_, left, baseline),
+            surface->state.global_alpha);
+        command.text = std::move(packet);
+        set_prepared_text_origin(command, left, baseline);
+        SoftwareRasterizerOptions raster_options;
+        raster_options.text_system = text_system_;
+        SoftwareRasterizer rasterizer({}, nullptr, raster_options);
+        rasterizer.rasterize(command, target, Rect{0, 0, surface->width, surface->height});
+        surface->pixels.swap(target.pixels);
+        mark_dirty(node, DomDirtyPaint);
+        return true;
     }
-    int width = metrics.width;
-    if (max_width > 0.0) {
-        int rounded_max_width = 0;
-        width = rounded_coordinate(max_width, rounded_max_width) ? rounded_max_width : surface->width;
-    }
-    if (width <= 0) {
-        width = metrics.width;
-    }
-    const int available_width = safe_span(left, surface->width);
-    if (available_width <= 0) {
-        return false;
-    }
-    width = std::max(1, std::min(width, available_width));
-    const int line_height = std::max(1, metrics.line_height);
-    FrameBuffer target;
-    target.width = surface->width;
-    target.height = surface->height;
-    target.pixels.swap(surface->pixels);
-
-    DisplayCommand command;
-    command.type = DisplayCommandType::Text;
-    command.rect = Rect{left, safe_add(baseline, -line_height), width, line_height};
-    command.color = with_global_alpha(color_for_style(surface->state.fill_style, gradients_, left, baseline),
-                                      surface->state.global_alpha);
-    command.text = owned_text;
-    command.font_size = surface->state.font_size;
-    command.font_weight = surface->state.font_weight;
-    command.font_family_hash = surface->state.font_family_hash;
-    command.text_align = TextCommandAlign::Start;
-    command.text_single_line = true;
-    SoftwareRasterizer rasterizer(text_painter_);
-    rasterizer.rasterize(command, target, Rect{0, 0, surface->width, surface->height});
-
-    surface->pixels.swap(target.pixels);
-    mark_dirty(node, DomDirtyPaint);
-    return true;
+    return false;
 }
 
 bool Canvas2DRegistry::draw_image(Node& destination,

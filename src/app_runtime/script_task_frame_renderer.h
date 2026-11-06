@@ -2,6 +2,7 @@
 
 #include "app_runtime/script_task_frame_codec.h"
 #include "render_core/software_renderer.h"
+#include "render_core/text_system.h"
 
 #include <array>
 #include <cstddef>
@@ -24,6 +25,8 @@ struct ScriptTaskFrameRendererOptions {
     DiagnosticSink* diagnostics = nullptr;
     SoftwareRasterizerStatistics* rasterizer_statistics = nullptr;
     SoftwareRasterizerTiming rasterizer_timing;
+    const TextSystem* text_system = nullptr;
+    TextPaintLimits text_limits;
 };
 
 // Read-only comparison of two value frames for retained-rendering research.

@@ -75,7 +75,7 @@ jellyframe::HostBudgets installed_script_budgets(int width, int height) {
 
 jellyframe::ScriptTaskAppFrameCodecOptions frame_codec_options() {
     jellyframe::ScriptTaskAppFrameCodecOptions options;
-    options.version = 4;
+    options.version = 5;
     options.max_commands = kMaxCommands;
     options.max_text_bytes = 12u * 1024u;
     options.max_input_targets = 48;
@@ -147,6 +147,9 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options(const InstalledBundleS
     options.frame_codec = frame_codec_options();
     options.input_codec = {32, 256};
     options.service_request_codec = {64};
+    options.text_system = state.host != nullptr
+        ? state.host->fonts().core_text_system()
+        : nullptr;
     return options;
 }
 
@@ -357,6 +360,9 @@ void ui_entry(void* raw) {
     jellyframe::ScriptTaskFrameRendererOptions renderer_options;
     renderer_options.max_clip_depth = 8;
     renderer_options.max_temporary_pixels = pixel_count;
+    renderer_options.text_system = state->host != nullptr
+        ? state->host->fonts().core_text_system()
+        : nullptr;
     const jellyframe::ScriptTaskFrameRenderer renderer(make_production_text_painter(), renderer_options);
     jellyframe::SoftwareRasterizerScratch scratch;
     std::uint32_t input_sequence = 1;

@@ -2194,10 +2194,10 @@ async function selectMissingFontImport(root, options = {}) {
       : "The missing font entry has no valid id; fix jellyframe.app.json first.");
     return undefined;
   }
-  if (typeof target.source !== "string" || !target.source.toLowerCase().endsWith(".jffont")) {
+  if (typeof target.source !== "string" || !/\.jffont2?$/i.test(target.source)) {
     vscode.window.showErrorMessage(chinese
-      ? `字体 ${target.id || target.source} 的 source 必须是 .jffont 路径。`
-      : `Font ${target.id || target.source} must declare a .jffont source path.`);
+      ? `字体 ${target.id || target.source} 的 source 必须是 .jffont 或 .jffont2 路径。`
+      : `Font ${target.id || target.source} must declare a .jffont or .jffont2 source path.`);
     return undefined;
   }
 

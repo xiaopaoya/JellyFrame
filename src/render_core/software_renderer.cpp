@@ -1,5 +1,6 @@
 ﻿#include "render_core/software_renderer.h"
 
+#include "render_core/prepared_text.h"
 #include "render_core/text_scan.h"
 #include "render_core/modern_paint.h"
 #include "render_core/feature_config.h"
@@ -1683,6 +1684,31 @@ void SoftwareRasterizer::rasterize(const DisplayCommand& command,
             stroke_rect_clipped(target, rect, clip, effective_color, command.stroke_width, command.border_radius);
         }
         break;
+    case DisplayCommandType::PreparedText: {
+        if (options_.text_system == nullptr) {
+            report_diagnostic(diagnostics_, DiagnosticStage::Paint, DiagnosticSeverity::Warning,
+                              "paint-prepared-text-service-missing",
+                              "Prepared text command requires the Core text service", {});
+            break;
+        }
+        PreparedTextView prepared;
+        if (!decode_prepared_text(command.text, prepared)) {
+            report_diagnostic(diagnostics_, DiagnosticStage::Paint, DiagnosticSeverity::Warning,
+                              "paint-prepared-text-invalid",
+                              "Prepared text command contains an invalid JFTP packet", {});
+            break;
+        }
+        const auto origin_x = static_cast<std::int64_t>(safe_add(prepared_text_origin_x(command), offset_x)) * 1000;
+        const auto baseline_y = static_cast<std::int64_t>(safe_add(prepared_text_baseline_y(command), offset_y)) * 1000;
+        const auto status = options_.text_system->paint(prepared, target, clipped, origin_x, baseline_y,
+                                                        effective_color, options_.text_limits);
+        if (status != TextSystemStatus::Ok) {
+            report_diagnostic(diagnostics_, DiagnosticStage::Paint, DiagnosticSeverity::Warning,
+                              "paint-prepared-text-refused",
+                              "Prepared text command was refused by Core validation or budget", {});
+        }
+        break;
+    }
     case DisplayCommandType::Text: {
         if (rect.width <= 0 || rect.height <= 0) {
             break;
@@ -2124,7 +2150,9 @@ SoftwareCompositor::SoftwareCompositor(TextPainter text_painter, ImagePainter im
                   SoftwareRasterizerOptions{options.max_offscreen_pixels,
                                             nullptr,
                                             options.rasterizer_timing,
-                                            options.command_observer}),
+                                            options.command_observer,
+                                            options.text_system,
+                                            options.text_limits}),
       options_(options) {}
 
 FrameBuffer SoftwareCompositor::render(const LayerNode& root,

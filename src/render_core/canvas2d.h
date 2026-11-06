@@ -3,7 +3,6 @@
 #include "render_core/dom.h"
 #include "render_core/geometry.h"
 #include "render_core/software_renderer.h"
-#include "render_core/text_backend.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -24,6 +23,7 @@ struct Canvas2DPolicy {
     std::size_t max_state_stack_depth = 8;
     std::size_t max_gradients = 16;
     std::size_t max_gradient_stops = 4;
+    std::size_t max_text_glyphs = 128;
 };
 
 struct Canvas2DPoint {
@@ -101,7 +101,7 @@ public:
 
     void set_policy(Canvas2DPolicy policy);
     const Canvas2DPolicy& policy() const { return policy_; }
-    void set_text_backend(TextMeasureProvider measure, TextPainter painter);
+    void set_text_system(const TextSystem* text_system);
     void clear();
 
     std::uint32_t ensure_surface(Node& node);
@@ -159,8 +159,7 @@ public:
 
 private:
     Canvas2DPolicy policy_;
-    TextMeasureProvider text_measure_;
-    TextPainter text_painter_;
+    const TextSystem* text_system_ = nullptr;
     std::uint32_t next_handle_ = 1;
     std::uint32_t next_gradient_id_ = 1;
     std::vector<Canvas2DSurface> surfaces_;

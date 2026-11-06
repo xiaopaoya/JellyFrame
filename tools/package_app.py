@@ -29,6 +29,9 @@ JFAPP_ALIGNMENT = 4
 JFFONT_MAGIC = b"JFFONT0\0"
 JFFONT_HEADER_SIZE = 32
 JFFONT_GLYPH_ENTRY_SIZE = 16
+JFFONT2_MAGIC = b"JFFONT2\0"
+JFFONT2_HEADER_SIZE = 128
+JFFONT2_GLYPH_ENTRY_SIZE = 40
 
 KIND_BY_SUFFIX = {
     ".css": "jellyframe::HostResourceKind::Stylesheet",
@@ -42,6 +45,7 @@ KIND_BY_SUFFIX = {
     ".bdf": "jellyframe::HostResourceKind::Font",
     ".fnt": "jellyframe::HostResourceKind::Font",
     ".jffont": "jellyframe::HostResourceKind::Font",
+    ".jffont2": "jellyframe::HostResourceKind::Font",
     ".ttf": "jellyframe::HostResourceKind::Font",
     ".otf": "jellyframe::HostResourceKind::Font",
     ".woff": "jellyframe::HostResourceKind::Font",
@@ -2359,14 +2363,14 @@ def apply_imported_font_resources(resources: list[dict],
         if host_path.is_symlink():
             fail(f"imported font must not be a symlink: {host_path}")
         host_path = host_path.resolve()
-        if host_path.suffix.lower() != ".jffont":
-            fail(f"imported font must use the .jffont runtime format: {host_path}")
+        if host_path.suffix.lower() not in {".jffont", ".jffont2"}:
+            fail(f"imported font must use the .jffont or .jffont2 runtime format: {host_path}")
         if not host_path.is_file():
             fail(f"imported font does not exist: {host_path}")
         data = host_path.read_bytes()
         parsed = parse_jffont(data)
         if not parsed.get("ok"):
-            fail(f"imported font is not a valid .jffont resource: {host_path} ({parsed.get('error', 'invalid')})")
+            fail(f"imported font is not a valid .jffont/.jffont2 resource: {host_path} ({parsed.get('error', 'invalid')})")
         if max_resource_bytes > 0 and len(data) > max_resource_bytes:
             fail(f"imported font exceeds maxResourceBytes: {app_path} ({len(data)} bytes)")
         resource = {
@@ -2559,6 +2563,8 @@ def profile_covers_codepoint(profile: str, codepoint: int) -> bool:
 
 
 def parse_jffont(data: bytes) -> dict:
+    if data[:8] == JFFONT2_MAGIC:
+        return parse_jffont2(data)
     if len(data) < JFFONT_HEADER_SIZE:
         return {"ok": False, "error": "short-header"}
     if data[:8] != JFFONT_MAGIC:
@@ -2621,6 +2627,85 @@ def parse_jffont(data: bytes) -> dict:
     }
 
 
+def parse_jffont2(data: bytes) -> dict:
+    if len(data) < JFFONT2_HEADER_SIZE:
+        return {"ok": False, "error": "short-header"}
+    if data[:8] != JFFONT2_MAGIC:
+        return {"ok": False, "error": "bad-magic"}
+    version, header_size, glyph_entry_size, profile = struct.unpack_from("<HHHH", data, 8)
+    total_size, glyph_count, glyph_offset, bitmap_offset, bitmap_size = struct.unpack_from("<IIIII", data, 16)
+    units_per_em, raster_size, weight = struct.unpack_from("<HHH", data, 36)
+    coverage_bits, reserved = struct.unpack_from("<BB", data, 42)
+    ascent, descent, line_gap = struct.unpack_from("<iii", data, 44)
+    fallback = struct.unpack_from("<I", data, 56)[0]
+    stored_crc = struct.unpack_from("<I", data, 96)[0]
+    raster_profile, metric_source = struct.unpack_from("<IH", data, 100)
+    table_size = glyph_count * JFFONT2_GLYPH_ENTRY_SIZE
+    if (version, header_size, glyph_entry_size, profile) != (2, 128, 40, 1):
+        return {"ok": False, "error": "unsupported-header"}
+    if (total_size != len(data) or glyph_offset != 128 or
+            table_size > len(data) - glyph_offset or
+            bitmap_offset != glyph_offset + table_size or
+            bitmap_size != len(data) - bitmap_offset):
+        return {"ok": False, "error": "invalid-layout"}
+    if (glyph_count == 0 or glyph_count > 65535 or
+            units_per_em == 0 or units_per_em > 16384 or raster_size == 0 or raster_size > 4096 or
+            weight == 0 or weight > 1000 or coverage_bits not in {1, 2, 4, 8} or reserved != 0 or
+            ascent < 0 or descent < 0 or max(abs(ascent), abs(descent), abs(line_gap)) > 1 << 20 or
+            not 0 <= ascent + descent + line_gap <= 1 << 20 or
+            raster_profile != 1 or metric_source != 1 or any(data[106:128]) or
+            not any(data[64:96]) or any(data[52:56]) or any(data[60:64])):
+        return {"ok": False, "error": "invalid-metrics-or-profile"}
+    crc_data = bytearray(data)
+    crc_data[96:100] = b"\0\0\0\0"
+    if zlib.crc32(crc_data) & 0xffffffff != stored_crc:
+        return {"ok": False, "error": "crc-mismatch"}
+
+    glyphs = set()
+    previous = -1
+    expected_coverage_offset = 0
+    for index in range(glyph_count):
+        offset = glyph_offset + index * JFFONT2_GLYPH_ENTRY_SIZE
+        codepoint, glyph_id = struct.unpack_from("<II", data, offset)
+        advance, bearing_x, bearing_y = struct.unpack_from("<iii", data, offset + 8)
+        width, height = struct.unpack_from("<HH", data, offset + 20)
+        stride, coverage_offset, coverage_size, record_reserved = struct.unpack_from("<IIII", data, offset + 24)
+        minimum_stride = (width * coverage_bits + 7) // 8
+        expected_size = stride * height
+        if (codepoint > 0x10ffff or 0xd800 <= codepoint <= 0xdfff or codepoint <= previous or
+                glyph_id == 0 or glyph_id > 65535 or not 0 <= advance <= 1 << 20 or
+                abs(bearing_x) > 1 << 20 or abs(bearing_y) > 1 << 20 or
+                ((width == 0) != (height == 0)) or width > 4096 or height > 4096 or
+                stride != minimum_stride or coverage_size != expected_size or
+                coverage_offset != expected_coverage_offset or record_reserved != 0 or
+                coverage_size > bitmap_size - expected_coverage_offset or
+                (width == 0 and (bearing_x != 0 or bearing_y != 0))):
+            return {"ok": False, "error": "invalid-glyph-entry", "glyphIndex": index}
+        trailing_bits = (width * coverage_bits) % 8
+        if trailing_bits:
+            padding_mask = (1 << (8 - trailing_bits)) - 1
+            for row in range(height):
+                if data[bitmap_offset + coverage_offset + (row + 1) * stride - 1] & padding_mask:
+                    return {"ok": False, "error": "nonzero-row-padding", "glyphIndex": index}
+        glyphs.add(codepoint)
+        previous = codepoint
+        expected_coverage_offset += coverage_size
+    if expected_coverage_offset != bitmap_size or (fallback != 0 and fallback not in glyphs):
+        return {"ok": False, "error": "invalid-coverage"}
+    return {
+        "ok": True,
+        "format": "jffont2-scalar-bitmap-v1",
+        "coverageBits": coverage_bits,
+        "glyphCount": glyph_count,
+        "lineHeight": raster_size,
+        "rasterPixelSize": raster_size,
+        "unitsPerEm": units_per_em,
+        "weight": weight,
+        "fallbackAdvance": 0,
+        "glyphs": glyphs,
+    }
+
+
 def collect_font_diagnostics(manifest: dict,
                              resources: list[dict],
                              target_config: dict,
@@ -2674,7 +2759,7 @@ def collect_font_diagnostics(manifest: dict,
             continue
 
         suffix = resource["file"].suffix.lower() if resource is not None else ""
-        if suffix != ".jffont":
+        if suffix not in {".jffont", ".jffont2"}:
             font_entry["status"] = "packaged-unsupported-runtime-format"
             font_entry["format"] = suffix[1:] if suffix else "unknown"
             warnings.append({
@@ -2690,7 +2775,7 @@ def collect_font_diagnostics(manifest: dict,
         parsed = parse_jffont(resource["file"].read_bytes())
         if not parsed.get("ok"):
             font_entry["status"] = "invalid"
-            font_entry["format"] = "jffont-v0/v1"
+            font_entry["format"] = "jffont-v0/v1" if suffix == ".jffont" else "jffont2"
             font_entry["error"] = parsed.get("error", "invalid")
             warnings.append({
                 "level": "warning",
@@ -2716,16 +2801,17 @@ def collect_font_diagnostics(manifest: dict,
             "usedGlyphSample": codepoint_sample(source_codepoints & glyphs, 24),
             })
         native_size = parsed["lineHeight"]
-        renderable_sizes = [native_size * scale for scale in range(1, 9)]
+        core_font = parsed["format"].startswith("jffont2-")
+        renderable_sizes = [] if core_font else [native_size * scale for scale in range(1, 9)]
         declared_sizes = font_entry["sizes"]
-        declared_unavailable_sizes = sorted(set(declared_sizes) - set(renderable_sizes))
+        declared_unavailable_sizes = [] if core_font else sorted(set(declared_sizes) - set(renderable_sizes))
         normalized_family = normalize_font_family_name(font_entry["family"]).lower()
         used_sizes = sorted({
             entry["size"] for entry in font_size_usage["entries"]
             if normalized_family and normalize_font_family_name(entry["family"]).lower() == normalized_family
         })
         undeclared_used_sizes = sorted(set(used_sizes) - set(declared_sizes))
-        unavailable_used_sizes = sorted(set(used_sizes) - set(renderable_sizes))
+        unavailable_used_sizes = [] if core_font else sorted(set(used_sizes) - set(renderable_sizes))
         font_entry.update({
             "nativeSize": native_size,
             "renderableSizes": renderable_sizes,
@@ -2733,6 +2819,7 @@ def collect_font_diagnostics(manifest: dict,
             "undeclaredUsedSizes": undeclared_used_sizes,
             "declaredUnavailableSizes": declared_unavailable_sizes,
             "unavailableUsedSizes": unavailable_used_sizes,
+            "scalable": core_font,
         })
         if undeclared_used_sizes:
             warnings.append({

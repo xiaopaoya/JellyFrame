@@ -1,6 +1,7 @@
 #include "app_runtime/app_font_set.h"
 
 #include <algorithm>
+#include <unordered_map>
 
 namespace jellyframe {
 namespace {
@@ -142,6 +143,8 @@ AppFontSet::AppFontSet(std::size_t capacity)
     fonts_.reserve(capacity_);
     fallback_fonts_.reserve(capacity_ + 1);
     family_fonts_.reserve(capacity_ + 1);
+    core_fonts_.reserve(capacity_);
+    core_faces_.reserve(capacity_ + 1);
 }
 
 AppFontLoadResult AppFontSet::load_jffont(std::uint32_t app_instance_id,
@@ -170,6 +173,137 @@ AppFontLoadResult AppFontSet::attach_jffont_view(std::uint32_t app_instance_id,
     return add_jffont(app_instance_id, data, size, false, family);
 }
 
+AppFontLoadResult AppFontSet::load_core_font(std::uint32_t app_instance_id,
+                                             const std::uint8_t* data,
+                                             std::size_t size,
+                                             std::string_view family) {
+    return add_core_font(app_instance_id, data, size, true, family);
+}
+
+AppFontLoadResult AppFontSet::attach_core_font_view(std::uint32_t app_instance_id,
+                                                    const std::uint8_t* data,
+                                                    std::size_t size,
+                                                    std::string_view family) {
+    return add_core_font(app_instance_id, data, size, false, family);
+}
+
+bool AppFontSet::set_core_system_font(const std::uint8_t* data, std::size_t size) {
+    return bind_core_system_font(data, size, true);
+}
+
+bool AppFontSet::attach_core_system_font_view(const std::uint8_t* data, std::size_t size) {
+    return bind_core_system_font(data, size, false);
+}
+
+bool AppFontSet::bind_core_system_font(const std::uint8_t* data, std::size_t size, bool copy_bytes) {
+    if (data == nullptr || size == 0) return false;
+    std::vector<std::uint8_t> candidate_bytes;
+    FontResource candidate_font;
+    if (copy_bytes) {
+        try {
+            candidate_bytes.assign(data, data + size);
+        } catch (...) {
+            return false;
+        }
+    }
+    const std::uint8_t* candidate_data = copy_bytes ? candidate_bytes.data() : data;
+    const std::size_t candidate_size = copy_bytes ? candidate_bytes.size() : size;
+    if (candidate_font.load(candidate_data, candidate_size) != FontResourceStatus::Loaded)
+        return false;
+    auto old_bytes = std::move(core_system_font_bytes_);
+    const FontResource old_font = core_system_font_;
+    const std::uint64_t old_resource_id = core_system_resource_id_;
+    core_system_font_bytes_ = std::move(candidate_bytes);
+    core_system_font_ = candidate_font;
+    core_system_resource_id_ = next_core_resource_id_++;
+    if (!rebuild_core_text_system()) {
+        core_system_font_bytes_ = std::move(old_bytes);
+        core_system_font_ = old_font;
+        core_system_resource_id_ = old_resource_id;
+        rebuild_core_text_system();
+        return false;
+    }
+    return true;
+}
+
+const TextSystem* AppFontSet::core_text_system() const {
+    return core_text_system_ready_ ? &core_text_system_ : nullptr;
+}
+
+AppFontLoadResult AppFontSet::add_core_font(std::uint32_t app_instance_id,
+                                           const std::uint8_t* data,
+                                           std::size_t size,
+                                           bool copy_bytes,
+                                           std::string_view family) {
+    if (app_instance_id == 0)
+        return AppFontLoadResult{AppFontLoadStatus::EmptyInstance, fonts_.size() + core_fonts_.size()};
+    if (data == nullptr || size == 0)
+        return AppFontLoadResult{AppFontLoadStatus::InvalidFont, fonts_.size() + core_fonts_.size()};
+    if (app_instance_id_ != 0 && app_instance_id_ != app_instance_id) clear();
+    if (fonts_.size() + core_fonts_.size() >= capacity_)
+        return AppFontLoadResult{AppFontLoadStatus::CapacityExceeded, fonts_.size() + core_fonts_.size()};
+
+    CoreFont loaded;
+    loaded.family_hash = normalized_font_family_hash(family);
+    try {
+        if (copy_bytes) loaded.bytes.assign(data, data + size);
+    } catch (...) {
+        return AppFontLoadResult{AppFontLoadStatus::InvalidFont, fonts_.size() + core_fonts_.size()};
+    }
+    const std::uint8_t* resource_bytes = copy_bytes ? loaded.bytes.data() : data;
+    const std::size_t resource_size = copy_bytes ? loaded.bytes.size() : size;
+    if (loaded.resource.load(resource_bytes, resource_size) != FontResourceStatus::Loaded)
+        return AppFontLoadResult{AppFontLoadStatus::InvalidFont, fonts_.size() + core_fonts_.size()};
+    try {
+        core_fonts_.push_back(std::move(loaded));
+    } catch (...) {
+        return AppFontLoadResult{AppFontLoadStatus::CapacityExceeded, fonts_.size() + core_fonts_.size()};
+    }
+    if (!rebuild_core_text_system()) {
+        core_fonts_.pop_back();
+        return AppFontLoadResult{AppFontLoadStatus::InvalidFont, fonts_.size() + core_fonts_.size()};
+    }
+    core_fonts_.back().resource_id = next_core_resource_id_++;
+    app_instance_id_ = app_instance_id;
+    return AppFontLoadResult{AppFontLoadStatus::Loaded, fonts_.size() + core_fonts_.size()};
+}
+
+bool AppFontSet::rebuild_core_text_system() {
+    std::vector<TextFontFace> candidate_faces;
+    std::unordered_map<std::uint32_t, std::uint32_t> family_ids;
+    try {
+        candidate_faces.reserve(core_fonts_.size() + (core_system_font_.valid() ? 1U : 0U));
+        family_ids.reserve(core_fonts_.size());
+        if (core_system_font_.valid())
+            candidate_faces.push_back({core_system_resource_id_, 0, core_system_font_, 0});
+        std::uint32_t next_family_id = 1;
+        for (const auto& loaded : core_fonts_) {
+            std::uint32_t family_id = 0;
+            if (loaded.family_hash != 0) {
+                auto [it, inserted] = family_ids.emplace(loaded.family_hash, next_family_id);
+                if (inserted) ++next_family_id;
+                family_id = it->second;
+            }
+            const std::uint64_t resource_id = loaded.resource_id != 0
+                ? loaded.resource_id : next_core_resource_id_;
+            candidate_faces.push_back({resource_id, family_id, loaded.resource, loaded.family_hash});
+        }
+    } catch (...) {
+        return false;
+    }
+    if (candidate_faces.empty()) {
+        core_faces_.clear();
+        core_text_system_.clear();
+        core_text_system_ready_ = false;
+        return true;
+    }
+    if (core_text_system_.bind(candidate_faces.data(), candidate_faces.size()) != TextSystemStatus::Ok)
+        return false;
+    core_faces_.swap(candidate_faces);
+    core_text_system_ready_ = true;
+    return true;
+}
+
 AppFontLoadResult AppFontSet::add_jffont(std::uint32_t app_instance_id,
                                          const std::uint8_t* data,
                                          std::size_t size,
@@ -181,8 +315,8 @@ AppFontLoadResult AppFontSet::add_jffont(std::uint32_t app_instance_id,
     if (app_instance_id_ != 0 && app_instance_id_ != app_instance_id) {
         clear();
     }
-    if (fonts_.size() >= capacity_) {
-        return AppFontLoadResult{AppFontLoadStatus::CapacityExceeded, fonts_.size()};
+    if (fonts_.size() + core_fonts_.size() >= capacity_) {
+        return AppFontLoadResult{AppFontLoadStatus::CapacityExceeded, fonts_.size() + core_fonts_.size()};
     }
 
     LoadedFont loaded;
@@ -206,16 +340,23 @@ std::size_t AppFontSet::clear_app_instance(std::uint32_t app_instance_id) {
     if (app_instance_id == 0 || app_instance_id_ != app_instance_id) {
         return 0;
     }
-    const std::size_t count = fonts_.size();
-    clear();
+    const std::size_t count = fonts_.size() + core_fonts_.size();
+    fonts_.clear();
+    core_fonts_.clear();
+    app_instance_id_ = 0;
+    contexts_dirty_ = true;
+    refresh_context();
+    rebuild_core_text_system();
     return count;
 }
 
 void AppFontSet::clear() {
     fonts_.clear();
+    core_fonts_.clear();
     app_instance_id_ = 0;
     contexts_dirty_ = true;
     refresh_context();
+    rebuild_core_text_system();
 }
 
 void AppFontSet::set_system_font(const BitmapFont* font) {

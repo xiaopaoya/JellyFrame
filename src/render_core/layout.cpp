@@ -1,6 +1,7 @@
 ﻿#include "render_core/layout.h"
 
 #include "render_core/form_control.h"
+#include "render_core/prepared_text.h"
 #include "render_core/text_normalization.h"
 #include "render_core/text_scan.h"
 
@@ -24,6 +25,26 @@ int clamp_layout_value(std::int64_t value) {
     return static_cast<int>(std::clamp<std::int64_t>(value,
                                                      std::numeric_limits<int>::min(),
                                                      std::numeric_limits<int>::max()));
+}
+
+int q1000_ceil_pixels(std::int32_t value) {
+    return value <= 0 ? 0 : clamp_layout_value((static_cast<std::int64_t>(value) + 999) / 1000);
+}
+
+TextSystemStatus measure_core_text(const TextSystem& text_system, std::string_view text,
+                                   const Style& style, TextRunMetrics& metrics) {
+    if (style.letter_spacing != 0) return TextSystemStatus::UnsupportedStyle;
+    if (style.font_size < 0 || style.font_size > std::numeric_limits<std::int32_t>::max() / 1000)
+        return TextSystemStatus::InvalidRequest;
+    std::uint32_t family_id = 0;
+    if (!text_system.resolve_family_hash(style.font_family_hash, family_id))
+        return TextSystemStatus::InvalidFontSet;
+    TextFontRequest request;
+    request.families = &family_id;
+    request.family_count = 1;
+    request.size_q1000 = style.font_size * 1000;
+    request.weight = static_cast<std::uint16_t>(std::clamp(style.font_weight, 1, 1000));
+    return text_system.measure(text, request, metrics);
 }
 
 int bounded_add(int left, int right) {
@@ -613,7 +634,8 @@ struct GridPlacement {
     bool fallback_block = false;
 };
 
-int grid_intrinsic_outer_width(const LayoutBox& box, const TextMeasureProvider& text_measure) {
+int grid_intrinsic_outer_width(const LayoutBox& box, const TextMeasureProvider& text_measure,
+                               const TextSystem* text_system) {
     if (box.style.width >= 0) {
         return box.style.box_sizing_border_box
             ? std::max(0, box.style.width)
@@ -623,6 +645,11 @@ int grid_intrinsic_outer_width(const LayoutBox& box, const TextMeasureProvider& 
     }
     if (box.node != nullptr && box.node->type == NodeType::Text) {
         const std::string text = transformed_render_text(*box.node, box.style.text_transform);
+        if (text_system != nullptr) {
+            TextRunMetrics metrics;
+            return measure_core_text(*text_system, text, box.style, metrics) == TextSystemStatus::Ok
+                ? q1000_ceil_pixels(metrics.advance) : 0;
+        }
         return measure_text_with_letter_spacing(text_measure,
                                                 text,
                                                 box.style.font_size,
@@ -638,7 +665,7 @@ int grid_intrinsic_outer_width(const LayoutBox& box, const TextMeasureProvider& 
             continue;
         }
         const int outer_width = bounded_non_negative_add(
-            bounded_non_negative_add(grid_intrinsic_outer_width(*child, text_measure), child->style.margin.left),
+            bounded_non_negative_add(grid_intrinsic_outer_width(*child, text_measure, text_system), child->style.margin.left),
             child->style.margin.right);
         const bool inline_child = (child->node != nullptr && child->node->type == NodeType::Text) ||
             child->style.display == Display::Inline || child->style.display == Display::InlineBlock;
@@ -659,6 +686,7 @@ int grid_intrinsic_outer_width(const LayoutBox& box, const TextMeasureProvider& 
 void finalize_grid_columns(GridColumns& columns,
                            const std::vector<GridPlacement>& placements,
                            const TextMeasureProvider& text_measure,
+                           const TextSystem* text_system,
                            int content_width) {
     for (const GridPlacement& placement : placements) {
         if (placement.fallback_block || placement.column_span != 1 ||
@@ -666,7 +694,7 @@ void finalize_grid_columns(GridColumns& columns,
             !columns.auto_sized[static_cast<std::size_t>(placement.column)]) {
             continue;
         }
-        const int intrinsic_width = grid_intrinsic_outer_width(*placement.child, text_measure);
+        const int intrinsic_width = grid_intrinsic_outer_width(*placement.child, text_measure, text_system);
         columns.widths[static_cast<std::size_t>(placement.column)] = std::max(
             columns.widths[static_cast<std::size_t>(placement.column)], intrinsic_width);
     }
@@ -839,6 +867,18 @@ bool has_only_inline_children(const LayoutBox& box) {
 void shift_box(LayoutBox& box, int dx, int dy) {
     box.rect.x = bounded_add(box.rect.x, dx);
     box.rect.y = bounded_add(box.rect.y, dy);
+    if (box.text_layout_cache.valid) {
+        box.text_layout_cache.rect_x = bounded_add(box.text_layout_cache.rect_x, dx);
+        box.text_layout_cache.rect_y = bounded_add(box.text_layout_cache.rect_y, dy);
+        if (box.text_layout_cache.prepared_text) {
+            box.text_layout_cache.prepared_origin_x = bounded_add(box.text_layout_cache.prepared_origin_x, dx);
+            box.text_layout_cache.prepared_baseline_y = bounded_add(box.text_layout_cache.prepared_baseline_y, dy);
+            for (auto& line : box.text_layout_cache.prepared_lines) {
+                line.origin_x = bounded_add(line.origin_x, dx);
+                line.baseline_y = bounded_add(line.baseline_y, dy);
+            }
+        }
+    }
     for (auto& child : box.children) {
         shift_box(*child, dx, dy);
     }
@@ -1126,6 +1166,185 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
                                   int height) const {
     box.text_layout_cache = TextLayoutCache{};
     const std::string text = transformed_render_text(*box.node, box.style.text_transform);
+    if (options_.text_system != nullptr) {
+        TextLayoutCache& cache = box.text_layout_cache;
+        cache.text_system = options_.text_system;
+        cache.text_system_generation = options_.text_system->generation();
+        cache.source_text = box.node->text;
+        cache.rendered_text = text;
+        cache.font_size = box.style.font_size;
+        cache.font_weight = box.style.font_weight;
+        cache.font_family_hash = box.style.font_family_hash;
+        cache.text_indent = box.style.text_indent;
+        cache.letter_spacing = box.style.letter_spacing;
+        cache.text_transform = box.style.text_transform;
+        cache.overflow_wrap_anywhere = box.style.overflow_wrap_anywhere;
+        cache.white_space_nowrap = box.style.white_space_nowrap;
+        cache.text_overflow_ellipsis = box.style.text_overflow_ellipsis;
+        cache.text_align = box.style.text_align;
+        const auto refuse = [&](const char* detail) {
+            cache.valid = true;
+            report_diagnostic(options_.diagnostics, DiagnosticStage::Layout,
+                              DiagnosticSeverity::Warning, "layout-core-text-refused",
+                              "Core TextSystem could not prepare this text layout", detail);
+            box.rect = Rect{border_box_x, border_box_y, 0, 0};
+            cache.rect_x = box.rect.x;
+            cache.rect_y = box.rect.y;
+            return 0;
+        };
+        if (box.style.letter_spacing != 0 || box.style.text_overflow_ellipsis ||
+            box.style.font_size < 0 || box.style.font_size > std::numeric_limits<std::int32_t>::max() / 1000) {
+            return refuse("letter-spacing, text-overflow ellipsis, or font-size is outside the prepared-text profile");
+        }
+        std::uint32_t family_id = 0;
+        if (!options_.text_system->resolve_family_hash(box.style.font_family_hash, family_id)) {
+            return refuse("font-family is not registered in the Core text catalog");
+        }
+        TextFontRequest request;
+        request.families = &family_id;
+        request.family_count = 1;
+        request.size_q1000 = box.style.font_size * 1000;
+        request.weight = static_cast<std::uint16_t>(std::clamp(box.style.font_weight, 1, 1000));
+        TextRunMetrics run;
+        const auto measured = options_.text_system->measure(text, request, run);
+        if (measured != TextSystemStatus::Ok) return refuse("text measurement was refused by Core TextSystem");
+        if (run.glyph_count > options_.max_prepared_text_glyphs)
+            return refuse("text run exceeds the configured prepared-glyph limit");
+        const auto ceil_px = [](std::int32_t value) {
+            return value <= 0 ? 0 : static_cast<int>((static_cast<std::int64_t>(value) + 999) / 1000);
+        };
+        const int raw_text_width = ceil_px(run.advance);
+        const int text_indent = std::max(0, std::min(box.style.text_indent, content_width));
+        const int usable_text_width = bounded_non_negative_subtract(content_width, text_indent);
+        const bool wraps = !box.style.white_space_nowrap &&
+            (box.style.overflow_wrap_anywhere || has_text_wrap_opportunity(text));
+        const bool needs_wrap = usable_text_width > 0 && raw_text_width > usable_text_width && wraps;
+        std::vector<PreparedTextGlyph> glyphs(run.glyph_count);
+        TextRunMetrics prepared;
+        if (options_.text_system->prepare(text, request, glyphs.data(), glyphs.size(), prepared) != TextSystemStatus::Ok)
+            return refuse("prepared glyphs could not be produced");
+
+        struct CoreLineDraft { std::string text; std::int64_t advance = 0; };
+        std::vector<CoreLineDraft> line_drafts;
+        if (!needs_wrap) {
+            line_drafts.push_back({text, run.advance});
+        } else {
+            struct TokenDraft {
+                std::string text;
+                std::int64_t advance = 0;
+                std::size_t first_glyph = 0;
+                std::size_t end_glyph = 0;
+            };
+            CoreLineDraft line;
+            TokenDraft token;
+            bool pending_space = false;
+            TextRunMetrics space_metrics;
+            if (measure_core_text(*options_.text_system, " ", box.style, space_metrics) != TextSystemStatus::Ok)
+                return refuse("space advance could not be measured for line breaking");
+            const auto emit_line = [&]() {
+                if (!line.text.empty() || line_drafts.empty()) line_drafts.push_back(std::move(line));
+                line = CoreLineDraft{};
+            };
+            const auto append_token = [&]() -> bool {
+                if (token.text.empty()) return true;
+                const std::int64_t separator = line.text.empty() || !pending_space ? 0 : space_metrics.advance;
+                const std::int64_t candidate = line.advance + separator + token.advance;
+                if (!line.text.empty() && candidate > static_cast<std::int64_t>(usable_text_width) * 1000) emit_line();
+                if (box.style.overflow_wrap_anywhere && token.advance > static_cast<std::int64_t>(usable_text_width) * 1000) {
+                    for (std::size_t glyph_index = token.first_glyph; glyph_index < token.end_glyph; ++glyph_index) {
+                        const auto& glyph = glyphs[glyph_index];
+                        if (!line.text.empty() && line.advance + glyph.geometry.advance > static_cast<std::int64_t>(usable_text_width) * 1000)
+                            emit_line();
+                        line.text.append(text.data() + glyph.source_begin, glyph.source_end - glyph.source_begin);
+                        line.advance += glyph.geometry.advance;
+                    }
+                } else {
+                    if (!line.text.empty() && pending_space) {
+                        line.text.push_back(' ');
+                        line.advance += space_metrics.advance;
+                    }
+                    line.text += token.text;
+                    line.advance += token.advance;
+                }
+                token = TokenDraft{};
+                pending_space = false;
+                return true;
+            };
+            for (std::size_t glyph_index = 0; glyph_index < glyphs.size(); ++glyph_index) {
+                const auto& glyph = glyphs[glyph_index];
+                const std::uint32_t cp = glyph.source_codepoint;
+                if (cp == ' ' || cp == '\t' || cp == '\r') {
+                    if (!append_token()) return refuse("line token could not be prepared");
+                    pending_space = !line.text.empty();
+                    continue;
+                }
+                const auto byte_count = glyph.source_end - glyph.source_begin;
+                if (token.text.empty()) token.first_glyph = glyph_index;
+                token.end_glyph = glyph_index + 1;
+                token.text.append(text.data() + glyph.source_begin, byte_count);
+                token.advance += glyph.geometry.advance;
+                if (is_cjk_codepoint(cp) || cp == '-' || cp == '/' || cp == 0x3001U || cp == 0x3002U) {
+                    if (!append_token()) return refuse("line token could not be prepared");
+                }
+            }
+            if (!append_token()) return refuse("line token could not be prepared");
+            if (!line.text.empty() || line_drafts.empty()) emit_line();
+        }
+        const int text_width = std::max(min_width, std::min(usable_text_width, raw_text_width));
+        const int line_height = box.style.line_height > 0 ? box.style.line_height : ceil_px(run.natural_height);
+        const int fixed_text_height = specified_content_height(box.style, height);
+        const int line_count = clamp_layout_value(static_cast<std::int64_t>(line_drafts.size()));
+        int text_height = std::max(specified_content_min_height(box.style, height),
+            fixed_text_height >= 0 ? fixed_text_height : bounded_non_negative_multiply(std::max(0, line_height), line_count));
+        const int max_text_height = resolved_max_content_height(box.style, height);
+        if (max_text_height >= 0) text_height = std::min(text_height, max_text_height);
+        const int text_x = bounded_add(border_box_x, text_indent);
+        box.rect = Rect{text_x, border_box_y, text_width, text_height};
+        const int vertical_extent = ceil_px(run.ascent) + ceil_px(run.descent);
+        const int leading = std::max(0, line_height - vertical_extent);
+        cache.prepared_origin_x = text_x;
+        cache.prepared_baseline_y = bounded_add(border_box_y, bounded_add(ceil_px(run.ascent), leading / 2));
+        cache.available_width = usable_text_width;
+        cache.content_width = content_width;
+        cache.rect_x = box.rect.x;
+        cache.rect_y = box.rect.y;
+        cache.rect_width = box.rect.width;
+        cache.rect_height = box.rect.height;
+        cache.viewport_width = box.viewport_width;
+        cache.viewport_height = box.viewport_height;
+        cache.line_height = line_height;
+        cache.lines.clear();
+        cache.prepared_lines.clear();
+        for (std::size_t line_index = 0; line_index < line_drafts.size(); ++line_index) {
+            auto& line = line_drafts[line_index];
+            cache.lines.push_back(line.text);
+            std::vector<PreparedTextGlyph> line_glyphs(prepared.glyph_count);
+            TextRunMetrics line_metrics;
+            if (options_.text_system->prepare(line.text, request, line_glyphs.data(), line_glyphs.size(), line_metrics) != TextSystemStatus::Ok)
+                return refuse("a wrapped text line could not be prepared");
+            line_glyphs.resize(line_metrics.glyph_count);
+            PreparedTextLine prepared_line;
+            const int line_width = ceil_px(static_cast<std::int32_t>(std::min<std::int64_t>(line.advance,
+                std::numeric_limits<std::int32_t>::max())));
+            const int line_offset = box.style.text_align == TextAlign::Center
+                ? std::max(0, bounded_subtract(usable_text_width, line_width) / 2)
+                : box.style.text_align == TextAlign::End
+                    ? std::max(0, bounded_subtract(usable_text_width, line_width)) : 0;
+            prepared_line.origin_x = bounded_add(text_x, line_offset);
+            prepared_line.baseline_y = bounded_add(border_box_y,
+                bounded_add(bounded_non_negative_multiply(std::max(0, line_height), static_cast<int>(line_index)),
+                            bounded_add(ceil_px(run.ascent), leading / 2)));
+            prepared_line.width = line_width;
+            if (!encode_prepared_text(line_glyphs.data(), line_glyphs.size(), request.size_q1000,
+                                      static_cast<std::uint32_t>(line.text.size()), prepared_line.packet))
+                return refuse("a wrapped text packet could not be encoded");
+            cache.prepared_lines.push_back(std::move(prepared_line));
+        }
+        if (cache.prepared_lines.size() == 1) cache.prepared_packet = cache.prepared_lines.front().packet;
+        cache.prepared_text = true;
+        cache.valid = true;
+        return text_height;
+    }
     const TextMetrics metrics = measure_text_with_letter_spacing(text_measure_,
                                                                  text,
                                                                  box.style.font_size,
@@ -1206,6 +1425,8 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
     cache.text_measure = text_measure_;
     cache.available_width = usable_text_width;
     cache.content_width = content_width;
+    cache.rect_x = box.rect.x;
+    cache.rect_y = box.rect.y;
     cache.rect_width = box.rect.width;
     cache.rect_height = box.rect.height;
     cache.viewport_width = box.viewport_width;
@@ -1717,7 +1938,7 @@ int LayoutEngine::layout_grid_box(LayoutBox& box,
         placements.push_back(placement);
     }
 
-    finalize_grid_columns(columns, placements, text_measure_, content_width);
+    finalize_grid_columns(columns, placements, text_measure_, options_.text_system, content_width);
 
     for (const GridPlacement& placement : placements) {
         LayoutBox& child = *placement.child;

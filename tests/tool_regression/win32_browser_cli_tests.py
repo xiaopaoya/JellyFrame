@@ -17,6 +17,14 @@ JFAPP_MAGIC = b"JFAPPV0\0"
 JFAPP_HEADER_SIZE = struct.calcsize(JFAPP_HEADER_FORMAT)
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATIC_SVG_ICON_APP = REPO_ROOT / "tests" / "fixtures" / "apps" / "jelly_svg_icon"
+LOCKED_CORE_VERSION = re.search(
+    r'^set\(JELLYFRAME_RENDER_CORE_LOCKED_VERSION "([0-9]+\.[0-9]+\.[0-9]+)"',
+    (REPO_ROOT / "cmake" / "jellyframe_dependency_lock.cmake").read_text(encoding="utf-8"),
+    re.MULTILINE,
+)
+if LOCKED_CORE_VERSION is None:
+    raise RuntimeError("Render Core dependency lock is missing its version")
+LOCKED_CORE_VERSION = LOCKED_CORE_VERSION.group(1)
 
 
 def run_case(exe: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -203,7 +211,7 @@ def write_jfapp(
             "versionCode": version_code,
             "entry": entry,
             "minJellyFrame": "0.6.0",
-            "minRenderCore": "0.7.0",
+            "minRenderCore": "0.8.0",
             "script": "classic",
             "viewport": {"designWidth": 172, "designHeight": 320},
             "budgets": {"maxResourceBytes": 65536},
@@ -398,7 +406,7 @@ def main() -> int:
                 "versionCode": 1,
                 "entry": "/index.html",
                 "runtime": {
-                    "minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "classic"
+                    "minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "classic"
                 },
                 "viewport": {"designWidth": 160, "designHeight": 60},
             }),
@@ -570,7 +578,7 @@ def main() -> int:
                 "versionCode": 1,
                 "entry": "/index.html",
                 "runtime": {
-                    "minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "none"
+                    "minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"
                 },
                 "viewport": {"designWidth": 160, "designHeight": 60},
             }),
@@ -733,7 +741,7 @@ def main() -> int:
                 "versionCode": 1,
                 "entry": "/index.html",
                 "runtime": {
-                    "minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "none"
+                    "minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"
                 },
                 "viewport": {"designWidth": 160, "designHeight": 100},
             }),
@@ -806,7 +814,7 @@ def main() -> int:
                     "versionCode": 1,
                     "entry": "/index.html",
                     "runtime": {
-                        "minJellyFrame": "0.6.0", "minRenderCore": "0.7.0", "script": "none"
+                        "minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"
                     },
                     "viewport": {"designWidth": 172, "designHeight": 320},
                 }
@@ -844,7 +852,7 @@ def main() -> int:
         historical_core_result = run_case(exe, ["--app", str(app)])
         require(historical_core_result.returncode != 0,
                 "native app loading must reject a historical Render Core contract")
-        require("minRenderCore must target the configured pre-1.0 Render Core line 0.7.0"
+        require(f"minRenderCore must target the configured pre-1.0 Render Core line {LOCKED_CORE_VERSION}"
                 in historical_core_result.stdout,
                 "native app loading must report the configured Render Core requirement")
 

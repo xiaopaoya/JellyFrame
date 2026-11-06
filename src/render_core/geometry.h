@@ -173,6 +173,7 @@ enum class DisplayCommandType : std::uint8_t {
     RadialGradient,
     BoxShadow,
     Text,
+    PreparedText,
     Image,
 };
 
@@ -262,6 +263,17 @@ struct DisplayCommand {
     // intentionally do not serialize it and normal rendering never reads it.
     std::uint32_t trace_owner_token = 0;
 };
+
+inline void set_prepared_text_origin(DisplayCommand& command, int x, int baseline_y) {
+    command.object_position.x_percent = x;
+    command.object_position.y_percent = baseline_y;
+}
+inline int prepared_text_origin_x(const DisplayCommand& command) {
+    return command.object_position.x_percent;
+}
+inline int prepared_text_baseline_y(const DisplayCommand& command) {
+    return command.object_position.y_percent;
+}
 
 using DisplayList = std::vector<DisplayCommand>;
 

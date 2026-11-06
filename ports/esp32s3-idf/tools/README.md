@@ -11,6 +11,8 @@ target.
   bounded C++ resource table consumed by the port build.
 - `generate_noto_sans_sc_font_pack.py`: offline font-pack generation; source
   fonts and licensing records live under `../font/`.
+- `generate_core_system_font.py`: prepares the family-0 JFFONT2 Core resource
+  from the vendored Noto Regular face for embedded read-only storage.
 - `collect_p3_1_acceptance.py`, `collect_p3_4_mixed_soak.py` and
   `collect_value_frame_v2_soak.py`: evidence collectors for port-owned
   reports, not runtime firmware tools. The value-frame v2 collector writes a

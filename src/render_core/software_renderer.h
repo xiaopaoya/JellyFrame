@@ -4,6 +4,7 @@
 #include "render_core/geometry.h"
 #include "render_core/host.h"
 #include "render_core/layer_tree.h"
+#include "render_core/text_system.h"
 
 #include <array>
 #include <cstddef>
@@ -198,6 +199,8 @@ struct SoftwareRasterizerOptions {
     // Optional explicit profiling hook. With no observer, the rasterizer does
     // not read timing and creates no command samples.
     SoftwareRasterizerCommandObserver command_observer;
+    const TextSystem* text_system = nullptr;
+    TextPaintLimits text_limits;
 };
 
 class SoftwareRasterizer {
@@ -265,6 +268,8 @@ public:
         bool smooth_scaled_layers = true;
         SoftwareRasterizerTiming rasterizer_timing;
         SoftwareRasterizerCommandObserver command_observer;
+        const TextSystem* text_system = nullptr;
+        TextPaintLimits text_limits;
     };
 
     struct Scratch {

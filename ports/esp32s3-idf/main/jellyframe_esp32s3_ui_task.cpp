@@ -8,6 +8,9 @@
 #endif
 #include "jellyframe_esp32s3_input.h"
 #include "jellyframe_esp32s3_resources.h"
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+#include "jellyframe_esp32s3_core_system_font.h"
+#endif
 
 #include "app_runtime/app_host.h"
 #include "device_runtime_contracts/device_bundle.h"
@@ -479,6 +482,8 @@ struct TimerUiTaskContext {
 #endif
     jellyframe::TextMeasureProvider text_measure{};
     jellyframe::TextPainter text_painter{};
+    jellyframe::AppFontSet core_text_fonts{0};
+    const jellyframe::TextSystem* core_text_system = nullptr;
     jellyframe::FrameScratch frame_scratch;
     jellyframe::AppFrameScratch app_scratch;
     jellyframe::SoftwareCompositor::Scratch compositor_scratch;
@@ -1212,6 +1217,7 @@ int resolve_scroll_y(const jellyframe::Node& node, int max_scroll_y, void* raw_c
 jellyframe::LayerTreeBuilderOptions make_layer_tree_options(const TimerUiTaskContext& context) {
     jellyframe::LayerTreeBuilderOptions options = jellyframe::layer_tree_options_from_budgets(context.budgets);
     options.text_measure = context.text_measure;
+    options.text_system = context.core_text_system;
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     options.image_resolver = make_bmp_image_resolver(const_cast<BmpImageAdapter&>(context.image_adapter));
 #endif
@@ -1730,9 +1736,9 @@ bool rebuild_pipeline(TimerUiTaskContext& context) {
         return false;
     }
 
-    jellyframe::LayoutEngine layout_engine(style_resolver,
-                                           context.text_measure,
-                                           jellyframe::layout_engine_options_from_budgets(context.budgets));
+    auto layout_options = jellyframe::layout_engine_options_from_budgets(context.budgets);
+    layout_options.text_system = context.core_text_system;
+    jellyframe::LayoutEngine layout_engine(style_resolver, context.text_measure, layout_options);
     const std::uint64_t layout_start = esp_timer_get_time();
     context.pipeline.layout_tree =
         layout_engine.layout(*context.pipeline.render_tree, context.width, context.height, context.pipeline.layout_arena);
@@ -1940,9 +1946,9 @@ bool render_and_present(TimerUiTaskContext& context,
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     image_painter = make_bmp_image_painter(context.image_adapter);
 #endif
-    jellyframe::SoftwareCompositor compositor(context.text_painter,
-        image_painter,
-        jellyframe::software_compositor_options_from_budgets(context.budgets));
+    auto compositor_options = jellyframe::software_compositor_options_from_budgets(context.budgets);
+    compositor_options.text_system = context.core_text_system;
+    jellyframe::SoftwareCompositor compositor(context.text_painter, image_painter, compositor_options);
     const std::uint64_t compose_start = esp_timer_get_time();
     if (rebuild_framebuffer_for_normal_present) {
         compositor.render_into(*context.pipeline.layer_tree,
@@ -2317,6 +2323,19 @@ void run_retained_ui_task(void* raw_context) {
                                                             nullptr};
     context->text_painter = jellyframe::TextPainter{app_font_paint_callback,
                                                     &context->font_context};
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+    if (!context->core_text_fonts.attach_core_system_font_view(
+            jellyframe_esp32s3_generated::kCoreSystemFont,
+            jellyframe_esp32s3_generated::kCoreSystemFontBytes)) {
+        ESP_LOGE(kTag, "Core default font resource failed validation");
+        context.reset();
+        vTaskDelete(nullptr);
+        return;
+    }
+    context->core_text_system = context->core_text_fonts.core_text_system();
+    context->text_measure = {};
+    context->text_painter = {};
+#endif
     const auto& font_stats = production_font_stats();
     ESP_LOGI(kTag,
              "font_pack family=\"%s\" coverage=%s faces=%u coverage_chars=%u glyphs=%u bitmap_bytes=%u bits_per_pixel=%u",
