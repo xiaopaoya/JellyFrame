@@ -460,12 +460,12 @@ void fill_opaque_nonuniform_rounded_rect(FrameBuffer& target,
     };
     for (int y = visible.y; y < y_end; ++y) {
         std::array<Span, 4> corner_spans{};
-        int span_count = 0;
+        std::size_t span_count = 0;
         const auto append_span = [&](std::int64_t start, std::int64_t end) {
             const int clipped_start = std::max(visible.x, clamp_int64_to_int(start));
             const int clipped_end = std::min(x_end, clamp_int64_to_int(end));
-            if (clipped_start < clipped_end) {
-                corner_spans[static_cast<std::size_t>(span_count++)] = {clipped_start, clipped_end};
+            if (clipped_start < clipped_end && span_count < corner_spans.size()) {
+                corner_spans[span_count++] = {clipped_start, clipped_end};
             }
         };
         const CornerRadii& radii = rounded.radii;
@@ -483,16 +483,23 @@ void fill_opaque_nonuniform_rounded_rect(FrameBuffer& target,
             append_span(static_cast<std::int64_t>(rounded.right) - radii.bottom_right, rounded.right);
         }
 
-        std::sort(corner_spans.begin(), corner_spans.begin() + span_count,
-                  [](const Span& left, const Span& right) {
-                      return left.start < right.start ||
-                             (left.start == right.start && left.end < right.end);
-                  });
+        for (std::size_t index = 1; index < span_count; ++index) {
+            const Span value = corner_spans[index];
+            std::size_t position = index;
+            while (position > 0 &&
+                   (corner_spans[position - 1].start > value.start ||
+                    (corner_spans[position - 1].start == value.start &&
+                     corner_spans[position - 1].end > value.end))) {
+                corner_spans[position] = corner_spans[position - 1];
+                --position;
+            }
+            corner_spans[position] = value;
+        }
         Color* row_pixels = target.pixels.data() + static_cast<std::size_t>(y) *
             static_cast<std::size_t>(target.width);
         int cursor = visible.x;
-        for (int index = 0; index < span_count; ++index) {
-            const Span span = corner_spans[static_cast<std::size_t>(index)];
+        for (std::size_t index = 0; index < span_count; ++index) {
+            const Span span = corner_spans[index];
             if (cursor < span.start) {
                 std::fill(row_pixels + cursor, row_pixels + span.start, color);
             }
@@ -502,8 +509,8 @@ void fill_opaque_nonuniform_rounded_rect(FrameBuffer& target,
             std::fill(row_pixels + cursor, row_pixels + x_end, color);
         }
 
-        for (int index = 0; index < span_count; ++index) {
-            const Span span = corner_spans[static_cast<std::size_t>(index)];
+        for (std::size_t index = 0; index < span_count; ++index) {
+            const Span span = corner_spans[index];
             for (int x = span.start; x < span.end; ++x) {
                 const int coverage = rounded_rect_coverage(rounded, x, y);
                 if (coverage == 255) {

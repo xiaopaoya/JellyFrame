@@ -59,3 +59,34 @@ does not generate or link the Core font and produces a `0x4e4950` image with
 `0x31b6b0` bytes (39%) free in the app partition; the enabled build generates
 the resource and retains the `0x5ab840` image with 29% free. The profile delta
 is `0xc6ef0` bytes (814,832 bytes). Neither image was flashed.
+
+## Post-merge mainline validation
+
+Runtime PR #47 was merged to `master` as `02c1e568a2061a3bab67bb7d569a362e48a83a8a`.
+The merged tree was then checked on `codex/post-core-owned-font-validation`.
+
+The first ESP-IDF 5.3.1 build of the merged tree exposed two integration issues
+that host CI had not covered:
+
+- The ESP-IDF Render Core component now adds the package `include/` directory
+  only when that directory exists, while always exposing the source `src/`
+  directory. This supports the Runtime's in-tree source layout, which has no
+  top-level `include/` directory.
+- The nonuniform rounded-rectangle renderer now bounds the four-span scratch
+  array and uses insertion sort. ESP-IDF GCC 13 had diagnosed the previous
+  `std::sort` range on that fixed-size array as `-Werror=array-bounds`.
+
+Both the default WS147 bring-up profile and the Core TextSystem acceptance
+profile build successfully with ESP-IDF 5.3.1. The Core TextSystem build uses
+`sdkconfig.defaults;sdkconfig.ws147_core_text.defaults`, embeds the 716,274-byte
+Core font resource, and produces a `0x5ab5f0`-byte image, leaving `0x254a10`
+bytes (29%) free in the 8 MiB app partition. This is compile-only evidence:
+the image has not been flashed and the board has not been physically accepted.
+
+The current in-tree Render Core regression executable builds from the
+post-merge Runtime checkout and passes. Runtime package-consumer Release CTest
+passes all 82 applicable tests after excluding
+`jellyframe_cli_external_trial_evidence`, which requires a trial build directory
+inside a repository-local CMake build tree; this verification build is under
+`D:\CodexTemp\Builds`. The unrestricted run therefore reports only that known
+directory-constraint failure, with the other 82 tests passing.
