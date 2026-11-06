@@ -1611,7 +1611,7 @@ void sort_layer_children(LayerNode& layer) {
     while (!pending.empty()) {
         LayerNode* current = pending.back();
         pending.pop_back();
-        std::stable_sort(current->children.begin(), current->children.end(),
+        std::sort(current->children.begin(), current->children.end(),
             [](const LayerNodePtr& left, const LayerNodePtr& right) {
                 if (left->z_index != right->z_index) {
                     return left->z_index < right->z_index;
