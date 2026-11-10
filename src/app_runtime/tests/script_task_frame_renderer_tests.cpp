@@ -1560,7 +1560,11 @@ template<class Command> void unknown_typed_command_is_refused_before_frame_write
         fill.rect = frame.viewport;
         fill.color = {255, 0, 0, 255};
         Command shadow;
-        detail::set_command_type(shadow, Type::CssBoxShadow);
+        if constexpr (detail::has_css_shadow_type<Type>::value) {
+            detail::set_command_type(shadow, Type::CssBoxShadow);
+            if constexpr (detail::has_css_shadow_paint<Command>::value)
+                shadow.css_shadow_paint().border_box = frame.viewport;
+        } else detail::set_command_type(shadow, Type::PreparedText);
         shadow.rect = frame.viewport;
         frame.display_list = {fill, shadow};
         FrameBuffer target(8, 8, {11, 22, 33, 255});

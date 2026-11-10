@@ -763,13 +763,14 @@ template<class Command> void typed_payloads_require_negotiated_transport() {
         using Type = decltype(detail::command_type(std::declval<const Command&>()));
         auto frame = fixture();
         Command css;
-        detail::set_command_type(css, Type::CssBoxShadow);
-        css.rect = {0, 0, 12, 12};
-        frame.display_list.push_back(css);
         std::vector<std::uint8_t> sentinel{1, 2, 3};
-        assert(encode_script_task_app_frame(frame, limits(), sentinel) == ScriptTaskAppFrameCodecStatus::InvalidValue);
-        assert((sentinel == std::vector<std::uint8_t>{1, 2, 3}));
-        frame.display_list.pop_back();
+        if constexpr (detail::has_css_shadow_type<Type>::value && detail::has_css_shadow_paint<Command>::value) {
+            detail::set_command_type(css, Type::CssBoxShadow);
+            css.rect = {0, 0, 12, 12}; frame.display_list.push_back(css);
+            assert(encode_script_task_app_frame(frame, limits(), sentinel) == ScriptTaskAppFrameCodecStatus::InvalidValue);
+            assert((sentinel == std::vector<std::uint8_t>{1, 2, 3}));
+            frame.display_list.pop_back();
+        }
         Command image;
         detail::set_command_type(image, Type::Image);
         image.image_paint().background_paint_clip = {1, 2, 3, 4};
@@ -779,7 +780,7 @@ template<class Command> void typed_payloads_require_negotiated_transport() {
         frame.display_list.pop_back();
         std::vector<std::uint8_t> bytes;
         assert(encode_script_task_app_frame(frame, limits(), bytes) == ScriptTaskAppFrameCodecStatus::Accepted);
-        bytes[32] = static_cast<std::uint8_t>(Type::CssBoxShadow);
+        bytes[32] = 9;
         ScriptTaskAppFrame decoded;
         decoded.viewport = {9, 8, 7, 6};
         assert(decode_script_task_app_frame(bytes, limits(), decoded) == ScriptTaskAppFrameCodecStatus::Malformed);

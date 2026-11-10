@@ -355,6 +355,93 @@ jobs:
         shell: pwsh
         run: ctest --test-dir build/desktop-scripting-forms-off -C Release -R "^jellyframe_script_tests$" --output-on-failure
 
+  canonical-abi4-installed-consumers:
+    name: Canonical ABI4 Installed Consumers (${{ matrix.profile }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: full
+            profile_id: render-core-default
+          - profile: cropped
+            profile_id: render-core-minimal-no-forms-advanced
+
+    steps:
+      - name: Checkout JellyFrame
+        uses: actions/checkout@v5
+
+      - name: Checkout Render Core source
+        uses: actions/checkout@v5
+        with:
+          repository: xiaopaoya/JellyFrame-Render-Core
+          ref: master
+          path: third_party/render-core-source
+
+      - name: Checkout JerryScript
+        uses: actions/checkout@v5
+        with:
+          repository: jerryscript-project/jerryscript
+          ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
+          path: third_party/jerryscript
+
+      - name: Build JerryScript
+        shell: pwsh
+        run: python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+
+      - name: Configure and install ABI4 Render Core
+        shell: pwsh
+        run: |
+          $core = 'third_party/render-core-source'
+          $build = "build\core-abi4-${{ matrix.profile }}"
+          $install = "build\core-install-${{ matrix.profile }}"
+          $args = @(
+            '-S', $core, '-B', $build,
+            '-DJELLYFRAME_BUILD_TESTS=OFF',
+            '-DJELLYFRAME_INSTALL_RENDER_CORE=ON',
+            '-DJELLYFRAME_RENDER_CORE_ENGINE_ABI=4'
+          )
+          if ('${{ matrix.profile }}' -eq 'cropped') {
+            $args += @(
+              '-DJELLYFRAME_ENABLE_CANVAS2D=OFF',
+              '-DJELLYFRAME_ENABLE_MODERN_PAINT=OFF',
+              '-DJELLYFRAME_ENABLE_FLEX_GRID=OFF',
+              '-DJELLYFRAME_ENABLE_ADVANCED_FORMS=OFF'
+            )
+          }
+          cmake @args
+          if ($LASTEXITCODE -ne 0) { throw 'Core ABI4 configure failed' }
+          cmake --build $build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Core ABI4 build failed' }
+          cmake --install $build --config Release --prefix $install
+          if ($LASTEXITCODE -ne 0) { throw 'Core ABI4 install failed' }
+          $manifest = Get-Content "$build\generated\jellyframe_render_core_source_manifest.json" -Raw | ConvertFrom-Json
+          $profile = Get-Content "$build\generated\jellyframe_render_core_profile.json" -Raw | ConvertFrom-Json
+          if ($profile.engineAbi -ne 4 -or $profile.profileId -ne '${{ matrix.profile_id }}') {
+            throw "Unexpected Core ABI/profile: $($profile.engineAbi)/$($profile.profileId)"
+          }
+          "EXPECTED_CORE_SOURCE_HASH=$($manifest.sourceHash)" >> $env:GITHUB_ENV
+          "EXPECTED_CORE_PROFILE_ID=$($profile.profileId)" >> $env:GITHUB_ENV
+          "CORE_INSTALL_PREFIX=$((Resolve-Path $install).Path)" >> $env:GITHUB_ENV
+
+      - name: Configure installed v9 consumers
+        shell: pwsh
+        run: >-
+          cmake -S docs/evaluation/canonical-abi4-codec-v9-consumer
+          -B build/canonical-v9-consumers-${{ matrix.profile }}
+          -DJellyFrameRenderCore_DIR="$env:CORE_INSTALL_PREFIX\lib\cmake\JellyFrameRenderCore"
+          -DEXPECTED_CORE_SOURCE_HASH="$env:EXPECTED_CORE_SOURCE_HASH"
+          -DEXPECTED_CORE_PROFILE_ID="$env:EXPECTED_CORE_PROFILE_ID"
+          -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE\third_party\jerryscript"
+
+      - name: Build and run installed v9 consumers
+        shell: pwsh
+        run: |
+          cmake --build build/canonical-v9-consumers-${{ matrix.profile }} --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Canonical ABI4 consumers failed to build' }
+          ctest --test-dir build/canonical-v9-consumers-${{ matrix.profile }} -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw 'Canonical ABI4 installed consumer tests failed' }
+
   render-core-standalone:
     name: Standalone Render Core
     runs-on: ubuntu-latest

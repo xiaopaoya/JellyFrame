@@ -73,6 +73,7 @@ void BmpImageAdapter::configure(const jellyframe::HostBudgets& budgets,
     resource_stats_ = {};
     stats_ = {};
     entries_.clear();
+    background_resource_resolver_ = nullptr;
     resource_context_ = bundle != nullptr
         ? make_resource_context(budgets, base_url, *bundle, &resource_stats_)
         : make_resource_context(budgets, base_url, &resource_stats_);
@@ -163,20 +164,27 @@ BmpImageAdapter::CacheStatus BmpImageAdapter::decode(std::string_view url,
 
 bool BmpImageAdapter::resolve(const jellyframe::Node& node,
                               jellyframe::ImageResolveKind kind,
-                              std::uint16_t,
-                              std::uint32_t& handle) {
-    handle = 0;
-    if (kind != jellyframe::ImageResolveKind::Content) {
-        return false;
+                              std::uint16_t background_resource_id,
+                              jellyframe::ResolvedImageResource& result) {
+    result = {};
+    std::string_view url;
+    if (kind == jellyframe::ImageResolveKind::Content) {
+        url = node.attribute("src");
+    } else if (background_resource_resolver_ != nullptr) {
+        const std::string* resolved = background_resource_resolver_->background_image_resource_url(
+            background_resource_id);
+        if (resolved != nullptr) url = *resolved;
     }
-    const std::string_view url = node.attribute("src");
     if (url.empty()) {
         return false;
     }
     ++stats_.requests;
     if (Entry* cached = find(url)) {
         ++stats_.cache_hits;
-        handle = cached->handle;
+        if (cached->status == CacheStatus::Ready)
+            result = {cached->handle, {jellyframe::ImageIntrinsicSizeState::Known,
+                                       static_cast<std::uint16_t>(cached->width),
+                                       static_cast<std::uint16_t>(cached->height)}};
         return cached->status == CacheStatus::Ready;
     }
     if (url.size() > kMaxUrlBytes || entries_.size() >= kMaxCacheEntries) {
@@ -203,7 +211,7 @@ bool BmpImageAdapter::resolve(const jellyframe::Node& node,
             stats_.decode_us += static_cast<std::uint64_t>(esp_timer_get_time() - start);
         }
     }
-    handle = entry.handle;
+    const std::uint32_t handle = entry.handle;
     switch (entry.status) {
     case CacheStatus::Ready: ++stats_.decoded; break;
     case CacheStatus::Missing: ++stats_.missing; break;
@@ -215,21 +223,22 @@ bool BmpImageAdapter::resolve(const jellyframe::Node& node,
     try {
         entries_.push_back(std::move(entry));
     } catch (const std::bad_alloc&) {
-        handle = 0;
         ++stats_.paint_failures;
         return false;
     }
-    return entries_.back().status == CacheStatus::Ready;
+    const Entry& stored = entries_.back();
+    if (stored.status != CacheStatus::Ready) return false;
+    result = {handle, {jellyframe::ImageIntrinsicSizeState::Known,
+                       static_cast<std::uint16_t>(stored.width),
+                       static_cast<std::uint16_t>(stored.height)}};
+    return true;
 }
 
 bool BmpImageAdapter::paint(jellyframe::FrameBuffer& target,
-                            jellyframe::Rect rect,
-                            std::uint32_t handle,
-                            jellyframe::ObjectFit object_fit,
-                            jellyframe::ObjectPosition object_position,
-                            jellyframe::ImageRendering) {
+                            const jellyframe::ImagePaintRequest& request) {
     ++stats_.paint_calls;
-    const Entry* entry = find(handle);
+    const jellyframe::Rect rect = request.destination;
+    const Entry* entry = find(request.image_handle);
     if (entry == nullptr || entry->status != CacheStatus::Ready || rect.width <= 0 || rect.height <= 0) {
         ++stats_.paint_failures;
         return false;
@@ -238,22 +247,23 @@ bool BmpImageAdapter::paint(jellyframe::FrameBuffer& target,
     const double source_h = static_cast<double>(entry->height);
     double draw_w = static_cast<double>(rect.width);
     double draw_h = static_cast<double>(rect.height);
-    if (object_fit == jellyframe::ObjectFit::None) {
+    if (request.object_fit == jellyframe::ObjectFit::None) {
         draw_w = source_w;
         draw_h = source_h;
-    } else if (object_fit == jellyframe::ObjectFit::Contain || object_fit == jellyframe::ObjectFit::Cover ||
-               object_fit == jellyframe::ObjectFit::ScaleDown) {
+    } else if (request.object_fit == jellyframe::ObjectFit::Contain ||
+               request.object_fit == jellyframe::ObjectFit::Cover ||
+               request.object_fit == jellyframe::ObjectFit::ScaleDown) {
         const double contain_scale = std::min(rect.width / source_w, rect.height / source_h);
         const double cover_scale = std::max(rect.width / source_w, rect.height / source_h);
-        double scale = object_fit == jellyframe::ObjectFit::Cover ? cover_scale : contain_scale;
-        if (object_fit == jellyframe::ObjectFit::ScaleDown) {
+        double scale = request.object_fit == jellyframe::ObjectFit::Cover ? cover_scale : contain_scale;
+        if (request.object_fit == jellyframe::ObjectFit::ScaleDown) {
             scale = std::min(1.0, contain_scale);
         }
         draw_w = std::max(1.0, std::round(source_w * scale));
         draw_h = std::max(1.0, std::round(source_h * scale));
     }
-    const int position_x = std::clamp(object_position.x_percent, 0, 100);
-    const int position_y = std::clamp(object_position.y_percent, 0, 100);
+    const int position_x = std::clamp(request.object_position.x_percent, 0, 100);
+    const int position_y = std::clamp(request.object_position.y_percent, 0, 100);
     const double offset_x = (static_cast<double>(rect.width) - draw_w) * position_x / 100.0;
     const double offset_y = (static_cast<double>(rect.height) - draw_h) * position_y / 100.0;
     for (int y = 0; y < rect.height; ++y) {
@@ -279,21 +289,17 @@ namespace {
 bool resolve_callback(const jellyframe::Node& node,
                       jellyframe::ImageResolveKind kind,
                       std::uint16_t background_resource_id,
-                      std::uint32_t& handle,
+                      jellyframe::ResolvedImageResource& result,
                       void* context) {
     auto* adapter = static_cast<BmpImageAdapter*>(context);
-    return adapter != nullptr && adapter->resolve(node, kind, background_resource_id, handle);
+    return adapter != nullptr && adapter->resolve(node, kind, background_resource_id, result);
 }
 
 bool paint_callback(jellyframe::FrameBuffer& target,
-                    jellyframe::Rect rect,
-                    std::uint32_t handle,
-                    jellyframe::ObjectFit object_fit,
-                    jellyframe::ObjectPosition object_position,
-                    jellyframe::ImageRendering image_rendering,
+                    const jellyframe::ImagePaintRequest& request,
                     void* context) {
     auto* adapter = static_cast<BmpImageAdapter*>(context);
-    return adapter != nullptr && adapter->paint(target, rect, handle, object_fit, object_position, image_rendering);
+    return adapter != nullptr && adapter->paint(target, request);
 }
 } // namespace
 

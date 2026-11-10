@@ -6,8 +6,30 @@ else()
     set(JELLYFRAME_RENDER_CORE_SOURCE_ROOT "${JELLYFRAME_ROOT}")
 endif()
 set(JELLYFRAME_SOURCE_ROOT "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}")
+unset(JELLYFRAME_RENDER_CORE_PACKAGE_VERSION CACHE)
+unset(JELLYFRAME_RENDER_CORE_ENGINE_ABI CACHE)
+unset(JELLYFRAME_RENDER_CORE_CMAKE_VERSION CACHE)
+include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_version.cmake")
 include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_sources.cmake")
-include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_profile.cmake")
+if(NOT CMAKE_SCRIPT_MODE_FILE)
+    include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_profile.cmake")
+    include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_source_hash.cmake")
+    jellyframe_compute_render_core_source_hash("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}")
+    set(JELLYFRAME_RENDER_CORE_SOURCE_MANIFEST_FILE
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/jellyframe_render_core_source_manifest.json")
+    configure_file(
+        "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_source_manifest.json.in"
+        "${JELLYFRAME_RENDER_CORE_SOURCE_MANIFEST_FILE}"
+        @ONLY)
+    set(JELLYFRAME_RENDER_CORE_PORT_PROVENANCE_FILE
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/jellyframe_render_core_port_provenance.txt")
+    file(WRITE "${JELLYFRAME_RENDER_CORE_PORT_PROVENANCE_FILE}"
+        "package=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}\n"
+        "abi=${JELLYFRAME_RENDER_CORE_ENGINE_ABI}\n"
+        "profile=${JELLYFRAME_RENDER_CORE_PROFILE_ID}\n"
+        "source=${JELLYFRAME_RENDER_CORE_SOURCE_HASH}\n"
+        "files=${JELLYFRAME_RENDER_CORE_SOURCE_FILE_COUNT}\n")
+endif()
 set(JELLYFRAME_RENDER_CORE_INCLUDE_DIRS
     "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/src")
 if(EXISTS "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/include")

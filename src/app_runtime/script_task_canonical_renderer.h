@@ -56,7 +56,7 @@ inline bool render(const ScriptTaskAppFrame& frame, FrameBuffer& target, Color b
     } catch (const std::bad_alloc&) { return fail(ScriptTaskFrameRenderStatus::FramebufferRejected); }
 #if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
     for (const auto& c : frame.display_list) {
-        const auto k = kind(c.type());
+        const auto k = command_kind(c);
         // Cropped Core deliberately falls gradients back to a solid color and
         // omits shadows. Such fallback is not successful v9 semantic replay.
         if ((k >= 2 && k <= 5) || k == 9) return fail(ScriptTaskFrameRenderStatus::InvalidFrame);

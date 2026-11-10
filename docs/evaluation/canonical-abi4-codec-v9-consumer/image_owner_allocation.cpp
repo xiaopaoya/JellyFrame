@@ -23,8 +23,8 @@ public:
     const Color pixel{17,33,91,255};
     std::uint64_t generation() const noexcept override { return 1; }
     bool contains(std::uint32_t h) const noexcept override { return h == 73; }
-    bool resolve(std::string_view url, ResolvedImageResource& out) const override { out = {}; if (url != "/image.bmp") return false; out.image_handle = 73; return true; }
-    bool paint(FrameBuffer& target, const ImagePaintRequest&) const override { for (auto& p : target.pixels) p = pixel; return true; }
+    bool resolve(std::string_view url, ResolvedImageResource& out) const { out = {}; if (url != "/image.bmp") return false; out.image_handle = 73; return true; }
+    bool paint(FrameBuffer& target, const ImagePaintRequest&) const { for (auto& p : target.pixels) p = pixel; return true; }
 };
 int main() {
     const auto source = std::make_shared<Images>();
@@ -39,7 +39,8 @@ int main() {
     ScriptTaskAppFrame frame; frame.viewport = {0,0,4,4}; frame.image_provider_id = owner->id();
     ScriptTaskFrameGroup root; root.parent = kScriptTaskNoParentClip; root.type = LayerType::Root; root.bounds = frame.viewport; root.command_count = 1;
     frame.groups.push_back(root);
-    DisplayCommand command; command.set_type(DisplayCommandType::Image); command.rect = frame.viewport; command.image_paint().image_handle = 73; frame.display_list.push_back(command);
+    DisplayCommand command; detail::set_command_type(command, DisplayCommandType::Image); command.rect = frame.viewport;
+    detail::command_image_handle(command) = 73; frame.display_list.push_back(command);
     ScriptTaskFrameRendererOptions options; options.image_provider = owner; ScriptTaskFrameRenderer renderer({}, {}, options);
     FrameBuffer target(4,4,{1,2,3,4});
     calls = 0; assert(renderer.render_into(frame, target, {})); const long allocations = calls;

@@ -134,60 +134,76 @@ static_assert(kPreparedTextHeaderBytes == 32 && kPreparedTextRecordBytes == 52,
               "v9 requires the actual canonical JFTP1 contract");
 
 // Stable canonical wire kinds; never serialize a Core enum's underlying value.
-inline int kind(DisplayCommandType t) {
+template<class E> inline int kind_impl(E t) {
     switch (t) {
     case DisplayCommandType::FillRect: return 0; case DisplayCommandType::StrokeRect: return 1;
     case DisplayCommandType::LinearGradient: return 2; case DisplayCommandType::ConicGradient: return 3;
     case DisplayCommandType::RadialGradient: return 4; case DisplayCommandType::BoxShadow: return 5;
     case DisplayCommandType::Text: return 6; case DisplayCommandType::PreparedText: return 7;
-    case DisplayCommandType::Image: return 8; case DisplayCommandType::CssBoxShadow: return 9;
+    case DisplayCommandType::Image: return 8;
     default: return -1;
     }
 }
-inline bool set_kind(DisplayCommand& c, unsigned value) {
+template<class E> inline int kind_shadow(E t) {
+    if constexpr (has_css_shadow_type<E>::value) {
+        if (t == E::CssBoxShadow) return 9;
+        return kind_impl(static_cast<DisplayCommandType>(t));
+    }
+    else return kind_impl(static_cast<DisplayCommandType>(t));
+}
+template<class C> inline int command_kind(const C& c) {
+    const auto t = command_type(c);
+    return kind_shadow(t);
+}
+template<class C> inline bool set_kind_impl(C& c, unsigned value) {
+    using E = decltype(command_type(c));
     switch (value) {
-    case 0: c.set_type(DisplayCommandType::FillRect); break;
-    case 1: c.set_type(DisplayCommandType::StrokeRect); break;
-    case 2: c.set_type(DisplayCommandType::LinearGradient); break;
-    case 3: c.set_type(DisplayCommandType::ConicGradient); break;
-    case 4: c.set_type(DisplayCommandType::RadialGradient); break;
-    case 5: c.set_type(DisplayCommandType::BoxShadow); break;
-    case 6: c.set_type(DisplayCommandType::Text); break;
-    case 7: c.set_type(DisplayCommandType::PreparedText); break;
-    case 8: c.set_type(DisplayCommandType::Image); break;
-    case 9: c.set_type(DisplayCommandType::CssBoxShadow); break;
+    case 0: set_command_type(c, E::FillRect); break;
+    case 1: set_command_type(c, E::StrokeRect); break;
+    case 2: set_command_type(c, E::LinearGradient); break;
+    case 3: set_command_type(c, E::ConicGradient); break;
+    case 4: set_command_type(c, E::RadialGradient); break;
+    case 5: set_command_type(c, E::BoxShadow); break;
+    case 6: set_command_type(c, E::Text); break;
+    case 7: if constexpr (has_prepared_command_type<E>::value) set_command_type(c, E::PreparedText); else return false; break;
+    case 8: set_command_type(c, E::Image); break;
+    case 9:
+        if constexpr (has_css_shadow_type<E>::value) set_command_type(c, E::CssBoxShadow);
+        else return false;
+        break;
     default: return false;
     }
     return true;
 }
-inline bool valid_command(const DisplayCommand& c) {
-    const auto k = kind(c.type());
+inline bool set_kind(DisplayCommand& c, unsigned value) { return set_kind_impl(c, value); }
+template<class C> inline bool valid_command(const C& c) {
+    const auto k = command_kind(c);
     if (k < 0 || !valid_rect(c.rect) || !valid_transform(c.transform) ||
         c.text.size() > UINT32_MAX) return false;
     if (k <= 5) {
-        const auto& p = c.basic_paint();
+        const auto p = legacy_command_fields(c);
         if (static_cast<unsigned>(p.gradient_axis) > 4 || !valid_clip(command_background_paint_clip(c))) return false;
-        if ((k < 2 || k > 4) && !command_background_paint_clip_empty({p.background_paint_clip.dx,
-            p.background_paint_clip.dy, p.background_paint_clip.width, p.background_paint_clip.height})) return false;
     } else if (k <= 7) {
-        const auto& p = c.text_paint();
+        const auto p = legacy_command_fields(c);
         if (static_cast<unsigned>(p.text_align) > 2) return false;
         if (k == 7) { PreparedTextView view; if (!decode_prepared_text(c.text, view)) return false; }
     } else if (k == 8) {
-        const auto& p = c.image_paint();
+        const auto p = legacy_command_fields(c);
         if (static_cast<unsigned>(p.object_fit) > 4 || static_cast<unsigned>(p.image_rendering) > 2 ||
             !valid_clip(command_background_paint_clip(c))) return false;
     } else {
+      if constexpr (has_css_shadow_paint<C>::value) {
         const auto& p = c.css_shadow_paint();
         if (!valid_rect(p.border_box) || !valid_rect(p.padding_box) || !valid_rect(p.source_rect) ||
             static_cast<unsigned>(p.mode) > 1 || (p.flags & ~1U)) return false;
+      } else return false;
     }
     // Non-text canonical paints never use ABI9 fractional/extension packets.
     return (k == 6 || k == 7) || c.text.empty();
 }
 
-inline void put_command(std::vector<std::uint8_t>& b, std::size_t at, const DisplayCommand& c) {
-    const auto k = kind(c.type()); u32(b, at, k); rect(b, at + 4, c.rect);
+template<class C> inline void put_command(std::vector<std::uint8_t>& b, std::size_t at, const C& c) {
+    const auto k = command_kind(c); u32(b, at, k); rect(b, at + 4, c.rect);
     const Color colors[] = {c.color, c.color2};
     for (unsigned i = 0; i < 2; ++i) {
         b[at + 20 + 4 * i] = colors[i].r; b[at + 21 + 4 * i] = colors[i].g;
@@ -200,32 +216,39 @@ inline void put_command(std::vector<std::uint8_t>& b, std::size_t at, const Disp
     u32(b, at + 56, c.transform.ty_1024); u32(b, at + 60, c.transform.source_clip_index);
     at += 64;
     if (k <= 5) {
-        const auto& p = c.basic_paint(); u32(b, at, p.border_radius); u32(b, at + 4, p.stroke_width);
+        const auto p = legacy_command_fields(c); u32(b, at, p.border_radius); u32(b, at + 4, p.stroke_width);
         u32(b, at + 8, static_cast<unsigned>(p.gradient_axis)); u32(b, at + 12, p.gradient_stop_percent);
-        const auto& q = p.background_paint_clip; paint_clip(b, at + 16, {q.dx, q.dy, q.width, q.height});
+        paint_clip(b, at + 16, command_background_paint_clip(c));
     } else if (k <= 7) {
-        const auto& p = c.text_paint();
+        const auto p = legacy_command_fields(c);
         u32(b, at, p.border_radius); u32(b, at + 4, p.stroke_width); u32(b, at + 8, p.font_size);
         u32(b, at + 12, p.font_weight); u32(b, at + 16, p.font_family_hash);
         u32(b, at + 20, static_cast<unsigned>(p.text_align)); u32(b, at + 24, p.text_single_line);
-        u32(b, at + 28, p.origin_x); u32(b, at + 32, p.baseline_y);
+        if constexpr (has_typed_command<C>::value) {
+            const auto& text = c.text_paint();
+            u32(b, at + 28, text.origin_x); u32(b, at + 32, text.baseline_y);
+        } else {
+            u32(b, at + 28, c.object_position.x_percent); u32(b, at + 32, c.object_position.y_percent);
+        }
     } else if (k == 8) {
-        const auto& p = c.image_paint(); u32(b, at, p.image_handle);
+        const auto p = legacy_command_fields(c); u32(b, at, p.image_handle);
         paint_clip(b, at + 4, command_background_paint_clip(c));
         u32(b, at + 12, static_cast<unsigned>(p.object_fit)); u32(b, at + 16, p.object_position.x_percent);
         u32(b, at + 20, p.object_position.y_percent); u32(b, at + 24, static_cast<unsigned>(p.image_rendering));
         u32(b, at + 28, p.border_radius);
     } else {
+      if constexpr (has_css_shadow_paint<C>::value) {
         const auto& p = c.css_shadow_paint(); rect(b, at, p.border_box); rect(b, at + 16, p.padding_box);
         rect(b, at + 32, p.source_rect); u32(b, at + 48, p.border_radii); u32(b, at + 52, p.padding_radii);
         u32(b, at + 56, p.source_radii); b[at + 60] = static_cast<std::uint8_t>(p.blur_px);
         b[at + 61] = static_cast<std::uint8_t>(p.blur_px >> 8); b[at + 62] = static_cast<std::uint8_t>(p.mode);
         b[at + 63] = p.flags;
+      }
     }
 }
-inline bool get_command(const std::vector<std::uint8_t>& b, std::size_t at, DisplayCommand& c) {
+template<class C> inline bool get_command(const std::vector<std::uint8_t>& b, std::size_t at, C& c) {
     const auto k = u32(b, at);
-    if (!set_kind(c, k) || u32(b, at + 32) > 1 || u32(b, at + 60) > 65535) return false;
+    if (!set_kind_impl(c, k) || u32(b, at + 32) > 1 || u32(b, at + 60) > 65535) return false;
     c.rect = rect(b, at + 4); c.color = {b[at+20], b[at+21], b[at+22], b[at+23]};
     c.color2 = {b[at+24], b[at+25], b[at+26], b[at+27]};
     c.transform.enabled = u32(b, at + 32) != 0;
@@ -235,31 +258,35 @@ inline bool get_command(const std::vector<std::uint8_t>& b, std::size_t at, Disp
     c.transform.source_clip_index = static_cast<std::uint16_t>(u32(b, at + 60)); at += 64;
     if (k <= 5) {
         if (u32(b, at + 8) > 4 || !zero(b, at + 24, 40)) return false;
-        auto& p = c.basic_paint(); p.border_radius = i32(b, at); p.stroke_width = i32(b, at + 4);
+        auto p = legacy_command_fields(c); p.border_radius = i32(b, at); p.stroke_width = i32(b, at + 4);
         p.gradient_axis = static_cast<GradientAxis>(u32(b, at + 8)); p.gradient_stop_percent = i32(b, at + 12);
         const auto q = paint_clip(b, at + 16);
-        p.background_paint_clip = {static_cast<std::int16_t>(q.dx), static_cast<std::int16_t>(q.dy),
-            static_cast<std::uint16_t>(q.width), static_cast<std::uint16_t>(q.height)};
+        apply_legacy_command_fields(c, p); set_command_background_paint_clip(c, q);
     } else if (k <= 7) {
         if (u32(b, at + 20) > 2 || u32(b, at + 24) > 1 || !zero(b, at + 36, 28)) return false;
-        auto& p = c.text_paint(); p.border_radius = i32(b, at); p.stroke_width = i32(b, at + 4);
+        auto p = legacy_command_fields(c); p.border_radius = i32(b, at); p.stroke_width = i32(b, at + 4);
         p.font_size = i32(b, at + 8); p.font_weight = i32(b, at + 12); p.font_family_hash = u32(b, at + 16);
         p.text_align = static_cast<TextCommandAlign>(u32(b, at + 20)); p.text_single_line = u32(b, at + 24) != 0;
-        p.origin_x = i32(b, at + 28); p.baseline_y = i32(b, at + 32);
+        apply_legacy_command_fields(c, p);
+        if constexpr (has_typed_command<C>::value) {
+            c.text_paint().origin_x = i32(b, at + 28);
+            c.text_paint().baseline_y = i32(b, at + 32);
+        } else c.object_position = {i32(b, at + 28), i32(b, at + 32)};
     } else if (k == 8) {
         if (u32(b, at + 12) > 4 || u32(b, at + 24) > 2 || !zero(b, at + 32, 32)) return false;
-        auto& p = c.image_paint(); p.image_handle = u32(b, at); const auto q = paint_clip(b, at + 4);
-        p.background_paint_clip = {static_cast<std::int16_t>(q.dx), static_cast<std::int16_t>(q.dy),
-            static_cast<std::uint16_t>(q.width), static_cast<std::uint16_t>(q.height)};
+        auto p = legacy_command_fields(c); p.image_handle = u32(b, at); const auto q = paint_clip(b, at + 4);
         p.object_fit = static_cast<ObjectFit>(u32(b, at + 12));
         p.object_position = {i32(b, at + 16), i32(b, at + 20)};
         p.image_rendering = static_cast<ImageRendering>(u32(b, at + 24)); p.border_radius = i32(b, at + 28);
+        apply_legacy_command_fields(c, p); set_command_background_paint_clip(c, q);
     } else {
+      if constexpr (has_css_shadow_paint<C>::value) {
         if (b[at + 62] > 1 || b[at + 63] > 1) return false;
         auto& p = c.css_shadow_paint(); p.border_box = rect(b, at); p.padding_box = rect(b, at + 16);
         p.source_rect = rect(b, at + 32); p.border_radii = i32(b, at + 48); p.padding_radii = i32(b, at + 52);
         p.source_radii = i32(b, at + 56); p.blur_px = static_cast<std::uint16_t>(b[at+60] | (unsigned(b[at+61]) << 8));
         p.mode = static_cast<CssBoxShadowMode>(b[at + 62]); p.flags = b[at + 63];
+      } else return false;
     }
     return true;
 }
@@ -401,7 +428,7 @@ inline Status capture(const LayerNode& root, Rect viewport, const ScriptTaskAppF
             captured_bytes > o.max_payload_bytes) return Status::PayloadTooLarge;
         for (const auto& c : n.display_list) {
             if (!valid_command(c)) return Status::InvalidValue;
-            if (c.type() == DisplayCommandType::Image) f.image_provider_id = o.image_provider_id;
+            if (command_kind(c) == 8) f.image_provider_id = o.image_provider_id;
             if (!add(captured_text, c.text.size()) || captured_text > o.max_text_bytes) return Status::TooManyTextBytes;
             if (!add(captured_bytes, c.text.size()) || captured_bytes > o.max_payload_bytes) return Status::PayloadTooLarge;
         }

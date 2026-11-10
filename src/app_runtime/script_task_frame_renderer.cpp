@@ -769,7 +769,8 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
     if (!frame.groups.empty() || !frame.command_ellipses.empty() ||
         std::any_of(frame.display_list.begin(), frame.display_list.end(), [](const auto& c) {
-            return c.type() == DisplayCommandType::PreparedText || c.type() == DisplayCommandType::CssBoxShadow;
+            const auto type = c.type();
+            return detail::is_prepared_command_type(type) || detail::is_css_shadow_command_type(type);
         }))
         return detail::canonical::render(frame, target, background, dirty_rects, dirty_rect_count,
                                          text_painter_, image_painter_, options_, status);

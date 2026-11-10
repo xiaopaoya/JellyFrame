@@ -173,6 +173,16 @@ inline void rendering() {
                  "catalog ownership, stale/missing resources, atomic paint refusal and conservative retained damage passed\n";
 }
 #endif
+template<class Command> void configure_css_shadow(Command& command) {
+    using Type = decltype(detail::command_type(command));
+    if constexpr (detail::has_css_shadow_type<Type>::value && detail::has_css_shadow_paint<Command>::value) {
+        detail::set_command_type(command, Type::CssBoxShadow);
+        auto& paint = command.css_shadow_paint();
+        paint.border_box = {1, 2, 30, 40}; paint.padding_box = {3, 4, 26, 36};
+        paint.source_rect = {2, 3, 27, 37}; paint.border_radii = 2; paint.padding_radii = 1;
+        paint.source_radii = 2; paint.blur_px = 0; paint.mode = CssBoxShadowMode::Inset; paint.flags = 0;
+    }
+}
 inline void run() {
     using Status = ScriptTaskAppFrameCodecStatus;
     assert(script_task_app_frame_codec_supports_version(9) == detail::canonical::available);
@@ -184,8 +194,10 @@ inline void run() {
     options.max_input_targets = 4; options.max_clips = 4;
     LayerNode root; root.type = LayerType::Root; root.bounds = {0, 0, 80, 80};
     root.reasons = LayerReasonRoot; root.source_order = 123;
-    for (unsigned kind = 0; kind < 10; ++kind) {
-        DisplayCommand c; assert(detail::canonical::set_kind(c, kind));
+    constexpr bool has_css_shadow = detail::has_css_shadow_type<DisplayCommandType>::value &&
+        detail::has_css_shadow_paint<DisplayCommand>::value;
+    for (unsigned kind = 0; kind < (has_css_shadow ? 10U : 9U); ++kind) {
+        DisplayCommand c; if (!detail::canonical::set_kind(c, kind)) std::abort();
         c.rect = {1, 2, 30, 40}; c.color = {3, 7, 11, 197}; c.color2 = {31, 37, 41, 173};
         if (kind <= 5) {
             auto& p = c.basic_paint(); p.border_radius = 3; p.stroke_width = 2;
@@ -200,17 +212,14 @@ inline void run() {
                 PreparedTextGlyph g; g.resource_id = (1ULL << 48) + 17; g.glyph_id = 23;
                 g.codepoint = g.source_codepoint = 65; g.source_begin = 0; g.source_end = 1; g.x = 0;
                 g.geometry = {1250, -100, 1400, 900, 1500};
-                assert(encode_prepared_text(&g, 1, 16125, 1, c.text));
-                assert(c.text.size() == 84 && c.text[4] == 1);
+                if (!encode_prepared_text(&g, 1, 16125, 1, c.text)) std::abort();
             }
         } else if (kind == 8) {
             auto& p = c.image_paint(); p.image_handle = 0xfedcba98U; p.object_fit = ObjectFit::Cover;
             p.object_position = {-13, 157}; p.image_rendering = ImageRendering::CrispEdges; p.border_radius = 5;
             detail::set_command_background_paint_clip(c, {-32768, 32767, 65535, 1});
         } else {
-            auto& p = c.css_shadow_paint(); p.border_box = {1, 2, 30, 40}; p.padding_box = {3, 4, 26, 36};
-            p.source_rect = {2, 3, 27, 37}; p.border_radii = 2; p.padding_radii = 1; p.source_radii = 2;
-            p.blur_px = 0; p.mode = CssBoxShadowMode::Inset; p.flags = 0;
+            configure_css_shadow(c);
         }
         root.display_list.push_back(c);
     }
@@ -223,28 +232,36 @@ inline void run() {
     child->z_index = -9; child->source_order = (1ULL << 40) + 73;
     root.children.push_back(std::move(child));
     ScriptTaskAppFrame frame;
-    assert(make_script_task_group_frame(root, root.bounds, options, frame) == Status::Accepted);
-    assert(frame.groups.size() == 2 && frame.display_list.size() == 10);
+    if (make_script_task_group_frame(root, root.bounds, options, frame) != Status::Accepted) std::abort();
+    const auto command_count = has_css_shadow ? 10U : 9U;
+    assert(frame.groups.size() == 2 && frame.display_list.size() == command_count);
     frame.clips.push_back({{0, 0, 60, 60}, 3, kScriptTaskNoParentClip});
     frame.input_targets.push_back({117, {1, 2, 10, 12}, true, 0});
     std::vector<std::uint8_t> bytes;
-    assert(encode_script_task_app_frame(frame, options, bytes) == Status::Accepted);
+    if (encode_script_task_app_frame(frame, options, bytes) != Status::Accepted) std::abort();
     const std::size_t command_at = 52 + 28 + 2 * 112;
-    assert(bytes.size() == command_at + 10 * 128 + 18 + 84 + 24);
-    assert(bytes[4] == 9 && detail::canonical::u32(bytes, command_at) == 0);
+    if (bytes.size() != command_at + command_count * 128 + 18 + 84 + 24 ||
+        bytes[4] != 9 || detail::canonical::u32(bytes, command_at) != 0) std::abort();
     // Stable kind7 and a genuine JFTP1 packet; resource identity keeps all64 bits.
     const auto prepared_at = command_at + 7 * 128 + 18;
-    assert(detail::canonical::u32(bytes, prepared_at) == 7);
-    assert(detail::canonical::i32(bytes, prepared_at + 92) == -123);
-    assert(detail::canonical::i32(bytes, prepared_at + 96) == 456);
-    assert(bytes[prepared_at + 128 + 4] == 1);
+    if (detail::canonical::u32(bytes, prepared_at) != 7 ||
+        detail::canonical::i32(bytes, prepared_at + 92) != -123 ||
+        detail::canonical::i32(bytes, prepared_at + 96) != 456 || bytes[prepared_at + 128 + 4] != 1) std::abort();
     ScriptTaskAppFrame decoded;
-    assert(decode_script_task_app_frame(bytes, options, decoded) == Status::Accepted);
+    const auto decode_status = decode_script_task_app_frame(bytes, options, decoded);
+    if (decode_status != Status::Accepted) std::abort();
     for (std::size_t i = 0; i < frame.display_list.size(); ++i)
         assert(display_commands_equal(frame.display_list[i], decoded.display_list[i]));
     PreparedTextView view; PreparedTextGlyph glyph;
     assert(decode_prepared_text(decoded.display_list[7].text, view) && view.read(0, glyph));
     assert(glyph.resource_id == (1ULL << 48) + 17);
+    if constexpr (!has_css_shadow) {
+        auto unsupported = bytes;
+        detail::canonical::u32(unsupported, command_at + (command_count - 1) * 128, 9);
+        ScriptTaskAppFrame untouched; untouched.viewport = {91, 92, 93, 94};
+        assert(decode_script_task_app_frame(unsupported, options, untouched) == Status::Malformed);
+        assert(untouched.viewport.x == 91 && untouched.display_list.empty());
+    }
     const auto& g = decoded.groups[1];
     assert(g.has_transform && g.has_clip && g.opacity == 0.625F && g.transform.translate_x == 1.25F &&
         g.transform.rotate_degrees == 12.5F && g.origin_x_percent == -17 && g.origin_y_percent == 123 &&

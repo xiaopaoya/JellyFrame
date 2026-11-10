@@ -9,6 +9,10 @@ namespace jellyframe::detail {
 // The adapter reads only the active payload; it does not change wire formats.
 template<class T, class = void> struct has_typed_command : std::false_type {};
 template<class T> struct has_typed_command<T, std::void_t<decltype(std::declval<const T&>().type())>> : std::true_type {};
+template<class T, class = void> struct has_css_shadow_paint : std::false_type {};
+template<class T> struct has_css_shadow_paint<T, std::void_t<decltype(std::declval<T&>().css_shadow_paint())>> : std::true_type {};
+template<class E, class = void> struct has_css_shadow_type : std::false_type {};
+template<class E> struct has_css_shadow_type<E, std::void_t<decltype(E::CssBoxShadow)>> : std::true_type {};
 template<class T> auto command_type(const T& c) {
     if constexpr (has_typed_command<T>::value) return c.type();
     else return c.type;
@@ -21,6 +25,10 @@ template<class E, class = void> struct has_prepared_command_type : std::false_ty
 template<class E> struct has_prepared_command_type<E, std::void_t<decltype(E::PreparedText)>> : std::true_type {};
 template<class E> bool is_prepared_command_type(E type) {
     if constexpr (has_prepared_command_type<E>::value) return type == E::PreparedText;
+    else return false;
+}
+template<class E> bool is_css_shadow_command_type(E type) {
+    if constexpr (has_css_shadow_type<E>::value) return type == E::CssBoxShadow;
     else return false;
 }
 template<class E> bool legacy_command_type(E type) {
@@ -100,6 +108,10 @@ template<class T> decltype(auto) command_object_position(T& c) {
     if constexpr (has_typed_command<T>::value) {
         return (c.image_paint().object_position);
     } else return (c.object_position);
+}
+template<class T> decltype(auto) command_object_position(const T& c) {
+    if constexpr (has_typed_command<T>::value) return (c.image_paint().object_position);
+    else return (c.object_position);
 }
 template<class T> decltype(auto) command_image_rendering(T& c) {
     if constexpr (has_typed_command<T>::value) {

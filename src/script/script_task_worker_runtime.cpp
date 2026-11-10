@@ -12,16 +12,58 @@
 
 #include <algorithm>
 #include <limits>
+#include <type_traits>
+#include <tuple>
+#include <utility>
 
 namespace jellyframe {
 namespace {
 
+template<class T, class = void>
+struct HasBackgroundResourceResolver : std::false_type {};
+
+template<class T>
+struct HasBackgroundResourceResolver<T, std::void_t<decltype(
+    std::declval<T&>().background_resource_resolver)>> : std::true_type {};
+
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+template<class T> struct FunctionArguments;
+template<class R, class... Args> struct FunctionArguments<R (*)(Args...)> {
+    using Tuple = std::tuple<Args...>;
+};
+using ImageResolveResult = std::remove_reference_t<std::remove_cv_t<
+    std::tuple_element_t<3, typename FunctionArguments<ImageHandleResolveCallback>::Tuple>>>;
+
+template<class Result>
+bool set_image_resolve_result(Result& result, const ResolvedImageResource& resolved) {
+    if constexpr (std::is_same<Result, std::uint32_t>::value) {
+        result = resolved.image_handle;
+        return result != 0;
+    } else {
+        result = resolved;
+        return result.image_handle != 0;
+    }
+}
+
+template<class Options>
+void configure_background_resource_resolver(Options& options, const StyleResolver* resolver) {
+    if constexpr (HasBackgroundResourceResolver<Options>::value)
+        options.background_resource_resolver = resolver;
+}
+#endif
+
 ScriptTaskAppFrameCodecOptions frame_options_from(const ScriptTaskWorkerRuntimeOptions& options) {
     ScriptTaskAppFrameCodecOptions result = options.frame_codec;
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    if (result.version == 9 && options.image_provider)
+        result.image_provider_id = options.image_provider->id();
+#endif
     if (result.max_commands == 0) result.max_commands = std::max<std::size_t>(1, options.budgets.max_display_commands);
     if (result.max_input_targets == 0) result.max_input_targets = std::max<std::size_t>(1, options.budgets.max_display_commands);
     if (result.max_payload_bytes == 0) result.max_payload_bytes = std::max<std::size_t>(1, options.budgets.max_resource_bytes);
     if (result.max_text_bytes == 0) result.max_text_bytes = result.max_payload_bytes;
+    if (result.max_groups == 0) result.max_groups = std::max<std::size_t>(1, options.budgets.max_layers);
+    if (result.max_group_depth == 0) result.max_group_depth = 32;
     return result;
 }
 
@@ -56,6 +98,10 @@ ScriptTaskWorkerRuntime::ScriptTaskWorkerRuntime(ScriptAppSession session,
         options_.service_request_codec.max_payload_bytes = std::max<std::size_t>(64, options_.budgets.max_resource_bytes);
     }
     fatal_record_.session = session_;
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    if (options_.frame_codec.version == 9 && options_.image_provider)
+        options_.frame_codec.image_provider_id = options_.image_provider->id();
+#endif
 }
 
 ScriptTaskWorkerRuntime::~ScriptTaskWorkerRuntime() {
@@ -79,6 +125,21 @@ void ScriptTaskWorkerRuntime::stop() {
     render_tree_.reset();
     style_resolver_.reset();
     document_owner_.set_root(nullptr);
+}
+
+bool ScriptTaskWorkerRuntime::supervisor_matches(const ScriptTaskSupervisor& supervisor) const {
+    if (!session_.valid() || !supervisor.accepts(session_)) return false;
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    if (options_.frame_codec.version == 9) {
+        const auto catalog = supervisor.text_catalog(session_);
+        const auto images = supervisor.image_provider(session_);
+        return options_.text_catalog && catalog == options_.text_catalog &&
+            images == options_.image_provider && (!images || images->valid());
+    }
+#else
+    if (options_.frame_codec.version == 9) return false;
+#endif
+    return true;
 }
 
 bool ScriptTaskWorkerRuntime::publish_fatal(ScriptTaskSupervisor& supervisor) {
@@ -129,6 +190,22 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::strin
     if (stopped_) return ScriptTaskWorkerRuntimeInitStatus::Stopped;
     if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
     if (!session_.valid()) return ScriptTaskWorkerRuntimeInitStatus::InvalidSession;
+    if (options_.frame_codec.version == 9) {
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+        if (!options_.text_catalog ||
+            (options_.image_provider && !options_.image_provider->valid())) {
+            set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
+            return ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration;
+        }
+        if (!supervisor_validated_) {
+            set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
+            return ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration;
+        }
+#else
+        set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
+        return ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration;
+#endif
+    }
     if (html.empty() || html.size() > options_.budgets.max_resource_bytes ||
         css.size() > options_.budgets.max_resource_bytes || options_.viewport.width <= 0 ||
         options_.viewport.height <= 0 || !framebuffer_size_fits_budget(options_.viewport.width,
@@ -170,6 +247,29 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::strin
     return ScriptTaskWorkerRuntimeInitStatus::Accepted;
 }
 
+ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(
+    ScriptTaskSupervisor& supervisor, std::string_view html, std::string_view css) {
+    if (stopped_) return ScriptTaskWorkerRuntimeInitStatus::Stopped;
+    if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
+    if (options_.frame_codec.version == 9) {
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+        if (!options_.text_catalog || (options_.image_provider && !options_.image_provider->valid())) {
+            set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
+            return ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration;
+        }
+#else
+        set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
+        return ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration;
+#endif
+    }
+    if (!supervisor_matches(supervisor)) {
+        set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
+        return ScriptTaskWorkerRuntimeInitStatus::ResourceMismatch;
+    }
+    supervisor_validated_ = true;
+    return initialize(html, css);
+}
+
 void ScriptTaskWorkerRuntime::set_host_time_ms(std::uint64_t now_ms) {
     if (runtime_ != nullptr) {
         runtime_->set_host_time_ms(now_ms);
@@ -179,6 +279,9 @@ void ScriptTaskWorkerRuntime::set_host_time_ms(std::uint64_t now_ms) {
 ScriptEvaluationResult ScriptTaskWorkerRuntime::eval(std::string_view source, std::string_view source_name) {
     if (!initialized_ || fatal()) {
         return {false, {}, "worker runtime is not active", ScriptEvaluationStatus::Exception};
+    }
+    if (options_.frame_codec.version == 9 && active_supervisor_ == nullptr) {
+        return {false, {}, "v9 evaluation requires supervisor validation", ScriptEvaluationStatus::Exception};
     }
     ScriptEvaluationResult result = runtime_->eval(source, source_name);
     if (!result.ok) {
@@ -200,6 +303,11 @@ ScriptEvaluationResult ScriptTaskWorkerRuntime::eval_with_supervisor(
     std::string_view source,
     std::string_view source_name) {
     ActiveSupervisorScope scope(*this, supervisor);
+    if (!supervisor_matches(supervisor)) {
+        set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
+        (void)publish_fatal(supervisor);
+        return {false, {}, "worker session resource mismatch", ScriptEvaluationStatus::Exception};
+    }
     ScriptEvaluationResult result = eval(source, source_name);
     if (fatal()) {
         (void)publish_fatal(supervisor);
@@ -210,12 +318,25 @@ ScriptEvaluationResult ScriptTaskWorkerRuntime::eval_with_supervisor(
 ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::publish_frame(ScriptTaskSupervisor& supervisor) {
     ScriptTaskAppFramePublishResult result;
     ++telemetry_.frame_publish_attempts;
-    if (!initialized_ || fatal() || !layer_tree_) {
+    if (!initialized_ || fatal() || !layer_tree_ || !supervisor_matches(supervisor)) {
+        if (initialized_ && !fatal() && !supervisor_matches(supervisor))
+            set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
         ++telemetry_.frame_publish_rejections;
+        if (fatal()) (void)publish_fatal(supervisor);
         return result;
     }
-    ScriptTaskAppFrame frame = make_script_task_app_frame(
-        *layer_tree_, options_.viewport, {}, options_.frame_codec.version >= 2);
+    ScriptTaskAppFrame frame;
+    if (options_.frame_codec.version == 9) {
+        const auto status = make_script_task_group_frame(*layer_tree_, options_.viewport,
+                                                        options_.frame_codec, frame);
+        if (status != ScriptTaskAppFrameCodecStatus::Accepted) {
+            ++telemetry_.frame_publish_rejections;
+            return result;
+        }
+    } else {
+        frame = make_script_task_app_frame(
+            *layer_tree_, options_.viewport, {}, options_.frame_codec.version >= 2);
+    }
     result = frame_publisher_.publish(supervisor, session_, frame);
     if (result.accepted()) {
         ++telemetry_.published_frame_seq;
@@ -224,6 +345,7 @@ ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::publish_frame(ScriptTas
     }
     if (result.accepted()) {
         clear_dirty_flags(*document_owner_.root());
+        pending_frame_publication_ = false;
     }
     return result;
 }
@@ -238,6 +360,10 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::process_one(ScriptTas
         return value;
     };
     if (!initialized_ || fatal()) {
+        return finish(result);
+    }
+    if (!supervisor_matches(supervisor)) {
+        set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
         return finish(result);
     }
     ScriptTaskPacket packet;
@@ -418,6 +544,10 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::pump_callbacks(
     if (!initialized_ || fatal()) {
         return finish(result);
     }
+    if (!supervisor_matches(supervisor)) {
+        set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
+        return finish(result);
+    }
 
     // Timer callbacks can issue service requests too. Keep the same
     // supervisor scope as input and completion processing while they run.
@@ -482,12 +612,41 @@ bool ScriptTaskWorkerRuntime::rebuild_pipeline() {
     RenderObjectPtr render_tree = render_builder.build(*document_owner_.root());
     if (!render_tree) return false;
     LayoutEngineOptions layout_options = layout_engine_options_from_budgets(options_.budgets);
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    layout_options.text_system = options_.frame_codec.version == 9
+        ? &options_.text_catalog->text_system() : options_.text_system;
+#else
     layout_options.text_system = options_.text_system;
+#endif
     LayoutEngine layout_engine(*style_resolver_, {}, layout_options);
     LayoutBoxPtr layout_tree = layout_engine.layout(*render_tree, options_.viewport.width, options_.viewport.height);
     if (!layout_tree) return false;
+    // Text layout caches were just rebuilt from this DOM snapshot. Core's layer
+    // builder rejects caches while their source nodes still carry dirty flags.
+    clear_dirty_flags(*document_owner_.root());
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(options_.budgets);
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    layer_options.text_system = options_.frame_codec.version == 9
+        ? &options_.text_catalog->text_system() : options_.text_system;
+    if (options_.frame_codec.version == 9) {
+        configure_background_resource_resolver(layer_options, style_resolver_.get());
+        if constexpr (HasBackgroundResourceResolver<LayerTreeBuilderOptions>::value) {
+          layer_options.image_resolver = {[](const Node& node, ImageResolveKind kind,
+                                             std::uint16_t resource_id, ImageResolveResult& result,
+                                             void* context) {
+            if (kind != ImageResolveKind::Background || resource_id == 0 || context == nullptr) return false;
+            auto* runtime = static_cast<ScriptTaskWorkerRuntime*>(context);
+            if (!runtime->options_.image_provider) return false;
+            const std::string* url = runtime->style_resolver_->background_image_resource_url(resource_id);
+            ResolvedImageResource resolved;
+            return url != nullptr && runtime->options_.image_provider->resolve(*url, resolved) &&
+                set_image_resolve_result(result, resolved);
+          }, this};
+        }
+    }
+#else
     layer_options.text_system = options_.text_system;
+#endif
     LayerTreeBuilder layer_builder(layer_options);
     LayerNodePtr layer_tree = layer_builder.build(*layout_tree);
     if (!layer_tree) return false;
@@ -509,12 +668,14 @@ bool ScriptTaskWorkerRuntime::rebuild_pipeline() {
     layout_tree_ = std::move(layout_tree);
     layer_tree_ = std::move(layer_tree);
     input_controller_ = std::move(input_controller);
+    pending_frame_publication_ = true;
     return true;
 }
 
 bool ScriptTaskWorkerRuntime::has_dirty_document() const {
-    return document_owner_.root() != nullptr &&
-           subtree_dirty_flags(*document_owner_.root()) != DomDirtyNone;
+    return pending_frame_publication_ ||
+           (document_owner_.root() != nullptr &&
+            subtree_dirty_flags(*document_owner_.root()) != DomDirtyNone);
 }
 
 } // namespace jellyframe
