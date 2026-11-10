@@ -3,6 +3,8 @@
 #include "app_runtime/script_task_input_codec.h"
 #include "app_runtime/script_task_service_bridge.h"
 #include "app_runtime/script_task_fatal_codec.h"
+#include "app_runtime/script_task_canonical_codec.h"
+#include "app_runtime/script_task_frame_renderer.h"
 #include "app_runtime/tests/runtime_font_test_fixture.h"
 
 #include <iostream>
@@ -815,13 +817,13 @@ void worker_stop_preserves_supervisor_owned_frame_lease() {
 }
 
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
-void worker_v9_rejects_invalid_config_and_catalog_mismatch_before_vm() {
+void worker_canonical_rejects_invalid_config_and_catalog_mismatch_before_vm(std::uint8_t version) {
     {
         ScriptTaskSupervisor supervisor = make_supervisor();
         const runtime_test_fonts::Fonts fonts;
         const ScriptAppSession session = supervisor.begin(22, fonts.catalog);
         ScriptTaskWorkerRuntimeOptions options = runtime_options_v3();
-        options.frame_codec.version = 9;
+        options.frame_codec.version = version;
         ScriptTaskWorkerRuntime missing(session, options);
         check(missing.initialize(supervisor, "<body></body>", "") ==
                   ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration,
@@ -835,7 +837,7 @@ void worker_v9_rejects_invalid_config_and_catalog_mismatch_before_vm() {
         const runtime_test_fonts::Fonts other;
         const ScriptAppSession session = supervisor.begin(23, expected.catalog);
         ScriptTaskWorkerRuntimeOptions options = runtime_options_v3();
-        options.frame_codec.version = 9;
+        options.frame_codec.version = version;
         options.text_catalog = other.catalog;
         ScriptTaskWorkerRuntime mismatch(session, options);
         check(mismatch.initialize(supervisor, "<body></body>", "") ==
@@ -845,12 +847,12 @@ void worker_v9_rejects_invalid_config_and_catalog_mismatch_before_vm() {
     }
 }
 
-void worker_v9_uses_catalog_for_layout_and_publishes_canonical_group_frame() {
+void worker_canonical_uses_catalog_for_layout_and_publishes_group_frame(std::uint8_t version) {
     ScriptTaskSupervisor supervisor = make_supervisor();
     const runtime_test_fonts::Fonts fonts;
     const ScriptAppSession session = supervisor.begin(24, fonts.catalog);
     ScriptTaskWorkerRuntimeOptions options = runtime_options_v3();
-    options.frame_codec.version = 9;
+    options.frame_codec.version = version;
     options.frame_codec.max_groups = 32;
     options.text_catalog = fonts.catalog;
     ScriptTaskWorkerRuntime runtime(session, options);
@@ -881,6 +883,75 @@ void worker_v9_uses_catalog_for_layout_and_publishes_canonical_group_frame() {
     check(!accepted.frame().groups.empty() && accepted.text_catalog() == fonts.catalog,
           "canonical group frame retains the exact catalog used for layout");
     check(has_prepared_text(accepted.frame()), "updated canonical frame retains prepared text output");
+}
+
+template<class Command> void worker_v10_mutation_publishes_changed_packed_axes() {
+    if constexpr (detail::canonical::has_radius_y_fields<Command>::value) {
+        ScriptTaskSupervisor supervisor = make_supervisor();
+        const runtime_test_fonts::Fonts fonts;
+        const ScriptAppSession session = supervisor.begin(25, fonts.catalog);
+        auto options = runtime_options_v3(); options.frame_codec.version = 10;
+        options.frame_codec.max_groups = 32; options.text_catalog = fonts.catalog;
+        ScriptTaskWorkerRuntime runtime(session, options);
+        check(runtime.initialize(supervisor, "<body><div id='ellipse'>AB</div></body>",
+                  "body { margin: 0; } #ellipse { display: block; width: 96px; height: 64px; "
+                  "background-color: #1122ee; overflow: hidden; font-size: 16px; "
+                  "font-family: sans-serif; border-radius: 30px 20px 10px 24px / 6px 12px 4px 8px; }") ==
+                  ScriptTaskWorkerRuntimeInitStatus::Accepted,
+              "v10 worker initializes packed independent radius axes");
+        check(!runtime.eval("1 + 1").ok && !runtime.fatal(),
+              "v10 evaluation requires supervisor validation without corrupting the worker");
+        check(runtime.publish_frame(supervisor).accepted(), "v10 worker publishes its initial packed-axis frame");
+        ScriptTaskAcceptedAppFrame accepted;
+        check(take_script_task_app_frame(supervisor, session, options.frame_codec, accepted) ==
+                  ScriptTaskAppFrameTakeStatus::Accepted,
+              "consumer accepts the actual worker-produced v10 wire frame");
+        const auto before = accepted.frame();
+        const int radius_x = encode_corner_radii({30, 20, 10, 24});
+        const int initial_y = encode_corner_radii({6, 12, 4, 8});
+        const int changed_y = encode_corner_radii({18, 8, 16, 4});
+        const auto has_axes = [&](const ScriptTaskAppFrame& frame, int expected_y) {
+            bool paint = false, clip = false;
+            for (const auto& command : frame.display_list)
+                if (worker_test_access::worker_command_type(command) == DisplayCommandType::FillRect &&
+                    command.color.r == 17 && command.color.g == 34 && command.color.b == 238)
+                    paint = detail::legacy_command_fields(command).border_radius == radius_x &&
+                        detail::canonical::radius_y(command) == expected_y;
+            for (const auto& group : frame.groups)
+                clip = clip || (group.has_clip && group.clip_border_radius == radius_x &&
+                                group.clip_border_radius_y == expected_y);
+            return paint && clip;
+        };
+        check(has_axes(before, initial_y), "published v10 paints and clip groups preserve signed per-corner Y");
+        check(runtime.eval_with_supervisor(supervisor,
+                  "document.getElementById('ellipse').setAttribute('style', "
+                  "'border-radius: 30px 20px 10px 24px / 18px 8px 16px 4px;');").ok,
+              "v10 worker rebuilds geometry after a Y-only DOM style mutation");
+        check(runtime.publish_frame(supervisor).accepted(), "v10 worker republishes mutated packed axes");
+        check(take_script_task_app_frame(supervisor, session, options.frame_codec, accepted) ==
+                  ScriptTaskAppFrameTakeStatus::Accepted,
+              "consumer accepts the mutated v10 frame with the same catalog");
+        check(has_axes(accepted.frame(), changed_y) && accepted.text_catalog() == fonts.catalog,
+              "mutated v10 frame carries the new Y axes and exact layout catalog");
+        check(runtime.telemetry().published_frame_seq == 2, "worker published both versions of the frame");
+        ScriptTaskFrameRendererOptions render_options; render_options.text_catalog = accepted.text_catalog();
+        ScriptTaskFrameRenderer renderer({}, {}, render_options);
+        check(plan_script_task_group_damage(renderer, before, accepted.frame()).kind == ScriptTaskFrameDamageKind::Full,
+              "worker-produced Y-only changes invalidate retained pixels");
+        ScriptTaskFrameRenderStatus status;
+        const auto old_pixels = renderer.render(before, {255, 255, 255, 255}, &status);
+        check(status == ScriptTaskFrameRenderStatus::Accepted, "initial worker frame replays with its catalog");
+        runtime.stop();
+        const auto new_pixels = renderer.render(accepted.frame(), {255, 255, 255, 255}, &status);
+        check(status == ScriptTaskFrameRenderStatus::Accepted, "accepted mutated frame survives worker teardown");
+        bool changed = false;
+        for (std::size_t i = 0; i < old_pixels.pixels.size(); ++i) {
+            const auto a = old_pixels.pixels[i], b = new_pixels.pixels[i];
+            changed = changed || a.r != b.r || a.g != b.g || a.b != b.b || a.a != b.a;
+        }
+        check(changed, "the worker Y-only mutation changes rendered pixels");
+        std::cout << "worker v10: signed axes, supervisor-gated mutation, publish/take, damage and retained replay passed\n";
+    }
 }
 #endif
 
@@ -999,8 +1070,13 @@ int script_task_worker_runtime_tests_main() {
         worker_stop_is_explicit_and_idempotent();
         worker_stop_preserves_supervisor_owned_frame_lease();
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
-        worker_v9_rejects_invalid_config_and_catalog_mismatch_before_vm();
-        worker_v9_uses_catalog_for_layout_and_publishes_canonical_group_frame();
+        for (auto version : {std::uint8_t{9}, std::uint8_t{10}}) {
+            if (!script_task_app_frame_codec_supports_version(version)) continue;
+            worker_canonical_rejects_invalid_config_and_catalog_mismatch_before_vm(version);
+            worker_canonical_uses_catalog_for_layout_and_publishes_group_frame(version);
+        }
+        if (script_task_app_frame_codec_supports_version(10))
+            worker_v10_mutation_publishes_changed_packed_axes<DisplayCommand>();
 #endif
         worker_fatal_publishes_once_as_a_supervisor_value();
         worker_c_safe_fatal_boundary_publishes_value_record();

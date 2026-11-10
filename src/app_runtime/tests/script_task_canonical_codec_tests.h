@@ -1,6 +1,7 @@
 #pragma once
 #include "app_runtime/script_task_canonical_codec.h"
 #include "app_runtime/script_task_canonical_renderer.h"
+#include "render_core/raster_primitives.h"
 #include "runtime_font_test_fixture.h"
 #include <cassert>
 #include <iostream>
@@ -173,6 +174,228 @@ inline void rendering() {
                  "catalog ownership, stale/missing resources, atomic paint refusal and conservative retained damage passed\n";
 }
 #endif
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
+template<class Command, class Node> inline void elliptical_v10_round_trip() {
+    if constexpr (detail::canonical::has_radius_y_fields<Command>::value &&
+                  detail::canonical::has_layer_radius_y<Node>::value) {
+        using Status = ScriptTaskAppFrameCodecStatus;
+        Node root; root.type = LayerType::Root; root.bounds = {0, 0, 48, 40};
+        LayerNodePtr child(new Node, LayerNodeDeleter{});
+        child->type = LayerType::Composited; child->bounds = root.bounds; child->has_clip = true;
+        child->clip_rect = {3, 2, 42, 36}; child->clip_border_radius = 19;
+        detail::canonical::set_layer_radius_y(*child, 7);
+        Command fill; assert(detail::canonical::set_kind(fill, 0)); fill.rect = {0, 0, 48, 40};
+        fill.color = {17, 113, 221, 255}; fill.basic_paint().border_radius = 16;
+        fill.basic_paint().border_radius_y = 5; child->display_list.push_back(fill);
+        root.children.push_back(std::move(child));
+
+        ScriptTaskAppFrameCodecOptions options; options.version = 10; options.max_commands = 4;
+        options.max_text_bytes = 128; options.max_payload_bytes = 4096; options.max_groups = 4;
+        options.max_clips = 4; options.max_input_targets = 4;
+        ScriptTaskAppFrame captured, decoded;
+        assert(make_script_task_group_frame(root, root.bounds, options, captured) == Status::Accepted);
+        captured.clips.push_back({{1, 1, 44, 38}, 13, kScriptTaskNoParentClip, 4});
+        std::vector<std::uint8_t> bytes;
+        assert(encode_script_task_app_frame(captured, options, bytes) == Status::Accepted && bytes[4] == 10);
+        assert(decode_script_task_app_frame(bytes, options, decoded) == Status::Accepted);
+        assert(decoded.display_list[0].basic_paint().border_radius == 16 &&
+               detail::canonical::radius_y(decoded.display_list[0]) == 5);
+        assert(decoded.groups[1].clip_border_radius == 19 && decoded.groups[1].clip_border_radius_y == 7);
+        assert(decoded.clips[0].border_radius == 13 && decoded.clips[0].border_radius_y == 4);
+        std::vector<std::uint8_t> reencoded;
+        assert(encode_script_task_app_frame(decoded, options, reencoded) == Status::Accepted && reencoded == bytes);
+        assert(bytes.size() == 52 + 28 + 2 * 116 + 128);
+
+        const auto expected = SoftwareCompositor().render(root, 48, 40, {249, 247, 241, 255});
+        ScriptTaskFrameRenderer renderer;
+        ScriptTaskFrameRenderStatus render_status;
+        const auto actual = renderer.render(decoded, {249, 247, 241, 255}, &render_status);
+        assert(render_status == ScriptTaskFrameRenderStatus::Accepted && same_pixels(expected, actual));
+
+        auto payloads = captured;
+        Command text; assert(detail::canonical::set_kind(text, 6)); text.rect = {0, 0, 1, 1}; text.text = "T";
+        text.text_paint().border_radius = 9; text.text_paint().border_radius_y = 3;
+        payloads.display_list.push_back(text);
+        Command image; assert(detail::canonical::set_kind(image, 8)); image.rect = {0, 0, 1, 1};
+        image.image_paint().image_handle = 73; image.image_paint().border_radius = 11;
+        image.image_paint().border_radius_y = 2; payloads.display_list.push_back(image);
+        payloads.image_provider_id = 77; payloads.groups[1].command_count = 3;
+        assert(encode_script_task_app_frame(payloads, options, bytes) == Status::Accepted);
+        assert(decode_script_task_app_frame(bytes, options, decoded) == Status::Accepted);
+        assert(decoded.display_list[1].text_paint().border_radius == 9 && detail::canonical::radius_y(decoded.display_list[1]) == 3);
+        assert(decoded.display_list[2].image_paint().border_radius == 11 && detail::canonical::radius_y(decoded.display_list[2]) == 2);
+
+        auto legacy = captured;
+        auto legacy_options = options; legacy_options.version = 9;
+        detail::canonical::set_radius_y(legacy.display_list[0], -1);
+        legacy.groups[1].clip_border_radius_y = -1;
+        legacy.clips[0].border_radius_y = -1;
+        std::vector<std::uint8_t> v9_bytes;
+        assert(encode_script_task_app_frame(legacy, legacy_options, v9_bytes) == Status::Accepted);
+        auto equal_v9 = legacy;
+        detail::canonical::set_radius_y(equal_v9.display_list[0], 16);
+        equal_v9.groups[1].clip_border_radius_y = 19;
+        equal_v9.clips[0].border_radius_y = 13;
+        std::vector<std::uint8_t> equal_v9_bytes;
+        assert(encode_script_task_app_frame(equal_v9, legacy_options, equal_v9_bytes) == Status::Accepted);
+        assert(equal_v9_bytes == v9_bytes);
+        ScriptTaskAppFrame decoded_v9;
+        assert(decode_script_task_app_frame(v9_bytes, legacy_options, decoded_v9) == Status::Accepted);
+        assert(detail::canonical::radius_y(decoded_v9.display_list[0]) == -1 &&
+               decoded_v9.groups[1].clip_border_radius_y == -1 && decoded_v9.clips[0].border_radius_y == -1);
+        auto unequal_v9 = legacy;
+        detail::canonical::set_radius_y(unequal_v9.display_list[0], 5);
+        reencoded = {3, 4, 5};
+        assert(encode_script_task_app_frame(unequal_v9, legacy_options, reencoded) == Status::InvalidValue);
+        assert((reencoded == std::vector<std::uint8_t>{3, 4, 5}));
+        unequal_v9 = legacy; unequal_v9.groups[1].clip_border_radius_y = 7;
+        assert(encode_script_task_app_frame(unequal_v9, legacy_options, reencoded) == Status::InvalidGroup);
+        assert((reencoded == std::vector<std::uint8_t>{3, 4, 5}));
+        unequal_v9 = legacy; unequal_v9.clips[0].border_radius_y = 4;
+        assert(encode_script_task_app_frame(unequal_v9, legacy_options, reencoded) == Status::InvalidClip);
+        assert((reencoded == std::vector<std::uint8_t>{3, 4, 5}));
+        auto malformed = bytes;
+        const std::size_t command_at = 52 + 28 + 2 * 116;
+        detail::canonical::u32(malformed, command_at + 64 + 24, 0xffffffffU);
+        ScriptTaskAppFrame untouched; untouched.viewport = {91, 92, 93, 94};
+        assert(decode_script_task_app_frame(malformed, options, untouched) == Status::Malformed);
+        assert(untouched.viewport.x == 91 && untouched.display_list.empty());
+        malformed = bytes; detail::canonical::u32(malformed, 52 + 28 + 116 + 112, 0xffffffffU);
+        assert(decode_script_task_app_frame(malformed, options, untouched) == Status::Malformed);
+        malformed = bytes; malformed[4] = 9;
+        assert(decode_script_task_app_frame(malformed, options, untouched) == Status::UnsupportedVersion);
+        malformed = bytes; detail::canonical::u32(malformed, 36, 3);
+        assert(decode_script_task_app_frame(malformed, options, untouched) == Status::Malformed);
+        malformed = bytes; malformed.push_back(0);
+        assert(decode_script_task_app_frame(malformed, options, untouched) == Status::Malformed);
+
+        auto legacy_v9_options = options; legacy_v9_options.version = 9; reencoded = {3, 4, 5};
+        assert(encode_script_task_app_frame(captured, legacy_v9_options, reencoded) == Status::InvalidGroup);
+        assert((reencoded == std::vector<std::uint8_t>{3, 4, 5}));
+
+        // Both axes must include signed, nonuniform per-corner encodings.
+        const int packed_x = encode_corner_radii({19, 11, 15, 7});
+        const int packed_y = encode_corner_radii({4, 8, 6, 2});
+        assert(packed_x < -1 && packed_y < -1 && packed_x != packed_y);
+        auto packed = payloads;
+        for (auto& c : packed.display_list) {
+            auto fields = detail::legacy_command_fields(c); fields.border_radius = packed_x;
+            detail::apply_legacy_command_fields(c, fields);
+            detail::canonical::set_radius_y(c, packed_y);
+        }
+        packed.groups[1].clip_border_radius = packed_x; packed.groups[1].clip_border_radius_y = packed_y;
+        packed.clips[0].border_radius = packed_x; packed.clips[0].border_radius_y = packed_y;
+        assert(encode_script_task_app_frame(packed, options, bytes) == Status::Accepted);
+        assert(decode_script_task_app_frame(bytes, options, decoded) == Status::Accepted);
+        for (const auto& c : decoded.display_list) {
+            assert(detail::legacy_command_fields(c).border_radius == packed_x);
+            assert(detail::canonical::radius_y(c) == packed_y);
+        }
+        assert(decoded.groups[1].clip_border_radius_y == packed_y && decoded.clips[0].border_radius_y == packed_y);
+        assert(encode_script_task_app_frame(decoded, options, reencoded) == Status::Accepted && reencoded == bytes);
+
+        auto packed_fill = captured;
+        packed_fill.display_list[0] = packed.display_list[0];
+        packed_fill.groups[1] = packed.groups[1]; packed_fill.groups[1].command_count = 1;
+        packed_fill.clips = packed.clips;
+        Node packed_root; packed_root.type = LayerType::Root; packed_root.bounds = root.bounds;
+        LayerNodePtr packed_child(new Node, LayerNodeDeleter{});
+        packed_child->type = LayerType::Composited; packed_child->bounds = root.bounds;
+        packed_child->has_clip = true; packed_child->clip_rect = packed_fill.groups[1].clip_rect;
+        packed_child->clip_border_radius = packed_x; detail::canonical::set_layer_radius_y(*packed_child, packed_y);
+        packed_child->display_list = packed_fill.display_list; packed_root.children.push_back(std::move(packed_child));
+        ScriptTaskAppFrame packed_capture;
+        assert(make_script_task_group_frame(packed_root, root.bounds, options, packed_capture) == Status::Accepted);
+        assert(packed_capture.groups[1].clip_border_radius_y == packed_y);
+        const auto flattened = make_script_task_app_frame(packed_root, root.bounds, {}, true);
+        bool flattened_y_preserved = false;
+        for (const auto& clip : flattened.clips)
+            flattened_y_preserved = flattened_y_preserved ||
+                (clip.border_radius == packed_x && clip.border_radius_y == packed_y);
+        assert(flattened_y_preserved);
+        assert(encode_script_task_app_frame(packed_fill, options, bytes) == Status::Accepted);
+        assert(decode_script_task_app_frame(bytes, options, decoded) == Status::Accepted);
+        const auto packed_expected = SoftwareCompositor().render(packed_root, 48, 40, {249, 247, 241, 255});
+        const auto packed_actual = renderer.render(decoded, {249, 247, 241, 255}, &render_status);
+        assert(render_status == ScriptTaskFrameRenderStatus::Accepted && same_pixels(packed_expected, packed_actual));
+        const auto flattened_actual = renderer.render(flattened, {249, 247, 241, 255}, &render_status);
+        assert(render_status == ScriptTaskFrameRenderStatus::Accepted && same_pixels(packed_expected, flattened_actual));
+        auto circular = packed_fill; detail::canonical::set_radius_y(circular.display_list[0], packed_x);
+        circular.groups[1].clip_border_radius_y = packed_x;
+        const auto circular_pixels = renderer.render(circular, {249, 247, 241, 255}, &render_status);
+        assert(render_status == ScriptTaskFrameRenderStatus::Accepted && !same_pixels(packed_actual, circular_pixels));
+        auto changed = packed_fill; detail::canonical::set_radius_y(changed.display_list[0], packed_x);
+        assert(plan_script_task_group_damage(renderer, packed_fill, changed).kind == ScriptTaskFrameDamageKind::Full);
+        changed = packed_fill; changed.groups[1].clip_border_radius_y = packed_x;
+        assert(plan_script_task_group_damage(renderer, packed_fill, changed).kind == ScriptTaskFrameDamageKind::Full);
+
+        packed_fill.input_targets.push_back({29, root.bounds, true, 0});
+        bool hit_differs_from_circle = false;
+        for (int y = 0; y < 40; ++y) for (int x = 0; x < 48; ++x) {
+            const auto& clip = packed_fill.clips[0];
+            // root.bounds keeps overload resolution dependent on this Core's Node API.
+            auto clip_rect = root.bounds; clip_rect = clip.rect;
+            const bool inside = rounded_rect_coverage(clip_rect, packed_x, packed_y, x, y) != 0;
+            const bool circular_inside = rounded_rect_coverage(clip_rect, packed_x, x, y) != 0;
+            hit_differs_from_circle = hit_differs_from_circle || inside != circular_inside;
+            assert(resolve_script_task_input_target(packed_fill, x, y) == (inside ? 29U : 0U));
+        }
+        assert(hit_differs_from_circle);
+
+        auto packed_legacy = packed;
+        for (auto& c : packed_legacy.display_list) detail::canonical::set_radius_y(c, -1);
+        packed_legacy.groups[1].clip_border_radius_y = -1; packed_legacy.clips[0].border_radius_y = -1;
+        assert(encode_script_task_app_frame(packed_legacy, legacy_options, v9_bytes) == Status::Accepted);
+        auto packed_equal = packed_legacy;
+        for (auto& c : packed_equal.display_list) detail::canonical::set_radius_y(c, packed_x);
+        packed_equal.groups[1].clip_border_radius_y = packed_x; packed_equal.clips[0].border_radius_y = packed_x;
+        assert(encode_script_task_app_frame(packed_equal, legacy_options, equal_v9_bytes) == Status::Accepted && equal_v9_bytes == v9_bytes);
+        assert(decode_script_task_app_frame(v9_bytes, legacy_options, decoded_v9) == Status::Accepted);
+        for (const auto& c : decoded_v9.display_list) assert(detail::canonical::radius_y(c) == -1);
+        assert(encode_script_task_app_frame(packed_legacy, options, bytes) == Status::Accepted);
+        assert(decode_script_task_app_frame(bytes, options, decoded) == Status::Accepted);
+        for (const auto& c : decoded.display_list) assert(detail::canonical::radius_y(c) == packed_x);
+        assert(decoded.groups[1].clip_border_radius_y == packed_x && decoded.clips[0].border_radius_y == packed_x);
+        const std::size_t y_offsets[] = {52 + 24, 52 + 28 + 116 + 112,
+            command_at + 88, command_at + 128 + 100, command_at + 256 + 1 + 96};
+        for (auto offset : y_offsets) for (auto invalid : {0xffffffffU, 0x90000000U, 0xf0000000U}) {
+            malformed = bytes; detail::canonical::u32(malformed, offset, invalid);
+            assert(decode_script_task_app_frame(malformed, options, untouched) == Status::Malformed);
+            assert(untouched.viewport.x == 91 && untouched.display_list.empty());
+        }
+        auto packed_unequal = packed_legacy;
+        detail::canonical::set_radius_y(packed_unequal.display_list[0], packed_y);
+        reencoded = {3, 4, 5};
+        assert(encode_script_task_app_frame(packed_unequal, legacy_options, reencoded) == Status::InvalidValue);
+        packed_unequal = packed_legacy; packed_unequal.groups[1].clip_border_radius_y = packed_y;
+        assert(encode_script_task_app_frame(packed_unequal, legacy_options, reencoded) == Status::InvalidGroup);
+        packed_unequal = packed_legacy; packed_unequal.clips[0].border_radius_y = packed_y;
+        assert(encode_script_task_app_frame(packed_unequal, legacy_options, reencoded) == Status::InvalidClip);
+        assert((reencoded == std::vector<std::uint8_t>{3, 4, 5}));
+        auto v4_options = options; v4_options.version = 4;
+        auto flat_legacy = packed_legacy; flat_legacy.groups.clear(); flat_legacy.clips.clear();
+        flat_legacy.image_provider_id = 0; flat_legacy.display_list.resize(1);
+        auto flat_equal = flat_legacy;
+        detail::canonical::set_radius_y(flat_equal.display_list[0], packed_x);
+        assert(encode_script_task_app_frame(flat_legacy, v4_options, v9_bytes) == Status::Accepted);
+        assert(encode_script_task_app_frame(flat_equal, v4_options, equal_v9_bytes) == Status::Accepted && equal_v9_bytes == v9_bytes);
+        assert(decode_script_task_app_frame(v9_bytes, v4_options, decoded_v9) == Status::Accepted);
+        assert(encode_script_task_app_frame(decoded_v9, v4_options, reencoded) == Status::Accepted && reencoded == v9_bytes);
+        detail::canonical::set_radius_y(flat_equal.display_list[0], packed_y); reencoded = {3, 4, 5};
+        assert(encode_script_task_app_frame(flat_equal, v4_options, reencoded) == Status::InvalidValue);
+        assert((reencoded == std::vector<std::uint8_t>{3, 4, 5}));
+        flat_legacy.clips.push_back({root.bounds, 13, kScriptTaskNoParentClip, -1});
+        assert(encode_script_task_app_frame(flat_legacy, v4_options, v9_bytes) == Status::Accepted);
+        flat_legacy.clips[0].border_radius_y = 13;
+        assert(encode_script_task_app_frame(flat_legacy, v4_options, equal_v9_bytes) == Status::Accepted && equal_v9_bytes == v9_bytes);
+        flat_legacy.clips[0].border_radius_y = 4;
+        assert(encode_script_task_app_frame(flat_legacy, v4_options, reencoded) == Status::InvalidClip);
+        assert((reencoded == std::vector<std::uint8_t>{3, 4, 5}));
+        std::cout << "canonical v10: signed per-corner axes, sentinel normalization, v9 byte identity/refusal, "
+                     "capture/replay pixels, Y-only damage and elliptical input clips passed\n";
+    }
+}
+#endif
 template<class Command> void configure_css_shadow(Command& command) {
     using Type = decltype(detail::command_type(command));
     if constexpr (detail::has_css_shadow_type<Type>::value && detail::has_css_shadow_paint<Command>::value) {
@@ -180,12 +403,13 @@ template<class Command> void configure_css_shadow(Command& command) {
         auto& paint = command.css_shadow_paint();
         paint.border_box = {1, 2, 30, 40}; paint.padding_box = {3, 4, 26, 36};
         paint.source_rect = {2, 3, 27, 37}; paint.border_radii = 2; paint.padding_radii = 1;
-        paint.source_radii = 2; paint.blur_px = 0; paint.mode = CssBoxShadowMode::Inset; paint.flags = 0;
+        paint.source_radii = 2; paint.blur_px = 0; paint.mode = decltype(paint.mode)::Inset; paint.flags = 0;
     }
 }
 inline void run() {
     using Status = ScriptTaskAppFrameCodecStatus;
     assert(script_task_app_frame_codec_supports_version(9) == detail::canonical::available);
+    assert(script_task_app_frame_codec_supports_version(10) == detail::canonical::elliptical_available);
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
     ScriptTaskAppFrameCodecOptions options;
     options.image_provider_id = (1ULL << 48) + 81;
@@ -327,6 +551,7 @@ inline void run() {
     std::cout << "canonical v9: 10 typed kinds/JFTP1/all paint clips, nested group values, "
               << bytes.size() << " atomic truncations and malformed/refusal checks passed\n";
     rendering();
+    elliptical_v10_round_trip<DisplayCommand, LayerNode>();
 #else
     std::cout << "canonical v9 unavailable on selected Core; legacy contracts retained\n";
 #endif

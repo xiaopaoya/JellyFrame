@@ -453,6 +453,126 @@ jobs:
           ctest --test-dir build/canonical-v9-consumers-${{ matrix.profile }} -C Release --output-on-failure
           if ($LASTEXITCODE -ne 0) { throw 'Canonical ABI4 installed consumer tests failed' }
 
+  canonical-v10-installed-consumers:
+    name: Canonical v10 Installed Consumer and Worker (${{ matrix.profile }})
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: full
+            profile_id: render-core-default
+          - profile: cropped
+            profile_id: render-core-minimal-no-forms-advanced
+    env:
+      CORE_F5_COMMIT: a0067eebde0ffe677e6e38acdd4c75da8bc78b50
+      EXPECTED_CORE_SOURCE_HASH: 369973a9b051cdff8af56f5bd11a94cd17c75de6940473d2fa6dcee8b171c33c
+      EXPECTED_CORE_SOURCE_FILE_COUNT: '139'
+      EXPECTED_CORE_PROFILE_ID: ${{ matrix.profile_id }}
+
+    steps:
+      - name: Checkout JellyFrame Runtime
+        uses: actions/checkout@v5
+
+      - name: Checkout merged Core F5 PR 20
+        uses: actions/checkout@v5
+        with:
+          repository: xiaopaoya/JellyFrame-Render-Core
+          ref: a0067eebde0ffe677e6e38acdd4c75da8bc78b50
+          path: third_party/render-core-f5
+
+      - name: Verify exact merged Core revision
+        shell: pwsh
+        run: |
+          $revision = (git -C third_party/render-core-f5 rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $revision -ne $env:CORE_F5_COMMIT) {
+            throw "Expected merged Core F5 $env:CORE_F5_COMMIT, got $revision"
+          }
+
+      - name: Checkout JerryScript
+        uses: actions/checkout@v5
+        with:
+          repository: jerryscript-project/jerryscript
+          ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
+          path: third_party/jerryscript
+
+      - name: Build JerryScript
+        shell: pwsh
+        run: |
+          python third_party/jerryscript/tools/build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+          if ($LASTEXITCODE -ne 0) { throw 'JerryScript build failed' }
+
+      - name: Build and install pinned Core F5 profile
+        shell: pwsh
+        run: |
+          $build = 'build/core-f5-${{ matrix.profile }}'
+          $install = 'build/core-f5-install-${{ matrix.profile }}'
+          $coreArgs = @(
+            '-S', 'third_party/render-core-f5', '-B', $build,
+            '-DJELLYFRAME_BUILD_TESTS=OFF',
+            '-DJELLYFRAME_INSTALL_RENDER_CORE=ON'
+          )
+          if ('${{ matrix.profile }}' -eq 'cropped') {
+            $coreArgs += @(
+              '-DJELLYFRAME_ENABLE_CANVAS2D=OFF',
+              '-DJELLYFRAME_ENABLE_MODERN_PAINT=OFF',
+              '-DJELLYFRAME_ENABLE_FLEX_GRID=OFF',
+              '-DJELLYFRAME_ENABLE_ADVANCED_FORMS=OFF'
+            )
+          }
+          cmake @coreArgs
+          if ($LASTEXITCODE -ne 0) { throw 'Core F5 configure failed' }
+          $manifest = Get-Content "$build/generated/jellyframe_render_core_source_manifest.json" -Raw | ConvertFrom-Json
+          $profile = Get-Content "$build/generated/jellyframe_render_core_profile.json" -Raw | ConvertFrom-Json
+          if ($manifest.sourceHash -ne $env:EXPECTED_CORE_SOURCE_HASH -or
+              $manifest.sourceFileCount -ne [int]$env:EXPECTED_CORE_SOURCE_FILE_COUNT -or
+              @($manifest.files).Count -ne [int]$env:EXPECTED_CORE_SOURCE_FILE_COUNT) {
+            throw 'Core F5 source manifest does not match the merged source pin'
+          }
+          $packageVersion = [version]($profile.packageVersion -replace '-.*$', '')
+          if ($packageVersion -lt [version]'0.9' -or $profile.engineAbi -ne 4 -or
+              $profile.profileId -ne $env:EXPECTED_CORE_PROFILE_ID) {
+            throw "Unexpected Core F5 package/ABI/profile: $($profile | ConvertTo-Json -Compress)"
+          }
+          cmake --build $build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Core F5 build failed' }
+          cmake --install $build --config Release --prefix $install
+          if ($LASTEXITCODE -ne 0) { throw 'Core F5 install failed' }
+          "CORE_F5_INSTALL_PREFIX=$((Resolve-Path $install).Path)" >> $env:GITHUB_ENV
+
+      - name: Configure installed v10 consumer and actual worker
+        shell: pwsh
+        run: >-
+          cmake -S docs/evaluation/canonical-abi4-codec-v10
+          -B build/canonical-v10-consumers-${{ matrix.profile }}
+          -DJellyFrameRenderCore_DIR="$env:CORE_F5_INSTALL_PREFIX/lib/cmake/JellyFrameRenderCore"
+          -DEXPECTED_CORE_SOURCE_HASH="$env:EXPECTED_CORE_SOURCE_HASH"
+          -DEXPECTED_CORE_PROFILE_ID="$env:EXPECTED_CORE_PROFILE_ID"
+          -DBUILD_V10_WORKER=ON
+          -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE/third_party/jerryscript"
+
+      - name: Build and run installed v10 consumer and actual worker
+        shell: pwsh
+        run: |
+          $build = 'build/canonical-v10-consumers-${{ matrix.profile }}'
+          cmake --build $build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Canonical v10 consumers failed to build' }
+          ctest --test-dir $build -C Release -V --output-on-failure --timeout 90
+          if ($LASTEXITCODE -ne 0) { throw 'Canonical v10 installed consumer/worker tests failed' }
+
+      - name: Upload canonical v10 qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-v10-installed-${{ matrix.profile }}
+          path: |
+            build/canonical-v10-consumers-${{ matrix.profile }}/qualified_core_identity.txt
+            build/canonical-v10-consumers-${{ matrix.profile }}/Testing/Temporary/LastTest.log
+            build/core-f5-${{ matrix.profile }}/generated/jellyframe_render_core_source_manifest.json
+            build/core-f5-${{ matrix.profile }}/generated/jellyframe_render_core_profile.json
+          if-no-files-found: warn
+
   render-core-standalone:
     name: Standalone Render Core
     if: github.event_name != 'workflow_dispatch'

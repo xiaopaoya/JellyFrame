@@ -25,6 +25,7 @@ struct ScriptTaskFrameClip {
     Rect rect;
     int border_radius = 0;
     std::uint32_t parent_clip = kScriptTaskNoParentClip;
+    int border_radius_y = -1;
 };
 
 // Preorder, value-owned paint groups. Commands remain in source coordinates;
@@ -38,6 +39,7 @@ struct ScriptTaskFrameGroup {
     Rect bounds;
     Rect clip_rect;
     int clip_border_radius = 0;
+    int clip_border_radius_y = -1;
     LayerType type = LayerType::Paint;
     std::uint8_t clip_axes = 3;
     bool has_clip = false;
@@ -89,7 +91,7 @@ struct ScriptTaskAppFrameCodecOptions {
     std::size_t max_input_targets = 0;
     std::size_t max_payload_bytes = 0;
     std::uint8_t version = 1;
-    // Producer-owned namespace used during v9 group capture only.
+    // Producer-owned namespace used during canonical v9/v10 group capture only.
     std::uint64_t image_provider_id = 0;
     std::size_t max_clips = 0;
     std::size_t max_clip_depth = 8;
@@ -129,8 +131,11 @@ enum class ScriptTaskAppFrameCodecStatus {
 // group frames. It rejects legacy text/JFGR and does not downgrade to v6.
 // v9 is an independent canonical ABI4 typed-command family: JFTP1 and explicit
 // text origin/baseline, image/gradient relative clips, canonical layer metadata.
-// Its header/group/command records are44/112/128 bytes. It does not enable or
+// Its header/group/command records are 52/112/128 bytes. It does not enable or
 // redefine the ABI9-only v5-v8 prerequisites. Both peers must explicitly opt in.
+// v10 adds independent encoded Y radii to canonical commands, clips and groups;
+// its group record is 116 bytes. Only in-memory Y=-1 falls back to X. V9 and
+// older formats reject distinct Y axes instead of silently dropping them.
 // Configure the same explicitly selected version on both peers. v5 is transport
 // support only; a painter/renderer still has to support its sampling semantics.
 bool script_task_app_frame_codec_supports_version(std::uint8_t version);

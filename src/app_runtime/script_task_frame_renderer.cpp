@@ -24,6 +24,11 @@ namespace {
 bool empty_rect(Rect rect) {
     return rect.width <= 0 || rect.height <= 0;
 }
+template<class Clip>
+auto set_raster_clip_y(Clip& clip, int y, int) -> decltype(clip.border_radius_y = y, void()) {
+    clip.border_radius_y = y;
+}
+template<class Clip> void set_raster_clip_y(Clip&, int, long) {}
 
 template <typename Value>
 void add_saturating(Value& target, Value value) {
@@ -193,7 +198,12 @@ FrameBufferComparison compare_framebuffer(const FrameBuffer& left, const FrameBu
 template<class Command>
 bool equal_display_command(const Command& left, const Command& right) {
     if constexpr (detail::has_typed_command<Command>::value) {
-        return display_commands_equal(left, right) &&
+        const bool ellipse_equal = [&] {
+            if constexpr (detail::canonical::has_radius_y_fields<Command>::value)
+                return detail::canonical::radius_y(left) == detail::canonical::radius_y(right);
+            return true;
+        }();
+        return ellipse_equal && display_commands_equal(left, right) &&
             equal_rect(detail::command_sampling_rect(left), detail::command_sampling_rect(right)) &&
             equal_background_paint_clip(detail::command_background_paint_clip(left),
                                         detail::command_background_paint_clip(right));
@@ -214,6 +224,7 @@ bool equal_display_command(const Command& left, const Command& right) {
 
 bool equal_clip(const ScriptTaskFrameClip& left, const ScriptTaskFrameClip& right) {
     return equal_rect(left.rect, right.rect) && left.border_radius == right.border_radius &&
+        left.border_radius_y == right.border_radius_y &&
         left.parent_clip == right.parent_clip;
 }
 
@@ -557,7 +568,7 @@ ScriptTaskFrameDamage plan_script_task_group_damage(
     if (!previous.groups.empty() || !current.groups.empty()) {
         if (previous.image_provider_id != current.image_provider_id) return full;
         ScriptTaskAppFrameCodecOptions canonical_limits;
-        canonical_limits.version = 9;
+        canonical_limits.version = detail::canonical::elliptical_available ? 10 : 9;
         canonical_limits.max_commands = canonical_limits.max_text_bytes = canonical_limits.max_input_targets =
             canonical_limits.max_payload_bytes = std::numeric_limits<std::size_t>::max();
         canonical_limits.max_groups = 1024; canonical_limits.max_clips = 65535;
@@ -568,8 +579,8 @@ ScriptTaskFrameDamage plan_script_task_group_damage(
         }
         if (!equal_rect(previous.viewport, current.viewport) || previous.groups.size() != current.groups.size() ||
             previous.display_list.size() != current.display_list.size() ||
-            detail::canonical::validate_groups(previous, 1024, 32) != ScriptTaskAppFrameCodecStatus::Accepted ||
-            detail::canonical::validate_groups(current, 1024, 32) != ScriptTaskAppFrameCodecStatus::Accepted)
+            detail::canonical::validate_groups(previous, 1024, 32, canonical_limits.version) != ScriptTaskAppFrameCodecStatus::Accepted ||
+            detail::canonical::validate_groups(current, 1024, 32, canonical_limits.version) != ScriptTaskAppFrameCodecStatus::Accepted)
             return full;
         for (std::size_t i = 0; i < current.groups.size(); ++i)
             if (!detail::canonical::same_group(previous.groups[i], current.groups[i])) return full;
@@ -610,7 +621,8 @@ ScriptTaskFrameDamage plan_script_task_group_damage(
         if (a.parent != b.parent || a.command_begin != b.command_begin ||
             a.command_count != b.command_count || a.type != b.type) return full;
         if (equal_rect(a.bounds, b.bounds) && equal_rect(a.clip_rect, b.clip_rect) &&
-            a.clip_border_radius == b.clip_border_radius && a.clip_axes == b.clip_axes &&
+            a.clip_border_radius == b.clip_border_radius && a.clip_border_radius_y == b.clip_border_radius_y &&
+            a.clip_axes == b.clip_axes &&
             a.has_clip == b.has_clip && a.opacity == b.opacity &&
             a.has_clip_ellipse == b.has_clip_ellipse && a.clip_ellipse == b.clip_ellipse) continue;
         // A changed group mask/opacity affects all its descendants, even when
@@ -731,7 +743,9 @@ bool ScriptTaskFrameRenderer::collect_clip_chain(const ScriptTaskAppFrame& frame
                               "clip skipped");
             return false;
         }
-        output.push_back({clip.rect, clip.border_radius});
+        RasterClip raster_clip{clip.rect, clip.border_radius};
+        set_raster_clip_y(raster_clip, clip.border_radius_y, 0);
+        output.push_back(raster_clip);
     }
     return true;
 }
