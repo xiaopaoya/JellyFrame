@@ -1214,11 +1214,13 @@ int resolve_scroll_y(const jellyframe::Node& node, int max_scroll_y, void* raw_c
     return 0;
 }
 
-jellyframe::LayerTreeBuilderOptions make_layer_tree_options(const TimerUiTaskContext& context) {
+jellyframe::LayerTreeBuilderOptions make_layer_tree_options(
+    TimerUiTaskContext& context, jellyframe::StyleResolver& style_resolver) {
     jellyframe::LayerTreeBuilderOptions options = jellyframe::layer_tree_options_from_budgets(context.budgets);
     options.text_measure = context.text_measure;
     options.text_system = context.core_text_system;
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+    context.image_adapter.set_background_resource_resolver(&style_resolver);
     options.image_resolver = make_bmp_image_resolver(const_cast<BmpImageAdapter&>(context.image_adapter));
 #endif
     if (context.scroll_benchmark || context.installed_bundle_app || context.embedded_ui_workload) {
@@ -1285,9 +1287,9 @@ jellyframe::LayerNodePtr clone_layer_tree(const jellyframe::LayerNode& source) {
 
 bool layer_tree_contains_gradient(const jellyframe::LayerNode& layer) {
     for (const jellyframe::DisplayCommand& command : layer.display_list) {
-        if (command.type == jellyframe::DisplayCommandType::LinearGradient ||
-            command.type == jellyframe::DisplayCommandType::ConicGradient ||
-            command.type == jellyframe::DisplayCommandType::RadialGradient) {
+        if (command.type() == jellyframe::DisplayCommandType::LinearGradient ||
+            command.type() == jellyframe::DisplayCommandType::ConicGradient ||
+            command.type() == jellyframe::DisplayCommandType::RadialGradient) {
             return true;
         }
     }
@@ -1748,7 +1750,7 @@ bool rebuild_pipeline(TimerUiTaskContext& context) {
         return false;
     }
 
-    jellyframe::LayerTreeBuilder layer_builder(make_layer_tree_options(context));
+    jellyframe::LayerTreeBuilder layer_builder(make_layer_tree_options(context, style_resolver));
     const std::uint64_t layer_build_start = esp_timer_get_time();
     context.pipeline.layer_tree = layer_builder.build(*context.pipeline.layout_tree, context.pipeline.layer_arena);
     const std::uint64_t layer_build_us = static_cast<std::uint64_t>(esp_timer_get_time() - layer_build_start);
@@ -1833,6 +1835,17 @@ const jellyframe::Rect* choose_dirty_rects(TimerUiTaskContext& context,
 bool render_and_present(TimerUiTaskContext& context,
                         const jellyframe::FrameUpdatePlan& update_plan,
                         std::uint32_t& present_us) {
+#if CONFIG_JELLYFRAME_ESP32S3_PERSISTENT_STYLE_RESOLVER
+    if (context.style_resolver == nullptr) return false;
+    jellyframe::StyleResolver& style_resolver = *context.style_resolver;
+#else
+    if (context.stylesheet == nullptr) return false;
+    jellyframe::StyleResolverOptions style_options;
+    style_options.max_candidate_cache_entries =
+        static_cast<std::size_t>(CONFIG_JELLYFRAME_ESP32S3_STYLE_RESOLVER_CACHE_ENTRIES);
+    jellyframe::StyleResolver transient_style_resolver(*context.stylesheet, style_options);
+    jellyframe::StyleResolver& style_resolver = transient_style_resolver;
+#endif
     jellyframe::LayerNodePtr previous_layer_snapshot;
     bool layer_snapshot_failed = false;
     if (update_plan.action == jellyframe::FrameUpdateAction::RepaintExisting &&
@@ -1853,7 +1866,7 @@ bool render_and_present(TimerUiTaskContext& context,
         const std::uint64_t layer_build_start = esp_timer_get_time();
         context.pipeline.layer_tree.reset();
         context.pipeline.layer_arena.rewind();
-        jellyframe::LayerTreeBuilder layer_builder(make_layer_tree_options(context));
+        jellyframe::LayerTreeBuilder layer_builder(make_layer_tree_options(context, style_resolver));
         context.pipeline.layer_tree = layer_builder.build(*context.pipeline.layout_tree,
                                                            context.pipeline.layer_arena);
         context.telemetry.layer_build_us +=

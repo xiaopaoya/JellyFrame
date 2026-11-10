@@ -1,5 +1,8 @@
+#include "app_runtime/script_task_command_access.h"
 #include "app_runtime/script_task_frame_renderer.h"
 #include "app_runtime/app_font_set.h"
+#include "app_runtime/script_task_sampling.h"
+#include "app_runtime/script_task_frame_groups.h"
 
 #include <cassert>
 #include <cstdint>
@@ -8,6 +11,23 @@
 using namespace jellyframe;
 
 namespace {
+
+ScriptTaskAppFrame composition_frame(const LayerNode& root, Rect viewport) {
+    if (!script_task_app_frame_codec_supports_version(6))
+        return make_script_task_app_frame(root, viewport, {}, true);
+    ScriptTaskAppFrameCodecOptions options;
+    options.version = 6;
+    options.max_commands = 128;
+    options.max_text_bytes = 16384;
+    options.max_payload_bytes = 65536;
+    options.max_groups = 128;
+    ScriptTaskAppFrame captured, decoded;
+    assert(make_script_task_group_frame(root, viewport, options, captured) == ScriptTaskAppFrameCodecStatus::Accepted);
+    std::vector<std::uint8_t> bytes;
+    assert(encode_script_task_app_frame(captured, options, bytes) == ScriptTaskAppFrameCodecStatus::Accepted);
+    assert(decode_script_task_app_frame(bytes, options, decoded) == ScriptTaskAppFrameCodecStatus::Accepted);
+    return decoded;
+}
 
 struct ReplayTimingClock {
     const std::uint64_t* samples = nullptr;
@@ -31,7 +51,7 @@ ScriptTaskAppFrame rounded_frame() {
     ScriptTaskAppFrame frame;
     frame.viewport = {0, 0, 40, 40};
     DisplayCommand fill;
-    fill.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(fill, DisplayCommandType::FillRect);
     fill.rect = {0, 0, 40, 40};
     fill.color = {20, 120, 240, 255};
     frame.display_list.push_back(fill);
@@ -84,10 +104,10 @@ void renderer_applies_value_frame_rotation_with_a_rounded_clip() {
     frame.viewport = {0, 0, 32, 32};
     frame.clips = {{{4, 4, 24, 24}, 8, kScriptTaskNoParentClip}};
     DisplayCommand hand;
-    hand.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(hand, DisplayCommandType::FillRect);
     hand.rect = {15, 5, 2, 12};
     hand.color = {240, 80, 90, 255};
-    hand.border_radius = 1;
+    jellyframe::detail::command_border_radius(hand) = 1;
     hand.transform.enabled = true;
     hand.transform.xx_1024 = 0;
     hand.transform.xy_1024 = -1024;
@@ -121,16 +141,16 @@ void renderer_matches_layer_compositor_for_right_angle_value_rotation() {
     hand->transform_origin_x_percent = 50;
     hand->transform_origin_y_percent = 100;
     DisplayCommand fill;
-    fill.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(fill, DisplayCommandType::FillRect);
     fill.rect = hand->bounds;
     fill.color = {240, 80, 90, 255};
-    fill.border_radius = 1;
+    jellyframe::detail::command_border_radius(fill) = 1;
     hand->display_list.push_back(fill);
     clipped->children.push_back(std::move(hand));
     root.children.push_back(std::move(clipped));
 
     const FrameBuffer expected = SoftwareCompositor().render(root, 32, 32, {255, 255, 255, 255});
-    const ScriptTaskAppFrame frame = make_script_task_app_frame(root, {0, 0, 32, 32}, {}, true);
+    const ScriptTaskAppFrame frame = composition_frame(root, {0, 0, 32, 32});
     const FrameBuffer actual = ScriptTaskFrameRenderer().render(frame, {255, 255, 255, 255});
     assert(actual.pixels.size() == expected.pixels.size());
     for (std::size_t index = 0; index < actual.pixels.size(); ++index) {
@@ -156,7 +176,7 @@ void renderer_applies_ancestor_clip_only_in_destination_space_for_transforms() {
     rotated->transform_origin_x_percent = 50;
     rotated->transform_origin_y_percent = 50;
     DisplayCommand fill;
-    fill.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(fill, DisplayCommandType::FillRect);
     fill.rect = rotated->bounds;
     fill.color = {240, 80, 90, 255};
     rotated->display_list.push_back(fill);
@@ -164,7 +184,7 @@ void renderer_applies_ancestor_clip_only_in_destination_space_for_transforms() {
     root.children.push_back(std::move(clipped));
 
     const FrameBuffer expected = SoftwareCompositor().render(root, 32, 32, {255, 255, 255, 255});
-    const ScriptTaskAppFrame frame = make_script_task_app_frame(root, {0, 0, 32, 32}, {}, true);
+    const ScriptTaskAppFrame frame = composition_frame(root, {0, 0, 32, 32});
     const FrameBuffer actual = ScriptTaskFrameRenderer().render(frame, {255, 255, 255, 255});
     assert(actual.pixels.size() == expected.pixels.size());
     for (std::size_t index = 0; index < actual.pixels.size(); ++index) {
@@ -179,7 +199,7 @@ void renderer_accepts_degenerate_value_frame_transform_as_empty_paint() {
     ScriptTaskAppFrame frame;
     frame.viewport = {0, 0, 16, 16};
     DisplayCommand fill;
-    fill.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(fill, DisplayCommandType::FillRect);
     fill.rect = {2, 2, 12, 12};
     fill.color = {240, 80, 90, 255};
     fill.transform.enabled = true;
@@ -210,14 +230,14 @@ void renderer_matches_transformed_layer_own_clip() {
     rotated->transform_origin_x_percent = 50;
     rotated->transform_origin_y_percent = 50;
     DisplayCommand fill;
-    fill.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(fill, DisplayCommandType::FillRect);
     fill.rect = rotated->bounds;
     fill.color = {240, 80, 90, 255};
     rotated->display_list.push_back(fill);
     root.children.push_back(std::move(rotated));
 
     const FrameBuffer expected = SoftwareCompositor().render(root, 32, 32, {255, 255, 255, 255});
-    const ScriptTaskAppFrame frame = make_script_task_app_frame(root, {0, 0, 32, 32}, {}, true);
+    const ScriptTaskAppFrame frame = composition_frame(root, {0, 0, 32, 32});
     const FrameBuffer actual = ScriptTaskFrameRenderer().render(frame, {255, 255, 255, 255});
     assert(actual.pixels.size() == expected.pixels.size());
     for (std::size_t index = 0; index < actual.pixels.size(); ++index) {
@@ -248,7 +268,7 @@ void renderer_matches_nested_source_clips_for_transformed_child_content() {
     child->has_clip = true;
     child->clip_rect = {8, 7, 16, 15};
     DisplayCommand fill;
-    fill.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(fill, DisplayCommandType::FillRect);
     fill.rect = child->bounds;
     fill.color = {240, 80, 90, 255};
     child->display_list.push_back(fill);
@@ -256,7 +276,7 @@ void renderer_matches_nested_source_clips_for_transformed_child_content() {
     root.children.push_back(std::move(rotated));
 
     const FrameBuffer expected = SoftwareCompositor().render(root, 40, 40, {255, 255, 255, 255});
-    const ScriptTaskAppFrame frame = make_script_task_app_frame(root, {0, 0, 40, 40}, {}, true);
+    const ScriptTaskAppFrame frame = composition_frame(root, {0, 0, 40, 40});
     const FrameBuffer actual = ScriptTaskFrameRenderer().render(frame, {255, 255, 255, 255});
     assert(actual.pixels.size() == expected.pixels.size());
     for (std::size_t index = 0; index < actual.pixels.size(); ++index) {
@@ -277,11 +297,11 @@ void renderer_matches_layer_compositor_for_translucent_clip_run() {
     clipped->clip_rect = {8, 8, 24, 24};
     clipped->clip_border_radius = 8;
     DisplayCommand blue;
-    blue.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(blue, DisplayCommandType::FillRect);
     blue.rect = {0, 0, 40, 40};
     blue.color = {20, 120, 240, 160};
     DisplayCommand red;
-    red.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(red, DisplayCommandType::FillRect);
     red.rect = {12, 12, 20, 20};
     red.color = {240, 80, 70, 128};
     clipped->display_list.push_back(blue);
@@ -289,7 +309,7 @@ void renderer_matches_layer_compositor_for_translucent_clip_run() {
     root.children.push_back(std::move(clipped));
 
     const FrameBuffer expected = SoftwareCompositor().render(root, 40, 40, {255, 255, 255, 255});
-    const ScriptTaskAppFrame frame = make_script_task_app_frame(root, {0, 0, 40, 40}, {}, true);
+    const ScriptTaskAppFrame frame = composition_frame(root, {0, 0, 40, 40});
     ScriptTaskFrameRenderer renderer;
     const FrameBuffer actual = renderer.render(frame, {255, 255, 255, 255});
     assert(actual.pixels.size() == expected.pixels.size());
@@ -397,6 +417,26 @@ void frame_diff_reports_value_churn_without_granting_reuse() {
            report.changed_command_bounds.y == 0 && report.changed_command_bounds.width == 40 &&
            report.changed_command_bounds.height == 40);
 
+    if (detail::kScriptTaskSamplingTransportAvailable) {
+        current = previous;
+        detail::set_command_sampling_rect(current.display_list[0], {2, 3, 36, 34});
+        const ScriptTaskFrameDiff changed_sampling_report = diff_script_task_app_frames(previous, current);
+        assert(changed_sampling_report.unchanged_command_count == 0 &&
+               changed_sampling_report.changed_command_count == 1 && changed_sampling_report.has_changed_command_bounds);
+    }
+
+    if constexpr (detail::has_background_clip_transport<DisplayCommand>()) {
+        current = previous;
+        detail::set_command_type(current.display_list[0], DisplayCommandType::Image);
+        previous.display_list[0] = current.display_list[0];
+        detail::set_command_background_paint_clip(previous.display_list[0], {0, 0, 8, 8});
+        current.display_list[0] = previous.display_list[0];
+        detail::set_command_background_paint_clip(current.display_list[0], {1, 0, 8, 8});
+        const ScriptTaskFrameDiff changed_background_clip = diff_script_task_app_frames(previous, current);
+        assert(changed_background_clip.changed_command_count == 1 &&
+               changed_background_clip.unchanged_command_count == 0);
+    }
+
     current.clips[1].border_radius = 4;
     const ScriptTaskFrameDiff changed_clip_report = diff_script_task_app_frames(previous, current);
     assert(!changed_clip_report.clip_chains_equal && !changed_clip_report.paint_structure_equal);
@@ -425,7 +465,7 @@ void frame_diff_reports_value_churn_without_granting_reuse() {
 void frame_diff_accumulator_owns_only_accepted_value_frames() {
     ScriptTaskAppFrame base = rounded_frame();
     DisplayCommand badge;
-    badge.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(badge, DisplayCommandType::FillRect);
     badge.rect = {4, 4, 8, 8};
     badge.color = {20, 30, 40, 255};
     base.display_list.push_back(badge);
@@ -470,22 +510,22 @@ ScriptTaskAppFrame replay_candidate_frame() {
     ScriptTaskAppFrame frame;
     frame.viewport = {0, 0, 40, 24};
     DisplayCommand background;
-    background.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(background, DisplayCommandType::FillRect);
     background.rect = {0, 0, 40, 24};
     background.color = {24, 40, 68, 255};
     frame.display_list.push_back(background);
     DisplayCommand card;
-    card.type = DisplayCommandType::LinearGradient;
+    jellyframe::detail::set_command_type(card, DisplayCommandType::LinearGradient);
     card.rect = {4, 3, 32, 18};
     card.color = {60, 180, 220, 255};
     card.color2 = {40, 100, 180, 255};
-    card.border_radius = 6;
+    jellyframe::detail::command_border_radius(card) = 6;
     frame.display_list.push_back(card);
     DisplayCommand overlay;
-    overlay.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(overlay, DisplayCommandType::FillRect);
     overlay.rect = {12, 8, 12, 8};
     overlay.color = {250, 90, 70, 128};
-    overlay.border_radius = 3;
+    jellyframe::detail::command_border_radius(overlay) = 3;
     frame.display_list.push_back(overlay);
     frame.clips = {{{4, 3, 32, 18}, 6, kScriptTaskNoParentClip}};
     frame.display_clip_indices = {kScriptTaskNoClip, 0, 0};
@@ -527,6 +567,42 @@ void retained_replay_rebuilds_stable_underlap_and_verifies_pixels() {
            statistics.canonical_output_bytes == 40 * 24 * sizeof(Color));
 }
 
+void retained_replay_matches_canonical_output_for_background_clip_mutation() {
+    if (!detail::has_background_clip_transport<DisplayCommand>()) return;
+#if defined(JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED) && !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    return;
+#endif
+
+    ScriptTaskFrameRenderer renderer;
+    const Color background{255, 255, 255, 255};
+    ScriptTaskAppFrame previous = replay_candidate_frame();
+    detail::set_command_background_paint_clip(previous.display_list[1], {0, 0, 32, 18});
+    const FrameBuffer previous_image = renderer.render(previous, background);
+
+    ScriptTaskAppFrame current = previous;
+    detail::set_command_background_paint_clip(current.display_list[1], {8, 4, 16, 10});
+    const FrameBuffer expected = renderer.render(current, background);
+    assert(!equal_framebuffer_pixels(previous_image, expected));
+
+    ScriptTaskFrameRetainedReplayOptions options;
+    options.enabled = true;
+    options.max_retained_pixels = static_cast<std::size_t>(previous.viewport.width) *
+        static_cast<std::size_t>(previous.viewport.height);
+    options.max_replay_pixels = options.max_retained_pixels;
+    ScriptTaskFrameRetainedReplay replay(options);
+    assert(replay.observe_presented(previous, previous_image, background, 13));
+    FrameBuffer actual;
+    ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled;
+    assert(replay.render_into(renderer, current, actual, background, 13, &status));
+    assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
+    assert(equal_framebuffer_pixels(actual, expected));
+    assert(replay.observe_presented(current, actual, background, 13));
+
+    const auto& statistics = replay.statistics();
+    assert(statistics.candidates == 1 && statistics.replays == 1 &&
+           statistics.pixel_mismatch_fallbacks == 0 && statistics.pixel_mismatch_pixels == 0);
+}
+
 void retained_replay_uses_conservative_fallbacks_and_commit_boundary() {
     ScriptTaskFrameRenderer renderer;
     ScriptTaskFrameRetainedReplayOptions options;
@@ -561,19 +637,19 @@ void retained_replay_uses_conservative_fallbacks_and_commit_boundary() {
 
 void retained_replay_rejects_unbounded_host_painters() {
     DisplayCommand text;
-    text.type = DisplayCommandType::Text;
+    jellyframe::detail::set_command_type(text, DisplayCommandType::Text);
     text.rect = {1, 2, 12, 8};
     Rect bounds;
     assert(!script_task_frame_command_visual_bounds(text, bounds));
     assert(bounds.width == 0 && bounds.height == 0);
 
     DisplayCommand image;
-    image.type = DisplayCommandType::Image;
+    jellyframe::detail::set_command_type(image, DisplayCommandType::Image);
     image.rect = {1, 2, 12, 8};
     assert(!script_task_frame_command_visual_bounds(image, bounds));
 
     DisplayCommand shadow;
-    shadow.type = DisplayCommandType::BoxShadow;
+    jellyframe::detail::set_command_type(shadow, DisplayCommandType::BoxShadow);
     shadow.rect = {1, 2, 12, 8};
     assert(script_task_frame_command_visual_bounds(shadow, bounds));
     assert(bounds.x == 1 && bounds.y == 2 && bounds.width == 12 && bounds.height == 8);
@@ -599,12 +675,12 @@ ScriptTaskAppFrame text_replay_frame() {
     ScriptTaskAppFrame frame;
     frame.viewport = {0, 0, 24, 12};
     DisplayCommand fill;
-    fill.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(fill, DisplayCommandType::FillRect);
     fill.rect = {0, 0, 24, 12};
     fill.color = {20, 30, 40, 255};
     frame.display_list.push_back(fill);
     DisplayCommand text;
-    text.type = DisplayCommandType::Text;
+    jellyframe::detail::set_command_type(text, DisplayCommandType::Text);
     text.rect = {7, 4, 8, 4};
     text.color = {80, 220, 130, 255};
     text.text = "1";
@@ -672,7 +748,7 @@ void retained_replay_accepts_verified_app_font_set_painter() {
     const Color background{255, 255, 255, 255};
     ScriptTaskAppFrame previous = text_replay_frame();
     previous.display_list[1].text = "A";
-    previous.display_list[1].font_weight = 700;
+    jellyframe::detail::command_font_weight(previous.display_list[1]) = 700;
     const FrameBuffer previous_image = renderer.render(previous, background);
     assert(replay.observe_presented(previous, previous_image, background, 5));
 
@@ -700,8 +776,22 @@ bool bounded_marker_image_painter(FrameBuffer& target,
     return true;
 }
 
+template<class Request>
+bool bounded_marker_image_request_painter(FrameBuffer& target, const Request& request, void* context) {
+    return bounded_marker_image_painter(target, request.destination, request.image_handle,
+        request.object_fit, request.object_position, request.image_rendering, context);
+}
+template<class Painter> Painter make_bounded_marker_image_painter() {
+    Painter painter;
+    if constexpr (std::is_convertible_v<decltype(&bounded_marker_image_painter), decltype(painter.paint)>)
+        painter.paint = bounded_marker_image_painter;
+    else painter.paint = bounded_marker_image_request_painter;
+    painter.writes_only_within_rect = true;
+    return painter;
+}
+
 void retained_replay_accepts_explicitly_bounded_image_painter() {
-    ImagePainter bounded{bounded_marker_image_painter, nullptr, true};
+    auto bounded = make_bounded_marker_image_painter<ImagePainter>();
     ScriptTaskFrameRenderer renderer({}, bounded);
     ScriptTaskFrameRetainedReplayOptions options;
     options.enabled = true;
@@ -710,19 +800,61 @@ void retained_replay_accepts_explicitly_bounded_image_painter() {
     ScriptTaskFrameRetainedReplay replay(options);
     const Color background{255, 255, 255, 255};
     ScriptTaskAppFrame previous = text_replay_frame();
-    previous.display_list[1].type = DisplayCommandType::Image;
-    previous.display_list[1].image_handle = 7;
+    jellyframe::detail::set_command_type(previous.display_list[1], DisplayCommandType::Image);
+    jellyframe::detail::command_image_handle(previous.display_list[1]) = 7;
     previous.display_list[1].text.clear();
     const FrameBuffer previous_image = renderer.render(previous, background);
     assert(replay.observe_presented(previous, previous_image, background, 3));
 
     ScriptTaskAppFrame current = previous;
-    current.display_list[1].object_position.x_percent = 75;
+    jellyframe::detail::command_object_position(current.display_list[1]).x_percent = 75;
     FrameBuffer actual;
     ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled;
     assert(replay.render_into(renderer, current, actual, background, 3, &status));
     assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
     assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
+}
+
+void value_frame_renderer_rejects_unsupported_sampling_without_writing() {
+    ScriptTaskAppFrame frame;
+    frame.viewport = {0, 0, 16, 12};
+    DisplayCommand image;
+    jellyframe::detail::set_command_type(image, DisplayCommandType::Image);
+    image.rect = {2, 2, 8, 6};
+    detail::set_command_sampling_rect(image, {1, 2, 12, 6});
+    image.text.assign("JFFS\0fractional", 15);
+    DisplayCommand background;
+    background.rect = frame.viewport;
+    background.color = {255, 0, 0, 255};
+    frame.display_list = {background, image};
+
+    FrameBuffer target(16, 12, {12, 24, 36, 255});
+    const FrameBuffer before = target;
+    ScriptTaskFrameRenderer renderer;
+    ScriptTaskFrameRenderStatus status = ScriptTaskFrameRenderStatus::Accepted;
+    for (const auto type : {DisplayCommandType::Image, DisplayCommandType::LinearGradient,
+                           DisplayCommandType::ConicGradient, DisplayCommandType::RadialGradient}) {
+        jellyframe::detail::set_command_type(frame.display_list.back(), type);
+        assert(!renderer.render_into(frame, target, {255, 255, 255, 255}, nullptr, 0, nullptr, &status));
+        assert(status == ScriptTaskFrameRenderStatus::UnsupportedSamplingFeature);
+        assert(equal_framebuffer_pixels(target, before));
+    }
+    if (script_task_app_frame_codec_supports_version(6)) {
+        ScriptTaskFrameGroup group;
+        group.bounds = frame.viewport;
+        group.command_count = static_cast<std::uint32_t>(frame.display_list.size());
+        frame.groups.push_back(group);
+        assert(!renderer.render_into(frame, target, {255, 255, 255, 255}, nullptr, 0, nullptr, &status));
+        assert(status == ScriptTaskFrameRenderStatus::UnsupportedSamplingFeature);
+        assert(equal_framebuffer_pixels(target, before));
+        frame.groups.clear();
+    }
+    if (detail::kScriptTaskSamplingTransportAvailable) {
+        frame.display_list.back().text.clear();
+        assert(!renderer.render_into(frame, target, {255, 255, 255, 255}, nullptr, 0, nullptr, &status));
+        assert(status == ScriptTaskFrameRenderStatus::UnsupportedSamplingFeature);
+        assert(equal_framebuffer_pixels(target, before));
+    }
 }
 
 bool lying_text_painter(FrameBuffer& target,
@@ -780,34 +912,34 @@ ScriptTaskAppFrame retained_replay_stress_frame() {
     frame.viewport = {0, 0, 64, 48};
 
     DisplayCommand background;
-    background.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(background, DisplayCommandType::FillRect);
     background.rect = {0, 0, 64, 48};
     background.color = {16, 24, 38, 255};
     frame.display_list.push_back(background);
 
     DisplayCommand shadow;
-    shadow.type = DisplayCommandType::BoxShadow;
+    jellyframe::detail::set_command_type(shadow, DisplayCommandType::BoxShadow);
     shadow.rect = {6, 5, 52, 38};
     shadow.color = {0, 0, 0, 92};
-    shadow.border_radius = 10;
-    shadow.stroke_width = 5;
+    jellyframe::detail::command_border_radius(shadow) = 10;
+    jellyframe::detail::command_stroke_width(shadow) = 5;
     frame.display_list.push_back(shadow);
 
     DisplayCommand surface;
-    surface.type = DisplayCommandType::LinearGradient;
+    jellyframe::detail::set_command_type(surface, DisplayCommandType::LinearGradient);
     surface.rect = {10, 8, 44, 30};
     surface.color = {58, 184, 214, 255};
     surface.color2 = {52, 84, 182, 255};
-    surface.gradient_axis = GradientAxis::DiagonalDownRight;
-    surface.gradient_stop_percent = 72;
-    surface.border_radius = 8;
+    jellyframe::detail::command_gradient_axis(surface) = GradientAxis::DiagonalDownRight;
+    jellyframe::detail::command_gradient_stop_percent(surface) = 72;
+    jellyframe::detail::command_border_radius(surface) = 8;
     frame.display_list.push_back(surface);
 
     DisplayCommand accent;
-    accent.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(accent, DisplayCommandType::FillRect);
     accent.rect = {18, 19, 10, 7};
     accent.color = {247, 105, 81, 144};
-    accent.border_radius = 3;
+    jellyframe::detail::command_border_radius(accent) = 3;
     frame.display_list.push_back(accent);
 
     frame.clips = {{{10, 8, 44, 30}, 8, kScriptTaskNoParentClip}};
@@ -820,49 +952,49 @@ ScriptTaskAppFrame retained_replay_nested_clip_frame() {
     frame.viewport = {0, 0, 64, 48};
 
     DisplayCommand background;
-    background.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(background, DisplayCommandType::FillRect);
     background.rect = {0, 0, 64, 48};
     background.color = {17, 25, 40, 255};
     frame.display_list.push_back(background);
 
     DisplayCommand shadow;
-    shadow.type = DisplayCommandType::BoxShadow;
+    jellyframe::detail::set_command_type(shadow, DisplayCommandType::BoxShadow);
     shadow.rect = {5, 4, 54, 40};
     shadow.color = {0, 0, 0, 96};
-    shadow.border_radius = 10;
-    shadow.stroke_width = 5;
+    jellyframe::detail::command_border_radius(shadow) = 10;
+    jellyframe::detail::command_stroke_width(shadow) = 5;
     frame.display_list.push_back(shadow);
 
     DisplayCommand underlay;
-    underlay.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(underlay, DisplayCommandType::FillRect);
     underlay.rect = {19, 16, 15, 11};
     underlay.color = {93, 116, 180, 196};
-    underlay.border_radius = 3;
+    jellyframe::detail::command_border_radius(underlay) = 3;
     frame.display_list.push_back(underlay);
 
     DisplayCommand panel;
-    panel.type = DisplayCommandType::LinearGradient;
+    jellyframe::detail::set_command_type(panel, DisplayCommandType::LinearGradient);
     panel.rect = {8, 7, 48, 34};
     panel.color = {57, 193, 209, 255};
     panel.color2 = {65, 87, 184, 255};
-    panel.gradient_axis = GradientAxis::DiagonalDownRight;
-    panel.gradient_stop_percent = 68;
-    panel.border_radius = 9;
+    jellyframe::detail::command_gradient_axis(panel) = GradientAxis::DiagonalDownRight;
+    jellyframe::detail::command_gradient_stop_percent(panel) = 68;
+    jellyframe::detail::command_border_radius(panel) = 9;
     frame.display_list.push_back(panel);
 
     DisplayCommand accent;
-    accent.type = DisplayCommandType::FillRect;
+    jellyframe::detail::set_command_type(accent, DisplayCommandType::FillRect);
     accent.rect = {19, 17, 12, 8};
     accent.color = {250, 124, 89, 172};
-    accent.border_radius = 4;
+    jellyframe::detail::command_border_radius(accent) = 4;
     frame.display_list.push_back(accent);
 
     DisplayCommand highlight;
-    highlight.type = DisplayCommandType::StrokeRect;
+    jellyframe::detail::set_command_type(highlight, DisplayCommandType::StrokeRect);
     highlight.rect = {16, 14, 30, 21};
     highlight.color = {238, 249, 255, 144};
-    highlight.border_radius = 7;
-    highlight.stroke_width = 2;
+    jellyframe::detail::command_border_radius(highlight) = 7;
+    jellyframe::detail::command_stroke_width(highlight) = 2;
     frame.display_list.push_back(highlight);
 
     frame.clips = {
@@ -1011,7 +1143,7 @@ void retained_replay_falls_back_for_contract_boundary_changes() {
                     ScriptTaskFrameRetainedReplayFallbackReason::PaintSkeleton);
 
     ScriptTaskAppFrame changed_type = base;
-    changed_type.display_list[3].type = DisplayCommandType::StrokeRect;
+    jellyframe::detail::set_command_type(changed_type.display_list[3], DisplayCommandType::StrokeRect);
     verify_fallback(changed_type,
                     background,
                     11,
@@ -1086,7 +1218,7 @@ void retained_replay_matches_canonical_output_across_pseudorandom_mutations() {
             command.color2 = {static_cast<std::uint8_t>(value >> 2U),
                               static_cast<std::uint8_t>(value >> 10U),
                               static_cast<std::uint8_t>(value >> 18U), 255};
-            command.gradient_stop_percent = 20 + static_cast<int>(value % 81U);
+            jellyframe::detail::command_gradient_stop_percent(command) = 20 + static_cast<int>(value % 81U);
             break;
         default:
             command.rect.x = 10 + static_cast<int>(value % 36U);
@@ -1143,9 +1275,317 @@ void retained_replay_preserves_last_presented_state_across_rejections() {
                static_cast<std::size_t>(ScriptTaskFrameRetainedReplayFallbackReason::InvalidFrame)] == 1);
 }
 
+void v6_groups_match_compositor_across_nested_effects_and_dirty_tiles() {
+#if JELLYFRAME_SCRIPT_TASK_GROUP_API
+    std::size_t compared_pixels = 0;
+    for (int scene = 0; scene < 24; ++scene) {
+        LayerNode root;
+        root.type = LayerType::Root;
+        root.bounds = {0, 0, 48, 48};
+        root.has_clip = true; root.clip_rect = {2, 3, 42, 39};
+        LayerNodePtr outer(new LayerNode(), LayerNodeDeleter{});
+        outer->type = LayerType::Composited;
+        outer->bounds = {8, 5, 27, 29};
+        outer->has_clip = true; outer->clip_rect = {10, 9, 23, 21};
+        outer->clip_axes = static_cast<std::uint8_t>(1 + scene % 3);
+        outer->opacity = scene % 2 ? 0.375F : 1.0F;
+        outer->transform.rotate_degrees = scene % 3 ? 27.125F : 90.0F;
+        outer->transform.scale_x = scene % 4 == 0 ? -0.875F : 1.125F;
+        outer->transform.scale_y = 0.75F;
+        outer->transform.translate_x = 1.25F;
+        outer->transform.translate_y = -0.75F;
+        outer->transform_origin_x_percent = -15;
+        outer->transform_origin_y_percent = 70;
+        if (scene % 4 == 1) {
+            outer->clip_border_radius = 6;
+            outer->clip_ellipse_geometry = std::make_unique<EllipticalCornerRadii>(
+                EllipticalCornerRadii{{7, 3, 5, 4}, {3, 6, 4, 7}});
+        }
+#if JELLYFRAME_RENDER_CORE_AFFINE2D_ENABLED
+        if (scene % 4 == 2) outer->affine_transform = std::make_unique<AffineTransform2D>(
+            AffineTransform2D{0.875F, -0.125F, 0.25F, 1.125F, 3.125F, -1.25F});
+        if (scene == 23) outer->affine_transform = std::make_unique<AffineTransform2D>(
+            AffineTransform2D{0, 0, 0, 1, 0, 0});
+#endif
+        DisplayCommand blue;
+        blue.rect = {6, 3, 30, 30}; blue.color = {20, 80, 230, 173};
+        outer->display_list.push_back(blue);
+        auto red = blue; red.rect = {12, 11, 21, 21}; red.color = {235, 70, 30, 149};
+        outer->display_list.push_back(red);
+        outer->ellipse_geometry = std::make_unique<CommandEllipseGeometryList>();
+        outer->ellipse_geometry->entries.push_back({1, {{5, 4, 3, 7}, {2, 6, 4, 3}}});
+        LayerNodePtr child(new LayerNode(), LayerNodeDeleter{});
+        child->type = LayerType::Composited;
+        child->bounds = {4, 10, 28, 25};
+        child->has_clip = true; child->clip_rect = {9, 7, 21, 24};
+        child->clip_border_radius = scene % 5 == 0 ? 5 : 0;
+        child->opacity = 0.625F;
+        child->transform.rotate_degrees = scene % 2 ? -14.375F : 0;
+        child->transform.translate_y = 2;
+        auto green = red; green.rect = {4, 7, 29, 25}; green.color = {20, 215, 65, 193};
+        child->display_list.push_back(green);
+        outer->children.push_back(std::move(child));
+        root.children.push_back(std::move(outer));
+        const Color background{245, 240, 235, 255};
+        const auto expected = SoftwareCompositor().render(root, 48, 48, background);
+        auto frame = composition_frame(root, {0, 0, 48, 48});
+        root.children.clear(); // The frame owns every value and ellipse sidecar.
+        assert(frame.groups.size() == 3 && frame.display_list.size() == 3);
+        assert(frame.command_ellipses.size() == 1);
+        assert(frame.display_list[0].color.a == 173);
+        ScriptTaskFrameRenderStatus status;
+        const auto actual = ScriptTaskFrameRenderer().render(frame, background, &status);
+        assert(status == ScriptTaskFrameRenderStatus::Accepted);
+        assert(actual.pixels.size() == expected.pixels.size());
+        for (std::size_t i = 0; i < actual.pixels.size(); ++i) {
+            assert(actual.pixels[i].r == expected.pixels[i].r && actual.pixels[i].g == expected.pixels[i].g &&
+                actual.pixels[i].b == expected.pixels[i].b && actual.pixels[i].a == expected.pixels[i].a);
+            ++compared_pixels;
+        }
+        FrameBuffer tiled(48, 48, {101, 102, 103, 255});
+        for (int y = 0; y < 48; y += 8) {
+            const Rect dirty{0, y, 48, 8};
+            assert(ScriptTaskFrameRenderer().render_into(frame, tiled, background, &dirty, 1));
+        }
+        for (std::size_t i = 0; i < tiled.pixels.size(); ++i) {
+            assert(tiled.pixels[i].r == expected.pixels[i].r && tiled.pixels[i].g == expected.pixels[i].g &&
+                tiled.pixels[i].b == expected.pixels[i].b && tiled.pixels[i].a == expected.pixels[i].a);
+            ++compared_pixels;
+        }
+        // Structural rejection precedes any framebuffer clear or painter call.
+        auto invalid = frame; invalid.groups.back().parent = 99;
+        FrameBuffer sentinel(48, 48, {11, 22, 33, 44});
+        assert(!ScriptTaskFrameRenderer().render_into(invalid, sentinel, background));
+        for (const auto pixel : sentinel.pixels) assert(pixel.r == 11 && pixel.a == 44);
+        invalid = frame;
+        invalid.command_ellipses.push_back(invalid.command_ellipses.front());
+        assert(!ScriptTaskFrameRenderer().render_into(invalid, sentinel, background));
+        for (const auto pixel : sentinel.pixels) assert(pixel.r == 11 && pixel.a == 44);
+        assert(!diff_script_task_app_frames(frame, frame).paint_structure_equal);
+        if (scene == 0) {
+            for (const std::size_t limit : {1U, 255U, 256U, 511U, 512U, 1023U, 2048U, 4096U}) {
+                ScriptTaskFrameRendererOptions limited_options;
+                limited_options.max_temporary_pixels = limit;
+                auto limited_frame = frame;
+                const auto limited_image = ScriptTaskFrameRenderer({}, limited_options).render(limited_frame, background);
+                // Budget branches depend on full reference surfaces, not damage tiles.
+                FrameBuffer limited_tiled(48, 48, background);
+                for (int y = 0; y < 48; y += 8) {
+                    const Rect dirty{0, y, 48, 8};
+                    assert(ScriptTaskFrameRenderer({}, limited_options).render_into(limited_frame,
+                        limited_tiled, background, &dirty, 1));
+                }
+                assert(equal_framebuffer_pixels(limited_image, limited_tiled));
+            }
+            ScriptTaskFrameRendererOptions depth_limit; depth_limit.max_group_depth = 2;
+            assert(!ScriptTaskFrameRenderer({}, depth_limit).render_into(frame, sentinel, background));
+            for (const auto pixel : sentinel.pixels) assert(pixel.r == 11 && pixel.a == 44);
+        }
+    }
+    std::cout << "v6 groups: 24 scenes, full/tiled exact RGBA pixels=" << compared_pixels << "\n";
+#endif
+}
+
+void v6_group_frame_fixes_legacy_source_surface_fringe() {
+#if JELLYFRAME_SCRIPT_TASK_GROUP_API
+    LayerNode root;
+    root.type = LayerType::Root; root.bounds = {0, 0, 32, 32};
+    LayerNodePtr rotated(new LayerNode(), LayerNodeDeleter{});
+    rotated->type = LayerType::Composited; rotated->bounds = {8, 2, 16, 12};
+    rotated->has_clip = true; rotated->clip_rect = {8, 8, 16, 6};
+    rotated->transform.rotate_degrees = 90;
+    DisplayCommand fill; fill.rect = rotated->bounds; fill.color = {240, 80, 90, 255};
+    rotated->display_list.push_back(fill); root.children.push_back(std::move(rotated));
+    const Color background{255, 255, 255, 255};
+    const auto reference = SoftwareCompositor().render(root, 32, 32, background);
+    const auto legacy = ScriptTaskFrameRenderer().render(
+        make_script_task_app_frame(root, root.bounds, {}, true), background);
+    const auto grouped = ScriptTaskFrameRenderer().render(composition_frame(root, root.bounds), background);
+    std::size_t legacy_differences = 0;
+    for (std::size_t i = 0; i < reference.pixels.size(); ++i) {
+        legacy_differences += legacy.pixels[i].r != reference.pixels[i].r;
+        assert(grouped.pixels[i].r == reference.pixels[i].r && grouped.pixels[i].g == reference.pixels[i].g &&
+            grouped.pixels[i].b == reference.pixels[i].b && grouped.pixels[i].a == reference.pixels[i].a);
+    }
+    assert(legacy_differences != 0);
+    std::cout << "legacy transformed own-clip differing pixels=" << legacy_differences << "; v6=0\n";
+#endif
+}
+
+void v6_opacity_is_applied_after_overlapping_children() {
+#if JELLYFRAME_SCRIPT_TASK_GROUP_API
+    LayerNode root; root.type = LayerType::Root; root.bounds = {0, 0, 24, 16};
+    LayerNodePtr group(new LayerNode(), LayerNodeDeleter{});
+    group->type = LayerType::Composited; group->bounds = root.bounds; group->opacity = 0.5F;
+    DisplayCommand red; red.rect = {2, 2, 12, 10}; red.color = {240, 0, 0, 255};
+    group->display_list.push_back(red); red.rect.x = 8; group->display_list.push_back(red);
+    root.children.push_back(std::move(group));
+    const auto output = ScriptTaskFrameRenderer().render(composition_frame(root, root.bounds), {0, 0, 0, 255});
+    assert(output.pixel(4, 4).r == output.pixel(10, 4).r);
+    assert(output.pixel(10, 4).r >= 119 && output.pixel(10, 4).r <= 121);
+#endif
+}
+
+void v6_fractional_image_painter_is_checked_before_group_publication() {
+#if JELLYFRAME_SCRIPT_TASK_GROUP_API && defined(JELLYFRAME_RENDER_CORE_FRACTIONAL_IMAGE_SAMPLING_API_VERSION)
+    LayerNode root; root.type=LayerType::Root; root.bounds={0,0,32,32};
+    LayerNodePtr group(new LayerNode(),LayerNodeDeleter{});
+    group->type=LayerType::Composited;group->bounds={5,4,21,20};
+    group->has_clip=true;group->clip_rect={6,5,19,18};group->clip_border_radius=5;
+    group->opacity=0.625F;group->transform.rotate_degrees=22.125F;
+    DisplayCommand command;jellyframe::detail::set_command_type(command, DisplayCommandType::Image);command.rect={5,4,18,15};
+    command.sampling_rect=command.rect;jellyframe::detail::command_image_handle(command)=7;
+    assert(encode_fractional_sampling({{1,3},{1,4},{53,3},{59,4}},command.text));
+    group->display_list.push_back(command);root.children.push_back(std::move(group));
+    ImagePainter painter;
+    painter.paint_fractional_clipped=[](FrameBuffer& target,const ImagePaintFractionalRequest& request,void*) {
+        if(request.image_handle!=7)return false;
+        for(int y=request.clip.y;y<safe_edge(request.clip.y,request.clip.height);++y)
+            for(int x=request.clip.x;x<safe_edge(request.clip.x,request.clip.width);++x)
+                target.pixel(x,y)={static_cast<std::uint8_t>(x*7),static_cast<std::uint8_t>(y*9),113,255};
+        return true;
+    };
+    const Color background{13,17,29,255};
+    FrameBuffer expected(32,32,background);
+    assert(SoftwareCompositor({},painter).render_into_checked(root,expected,background).complete());
+    auto frame=composition_frame(root,root.bounds);root.children.clear();
+    ScriptTaskFrameRenderer renderer({},painter);
+    const auto actual=renderer.render(frame,background);
+    assert(equal_framebuffer_pixels(actual,expected));
+    FrameBuffer target(32,32,{44,55,66,77});const auto before=target;
+    auto missing=painter;missing.paint_fractional_clipped=nullptr;
+    ScriptTaskFrameRenderStatus status;
+    assert(!ScriptTaskFrameRenderer({},missing).render_into(frame,target,background,nullptr,0,nullptr,&status));
+    assert(status==ScriptTaskFrameRenderStatus::UnsupportedSamplingFeature);
+    assert(equal_framebuffer_pixels(target,before));
+#endif
+}
+
 } // namespace
 
+void v6_damage_matches_full_frames_and_falls_back_at_contract_boundaries() {
+#if JELLYFRAME_SCRIPT_TASK_GROUP_API
+    TextPainter text{bounded_marker_text_painter, nullptr, nullptr, true};
+    text.supports_tiled_replay = true;
+    ImagePainter image{bounded_marker_image_painter, nullptr, true};
+    ScriptTaskFrameRenderer renderer(text, image);
+    LayerNode root; root.type = LayerType::Root; root.bounds = {0, 0, 96, 80};
+    DisplayCommand background; background.rect = root.bounds; background.color = {13, 17, 29, 255};
+    root.display_list.push_back(background);
+    LayerNodePtr card(new LayerNode(), LayerNodeDeleter{});
+    card->bounds = {3, 2, 89, 76}; card->has_clip = true;
+    card->clip_rect = card->bounds; card->clip_border_radius = 11; card->opacity = 0.75F;
+    background.rect = card->bounds; background.color = {230, 240, 250, 210};
+    card->display_list.push_back(background);
+    DisplayCommand picture; jellyframe::detail::set_command_type(picture, DisplayCommandType::Image);
+    picture.rect = {8, 7, 35, 21}; jellyframe::detail::command_image_handle(picture) = 1;
+    card->display_list.push_back(picture);
+    LayerNodePtr button(new LayerNode(), LayerNodeDeleter{});
+    button->bounds = {17, 39, 63, 25}; button->has_clip = true;
+    button->clip_rect = button->bounds; button->clip_border_radius = 8;
+    background.rect = button->bounds; background.color = {20, 110, 220, 180};
+    button->display_list.push_back(background);
+    DisplayCommand label; jellyframe::detail::set_command_type(label, DisplayCommandType::Text); label.rect = {23, 43, 45, 15};
+    label.text = "ROUND"; label.color = {250, 250, 250, 255};
+    button->display_list.push_back(label);
+    card->children.push_back(std::move(button));
+    // Unchanged translucent overlay must also be replayed over new underlays.
+    LayerNodePtr overlay(new LayerNode(), LayerNodeDeleter{});
+    background.rect = {41, 48, 42, 22}; background.color = {220, 30, 70, 80};
+    overlay->bounds = background.rect; overlay->display_list.push_back(background);
+    card->children.push_back(std::move(overlay));
+    root.children.push_back(std::move(card));
+    auto previous = composition_frame(root, root.bounds);
+    const Color clear{4, 8, 12, 255};
+    FrameBuffer retained = renderer.render(previous, clear);
+    assert(plan_script_task_group_damage(renderer, previous, previous).kind == ScriptTaskFrameDamageKind::Unchanged);
+    unsigned partial = 0;
+    for (int step = 0; step < 100; ++step) {
+        auto& paint = *root.children[0]->children[0];
+        paint.clip_border_radius = step % 2 ? 0 : 9;
+        paint.opacity = step % 3 ? 1.0F : 0.625F;
+        paint.display_list[0].color = {static_cast<std::uint8_t>(30 + step), 90, 210, 190};
+        paint.display_list[0].rect.x = 15 + step % 9;
+        paint.display_list[1].text = step % 2 ? "SQUARE" : "ROUND";
+        paint.display_list[1].rect.x = 22 + step % 4;
+        auto current = composition_frame(root, root.bounds);
+        // Ellipse addition, removal and value changes are independent of the
+        // command record itself; cover all three transitions.
+        if (step % 3) current.command_ellipses.push_back({3, {{7, 4, 8, 2, 3, 7, 2, 8}}});
+        const auto damage = plan_script_task_group_damage(renderer, previous, current);
+        assert(damage.kind == ScriptTaskFrameDamageKind::Partial);
+        assert(damage.rect.width * damage.rect.height < 96 * 80);
+        ++partial;
+        assert(renderer.render_into(current, retained, clear, &damage.rect, 1));
+        const auto canonical = renderer.render(current, clear);
+        assert(canonical.pixels.size() == retained.pixels.size());
+        for (std::size_t i = 0; i < retained.pixels.size(); ++i) {
+            const auto a = retained.pixels[i], b = canonical.pixels[i];
+            assert(a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a);
+        }
+        previous = std::move(current);
+    }
+    assert(partial == 100);
+    auto changed = previous;
+    changed.input_targets.push_back({});
+    assert(plan_script_task_group_damage(renderer, previous, changed).kind == ScriptTaskFrameDamageKind::Unchanged);
+    changed = previous; changed.groups[1].transform.translate_x = 1;
+    assert(plan_script_task_group_damage(renderer, previous, changed).kind == ScriptTaskFrameDamageKind::Full);
+    changed = previous; changed.display_list.pop_back();
+    assert(plan_script_task_group_damage(renderer, previous, changed).kind == ScriptTaskFrameDamageKind::Full);
+    changed = previous; changed.groups[2].parent = 9999;
+    assert(plan_script_task_group_damage(renderer, previous, changed).kind == ScriptTaskFrameDamageKind::Full);
+    changed = previous; changed.clip_metadata_overflow = true;
+    assert(plan_script_task_group_damage(renderer, previous, changed).kind == ScriptTaskFrameDamageKind::Full);
+    changed = previous; changed.viewport.width++;
+    assert(plan_script_task_group_damage(renderer, previous, changed).kind == ScriptTaskFrameDamageKind::Full);
+    assert(plan_script_task_group_damage(ScriptTaskFrameRenderer({}, image), previous, previous).kind ==
+        ScriptTaskFrameDamageKind::Full);
+#endif
+}
+
+int script_task_frame_sampling_tests_main() {
+    frame_diff_reports_value_churn_without_granting_reuse();
+    value_frame_renderer_rejects_unsupported_sampling_without_writing();
+    std::cout << "script task sampling transport/render-refusal tests passed\n";
+    return 0;
+}
+
+template<class Command> void unknown_typed_command_is_refused_before_frame_writes() {
+    if constexpr (detail::has_typed_command<Command>::value) {
+        using Type = decltype(detail::command_type(std::declval<const Command&>()));
+        ScriptTaskAppFrame frame;
+        frame.viewport = {0, 0, 8, 8};
+        Command fill;
+        fill.rect = frame.viewport;
+        fill.color = {255, 0, 0, 255};
+        Command shadow;
+        if constexpr (detail::has_css_shadow_type<Type>::value) {
+            detail::set_command_type(shadow, Type::CssBoxShadow);
+            if constexpr (detail::has_css_shadow_paint<Command>::value)
+                shadow.css_shadow_paint().border_box = frame.viewport;
+        } else detail::set_command_type(shadow, Type::PreparedText);
+        shadow.rect = frame.viewport;
+        frame.display_list = {fill, shadow};
+        FrameBuffer target(8, 8, {11, 22, 33, 255});
+        const auto before = target;
+        ScriptTaskFrameRenderer renderer;
+        ScriptTaskFrameRenderStatus status;
+        assert(!renderer.render_into(frame, target, {}, nullptr, 0, nullptr, &status));
+        assert(status == ScriptTaskFrameRenderStatus::InvalidFrame);
+        assert(equal_framebuffer_pixels(target, before));
+        Rect bounds;
+        assert(!script_task_frame_command_visual_bounds(shadow, bounds));
+    }
+}
+
 int script_task_frame_renderer_tests_main() {
+    unknown_typed_command_is_refused_before_frame_writes<DisplayCommand>();
+    v6_damage_matches_full_frames_and_falls_back_at_contract_boundaries();
+    v6_groups_match_compositor_across_nested_effects_and_dirty_tiles();
+    v6_group_frame_fixes_legacy_source_surface_fringe();
+    v6_opacity_is_applied_after_overlapping_children();
+    v6_fractional_image_painter_is_checked_before_group_publication();
     renderer_applies_nested_value_clips();
     renderer_consumes_codec_round_tripped_v2_frame();
     renderer_applies_value_frame_rotation_with_a_rounded_clip();
@@ -1167,6 +1607,8 @@ int script_task_frame_renderer_tests_main() {
     retained_replay_accepts_explicitly_bounded_text_painter();
     retained_replay_accepts_verified_app_font_set_painter();
     retained_replay_accepts_explicitly_bounded_image_painter();
+    retained_replay_matches_canonical_output_for_background_clip_mutation();
+    value_frame_renderer_rejects_unsupported_sampling_without_writing();
     retained_replay_recovers_from_false_bounded_painter_claim();
     retained_replay_matches_canonical_output_across_local_mutations();
     retained_replay_matches_canonical_output_across_nested_clip_mutations();

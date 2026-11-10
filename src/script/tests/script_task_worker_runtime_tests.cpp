@@ -3,12 +3,25 @@
 #include "app_runtime/script_task_input_codec.h"
 #include "app_runtime/script_task_service_bridge.h"
 #include "app_runtime/script_task_fatal_codec.h"
+#include "app_runtime/tests/runtime_font_test_fixture.h"
 
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
+#include <utility>
 
 using namespace jellyframe;
+
+namespace worker_test_access {
+template<class T, class = void> struct WorkerHasTypedCommand : std::false_type {};
+template<class T> struct WorkerHasTypedCommand<T,
+    std::void_t<decltype(std::declval<const T&>().type())>> : std::true_type {};
+template<class T> auto worker_command_type(const T& command) {
+    if constexpr (WorkerHasTypedCommand<T>::value) return command.type();
+    else return command.type;
+}
+} // namespace worker_test_access
 
 namespace {
 
@@ -174,7 +187,8 @@ void worker_interaction_hints_preserve_css_and_dom_events() {
         bool saw_change = false;
         for (const auto& command : frame.display_list) {
             saw_change = saw_change || command.text == "focused" || command.text == "pressed" ||
-                (command.type == DisplayCommandType::FillRect && command.color.r == 255 && command.color.b == 0);
+                (worker_test_access::worker_command_type(command) == DisplayCommandType::FillRect &&
+                 command.color.r == 255 && command.color.b == 0);
         }
         check(saw_change, "replacement carries actual pseudo CSS or event output");
     }
@@ -252,7 +266,8 @@ void worker_resolves_media_queries_against_its_runtime_viewport() {
           "media viewport frame is received");
     bool saw_media_color = false;
     for (const DisplayCommand& command : frame.display_list) {
-        if (command.type == DisplayCommandType::FillRect && command.color.r == 0 && command.color.g == 255 &&
+        if (worker_test_access::worker_command_type(command) == DisplayCommandType::FillRect &&
+            command.color.r == 0 && command.color.g == 255 &&
             command.color.b == 0) {
             saw_media_color = true;
         }
@@ -783,6 +798,92 @@ void worker_stop_is_explicit_and_idempotent() {
           "stopped worker cannot be rebound to another realm");
 }
 
+void worker_stop_preserves_supervisor_owned_frame_lease() {
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const ScriptAppSession session = supervisor.begin(21);
+    ScriptTaskWorkerRuntime runtime(session, runtime_options());
+    check(runtime.initialize("<body><p>retained</p></body>", "p { display: block; }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted, "queued lease fixture initializes");
+    check(runtime.publish_frame(supervisor).accepted(), "queued frame lease publishes");
+    runtime.stop();
+    ScriptTaskAppFrame frame;
+    check(take_script_task_app_frame(supervisor, session, runtime_options().frame_codec, frame) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "worker stop leaves sealed supervisor frame available for UI release");
+    check(frame.display_list.size() == 1 && frame.display_list[0].text == "retained",
+          "queued frame retains copied display values after worker teardown");
+}
+
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+void worker_v9_rejects_invalid_config_and_catalog_mismatch_before_vm() {
+    {
+        ScriptTaskSupervisor supervisor = make_supervisor();
+        const runtime_test_fonts::Fonts fonts;
+        const ScriptAppSession session = supervisor.begin(22, fonts.catalog);
+        ScriptTaskWorkerRuntimeOptions options = runtime_options_v3();
+        options.frame_codec.version = 9;
+        ScriptTaskWorkerRuntime missing(session, options);
+        check(missing.initialize(supervisor, "<body></body>", "") ==
+                  ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration,
+              "v9 rejects missing configured catalog before VM creation");
+        check(!missing.initialized() && !missing.eval("1 + 1").ok,
+              "invalid v9 configuration performs no script work");
+    }
+    {
+        ScriptTaskSupervisor supervisor = make_supervisor();
+        const runtime_test_fonts::Fonts expected;
+        const runtime_test_fonts::Fonts other;
+        const ScriptAppSession session = supervisor.begin(23, expected.catalog);
+        ScriptTaskWorkerRuntimeOptions options = runtime_options_v3();
+        options.frame_codec.version = 9;
+        options.text_catalog = other.catalog;
+        ScriptTaskWorkerRuntime mismatch(session, options);
+        check(mismatch.initialize(supervisor, "<body></body>", "") ==
+                  ScriptTaskWorkerRuntimeInitStatus::ResourceMismatch,
+              "v9 refuses a different session catalog before VM creation");
+        check(!mismatch.initialized(), "catalog mismatch does not initialize worker realm");
+    }
+}
+
+void worker_v9_uses_catalog_for_layout_and_publishes_canonical_group_frame() {
+    ScriptTaskSupervisor supervisor = make_supervisor();
+    const runtime_test_fonts::Fonts fonts;
+    const ScriptAppSession session = supervisor.begin(24, fonts.catalog);
+    ScriptTaskWorkerRuntimeOptions options = runtime_options_v3();
+    options.frame_codec.version = 9;
+    options.frame_codec.max_groups = 32;
+    options.text_catalog = fonts.catalog;
+    ScriptTaskWorkerRuntime runtime(session, options);
+    check(runtime.initialize(supervisor, "<body><div>AB</div></body>",
+              "body { margin: 0; } div { display: block; font-size: 16px; "
+              "font-family: sans-serif; white-space: nowrap; }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "v9 worker initializes with its session catalog");
+    check(runtime.publish_frame(supervisor).accepted(), "v9 worker publishes canonical frame");
+    ScriptTaskAcceptedAppFrame accepted;
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, accepted) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "UI accepts canonical worker frame with its session catalog");
+    const auto has_prepared_text = [](const ScriptTaskAppFrame& frame) {
+        return std::any_of(
+            frame.display_list.begin(), frame.display_list.end(),
+            [](const DisplayCommand& command) {
+                return worker_test_access::worker_command_type(command) == DisplayCommandType::PreparedText;
+            });
+    };
+    check(has_prepared_text(accepted.frame()), "canonical frame contains prepared text output");
+    check(runtime.eval_with_supervisor(supervisor, "document.body.setAttribute('data-ready', 'yes');").ok,
+          "v9 worker executes DOM mutation after resource identity validation");
+    check(runtime.publish_frame(supervisor).accepted(), "v9 worker republishes its current canonical frame");
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, accepted) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "UI accepts the current canonical worker frame");
+    check(!accepted.frame().groups.empty() && accepted.text_catalog() == fonts.catalog,
+          "canonical group frame retains the exact catalog used for layout");
+    check(has_prepared_text(accepted.frame()), "updated canonical frame retains prepared text output");
+}
+#endif
+
 void worker_fatal_publishes_once_as_a_supervisor_value() {
     ScriptTaskSupervisor supervisor = make_supervisor();
     const ScriptAppSession session = supervisor.begin(19);
@@ -896,6 +997,11 @@ int script_task_worker_runtime_tests_main() {
         worker_animation_watchdog_becomes_fatal_value();
         worker_input_and_service_callback_exceptions_stop_the_worker();
         worker_stop_is_explicit_and_idempotent();
+        worker_stop_preserves_supervisor_owned_frame_lease();
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+        worker_v9_rejects_invalid_config_and_catalog_mismatch_before_vm();
+        worker_v9_uses_catalog_for_layout_and_publishes_canonical_group_frame();
+#endif
         worker_fatal_publishes_once_as_a_supervisor_value();
         worker_c_safe_fatal_boundary_publishes_value_record();
         worker_input_node_destruction_clears_interaction_state();

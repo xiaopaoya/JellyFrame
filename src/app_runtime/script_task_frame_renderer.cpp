@@ -1,4 +1,12 @@
+#include "app_runtime/script_task_command_access.h"
 #include "app_runtime/script_task_frame_renderer.h"
+#include "app_runtime/script_task_sampling.h"
+#include "app_runtime/script_task_frame_groups.h"
+#include "app_runtime/script_task_canonical_renderer.h"
+#if __has_include("render_core/fractional_image_sampling.h")
+#include "render_core/fractional_image_sampling.h"
+#include "render_core/fractional_sampling.h"
+#endif
 
 #include "render_core/raster_primitives.h"
 #include "render_core/dirty_region.h"
@@ -68,6 +76,12 @@ Rect expand_rect(Rect rect, int amount) {
 
 bool equal_rect(Rect left, Rect right) {
     return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
+}
+
+bool equal_background_paint_clip(detail::CommandBackgroundPaintClip left,
+                                 detail::CommandBackgroundPaintClip right) {
+    return left.dx == right.dx && left.dy == right.dy &&
+        left.width == right.width && left.height == right.height;
 }
 
 bool equal_color(Color left, Color right) {
@@ -176,7 +190,14 @@ FrameBufferComparison compare_framebuffer(const FrameBuffer& left, const FrameBu
     return comparison;
 }
 
-bool equal_display_command(const DisplayCommand& left, const DisplayCommand& right) {
+template<class Command>
+bool equal_display_command(const Command& left, const Command& right) {
+    if constexpr (detail::has_typed_command<Command>::value) {
+        return display_commands_equal(left, right) &&
+            equal_rect(detail::command_sampling_rect(left), detail::command_sampling_rect(right)) &&
+            equal_background_paint_clip(detail::command_background_paint_clip(left),
+                                        detail::command_background_paint_clip(right));
+    } else {
     return left.type == right.type && equal_rect(left.rect, right.rect) && equal_color(left.color, right.color) &&
         equal_color(left.color2, right.color2) && left.text == right.text &&
         left.border_radius == right.border_radius && left.stroke_width == right.stroke_width &&
@@ -186,7 +207,9 @@ bool equal_display_command(const DisplayCommand& left, const DisplayCommand& rig
         left.gradient_stop_percent == right.gradient_stop_percent && left.image_handle == right.image_handle &&
         left.object_fit == right.object_fit && left.object_position.x_percent == right.object_position.x_percent &&
         left.object_position.y_percent == right.object_position.y_percent &&
-        left.image_rendering == right.image_rendering && equal_transform(left.transform, right.transform);
+        left.image_rendering == right.image_rendering && equal_transform(left.transform, right.transform) &&
+        equal_rect(detail::command_sampling_rect(left), detail::command_sampling_rect(right));
+    }
 }
 
 bool equal_clip(const ScriptTaskFrameClip& left, const ScriptTaskFrameClip& right) {
@@ -211,7 +234,43 @@ bool has_valid_clip_parallelism(const ScriptTaskAppFrame& frame) {
 
 bool has_valid_value_frame_shape(const ScriptTaskAppFrame& frame) {
     return frame.viewport.width > 0 && frame.viewport.height > 0 &&
-        has_valid_clip_parallelism(frame) && !frame.clip_metadata_overflow;
+        has_valid_clip_parallelism(frame) && !frame.clip_metadata_overflow && frame.groups.empty() &&
+        frame.command_ellipses.empty();
+}
+
+bool contains_unsupported_sampling(const ScriptTaskAppFrame& frame, const ImagePainter& painter) {
+    for (const auto& command : frame.display_list) {
+        if (!detail::has_legacy_incompatible_sampling(command)) continue;
+#if defined(JELLYFRAME_RENDER_CORE_FRACTIONAL_IMAGE_SAMPLING_API_VERSION)
+        // A v6 group can carry an integer background tile through its
+        // sampling_rect alone; only the legacy flattened frame needs to
+        // reject that independent sampling geometry. Fractional packets still
+        // require the full checks below.
+        if (!detail::has_sampling_payload(command)) {
+            if (frame.groups.empty()) return true;
+            continue;
+        }
+        // Only the group representation preserves Core source-surface semantics.
+        if (frame.groups.empty()) return true;
+        const bool packet_kind = detail::command_type(command) == DisplayCommandType::Image ||
+            detail::command_type(command) == DisplayCommandType::LinearGradient ||
+            detail::command_type(command) == DisplayCommandType::ConicGradient ||
+            detail::command_type(command) == DisplayCommandType::RadialGradient;
+        if (!packet_kind || command.text.empty()) return true;
+        FractionalSampling sampling;
+        Rect support;
+        if (!decode_fractional_sampling(command.text, sampling) ||
+            !fractional_sampling_bounds(detail::command_sampling_rect(command), sampling, support)) return true;
+        if (detail::command_type(command) == DisplayCommandType::Image && painter.paint_fractional_clipped == nullptr) return true;
+#if !JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+        if (detail::command_type(command) != DisplayCommandType::Image) return true;
+#endif
+#else
+        (void)painter;
+        return true;
+#endif
+    }
+    return false;
 }
 
 std::uint16_t display_clip_index_at(const ScriptTaskAppFrame& frame, std::size_t index) {
@@ -289,7 +348,11 @@ void clear_rect(FrameBuffer& target, Rect rect, Color color) {
 }
 
 bool valid_display_command_type(DisplayCommandType type) {
-    return static_cast<std::size_t>(type) < kDisplayCommandTypeCount;
+    #if JELLYFRAME_SCRIPT_TASK_GROUP_API
+    if (type == DisplayCommandType::GlyphRun || type == DisplayCommandType::BaselineText ||
+        type == DisplayCommandType::OriginText || type == DisplayCommandType::BorderRing) return true;
+#endif
+    return detail::legacy_command_type(type);
 }
 
 bool equal_paint_skeleton(const ScriptTaskAppFrame& previous,
@@ -299,7 +362,7 @@ bool equal_paint_skeleton(const ScriptTaskAppFrame& previous,
         return false;
     }
     for (std::size_t index = 0; index < previous.display_list.size(); ++index) {
-        if (previous.display_list[index].type != current.display_list[index].type) {
+        if (detail::command_type(previous.display_list[index]) != detail::command_type(current.display_list[index])) {
             return false;
         }
     }
@@ -309,7 +372,11 @@ bool equal_paint_skeleton(const ScriptTaskAppFrame& previous,
 } // namespace
 
 bool script_task_frame_command_visual_bounds(const DisplayCommand& command, Rect& output) {
-    if (!valid_display_command_type(command.type) || command.rect.width <= 0 || command.rect.height <= 0) {
+    if (detail::is_prepared_command_type(detail::command_type(command))) {
+        output = {};
+        return false; // Glyph ink may extend beyond the command rectangle.
+    }
+    if (!valid_display_command_type(detail::command_type(command)) || command.rect.width <= 0 || command.rect.height <= 0) {
         output = {};
         return false;
     }
@@ -317,7 +384,7 @@ bool script_task_frame_command_visual_bounds(const DisplayCommand& command, Rect
     // write contract. Their glyph/sampling footprint therefore cannot yet be
     // used to shrink a replay region. The first probe falls back instead of
     // relying on rect, even though the built-in fallback happens to stay in it.
-    if (command.type == DisplayCommandType::Text || command.type == DisplayCommandType::Image) {
+    if (detail::command_type(command) == DisplayCommandType::Text || detail::command_type(command) == DisplayCommandType::Image) {
         output = {};
         return false;
     }
@@ -329,7 +396,7 @@ bool script_task_frame_command_visual_bounds(const DisplayCommand& command, Rect
 ScriptTaskFrameDiff diff_script_task_app_frames(const ScriptTaskAppFrame& previous,
                                                 const ScriptTaskAppFrame& current) {
     ScriptTaskFrameDiff report;
-    report.viewport_equal = equal_rect(previous.viewport, current.viewport);
+    report.viewport_equal = equal_rect(previous.viewport, current.viewport) && previous.image_provider_id == current.image_provider_id;
     report.previous_command_count = previous.display_list.size();
     report.current_command_count = current.display_list.size();
     report.clip_chains_equal = equal_vector(previous.clips, current.clips, equal_clip);
@@ -346,7 +413,8 @@ ScriptTaskFrameDiff diff_script_task_app_frames(const ScriptTaskAppFrame& previo
         }
     }
     report.paint_structure_equal = report.viewport_equal && report.clip_chains_equal &&
-        report.display_clip_indices_equal;
+        report.display_clip_indices_equal && previous.groups.empty() && current.groups.empty() &&
+        previous.command_ellipses.empty() && current.command_ellipses.empty();
 
     const std::size_t comparable_count = valid_parallelism
         ? std::min(report.previous_command_count, report.current_command_count)
@@ -444,10 +512,7 @@ ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
                   SoftwareRasterizerOptions{
                       options.max_temporary_pixels,
                       options.rasterizer_statistics,
-                      options.rasterizer_timing,
-                      {},
-                      options.text_system,
-                      options.text_limits}),
+                      options.rasterizer_timing}),
       options_(options),
       text_painter_(text_painter) {}
 
@@ -460,30 +525,20 @@ ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
                   SoftwareRasterizerOptions{
                       options.max_temporary_pixels,
                       options.rasterizer_statistics,
-                      options.rasterizer_timing,
-                      {},
-                      options.text_system,
-                      options.text_limits}),
+                      options.rasterizer_timing}),
       options_(options),
       text_painter_(text_painter),
       image_painter_(image_painter) {}
 
 bool ScriptTaskFrameRenderer::command_visual_bounds(const DisplayCommand& command, Rect& output) const {
-    if (command.type == DisplayCommandType::PreparedText) {
-        if (options_.text_system == nullptr || command.rect.width <= 0 || command.rect.height <= 0) {
-            output = {};
-            return false;
-        }
-        return transform_bounds(command, output);
-    }
-    if (command.type == DisplayCommandType::Text) {
+    if (detail::command_type(command) == DisplayCommandType::Text) {
         if (!text_painter_.writes_only_within_rect || command.rect.width <= 0 || command.rect.height <= 0) {
             output = {};
             return false;
         }
         return transform_bounds(command, output);
     }
-    if (command.type == DisplayCommandType::Image) {
+    if (detail::command_type(command) == DisplayCommandType::Image) {
         if (!image_painter_.writes_only_within_rect || command.rect.width <= 0 || command.rect.height <= 0) {
             output = {};
             return false;
@@ -491,6 +546,109 @@ bool ScriptTaskFrameRenderer::command_visual_bounds(const DisplayCommand& comman
         return transform_bounds(command, output);
     }
     return script_task_frame_command_visual_bounds(command, output);
+}
+
+ScriptTaskFrameDamage plan_script_task_group_damage(
+    const ScriptTaskFrameRenderer& renderer,
+    const ScriptTaskAppFrame& previous, const ScriptTaskAppFrame& current) {
+    const Rect viewport{0, 0, current.viewport.width, current.viewport.height};
+    const ScriptTaskFrameDamage full{ScriptTaskFrameDamageKind::Full, viewport};
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
+    if (!previous.groups.empty() || !current.groups.empty()) {
+        if (previous.image_provider_id != current.image_provider_id) return full;
+        ScriptTaskAppFrameCodecOptions canonical_limits;
+        canonical_limits.version = 9;
+        canonical_limits.max_commands = canonical_limits.max_text_bytes = canonical_limits.max_input_targets =
+            canonical_limits.max_payload_bytes = std::numeric_limits<std::size_t>::max();
+        canonical_limits.max_groups = 1024; canonical_limits.max_clips = 65535;
+        for (const auto* f : {&previous, &current}) {
+            std::size_t bytes;
+            if (detail::canonical::validate(*f, canonical_limits, bytes) != ScriptTaskAppFrameCodecStatus::Accepted)
+                return full;
+        }
+        if (!equal_rect(previous.viewport, current.viewport) || previous.groups.size() != current.groups.size() ||
+            previous.display_list.size() != current.display_list.size() ||
+            detail::canonical::validate_groups(previous, 1024, 32) != ScriptTaskAppFrameCodecStatus::Accepted ||
+            detail::canonical::validate_groups(current, 1024, 32) != ScriptTaskAppFrameCodecStatus::Accepted)
+            return full;
+        for (std::size_t i = 0; i < current.groups.size(); ++i)
+            if (!detail::canonical::same_group(previous.groups[i], current.groups[i])) return full;
+        for (std::size_t i = 0; i < current.display_list.size(); ++i)
+            if (!equal_display_command(previous.display_list[i], current.display_list[i])) return full;
+        return {ScriptTaskFrameDamageKind::Unchanged, {}};
+    }
+#endif
+    if (!equal_rect(previous.viewport, current.viewport) || current.viewport.x != 0 ||
+        current.viewport.y != 0 || viewport.width <= 0 || viewport.height <= 0 ||
+        previous.groups.empty() || previous.groups.size() != current.groups.size() ||
+        previous.display_list.size() != current.display_list.size()) return full;
+    for (const auto* frame : {&previous, &current}) {
+        if (frame->clip_metadata_overflow || !frame->clips.empty() ||
+            detail::validate_frame_groups(*frame, 1024, 32) != ScriptTaskAppFrameCodecStatus::Accepted)
+            return full;
+        for (const auto& group : frame->groups) {
+            const auto& t = group.transform;
+            if (group.has_affine || t.translate_x != 0 || t.translate_y != 0 ||
+                t.scale_x != 1 || t.scale_y != 1 || t.rotate_degrees != 0) return full;
+        }
+        // Validate all command bounds, including unchanged commands: they may
+        // overlap a dirty region and are dependencies of its reconstruction.
+        for (const auto& command : frame->display_list) {
+#if JELLYFRAME_SCRIPT_TASK_GROUP_API
+            // Glyph callbacks have a separate bounds contract; do not infer
+            // it from the legacy text painter's opt-in.
+            if (detail::command_type(command) == DisplayCommandType::GlyphRun) return full;
+#endif
+            Rect bounds;
+            if (!renderer.command_visual_bounds(command, bounds)) return full;
+        }
+    }
+    Rect damage{};
+    for (std::size_t i = 0; i < current.groups.size(); ++i) {
+        const auto& a = previous.groups[i];
+        const auto& b = current.groups[i];
+        if (a.parent != b.parent || a.command_begin != b.command_begin ||
+            a.command_count != b.command_count || a.type != b.type) return full;
+        if (equal_rect(a.bounds, b.bounds) && equal_rect(a.clip_rect, b.clip_rect) &&
+            a.clip_border_radius == b.clip_border_radius && a.clip_axes == b.clip_axes &&
+            a.has_clip == b.has_clip && a.opacity == b.opacity &&
+            a.has_clip_ellipse == b.has_clip_ellipse && a.clip_ellipse == b.clip_ellipse) continue;
+        // A changed group mask/opacity affects all its descendants, even when
+        // their command values are identical. Include old and new footprints.
+        for (std::size_t j = i; j < current.groups.size(); ++j) {
+            if (j != i && current.groups[j].parent < i) break;
+            for (const auto* frame : {&previous, &current}) {
+                const auto& group = frame->groups[j];
+                for (std::size_t k = group.command_begin; k < group.command_begin + group.command_count; ++k) {
+                    Rect bounds;
+                    renderer.command_visual_bounds(frame->display_list[k], bounds);
+                    damage = union_rect(damage, bounds);
+                }
+            }
+        }
+    }
+    std::size_t old_ellipse = 0, new_ellipse = 0;
+    for (std::size_t i = 0; i < current.display_list.size(); ++i) {
+        const ScriptTaskFrameEllipse* a = nullptr;
+        const ScriptTaskFrameEllipse* b = nullptr;
+        if (old_ellipse < previous.command_ellipses.size() &&
+            previous.command_ellipses[old_ellipse].command_index == i)
+            a = &previous.command_ellipses[old_ellipse++];
+        if (new_ellipse < current.command_ellipses.size() &&
+            current.command_ellipses[new_ellipse].command_index == i)
+            b = &current.command_ellipses[new_ellipse++];
+        if (equal_display_command(previous.display_list[i], current.display_list[i]) &&
+            ((!a && !b) || (a && b && a->radii == b->radii))) continue;
+        for (const auto* frame : {&previous, &current}) {
+            Rect bounds;
+            renderer.command_visual_bounds(frame->display_list[i], bounds);
+            damage = union_rect(damage, bounds);
+        }
+    }
+    damage = intersect_rect(damage, viewport);
+    if (empty_rect(damage)) return {ScriptTaskFrameDamageKind::Unchanged, damage};
+    return {equal_rect(damage, viewport) ? ScriptTaskFrameDamageKind::Full :
+            ScriptTaskFrameDamageKind::Partial, damage};
 }
 
 FrameBuffer ScriptTaskFrameRenderer::render(const ScriptTaskAppFrame& frame,
@@ -516,6 +674,14 @@ bool ScriptTaskFrameRenderer::validate_frame(const ScriptTaskAppFrame& frame) co
                           "Value frame viewport is invalid",
                           "non-positive dimensions");
         return false;
+    }
+    for (const auto& command : frame.display_list) {
+        if (!valid_display_command_type(detail::command_type(command))) {
+            report_diagnostic(options_.diagnostics, DiagnosticStage::Paint, DiagnosticSeverity::Warning,
+                              "script-frame-command-type", "Unsupported value-frame command type",
+                              "command type is not supported by this renderer");
+            return false;
+        }
     }
     if (!frame.display_clip_indices.empty() &&
         frame.display_clip_indices.size() != frame.display_list.size()) {
@@ -570,6 +736,24 @@ bool ScriptTaskFrameRenderer::collect_clip_chain(const ScriptTaskAppFrame& frame
     return true;
 }
 
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAcceptedAppFrame& accepted,
+                                          FrameBuffer& target, Color background,
+                                          const Rect* dirty_rects, std::size_t dirty_rect_count,
+                                          SoftwareRasterizerScratch* scratch,
+                                          ScriptTaskFrameRenderStatus* status) const {
+    if (!accepted.valid()) {
+        if (status) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+        return false;
+    }
+    auto options = options_;
+    options.text_catalog = accepted.text_catalog();
+    options.image_provider = accepted.image_provider();
+    ScriptTaskFrameRenderer bound(text_painter_, accepted.image_provider() ? accepted.image_provider()->painter() : image_painter_, std::move(options));
+    return bound.render_into(accepted.frame(), target, background, dirty_rects, dirty_rect_count, scratch, status);
+}
+#endif
+
 bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
                                           FrameBuffer& target,
                                           Color background,
@@ -578,6 +762,19 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
                                           SoftwareRasterizerScratch* scratch,
                                           ScriptTaskFrameRenderStatus* status) const {
     if (status != nullptr) *status = ScriptTaskFrameRenderStatus::Accepted;
+    if (frame.image_provider_id && frame.groups.empty()) {
+        if (status) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+        return false;
+    }
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
+    if (!frame.groups.empty() || !frame.command_ellipses.empty() ||
+        std::any_of(frame.display_list.begin(), frame.display_list.end(), [](const auto& c) {
+            const auto type = c.type();
+            return detail::is_prepared_command_type(type) || detail::is_css_shadow_command_type(type);
+        }))
+        return detail::canonical::render(frame, target, background, dirty_rects, dirty_rect_count,
+                                         text_painter_, image_painter_, options_, status);
+#endif
     if (!validate_frame(frame) || target.width != frame.viewport.width ||
         target.height != frame.viewport.height) {
         if (status != nullptr) {
@@ -586,6 +783,56 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
                 : ScriptTaskFrameRenderStatus::FramebufferRejected;
         }
         return false;
+    }
+    if (contains_unsupported_sampling(frame, image_painter_)) {
+        if (status != nullptr) *status = ScriptTaskFrameRenderStatus::UnsupportedSamplingFeature;
+        return false;
+    }
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    if (options_.text_catalog) {
+        if (!script_task_frame_uses_catalog(frame, *options_.text_catalog)) {
+            if (status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+            return false;
+        }
+    } else {
+        for (const auto& command : frame.display_list) {
+            if (detail::has_prepared_text_packet(command)) {
+                if (status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+                return false;
+            }
+        }
+    }
+#endif
+    if (!frame.groups.empty() || !frame.command_ellipses.empty()) {
+        const auto validation = detail::validate_frame_groups(frame, options_.max_groups, options_.max_group_depth);
+        if (validation != ScriptTaskAppFrameCodecStatus::Accepted || frame.clip_metadata_overflow) {
+            if (status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+            return false;
+        }
+#if JELLYFRAME_SCRIPT_TASK_GROUP_API
+        try {
+            detail::FrameGroupTree tree(frame);
+            SoftwareCompositor::Options options;
+            options.max_offscreen_pixels = options_.max_temporary_pixels;
+            options.diagnostics = options_.diagnostics;
+            options.rasterizer_timing = options_.rasterizer_timing;
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+            options.text_system = options_.text_catalog ? &options_.text_catalog->text_system() : nullptr;
+            options.text_limits = options_.text_limits;
+#endif
+            SoftwareCompositor compositor(text_painter_, image_painter_, options);
+            const auto result = compositor.render_into_checked(tree.root(), target, background,
+                dirty_rects, dirty_rect_count);
+            if (!result.complete() && status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+            return result.complete();
+        } catch (const std::bad_alloc&) {
+            if (status != nullptr) *status = ScriptTaskFrameRenderStatus::FramebufferRejected;
+            return false;
+        }
+#else
+        if (status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+        return false;
+#endif
     }
 
     const Rect target_rect{0, 0, target.width, target.height};

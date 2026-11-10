@@ -489,6 +489,33 @@ ScriptAppSession ScriptTaskSupervisor::begin(std::uint32_t app_instance_id) {
     return sessions_.begin(app_instance_id);
 }
 
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+ScriptAppSession ScriptTaskSupervisor::begin(std::uint32_t app_instance_id, RuntimeFontCatalog::Handle catalog) {
+    return begin(app_instance_id, std::move(catalog), {});
+}
+
+ScriptAppSession ScriptTaskSupervisor::begin(std::uint32_t app_instance_id, RuntimeFontCatalog::Handle catalog, RuntimeImageProvider::Handle images) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (!catalog || (images && !images->valid()) || sessions_.current_snapshot().valid() || retiring_session_.valid()) return {};
+    const auto session = sessions_.begin(app_instance_id);
+    if (!session.valid()) return {};
+    next_frame_sequence_ = 1;
+    text_catalog_ = std::move(catalog);
+    image_provider_ = std::move(images);
+    return session;
+}
+
+RuntimeImageProvider::Handle ScriptTaskSupervisor::image_provider(const ScriptAppSession& session) const {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    return sessions_.accepts(session) ? image_provider_ : RuntimeImageProvider::Handle{};
+}
+
+RuntimeFontCatalog::Handle ScriptTaskSupervisor::text_catalog(const ScriptAppSession& session) const {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    return sessions_.accepts(session) ? text_catalog_ : RuntimeFontCatalog::Handle{};
+}
+#endif
+
 bool ScriptTaskSupervisor::accepts(const ScriptAppSession& session) const {
     std::lock_guard<std::mutex> lock(state_mutex_);
     return sessions_.accepts(session);
@@ -537,6 +564,7 @@ ScriptTaskFramePublishResult ScriptTaskSupervisor::publish_frame(const ScriptApp
         result.frame_lease_id = 0;
         return result;
     }
+    result.frame_sequence = next_frame_sequence_;
     next_frame_sequence_ = next_nonzero(next_frame_sequence_);
     return result;
 }
@@ -700,6 +728,10 @@ ScriptTaskTeardownResult ScriptTaskSupervisor::complete_teardown(const ScriptApp
     result.discarded_release_intents = release_intents_.discard_session(retired_session);
     result.retired_service_tombstones = services_.clear_session(retired_session);
     retiring_session_ = {};
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    text_catalog_.reset();
+    image_provider_.reset();
+#endif
     return result;
 }
 

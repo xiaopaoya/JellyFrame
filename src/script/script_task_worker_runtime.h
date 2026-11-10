@@ -21,6 +21,8 @@ class TextSystem;
 enum class ScriptTaskWorkerRuntimeInitStatus : std::uint8_t {
     Accepted,
     InvalidSession,
+    InvalidConfiguration,
+    ResourceMismatch,
     ParseRejected,
     BudgetRejected,
     Fatal,
@@ -35,6 +37,7 @@ enum class ScriptTaskWorkerRuntimeFatalReason : std::uint8_t {
     BudgetExceeded,
     LoadFailure,
     ServiceUnsupported,
+    ResourceMismatch,
 };
 
 struct ScriptTaskWorkerRuntimeFatalRecord {
@@ -55,6 +58,10 @@ struct ScriptTaskWorkerRuntimeOptions {
     ScriptTaskInputCodecOptions input_codec;
     ScriptTaskServiceRequestCodecOptions service_request_codec;
     const TextSystem* text_system = nullptr;
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    RuntimeFontCatalog::Handle text_catalog;
+    RuntimeImageProvider::Handle image_provider;
+#endif
 };
 
 struct ScriptTaskWorkerRuntimeTelemetry {
@@ -99,6 +106,9 @@ public:
     ScriptTaskWorkerRuntime& operator=(const ScriptTaskWorkerRuntime&) = delete;
 
     ScriptTaskWorkerRuntimeInitStatus initialize(std::string_view html,
+                                                 std::string_view css);
+    ScriptTaskWorkerRuntimeInitStatus initialize(ScriptTaskSupervisor& supervisor,
+                                                 std::string_view html,
                                                  std::string_view css);
     bool initialized() const { return initialized_; }
     bool stopped() const { return stopped_; }
@@ -183,6 +193,8 @@ private:
     bool consume_callback_failure();
     bool rebuild_pipeline();
     bool has_dirty_document() const;
+    bool supervisor_matches(const ScriptTaskSupervisor& supervisor) const;
+    bool supervisor_validated_ = false;
 
     ScriptAppSession session_;
     ScriptTaskWorkerRuntimeOptions options_;
@@ -198,6 +210,8 @@ private:
     ScriptTaskAppFramePublisher frame_publisher_;
     ScriptTaskWorkerRuntimeFatalRecord fatal_record_;
     ScriptTaskWorkerRuntimeTelemetry telemetry_;
+    // Tracks rebuilt output after DOM dirty flags are cleared for Core capture.
+    bool pending_frame_publication_ = false;
     ScriptTaskSupervisor* active_supervisor_ = nullptr;
     std::uint32_t service_request_sequence_ = 1;
     bool service_gateway_available_ = false;

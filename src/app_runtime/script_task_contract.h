@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <mutex>
 #include <vector>
+#include "app_runtime/runtime_font_catalog.h"
+#include "app_runtime/runtime_image_provider.h"
 
 namespace jellyframe {
 
@@ -314,6 +316,8 @@ struct ScriptTaskFramePublishResult {
     ScriptTaskFrameLeaseStatus lease_status = ScriptTaskFrameLeaseStatus::InvalidSession;
     ScriptTaskMailboxPostStatus mailbox_status = ScriptTaskMailboxPostStatus::InvalidPacket;
     ScriptTaskLeaseId frame_lease_id = 0;
+    // Actual accepted mailbox packet identity, zero on a rejected publish.
+    std::uint32_t frame_sequence = 0;
 
     bool accepted() const {
         return lease_status == ScriptTaskFrameLeaseStatus::Accepted &&
@@ -345,6 +349,14 @@ public:
     ScriptAppSession begin(std::uint32_t app_instance_id);
     bool accepts(const ScriptAppSession& session) const;
     ScriptAppSession current() const;
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    // Atomic session/snapshot publication under the supervisor lock. Binding
+    // cannot change during a session, including after app font replacement.
+    ScriptAppSession begin(std::uint32_t app_instance_id, RuntimeFontCatalog::Handle catalog);
+    RuntimeFontCatalog::Handle text_catalog(const ScriptAppSession& session) const;
+    ScriptAppSession begin(std::uint32_t app_instance_id, RuntimeFontCatalog::Handle catalog, RuntimeImageProvider::Handle images);
+    RuntimeImageProvider::Handle image_provider(const ScriptAppSession& session) const;
+#endif
 
     ScriptTaskMailboxPostStatus post_input(const ScriptTaskPacket& packet);
     // Worker-facing receive path for input and service-completion values. A
@@ -411,6 +423,10 @@ private:
     // Keeps the retiring identity alive until every supervisor-owned resource
     // has been released in complete_teardown().
     ScriptAppSession retiring_session_;
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    RuntimeFontCatalog::Handle text_catalog_;
+    RuntimeImageProvider::Handle image_provider_;
+#endif
     std::uint32_t next_frame_sequence_ = 1;
 };
 

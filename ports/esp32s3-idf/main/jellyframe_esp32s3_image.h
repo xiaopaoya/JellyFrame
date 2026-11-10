@@ -35,17 +35,17 @@ public:
                    std::string_view base_url,
                    const ResourceBundle* bundle = nullptr);
 
+    void set_background_resource_resolver(const jellyframe::StyleResolver* resolver) {
+        background_resource_resolver_ = resolver;
+    }
+
     bool resolve(const jellyframe::Node& node,
                  jellyframe::ImageResolveKind kind,
                  std::uint16_t background_resource_id,
-                 std::uint32_t& handle);
+                 jellyframe::ResolvedImageResource& result);
 
     bool paint(jellyframe::FrameBuffer& target,
-               jellyframe::Rect rect,
-               std::uint32_t handle,
-               jellyframe::ObjectFit object_fit,
-               jellyframe::ObjectPosition object_position,
-               jellyframe::ImageRendering image_rendering);
+               const jellyframe::ImagePaintRequest& request);
 
     const ImageAdapterStats& stats() const { return stats_; }
 
@@ -71,6 +71,7 @@ private:
 
     ResourceLoadStats resource_stats_{};
     ResourceBundleContext resource_context_{};
+    const jellyframe::StyleResolver* background_resource_resolver_ = nullptr;
     ImageAdapterStats stats_{};
     std::vector<Entry> entries_;
 
