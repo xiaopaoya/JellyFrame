@@ -2,6 +2,9 @@
 #include <cstdlib>
 #include <string>
 #include <string_view>
+#if defined(_MSC_VER)
+#include <crtdbg.h>
+#endif
 
 int script_task_contract_tests_main();
 int script_task_frame_codec_tests_main();
@@ -50,6 +53,12 @@ int run_test_group(const char* name, TestMain test_main, std::string_view only, 
 } // namespace
 
 int main() {
+#if defined(_MSC_VER)
+    _set_error_mode(_OUT_TO_STDERR);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+#endif
     const std::string only = environment_value("JELLYFRAME_TEST_ONLY");
     const bool trace = !environment_value("JELLYFRAME_TEST_TRACE").empty();
     int failed = 0;

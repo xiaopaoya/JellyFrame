@@ -208,6 +208,8 @@ if(JELLYFRAME_BUILD_SCRIPTING)
 
     if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         add_library(jellyframe_script_task_runtime
+            src/app_runtime/runtime_font_catalog.cpp
+            src/app_runtime/runtime_image_provider.cpp
             src/app_runtime/script_task_contract.cpp
             src/app_runtime/script_task_frame_codec.cpp
             src/app_runtime/script_task_frame_renderer.cpp

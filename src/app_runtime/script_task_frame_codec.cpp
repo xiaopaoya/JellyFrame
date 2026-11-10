@@ -168,6 +168,8 @@ bool transport_command_type(DisplayCommandType type, std::uint8_t version) {
 }
 bool valid_command(const DisplayCommand& c, std::uint8_t version = kVersionV5) {
     return transport_command_type(detail::command_type(c), version) &&
+        detail::canonical::valid_radius_y(detail::legacy_command_fields(c).border_radius,
+                                         detail::canonical::radius_y(c), 9) &&
         (!detail::command_has_untransported_payload(c) ||
          (version >= kVersionV7 && detail::is_prepared_command_type(detail::command_type(c)))) &&
         valid_wire_fields(detail::legacy_command_fields(c)) &&
@@ -189,7 +191,8 @@ bool valid_target(const ScriptTaskInputTarget& target) {
     return target.target_key != 0 && target.rect.width >= 0 && target.rect.height >= 0;
 }
 bool valid_clip(const ScriptTaskFrameClip& clip) {
-    return clip.rect.width >= 0 && clip.rect.height >= 0 && clip.border_radius >= 0;
+    return clip.rect.width >= 0 && clip.rect.height >= 0 && clip.border_radius >= 0 &&
+        (clip.border_radius_y == -1 || clip.border_radius_y == clip.border_radius);
 }
 bool point_in_rect(Rect rect, int x, int y) {
     return x >= rect.x && y >= rect.y &&
@@ -214,6 +217,21 @@ bool valid_clip_index(std::uint16_t index, std::size_t clip_count) {
     return index == kScriptTaskNoClip || static_cast<std::size_t>(index) < clip_count;
 }
 
+template<class Clip>
+auto frame_clip_coverage(const Clip& clip, int x, int y, int)
+    -> decltype(rounded_rect_coverage(clip.rect, clip.border_radius, clip.border_radius_y, x, y)) {
+    return rounded_rect_coverage(clip.rect, clip.border_radius, clip.border_radius_y, x, y);
+}
+template<class Clip>
+auto frame_clip_coverage(const Clip& clip, int x, int y, long)
+    -> decltype(rounded_rect_coverage(clip.rect, clip.border_radius, x, y)) {
+    return rounded_rect_coverage(clip.rect, clip.border_radius, x, y);
+}
+template<class Clip> auto flattened_radius_y(const Clip& clip, int) -> decltype(clip.border_radius_y) {
+    return clip.border_radius_y;
+}
+template<class Clip> int flattened_radius_y(const Clip&, long) { return -1; }
+
 bool point_in_clip_chain(const ScriptTaskAppFrame& frame, std::uint16_t clip_index, int x, int y) {
     if (clip_index == kScriptTaskNoClip) {
         return true;
@@ -226,7 +244,7 @@ bool point_in_clip_chain(const ScriptTaskAppFrame& frame, std::uint16_t clip_ind
         }
         const ScriptTaskFrameClip& clip = frame.clips[index];
         if (!point_in_rect(clip.rect, x, y) ||
-            rounded_rect_coverage(clip.rect, clip.border_radius, x, y) == 0) {
+            frame_clip_coverage(clip, x, y, 0) == 0) {
             return false;
         }
         index = clip.parent_clip;
@@ -237,6 +255,7 @@ bool point_in_clip_chain(const ScriptTaskAppFrame& frame, std::uint16_t clip_ind
 
 bool script_task_app_frame_codec_supports_version(std::uint8_t version) {
     return (version == 9 && detail::canonical::available) ||
+        (version == 10 && detail::canonical::elliptical_available) ||
         (version >= kVersionV1 && version <= kVersionV4) ||
         (version == kVersionV5 && detail::kScriptTaskSamplingTransportAvailable) ||
         (version == kVersionV6 && detail::kScriptTaskGroupTransportAvailable && detail::kScriptTaskSamplingTransportAvailable) ||
@@ -250,7 +269,7 @@ bool script_task_app_frame_codec_supports_version(std::uint8_t version) {
 ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFrame& frame,
                                                             const ScriptTaskAppFrameCodecOptions& options,
                                                             std::vector<std::uint8_t>& output) {
-    if (options.version == 9) return detail::canonical::encode(frame, options, output);
+    if (options.version == 9 || options.version == 10) return detail::canonical::encode(frame, options, output);
     if (frame.image_provider_id) return ScriptTaskAppFrameCodecStatus::InvalidValue;
     if (options.version != kVersionV1 && options.version != kVersionV2 && options.version != kVersionV3 &&
         options.version != kVersionV4 && options.version != kVersionV5 && options.version != kVersionV6 && options.version != kVersionV7 &&
@@ -269,6 +288,9 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
         return ScriptTaskAppFrameCodecStatus::UnsupportedGroupFeature;
     if (options.version >= kVersionV6) {
         if (!detail::kScriptTaskGroupTransportAvailable) return ScriptTaskAppFrameCodecStatus::UnsupportedGroupFeature;
+        for (const auto& group : frame.groups)
+            if (group.clip_border_radius_y != -1 && group.clip_border_radius_y != group.clip_border_radius)
+                return ScriptTaskAppFrameCodecStatus::UnsupportedGroupFeature;
         const auto group_status = detail::validate_frame_groups(frame, options.max_groups, options.max_group_depth);
         if (group_status != ScriptTaskAppFrameCodecStatus::Accepted) return group_status;
     }
@@ -470,7 +492,8 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
 ScriptTaskAppFrameCodecStatus decode_script_task_app_frame(const std::vector<std::uint8_t>& input,
                                                             const ScriptTaskAppFrameCodecOptions& options,
                                                             ScriptTaskAppFrame& output) {
-    if (options.version == 9 || (input.size() > 4 && input[4] == 9)) {
+    if (options.version == 9 || options.version == 10 ||
+        (input.size() > 4 && (input[4] == 9 || input[4] == 10))) {
         if (input.size() > 4 && options.version != input[4]) return ScriptTaskAppFrameCodecStatus::UnsupportedVersion;
         return detail::canonical::decode(input, options, output);
     }
@@ -709,7 +732,7 @@ ScriptTaskAppFrame make_script_task_app_frame(const LayerNode& layer_tree,
         }
         frame.clips.reserve(flattened.clips.size());
         for (const FlattenedClip& clip : flattened.clips) {
-            frame.clips.push_back({clip.rect, clip.border_radius, clip.parent_clip});
+            frame.clips.push_back({clip.rect, clip.border_radius, clip.parent_clip, flattened_radius_y(clip, 0)});
         }
     } else {
         frame.display_list = flattener.flatten(layer_tree);
@@ -723,6 +746,10 @@ ScriptTaskAppFrameCodecStatus make_script_task_group_frame(
     ScriptTaskAppFrame& output) {
     using Status = ScriptTaskAppFrameCodecStatus;
     if (limits.version == 9) return detail::canonical::capture(root, viewport, limits, output);
+    if (limits.version == 10) {
+        if (!detail::canonical::elliptical_available) return Status::UnsupportedVersion;
+        return detail::canonical::capture(root, viewport, limits, output);
+    }
     if ((limits.version != kVersionV6 && limits.version != kVersionV7 && limits.version != kVersionV8) ||
         !script_task_app_frame_codec_supports_version(limits.version))
         return Status::UnsupportedGroupFeature;
@@ -922,7 +949,8 @@ ScriptTaskAppFrameTakeStatus take_script_task_app_frame(
     ScriptTaskSupervisor& supervisor, const ScriptAppSession& session,
     const ScriptTaskAppFrameCodecOptions& options, ScriptTaskAcceptedAppFrame& output) {
     if (!((options.version == 7 && JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API) ||
-          (options.version == 9 && detail::canonical::available)))
+          (options.version == 9 && detail::canonical::available) ||
+          (options.version == 10 && detail::canonical::elliptical_available)))
         return ScriptTaskAppFrameTakeStatus::TextCatalogRejected;
     auto catalog = supervisor.text_catalog(session);
     if (!catalog) return ScriptTaskAppFrameTakeStatus::TextCatalogRejected;
@@ -931,7 +959,7 @@ ScriptTaskAppFrameTakeStatus take_script_task_app_frame(
     if (status != ScriptTaskAppFrameTakeStatus::Accepted) return status;
     if (!script_task_frame_uses_catalog(accepted.frame_, *catalog))
         return ScriptTaskAppFrameTakeStatus::TextCatalogRejected;
-    if (options.version == 9) {
+    if (options.version == 9 || options.version == 10) {
         accepted.images_ = supervisor.image_provider(session);
         if (!script_task_frame_uses_image_provider(accepted.frame_, accepted.images_))
             return ScriptTaskAppFrameTakeStatus::ImageProviderRejected;

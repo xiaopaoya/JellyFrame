@@ -1,4 +1,5 @@
 #include "app_runtime/script_task_frame_codec.h"
+#include "app_runtime/script_task_command_access.h"
 #include "app_runtime/script_task_service_bridge.h"
 #include "app_runtime/script_task_worker_inbox.h"
 
@@ -35,7 +36,7 @@ ScriptTaskAppFrame completed_frame() {
     ScriptTaskAppFrame frame;
     frame.viewport = {0, 0, 172, 320};
     DisplayCommand command;
-    command.type = DisplayCommandType::FillRect;
+    detail::set_command_type(command, DisplayCommandType::FillRect);
     command.rect = {0, 0, 172, 320};
     command.color = {12, 34, 56, 255};
     frame.display_list.push_back(command);

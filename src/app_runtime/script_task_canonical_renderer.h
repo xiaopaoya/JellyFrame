@@ -10,6 +10,7 @@ public:
         for (std::size_t i = 0; i < nodes_.size(); ++i) {
             auto& n = nodes_[i]; const auto& g = f.groups[i];
             n.type = g.type; n.bounds = g.bounds; n.clip_rect = g.clip_rect; n.clip_border_radius = g.clip_border_radius;
+            set_layer_radius_y(n, g.clip_border_radius_y);
             n.has_clip = g.has_clip; n.opacity = g.opacity; n.transform = g.transform; n.has_transform = g.has_transform;
             n.transform_origin_x_percent = g.origin_x_percent; n.transform_origin_y_percent = g.origin_y_percent;
             n.reasons = g.reasons; n.scroll_y = g.scroll_y; n.max_scroll_y = g.max_scroll_y;
@@ -28,7 +29,8 @@ inline bool same_group(const ScriptTaskFrameGroup& a, const ScriptTaskFrameGroup
     const auto same_rect = [](Rect x, Rect y) { return x.x == y.x && x.y == y.y && x.width == y.width && x.height == y.height; };
     return a.parent == b.parent && a.command_begin == b.command_begin && a.command_count == b.command_count &&
         a.type == b.type && same_rect(a.bounds, b.bounds) && same_rect(a.clip_rect, b.clip_rect) &&
-        a.clip_border_radius == b.clip_border_radius && a.has_clip == b.has_clip && a.opacity == b.opacity &&
+        a.clip_border_radius == b.clip_border_radius && a.clip_border_radius_y == b.clip_border_radius_y &&
+        a.has_clip == b.has_clip && a.opacity == b.opacity &&
         a.transform.translate_x == b.transform.translate_x && a.transform.translate_y == b.transform.translate_y &&
         a.transform.scale_x == b.transform.scale_x && a.transform.scale_y == b.transform.scale_y &&
         a.transform.rotate_degrees == b.transform.rotate_degrees && a.has_transform == b.has_transform &&
@@ -46,7 +48,7 @@ inline bool render(const ScriptTaskAppFrame& frame, FrameBuffer& target, Color b
     if (!script_task_frame_uses_image_provider(frame, options.image_provider)) return fail(ScriptTaskFrameRenderStatus::InvalidFrame);
     if (frame.image_provider_id) image = options.image_provider->painter();
     ScriptTaskAppFrameCodecOptions limits;
-    limits.version = 9; limits.max_commands = limits.max_text_bytes = limits.max_input_targets = limits.max_payload_bytes =
+    limits.version = elliptical_available ? 10 : 9; limits.max_commands = limits.max_text_bytes = limits.max_input_targets = limits.max_payload_bytes =
         std::numeric_limits<std::size_t>::max();
     limits.max_groups = options.max_groups; limits.max_group_depth = options.max_group_depth;
     limits.max_clips = 65535; limits.max_clip_depth = options.max_clip_depth;

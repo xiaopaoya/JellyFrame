@@ -1,4 +1,8 @@
 #include <iostream>
+#include <cstdlib>
+#if defined(_MSC_VER)
+#include <crtdbg.h>
+#endif
 
 #if defined(JELLYFRAME_TEST_ASSERTS_ENABLED) && defined(NDEBUG)
 #error "JellyFrame test targets must run with assert() enabled."
@@ -25,6 +29,12 @@ int run_test(const char* name, int (*test_main)()) {
 } // namespace
 
 int main() {
+#if defined(_MSC_VER)
+    _set_error_mode(_OUT_TO_STDERR);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+#endif
     int failed = 0;
     failed += run_test("script_runtime", script_runtime_tests_main);
 #if defined(JELLYFRAME_SCRIPT_TASK_RUNTIME_ENABLED)

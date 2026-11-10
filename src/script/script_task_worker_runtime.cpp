@@ -19,6 +19,8 @@
 namespace jellyframe {
 namespace {
 
+bool is_canonical_frame_version(std::uint8_t version) { return version == 9 || version == 10; }
+
 template<class T, class = void>
 struct HasBackgroundResourceResolver : std::false_type {};
 
@@ -55,7 +57,7 @@ void configure_background_resource_resolver(Options& options, const StyleResolve
 ScriptTaskAppFrameCodecOptions frame_options_from(const ScriptTaskWorkerRuntimeOptions& options) {
     ScriptTaskAppFrameCodecOptions result = options.frame_codec;
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
-    if (result.version == 9 && options.image_provider)
+    if (is_canonical_frame_version(result.version) && options.image_provider)
         result.image_provider_id = options.image_provider->id();
 #endif
     if (result.max_commands == 0) result.max_commands = std::max<std::size_t>(1, options.budgets.max_display_commands);
@@ -99,7 +101,7 @@ ScriptTaskWorkerRuntime::ScriptTaskWorkerRuntime(ScriptAppSession session,
     }
     fatal_record_.session = session_;
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
-    if (options_.frame_codec.version == 9 && options_.image_provider)
+    if (is_canonical_frame_version(options_.frame_codec.version) && options_.image_provider)
         options_.frame_codec.image_provider_id = options_.image_provider->id();
 #endif
 }
@@ -130,14 +132,14 @@ void ScriptTaskWorkerRuntime::stop() {
 bool ScriptTaskWorkerRuntime::supervisor_matches(const ScriptTaskSupervisor& supervisor) const {
     if (!session_.valid() || !supervisor.accepts(session_)) return false;
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
-    if (options_.frame_codec.version == 9) {
+    if (is_canonical_frame_version(options_.frame_codec.version)) {
         const auto catalog = supervisor.text_catalog(session_);
         const auto images = supervisor.image_provider(session_);
         return options_.text_catalog && catalog == options_.text_catalog &&
             images == options_.image_provider && (!images || images->valid());
     }
 #else
-    if (options_.frame_codec.version == 9) return false;
+    if (is_canonical_frame_version(options_.frame_codec.version)) return false;
 #endif
     return true;
 }
@@ -190,7 +192,7 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::strin
     if (stopped_) return ScriptTaskWorkerRuntimeInitStatus::Stopped;
     if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
     if (!session_.valid()) return ScriptTaskWorkerRuntimeInitStatus::InvalidSession;
-    if (options_.frame_codec.version == 9) {
+    if (is_canonical_frame_version(options_.frame_codec.version)) {
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
         if (!options_.text_catalog ||
             (options_.image_provider && !options_.image_provider->valid())) {
@@ -251,7 +253,7 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(
     ScriptTaskSupervisor& supervisor, std::string_view html, std::string_view css) {
     if (stopped_) return ScriptTaskWorkerRuntimeInitStatus::Stopped;
     if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
-    if (options_.frame_codec.version == 9) {
+    if (is_canonical_frame_version(options_.frame_codec.version)) {
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
         if (!options_.text_catalog || (options_.image_provider && !options_.image_provider->valid())) {
             set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
@@ -280,8 +282,8 @@ ScriptEvaluationResult ScriptTaskWorkerRuntime::eval(std::string_view source, st
     if (!initialized_ || fatal()) {
         return {false, {}, "worker runtime is not active", ScriptEvaluationStatus::Exception};
     }
-    if (options_.frame_codec.version == 9 && active_supervisor_ == nullptr) {
-        return {false, {}, "v9 evaluation requires supervisor validation", ScriptEvaluationStatus::Exception};
+    if (is_canonical_frame_version(options_.frame_codec.version) && active_supervisor_ == nullptr) {
+        return {false, {}, "canonical frame evaluation requires supervisor validation", ScriptEvaluationStatus::Exception};
     }
     ScriptEvaluationResult result = runtime_->eval(source, source_name);
     if (!result.ok) {
@@ -326,7 +328,7 @@ ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::publish_frame(ScriptTas
         return result;
     }
     ScriptTaskAppFrame frame;
-    if (options_.frame_codec.version == 9) {
+    if (is_canonical_frame_version(options_.frame_codec.version)) {
         const auto status = make_script_task_group_frame(*layer_tree_, options_.viewport,
                                                         options_.frame_codec, frame);
         if (status != ScriptTaskAppFrameCodecStatus::Accepted) {
@@ -613,7 +615,7 @@ bool ScriptTaskWorkerRuntime::rebuild_pipeline() {
     if (!render_tree) return false;
     LayoutEngineOptions layout_options = layout_engine_options_from_budgets(options_.budgets);
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
-    layout_options.text_system = options_.frame_codec.version == 9
+    layout_options.text_system = is_canonical_frame_version(options_.frame_codec.version)
         ? &options_.text_catalog->text_system() : options_.text_system;
 #else
     layout_options.text_system = options_.text_system;
@@ -626,9 +628,9 @@ bool ScriptTaskWorkerRuntime::rebuild_pipeline() {
     clear_dirty_flags(*document_owner_.root());
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(options_.budgets);
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
-    layer_options.text_system = options_.frame_codec.version == 9
+    layer_options.text_system = is_canonical_frame_version(options_.frame_codec.version)
         ? &options_.text_catalog->text_system() : options_.text_system;
-    if (options_.frame_codec.version == 9) {
+    if (is_canonical_frame_version(options_.frame_codec.version)) {
         configure_background_resource_resolver(layer_options, style_resolver_.get());
         if constexpr (HasBackgroundResourceResolver<LayerTreeBuilderOptions>::value) {
           layer_options.image_resolver = {[](const Node& node, ImageResolveKind kind,

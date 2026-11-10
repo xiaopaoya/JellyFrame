@@ -19,10 +19,31 @@
 
 namespace jellyframe::detail::canonical {
 using Status = ScriptTaskAppFrameCodecStatus;
-constexpr std::size_t header_bytes = 52, group_bytes = 112, command_bytes = 128;
+constexpr std::size_t header_bytes = 52, group_bytes_v9 = 112, group_bytes_v10 = 116, command_bytes = 128;
 constexpr std::size_t clip_bytes = 28, target_bytes = 24;
 constexpr bool available = JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API &&
     has_typed_command<DisplayCommand>::value && has_background_clip_transport<DisplayCommand>();
+
+template<class C, class = void> struct has_radius_y_fields : std::false_type {};
+template<class C> struct has_radius_y_fields<C, std::void_t<
+    decltype(std::declval<const C&>().basic_paint().border_radius_y),
+    decltype(std::declval<const C&>().text_paint().border_radius_y),
+    decltype(std::declval<const C&>().image_paint().border_radius_y)>> : std::true_type {};
+template<class N, class = void> struct has_layer_radius_y : std::false_type {};
+template<class N> struct has_layer_radius_y<N, std::void_t<
+    decltype(std::declval<const N&>().clip_border_radius_y)>> : std::true_type {};
+template<class N> inline int layer_radius_y(const N& n) {
+    if constexpr (has_layer_radius_y<N>::value) return n.clip_border_radius_y;
+    return -1;
+}
+template<class N> inline void set_layer_radius_y(N& n, int y) {
+    if constexpr (has_layer_radius_y<N>::value) n.clip_border_radius_y = y;
+}
+constexpr bool elliptical_available = available && has_radius_y_fields<DisplayCommand>::value &&
+    has_layer_radius_y<LayerNode>::value;
+constexpr std::uint8_t kVersionV9 = 9;
+constexpr std::uint8_t kVersionV10 = 10;
+inline std::size_t group_bytes(std::uint8_t version) { return version >= kVersionV10 ? group_bytes_v10 : group_bytes_v9; }
 
 inline void u32(std::vector<std::uint8_t>& b, std::size_t at, std::uint32_t value) {
     for (unsigned i = 0; i < 4; ++i) b[at + i] = static_cast<std::uint8_t>(value >> (8 * i));
@@ -96,7 +117,18 @@ inline CommandBackgroundPaintClip paint_clip(const std::vector<std::uint8_t>& b,
     return {v[0] < 32768 ? v[0] : v[0] - 65536, v[1] < 32768 ? v[1] : v[1] - 65536, v[2], v[3]};
 }
 
-inline Status validate_groups(const ScriptTaskAppFrame& frame, std::size_t max_groups, std::size_t max_depth) {
+inline bool valid_radius_encoding(int value) {
+    return value >= 0 || (static_cast<std::uint32_t>(value) & 0xf0000000U) == 0x80000000U;
+}
+inline bool valid_radius_y(int x, int y, std::uint8_t version) {
+    // Only -1 is the fallback sentinel. Packed per-corner radii set bit 31.
+    if (version >= kVersionV10 && !valid_radius_encoding(x)) return false;
+    if (y != -1 && !valid_radius_encoding(y)) return false;
+    return version >= kVersionV10 || y == -1 || y == x;
+}
+inline int effective_radius_y(int x, int y) { return y == -1 ? x : y; }
+inline Status validate_groups(const ScriptTaskAppFrame& frame, std::size_t max_groups, std::size_t max_depth,
+                              std::uint8_t version) {
     if (frame.groups.empty()) return Status::InvalidGroup;
     if (frame.groups.size() > max_groups || frame.groups.size() > UINT32_MAX) return Status::TooManyGroups;
     if (!frame.command_ellipses.empty() || !frame.display_clip_indices.empty()) return Status::UnsupportedGroupFeature;
@@ -114,6 +146,7 @@ inline Status validate_groups(const ScriptTaskAppFrame& frame, std::size_t max_g
         if (g.clip_axes != 3 || g.has_affine || g.has_clip_ellipse ||
             g.affine != std::array<float, 6>{{1, 0, 0, 1, 0, 0}} ||
             g.clip_ellipse != std::array<int, 8>{}) return Status::UnsupportedGroupFeature;
+        if (!valid_radius_y(g.clip_border_radius, g.clip_border_radius_y, version)) return Status::InvalidGroup;
         if (g.command_begin != command || command > frame.display_list.size() ||
             g.command_count > frame.display_list.size() - command || !valid_rect(g.bounds) || !valid_rect(g.clip_rect) ||
             layer_kind(g.type) < 0 || (g.reasons & ~(LayerReasonRoot | LayerReasonOverflowClip | LayerReasonOpacity |
@@ -155,6 +188,23 @@ template<class C> inline int command_kind(const C& c) {
     const auto t = command_type(c);
     return kind_shadow(t);
 }
+template<class C> inline int radius_y(const C& c) {
+    if constexpr (has_typed_command<C>::value && has_radius_y_fields<C>::value) {
+        const auto k = command_kind(c);
+        if (k <= 5) return c.basic_paint().border_radius_y;
+        if (k <= 7) return c.text_paint().border_radius_y;
+        if (k == 8) return c.image_paint().border_radius_y;
+    }
+    return -1;
+}
+template<class C> inline void set_radius_y(C& c, int value) {
+    if constexpr (has_typed_command<C>::value && has_radius_y_fields<C>::value) {
+        const auto k = command_kind(c);
+        if (k <= 5) c.basic_paint().border_radius_y = value;
+        else if (k <= 7) c.text_paint().border_radius_y = value;
+        else if (k == 8) c.image_paint().border_radius_y = value;
+    }
+}
 template<class C> inline bool set_kind_impl(C& c, unsigned value) {
     using E = decltype(command_type(c));
     switch (value) {
@@ -176,21 +226,22 @@ template<class C> inline bool set_kind_impl(C& c, unsigned value) {
     return true;
 }
 inline bool set_kind(DisplayCommand& c, unsigned value) { return set_kind_impl(c, value); }
-template<class C> inline bool valid_command(const C& c) {
+template<class C> inline bool valid_command(const C& c, std::uint8_t version = kVersionV10) {
     const auto k = command_kind(c);
     if (k < 0 || !valid_rect(c.rect) || !valid_transform(c.transform) ||
         c.text.size() > UINT32_MAX) return false;
     if (k <= 5) {
         const auto p = legacy_command_fields(c);
-        if (static_cast<unsigned>(p.gradient_axis) > 4 || !valid_clip(command_background_paint_clip(c))) return false;
+        if (static_cast<unsigned>(p.gradient_axis) > 4 || !valid_clip(command_background_paint_clip(c)) ||
+            !valid_radius_y(p.border_radius, radius_y(c), version)) return false;
     } else if (k <= 7) {
         const auto p = legacy_command_fields(c);
-        if (static_cast<unsigned>(p.text_align) > 2) return false;
+        if (static_cast<unsigned>(p.text_align) > 2 || !valid_radius_y(p.border_radius, radius_y(c), version)) return false;
         if (k == 7) { PreparedTextView view; if (!decode_prepared_text(c.text, view)) return false; }
     } else if (k == 8) {
         const auto p = legacy_command_fields(c);
         if (static_cast<unsigned>(p.object_fit) > 4 || static_cast<unsigned>(p.image_rendering) > 2 ||
-            !valid_clip(command_background_paint_clip(c))) return false;
+            !valid_clip(command_background_paint_clip(c)) || !valid_radius_y(p.border_radius, radius_y(c), version)) return false;
     } else {
       if constexpr (has_css_shadow_paint<C>::value) {
         const auto& p = c.css_shadow_paint();
@@ -202,7 +253,8 @@ template<class C> inline bool valid_command(const C& c) {
     return (k == 6 || k == 7) || c.text.empty();
 }
 
-template<class C> inline void put_command(std::vector<std::uint8_t>& b, std::size_t at, const C& c) {
+template<class C> inline void put_command(std::vector<std::uint8_t>& b, std::size_t at, const C& c,
+                                          std::uint8_t version) {
     const auto k = command_kind(c); u32(b, at, k); rect(b, at + 4, c.rect);
     const Color colors[] = {c.color, c.color2};
     for (unsigned i = 0; i < 2; ++i) {
@@ -219,6 +271,7 @@ template<class C> inline void put_command(std::vector<std::uint8_t>& b, std::siz
         const auto p = legacy_command_fields(c); u32(b, at, p.border_radius); u32(b, at + 4, p.stroke_width);
         u32(b, at + 8, static_cast<unsigned>(p.gradient_axis)); u32(b, at + 12, p.gradient_stop_percent);
         paint_clip(b, at + 16, command_background_paint_clip(c));
+        if (version >= kVersionV10) u32(b, at + 24, effective_radius_y(p.border_radius, radius_y(c)));
     } else if (k <= 7) {
         const auto p = legacy_command_fields(c);
         u32(b, at, p.border_radius); u32(b, at + 4, p.stroke_width); u32(b, at + 8, p.font_size);
@@ -230,12 +283,14 @@ template<class C> inline void put_command(std::vector<std::uint8_t>& b, std::siz
         } else {
             u32(b, at + 28, c.object_position.x_percent); u32(b, at + 32, c.object_position.y_percent);
         }
+        if (version >= kVersionV10) u32(b, at + 36, effective_radius_y(p.border_radius, radius_y(c)));
     } else if (k == 8) {
         const auto p = legacy_command_fields(c); u32(b, at, p.image_handle);
         paint_clip(b, at + 4, command_background_paint_clip(c));
         u32(b, at + 12, static_cast<unsigned>(p.object_fit)); u32(b, at + 16, p.object_position.x_percent);
         u32(b, at + 20, p.object_position.y_percent); u32(b, at + 24, static_cast<unsigned>(p.image_rendering));
         u32(b, at + 28, p.border_radius);
+        if (version >= kVersionV10) u32(b, at + 32, effective_radius_y(p.border_radius, radius_y(c)));
     } else {
       if constexpr (has_css_shadow_paint<C>::value) {
         const auto& p = c.css_shadow_paint(); rect(b, at, p.border_box); rect(b, at + 16, p.padding_box);
@@ -246,7 +301,8 @@ template<class C> inline void put_command(std::vector<std::uint8_t>& b, std::siz
       }
     }
 }
-template<class C> inline bool get_command(const std::vector<std::uint8_t>& b, std::size_t at, C& c) {
+template<class C> inline bool get_command(const std::vector<std::uint8_t>& b, std::size_t at, C& c,
+                                          std::uint8_t version) {
     const auto k = u32(b, at);
     if (!set_kind_impl(c, k) || u32(b, at + 32) > 1 || u32(b, at + 60) > 65535) return false;
     c.rect = rect(b, at + 4); c.color = {b[at+20], b[at+21], b[at+22], b[at+23]};
@@ -257,13 +313,16 @@ template<class C> inline bool get_command(const std::vector<std::uint8_t>& b, st
     c.transform.tx_1024 = i32(b, at + 52); c.transform.ty_1024 = i32(b, at + 56);
     c.transform.source_clip_index = static_cast<std::uint16_t>(u32(b, at + 60)); at += 64;
     if (k <= 5) {
-        if (u32(b, at + 8) > 4 || !zero(b, at + 24, 40)) return false;
+        if (u32(b, at + 8) > 4 || !zero(b, at + (version >= kVersionV10 ? 28 : 24),
+                                           version >= kVersionV10 ? 36 : 40)) return false;
         auto p = legacy_command_fields(c); p.border_radius = i32(b, at); p.stroke_width = i32(b, at + 4);
         p.gradient_axis = static_cast<GradientAxis>(u32(b, at + 8)); p.gradient_stop_percent = i32(b, at + 12);
         const auto q = paint_clip(b, at + 16);
         apply_legacy_command_fields(c, p); set_command_background_paint_clip(c, q);
+        if (version >= kVersionV10) { const int y = i32(b, at + 24); if (!valid_radius_encoding(y)) return false; set_radius_y(c, y); }
     } else if (k <= 7) {
-        if (u32(b, at + 20) > 2 || u32(b, at + 24) > 1 || !zero(b, at + 36, 28)) return false;
+        if (u32(b, at + 20) > 2 || u32(b, at + 24) > 1 ||
+            !zero(b, at + (version >= kVersionV10 ? 40 : 36), version >= kVersionV10 ? 24 : 28)) return false;
         auto p = legacy_command_fields(c); p.border_radius = i32(b, at); p.stroke_width = i32(b, at + 4);
         p.font_size = i32(b, at + 8); p.font_weight = i32(b, at + 12); p.font_family_hash = u32(b, at + 16);
         p.text_align = static_cast<TextCommandAlign>(u32(b, at + 20)); p.text_single_line = u32(b, at + 24) != 0;
@@ -272,26 +331,30 @@ template<class C> inline bool get_command(const std::vector<std::uint8_t>& b, st
             c.text_paint().origin_x = i32(b, at + 28);
             c.text_paint().baseline_y = i32(b, at + 32);
         } else c.object_position = {i32(b, at + 28), i32(b, at + 32)};
+        if (version >= kVersionV10) { const int y = i32(b, at + 36); if (!valid_radius_encoding(y)) return false; set_radius_y(c, y); }
     } else if (k == 8) {
-        if (u32(b, at + 12) > 4 || u32(b, at + 24) > 2 || !zero(b, at + 32, 32)) return false;
+        if (u32(b, at + 12) > 4 || u32(b, at + 24) > 2 ||
+            !zero(b, at + (version >= kVersionV10 ? 36 : 32), version >= kVersionV10 ? 28 : 32)) return false;
         auto p = legacy_command_fields(c); p.image_handle = u32(b, at); const auto q = paint_clip(b, at + 4);
         p.object_fit = static_cast<ObjectFit>(u32(b, at + 12));
         p.object_position = {i32(b, at + 16), i32(b, at + 20)};
         p.image_rendering = static_cast<ImageRendering>(u32(b, at + 24)); p.border_radius = i32(b, at + 28);
         apply_legacy_command_fields(c, p); set_command_background_paint_clip(c, q);
+        if (version >= kVersionV10) { const int y = i32(b, at + 32); if (!valid_radius_encoding(y)) return false; set_radius_y(c, y); }
     } else {
       if constexpr (has_css_shadow_paint<C>::value) {
         if (b[at + 62] > 1 || b[at + 63] > 1) return false;
         auto& p = c.css_shadow_paint(); p.border_box = rect(b, at); p.padding_box = rect(b, at + 16);
         p.source_rect = rect(b, at + 32); p.border_radii = i32(b, at + 48); p.padding_radii = i32(b, at + 52);
         p.source_radii = i32(b, at + 56); p.blur_px = static_cast<std::uint16_t>(b[at+60] | (unsigned(b[at+61]) << 8));
-        p.mode = static_cast<CssBoxShadowMode>(b[at + 62]); p.flags = b[at + 63];
+        p.mode = static_cast<decltype(p.mode)>(b[at + 62]); p.flags = b[at + 63];
       } else return false;
     }
     return true;
 }
 
-inline void put_group(std::vector<std::uint8_t>& b, std::size_t at, const ScriptTaskFrameGroup& g) {
+inline void put_group(std::vector<std::uint8_t>& b, std::size_t at, const ScriptTaskFrameGroup& g,
+                      std::uint8_t version) {
     u32(b, at, g.parent); u32(b, at + 4, g.command_begin); u32(b, at + 8, g.command_count);
     u32(b, at + 12, layer_kind(g.type)); rect(b, at + 16, g.bounds); rect(b, at + 32, g.clip_rect);
     u32(b, at + 48, g.clip_border_radius); u32(b, at + 52, unsigned(g.has_clip) | (unsigned(g.has_transform) << 1));
@@ -300,8 +363,10 @@ inline void put_group(std::vector<std::uint8_t>& b, std::size_t at, const Script
     u32(b, at + 80, g.origin_x_percent); u32(b, at + 84, g.origin_y_percent); u32(b, at + 88, g.reasons);
     u32(b, at + 92, g.scroll_y); u32(b, at + 96, g.max_scroll_y); u32(b, at + 100, g.z_index);
     u32(b, at + 104, static_cast<std::uint32_t>(g.source_order)); u32(b, at + 108, static_cast<std::uint32_t>(g.source_order >> 32));
+    if (version >= kVersionV10) u32(b, at + 112, effective_radius_y(g.clip_border_radius, g.clip_border_radius_y));
 }
-inline bool get_group(const std::vector<std::uint8_t>& b, std::size_t at, ScriptTaskFrameGroup& g) {
+inline bool get_group(const std::vector<std::uint8_t>& b, std::size_t at, ScriptTaskFrameGroup& g,
+                      std::uint8_t version) {
     if (!set_layer_kind(g, u32(b, at + 12)) || u32(b, at + 52) > 3) return false;
     g.parent = u32(b, at); g.command_begin = u32(b, at + 4); g.command_count = u32(b, at + 8);
     g.bounds = rect(b, at + 16); g.clip_rect = rect(b, at + 32);
@@ -310,31 +375,37 @@ inline bool get_group(const std::vector<std::uint8_t>& b, std::size_t at, Script
     g.transform = {f32(b, at + 60), f32(b, at + 64), f32(b, at + 68), f32(b, at + 72), f32(b, at + 76)};
     g.origin_x_percent = i32(b, at + 80); g.origin_y_percent = i32(b, at + 84); g.reasons = u32(b, at + 88);
     g.scroll_y = i32(b, at + 92); g.max_scroll_y = i32(b, at + 96); g.z_index = i32(b, at + 100);
-    g.source_order = u32(b, at + 104) | (std::uint64_t(u32(b, at + 108)) << 32); return true;
+    g.source_order = u32(b, at + 104) | (std::uint64_t(u32(b, at + 108)) << 32);
+    g.clip_border_radius_y = version >= kVersionV10 ? i32(b, at + 112) : -1;
+    if (version >= kVersionV10 && !valid_radius_encoding(g.clip_border_radius_y)) return false;
+    return true;
 }
 
 inline Status validate(const ScriptTaskAppFrame& f, const ScriptTaskAppFrameCodecOptions& o, std::size_t& total) {
+    if (o.version != kVersionV9 && o.version != kVersionV10) return Status::UnsupportedVersion;
+    if (o.version == kVersionV10 && !elliptical_available) return Status::UnsupportedVersion;
     if (!valid_rect(f.viewport)) return Status::InvalidValue;
     if (f.clip_metadata_overflow) return Status::InvalidClip;
     if (f.display_list.size() > o.max_commands || f.display_list.size() > UINT32_MAX) return Status::TooManyCommands;
     if (f.input_targets.size() > o.max_input_targets || f.input_targets.size() > UINT32_MAX) return Status::TooManyInputTargets;
     if (f.clips.size() > o.max_clips || f.clips.size() > 65535) return Status::TooManyClips;
-    auto status = validate_groups(f, o.max_groups, o.max_group_depth); if (status != Status::Accepted) return status;
+    auto status = validate_groups(f, o.max_groups, o.max_group_depth, o.version); if (status != Status::Accepted) return status;
     std::vector<std::size_t> depths;
     for (const auto& c : f.clips) {
         const auto index = depths.size();
-        if (!valid_rect(c.rect) || (c.parent_clip != kScriptTaskNoParentClip && c.parent_clip >= index)) return Status::InvalidClip;
+        if (!valid_rect(c.rect) || (c.parent_clip != kScriptTaskNoParentClip && c.parent_clip >= index) ||
+            !valid_radius_y(c.border_radius, c.border_radius_y, o.version)) return Status::InvalidClip;
         const auto depth = c.parent_clip == kScriptTaskNoParentClip ? 1 : depths[c.parent_clip] + 1;
         if (depth > o.max_clip_depth) return Status::TooDeepClipChain;
         depths.push_back(depth);
     }
     total = header_bytes;
-    if (!add(total, f.clips.size(), clip_bytes) || !add(total, f.groups.size(), group_bytes) ||
+    if (!add(total, f.clips.size(), clip_bytes) || !add(total, f.groups.size(), group_bytes(o.version)) ||
         !add(total, f.display_list.size(), command_bytes) || !add(total, f.input_targets.size(), target_bytes))
         return Status::PayloadTooLarge;
     std::size_t text = 0;
     for (const auto& c : f.display_list) {
-        if (!valid_command(c)) return Status::InvalidValue;
+        if (!valid_command(c, o.version)) return Status::InvalidValue;
         // Group commands remain in local source coordinates. A second command
         // transform would not be applied by the canonical compositor.
         if (c.transform.enabled || c.transform.source_clip_index != kScriptTaskNoClip) return Status::UnsupportedTransformFeature;
@@ -355,15 +426,19 @@ inline Status validate(const ScriptTaskAppFrame& f, const ScriptTaskAppFrameCode
 
 inline Status encode(const ScriptTaskAppFrame& f, const ScriptTaskAppFrameCodecOptions& o, std::vector<std::uint8_t>& output) {
     std::size_t total; auto status = validate(f, o, total); if (status != Status::Accepted) return status;
-    std::vector<std::uint8_t> b(total, 0); u32(b, 0, 0x4653464aU); b[4] = 9; rect(b, 8, f.viewport);
+    std::vector<std::uint8_t> b(total, 0); u32(b, 0, 0x4653464aU); b[4] = o.version; rect(b, 8, f.viewport);
     u32(b, 24, static_cast<std::uint32_t>(f.display_list.size())); u32(b, 28, static_cast<std::uint32_t>(f.input_targets.size()));
     u32(b, 32, static_cast<std::uint32_t>(f.clips.size())); u32(b, 36, static_cast<std::uint32_t>(f.groups.size()));
     u32(b, 44, static_cast<std::uint32_t>(f.image_provider_id)); u32(b, 48, static_cast<std::uint32_t>(f.image_provider_id >> 32));
     std::size_t at = header_bytes;
-    for (const auto& c : f.clips) { rect(b, at, c.rect); u32(b, at + 16, c.border_radius); u32(b, at + 20, c.parent_clip); at += clip_bytes; }
-    for (const auto& g : f.groups) { put_group(b, at, g); at += group_bytes; }
+    for (const auto& c : f.clips) {
+        rect(b, at, c.rect); u32(b, at + 16, c.border_radius); u32(b, at + 20, c.parent_clip);
+        if (o.version >= kVersionV10) u32(b, at + 24, effective_radius_y(c.border_radius, c.border_radius_y));
+        at += clip_bytes;
+    }
+    for (const auto& g : f.groups) { put_group(b, at, g, o.version); at += group_bytes(o.version); }
     for (const auto& c : f.display_list) {
-        put_command(b, at, c); at += command_bytes;
+        put_command(b, at, c, o.version); at += command_bytes;
         std::copy(c.text.begin(), c.text.end(), b.begin() + at); at += c.text.size();
     }
     for (const auto& t : f.input_targets) {
@@ -374,8 +449,8 @@ inline Status encode(const ScriptTaskAppFrame& f, const ScriptTaskAppFrameCodecO
 }
 
 inline Status decode(const std::vector<std::uint8_t>& b, const ScriptTaskAppFrameCodecOptions& o, ScriptTaskAppFrame& output) {
-    if (o.version != 9) return Status::UnsupportedVersion;
-    if (b.size() < header_bytes || b.size() > o.max_payload_bytes || u32(b, 0) != 0x4653464aU || b[4] != 9 ||
+    if (o.version != kVersionV9 && o.version != kVersionV10) return Status::UnsupportedVersion;
+    if (b.size() < header_bytes || b.size() > o.max_payload_bytes || u32(b, 0) != 0x4653464aU || b[4] != o.version ||
         !zero(b, 5, 3) || u32(b, 40) != 0) return Status::Malformed;
     const auto commands = u32(b, 24), targets = u32(b, 28), clips = u32(b, 32), groups = u32(b, 36);
     if (commands > o.max_commands) return Status::TooManyCommands;
@@ -384,20 +459,22 @@ inline Status decode(const std::vector<std::uint8_t>& b, const ScriptTaskAppFram
     if (groups > o.max_groups) return Status::TooManyGroups;
     std::size_t minimum = header_bytes;
     if (!add(minimum, commands, command_bytes) || !add(minimum, targets, target_bytes) ||
-        !add(minimum, clips, clip_bytes) || !add(minimum, groups, group_bytes) || minimum > b.size()) return Status::Malformed;
+        !add(minimum, clips, clip_bytes) || !add(minimum, groups, group_bytes(o.version)) || minimum > b.size()) return Status::Malformed;
     ScriptTaskAppFrame f; f.viewport = rect(b, 8); f.image_provider_id = u32(b, 44) | (std::uint64_t(u32(b, 48)) << 32); std::size_t at = header_bytes;
     for (std::uint32_t i = 0; i < clips; ++i) {
-        if (!zero(b, at + 24, 4)) return Status::Malformed;
-        f.clips.push_back({rect(b, at), i32(b, at + 16), u32(b, at + 20)}); at += clip_bytes;
+        if (o.version == kVersionV9 && !zero(b, at + 24, 4)) return Status::Malformed;
+        const int radius_y = o.version >= kVersionV10 ? i32(b, at + 24) : -1;
+        if (o.version >= kVersionV10 && !valid_radius_encoding(radius_y)) return Status::Malformed;
+        f.clips.push_back({rect(b, at), i32(b, at + 16), u32(b, at + 20), radius_y}); at += clip_bytes;
     }
     for (std::uint32_t i = 0; i < groups; ++i) {
-        ScriptTaskFrameGroup g; if (!get_group(b, at, g)) return Status::Malformed;
-        f.groups.push_back(g); at += group_bytes;
+        ScriptTaskFrameGroup g; if (!get_group(b, at, g, o.version)) return Status::Malformed;
+        f.groups.push_back(g); at += group_bytes(o.version);
     }
     std::size_t text = 0;
     for (std::uint32_t i = 0; i < commands; ++i) {
         if (b.size() - at < command_bytes) return Status::Malformed;
-        DisplayCommand c; if (!get_command(b, at, c)) return Status::Malformed;
+        DisplayCommand c; if (!get_command(b, at, c, o.version)) return Status::Malformed;
         const auto length = u32(b, at + 28); at += command_bytes;
         if (length > b.size() - at) return Status::Malformed;
         if (!add(text, length) || text > o.max_text_bytes) return Status::TooManyTextBytes;
@@ -424,17 +501,18 @@ inline Status capture(const LayerNode& root, Rect viewport, const ScriptTaskAppF
         if (f.groups.size() >= o.max_groups || f.groups.size() >= UINT32_MAX) return Status::TooManyGroups;
         if (f.display_list.size() > o.max_commands || n.display_list.size() > o.max_commands - f.display_list.size() ||
             n.display_list.size() > UINT32_MAX - f.display_list.size()) return Status::TooManyCommands;
-        if (!add(captured_bytes, 1, group_bytes) || !add(captured_bytes, n.display_list.size(), command_bytes) ||
+        if (!add(captured_bytes, 1, group_bytes(o.version)) || !add(captured_bytes, n.display_list.size(), command_bytes) ||
             captured_bytes > o.max_payload_bytes) return Status::PayloadTooLarge;
         for (const auto& c : n.display_list) {
-            if (!valid_command(c)) return Status::InvalidValue;
+            if (!valid_command(c, o.version)) return Status::InvalidValue;
             if (command_kind(c) == 8) f.image_provider_id = o.image_provider_id;
             if (!add(captured_text, c.text.size()) || captured_text > o.max_text_bytes) return Status::TooManyTextBytes;
             if (!add(captured_bytes, c.text.size()) || captured_bytes > o.max_payload_bytes) return Status::PayloadTooLarge;
         }
         ScriptTaskFrameGroup g; g.parent = parent; g.command_begin = static_cast<std::uint32_t>(f.display_list.size());
         g.command_count = static_cast<std::uint32_t>(n.display_list.size()); g.type = n.type; g.bounds = n.bounds;
-        g.clip_rect = n.clip_rect; g.clip_border_radius = n.clip_border_radius; g.has_clip = n.has_clip;
+        g.clip_rect = n.clip_rect; g.clip_border_radius = n.clip_border_radius;
+        g.clip_border_radius_y = layer_radius_y(n); g.has_clip = n.has_clip;
         g.opacity = n.opacity; g.transform = n.transform; g.has_transform = n.has_transform;
         g.origin_x_percent = n.transform_origin_x_percent; g.origin_y_percent = n.transform_origin_y_percent;
         g.reasons = n.reasons; g.scroll_y = n.scroll_y; g.max_scroll_y = n.max_scroll_y; g.z_index = n.z_index; g.source_order = n.source_order;
@@ -455,6 +533,7 @@ inline Status capture(const LayerNode& root, Rect viewport, const ScriptTaskAppF
     output = std::move(f); return Status::Accepted;
 }
 #else
+template<class C> inline int radius_y(const C&) { return -1; }
 inline Status encode(const ScriptTaskAppFrame&, const ScriptTaskAppFrameCodecOptions&, std::vector<std::uint8_t>&) { return Status::UnsupportedVersion; }
 inline Status decode(const std::vector<std::uint8_t>&, const ScriptTaskAppFrameCodecOptions&, ScriptTaskAppFrame&) { return Status::UnsupportedVersion; }
 inline Status capture(const LayerNode&, Rect, const ScriptTaskAppFrameCodecOptions&, ScriptTaskAppFrame&) { return Status::UnsupportedVersion; }
