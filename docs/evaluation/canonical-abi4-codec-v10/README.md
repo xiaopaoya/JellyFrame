@@ -1,5 +1,7 @@
 # Canonical ABI4 Frame Codec v10 Validation
 
+> Last updated: 2026-11-10; Applies to: 0.6.0-dev Runtime with optional Core 0.9.0-dev / ABI4.
+
 This Runtime candidate adds canonical v10 elliptical-radius transport. V9 keeps
 its existing wire version, record widths, reserved-zero requirements, and
 decoded `-1` Y-radius sentinel. V9 encoding accepts a Y sentinel or a Y value
