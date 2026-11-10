@@ -1,5 +1,7 @@
 # FreeRTOS IRAM Reserve Experiment
 
+> Last updated: 2026-11-10; Applies to: 0.6.0-dev
+
 This opt-in build profile tests `CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH=y`
 with ESP-IDF 5.3.1 on the WS147 ESP32-S3 port. It is not included in normal
 defaults and has not been hardware-accepted.
