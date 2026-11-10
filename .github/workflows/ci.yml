@@ -7,6 +7,13 @@ on:
   pull_request:
     branches:
       - master
+  workflow_dispatch:
+    inputs:
+      run_abi4_same_thread:
+        description: Build and test the ordinary desktop/script path against merged Core ABI4
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -14,6 +21,7 @@ permissions:
 jobs:
   linux-sanitizers:
     name: Linux ASan and UBSan
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -46,6 +54,7 @@ jobs:
 
   windows:
     name: Windows build and smoke tests
+    if: github.event_name != 'workflow_dispatch'
     runs-on: windows-latest
 
     steps:
@@ -269,6 +278,7 @@ jobs:
 
   windows-scripting:
     name: Windows scripting bridge tests
+    if: github.event_name != 'workflow_dispatch'
     runs-on: windows-latest
 
     steps:
@@ -357,6 +367,7 @@ jobs:
 
   canonical-abi4-installed-consumers:
     name: Canonical ABI4 Installed Consumers (${{ matrix.profile }})
+    if: github.event_name != 'workflow_dispatch'
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -444,6 +455,7 @@ jobs:
 
   render-core-standalone:
     name: Standalone Render Core
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -547,3 +559,133 @@ jobs:
 
       - name: Run Runtime package consumer CTest
         run: ctest --test-dir build/framework-external-core --output-on-failure
+
+  windows-abi4-same-thread:
+    name: Windows ordinary app path on Core ABI3 and ABI4
+    if: github.event_name != 'workflow_dispatch' || inputs.run_abi4_same_thread
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout JellyFrame Runtime
+        uses: actions/checkout@v5
+
+      - name: Build locked Render Core 0.8.0 ABI3 package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build\abi3-core-source | Out-Null
+          curl.exe --fail --location --retry 3 `
+            --output build\jellyframe-render-core-0.8.0.tar.gz `
+            https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v0.8.0/jellyframe-render-core-0.8.0.tar.gz
+          $hash = (Get-FileHash build\jellyframe-render-core-0.8.0.tar.gz -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne 'b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240') {
+            throw "Render Core ABI3 archive SHA-256 mismatch: $hash"
+          }
+          tar -xzf build\jellyframe-render-core-0.8.0.tar.gz -C build\abi3-core-source
+          cmake -S build\abi3-core-source\jellyframe-render-core-0.8.0 `
+            -B build\abi3-core -DJELLYFRAME_BUILD_TESTS=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'Core ABI3 configure failed' }
+          cmake --build build\abi3-core --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Core ABI3 build failed' }
+          cmake --install build\abi3-core --config Release --prefix build\abi3-core-install
+          if ($LASTEXITCODE -ne 0) { throw 'Core ABI3 install failed' }
+
+      - name: Configure and build locked ABI3 desktop shell
+        shell: pwsh
+        run: |
+          cmake -S . -B build\abi3-default `
+            -DJELLYFRAME_RENDER_CORE_PROVIDER=package `
+            -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=${{ github.workspace }}\build\abi3-core-install `
+            -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF `
+            -DJELLYFRAME_BUILD_EXAMPLES=ON `
+            -DJELLYFRAME_BUILD_TESTS=OFF `
+            -DJELLYFRAME_BUILD_BENCHMARKS=OFF `
+            -DJELLYFRAME_BUILD_SCRIPTING=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime ABI3 configure failed' }
+          $profile = Get-Content build\abi3-default\generated\jellyframe_render_core_profile.json -Raw | ConvertFrom-Json
+          $provenance = Get-Content build\abi3-default\generated\jellyframe_render_core_provenance.json -Raw | ConvertFrom-Json
+          if ($profile.engineAbi -ne 3 -or $profile.packageVersion -ne '0.8.0' -or
+              $provenance.lockEnforced -ne $true -or
+              $provenance.sourceHash -ne 'fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795') {
+            throw "Unexpected locked ABI3 provenance: $($provenance | ConvertTo-Json -Compress)"
+          }
+          cmake --build build\abi3-default --config Release --target jellyframe_desktop_shell --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime ABI3 desktop shell failed to build' }
+
+      - name: Checkout merged Render Core PR #17
+        uses: actions/checkout@v5
+        with:
+          repository: xiaopaoya/JellyFrame-Render-Core
+          ref: 431789fd78fc7f9a654f2f4a13d5e28be8f6e32f
+          path: third_party/render-core-source
+
+      - name: Verify merged Core source identity
+        shell: pwsh
+        run: |
+          $coreRevision = (git -C third_party\render-core-source rev-parse HEAD).Trim()
+          if ($coreRevision -ne '431789fd78fc7f9a654f2f4a13d5e28be8f6e32f') {
+            throw "Expected merged Core PR #17 at 431789fd78fc7f9a654f2f4a13d5e28be8f6e32f, got $coreRevision"
+          }
+          $coreAbi4 = Select-String -Path third_party\render-core-source\cmake\render_core_version.cmake `
+            -Pattern 'set\(JELLYFRAME_RENDER_CORE_ENGINE_ABI "4"' -Quiet
+          if (-not $coreAbi4) { throw 'Checked-out Core source does not declare ABI4' }
+
+      - name: Checkout JerryScript
+        uses: actions/checkout@v5
+        with:
+          repository: jerryscript-project/jerryscript
+          ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
+          path: third_party/jerryscript
+
+      - name: Build JerryScript
+        shell: pwsh
+        run: python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+
+      - name: Configure ordinary desktop and scripting consumers
+        shell: pwsh
+        run: >-
+          cmake -S . -B build/abi4-same-thread
+          -DJELLYFRAME_RENDER_CORE_PROVIDER=in-tree
+          -DJELLYFRAME_RENDER_CORE_SOURCE_DIR=${{ github.workspace }}/third_party/render-core-source
+          -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
+          -DJELLYFRAME_BUILD_EXAMPLES=ON
+          -DJELLYFRAME_BUILD_TESTS=ON
+          -DJELLYFRAME_BUILD_BENCHMARKS=OFF
+          -DJELLYFRAME_BUILD_SCRIPTING=ON
+          -DJELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=OFF
+          -DJERRYSCRIPT_ROOT=${{ github.workspace }}/third_party/jerryscript
+
+      - name: Verify ABI4 source-override provenance
+        shell: pwsh
+        run: |
+          $profile = Get-Content build\abi4-same-thread\generated\jellyframe_render_core_profile.json -Raw | ConvertFrom-Json
+          $provenance = Get-Content build\abi4-same-thread\generated\jellyframe_render_core_provenance.json -Raw | ConvertFrom-Json
+          if ($profile.engineAbi -ne 4 -or $profile.packageVersion -ne '0.9.0-dev') {
+            throw "Unexpected Core profile: ABI $($profile.engineAbi), version $($profile.packageVersion)"
+          }
+          if ($provenance.provider -ne 'source-override' -or $provenance.engineAbi -ne 4 -or
+              $provenance.lockEnforced -ne $false -or
+              $provenance.sourceHash -ne '488874f1f2ce0880a47da5695cbe88a13a14b927461360cff3b58f8e9d2e6172' -or
+              $provenance.sourceFileCount -ne 138 -or
+              $provenance.lockedVersion -ne '0.8.0' -or $provenance.lockedEngineAbi -ne 3 -or
+              $provenance.lockedSourceHash -ne 'fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795') {
+            throw "Unexpected Core source-override provenance: $($provenance | ConvertTo-Json -Compress)"
+          }
+
+      - name: Build desktop shell and same-thread scripting tests
+        shell: pwsh
+        run: >-
+          cmake --build build/abi4-same-thread --config Release
+          --target jellyframe_desktop_shell jellyframe_script_tests jellyframe_app_runtime_tests
+          --parallel
+
+      - name: Run ordinary script and App Runtime unit tests
+        shell: pwsh
+        run: >-
+          ctest --test-dir build/abi4-same-thread -C Release
+          -R "^(jellyframe_script_tests|jellyframe_app_runtime_tests)$"
+          --output-on-failure
+      - name: Exercise ordinary ABI4 desktop app entry
+        shell: pwsh
+        run: >-
+          python tests\tool_regression\runtime_abi4_same_thread_tests.py
+          build\abi4-same-thread\Release\jellyframe_desktop_shell.exe
