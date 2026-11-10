@@ -2,7 +2,7 @@
 
 #include "app_runtime/script_task_frame_codec.h"
 #include "render_core/software_renderer.h"
-#include "render_core/text_system.h"
+#include "app_runtime/runtime_font_catalog.h"
 
 #include <array>
 #include <cstddef>
@@ -17,16 +17,24 @@ enum class ScriptTaskFrameRenderStatus : std::uint8_t {
     InvalidFrame,
     InvalidClipChain,
     FramebufferRejected,
+    UnsupportedSamplingFeature,
 };
 
 struct ScriptTaskFrameRendererOptions {
+    RuntimeImageProvider::Handle image_provider;
     std::size_t max_clip_depth = 8;
     std::size_t max_temporary_pixels = 0;
     DiagnosticSink* diagnostics = nullptr;
     SoftwareRasterizerStatistics* rasterizer_statistics = nullptr;
     SoftwareRasterizerTiming rasterizer_timing;
-    const TextSystem* text_system = nullptr;
+    std::size_t max_groups = 1024;
+    std::size_t max_group_depth = 32;
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    // Renderer retains immutable registrations and font bytes for every replay.
+    // Prepared text requires checked group rendering, as in wire version7.
+    RuntimeFontCatalog::Handle text_catalog;
     TextPaintLimits text_limits;
+#endif
 };
 
 // Read-only comparison of two value frames for retained-rendering research.
@@ -94,8 +102,8 @@ private:
 };
 
 // Desktop/host-side consumer for the value-only frame contract. It never
-// reconstructs DOM or LayerNode state; all geometry comes from the decoded
-// frame and all drawing is delegated to the platform-neutral rasterizer.
+// reconstructs DOM state; v6 rebuilds only a private paint graph from validated
+// group values and delegates composition to the selected Core compositor.
 class ScriptTaskFrameRenderer final {
 public:
     explicit ScriptTaskFrameRenderer(TextPainter text_painter = {},
@@ -115,6 +123,15 @@ public:
                      std::size_t dirty_rect_count = 0,
                      SoftwareRasterizerScratch* scratch = nullptr,
                      ScriptTaskFrameRenderStatus* status = nullptr) const;
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    // Uses the accepted frame's supervisor-bound immutable catalog. The UI
+    // cannot accidentally reuse this renderer's previous application's fonts.
+    bool render_into(const ScriptTaskAcceptedAppFrame& frame,
+                     FrameBuffer& target, Color background,
+                     const Rect* dirty_rects = nullptr, std::size_t dirty_rect_count = 0,
+                     SoftwareRasterizerScratch* scratch = nullptr,
+                     ScriptTaskFrameRenderStatus* status = nullptr) const;
+#endif
 
     // Applies this renderer's host painter contracts to conservative command
     // bounds. Retained experiments must call this instead of assuming rect.
@@ -131,6 +148,25 @@ private:
     TextPainter text_painter_;
     ImagePainter image_painter_;
 };
+
+enum class ScriptTaskFrameDamageKind : std::uint8_t { Full, Partial, Unchanged };
+
+struct ScriptTaskFrameDamage {
+    ScriptTaskFrameDamageKind kind = ScriptTaskFrameDamageKind::Full;
+    Rect rect;
+};
+
+// Conservative v6 damage for an existing framebuffer. Both inputs must come
+// from the same immutable resource/painter snapshot and background. Previous
+// must describe the last successfully rendered AND presented framebuffer.
+// Invalidate it after any render/present failure or external framebuffer write.
+// The caller retains only its bounded decoded frame; no second image is needed.
+// Transform/structure changes and unbounded painters select Full. Partial
+// replays the entire current paint graph through Core's normal dirty clipping,
+// including unchanged translucent underlays/overlays and rounded groups.
+ScriptTaskFrameDamage plan_script_task_group_damage(
+    const ScriptTaskFrameRenderer& renderer,
+    const ScriptTaskAppFrame& previous, const ScriptTaskAppFrame& current);
 
 // Explicit, desktop-oriented retained-diff correctness probe. It copies the
 // last successfully presented value frame/image only when observe_presented()
