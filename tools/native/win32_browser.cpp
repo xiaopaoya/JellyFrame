@@ -11,6 +11,7 @@
 #include "app_runtime/app_load_telemetry.h"
 #include "app_runtime/app_service_worker.h"
 #include "app_runtime/app_services.h"
+#include "app_runtime/script_task_command_access.h"
 #include "app_runtime/system_events.h"
 #include "render_core/animation_invalidation.h"
 #include "render_core/animation_timeline.h"
@@ -69,8 +70,9 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <unordered_map>
+#include <type_traits>
 #include <utility>
+#include <unordered_map>
 #include <vector>
 
 using namespace jellyframe;
@@ -782,17 +784,34 @@ void add_package_background_image_fixtures(const StyleResolver& resolver,
 
 void collect_image_handles(const LayerNode& layer, std::vector<std::uint32_t>& handles) {
     for (const DisplayCommand& command : layer.display_list) {
-        if (command.type != DisplayCommandType::Image || command.image_handle == 0) {
+        if (detail::command_type(command) != DisplayCommandType::Image) {
             continue;
         }
-        if (std::find(handles.begin(), handles.end(), command.image_handle) == handles.end()) {
-            handles.push_back(command.image_handle);
+        const std::uint32_t handle = detail::command_image_handle(command);
+        if (handle == 0) continue;
+        if (std::find(handles.begin(), handles.end(), handle) == handles.end()) {
+            handles.push_back(handle);
         }
     }
     for (const auto& child : layer.children) {
         collect_image_handles(*child, handles);
     }
 }
+
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_LAYER_API_VERSION)
+bool has_non_solid_background(const Style& style) {
+    const auto end = style.background_layers.begin() +
+        std::min<std::size_t>(style.background_layer_count, style.background_layers.size());
+    return std::any_of(style.background_layers.begin(), end,
+                       [](const auto& background) {
+                           return background.kind != BackgroundLayerKind::None;
+                       });
+}
+#else
+bool has_non_solid_background(const Style& style) {
+    return style.background_paint != BackgroundPaintKind::Solid;
+}
+#endif
 
 void report_image_request_failure(DiagnosticSink* diagnostics,
                                   const std::string& src,
@@ -2072,11 +2091,11 @@ struct BrowserImageResolveContext {
     const StyleResolver* style_resolver = nullptr;
 };
 
-bool resolve_browser_image_handle(const Node& node,
-                                  ImageResolveKind kind,
-                                  std::uint16_t background_resource_id,
-                                  std::uint32_t& handle,
-                                  void* raw_context) {
+bool resolve_browser_image_handle_impl(const Node& node,
+                                       ImageResolveKind kind,
+                                       std::uint16_t background_resource_id,
+                                       std::uint32_t& handle,
+                                       void* raw_context) {
     auto* context = static_cast<BrowserImageResolveContext*>(raw_context);
     if (context == nullptr || node.type != NodeType::Element) {
         return false;
@@ -2101,7 +2120,10 @@ bool resolve_browser_image_handle(const Node& node,
         return false;
     }
     const AppImageSurfaceState previous_state = context->cache->state_for_url(*src);
-    const bool resolved = context->cache->resolve_or_request(*context->runtime, *context->images, *src, &handle);
+    const bool resolved = context->cache->resolve_or_request(*context->runtime,
+                                                              *context->images,
+                                                              *src,
+                                                              &handle);
     const AppServiceSubmitStatus submit_status = context->cache->last_submit_status_for_url(*src);
     const AppImageSurfaceState current_state = context->cache->state_for_url(*src);
     if (!resolved && submit_status != AppServiceSubmitStatus::Accepted &&
@@ -2122,6 +2144,40 @@ bool resolve_browser_image_handle(const Node& node,
     }
     return resolved;
 }
+
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_LAYER_API_VERSION)
+bool resolve_browser_image_handle(const Node& node,
+                                  ImageResolveKind kind,
+                                  std::uint16_t background_resource_id,
+                                  ResolvedImageResource& resource,
+                                  void* raw_context) {
+    resource = {};
+    if (!resolve_browser_image_handle_impl(node, kind, background_resource_id,
+                                           resource.image_handle, raw_context)) return false;
+    auto* context = static_cast<BrowserImageResolveContext*>(raw_context);
+    if (const AppDecodedSurfaceRecord* surface = context->images->surface(resource.image_handle)) {
+        if (surface->width <= 0 || surface->height <= 0 ||
+            surface->width > 8191 || surface->height > 8191) {
+            resource.intrinsic_size.state = ImageIntrinsicSizeState::Invalid;
+        } else {
+            resource.intrinsic_size = ImageIntrinsicSize{
+                ImageIntrinsicSizeState::Known,
+                static_cast<std::uint16_t>(surface->width),
+                static_cast<std::uint16_t>(surface->height),
+            };
+        }
+    }
+    return true;
+}
+#else
+bool resolve_browser_image_handle(const Node& node,
+                                  ImageResolveKind kind,
+                                  std::uint16_t background_resource_id,
+                                  std::uint32_t& handle,
+                                  void* raw_context) {
+    return resolve_browser_image_handle_impl(node, kind, background_resource_id, handle, raw_context);
+}
+#endif
 
 Color read_surface_pixel(const AppDecodedSurfaceRecord& surface, int x, int y) {
     if (x < 0 || y < 0 || x >= surface.width || y >= surface.height ||
@@ -2312,13 +2368,13 @@ ImageDrawMapping map_image_draw_rect(Rect rect,
     };
 }
 
-bool paint_image_surface(FrameBuffer& target,
-                         Rect rect,
-                         std::uint32_t image_handle,
-                         ObjectFit object_fit,
-                         ObjectPosition object_position,
-                         ImageRendering image_rendering,
-                         void* raw_context) {
+bool paint_image_surface_impl(FrameBuffer& target,
+                              Rect rect,
+                              std::uint32_t image_handle,
+                              ObjectFit object_fit,
+                              ObjectPosition object_position,
+                              ImageRendering image_rendering,
+                              void* raw_context) {
     auto* context = static_cast<BrowserImageContext*>(raw_context);
     if (context == nullptr || rect.width <= 0 || rect.height <= 0) {
         return false;
@@ -2429,6 +2485,27 @@ bool paint_image_surface(FrameBuffer& target,
     }
     return true;
 }
+
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+bool paint_image_surface(FrameBuffer& target,
+                         const ImagePaintRequest& request,
+                         void* raw_context) {
+    return paint_image_surface_impl(target, request.destination, request.image_handle,
+                                    request.object_fit, request.object_position,
+                                    request.image_rendering, raw_context);
+}
+#else
+bool paint_image_surface(FrameBuffer& target,
+                         Rect rect,
+                         std::uint32_t image_handle,
+                         ObjectFit object_fit,
+                         ObjectPosition object_position,
+                         ImageRendering image_rendering,
+                         void* raw_context) {
+    return paint_image_surface_impl(target, rect, image_handle, object_fit,
+                                    object_position, image_rendering, raw_context);
+}
+#endif
 
 HFONT create_gdi_text_font(int font_size, int font_weight) {
     const int font_height = -std::max(8, font_size);
@@ -6279,7 +6356,7 @@ private:
         const Style& style = layer->box->style;
         if (style.border_radius > 0 || style.border_radius_percent >= 0 ||
             style.opacity < 0.999F ||
-            style.background_paint != BackgroundPaintKind::Solid ||
+            has_non_solid_background(style) ||
             style.background_color.a != 255) {
             return false;
         }
