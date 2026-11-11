@@ -2,6 +2,12 @@
 
 Last updated: 2026-11-11; Applies to: 0.6.0-dev
 
+The original Node-routing experiment supplied the engine and Runtime evidence
+below. This delivery branch extracts only the dependency repair and necessary
+IDF build fixes onto Runtime master; it contains no Node identity or R3 owner
+implementation. Branch-specific validation belongs in
+`2026-11-11-weakref-delivery-slice.md`.
+
 The pinned JerryScript revision `b7069350c2e52e7dc721dfb75f067147bd79b39b`
 publishes its internal `WEAK_REFS` property with an undefined value, then
 assigns the collection pointer after property creation returns. Property
