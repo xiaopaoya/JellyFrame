@@ -264,12 +264,13 @@ config JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
 
 config JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
     bool "Use Core TextSystem in the retained device UI"
-    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK
+    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_DEVICE_IMAGE_LIFECYCLE_ACCEPTANCE
     default n
     help
         Opt in to Core-owned font selection, text measurement, layout packets
-        and software painting for the retained UI task. The default remains
-        the existing port bitmap backend until board visuals are accepted.
+        and software painting for retained UI tasks and installed Apps. The
+        default remains the existing port bitmap backend until board visuals
+        are accepted.
 
 config JELLYFRAME_ESP32S3_RUN_FLEX_GRID_ACCEPTANCE
     bool "Run Flex/Grid ON/OFF acceptance fixture"

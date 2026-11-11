@@ -22,6 +22,12 @@ struct ResourceBundle {
     std::size_t count = 0;
 };
 
+struct InstalledResourceReference {
+    jellyframe::HostResourceKind kind = jellyframe::HostResourceKind::Other;
+    std::string url;
+    std::string base_url;
+};
+
 // An installed app is snapshotted before its UI task starts.  The snapshot
 // owns every byte it exposes, so the UI never retains a registry lease or a
 // raw-partition pointer after launch.
@@ -73,6 +79,15 @@ ResourceBundleContext make_resource_context(const jellyframe::HostBudgets& budge
 bool resolve_local_resource_url(std::string_view url,
                                 std::string_view base_url,
                                 std::string& output);
+
+bool snapshot_resource_entry_compatible(const std::vector<InstalledResourceSnapshotEntry>& entries,
+                                       std::string_view url,
+                                       jellyframe::HostResourceKind kind,
+                                       bool& already_loaded);
+
+void collect_css_background_image_references(std::string css,
+                                             std::string_view base_url,
+                                             std::vector<InstalledResourceReference>& output);
 
 bool load_resource(const jellyframe::HostResourceRequest& request,
                    std::string& output,

@@ -359,6 +359,75 @@ endif()
 
 if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
+    add_executable(jellyframe_esp32s3_resource_reference_tests
+        ports/esp32s3-idf/tests/resource_reference_tests.cpp
+        ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp)
+    if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
+        function(jellyframe_probe_installed_canonical_owner)
+            include(CheckCXXSourceCompiles)
+            set(CMAKE_REQUIRED_INCLUDES
+                ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
+                "${CMAKE_CURRENT_SOURCE_DIR}/src")
+            set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+            unset(JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE CACHE)
+            check_cxx_source_compiles(
+                "#include \"app_runtime/script_task_prepared_text.h\"\nstatic_assert(JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API, \"canonical owner requires packet API\");"
+                JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE)
+            set(JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE
+                ${JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE} PARENT_SCOPE)
+        endfunction()
+        jellyframe_probe_installed_canonical_owner()
+        add_executable(jellyframe_esp32s3_installed_resource_owner_tests
+            ports/esp32s3-idf/tests/installed_resource_owner_tests.cpp
+            ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp
+            ports/esp32s3-idf/main/jellyframe_esp32s3_installed_resource_owner.cpp)
+        if(JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE)
+            target_sources(jellyframe_esp32s3_installed_resource_owner_tests PRIVATE
+                ports/esp32s3-idf/main/jellyframe_esp32s3_image.cpp)
+        endif()
+        target_link_libraries(jellyframe_esp32s3_installed_resource_owner_tests
+            PRIVATE jellyframe_script_task_runtime)
+        target_include_directories(jellyframe_esp32s3_installed_resource_owner_tests PRIVATE
+            ports/esp32s3-idf/main)
+        jellyframe_enable_test_asserts(jellyframe_esp32s3_installed_resource_owner_tests)
+        jellyframe_stage_sanitizer_runtime(jellyframe_esp32s3_installed_resource_owner_tests)
+        add_test(NAME jellyframe_esp32s3_installed_resource_owner_tests
+            COMMAND jellyframe_esp32s3_installed_resource_owner_tests)
+        set_tests_properties(jellyframe_esp32s3_installed_resource_owner_tests PROPERTIES SKIP_RETURN_CODE 77)
+        target_compile_definitions(jellyframe_esp32s3_installed_resource_owner_tests PRIVATE
+            CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM=1
+            CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER=1
+            "JELLYFRAME_CORE_SYSTEM_FONT_FIXTURE=\"${CMAKE_CURRENT_SOURCE_DIR}/ports/esp32s3-idf/font/core-system-noto-regular-16.jffont2\"")
+    endif()
+    if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
+        foreach(_core_text 0 1)
+            foreach(_bmp 0 1)
+                set(_admission_target jellyframe_esp32s3_frame_admission_${_core_text}_${_bmp}_tests)
+                add_executable(${_admission_target}
+                    ports/esp32s3-idf/tests/installed_frame_admission_tests.cpp)
+                target_include_directories(${_admission_target} PRIVATE ports/esp32s3-idf/main)
+                target_link_libraries(${_admission_target} PRIVATE jellyframe_script_task_runtime)
+                target_compile_definitions(${_admission_target} PRIVATE
+                    CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM=${_core_text}
+                    CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER=${_bmp}
+                    JELLYFRAME_TEST_CORE_TEXT=${_core_text}
+                    JELLYFRAME_TEST_BMP=${_bmp})
+                jellyframe_enable_test_asserts(${_admission_target})
+                jellyframe_stage_sanitizer_runtime(${_admission_target})
+                add_test(NAME ${_admission_target} COMMAND ${_admission_target})
+            endforeach()
+        endforeach()
+    endif()
+    target_include_directories(jellyframe_esp32s3_resource_reference_tests PRIVATE
+        ports/esp32s3-idf/main)
+    target_link_libraries(jellyframe_esp32s3_resource_reference_tests PRIVATE jellyframe_render_core)
+    target_compile_features(jellyframe_esp32s3_resource_reference_tests PRIVATE cxx_std_17)
+    target_compile_definitions(jellyframe_esp32s3_resource_reference_tests PRIVATE
+        "JELLYFRAME_RESOURCE_REFERENCE_FIXTURE=\"${CMAKE_CURRENT_SOURCE_DIR}/ports/esp32s3-idf/tests/fixtures/installed-resource-snapshot/styles/nested/theme.css\"")
+    add_test(NAME jellyframe_esp32s3_resource_reference_tests
+        COMMAND jellyframe_esp32s3_resource_reference_tests)
+    jellyframe_enable_test_asserts(jellyframe_esp32s3_resource_reference_tests)
+    jellyframe_stage_sanitizer_runtime(jellyframe_esp32s3_resource_reference_tests)
     if(WIN32 AND TARGET jellyframe_cpu2d_compare)
         add_executable(jellyframe_cpu2d_sampling_tests tests/cpu2d_sampling_tests.cpp)
         target_compile_features(jellyframe_cpu2d_sampling_tests PRIVATE cxx_std_17)

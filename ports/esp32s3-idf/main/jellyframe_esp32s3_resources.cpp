@@ -1,5 +1,8 @@
 #include "jellyframe_esp32s3_resources.h"
 
+#include "render_core/css_parser.h"
+#include "render_core/style.h"
+
 #include <string>
 #include <vector>
 
@@ -146,6 +149,35 @@ bool resolve_local_resource_url(std::string_view url,
                                 std::string_view base_url,
                                 std::string& output) {
     return resolve_resource_url(url, base_url, output);
+}
+
+bool snapshot_resource_entry_compatible(
+    const std::vector<InstalledResourceSnapshotEntry>& entries,
+    std::string_view url,
+    jellyframe::HostResourceKind kind,
+    bool& already_loaded) {
+    already_loaded = false;
+    for (const InstalledResourceSnapshotEntry& entry : entries) {
+        if (entry.url != url) continue;
+        if (entry.kind != kind) return false;
+        already_loaded = true;
+        return true;
+    }
+    return true;
+}
+
+void collect_css_background_image_references(
+    std::string css,
+    std::string_view base_url,
+    std::vector<InstalledResourceReference>& output) {
+    jellyframe::StyleResolver resolver(jellyframe::CssParser{}.parse(css));
+    for (std::size_t id = 1; id <= resolver.background_image_resource_count(); ++id) {
+        const std::string* url = resolver.background_image_resource_url(static_cast<std::uint16_t>(id));
+        if (url != nullptr) {
+            output.push_back(InstalledResourceReference{
+                jellyframe::HostResourceKind::Image, *url, std::string(base_url)});
+        }
+    }
 }
 
 bool load_resource(const jellyframe::HostResourceRequest& request,

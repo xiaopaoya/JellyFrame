@@ -1121,7 +1121,7 @@ bool load_timer_document(TimerUiTaskContext& context) {
     }
 
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
-    context.image_adapter.configure(context.budgets, context.document_url, resource_bundle);
+    context.image_adapter.configure(context.budgets, context.document_url, resource_bundle, esp_timer_get_time);
 #endif
 
     const std::string css = jellyframe::combine_author_css("",
@@ -2325,7 +2325,7 @@ void run_retained_ui_task(void* raw_context) {
     context->capabilities = make_ui_capabilities(board, context->width, context->height);
     context->budgets = context->capabilities.budgets;
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
-    context->image_adapter.configure(context->budgets, context->document_url);
+    context->image_adapter.configure(context->budgets, context->document_url, nullptr, esp_timer_get_time);
 #endif
     context->font_context = make_app_font_context();
     context->text_measure = jellyframe::TextMeasureProvider{app_font_measure_callback,
