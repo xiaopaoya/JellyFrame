@@ -941,6 +941,15 @@ if(JELLYFRAME_BUILD_TESTS)
         endif()
     endif()
 
+    if(WIN32 AND TARGET jellyframe_desktop_shell AND JELLYFRAME_BUILD_SCRIPTING AND JELLYFRAME_ENABLE_R3_SCRIPT_EVENTS)
+        add_test(
+            NAME jellyframe_browser_callback_failure
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/browser_callback_failure_tests.py
+                    $<TARGET_FILE:jellyframe_desktop_shell>
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    endif()
+
     if(WIN32 AND JELLYFRAME_BUILD_APP_RUNTIME AND JELLYFRAME_BUILD_EXAMPLES AND JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS)
         set(JELLYFRAME_WIN32_BROWSER_CLI_TEST_ARGS
             ${Python3_EXECUTABLE}

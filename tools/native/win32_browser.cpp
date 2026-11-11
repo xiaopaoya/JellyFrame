@@ -4814,6 +4814,7 @@ private:
     std::unordered_map<const Node*, int> scroll_offsets_;
     VerticalScrollGesture scroll_gesture_;
     const Node* scroll_drag_target_ = nullptr;
+    std::uint64_t script_recovery_generation_ = 0;
     const Node* scroll_inertia_target_ = nullptr;
     AnimationTimeline animation_timeline_;
     std::vector<StyleOverride> style_overrides_;
@@ -4955,10 +4956,11 @@ private:
         return true;
     }
 
-    void rebuild_input_controller(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
+    bool rebuild_input_controller(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
         input_ = std::make_unique<InputController>(
             *layer_tree_,
             input_invalidation_options_from_style(*style_resolver_));
+        if (consume_script_callback_failure("autofocus")) return false;
         input_->set_interaction_state(hovered_node, active_node, focused_node);
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         const Node* modal = script_runtime_ != nullptr ? script_runtime_->active_modal_dialog() : nullptr;
@@ -4968,8 +4970,10 @@ private:
                 active_modal_node_ = modal;
             } else {
                 input_->set_modal_root(nullptr);
+                if (consume_script_callback_failure("modal-focus")) return false;
                 if (modal_focus_restore_node_ != nullptr) {
                     input_->set_focused_node(modal_focus_restore_node_);
+                    if (consume_script_callback_failure("restore-focus")) return false;
                 }
                 active_modal_node_ = nullptr;
                 modal_focus_restore_node_ = nullptr;
@@ -4977,8 +4981,10 @@ private:
         }
         if (modal != nullptr) {
             input_->set_modal_root(modal);
+            if (consume_script_callback_failure("modal-focus")) return false;
         }
 #endif
+        return true;
     }
 
     LPARAM pointer_lparam(int x, int y) const {
@@ -6013,6 +6019,8 @@ private:
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
     void recover_active_app_after_script_failure(AppTeardownReason reason, const std::string& detail) {
+        ++script_recovery_generation_;
+        reset_scroll_motion();
         std::cerr << "script stopped reason=" << app_teardown_reason_name(reason) << " detail=" << detail << '\n';
         // All callers have returned from the synchronous script operation.
         pending_script_audio_events_.clear();
@@ -6534,7 +6542,7 @@ private:
             const auto present_started = trace_live_frame
                 ? std::chrono::steady_clock::now()
                 : std::chrono::steady_clock::time_point{};
-            rebuild_input_controller(hovered_node, active_node, focused_node);
+            if (!rebuild_input_controller(hovered_node, active_node, focused_node)) return true;
             update_blit_pixels_for_content_rect(strip_visible_rect);
             publish_vscode_frame();
             InvalidateRect(hwnd_, nullptr, FALSE);
@@ -6588,7 +6596,7 @@ private:
         const auto present_started = trace_live_frame
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        rebuild_input_controller(hovered_node, active_node, focused_node);
+        if (!rebuild_input_controller(hovered_node, active_node, focused_node)) return true;
         if (can_repaint_dirty) {
             update_blit_pixels_for_content_rect(dirty_content_rect);
         } else {
@@ -6643,6 +6651,7 @@ private:
             } else {
                 scroll_offsets_[scroll_node] = next;
             }
+            const std::uint64_t recovery_before = script_recovery_generation_;
             const bool rendered = render_scroll_state_only(input_ ? input_->hovered_node() : nullptr,
                                                            input_ ? input_->active_node() : nullptr,
                                                            input_ ? input_->focused_node() : nullptr,
@@ -6650,6 +6659,8 @@ private:
                                                            &match,
                                                            previous,
                                                            next);
+            // Recovery can replace the document and invalidate the scroll owner.
+            if (script_recovery_generation_ != recovery_before) return true;
             if (rendered) {
                 if (!live_trace_writer_.active() && frame_trace_enabled() && document_ != nullptr) {
                     const std::string owner = frame_trace_command_attribution_.owner_label_for_node(*scroll_node);
@@ -6729,7 +6740,9 @@ private:
             stop_scroll_inertia();
             return false;
         }
+        const std::uint64_t recovery_before = script_recovery_generation_;
         const bool scrolled = scroll_container_by(scroll_inertia_target_, delta_y);
+        if (script_recovery_generation_ != recovery_before) return false;
         if (!scrolled) {
             stop_scroll_inertia();
             return false;
@@ -7145,7 +7158,7 @@ private:
                 record_trace_span(FrameTraceStage::Paint, paint_started, std::chrono::steady_clock::now());
             }
             const auto present_started = std::chrono::steady_clock::now();
-            rebuild_input_controller(hovered_node, active_node, focused_node);
+            if (!rebuild_input_controller(hovered_node, active_node, focused_node)) return;
             capture_script_layout_snapshot();
             update_blit_pixels();
             publish_vscode_frame();
@@ -7267,7 +7280,7 @@ private:
                 record_trace_span(FrameTraceStage::Paint, paint_started, std::chrono::steady_clock::now());
             }
             const auto present_started = std::chrono::steady_clock::now();
-            rebuild_input_controller(hovered_node, active_node, focused_node);
+            if (!rebuild_input_controller(hovered_node, active_node, focused_node)) return;
             capture_script_layout_snapshot();
             update_blit_pixels();
             publish_vscode_frame();
@@ -7352,7 +7365,7 @@ private:
             record_trace_span(FrameTraceStage::Paint, paint_started, std::chrono::steady_clock::now());
         }
         const auto present_started = std::chrono::steady_clock::now();
-        rebuild_input_controller(hovered_node, active_node, focused_node);
+        if (!rebuild_input_controller(hovered_node, active_node, focused_node)) return;
         update_blit_pixels();
         publish_vscode_frame();
         clear_dirty_flags(*document_);
@@ -8029,7 +8042,10 @@ private:
         input.y = GET_Y_LPARAM(lparam) + scroll_y_;
         input.buttons = buttons_from_keys(wparam);
         input.modifiers = modifiers_from_keys(wparam);
-        if (update_scroll_drag(input.y)) {
+        const std::uint64_t recovery_before = script_recovery_generation_;
+        const bool dragged = update_scroll_drag(input.y);
+        if (script_recovery_generation_ != recovery_before) return;
+        if (dragged) {
             record_trace_event_owner(scroll_drag_target_);
             set_title("drag-scroll scrollY=" + std::to_string(scroll_y_));
             return;
@@ -8105,7 +8121,10 @@ private:
         record_trace_event_owner(target);
         stop_scroll_inertia();
         const int scroll_delta = -input.delta_y;
-        if (!scroll_container_by(target, scroll_delta)) {
+        const std::uint64_t recovery_before = script_recovery_generation_;
+        const bool scrolled = scroll_container_by(target, scroll_delta);
+        if (script_recovery_generation_ != recovery_before) return;
+        if (!scrolled) {
             scroll_by(scroll_delta);
         }
         set_title("wheel " + describe_node(target) + " scrollY=" + std::to_string(scroll_y_));
@@ -8219,7 +8238,9 @@ private:
             frame_options.max_animation_callbacks_per_frame > 0;
         const bool advanced_animation = frame_policy.presents_frames &&
             animation_budget_enabled && advance_animation_timeline(current_time_ms());
+        const std::uint64_t recovery_before = script_recovery_generation_;
         const bool advanced_scroll_inertia = advance_scroll_inertia(frame_policy);
+        if (script_recovery_generation_ != recovery_before) return;
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ == nullptr || !frame_policy.pumps_timers ||
             script_runtime_instance_id_ != app_runtime_.current_app_instance_id()) {
