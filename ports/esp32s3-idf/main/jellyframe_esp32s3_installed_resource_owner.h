@@ -1,9 +1,12 @@
 #pragma once
 
-#include "jellyframe_esp32s3_image.h"
+#include "jellyframe_esp32s3_resources.h"
 
 #include "app_runtime/runtime_font_catalog.h"
 #include "app_runtime/runtime_image_provider.h"
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+#include "jellyframe_esp32s3_image.h"
+#endif
 
 #include <memory>
 #include <string_view>

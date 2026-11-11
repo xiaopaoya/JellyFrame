@@ -26,6 +26,20 @@ The Host profile disables optional examples, benchmarks and sample regressions.
 An initial default-tools build failed on existing legacy DisplayCommand field
 access against opaque ABI4 commands. That log is retained in the evidence.
 
+The actual locked Core0.8/ABI3 package passes27 registered Runtime checks,
+including one explicit canonical-owner skip. Ordinary resource/session tests
+execute. The initial owner target exposed unavailable new image types in the
+old package. Its private header now includes the adapter only with canonical
+capability, and a compile probe selects the corresponding test implementation.
+New-Core positive resource/owner/session checks pass7/7 in each Event mode.
+The CI R3 full job now builds and executes the owner and all four session
+feature combinations against the pinned new Core source.
+
+Clang ASan+UBSan owner/resource/four-session/combined script-worker tests pass
+7/7 with assertions enabled. Runtime and Core C++ plus JerryScript core/ext
+are instrumented, with the platform port library uninstrumented and leak
+detection disabled. The canonical owner test executes positively in this run.
+
 ESP-IDF5.3.1 installed lifecycle builds link in all four CoreText/BMP combinations.
 Generated sdkconfig confirms each requested pair and lifecycle acceptance.
 
