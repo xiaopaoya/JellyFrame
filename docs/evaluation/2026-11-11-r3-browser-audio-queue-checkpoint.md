@@ -6,7 +6,7 @@ event reference and vector iteration state across that JS dispatch, then wrote
 the audio ID through the reference. Callback appends could reallocate the vector.
 
 BrowserApp now calls the small production pump in
-`tools/native/script_audio_event_queue.h`. It snapshots the initial vector size,
+`src/script/script_audio_event_queue.h`. It snapshots the initial vector size,
 copies each due event value and marks that indexed entry consumed before JS.
 It retains no vector iterator or element reference across dispatch. Appended
 entries remain for the next host pump, and one final compaction preserves order.
@@ -61,3 +61,31 @@ The isolated Runtime worktree is
 `E:/Workspaces/migration-followup/Core-r3-submit-kind-20261111`, version
 0.9.0-dev / ABI 4, source identity
 `98f89f0fd300e631e701b301023e1510026145efc50eb3c76845843eb1c34086` / 146.
+
+## Installed consumer staging correction
+
+The helper lives under `src/script` and both Browser and script tests include
+`script/script_audio_event_queue.h`. This keeps it available in the installed
+v10 consumer's existing script-source staging. The earlier tools/native header
+location made that real consumer fail to compile because its staged source tree
+contains script and app-runtime inputs. One production helper now supplies both
+callers through the existing script include path.
+
+After the move, the affected combined script/worker suites pass again in Debug,
+Release and ASan, and the desktop shell rebuilds in Debug and Release. Fresh
+Release installed-package consumer builds also pass both value-codec and actual
+Jerry worker tests in each profile (four tests total):
+
+- `E:/Builds/r3-browser-audio-installed-full-20261111` uses profile
+  `render-core-default` from `E:/Builds/r3-submit-kind-install-full-20261111`.
+- `E:/Builds/r3-browser-audio-installed-cropped-20261111` uses profile
+  `render-core-minimal-no-forms-advanced` from
+  `E:/Builds/r3-submit-kind-install-cropped-20261111`.
+
+Both installed packages retain Core 0.9.0-dev / ABI 4 and source identity
+`98f89f0fd300e631e701b301023e1510026145efc50eb3c76845843eb1c34086` / 146.
+The worker target compiles the staged script test including the real audio
+queue regression. Consumer logs are
+`E:/Builds/r3-browser-audio-installed-{full,cropped}-test.log`, with corresponding
+configure/build logs. The header move changes its include location and leaves
+the tested queue algorithm intact.

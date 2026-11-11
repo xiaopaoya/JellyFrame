@@ -1,5 +1,5 @@
 #include "script/jerryscript_runtime.h"
-#include "../../../tools/native/script_audio_event_queue.h"
+#include "script/script_audio_event_queue.h"
 
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_host_data.h"

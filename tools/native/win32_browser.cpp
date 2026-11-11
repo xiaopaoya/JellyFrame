@@ -41,7 +41,7 @@
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
 #include "script/script_runtime.h"
-#include "script_audio_event_queue.h"
+#include "script/script_audio_event_queue.h"
 #endif
 
 #include "app_registry.h"
