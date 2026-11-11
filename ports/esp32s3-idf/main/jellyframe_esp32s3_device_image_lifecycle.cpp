@@ -72,18 +72,40 @@ jellyframe::HostResourceKind resource_kind_for_path(std::string_view path) {
 }
 
 void collect_resource_references(const jellyframe::Node& node,
-                                 std::vector<std::pair<jellyframe::HostResourceKind, std::string>>& output) {
+                                 std::string_view base_url,
+                                 std::vector<InstalledResourceReference>& output) {
     const std::string& src = node.attribute("src");
     const std::string& href = node.attribute("href");
     if (node.tag_name == "link" && node.attribute("rel") == "stylesheet" && !href.empty()) {
-        output.emplace_back(jellyframe::HostResourceKind::Stylesheet, href);
+        output.push_back({jellyframe::HostResourceKind::Stylesheet, href, std::string(base_url)});
     } else if (node.tag_name == "script" && !src.empty()) {
-        output.emplace_back(jellyframe::HostResourceKind::ClassicScript, src);
+        output.push_back({jellyframe::HostResourceKind::ClassicScript, src, std::string(base_url)});
     } else if ((node.tag_name == "img" || node.tag_name == "source") && !src.empty()) {
-        output.emplace_back(jellyframe::HostResourceKind::Image, src);
+        output.push_back({jellyframe::HostResourceKind::Image, src, std::string(base_url)});
     }
     for (const auto& child : node.children) {
-        collect_resource_references(*child, output);
+        collect_resource_references(*child, base_url, output);
+    }
+}
+
+void collect_inline_background_images(const jellyframe::Node& node,
+                                      std::string_view base_url,
+                                      std::vector<InstalledResourceReference>& output) {
+    const std::string& inline_style = node.attribute("style");
+    if (!inline_style.empty()) {
+        collect_css_background_image_references("*{" + inline_style + "}", base_url, output);
+    }
+    if (node.tag_name == "style") {
+        std::string stylesheet;
+        for (const auto& child : node.children) {
+            if (child && child->type == jellyframe::NodeType::Text) stylesheet += child->text;
+        }
+        if (!stylesheet.empty()) {
+            collect_css_background_image_references(std::move(stylesheet), base_url, output);
+        }
+    }
+    for (const auto& child : node.children) {
+        collect_inline_background_images(*child, base_url, output);
     }
 }
 
@@ -98,38 +120,41 @@ bool snapshot_active_resources(const jellyframe::AppInstalledBundleBinding& bind
     if (!document) {
         return false;
     }
-    std::vector<std::pair<jellyframe::HostResourceKind, std::string>> references;
-    collect_resource_references(*document, references);
-    for (const auto& reference : references) {
+    const std::string entry_path(descriptor.summary.entry_path_view());
+    std::vector<InstalledResourceReference> references;
+    collect_resource_references(*document, entry_path, references);
+    const auto load_reference = [&](const auto& reference) {
         std::string path;
-        if (!resolve_local_resource_url(reference.second, descriptor.summary.entry_path_view(), path)) {
-            return false;
-        }
+        if (!resolve_local_resource_url(reference.url, reference.base_url, path)) return false;
         bool already_loaded = false;
-        for (const InstalledResourceSnapshotEntry& entry : snapshot.entries) {
-            if (entry.url == path) {
-                already_loaded = true;
-                break;
-            }
-        }
-        if (already_loaded) continue;
-        if (snapshot.entries.size() >= kInstalledResourceSnapshotMaxEntries) {
-            return false;
-        }
+        if (!snapshot_resource_entry_compatible(snapshot.entries, path, reference.kind, already_loaded)) return false;
+        if (already_loaded) return true;
+        if (snapshot.entries.size() >= kInstalledResourceSnapshotMaxEntries) return false;
         std::vector<std::uint8_t> bytes(kInstalledResourceMaxBytes);
         std::size_t read_bytes = 0;
         if (binding.read_active_resource(path, bytes.data(), bytes.size(), read_bytes) != DeviceBundleStatus::Ok ||
             read_bytes == 0 || read_bytes > kInstalledResourceMaxBytes ||
-            snapshot.total_bytes > kInstalledResourceSnapshotMaxBytes - read_bytes) {
-            return false;
-        }
+            snapshot.total_bytes > kInstalledResourceSnapshotMaxBytes - read_bytes) return false;
         bytes.resize(read_bytes);
         const jellyframe::HostResourceKind path_kind = resource_kind_for_path(path);
-        if (path_kind != reference.first) {
-            return false;
-        }
+        if (path_kind != reference.kind) return false;
         snapshot.total_bytes += read_bytes;
         snapshot.entries.push_back(InstalledResourceSnapshotEntry{std::move(path), path_kind, std::move(bytes)});
+        return true;
+    };
+    for (const auto& reference : references) {
+        if (!load_reference(reference)) return false;
+    }
+
+    std::vector<InstalledResourceReference> css_images;
+    for (const InstalledResourceSnapshotEntry& entry : snapshot.entries) {
+        if (entry.kind != jellyframe::HostResourceKind::Stylesheet) continue;
+        const std::string css(reinterpret_cast<const char*>(entry.bytes.data()), entry.bytes.size());
+        collect_css_background_image_references(css, entry.url, css_images);
+    }
+    collect_inline_background_images(*document, entry_path, css_images);
+    for (const auto& reference : css_images) {
+        if (!load_reference(reference)) return false;
     }
     return snapshot.rebuild_views();
 }

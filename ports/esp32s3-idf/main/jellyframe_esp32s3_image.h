@@ -31,9 +31,12 @@ struct ImageAdapterStats {
 
 class BmpImageAdapter final {
 public:
+    using Clock = std::int64_t (*)();
+
     void configure(const jellyframe::HostBudgets& budgets,
                    std::string_view base_url,
-                   const ResourceBundle* bundle = nullptr);
+                   const ResourceBundle* bundle,
+                   Clock clock);
 
     void set_background_resource_resolver(const jellyframe::StyleResolver* resolver) {
         background_resource_resolver_ = resolver;
@@ -71,6 +74,7 @@ private:
 
     ResourceLoadStats resource_stats_{};
     ResourceBundleContext resource_context_{};
+    Clock clock_ = nullptr;
     const jellyframe::StyleResolver* background_resource_resolver_ = nullptr;
     ImageAdapterStats stats_{};
     std::vector<Entry> entries_;

@@ -52,6 +52,13 @@ if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME)
         "${JELLYFRAME_ROOT}/src/app_runtime/script_task_fatal_codec.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/script_task_worker_inbox.cpp"
     )
+    if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM AND
+       CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER)
+        list(APPEND JELLYFRAME_SCRIPT_TASK_SOURCES
+            "${JELLYFRAME_ROOT}/src/app_runtime/runtime_font_catalog.cpp"
+            "${JELLYFRAME_ROOT}/src/app_runtime/runtime_image_provider.cpp"
+        )
+    endif()
     if(CONFIG_JELLYFRAME_ESP32S3_RUN_DEVICE_IMAGE_LIFECYCLE_ACCEPTANCE OR
        CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE OR
        CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_FRAME_V2_ACCEPTANCE OR

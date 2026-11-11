@@ -1,7 +1,5 @@
 #include "jellyframe_esp32s3_image.h"
 
-#include "esp_timer.h"
-
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -69,10 +67,12 @@ void blend_pixel(jellyframe::Color& destination, jellyframe::Color source) {
 
 void BmpImageAdapter::configure(const jellyframe::HostBudgets& budgets,
                                 std::string_view base_url,
-                                const ResourceBundle* bundle) {
+                                const ResourceBundle* bundle,
+                                Clock clock) {
     resource_stats_ = {};
     stats_ = {};
     entries_.clear();
+    clock_ = clock;
     background_resource_resolver_ = nullptr;
     resource_context_ = bundle != nullptr
         ? make_resource_context(budgets, base_url, *bundle, &resource_stats_)
@@ -206,9 +206,9 @@ bool BmpImageAdapter::resolve(const jellyframe::Node& node,
                 ? CacheStatus::Oversized
                 : (missing_before != resource_stats_.missing_loads ? CacheStatus::Missing : CacheStatus::Corrupt);
         } else {
-            const std::uint64_t start = esp_timer_get_time();
+            const std::int64_t start = clock_ ? clock_() : 0;
             entry.status = decode(url, bytes, entry);
-            stats_.decode_us += static_cast<std::uint64_t>(esp_timer_get_time() - start);
+            if (clock_) stats_.decode_us += static_cast<std::uint64_t>(clock_() - start);
         }
     }
     const std::uint32_t handle = entry.handle;
