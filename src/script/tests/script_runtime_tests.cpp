@@ -820,6 +820,70 @@ void javascript_nested_event_identity_and_stop_cleanup_work() {
     check(once.ok && once.value == "103", "throwing once listener is removed and later dispatch completes");
 }
 
+void backend_facade_reset_survives_admitted_operations() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    for (int mode = 0; mode != 6; ++mode) {
+        struct OwnerPins { unsigned active=0, retained=0, released=0; } pins;
+        ScriptRuntimeOptions options;
+        options.owner_context = &pins;
+        options.retain_owner = [](void* user) noexcept {
+            auto& pins = *static_cast<OwnerPins*>(user); ++pins.active; ++pins.retained; return true;
+        };
+        options.release_owner = [](void* user) noexcept {
+            auto& pins = *static_cast<OwnerPins*>(user); --pins.active; ++pins.released;
+        };
+        auto runtime = create_script_runtime(options);
+        check(runtime->bind_document(*document), "reset test document binds");
+        struct Context { std::unique_ptr<ScriptRuntime>* owner; unsigned calls = 0; } context{&runtime};
+        runtime->set_dom_mutation_observer([](void* user, const Node&, DomDirtyFlags, std::uint64_t) {
+            auto& context = *static_cast<Context*>(user);
+            ++context.calls;
+            context.owner->reset();
+        }, &context);
+        if (mode == 0) {
+            check(runtime->eval("document.body.setAttribute('data-reset','eval'); 'finished'").ok,
+                  "eval finishes after real facade reset");
+        } else if (mode == 1) {
+            check(runtime->eval("document.getElementById('button').onclick=function(e){this.textContent='event';}; 'ready'").ok,
+                  "native dispatch setup succeeds");
+            Event event("click");
+            check(dispatch_event(*find_first_by_tag(*document, "button"), event), "native dispatch completes after facade reset");
+        } else if (mode == 2) {
+            check(runtime->eval("setTimeout(function(){document.body.setAttribute('data-reset','timer');},0); 'ready'").ok,
+                  "timer reset setup succeeds");
+            check(runtime->pump_timers(1) == 1, "timer call returns after facade reset");
+        } else if (mode == 3) {
+            check(runtime->eval("requestAnimationFrame(function(){document.body.setAttribute('data-reset','frame');}); 'ready'").ok,
+                  "frame reset setup succeeds");
+            check(runtime->pump_animation_frame(1) == 1, "frame call returns after facade reset");
+        } else if (mode == 4) {
+            check(runtime->eval("var nesting=false; document.getElementById('button').onclick=function(){if(!nesting){nesting=true;this.click();}else{this.textContent='nested';}}; 'ready'").ok,
+                  "nested reset setup succeeds");
+            Event event("click");
+            check(dispatch_event(*find_first_by_tag(*document, "button"), event), "nested completion roots drain after real facade reset");
+        } else {
+            struct Request { std::uint32_t id=0, token=0; } request;
+            runtime->bind_script_service_gateway([](void* user, std::uint8_t, std::uint32_t id,
+                std::uint32_t token, std::uint32_t, std::uint8_t, std::uint32_t) {
+                auto& request = *static_cast<Request*>(user); request.id=id; request.token=token; return true;
+            }, &request);
+            check(runtime->eval("services.request(1,function(){document.body.setAttribute('data-reset','service');}); 'ready'").ok && request.id != 0,
+                  "service reset setup succeeds");
+            check(runtime->dispatch_script_service_completion(request.id,request.token,0,0,{}), "service call returns after facade reset");
+        }
+        check(!runtime && context.calls == 1, "real unique facade was deleted exactly once");
+        check(pins.active == 0 && pins.retained == pins.released, "operation and completion owner pins release exactly once");
+        auto fresh = create_script_runtime();
+        check(fresh->bind_document(*document) && fresh->eval("1+1").value == "2", "last pin drains engine before fresh initialization");
+    }
+    auto stopped = create_script_runtime();
+    stopped->request_stop();
+    stopped->request_stop();
+    check(stopped->stop_requested() && !stopped->bind_document(*document) && !stopped->eval("1").ok,
+          "logical stop is idempotent and revokes admission");
+}
+
 void javascript_rebind_admission_preserves_active_callbacks_and_event_roots() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='button'>0</button></body>");
@@ -3161,6 +3225,7 @@ int main() {
         javascript_generic_click_event_does_not_fake_mouse_coordinates();
         javascript_event_identity_is_shared_until_dispatch_completion();
         javascript_nested_event_identity_and_stop_cleanup_work();
+        backend_facade_reset_survives_admitted_operations();
         javascript_rebind_admission_preserves_active_callbacks_and_event_roots();
         javascript_event_identity_capacity_aborts_only_the_refused_dispatch();
         javascript_zero_event_capacity_and_native_allocation_refusal_fail_closed();

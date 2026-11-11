@@ -109,6 +109,15 @@ struct ScriptRuntimeOptions {
     // Shared DOM Event roots retained until Core dispatch completion. This is
     // a simultaneous dispatch bound, independent of the listener/VM budgets.
     std::size_t max_active_event_dispatches = 32;
+    // Same-thread public/native operation pins; no allocation per admission.
+    std::size_t max_active_operations = 64;
+    // Optional paired same-thread host-session pins. Each accepted operation
+    // and DOM completion retains once; release runs after its backend pin drops.
+    // These hooks must not throw or destroy an admitted owner before release.
+    bool (*retain_owner)(void*) noexcept = nullptr;
+    void (*release_owner)(void*) noexcept = nullptr;
+    void* owner_context = nullptr;
+
 };
 
 ScriptRuntimeOptions script_runtime_options_from_host_budgets(const HostBudgets& budgets);
@@ -134,6 +143,11 @@ struct ScriptSystemState {
 class ScriptRuntime {
 public:
     virtual ~ScriptRuntime() = default;
+    // Logical stop revokes new operations/callbacks; admitted work and native
+    // completion roots drain before physical backend cleanup. Borrowed host
+    // resources must survive that drain (or use the paired session hooks).
+    virtual void request_stop() noexcept = 0;
+    virtual bool stop_requested() const noexcept = 0;
 
     // Returns false without changing bindings while script execution or a DOM
     // dispatch completion is active. No pending document pointer is retained;
