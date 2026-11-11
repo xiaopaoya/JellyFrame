@@ -9,6 +9,9 @@
 #include "render_core/dom.h"
 #include "render_core/feature_config.h"
 #include "render_core/form_control.h"
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+#include "render_core/form_submission.h"
+#endif
 #include "render_core/html_parser.h"
 #include "render_core/layout.h"
 
@@ -2736,6 +2739,31 @@ void javascript_geolocation_uses_bound_location_service() {
 }
 
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+void javascript_submitter_requires_submit_event_kind() {
+    HtmlParser parser;
+    auto document = parser.parse(
+        "<body><form id='form'><button id='send'>Send</button></form></body>");
+    JerryScriptRuntime runtime;
+    check(runtime.bind_document(*document), "submit kind fixture binds");
+    check(runtime.eval(
+        "var submissions=[];document.getElementById('form').addEventListener('submit',function(e){"
+        "submissions.push(typeof e.submitter === 'undefined' ? 'generic' : "
+        "e.submitter === null ? 'null' : e.submitter.id);});").ok,
+        "submit kind listener registers");
+    Node* form = find_by_id(*document, "form");
+    Node* send = find_by_id(*document, "send");
+    check(form != nullptr && send != nullptr, "submit kind fixture nodes exist");
+    SubmitEvent actual(send);
+    check(dispatch_event(*form, actual), "typed submit event dispatches");
+    Event generic("submit");
+    check(dispatch_event(*form, generic), "generic submit-named event dispatches");
+    SubmitEvent no_submitter(nullptr);
+    check(dispatch_event(*form, no_submitter), "typed submit without submitter dispatches");
+    const auto result = runtime.eval("submissions.join(':')");
+    check(result.ok && result.value == "send:generic:null",
+        "only typed SubmitEvent exposes submitter and generic submit remains generic");
+}
+
 void javascript_form_submission_and_form_data_work() {
     HtmlParser parser;
     auto document = parser.parse(
@@ -3283,6 +3311,7 @@ int main() {
         javascript_date_now_uses_host_time();
         javascript_geolocation_uses_bound_location_service();
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+        javascript_submitter_requires_submit_event_kind();
         javascript_form_submission_and_form_data_work();
         javascript_form_data_budget_is_bounded();
         javascript_control_validity_subset_works();

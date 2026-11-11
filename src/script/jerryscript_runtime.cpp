@@ -14,6 +14,9 @@
 #include "render_core/feature_config.h"
 #include "render_core/form_control.h"
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+#if !defined(JELLYFRAME_EVENT_SUBMIT_KIND_API) || JELLYFRAME_EVENT_SUBMIT_KIND_API != 1
+#error "R3 submit event binding requires Core EventKind::Submit API version 1"
+#endif
 #include "render_core/form_submission.h"
 #endif
 #include "render_core/layout.h"
@@ -2059,11 +2062,12 @@ jerry_value_t create_event_object(JerryScriptRuntimeState& runtime, Event& event
         number("deltaMode", wheel.delta_mode);
     }
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-    if (const auto* submit = dynamic_cast<const SubmitEvent*>(&event)) {
-        if (submit->submitter() != nullptr) {
+    if (event.kind() == EventKind::Submit) {
+        const auto& submit = static_cast<const SubmitEvent&>(event);
+        if (submit.submitter() != nullptr) {
             value("submitter",
                          JerryValue(make_node_wrapper(runtime,
-                                                      *const_cast<Node*>(submit->submitter()),
+                                                      *const_cast<Node*>(submit.submitter()),
                                                       false)).get());
         } else {
             value("submitter", jerry_null());
