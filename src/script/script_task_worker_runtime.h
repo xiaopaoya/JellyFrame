@@ -27,6 +27,8 @@ enum class ScriptTaskWorkerRuntimeInitStatus : std::uint8_t {
     BudgetRejected,
     Fatal,
     Stopped,
+    AlreadyInitialized,
+    Busy,
 };
 
 enum class ScriptTaskWorkerRuntimeFatalReason : std::uint8_t {
@@ -111,6 +113,9 @@ public:
     ScriptTaskWorkerRuntime(const ScriptTaskWorkerRuntime&) = delete;
     ScriptTaskWorkerRuntime& operator=(const ScriptTaskWorkerRuntime&) = delete;
 
+    // Initialization is single-admission: repeated calls return AlreadyInitialized;
+    // reentry from any active worker/backend operation returns Busy. Neither
+    // refusal replaces the existing document, VM, supervisor context or frames.
     ScriptTaskWorkerRuntimeInitStatus initialize(std::string_view html,
                                                  std::string_view css);
     ScriptTaskWorkerRuntimeInitStatus initialize(ScriptTaskSupervisor& supervisor,

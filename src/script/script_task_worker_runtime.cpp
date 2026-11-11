@@ -193,6 +193,13 @@ public:
             state->options_.mutation_observer(state->options_.mutation_observer_user,
                                                node, flags, generation);
     }
+    ScriptTaskWorkerRuntimeInitStatus initialization_admission() const {
+        if (stopped_) return ScriptTaskWorkerRuntimeInitStatus::Stopped;
+        if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
+        if (active_operations_ != 0) return ScriptTaskWorkerRuntimeInitStatus::Busy;
+        if (initialized_) return ScriptTaskWorkerRuntimeInitStatus::AlreadyInitialized;
+        return ScriptTaskWorkerRuntimeInitStatus::Accepted;
+    }
     void release_operation();
     void drain();
     std::size_t active_operations_ = 0;
@@ -347,6 +354,7 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::State::initialize(std
                                                                        std::string_view css) {
     if (stopped_) return ScriptTaskWorkerRuntimeInitStatus::Stopped;
     if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
+    if (initialized_) return ScriptTaskWorkerRuntimeInitStatus::AlreadyInitialized;
     if (!session_.valid()) return ScriptTaskWorkerRuntimeInitStatus::InvalidSession;
     if (is_canonical_frame_version(options_.frame_codec.version)) {
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
@@ -417,6 +425,7 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::State::initialize(
     ScriptTaskSupervisor& supervisor, std::string_view html, std::string_view css) {
     if (stopped_) return ScriptTaskWorkerRuntimeInitStatus::Stopped;
     if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
+    if (initialized_) return ScriptTaskWorkerRuntimeInitStatus::AlreadyInitialized;
     if (is_canonical_frame_version(options_.frame_codec.version)) {
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
         if (!options_.text_catalog || (options_.image_provider && !options_.image_provider->valid())) {
@@ -897,6 +906,9 @@ void ScriptTaskWorkerRuntime::set_ui_accepted_frame_sequence(std::uint32_t seque
 }
 
 ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::string_view html, std::string_view css) {
+    const auto admission = state_ ? state_->initialization_admission()
+        : ScriptTaskWorkerRuntimeInitStatus::Stopped;
+    if (admission != ScriptTaskWorkerRuntimeInitStatus::Accepted) return admission;
     OperationPin pin(state_);
     if (!pin) return state_ && !state_->stopped_
         ? ScriptTaskWorkerRuntimeInitStatus::BudgetRejected
@@ -905,6 +917,9 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::strin
 }
 
 ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(ScriptTaskSupervisor& supervisor, std::string_view html, std::string_view css) {
+    const auto admission = state_ ? state_->initialization_admission()
+        : ScriptTaskWorkerRuntimeInitStatus::Stopped;
+    if (admission != ScriptTaskWorkerRuntimeInitStatus::Accepted) return admission;
     OperationPin pin(state_);
     if (!pin) return state_ && !state_->stopped_
         ? ScriptTaskWorkerRuntimeInitStatus::BudgetRejected

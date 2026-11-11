@@ -1178,6 +1178,50 @@ void worker_owner_reset_during_service_completion() {
         "real service callback owner reset drains safely without frame publication");
 }
 
+void worker_initialization_admission_preserves_session() {
+    auto supervisor = make_supervisor();
+    const auto session = supervisor.begin(97);
+    struct Context {
+        ScriptTaskWorkerRuntime* worker = nullptr;
+        ScriptTaskSupervisor* supervisor = nullptr;
+        std::size_t calls = 0;
+    } context;
+    auto options = runtime_options();
+    options.mutation_observer_user = &context;
+    options.mutation_observer = [](void* user, const Node&, DomDirtyFlags, std::uint64_t) {
+        auto& context = *static_cast<Context*>(user);
+        ++context.calls;
+        check(context.worker->initialize("<body>replacement</body>", "") ==
+            ScriptTaskWorkerRuntimeInitStatus::Busy, "active initialize refuses before replacing DOM");
+        check(context.worker->initialize(*context.supervisor, "<body>replacement</body>", "") ==
+            ScriptTaskWorkerRuntimeInitStatus::Busy, "active supervisor initialize refuses before replacing DOM");
+    };
+    ScriptTaskWorkerRuntime worker(session, options);
+    context.worker = &worker;
+    context.supervisor = &supervisor;
+    check(worker.initialize(supervisor, "<body><button id='button'>original</button></body>", "") ==
+        ScriptTaskWorkerRuntimeInitStatus::Accepted, "initial supervisor continuation remains admitted");
+    check(worker.initialize("<body>replacement</body>", "") ==
+        ScriptTaskWorkerRuntimeInitStatus::AlreadyInitialized, "repeated initialize refuses deterministically");
+    check(worker.initialize(supervisor, "<body>replacement</body>", "") ==
+        ScriptTaskWorkerRuntimeInitStatus::AlreadyInitialized, "repeated supervisor initialize refuses");
+    auto result = worker.eval_with_supervisor(supervisor,
+        "var preserved=41; document.getElementById('button').textContent='preserved'; preserved+1;");
+    check(result.ok && result.value == "42" && context.calls == 1 && !worker.fatal(),
+        "active initialization refusal preserves original VM and DOM without fatal");
+    check(worker.eval("preserved+1").value == "42" && worker.publish_frame(supervisor).accepted(),
+        "refused initialization preserves original realm and frame publication");
+    ScriptTaskAppFrame frame;
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, frame) ==
+        ScriptTaskAppFrameTakeStatus::Accepted, "preserved session frame reaches UI");
+    bool preserved = false;
+    for (const auto& command : frame.display_list) if (command.text == "preserved") preserved = true;
+    check(preserved, "preserved frame contains original DOM mutation");
+    worker.stop();
+    check(worker.initialize("<body></body>", "") == ScriptTaskWorkerRuntimeInitStatus::Stopped,
+        "stop takes precedence over initialized refusal");
+}
+
 void worker_owner_admission_refusal() {
     auto supervisor = make_supervisor();
     auto options = runtime_options();
@@ -1201,6 +1245,7 @@ int script_task_worker_runtime_tests_main() {
     try {
         worker_owner_teardown_during_callbacks();
         worker_owner_admission_refusal();
+        worker_initialization_admission_preserves_session();
         worker_owner_reset_during_service_completion();
         worker_input_publishes_value_frame();
         worker_interaction_hints_preserve_css_and_dom_events();
