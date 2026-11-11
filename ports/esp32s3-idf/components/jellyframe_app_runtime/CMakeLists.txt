@@ -114,6 +114,10 @@ idf_component_register(
 )
 
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)
+if(JELLYFRAME_SCRIPT_BACKEND_SOURCES)
+    include("${JELLYFRAME_ROOT}/cmake/jellyframe_script_event_config.cmake")
+    jellyframe_configure_script_events(${COMPONENT_LIB} PUBLIC idf::jellyframe_render_core)
+endif()
 
 target_compile_options(${COMPONENT_LIB} PRIVATE
     -Wall

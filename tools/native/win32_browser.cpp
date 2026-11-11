@@ -6189,7 +6189,9 @@ private:
                     debug_system_state_.network_online,
                 });
                 script_runtime_->set_host_time_ms(current_time_ms());
-                script_runtime_->bind_document(*document_);
+                if (!script_runtime_->bind_document(*document_)) {
+                    throw std::runtime_error("script document binding refused while runtime is active");
+                }
                 if (frame_trace_enabled()) {
                     script_runtime_->set_dom_mutation_observer(record_script_dom_mutation, this);
                 }

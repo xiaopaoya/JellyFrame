@@ -41,6 +41,7 @@ enum class ScriptCallbackFailureStatus : std::uint8_t {
     None,
     Exception,
     ExecutionBudgetExceeded,
+    ResourceLimit,
 };
 
 struct ScriptCallbackFailure {
@@ -105,6 +106,19 @@ struct ScriptRuntimeOptions {
     std::size_t max_attributes_per_element = 64;
     std::size_t max_dom_string_bytes = 512 * 1024;
     std::size_t max_service_callbacks = 16;
+    // Shared DOM Event roots retained until Core dispatch completion. This is
+    // a simultaneous dispatch bound in explicit R3 mode, independent of the
+    // listener/VM budgets. Legacy mode has callback-local objects, not roots.
+    std::size_t max_active_event_dispatches = 32;
+    // Same-thread public/native operation pins; no allocation per admission.
+    std::size_t max_active_operations = 64;
+    // Optional paired same-thread host-session pins. Each accepted operation
+    // and DOM completion retains once; release runs after its backend pin drops.
+    // These hooks must not throw or destroy an admitted owner before release.
+    bool (*retain_owner)(void*) noexcept = nullptr;
+    void (*release_owner)(void*) noexcept = nullptr;
+    void* owner_context = nullptr;
+
 };
 
 ScriptRuntimeOptions script_runtime_options_from_host_budgets(const HostBudgets& budgets);
@@ -130,8 +144,16 @@ struct ScriptSystemState {
 class ScriptRuntime {
 public:
     virtual ~ScriptRuntime() = default;
+    // Logical stop revokes new operations/callbacks; admitted work and native
+    // completion roots drain before physical backend cleanup. Borrowed host
+    // resources must survive that drain (or use the paired session hooks).
+    virtual void request_stop() noexcept = 0;
+    virtual bool stop_requested() const noexcept = 0;
 
-    virtual void bind_document(Node& document) = 0;
+    // Returns false without changing bindings while script execution or a DOM
+    // dispatch completion is active. No pending document pointer is retained;
+    // the host retries at a later idle boundary and keeps both owners alive.
+    virtual bool bind_document(Node& document) = 0;
     // Optional tooling hook. Implementations must not retain a queue or add
     // work when the callback is null.
     virtual void set_dom_mutation_observer(ScriptDomMutationCallback callback, void* user) {
