@@ -131,6 +131,7 @@ idf_component_register(
         "jellyframe_esp32s3_device_image_store.cpp"
         "jellyframe_esp32s3_hal.cpp"
         "jellyframe_esp32s3_image.cpp"
+        "jellyframe_esp32s3_installed_resource_owner.cpp"
         "jellyframe_esp32s3_jfdp_transport.cpp"
         "jellyframe_esp32s3_input.cpp"
         "jellyframe_esp32s3_resources.cpp"

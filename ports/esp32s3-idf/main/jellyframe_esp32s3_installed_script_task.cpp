@@ -8,6 +8,7 @@
 #include "jellyframe_esp32s3_font.h"
 #include "jellyframe_esp32s3_hal.h"
 #include "jellyframe_esp32s3_input.h"
+#include "jellyframe_esp32s3_installed_frame_admission.h"
 
 #include "app_runtime/app_host.h"
 #include "app_runtime/script_task_contract.h"
@@ -21,6 +22,10 @@
 #include "render_core/html_parser.h"
 #include "render_core/software_renderer.h"
 #include "script/script_task_worker_runtime.h"
+#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && \
+    CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+#include "jellyframe_esp32s3_core_system_font.h"
+#endif
 
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -33,7 +38,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <new>
 #include <string>
 #include <utility>
 #include <vector>
@@ -75,7 +79,13 @@ jellyframe::HostBudgets installed_script_budgets(int width, int height) {
 
 jellyframe::ScriptTaskAppFrameCodecOptions frame_codec_options() {
     jellyframe::ScriptTaskAppFrameCodecOptions options;
+#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+    options.version = 10;
+    options.max_groups = 64;
+    options.max_group_depth = 8;
+#else
     options.version = 5;
+#endif
     options.max_commands = kMaxCommands;
     options.max_text_bytes = 12u * 1024u;
     options.max_input_targets = 48;
@@ -129,6 +139,7 @@ struct InstalledBundleScriptSession {
     std::string entry_document;
     std::string author_css;
     std::vector<jellyframe::DocumentScript> scripts;
+    std::shared_ptr<const struct InstalledAppResources> runtime_resources;
     jellyframe::AppRuntimeHost* host = nullptr;
     jellyframe::ScriptTaskSupervisor* protocol = nullptr;
     jellyframe::ScriptAppSession script_session{};
@@ -150,6 +161,11 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options(const InstalledBundleS
     options.text_system = state.host != nullptr
         ? state.host->fonts().core_text_system()
         : nullptr;
+#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+    if (state.runtime_resources) {
+        state.runtime_resources->bind_worker_resources(options);
+    }
+#endif
     return options;
 }
 
@@ -360,6 +376,11 @@ void ui_entry(void* raw) {
     jellyframe::ScriptTaskFrameRendererOptions renderer_options;
     renderer_options.max_clip_depth = 8;
     renderer_options.max_temporary_pixels = pixel_count;
+#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+    if (state->runtime_resources) {
+        state->runtime_resources->bind_ui_resources(renderer_options);
+    }
+#endif
     const jellyframe::ScriptTaskFrameRenderer renderer(make_production_text_painter(), renderer_options);
     jellyframe::SoftwareRasterizerScratch scratch;
     std::uint32_t input_sequence = 1;
@@ -414,7 +435,8 @@ void supervisor_entry(void* raw) {
     }
     {
     jellyframe::ScriptTaskSupervisor protocol(supervisor_options());
-    state->script_session = protocol.begin(state->app_instance_id);
+    state->script_session = begin_installed_script_session(
+        protocol, state->app_instance_id, state->runtime_resources);
     state->protocol = &protocol;
     jellyframe::ScriptTaskServiceBridge bridge(*state->host, protocol, {8});
     TaskHandle_t worker = nullptr;
@@ -546,6 +568,18 @@ bool start_installed_bundle_script_task(std::string app_id,
     next->author_css = std::move(author_css);
     next->scripts = std::move(scripts);
     next->host = &host;
+#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+    auto static_font_owner = std::shared_ptr<const void>(
+        jellyframe_esp32s3_generated::kCoreSystemFont, [](const void*) {});
+    if (!create_installed_app_resources(std::move(resources), budgets, entry_path,
+            jellyframe_esp32s3_generated::kCoreSystemFont,
+            jellyframe_esp32s3_generated::kCoreSystemFontBytes,
+            std::move(static_font_owner), esp_timer_get_time, next->runtime_resources)) {
+        vSemaphoreDelete(next->stopped);
+        delete next;
+        return false;
+    }
+#endif
     const BaseType_t created = xTaskCreateWithCaps(
         supervisor_entry, "jf_app_supervisor", kSupervisorStackBytes, next, 7,
         &next->supervisor_task, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
