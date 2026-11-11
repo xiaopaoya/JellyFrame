@@ -7,6 +7,11 @@
 #include "freertos/task.h"
 
 #include <stdlib.h>
+#include <stdint.h>
+
+// The pinned JerryScript engine uses JMEM_ALIGNMENT_LOG=3. Its external
+// context starts the heap at the next 8-byte boundary.
+#define JELLYFRAME_JERRY_ALIGNMENT 8U
 
 static const char *const jellyframe_jerry_tag = "JellyFrameJerry";
 static jerry_context_t *jellyframe_jerry_context = NULL;
@@ -26,13 +31,29 @@ void jerry_port_sleep(uint32_t sleep_time) {
 }
 
 size_t jerry_port_context_alloc(size_t context_size) {
-    const size_t total = context_size + (size_t) JERRY_GLOBAL_HEAP_SIZE * 1024U;
-    jellyframe_jerry_context = (jerry_context_t *) heap_caps_malloc(
-        total, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (jellyframe_jerry_context == NULL) {
-        jellyframe_jerry_context = (jerry_context_t *) heap_caps_malloc(total, MALLOC_CAP_8BIT);
+    const size_t alignment_padding = JELLYFRAME_JERRY_ALIGNMENT - 1U;
+    const size_t heap_size = (size_t) JERRY_GLOBAL_HEAP_SIZE * 1024U;
+    if (context_size > SIZE_MAX - alignment_padding) {
+        jerry_port_fatal(JERRY_FATAL_OUT_OF_MEMORY);
     }
-    return jellyframe_jerry_context == NULL ? 0 : total;
+    const size_t aligned_context_size =
+        (context_size + alignment_padding) & ~alignment_padding;
+    if (aligned_context_size > SIZE_MAX - heap_size) {
+        jerry_port_fatal(JERRY_FATAL_OUT_OF_MEMORY);
+    }
+    const size_t total = aligned_context_size + heap_size;
+    jellyframe_jerry_context = (jerry_context_t *) heap_caps_aligned_alloc(
+        JELLYFRAME_JERRY_ALIGNMENT, total, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (jellyframe_jerry_context == NULL) {
+        jellyframe_jerry_context = (jerry_context_t *) heap_caps_aligned_alloc(
+            JELLYFRAME_JERRY_ALIGNMENT, total, MALLOC_CAP_8BIT);
+    }
+    // jerry_init immediately clears the returned context and computes the heap
+    // size. Allocation failure must enter the existing fatal boundary first.
+    if (jellyframe_jerry_context == NULL) {
+        jerry_port_fatal(JERRY_FATAL_OUT_OF_MEMORY);
+    }
+    return total;
 }
 
 jerry_context_t *jerry_port_context_get(void) { return jellyframe_jerry_context; }
