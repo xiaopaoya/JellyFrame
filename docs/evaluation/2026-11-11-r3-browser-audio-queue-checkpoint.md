@@ -121,5 +121,14 @@ header in a finally block, and the committed helper is the fixed version.
 Builds: `E:/Builds/runtime-audio-delivery-{native,asan}-20261111`.
 Reproduction runner and raw negative/restored logs:
 `E:/Experiments/runtime-audio-delivery-20261111`. Fresh delivery checks do not
-claim BrowserApp deletion safety or physical audio-driver behavior. Remote
-full/cropped installed/staged workers remain covered by the PR's CI gate.
+claim BrowserApp deletion safety or physical audio-driver behavior.
+
+The first PR CI run exposed a v9 staging omission: its explicit two-header copy
+did not include the new private audio helper, so both profiles failed to compile
+the real script API consumer. v9 now stages all private script headers through
+one configure-tracked inventory. Header additions and existing-header edits
+refresh the staged copies without importing bundled Core headers. Fresh exact
+installed v9 full/cropped packages each pass 4/4, including the real worker and
+script API/audio regression, on Core source
+`6ba204f6bed2984b27ed6299277dd9bd2ab7a2a56b0dccd5131beea8b54a3c0c` / 145.
+Remote CI is rerun for the corrected head; the failed run is not acceptance.
