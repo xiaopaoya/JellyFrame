@@ -32,8 +32,8 @@ readonly-global refusal, writable nonconfigurable rebind, late binding failure,
 stopped-state failure access and fresh Runtime recovery.
 
 Evidence is E:/Experiments/node-delivery-20261112 with final-ctest logs for all
-four routes and reproduction runners. Native full/Debug, installed profiles,
-target compile/resources, remote CI and device acceptance remain pending.
+four routes and reproduction runners. Later native, installed and target
+qualification is recorded below. Remote CI and device acceptance remain pending.
 
 ## Additional qualification
 
@@ -50,5 +50,8 @@ Core source f7c17009.../145 is render-core-default. Compilation includes the
 requires measurement. Target logs and provenance are retained in the evidence.
 
 CI expands pinned R3 full/cropped consumers across cache OFF/ON and enables
-cache in the legacy forms-disabled bridge tests. Native Debug/cache-ON and
-physical acceptance remain pending.
+cache in the legacy forms-disabled bridge tests. Native MSVC Debug with new
+Core R3/cache-ON passes the full Runtime suite21/21, including the combined
+script/worker test. JerryScript Debug libraries are rebuilt from the patched
+engine. Logs are native-debug-full-build.log and native-debug-full-ctest.log.
+Remote CI and physical acceptance remain pending.
