@@ -1,5 +1,5 @@
 #include "script/script_task_worker_runtime.h"
-#include "script/script_event_capabilities.h"
+#include "script/script_capabilities.h"
 
 #include "app_runtime/script_task_input_codec.h"
 #include "app_runtime/script_task_service_bridge.h"

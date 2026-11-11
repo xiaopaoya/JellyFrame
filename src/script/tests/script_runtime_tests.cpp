@@ -1,5 +1,5 @@
 #include "script/jerryscript_runtime.h"
-#include "script/script_event_capabilities.h"
+#include "script/script_capabilities.h"
 #include "script/script_audio_event_queue.h"
 
 #include "app_runtime/app_device_services.h"
@@ -34,11 +34,20 @@ namespace jellyframe {
 void set_script_event_staging_test_hook(void (*hook)(void*) noexcept, void* context) noexcept;
 }
 #endif
+namespace jellyframe {
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY && defined(JELLYFRAME_SCRIPT_IDENTITY_TESTING)
+bool run_node_identity_table_contract_tests();
+void collect_node_wrapper_test_garbage();
+bool run_node_wrapper_allocation_refusal_test(bool auxiliary, void (*arm)(), void (*disarm)());
+#endif
+}
 
 // Arm only from a native listener immediately before the script bridge/getter. This
 // exercises a recoverable C++ allocation failure, not JerryScript heap OOM.
 thread_local int script_test_allocations_before_failure = -1;
 thread_local bool script_test_skip_debug_proxies = false;
+thread_local bool script_test_persistent_allocation_failure = false;
+thread_local unsigned script_test_allocation_failure_count = 0;
 
 void* operator new(std::size_t size) {
 #if defined(_ITERATOR_DEBUG_LEVEL) && _ITERATOR_DEBUG_LEVEL != 0
@@ -49,7 +58,8 @@ void* operator new(std::size_t size) {
     const bool skip_failure = false;
 #endif
     if (!skip_failure && script_test_allocations_before_failure == 0) {
-        script_test_allocations_before_failure = -1;
+        if (!script_test_persistent_allocation_failure) script_test_allocations_before_failure = -1;
+        ++script_test_allocation_failure_count;
         throw std::bad_alloc();
     }
     if (!skip_failure && script_test_allocations_before_failure > 0) --script_test_allocations_before_failure;
@@ -338,6 +348,10 @@ void host_budgets_map_to_script_runtime_options_without_field_drift() {
     check(options.max_dom_string_bytes == 31, "HostBudgets maps DOM string cap exactly");
     check(options.max_animation_frame_callbacks == 11, "HostBudgets maps animation cap exactly");
     check(options.max_execution_check_count == 13, "HostBudgets maps watchdog check cap exactly");
+    check(options.max_node_wrapper_cache_entries == 256,
+          "identity-table cap remains separately bounded from the DOM-node budget");
+    check(options.max_auxiliary_node_bindings == 256,
+          "auxiliary native bindings have an independent default cap");
     check(options.execution_check_interval == 17, "HostBudgets maps watchdog interval exactly");
     check(options.max_route_history_entries == 16, "unrelated route-history cap keeps its default");
 
@@ -347,6 +361,53 @@ void host_budgets_map_to_script_runtime_options_without_field_drift() {
     check(zero_options.max_execution_check_count == 0 && zero_options.execution_check_interval == 0,
           "zero watchdog budgets remain disabled instead of shifting into another option");
 }
+
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY
+void node_wrapper_identity_cap_is_validated_before_vm_start() {
+    ScriptRuntimeOptions options;
+    options.max_node_wrapper_cache_entries = 0;
+    bool zero_rejected = false;
+    try { JerryScriptRuntime runtime(options); }
+    catch (const std::invalid_argument&) { zero_rejected = true; }
+    check(zero_rejected, "enabled Node identity rejects zero capacity before VM startup");
+    options.max_node_wrapper_cache_entries = 1024;
+    {
+        JerryScriptRuntime runtime(options);
+        check(runtime.eval("1").ok, "maximum supported identity-table capacity initializes");
+    }
+    options.max_node_wrapper_cache_entries = 1025;
+    bool rejected = false;
+    try {
+        JerryScriptRuntime runtime(options);
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    check(rejected, "unsupported identity-table capacity is rejected before VM initialization");
+
+    options.max_node_wrapper_cache_entries = 256;
+    options.max_auxiliary_node_bindings = 1024;
+    {
+        JerryScriptRuntime runtime(options);
+        check(runtime.eval("1").ok, "maximum auxiliary binding capacity initializes");
+    }
+    options.max_auxiliary_node_bindings = 1025;
+    rejected = false;
+    try {
+        JerryScriptRuntime runtime(options);
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    check(rejected, "unsupported auxiliary binding capacity is rejected before VM initialization");
+}
+
+void node_identity_table_owns_slots_and_weak_roots_safely() {
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY && defined(JELLYFRAME_SCRIPT_IDENTITY_TESTING)
+    check(run_node_identity_table_contract_tests(),
+          "identity slots preserve generations, binding ownership, weak roots and observer ordering");
+#endif
+}
+
+#endif
 
 void runtime_can_restart() {
     for (int i = 0; i < 3; ++i) {
@@ -668,6 +729,120 @@ void javascript_cached_destroyed_node_wrappers_are_invalidated() {
     check(find_first_by_tag(*document, "button") == nullptr, "destroyed button is gone");
     check(find_first_by_tag(*document, "canvas") == nullptr, "destroyed canvas is gone");
 }
+
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY
+void javascript_node_wrappers_are_canonical_across_entry_points() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><main><button id='target'>Tap</button></main></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    check(button != nullptr, "canonical wrapper target exists");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult setup = runtime.eval(
+        "var target = document.getElementById('target');"
+        "var query = document.querySelector('#target');"
+        "var child = document.querySelector('main').children[0];"
+        "target.marker = 'shared';"
+        "var same = target === query && query === child && child.marker === 'shared';"
+        "var eventSame = false;"
+        "target.addEventListener('click', function (event) {"
+        "  eventSame = this === target && event.target === target && event.currentTarget === target;"
+        "});"
+        "'ready'");
+    check(setup.ok && setup.value == "ready", "canonical wrapper identity setup succeeds");
+    Event click("click");
+    dispatch_event(*button, click);
+    const ScriptEvaluationResult result = runtime.eval("String(same) + ':' + String(eventSame)");
+    check(result.ok && result.value == "true:true",
+          "lookups, children, expandos and event target share one canonical wrapper");
+}
+
+void javascript_auxiliary_binding_limit_preserves_existing_helpers() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='target' style='display:block'>Tap</button></body>");
+
+    ScriptRuntimeOptions options;
+    options.max_auxiliary_node_bindings = 1;
+    JerryScriptRuntime runtime(options);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var target = document.getElementById('target');"
+        "var style = target.style;"
+        "var rejected = false;"
+        "try { target.classList; } catch (e) { rejected = true; }"
+        "style.display = 'none';"
+        "String(rejected) + ':' + style.display");
+    check(result.ok && result.value == "true:none",
+          "auxiliary binding refusal throws without corrupting an existing native helper binding");
+}
+
+void javascript_node_wrapper_slots_recycle_after_real_gc() {
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY && defined(JELLYFRAME_SCRIPT_IDENTITY_TESTING)
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='kept'>K</button><i id='a'></i><i id='b'></i><i id='c'></i></body>");
+    ScriptRuntimeOptions options;
+    options.max_node_wrapper_cache_entries = 3;
+    JerryScriptRuntime runtime(options);
+    check(runtime.bind_document(*document), "GC turnover document binds");
+    check(runtime.eval("var kept=document.getElementById('kept'); kept.marker=7; 'ready'").ok,
+          "GC turnover retains one canonical wrapper");
+    for (const char* id : {"a", "b", "c", "a", "b", "c"}) {
+        const auto acquired = runtime.eval(std::string("document.getElementById('") + id + "').tagName");
+        if (!acquired.ok || acquired.value != "i")
+            std::cerr << "GC turnover id=" << id << " ok=" << acquired.ok << " value=" << acquired.value
+                      << " error=" << acquired.error << '\n';
+        check(acquired.ok && acquired.value == "i", "collected wrappers release capacity for other live DOM nodes");
+        collect_node_wrapper_test_garbage();
+        const auto retained = runtime.eval("String(document.getElementById('kept')===kept)+':'+kept.marker");
+        check(retained.ok && retained.value == "true:7", "real GC preserves retained wrapper identity and expandos");
+    }
+    check(runtime.eval("var live=document.getElementById('a'); var refused=false;"
+                       "try{document.getElementById('b');}catch(e){refused=true;}String(refused)").value == "true",
+          "capacity still refuses while every wrapper is retained");
+    check(runtime.eval("live=null; 'released'").ok, "temporary wrapper root releases");
+    collect_node_wrapper_test_garbage();
+    check(runtime.eval("document.getElementById('b').tagName").value == "i",
+          "capacity recovers after the last wrapper root is collected");
+#endif
+}
+
+void javascript_node_wrapper_allocation_refusal_does_not_allocate_diagnostics() {
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY && defined(JELLYFRAME_SCRIPT_IDENTITY_TESTING)
+    for (bool auxiliary : {false, true}) {
+        script_test_allocation_failure_count = 0;
+        const bool recovered = run_node_wrapper_allocation_refusal_test(auxiliary, [] {
+            script_test_skip_debug_proxies = true;
+            script_test_persistent_allocation_failure = true;
+            script_test_allocations_before_failure = 0;
+        }, [] {
+            script_test_allocations_before_failure = -1;
+            script_test_persistent_allocation_failure = false;
+            script_test_skip_debug_proxies = false;
+        });
+        check(recovered, "persistent native allocation refusal becomes a JS RangeError without escaping the bridge");
+        check(script_test_allocation_failure_count == 1,
+              "Node allocation refusal records its status without a second diagnostic allocation");
+    }
+#endif
+}
+
+void javascript_node_wrapper_cache_limit_refuses_without_publishing_partial_wrapper() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='target'>Tap</button></body>");
+
+    ScriptRuntimeOptions options;
+    options.max_node_wrapper_cache_entries = 1;
+    JerryScriptRuntime runtime(options);
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var rejected = false;"
+        "try { document.getElementById('target'); } catch (e) { rejected = true; }"
+        "String(rejected)");
+    check(result.ok && result.value == "true", "canonical wrapper cache cap is observable as a script exception");
+}
+
+#endif
 
 void javascript_detached_node_budget_is_bounded() {
     HtmlParser parser;
@@ -1040,20 +1215,33 @@ void javascript_zero_event_capacity_and_native_allocation_refusal_fail_closed() 
     check(runtime.eval(
         "var count=0; document.getElementById('button').onclick=function(e){count++;}; 'ready'").ok,
         "allocation test handler registers");
-    for (allocation_stage = 0; allocation_stage < 3; ++allocation_stage) {
+    for (allocation_stage = 0; allocation_stage <= 2; ++allocation_stage) {
         Event refused("click", true, false);
-        check(!dispatch_event(*button, refused) && refused.dispatch_failed(), "native Event construction allocation refusal aborts dispatch");
-        check(script_test_allocations_before_failure == -1, "fault injection was consumed");
+        const bool dispatch_result = dispatch_event(*button, refused);
+        const bool injection_consumed = script_test_allocations_before_failure == -1;
+        script_test_allocations_before_failure = -1;
+        if (JELLYFRAME_SCRIPT_NODE_IDENTITY && allocation_stage == 2) {
+            check(dispatch_result, "dispatch without injected failure completes normally");
+            check(!injection_consumed,
+                  "canonical Node reuse avoids a third native allocation during Event publication");
+            check(!refused.dispatch_failed(), "allocation-stage 2 publishes the complete Event");
+            continue;
+        }
+        check(!dispatch_result && refused.dispatch_failed(), "native Event construction allocation refusal aborts dispatch");
+        check(injection_consumed, "fault injection was consumed");
         check(runtime.take_script_callback_failure().status == ScriptCallbackFailureStatus::ResourceLimit,
               "native Event construction allocation refusal reports resource failure");
+        auto refused_state = runtime.eval("String(count)");
+        check(refused_state.ok && refused_state.value == "0",
+              "failed allocation stages do not deliver a partial Event to the listener");
     }
     auto state = runtime.eval("String(count)");
-    check(state.ok && state.value == "0", "allocation refusal delivers no callback");
+    check(state.ok && state.value == (JELLYFRAME_SCRIPT_NODE_IDENTITY ? "1" : "0"), "only the complete Event reaches its callback");
     button->remove_event_listener(arm);
     Event recovered("click", true, false);
     check(dispatch_event(*button, recovered) && !recovered.dispatch_failed(), "dispatch recovers after native allocation refusal");
     state = runtime.eval("String(count)");
-    check(state.ok && state.value == "1", "recovered callback receives a complete Event");
+    check(state.ok && state.value == (JELLYFRAME_SCRIPT_NODE_IDENTITY ? "2" : "1"), "a later non-injected dispatch reaches the complete Event callback");
 }
 
 #endif
@@ -1079,39 +1267,53 @@ void javascript_event_publication_does_not_invoke_inherited_event_setters() {
 #if JELLYFRAME_SCRIPT_R3_EVENTS
 void javascript_lazy_current_target_uses_checked_event_staging() {
     HtmlParser parser;
-    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    auto document = parser.parse("<body><main><button id='button'>0</button></main></body>");
     Node* button = find_first_by_tag(*document, "button");
+    Node* main = find_first_by_tag(*document, "main");
     JerryScriptRuntime runtime;
     check(runtime.bind_document(*document), "lazy currentTarget bind succeeds");
+    check(main != nullptr, "lazy currentTarget ancestor exists");
+    bool inject = true;
+    bool getter_result_ok = false;
+    std::string getter_result;
+    bool injection_consumed = false;
+    unsigned later_calls = 0;
+    main->add_event_listener("click", [&](Event&) {
+        script_test_skip_debug_proxies = true;
+        if (inject) script_test_allocations_before_failure = 0;
+        const auto result = runtime.eval("saved.currentTarget === undefined", "");
+        script_test_skip_debug_proxies = false;
+        getter_result_ok = result.ok;
+        getter_result = result.value;
+        injection_consumed = script_test_allocations_before_failure == -1;
+        script_test_allocations_before_failure = -1;
+    });
+    main->add_event_listener("click", [&](Event&) { ++later_calls; });
     check(runtime.eval(
-        "var saved, setterCalls=0, laterCalls=0; var button=document.getElementById('button');"
+        "var saved, setterCalls=0; var button=document.getElementById('button');"
         "button.addEventListener('click',function(e){saved=e;});"
         "Object.defineProperty(Object.prototype,'appendChild',{set:function(v){setterCalls++;button.remove();},configurable:true});"
         "Object.defineProperty(Object.prototype,'tagName',{set:function(v){setterCalls++;throw new Error('poison');},configurable:true});"
         "'ready'").ok, "lazy getter prototype poison setup succeeds");
-    bool inject = false;
-    button->add_event_listener("click", [&](Event&) {
-        script_test_skip_debug_proxies = true;
-        if (inject) script_test_allocations_before_failure = 0;
-        auto result = runtime.eval("saved.currentTarget === undefined", "");
-        script_test_skip_debug_proxies = false;
-        check(result.ok && result.value == (inject ? "true" : "false"),
-              "lazy getter publishes complete wrapper or refuses allocation");
-        check(script_test_allocations_before_failure == -1, "getter consumes injected native failure");
-    });
-    check(runtime.eval("button.addEventListener('click',function(e){if(e===saved && e.currentTarget===this)laterCalls++;});'ready'").ok,
-          "later script listener registers");
-    Event ordinary("click", true, false);
-    check(dispatch_event(*button, ordinary), "lazy currentTarget bypasses inherited setters");
-    auto state = runtime.eval("setterCalls+':'+laterCalls+':'+saved.currentTarget");
-    check(state.ok && state.value == "0:1:null", "live getter and retained snapshot preserve semantics");
-    inject = true;
     Event refused("click", true, false);
-    check(!dispatch_event(*button, refused) && refused.dispatch_failed(), "lazy getter allocation refusal fails dispatch");
+    check(!dispatch_event(*button, refused) && refused.dispatch_failed(),
+          "uncached ancestor currentTarget allocation refusal fails dispatch");
+    check(getter_result_ok && getter_result == "true",
+          "failed lazy getter returns no partially published wrapper");
+    check(injection_consumed, "lazy getter consumes the injected native allocation failure");
+    check(later_calls == 0, "failed lazy getter stops later listeners");
     check(runtime.take_script_callback_failure().status == ScriptCallbackFailureStatus::ResourceLimit,
           "lazy getter allocation refusal reports ResourceLimit");
-    state = runtime.eval("setterCalls+':'+laterCalls+':'+saved.currentTarget");
-    check(state.ok && state.value == "0:1:null", "refused getter stops later listener and completion clears snapshot");
+    inject = false;
+    Event recovered("click", true, false);
+    check(dispatch_event(*button, recovered) && !recovered.dispatch_failed(),
+          "lazy ancestor wrapper publication recovers after allocation refusal");
+    check(getter_result_ok && getter_result == "false",
+          "retry publishes the complete ancestor wrapper");
+    check(later_calls == 1, "later listener runs after successful lazy wrapper publication");
+    const auto state = runtime.eval("setterCalls + ':' + String(saved.currentTarget === null)");
+    check(state.ok && state.value == "0:true",
+          "lazy wrapper publication bypasses inherited setters and clears the retained Event snapshot");
     check(runtime.bind_document(*document), "lazy getter failure leaves no active completion root");
 }
 
@@ -3421,6 +3623,51 @@ void javascript_dom_budget_ledger_rejects_growth_atomically() {
 
 } // namespace
 
+void document_bind_failure_preserves_or_terminates_consistently() {
+    HtmlParser parser;
+    auto original = parser.parse("<body><p id='old'>old</p></body>");
+    auto replacement = parser.parse("<body><p id='new'>new</p></body>");
+    {
+        JerryScriptRuntime runtime;
+        check(runtime.bind_document(*original), "immutable-global fixture binds");
+        check(runtime.eval("Object.defineProperty(this,'document',{configurable:false,writable:false});'locked'").ok,
+              "document global becomes immutable");
+        check(!runtime.bind_document(*replacement), "immutable global refuses replacement");
+        check(!runtime.stop_requested() &&
+              runtime.eval("document.getElementById('old').textContent").value == "old",
+              "early refusal preserves the original document and active VM");
+    }
+    {
+        JerryScriptRuntime runtime;
+        check(runtime.bind_document(*original), "writable-global fixture binds");
+        check(runtime.eval("Object.defineProperty(this,'document',{configurable:false,writable:true});'writable'").ok,
+              "nonconfigurable document remains writable");
+        check(runtime.bind_document(*replacement) &&
+              runtime.eval("document.getElementById('new').textContent").value == "new",
+              "document replacement preserves attributes of writable own globals");
+    }
+    {
+        JerryScriptRuntime runtime;
+        check(runtime.bind_document(*original), "late-failure fixture binds");
+        script_test_skip_debug_proxies = true;
+        script_test_allocations_before_failure = 0;
+        const bool bound = runtime.bind_document(*replacement);
+        const bool consumed = script_test_allocations_before_failure == -1;
+        script_test_allocations_before_failure = -1;
+        script_test_skip_debug_proxies = false;
+        check(!bound && consumed, "native allocation refusal cannot report successful document binding");
+        check(runtime.stop_requested() && runtime.script_callback_failed(),
+              "late replacement failure leaves a stopped session with observable failure");
+        check(runtime.take_script_callback_failure().status == ScriptCallbackFailureStatus::ResourceLimit,
+              "stopped session exposes its binding resource failure");
+        check(!runtime.eval("document").ok, "stopped binding cannot enter the mixed document state");
+    }
+    JerryScriptRuntime fresh;
+    check(fresh.bind_document(*replacement) &&
+          fresh.eval("document.getElementById('new').textContent").value == "new",
+          "new runtime recovers after failed replacement teardown");
+}
+
 int main() {
     try {
         expression_returns_value();
@@ -3432,7 +3679,12 @@ int main() {
         execution_watchdog_interrupts_timer_callback_when_supported();
         host_budgets_enable_script_execution_watchdog_when_supported();
         host_budgets_map_to_script_runtime_options_without_field_drift();
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY
+        node_wrapper_identity_cap_is_validated_before_vm_start();
+        node_identity_table_owns_slots_and_weak_roots_safely();
+#endif
         runtime_can_restart();
+        document_bind_failure_preserves_or_terminates_consistently();
         base64_helpers_follow_html_binary_string_subset();
         inline_document_script_mutates_dom();
         script_dom_mutation_observer_is_scoped_and_precise();
@@ -3445,6 +3697,13 @@ int main() {
         javascript_runtime_drops_destroyed_bound_document();
         javascript_listener_can_destroy_its_target_during_dispatch();
         javascript_cached_destroyed_node_wrappers_are_invalidated();
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY
+        javascript_node_wrappers_are_canonical_across_entry_points();
+        javascript_node_wrapper_allocation_refusal_does_not_allocate_diagnostics();
+        javascript_node_wrapper_slots_recycle_after_real_gc();
+        javascript_auxiliary_binding_limit_preserves_existing_helpers();
+        javascript_node_wrapper_cache_limit_refuses_without_publishing_partial_wrapper();
+#endif
         javascript_detached_node_budget_is_bounded();
         javascript_click_listener_mutates_dom();
         javascript_generic_click_event_does_not_fake_mouse_coordinates();

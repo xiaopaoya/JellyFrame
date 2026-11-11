@@ -1,6 +1,9 @@
-﻿#pragma once
+#pragma once
 
 #include "script/script_runtime.h"
+#include "script/script_capabilities.h"
+
+#include <jerryscript.h>
 
 #include <cstdint>
 #include <cstddef>
@@ -100,12 +103,35 @@ private:
     std::vector<std::unique_ptr<ScriptAnimationFrameCallback>> animation_frame_callbacks_;
     bool pumping_timers_ = false;
     bool pumping_animation_frames_ = false;
+    bool deferred_document_callbacks_release_ = false;
     std::vector<std::unique_ptr<ScriptXmlHttpRequest>> xml_http_requests_;
     std::vector<std::unique_ptr<ScriptAudioElement>> audio_elements_;
     std::vector<std::unique_ptr<ScriptGeolocationRequest>> geolocation_requests_;
     std::vector<std::unique_ptr<ScriptServiceCallback>> service_callbacks_;
     std::vector<std::unique_ptr<ScriptDialogState>> dialog_states_;
     std::vector<ScriptNodeBinding*> node_bindings_;
+    std::size_t auxiliary_node_binding_count_ = 0;
+    struct NodeIdentitySlot {
+        Node* node = nullptr;
+        ScriptNodeBinding* binding = nullptr;
+        jerry_value_t weak_ref_value = 0;
+        std::uint32_t generation = 0;
+        bool has_weak_ref = false;
+        bool release_pending = false;
+    };
+    static_assert(sizeof(NodeIdentitySlot) == (sizeof(void*) == 4 ? 20U : 32U),
+                  "update Node identity table metadata budget when slot layout changes");
+    struct NodeIdentitySlotHandle {
+        std::size_t index = 0;
+        std::uint32_t generation = 0;
+        std::uint64_t epoch = 0;
+        bool valid = false;
+    };
+    std::vector<NodeIdentitySlot> node_identity_slots_;
+    std::size_t node_identity_live_count_ = 0;
+    std::uint64_t document_epoch_ = 0;
+    jerry_value_t weak_ref_constructor_ = 0;
+    jerry_value_t weak_ref_deref_ = 0;
     std::vector<ScriptNodeBinding*> layout_snapshot_bindings_;
     std::unordered_map<const Node*, std::vector<ScriptNodeBinding*>> layout_snapshot_binding_index_;
     std::vector<ScriptLocalStorageBinding*> local_storage_bindings_;
@@ -218,7 +244,21 @@ private:
     std::string dialog_return_value(const Node& node) const;
     void set_dialog_return_value(Node& node, std::string value);
     void clear_dialog_states();
-    ScriptNodeBinding* bind_script_node(Node& node);
+    ScriptNodeBinding* bind_script_node(Node& node, bool auxiliary = true);
+    // Native half of the canonical wrapper table. Never called from finalizers.
+    std::size_t find_node_identity_slot(const Node& node) const noexcept;
+    NodeIdentitySlotHandle reserve_node_identity_slot(Node& node, ScriptNodeBinding* binding);
+    bool node_identity_slot_matches(NodeIdentitySlotHandle handle, const Node& node) const noexcept;
+    jerry_value_t create_node_identity_weak_ref(jerry_value_t wrapper);
+    bool publish_node_identity_weak_ref(NodeIdentitySlotHandle handle, Node& node, jerry_value_t weak_ref);
+    bool replace_node_identity_weak_ref(NodeIdentitySlotHandle handle, Node& node, jerry_value_t weak_ref);
+    jerry_value_t deref_node_identity_weak_ref(NodeIdentitySlotHandle handle, Node& node);
+    void release_node_identity_slot(NodeIdentitySlotHandle handle, Node& node) noexcept;
+    void release_node_identity_slot(Node& node) noexcept;
+    void forget_node_identity_binding(ScriptNodeBinding& binding) noexcept;
+    void retire_finalized_node_identity_binding(const ScriptNodeBinding& binding) noexcept;
+    void drain_node_identity_releases() noexcept;
+    void clear_node_identity_slots() noexcept;
     Node* resolve_script_node(const ScriptNodeBinding& binding) const;
     void forget_script_node_binding(ScriptNodeBinding& binding);
     void invalidate_script_node(Node& node);

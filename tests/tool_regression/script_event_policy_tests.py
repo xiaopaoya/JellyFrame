@@ -52,7 +52,7 @@ class ScriptEventPolicyTests(unittest.TestCase):
                     (headers / 'feature_config.h').write_text(
                         f'#define JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED {int(forms)}\n', encoding='utf-8')
                     policy_line = '' if policy is None else f'#define JELLYFRAME_SCRIPT_R3_EVENTS {policy}\n'
-                    source.write_text(policy_line + '#include "script/script_event_capabilities.h"\n'
+                    source.write_text(policy_line + '#include "script/script_capabilities.h"\n'
                         f'static_assert(JELLYFRAME_SCRIPT_R3_EVENTS == {policy or 0}, "explicit policy");\n',
                         encoding='utf-8')
                     if msvc:
