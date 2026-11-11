@@ -1,0 +1,17 @@
+{
+  "revision": "b7069350c2e52e7dc721dfb75f067147bd79b39b",
+  "files": {
+    "jerry-core/ecma/base/ecma-helpers.h": {
+      "before": "195b7251a9f33b5eb5dcf1f80887be17cca22888c80d5f780ac5271d1c02a3e2",
+      "after": "253bf2b483db58d5244e311047975cafa1a2b22b9f1206d3d3a85981607ef6e0"
+    },
+    "jerry-core/ecma/base/ecma-helpers.c": {
+      "before": "4087bef958fc024b442246097ff27d4b35341339d8269dfbe6484dcad13ee5e9",
+      "after": "ec3d6acb0ea5b9cca32d1b49bd6bfa899d00d3849a4d047df8a537271c974289"
+    },
+    "jerry-core/ecma/operations/ecma-objects.c": {
+      "before": "226fd6950c7596d64b4c486fdd127f9896abc6517ce3d4104ac61e3dfa134516",
+      "after": "7d461aa6e26679166b29bf7ccfd899977a938774900fdb8ab9dd7e806dbe5837"
+    }
+  }
+}

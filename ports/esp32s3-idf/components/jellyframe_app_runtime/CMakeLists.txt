@@ -1,3 +1,10 @@
+if(CMAKE_BUILD_EARLY_EXPANSION)
+    # ESP-IDF scans requirements before sdkconfig and project cache options are
+    # available. Declare the dependency superset here and select sources below.
+    idf_component_register(REQUIRES jellyframe_render_core jellyframe_jerryscript)
+    return()
+endif()
+
 set(JELLYFRAME_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../..")
 if(NOT JELLYFRAME_JERRYSCRIPT_ROOT)
     set(JELLYFRAME_JERRYSCRIPT_ROOT "${JELLYFRAME_ROOT}/third_party/jerryscript")

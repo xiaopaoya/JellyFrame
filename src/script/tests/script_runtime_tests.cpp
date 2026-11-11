@@ -1869,7 +1869,7 @@ void browser_audio_pump_defers_callback_enqueued_playback() {
             host.pending.push_back({audio_id, 0, ScriptAudioEventKind::Ended});
             return true;
         }, &host});
-    check(runtime.bind_document(*document), "browser audio pump document binds");
+    runtime.bind_document(*document);
     check(runtime.eval(
         "var ended=0;var tone=new Audio('/silent-test.wav');"
         "tone.addEventListener('ended',function(){ended++;"

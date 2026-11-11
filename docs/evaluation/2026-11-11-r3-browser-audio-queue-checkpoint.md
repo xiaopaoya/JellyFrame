@@ -1,5 +1,10 @@
 # R3 Browser audio callback queue checkpoint
 
+Last updated: 2026-11-11; Applies to: 0.6.0-dev
+
+This is the original experimental checkpoint. The standalone mainline-based
+delivery's fresh validation is recorded at the end of this document.
+
 An audio ended JS listener can call Audio.play(), which appends to BrowserApp's
 pending audio vector through ScriptAudioHost. The previous range-for held an
 event reference and vector iteration state across that JS dispatch, then wrote
@@ -89,3 +94,32 @@ queue regression. Consumer logs are
 `E:/Builds/r3-browser-audio-installed-{full,cropped}-test.log`, with corresponding
 configure/build logs. The header move changes its include location and leaves
 the tested queue algorithm intact.
+
+## Standalone delivery on current Runtime master
+
+The queue helper and real Audio regression were replayed independently onto
+Runtime `161adce8`, then integrated without conflict with `27f0503b` (the
+separately merged JerryScript dependency repair). No R3 Event/owner or Node
+identity implementation is included. The regression uses the current void
+`bind_document` API rather than requiring the experimental boolean signature.
+
+Fresh qualification uses the actual released Core 0.8.0 package, ABI3, source
+`fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795` / 111,
+with `lockEnforced=true`. MSVC Release desktop shell, combined script and
+task-runtime test targets build; script, task-runtime, source-boundary and
+documentation checks pass 4/4. This is a focused gate, not all desktop CTest.
+
+A separate Clang ASan+UBSan build uses the same release Core source rebuilt
+with matching sanitizer/standard-library annotations. Runtime/Core C++ and
+JerryScript core/ext are instrumented; the platform port remains uninstrumented
+and leak detection is disabled. The complete combined script/worker group
+passes 1/1. This new source's temporary control restoring the old reference-
+holding loop produces an actual ASan heap-use-after-free and exit1; restoring
+the production helper rebuilds and passes. The control restores the original
+header in a finally block, and the committed helper is the fixed version.
+
+Builds: `E:/Builds/runtime-audio-delivery-{native,asan}-20261111`.
+Reproduction runner and raw negative/restored logs:
+`E:/Experiments/runtime-audio-delivery-20261111`. Fresh delivery checks do not
+claim BrowserApp deletion safety or physical audio-driver behavior. Remote
+full/cropped installed/staged workers remain covered by the PR's CI gate.

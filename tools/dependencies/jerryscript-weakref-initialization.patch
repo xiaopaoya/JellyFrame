@@ -1,0 +1,60 @@
+--- a/jerry-core/ecma/base/ecma-helpers.h
++++ b/jerry-core/ecma/base/ecma-helpers.h
+@@ -425,6 +425,10 @@
+                                                         ecma_string_t *name_p,
+                                                         uint8_t prop_attributes,
+                                                         ecma_property_t **out_prop_p);
++ecma_property_value_t *ecma_create_initialized_internal_property (ecma_object_t *object_p,
++                                                                  ecma_string_t *name_p,
++                                                                  ecma_property_value_t value);
++
+ ecma_property_value_t *ecma_create_named_accessor_property (ecma_object_t *object_p,
+                                                             ecma_string_t *name_p,
+                                                             ecma_object_t *get_p,
+--- a/jerry-core/ecma/base/ecma-helpers.c
++++ b/jerry-core/ecma/base/ecma-helpers.c
+@@ -535,6 +535,27 @@
+ 
+   return ecma_create_property (object_p, name_p, type_and_flags, value, out_prop_p);
+ } /* ecma_create_named_data_property */
++
++/**
++ * Create an internal property with its value initialized before a possible GC
++ * during property hashmap insertion.
++ *
++ * @return pointer to the newly created property value
++ */
++ecma_property_value_t *
++ecma_create_initialized_internal_property (ecma_object_t *object_p, /**< object */
++                                            ecma_string_t *name_p, /**< internal property name */
++                                            ecma_property_value_t value) /**< initial value */
++{
++  JERRY_ASSERT (object_p != NULL && name_p != NULL);
++  JERRY_ASSERT (ecma_find_named_property (object_p, name_p) == NULL);
++  ecma_property_t *property_p;
++  ecma_property_value_t *result_p = ecma_create_property (object_p, name_p, ECMA_PROPERTY_FLAG_DATA,
++                                                        value, &property_p);
++  JERRY_ASSERT (*property_p == ECMA_PROPERTY_INTERNAL);
++  return result_p;
++}
++
+ 
+ /**
+  * Create named accessor property with given name, attributes, getter and setter.
+--- a/jerry-core/ecma/operations/ecma-objects.c
++++ b/jerry-core/ecma/operations/ecma-objects.c
+@@ -3351,9 +3351,11 @@
+   {
+     refs_p = ecma_new_collection ();
+ 
+-    ecma_property_value_t *value_p;
+-    ECMA_CREATE_INTERNAL_PROPERTY (object_p, weak_refs_string_p, property_p, value_p);
+-    ECMA_SET_INTERNAL_VALUE_POINTER (value_p->value, refs_p);
++    /* Hashmap insertion may collect after the property is linked. Publish the
++     * collection pointer together with the property so GC can always scan it. */
++    ecma_property_value_t value;
++    ECMA_SET_INTERNAL_VALUE_POINTER (value.value, refs_p);
++    ecma_create_initialized_internal_property (object_p, weak_refs_string_p, value);
+   }
+   else
+   {
