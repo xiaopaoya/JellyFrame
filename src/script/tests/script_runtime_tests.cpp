@@ -1,4 +1,5 @@
 #include "script/jerryscript_runtime.h"
+#include "script/script_audio_event_queue.h"
 
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_host_data.h"
@@ -2222,6 +2223,53 @@ bool fake_audio_play(void* user, std::uint32_t audio_id, std::string_view src, d
     return true;
 }
 
+void browser_audio_pump_defers_callback_enqueued_playback() {
+    HtmlParser parser;
+    auto document = parser.parse("<body></body>");
+    struct Host {
+        std::vector<PendingScriptAudioEvent> pending;
+        std::size_t plays = 0;
+    } host;
+    JerryScriptRuntime runtime;
+    runtime.bind_audio_host(ScriptAudioHost{
+        [](void* user, std::uint32_t audio_id, std::string_view, double, std::string*) {
+            auto& host = *static_cast<Host*>(user);
+            ++host.plays;
+            host.pending.push_back({audio_id, 0, ScriptAudioEventKind::Ended});
+            return true;
+        }, &host});
+    runtime.bind_document(*document);
+    check(runtime.eval(
+        "var ended=0;var tone=new Audio('/silent-test.wav');"
+        "tone.addEventListener('ended',function(){ended++;"
+        "if(ended===1){for(var i=0;i<128;i++)tone.play();}});tone.play();").ok,
+        "browser audio callback queues initial playback through ScriptAudioHost");
+    host.pending.shrink_to_fit();
+    bool consumed_before_callback = false;
+    const auto dispatch = [&](std::uint32_t audio_id, ScriptAudioEventKind kind) {
+        consumed_before_callback = host.pending.front().audio_id == 0;
+        return runtime.dispatch_audio_event(audio_id, kind);
+    };
+    check(pump_pending_script_audio_events(host.pending, 0, dispatch),
+        "browser initial audio batch dispatches");
+    check(consumed_before_callback, "audio consumed before author callback");
+    check(runtime.eval("ended").value == "1" && host.plays == 129 && host.pending.size() == 128,
+        "callback vector growth preserves all new events for the later batch");
+    check(pump_pending_script_audio_events(host.pending, 0,
+        [&](std::uint32_t audio_id, ScriptAudioEventKind kind) {
+            return runtime.dispatch_audio_event(audio_id, kind);
+        }), "browser later audio batch dispatches");
+    check(runtime.eval("ended").value == "129" && host.pending.empty(),
+        "later batch delivers each callback-enqueued event exactly once");
+    host.pending.push_back({1, 5, ScriptAudioEventKind::Ended});
+    host.pending.push_back({2, 3, ScriptAudioEventKind::Ended});
+    std::string order;
+    check(pump_pending_script_audio_events(host.pending, 3,
+        [&](std::uint32_t id, ScriptAudioEventKind) { order += std::to_string(id); return true; }) &&
+        order == "2" && host.pending.size() == 1 && host.pending.front().audio_id == 1,
+        "future audio remains pending while due audio dispatches");
+}
+
 void javascript_audio_subset_uses_bound_host() {
     HtmlParser parser;
     auto document = parser.parse("<body></body>");
@@ -3300,6 +3348,7 @@ int main() {
         javascript_local_storage_is_exposed_only_when_bound();
         javascript_local_storage_subset_uses_bound_shadow();
         javascript_local_storage_quota_error_is_reported();
+        browser_audio_pump_defers_callback_enqueued_playback();
         javascript_audio_subset_uses_bound_host();
         javascript_service_objects_are_invalidated_after_clear_and_rebind();
         cleared_services_reclaim_late_runtime_completion_only();

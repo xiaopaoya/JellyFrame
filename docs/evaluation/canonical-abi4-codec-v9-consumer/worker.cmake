@@ -12,13 +12,17 @@ if(NOT JERRYSCRIPT_LIBRARIES)
 endif()
 include("${_worker_repo}/cmake/jellyframe_script_backend_jerryscript.cmake")
 file(COPY "${_worker_repo}/src/script/script_task_worker_runtime.cpp"
-          "${_worker_repo}/src/script/script_task_worker_runtime.h"
      DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/worker/src/script")
 file(COPY "${_worker_repo}/src/script/tests/script_task_worker_runtime_tests.cpp"
      DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/worker/src/script/tests")
-file(COPY "${_worker_repo}/src/script/script_runtime.h"
-          "${_worker_repo}/src/script/jerryscript_runtime.h"
-     DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/worker/src/script")
+# Stage private script headers from one inventory. configure_file also tracks
+# edits to existing headers, while CONFIGURE_DEPENDS detects new headers.
+file(GLOB _worker_script_headers CONFIGURE_DEPENDS "${_worker_repo}/src/script/*.h")
+foreach(_worker_header IN LISTS _worker_script_headers)
+  get_filename_component(_worker_header_name "${_worker_header}" NAME)
+  configure_file("${_worker_header}"
+    "${CMAKE_CURRENT_BINARY_DIR}/worker/src/script/${_worker_header_name}" COPYONLY)
+endforeach()
 file(COPY "${_worker_repo}/src/app_runtime"
      DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/worker/src")
 file(COPY "${_worker_repo}/src/device_runtime_contracts"
