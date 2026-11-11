@@ -361,6 +361,7 @@ jobs:
           -DJELLYFRAME_BUILD_SCRIPTING=ON
           -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=OFF
           -DJELLYFRAME_ENABLE_ADVANCED_FORMS=OFF
+          -DJELLYFRAME_ENABLE_NODE_IDENTITY=ON
           -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE\third_party\jerryscript"
 
       - name: Build scripting forms-off test target
@@ -465,7 +466,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Canonical ABI4 installed consumer tests failed' }
 
   r3-installed-event-owners:
-    name: R3 Event and Owner Installed Consumers (${{ matrix.profile }})
+    name: R3 Event and Owner Installed Consumers (${{ matrix.profile }}, Node ${{ matrix.node_identity }})
     if: github.event_name != 'workflow_dispatch'
     runs-on: windows-latest
     strategy:
@@ -474,8 +475,16 @@ jobs:
         include:
           - profile: full
             profile_id: render-core-default
+            node_identity: 'OFF'
           - profile: cropped
             profile_id: render-core-minimal-no-forms-advanced
+            node_identity: 'OFF'
+          - profile: full
+            profile_id: render-core-default
+            node_identity: 'ON'
+          - profile: cropped
+            profile_id: render-core-minimal-no-forms-advanced
+            node_identity: 'ON'
 
     steps:
       - name: Checkout JellyFrame
@@ -551,6 +560,7 @@ jobs:
           -DEXPECTED_CORE_SOURCE_HASH="$env:EXPECTED_CORE_SOURCE_HASH"
           -DEXPECTED_CORE_PROFILE_ID="$env:EXPECTED_CORE_PROFILE_ID"
           -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=ON
+          -DJELLYFRAME_ENABLE_NODE_IDENTITY=${{ matrix.node_identity }}
           '-DCMAKE_CXX_FLAGS=/GR- /EHsc'
           -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE\third_party\jerryscript"
 
