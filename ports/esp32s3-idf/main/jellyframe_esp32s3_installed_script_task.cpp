@@ -360,9 +360,6 @@ void ui_entry(void* raw) {
     jellyframe::ScriptTaskFrameRendererOptions renderer_options;
     renderer_options.max_clip_depth = 8;
     renderer_options.max_temporary_pixels = pixel_count;
-    renderer_options.text_system = state->host != nullptr
-        ? state->host->fonts().core_text_system()
-        : nullptr;
     const jellyframe::ScriptTaskFrameRenderer renderer(make_production_text_painter(), renderer_options);
     jellyframe::SoftwareRasterizerScratch scratch;
     std::uint32_t input_sequence = 1;
