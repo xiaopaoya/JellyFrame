@@ -90,6 +90,19 @@ worker budget-fatal publication without a later frame. Injection covers C++
 record/Event-binding/Node-binding creation allocations, not JerryScript heap
 exhaustion. The engine's real heap exhaustion follows its fatal OOM path.
 
+Independent review found that the lazy `currentTarget` getter, reached from a
+native listener evaluating a retained Event between JS callbacks, bypassed the
+checked wrapper construction used for listener `this`. Both now share the same
+checked/catching staging helper: own properties bypass inherited setters,
+recoverable native allocation refusal records `ResourceLimit` and fails the
+dispatch, and ordinary live/currently completed getters preserve wrapper/null
+semantics. A focused regression covers removing and throwing prototype setters,
+native binding-allocation refusal, later-listener suppression and null snapshots
+after completion. The Debug injector skips MSVC STL iterator-proxy allocations
+in noexcept default string constructors before getter entry; it still faults
+the fallible native binding allocation. The combined script/worker suite passes
+in the existing matched Debug and Release build trees after this correction.
+
 ## Reproduction
 
 Release configuration (from this Runtime worktree after the development

@@ -24,16 +24,24 @@
 
 using namespace jellyframe;
 
-// Arm only from a native listener immediately before the script bridge. This
+// Arm only from a native listener immediately before the script bridge/getter. This
 // exercises a recoverable C++ allocation failure, not JerryScript heap OOM.
 thread_local int script_test_allocations_before_failure = -1;
+thread_local bool script_test_skip_debug_proxies = false;
 
 void* operator new(std::size_t size) {
-    if (script_test_allocations_before_failure == 0) {
+#if defined(_ITERATOR_DEBUG_LEVEL) && _ITERATOR_DEBUG_LEVEL != 0
+    // Default-constructed eval result strings allocate noexcept STL iterator
+    // proxies before entering the getter. Target the fallible native binding.
+    const bool skip_failure = script_test_skip_debug_proxies && size == sizeof(std::_Container_proxy);
+#else
+    const bool skip_failure = false;
+#endif
+    if (!skip_failure && script_test_allocations_before_failure == 0) {
         script_test_allocations_before_failure = -1;
         throw std::bad_alloc();
     }
-    if (script_test_allocations_before_failure > 0) --script_test_allocations_before_failure;
+    if (!skip_failure && script_test_allocations_before_failure > 0) --script_test_allocations_before_failure;
     if (void* value = std::malloc(size == 0 ? 1 : size)) return value;
     throw std::bad_alloc();
 }
@@ -953,6 +961,44 @@ void javascript_event_publication_does_not_invoke_inherited_event_setters() {
     check(dispatch_event(*button, event) && !event.dispatch_failed(), "Event publication bypasses inherited setters");
     auto state = runtime.eval("count + ':' + setterCalls");
     check(state.ok && state.value == "1:0", "Event properties are published as checked own properties");
+}
+
+void javascript_lazy_current_target_uses_checked_event_staging() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    JerryScriptRuntime runtime;
+    check(runtime.bind_document(*document), "lazy currentTarget bind succeeds");
+    check(runtime.eval(
+        "var saved, setterCalls=0, laterCalls=0; var button=document.getElementById('button');"
+        "button.addEventListener('click',function(e){saved=e;});"
+        "Object.defineProperty(Object.prototype,'appendChild',{set:function(v){setterCalls++;button.remove();},configurable:true});"
+        "Object.defineProperty(Object.prototype,'tagName',{set:function(v){setterCalls++;throw new Error('poison');},configurable:true});"
+        "'ready'").ok, "lazy getter prototype poison setup succeeds");
+    bool inject = false;
+    button->add_event_listener("click", [&](Event&) {
+        script_test_skip_debug_proxies = true;
+        if (inject) script_test_allocations_before_failure = 0;
+        auto result = runtime.eval("saved.currentTarget === undefined", "");
+        script_test_skip_debug_proxies = false;
+        check(result.ok && result.value == (inject ? "true" : "false"),
+              "lazy getter publishes complete wrapper or refuses allocation");
+        check(script_test_allocations_before_failure == -1, "getter consumes injected native failure");
+    });
+    check(runtime.eval("button.addEventListener('click',function(e){if(e===saved && e.currentTarget===this)laterCalls++;});'ready'").ok,
+          "later script listener registers");
+    Event ordinary("click", true, false);
+    check(dispatch_event(*button, ordinary), "lazy currentTarget bypasses inherited setters");
+    auto state = runtime.eval("setterCalls+':'+laterCalls+':'+saved.currentTarget");
+    check(state.ok && state.value == "0:1:null", "live getter and retained snapshot preserve semantics");
+    inject = true;
+    Event refused("click", true, false);
+    check(!dispatch_event(*button, refused) && refused.dispatch_failed(), "lazy getter allocation refusal fails dispatch");
+    check(runtime.take_script_callback_failure().status == ScriptCallbackFailureStatus::ResourceLimit,
+          "lazy getter allocation refusal reports ResourceLimit");
+    state = runtime.eval("setterCalls+':'+laterCalls+':'+saved.currentTarget");
+    check(state.ok && state.value == "0:1:null", "refused getter stops later listener and completion clears snapshot");
+    check(runtime.bind_document(*document), "lazy getter failure leaves no active completion root");
 }
 
 void javascript_event_prevent_default_and_remove_listener_work() {
@@ -3119,6 +3165,7 @@ int main() {
         javascript_event_identity_capacity_aborts_only_the_refused_dispatch();
         javascript_zero_event_capacity_and_native_allocation_refusal_fail_closed();
         javascript_event_publication_does_not_invoke_inherited_event_setters();
+        javascript_lazy_current_target_uses_checked_event_staging();
         javascript_event_prevent_default_and_remove_listener_work();
         javascript_event_object_survives_after_dispatch_as_snapshot();
         javascript_event_handler_properties_work();

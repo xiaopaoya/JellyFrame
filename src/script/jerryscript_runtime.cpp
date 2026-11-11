@@ -1893,6 +1893,7 @@ void set_bool_property(jerry_value_t object, const char* name, bool value);
 void set_property(jerry_value_t object, const char* name, jerry_value_t value);
 void set_method(jerry_value_t object, const char* name, jerry_external_handler_t handler);
 jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool document_methods);
+jerry_value_t make_event_current_target(JerryScriptRuntime& runtime, Event& event);
 
 jerry_value_t event_get_phase(const jerry_call_info_t* call_info_p,
                               const jerry_value_t[],
@@ -1915,9 +1916,7 @@ jerry_value_t event_get_current_target(const jerry_call_info_t* call_info_p,
     if (binding->callback_this != 0) {
         return jerry_value_copy(binding->callback_this);
     }
-    return make_node_wrapper(*runtime,
-                             *const_cast<Node*>(binding->event->current_target()),
-                             false);
+    return make_event_current_target(*runtime, *binding->event);
 }
 
 jerry_value_t event_get_default_prevented(const jerry_call_info_t* call_info_p,
@@ -2128,12 +2127,12 @@ jerry_value_t make_event_object(JerryScriptRuntime& runtime, Event& event) {
     return jerry_undefined();
 }
 
-jerry_value_t make_event_listener_this(JerryScriptRuntime& runtime, Event& event) {
+jerry_value_t make_event_current_target(JerryScriptRuntime& runtime, Event& event) {
     try {
         ScriptObjectConstructionScope construction;
         JerryValue object(event.current_target() != nullptr
             ? make_node_wrapper(runtime, *const_cast<Node*>(event.current_target()), false)
-            : jerry_undefined());
+            : jerry_null());
         if (!construction.failed() && !jerry_value_is_exception(object.get()) && !event.dispatch_failed()) {
             return object.release();
         }
@@ -7903,7 +7902,7 @@ void JerryScriptRuntime::add_script_event_listener(Node& node,
         ScriptEventListenerCallbackScope callback_scope(*raw);
         JerryValue event_object(make_event_object(*runtime, event));
         if (!jerry_value_is_object(event_object.get())) return;
-        JerryValue this_value(make_event_listener_this(*runtime, event));
+        JerryValue this_value(make_event_current_target(*runtime, event));
         if (event.dispatch_failed() || !raw->active || raw->callback == 0) return;
         ScriptEventBinding* const event_binding = native_event_binding(event_object.get());
         const jerry_value_t event_arg = event_object.get();
@@ -7989,7 +7988,7 @@ void JerryScriptRuntime::set_script_event_handler(Node& node, std::string type, 
         ScriptEventListenerCallbackScope callback_scope(*raw);
         JerryValue event_object(make_event_object(*runtime, event));
         if (!jerry_value_is_object(event_object.get())) return;
-        JerryValue this_value(make_event_listener_this(*runtime, event));
+        JerryValue this_value(make_event_current_target(*runtime, event));
         if (event.dispatch_failed() || !raw->active || raw->callback == 0) return;
         ScriptEventBinding* const event_binding = native_event_binding(event_object.get());
         const jerry_value_t event_arg = event_object.get();
