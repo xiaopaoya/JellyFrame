@@ -41,6 +41,7 @@
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
 #include "script/script_runtime.h"
+#include "script_audio_event_queue.h"
 #endif
 
 #include "app_registry.h"
@@ -4803,11 +4804,6 @@ private:
     std::uint32_t script_runtime_instance_id_ = 0;
     const Node* active_modal_node_ = nullptr;
     const Node* modal_focus_restore_node_ = nullptr;
-    struct PendingScriptAudioEvent {
-        std::uint32_t audio_id = 0;
-        std::uint64_t due_ms = 0;
-        ScriptAudioEventKind kind = ScriptAudioEventKind::Ended;
-    };
 #endif
     std::unique_ptr<Node> document_;
     std::unique_ptr<StyleResolver> style_resolver_;
@@ -5498,22 +5494,10 @@ private:
             script_runtime_instance_id_ != app_runtime_.current_app_instance_id()) {
             return false;
         }
-        bool handled = false;
-        for (PendingScriptAudioEvent& event : pending_script_audio_events_) {
-            if (event.audio_id == 0 || event.due_ms > now_ms) {
-                continue;
-            }
-            handled = script_runtime_->dispatch_audio_event(event.audio_id, event.kind) || handled;
-            event.audio_id = 0;
-        }
-        pending_script_audio_events_.erase(
-            std::remove_if(pending_script_audio_events_.begin(),
-                           pending_script_audio_events_.end(),
-                           [](const PendingScriptAudioEvent& event) {
-                               return event.audio_id == 0;
-                           }),
-            pending_script_audio_events_.end());
-        return handled;
+        return pump_pending_script_audio_events(pending_script_audio_events_, now_ms,
+            [this](std::uint32_t audio_id, ScriptAudioEventKind kind) {
+                return script_runtime_->dispatch_audio_event(audio_id, kind);
+            });
     }
 
     static bool play_script_audio_callback(void* user,
