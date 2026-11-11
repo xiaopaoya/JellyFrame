@@ -78,18 +78,163 @@ ScriptTaskInputCodecOptions input_options_from(const ScriptTaskWorkerRuntimeOpti
 
 } // namespace
 
-ScriptTaskWorkerRuntime::ActiveSupervisorScope::ActiveSupervisorScope(
-    ScriptTaskWorkerRuntime& runtime,
+struct ScriptTaskWorkerRuntime::State {
+public:
+    explicit State(ScriptAppSession session,
+                                     ScriptTaskWorkerRuntimeOptions options = {});
+    ~State();
+
+    State(const State&) = delete;
+    State& operator=(const State&) = delete;
+
+    ScriptTaskWorkerRuntimeInitStatus initialize(std::string_view html,
+                                                 std::string_view css);
+    ScriptTaskWorkerRuntimeInitStatus initialize(ScriptTaskSupervisor& supervisor,
+                                                 std::string_view html,
+                                                 std::string_view css);
+    bool initialized() const { return initialized_; }
+    bool stopped() const { return stopped_; }
+    bool fatal() const { return fatal_record_.reason != ScriptTaskWorkerRuntimeFatalReason::None; }
+    ScriptTaskWorkerRuntimeFatalRecord fatal_record() const { return fatal_record_; }
+
+    // Establish the worker's monotonic host clock before author scripts run.
+    // The same value source must be passed to pump_callbacks later.
+    void set_host_time_ms(std::uint64_t now_ms);
+
+    ScriptEvaluationResult eval(std::string_view source, std::string_view source_name = {});
+    ScriptEvaluationResult eval_with_supervisor(ScriptTaskSupervisor& supervisor,
+                                                std::string_view source,
+                                                std::string_view source_name = {});
+
+    // Publishes the complete initial/current frame. The frame is copied into
+    // supervisor-owned sealed storage before the worker returns.
+    ScriptTaskAppFramePublishResult publish_frame(ScriptTaskSupervisor& supervisor);
+
+    // Consumes at most one input or copied service-completion packet. A fatal
+    // result also attempts to publish the value-only fatal record.
+    ScriptTaskWorkerRuntimeStepResult process_one(ScriptTaskSupervisor& supervisor);
+
+    // Runs due callbacks inside the worker-owned realm. Callback side effects
+    // are observed and published through the same value-frame path as input.
+    // A fatal result also attempts to publish the value-only fatal record.
+    ScriptTaskWorkerRuntimeStepResult pump_callbacks(std::uint64_t now_ms,
+                                                     ScriptTaskSupervisor& supervisor,
+                                                     std::size_t max_timer_callbacks = 32,
+                                                     std::size_t max_animation_callbacks = 4);
+
+    void set_ui_accepted_frame_sequence(std::uint32_t sequence) {
+        telemetry_.ui_accepted_frame_seq = sequence;
+    }
+    ScriptTaskWorkerRuntimeTelemetry telemetry() const { return telemetry_; }
+    bool service_gateway_available() const { return service_gateway_available_; }
+
+    // Releases only worker-owned VM/DOM/pipeline state. The supervisor must
+    // invalidate the session and retire service/frame leases separately.
+    void stop();
+    // Publishes the current fatal record once as a value packet. Retrying is
+    // safe when the supervisor fatal mailbox is temporarily full.
+    bool publish_fatal(ScriptTaskSupervisor& supervisor);
+
+    // Test-only C-safe fatal injection. This deliberately simulates the
+    // recoverable boundary used by a VM fatal without aborting, resetting a
+    // task, or unwinding across C++ frames. It publishes only the bounded
+    // supervisor-owned fatal value record.
+    bool inject_c_safe_fatal_for_test(ScriptTaskSupervisor& supervisor,
+                                      std::uint32_t diagnostic_code = 0);
+
+public:
+    class ActiveSupervisorScope {
+    public:
+        ActiveSupervisorScope(State& runtime, ScriptTaskSupervisor& supervisor);
+        ~ActiveSupervisorScope();
+
+    private:
+        State& runtime_;
+        ScriptTaskSupervisor* previous_ = nullptr;
+    };
+
+    static bool submit_service_request(void* user,
+                                       std::uint8_t kind,
+                                       std::uint32_t request_id,
+                                       std::uint32_t client_token,
+                                       std::uint32_t input_handle,
+                                       std::uint8_t priority,
+                                       std::uint32_t timeout_ms);
+    static bool cancel_service_request(void* user,
+                                        std::uint32_t request_id,
+                                        std::uint32_t client_token);
+    bool submit_service_request_impl(std::uint8_t kind,
+                                     std::uint32_t request_id,
+                                     std::uint32_t client_token,
+                                     std::uint32_t input_handle,
+                                     std::uint8_t priority,
+                                     std::uint32_t timeout_ms);
+    bool cancel_service_request_impl(std::uint32_t request_id,
+                                     std::uint32_t client_token);
+    void set_fatal(ScriptTaskWorkerRuntimeFatalReason reason, std::uint32_t diagnostic_code = 0);
+    bool consume_callback_failure();
+    bool rebuild_pipeline();
+    bool has_dirty_document() const;
+    bool supervisor_matches(const ScriptTaskSupervisor& supervisor) const;
+    static bool retain_owner(void* context) noexcept {
+        auto* state = static_cast<State*>(context);
+        if (state->stopped_ || state->active_operations_ >= state->options_.max_active_operations)
+            return false;
+        ++state->active_operations_;
+        return true;
+    }
+    static void release_owner(void* context) noexcept {
+        static_cast<State*>(context)->release_operation();
+    }
+    static void observe_mutation(void* context, const Node& node,
+                                 DomDirtyFlags flags, std::uint64_t generation) {
+        auto* state = static_cast<State*>(context);
+        if (!state->stopped_ && state->options_.mutation_observer)
+            state->options_.mutation_observer(state->options_.mutation_observer_user,
+                                               node, flags, generation);
+    }
+    void release_operation();
+    void drain();
+    std::size_t active_operations_ = 0;
+    bool owner_alive_ = true;
+    bool supervisor_validated_ = false;
+
+    ScriptAppSession session_;
+    ScriptTaskWorkerRuntimeOptions options_;
+    bool initialized_ = false;
+    bool stopped_ = false;
+    DomOwner document_owner_;
+    std::unique_ptr<ScriptRuntime> runtime_;
+    std::unique_ptr<StyleResolver> style_resolver_;
+    RenderObjectPtr render_tree_;
+    LayoutBoxPtr layout_tree_;
+    LayerNodePtr layer_tree_;
+    std::unique_ptr<InputController> input_controller_;
+    ScriptTaskAppFramePublisher frame_publisher_;
+    ScriptTaskWorkerRuntimeFatalRecord fatal_record_;
+    ScriptTaskWorkerRuntimeTelemetry telemetry_;
+    // Tracks rebuilt output after DOM dirty flags are cleared for Core capture.
+    bool pending_frame_publication_ = false;
+    ScriptTaskSupervisor* active_supervisor_ = nullptr;
+    std::uint32_t service_request_sequence_ = 1;
+    bool service_gateway_available_ = false;
+    bool fatal_published_ = false;
+    std::uint32_t fatal_packet_sequence_ = 1;
+};
+
+
+ScriptTaskWorkerRuntime::State::ActiveSupervisorScope::ActiveSupervisorScope(
+    State& runtime,
     ScriptTaskSupervisor& supervisor)
     : runtime_(runtime), previous_(runtime.active_supervisor_) {
     runtime_.active_supervisor_ = &supervisor;
 }
 
-ScriptTaskWorkerRuntime::ActiveSupervisorScope::~ActiveSupervisorScope() {
+ScriptTaskWorkerRuntime::State::ActiveSupervisorScope::~ActiveSupervisorScope() {
     runtime_.active_supervisor_ = previous_;
 }
 
-ScriptTaskWorkerRuntime::ScriptTaskWorkerRuntime(ScriptAppSession session,
+ScriptTaskWorkerRuntime::State::State(ScriptAppSession session,
                                                  ScriptTaskWorkerRuntimeOptions options)
     : session_(session),
       options_(std::move(options)),
@@ -106,20 +251,25 @@ ScriptTaskWorkerRuntime::ScriptTaskWorkerRuntime(ScriptAppSession session,
 #endif
 }
 
-ScriptTaskWorkerRuntime::~ScriptTaskWorkerRuntime() {
+ScriptTaskWorkerRuntime::State::~State() {
     stop();
 }
 
-void ScriptTaskWorkerRuntime::stop() {
-    if (stopped_) {
-        return;
-    }
+void ScriptTaskWorkerRuntime::State::stop() {
+    if (stopped_) return;
     stopped_ = true;
     initialized_ = false;
     service_gateway_available_ = false;
     active_supervisor_ = nullptr;
-    // Script-backend wrappers must die before their private document. Both are
-    // worker-owned, so this ordering never requires another task to help.
+    // A backend stop may itself release completion pins. Retain a local pin
+    // until request_stop has returned, even though new admission is revoked.
+    ++active_operations_;
+    if (runtime_) runtime_->request_stop();
+    --active_operations_;
+    if (active_operations_ == 0) drain();
+}
+
+void ScriptTaskWorkerRuntime::State::drain() {
     runtime_.reset();
     input_controller_.reset();
     layer_tree_.reset();
@@ -129,7 +279,13 @@ void ScriptTaskWorkerRuntime::stop() {
     document_owner_.set_root(nullptr);
 }
 
-bool ScriptTaskWorkerRuntime::supervisor_matches(const ScriptTaskSupervisor& supervisor) const {
+void ScriptTaskWorkerRuntime::State::release_operation() {
+    if (--active_operations_ != 0) return;
+    if (stopped_) drain();
+    if (!owner_alive_) delete this;
+}
+
+bool ScriptTaskWorkerRuntime::State::supervisor_matches(const ScriptTaskSupervisor& supervisor) const {
     if (!session_.valid() || !supervisor.accepts(session_)) return false;
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
     if (is_canonical_frame_version(options_.frame_codec.version)) {
@@ -144,8 +300,8 @@ bool ScriptTaskWorkerRuntime::supervisor_matches(const ScriptTaskSupervisor& sup
     return true;
 }
 
-bool ScriptTaskWorkerRuntime::publish_fatal(ScriptTaskSupervisor& supervisor) {
-    if (!fatal()) {
+bool ScriptTaskWorkerRuntime::State::publish_fatal(ScriptTaskSupervisor& supervisor) {
+    if (stopped_ || !fatal()) {
         return false;
     }
     if (fatal_published_) {
@@ -176,7 +332,7 @@ bool ScriptTaskWorkerRuntime::publish_fatal(ScriptTaskSupervisor& supervisor) {
     return true;
 }
 
-bool ScriptTaskWorkerRuntime::inject_c_safe_fatal_for_test(
+bool ScriptTaskWorkerRuntime::State::inject_c_safe_fatal_for_test(
     ScriptTaskSupervisor& supervisor,
     std::uint32_t diagnostic_code) {
     if (!initialized_ || stopped_ || fatal()) {
@@ -187,7 +343,7 @@ bool ScriptTaskWorkerRuntime::inject_c_safe_fatal_for_test(
     return publish_fatal(supervisor);
 }
 
-ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::string_view html,
+ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::State::initialize(std::string_view html,
                                                                        std::string_view css) {
     if (stopped_) return ScriptTaskWorkerRuntimeInitStatus::Stopped;
     if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
@@ -230,7 +386,11 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::strin
         std::string(css),
         css_parser_options_from_budgets(options_.budgets, options_.viewport.width, options_.viewport.height));
     document_owner_.set_root(std::move(parsed.document));
+    options_.script.retain_owner = retain_owner;
+    options_.script.release_owner = release_owner;
+    options_.script.owner_context = this;
     runtime_ = create_script_runtime(options_.script);
+    runtime_->set_dom_mutation_observer(observe_mutation, this);
     if (options_.script.max_execution_check_count != 0 &&
         !runtime_->execution_watchdog_supported()) {
         runtime_.reset();
@@ -248,11 +408,12 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::strin
         set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
         return ScriptTaskWorkerRuntimeInitStatus::BudgetRejected;
     }
+    if (stopped_) return ScriptTaskWorkerRuntimeInitStatus::Stopped;
     initialized_ = true;
     return ScriptTaskWorkerRuntimeInitStatus::Accepted;
 }
 
-ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(
+ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::State::initialize(
     ScriptTaskSupervisor& supervisor, std::string_view html, std::string_view css) {
     if (stopped_) return ScriptTaskWorkerRuntimeInitStatus::Stopped;
     if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
@@ -275,13 +436,13 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(
     return initialize(html, css);
 }
 
-void ScriptTaskWorkerRuntime::set_host_time_ms(std::uint64_t now_ms) {
+void ScriptTaskWorkerRuntime::State::set_host_time_ms(std::uint64_t now_ms) {
     if (runtime_ != nullptr) {
         runtime_->set_host_time_ms(now_ms);
     }
 }
 
-ScriptEvaluationResult ScriptTaskWorkerRuntime::eval(std::string_view source, std::string_view source_name) {
+ScriptEvaluationResult ScriptTaskWorkerRuntime::State::eval(std::string_view source, std::string_view source_name) {
     if (!initialized_ || fatal()) {
         return {false, {}, "worker runtime is not active", ScriptEvaluationStatus::Exception};
     }
@@ -294,6 +455,8 @@ ScriptEvaluationResult ScriptTaskWorkerRuntime::eval(std::string_view source, st
                       ? ScriptTaskWorkerRuntimeFatalReason::ScriptWatchdog
                       : ScriptTaskWorkerRuntimeFatalReason::ScriptException);
         (void) runtime_->take_script_callback_failure();
+    } else if (stopped_) {
+        return result;
     } else if (consume_callback_failure()) {
         // A callback failure is terminal even when the selected backend returned a
         // successful value for the surrounding worker operation.
@@ -303,7 +466,7 @@ ScriptEvaluationResult ScriptTaskWorkerRuntime::eval(std::string_view source, st
     return result;
 }
 
-ScriptEvaluationResult ScriptTaskWorkerRuntime::eval_with_supervisor(
+ScriptEvaluationResult ScriptTaskWorkerRuntime::State::eval_with_supervisor(
     ScriptTaskSupervisor& supervisor,
     std::string_view source,
     std::string_view source_name) {
@@ -320,7 +483,7 @@ ScriptEvaluationResult ScriptTaskWorkerRuntime::eval_with_supervisor(
     return result;
 }
 
-ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::publish_frame(ScriptTaskSupervisor& supervisor) {
+ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::State::publish_frame(ScriptTaskSupervisor& supervisor) {
     ScriptTaskAppFramePublishResult result;
     ++telemetry_.frame_publish_attempts;
     if (!initialized_ || fatal() || !layer_tree_ || !supervisor_matches(supervisor)) {
@@ -355,7 +518,7 @@ ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::publish_frame(ScriptTas
     return result;
 }
 
-ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::process_one(ScriptTaskSupervisor& supervisor) {
+ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::State::process_one(ScriptTaskSupervisor& supervisor) {
     ScriptTaskWorkerRuntimeStepResult result;
     const auto finish = [this, &supervisor](ScriptTaskWorkerRuntimeStepResult value) {
         if (fatal()) {
@@ -414,6 +577,7 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::process_one(ScriptTas
             ++telemetry_.service_packets_rejected;
             return result;
         }
+        if (stopped_) return result;
         if (consume_callback_failure()) {
             return finish(result);
         }
@@ -448,6 +612,7 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::process_one(ScriptTas
     const DomDirtyFlags before = subtree_dirty_flags(*document_owner_.root());
     result.input_status = dispatch_script_task_input(*input_controller_, input).status;
     result.input_accepted = result.input_status == ScriptTaskInputDispatchStatus::Accepted;
+    if (stopped_) return result;
     if (consume_callback_failure()) {
         return finish(result);
     }
@@ -469,32 +634,32 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::process_one(ScriptTas
     return finish(result);
 }
 
-bool ScriptTaskWorkerRuntime::submit_service_request(void* user,
+bool ScriptTaskWorkerRuntime::State::submit_service_request(void* user,
                                                      std::uint8_t kind,
                                                      std::uint32_t request_id,
                                                      std::uint32_t client_token,
                                                      std::uint32_t input_handle,
                                                      std::uint8_t priority,
                                                      std::uint32_t timeout_ms) {
-    auto* runtime = static_cast<ScriptTaskWorkerRuntime*>(user);
+    auto* runtime = static_cast<State*>(user);
     return runtime != nullptr && runtime->submit_service_request_impl(
         kind, request_id, client_token, input_handle, priority, timeout_ms);
 }
 
-bool ScriptTaskWorkerRuntime::cancel_service_request(void* user,
+bool ScriptTaskWorkerRuntime::State::cancel_service_request(void* user,
                                                       std::uint32_t request_id,
                                                       std::uint32_t client_token) {
-    auto* runtime = static_cast<ScriptTaskWorkerRuntime*>(user);
+    auto* runtime = static_cast<State*>(user);
     return runtime != nullptr && runtime->cancel_service_request_impl(request_id, client_token);
 }
 
-bool ScriptTaskWorkerRuntime::submit_service_request_impl(std::uint8_t kind,
+bool ScriptTaskWorkerRuntime::State::submit_service_request_impl(std::uint8_t kind,
                                                           std::uint32_t request_id,
                                                           std::uint32_t client_token,
                                                           std::uint32_t input_handle,
                                                           std::uint8_t priority,
                                                           std::uint32_t timeout_ms) {
-    if (active_supervisor_ == nullptr || request_id == 0 || client_token == 0) {
+    if (stopped_ || active_supervisor_ == nullptr || request_id == 0 || client_token == 0) {
         return false;
     }
     ScriptTaskServiceRequest request;
@@ -516,9 +681,9 @@ bool ScriptTaskWorkerRuntime::submit_service_request_impl(std::uint8_t kind,
     return true;
 }
 
-bool ScriptTaskWorkerRuntime::cancel_service_request_impl(std::uint32_t request_id,
+bool ScriptTaskWorkerRuntime::State::cancel_service_request_impl(std::uint32_t request_id,
                                                           std::uint32_t client_token) {
-    if (active_supervisor_ == nullptr || request_id == 0 || client_token == 0) {
+    if (stopped_ || active_supervisor_ == nullptr || request_id == 0 || client_token == 0) {
         return false;
     }
     const ScriptTaskServiceRequestPostResult posted = post_script_task_service_cancel(
@@ -533,7 +698,7 @@ bool ScriptTaskWorkerRuntime::cancel_service_request_impl(std::uint32_t request_
     return true;
 }
 
-ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::pump_callbacks(
+ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::State::pump_callbacks(
     std::uint64_t now_ms,
     ScriptTaskSupervisor& supervisor,
     std::size_t max_timer_callbacks,
@@ -559,10 +724,12 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::pump_callbacks(
     ActiveSupervisorScope scope(*this, supervisor);
     const DomDirtyFlags before = subtree_dirty_flags(*document_owner_.root());
     telemetry_.timer_callbacks += runtime_->pump_timers(now_ms, max_timer_callbacks);
+    if (stopped_) return result;
     if (consume_callback_failure()) {
         return finish(result);
     }
     telemetry_.animation_frame_callbacks += runtime_->pump_animation_frame(now_ms, max_animation_callbacks);
+    if (stopped_) return result;
     if (consume_callback_failure()) {
         return finish(result);
     }
@@ -586,7 +753,7 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::pump_callbacks(
     return finish(result);
 }
 
-void ScriptTaskWorkerRuntime::set_fatal(ScriptTaskWorkerRuntimeFatalReason reason,
+void ScriptTaskWorkerRuntime::State::set_fatal(ScriptTaskWorkerRuntimeFatalReason reason,
                                         std::uint32_t diagnostic_code) {
     if (fatal()) return;
     fatal_record_.reason = reason;
@@ -596,7 +763,7 @@ void ScriptTaskWorkerRuntime::set_fatal(ScriptTaskWorkerRuntimeFatalReason reaso
     fatal_record_.message_bytes = 0;
 }
 
-bool ScriptTaskWorkerRuntime::consume_callback_failure() {
+bool ScriptTaskWorkerRuntime::State::consume_callback_failure() {
     const ScriptCallbackFailure failure = runtime_->take_script_callback_failure();
     if (!failure.failed()) {
         return false;
@@ -610,7 +777,7 @@ bool ScriptTaskWorkerRuntime::consume_callback_failure() {
     return true;
 }
 
-bool ScriptTaskWorkerRuntime::rebuild_pipeline() {
+bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
     if (!document_owner_.root() || !style_resolver_) return false;
     RenderTreeOptions render_options = render_tree_options_from_budgets(options_.budgets);
     render_options.viewport_width = options_.viewport.width;
@@ -642,7 +809,7 @@ bool ScriptTaskWorkerRuntime::rebuild_pipeline() {
                                              std::uint16_t resource_id, ImageResolveResult& result,
                                              void* context) {
             if (kind != ImageResolveKind::Background || resource_id == 0 || context == nullptr) return false;
-            auto* runtime = static_cast<ScriptTaskWorkerRuntime*>(context);
+            auto* runtime = static_cast<State*>(context);
             if (!runtime->options_.image_provider) return false;
             const std::string* url = runtime->style_resolver_->background_image_resource_url(resource_id);
             ResolvedImageResource resolved;
@@ -679,10 +846,118 @@ bool ScriptTaskWorkerRuntime::rebuild_pipeline() {
     return true;
 }
 
-bool ScriptTaskWorkerRuntime::has_dirty_document() const {
+bool ScriptTaskWorkerRuntime::State::has_dirty_document() const {
     return pending_frame_publication_ ||
            (document_owner_.root() != nullptr &&
             subtree_dirty_flags(*document_owner_.root()) != DomDirtyNone);
+}
+
+// Pins refer only to the session, so a callback may destroy the public facade.
+class ScriptTaskWorkerRuntime::OperationPin {
+public:
+    explicit OperationPin(State* state) : state_(state != nullptr && !state->stopped_ &&
+        state->active_operations_ < state->options_.max_active_operations ? state : nullptr) {
+        if (state_) ++state_->active_operations_;
+    }
+    ~OperationPin() { if (state_) state_->release_operation(); }
+    explicit operator bool() const { return state_ != nullptr; }
+    State* operator->() const { return state_; }
+    OperationPin(const OperationPin&) = delete;
+    OperationPin& operator=(const OperationPin&) = delete;
+private:
+    State* state_;
+};
+
+ScriptTaskWorkerRuntime::ScriptTaskWorkerRuntime(ScriptAppSession session,
+    ScriptTaskWorkerRuntimeOptions options) : state_(new State(session, std::move(options))) {}
+ScriptTaskWorkerRuntime::~ScriptTaskWorkerRuntime() {
+    State* state = state_;
+    state_ = nullptr;
+    if (!state) return;
+    state->owner_alive_ = false;
+    state->stop();
+    if (state->active_operations_ == 0) delete state;
+}
+void ScriptTaskWorkerRuntime::stop() { if (state_) state_->stop(); }
+bool ScriptTaskWorkerRuntime::initialized() const { return state_ && state_->initialized_; }
+bool ScriptTaskWorkerRuntime::stopped() const { return !state_ || state_->stopped_; }
+bool ScriptTaskWorkerRuntime::fatal() const { return state_ && state_->fatal(); }
+ScriptTaskWorkerRuntimeFatalRecord ScriptTaskWorkerRuntime::fatal_record() const {
+    return state_ ? state_->fatal_record_ : ScriptTaskWorkerRuntimeFatalRecord{};
+}
+ScriptTaskWorkerRuntimeTelemetry ScriptTaskWorkerRuntime::telemetry() const {
+    return state_ ? state_->telemetry_ : ScriptTaskWorkerRuntimeTelemetry{};
+}
+bool ScriptTaskWorkerRuntime::service_gateway_available() const {
+    return state_ && state_->service_gateway_available_;
+}
+void ScriptTaskWorkerRuntime::set_ui_accepted_frame_sequence(std::uint32_t sequence) {
+    OperationPin pin(state_);
+    if (pin) pin->telemetry_.ui_accepted_frame_seq = sequence;
+}
+
+ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::string_view html, std::string_view css) {
+    OperationPin pin(state_);
+    if (!pin) return state_ && !state_->stopped_
+        ? ScriptTaskWorkerRuntimeInitStatus::BudgetRejected
+        : ScriptTaskWorkerRuntimeInitStatus::Stopped;
+    return pin->initialize(html, css);
+}
+
+ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(ScriptTaskSupervisor& supervisor, std::string_view html, std::string_view css) {
+    OperationPin pin(state_);
+    if (!pin) return state_ && !state_->stopped_
+        ? ScriptTaskWorkerRuntimeInitStatus::BudgetRejected
+        : ScriptTaskWorkerRuntimeInitStatus::Stopped;
+    return pin->initialize(supervisor, html, css);
+}
+
+void ScriptTaskWorkerRuntime::set_host_time_ms(std::uint64_t now_ms) {
+    OperationPin pin(state_);
+    if (!pin) return;
+    return pin->set_host_time_ms(now_ms);
+}
+
+ScriptEvaluationResult ScriptTaskWorkerRuntime::eval(std::string_view source, std::string_view source_name) {
+    OperationPin pin(state_);
+    if (!pin) return {false, {}, "worker stopped or operation limit", ScriptEvaluationStatus::Exception};
+    return pin->eval(source, source_name);
+}
+
+ScriptEvaluationResult ScriptTaskWorkerRuntime::eval_with_supervisor(ScriptTaskSupervisor& supervisor, std::string_view source, std::string_view source_name) {
+    OperationPin pin(state_);
+    if (!pin) return {false, {}, "worker stopped or operation limit", ScriptEvaluationStatus::Exception};
+    return pin->eval_with_supervisor(supervisor, source, source_name);
+}
+
+ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::publish_frame(ScriptTaskSupervisor& supervisor) {
+    OperationPin pin(state_);
+    if (!pin) return {};
+    return pin->publish_frame(supervisor);
+}
+
+ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::process_one(ScriptTaskSupervisor& supervisor) {
+    OperationPin pin(state_);
+    if (!pin) return {};
+    return pin->process_one(supervisor);
+}
+
+ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::pump_callbacks(std::uint64_t now_ms, ScriptTaskSupervisor& supervisor, std::size_t max_timer_callbacks, std::size_t max_animation_callbacks) {
+    OperationPin pin(state_);
+    if (!pin) return {};
+    return pin->pump_callbacks(now_ms, supervisor, max_timer_callbacks, max_animation_callbacks);
+}
+
+bool ScriptTaskWorkerRuntime::publish_fatal(ScriptTaskSupervisor& supervisor) {
+    OperationPin pin(state_);
+    if (!pin) return false;
+    return pin->publish_fatal(supervisor);
+}
+
+bool ScriptTaskWorkerRuntime::inject_c_safe_fatal_for_test(ScriptTaskSupervisor& supervisor, std::uint32_t diagnostic_code) {
+    OperationPin pin(state_);
+    if (!pin) return false;
+    return pin->inject_c_safe_fatal_for_test(supervisor, diagnostic_code);
 }
 
 } // namespace jellyframe

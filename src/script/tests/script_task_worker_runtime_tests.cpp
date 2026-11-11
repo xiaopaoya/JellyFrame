@@ -1072,10 +1072,136 @@ void worker_event_identity_refusal_becomes_budget_fatal_without_publishing_a_fra
           "Event refusal uses the existing budget-fatal value contract");
 }
 
+struct WorkerOwnerMutationContext {
+    std::unique_ptr<ScriptTaskWorkerRuntime>* owner = nullptr;
+    ScriptTaskSupervisor* supervisor = nullptr;
+    bool reset = false;
+    bool nested = false;
+    std::size_t calls = 0;
+    bool rejected = false;
+};
+
+void worker_owner_mutation(void* user, const Node&, DomDirtyFlags, std::uint64_t) {
+    auto& context = *static_cast<WorkerOwnerMutationContext*>(user);
+    ++context.calls;
+    auto* worker = context.owner->get();
+    if (context.nested) {
+        context.nested = false;
+        check(worker->eval_with_supervisor(*context.supervisor,
+            "document.getElementById('button').textContent='nested';").ok,
+            "nested supervisor scope survives owner reset");
+        return;
+    }
+    if (context.reset) {
+        context.owner->reset();
+    } else {
+        worker->stop();
+        worker->stop();
+        context.rejected = !worker->eval("'refused'").ok &&
+            !worker->publish_frame(*context.supervisor).accepted() &&
+            !worker->service_gateway_available() && worker->stopped();
+    }
+}
+
+void worker_owner_teardown_during_callbacks() {
+    for (bool reset : {false, true}) {
+        for (bool nested : {false, true}) {
+            for (bool timer : {false, true}) {
+                auto supervisor = make_supervisor();
+                const auto session = supervisor.begin(94);
+                WorkerOwnerMutationContext context;
+                auto options = runtime_options();
+                options.mutation_observer = worker_owner_mutation;
+                options.mutation_observer_user = &context;
+                auto owner = std::make_unique<ScriptTaskWorkerRuntime>(session, options);
+                context.owner = &owner;
+                context.supervisor = &supervisor;
+                context.reset = reset;
+                context.nested = nested;
+                check(owner->initialize("<body><button id='button'>ready</button></body>",
+                    "button { display:block; width:100px; height:40px; }") ==
+                    ScriptTaskWorkerRuntimeInitStatus::Accepted, "owner teardown initialize");
+                check(owner->eval(timer ?
+                    "setTimeout(function(){document.getElementById('button').textContent='timer';},1);" :
+                    "document.getElementById('button').onclick=function(){this.textContent='event';};").ok,
+                    "owner teardown registers callback");
+                if (timer) {
+                    auto result = owner->pump_callbacks(2, supervisor);
+                    check(!result.frame_published, "stopped timer cannot publish old frame");
+                } else {
+                    (void)owner->eval_with_supervisor(supervisor,
+                        "document.getElementById('button').click();");
+                }
+                check(context.calls == (nested ? 2u : 1u), "stopped observer admits no later callback");
+                check(reset ? !owner : context.rejected, "real reset or immediate stop rejection observed");
+                ScriptTaskAppFrame frame;
+                check(take_script_task_app_frame(supervisor, session, options.frame_codec, frame) !=
+                    ScriptTaskAppFrameTakeStatus::Accepted, "retired callback publishes no old frame");
+            }
+        }
+    }
+}
+
+void worker_owner_reset_during_service_completion() {
+    auto supervisor = make_supervisor();
+    auto session = supervisor.begin(95);
+    WorkerOwnerMutationContext context;
+    auto options = runtime_options();
+    options.mutation_observer = worker_owner_mutation;
+    options.mutation_observer_user = &context;
+    auto owner = std::make_unique<ScriptTaskWorkerRuntime>(session, options);
+    context.owner = &owner;
+    context.supervisor = &supervisor;
+    context.reset = true;
+    check(owner->initialize("<body><button id='button'>ready</button></body>", "") ==
+        ScriptTaskWorkerRuntimeInitStatus::Accepted, "service owner initialize");
+    check(owner->eval_with_supervisor(supervisor,
+        "services.request(3,function(){document.getElementById('button').textContent='done';});").ok,
+        "service owner request");
+    ScriptTaskPacket request_packet;
+    check(supervisor.take_service_request(request_packet), "service owner receives request");
+    ScriptTaskServiceRequest request;
+    check(decode_script_task_service_request(request_packet.payload, options.service_request_codec, request) ==
+        ScriptTaskServiceRequestCodecStatus::Accepted, "service owner decodes request");
+    ScriptTaskServiceCompletion completion;
+    completion.kind = request.kind;
+    completion.status = HostServiceStatus::Completed;
+    completion.request_id = request.request_id;
+    completion.client_token = request.client_token;
+    std::vector<std::uint8_t> bytes;
+    check(encode_script_task_service_completion(completion, bytes), "service owner completion encodes");
+    check(supervisor.post_service_completion(
+        {ScriptTaskPacketKind::ServiceCompletion, session, 1, 0, bytes}) ==
+        ScriptTaskMailboxPostStatus::Accepted, "service owner completion queues");
+    const auto result = owner->process_one(supervisor);
+    check(!owner && context.calls == 1 && result.service_completion_consumed && !result.frame_published,
+        "real service callback owner reset drains safely without frame publication");
+}
+
+void worker_owner_admission_refusal() {
+    auto supervisor = make_supervisor();
+    auto options = runtime_options();
+    options.max_active_operations = 0;
+    ScriptTaskWorkerRuntime worker(supervisor.begin(94), options);
+    check(worker.initialize("<body></body>", "") != ScriptTaskWorkerRuntimeInitStatus::Accepted,
+        "zero operation capacity refuses session initialization");
+    check(!worker.eval("'no admission'").ok, "zero operation capacity refuses eval");
+    worker.stop();
+    check(worker.stopped() && !worker.initialized(), "refused worker stops idempotently");
+    options.max_active_operations = 1;
+    ScriptTaskWorkerRuntime capped(supervisor.begin(96), options);
+    check(capped.initialize("<body></body>", "") != ScriptTaskWorkerRuntimeInitStatus::Accepted,
+        "backend owner pin cannot exceed worker admission cap");
+    capped.stop();
+}
+
 } // namespace
 
 int script_task_worker_runtime_tests_main() {
     try {
+        worker_owner_teardown_during_callbacks();
+        worker_owner_admission_refusal();
+        worker_owner_reset_during_service_completion();
         worker_input_publishes_value_frame();
         worker_interaction_hints_preserve_css_and_dom_events();
         worker_retries_dirty_frame_after_ui_mailbox_backpressure();

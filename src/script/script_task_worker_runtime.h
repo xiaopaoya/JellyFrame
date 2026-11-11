@@ -52,12 +52,18 @@ struct ScriptTaskWorkerRuntimeFatalRecord {
 
 struct ScriptTaskWorkerRuntimeOptions {
     HostBudgets budgets;
+    // Same-thread session admission; acquiring a pin never allocates.
+    std::size_t max_active_operations = 64;
     ScriptRuntimeOptions script;
     Rect viewport;
     ScriptTaskAppFrameCodecOptions frame_codec;
     ScriptTaskInputCodecOptions input_codec;
     ScriptTaskServiceRequestCodecOptions service_request_codec;
     const TextSystem* text_system = nullptr;
+    // Synchronous worker-thread tooling observer. The caller keeps user alive
+    // through the active call, including when the observer destroys this facade.
+    ScriptDomMutationCallback mutation_observer = nullptr;
+    void* mutation_observer_user = nullptr;
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
     RuntimeFontCatalog::Handle text_catalog;
     RuntimeImageProvider::Handle image_provider;
@@ -110,10 +116,10 @@ public:
     ScriptTaskWorkerRuntimeInitStatus initialize(ScriptTaskSupervisor& supervisor,
                                                  std::string_view html,
                                                  std::string_view css);
-    bool initialized() const { return initialized_; }
-    bool stopped() const { return stopped_; }
-    bool fatal() const { return fatal_record_.reason != ScriptTaskWorkerRuntimeFatalReason::None; }
-    ScriptTaskWorkerRuntimeFatalRecord fatal_record() const { return fatal_record_; }
+    bool initialized() const;
+    bool stopped() const;
+    bool fatal() const;
+    ScriptTaskWorkerRuntimeFatalRecord fatal_record() const;
 
     // Establish the worker's monotonic host clock before author scripts run.
     // The same value source must be passed to pump_callbacks later.
@@ -140,14 +146,13 @@ public:
                                                      std::size_t max_timer_callbacks = 32,
                                                      std::size_t max_animation_callbacks = 4);
 
-    void set_ui_accepted_frame_sequence(std::uint32_t sequence) {
-        telemetry_.ui_accepted_frame_seq = sequence;
-    }
-    ScriptTaskWorkerRuntimeTelemetry telemetry() const { return telemetry_; }
-    bool service_gateway_available() const { return service_gateway_available_; }
+    void set_ui_accepted_frame_sequence(std::uint32_t sequence);
+    ScriptTaskWorkerRuntimeTelemetry telemetry() const;
+    bool service_gateway_available() const;
 
-    // Releases only worker-owned VM/DOM/pipeline state. The supervisor must
-    // invalidate the session and retire service/frame leases separately.
+    // Revokes the session immediately; active calls/completion pins defer physical
+    // VM/DOM/pipeline release. The supervisor must invalidate its session and
+    // retire service/frame leases separately.
     void stop();
     // Publishes the current fatal record once as a value packet. Retrying is
     // safe when the supervisor fatal mailbox is temporarily full.
@@ -161,62 +166,9 @@ public:
                                       std::uint32_t diagnostic_code = 0);
 
 private:
-    class ActiveSupervisorScope {
-    public:
-        ActiveSupervisorScope(ScriptTaskWorkerRuntime& runtime, ScriptTaskSupervisor& supervisor);
-        ~ActiveSupervisorScope();
-
-    private:
-        ScriptTaskWorkerRuntime& runtime_;
-        ScriptTaskSupervisor* previous_ = nullptr;
-    };
-
-    static bool submit_service_request(void* user,
-                                       std::uint8_t kind,
-                                       std::uint32_t request_id,
-                                       std::uint32_t client_token,
-                                       std::uint32_t input_handle,
-                                       std::uint8_t priority,
-                                       std::uint32_t timeout_ms);
-    static bool cancel_service_request(void* user,
-                                        std::uint32_t request_id,
-                                        std::uint32_t client_token);
-    bool submit_service_request_impl(std::uint8_t kind,
-                                     std::uint32_t request_id,
-                                     std::uint32_t client_token,
-                                     std::uint32_t input_handle,
-                                     std::uint8_t priority,
-                                     std::uint32_t timeout_ms);
-    bool cancel_service_request_impl(std::uint32_t request_id,
-                                     std::uint32_t client_token);
-    void set_fatal(ScriptTaskWorkerRuntimeFatalReason reason, std::uint32_t diagnostic_code = 0);
-    bool consume_callback_failure();
-    bool rebuild_pipeline();
-    bool has_dirty_document() const;
-    bool supervisor_matches(const ScriptTaskSupervisor& supervisor) const;
-    bool supervisor_validated_ = false;
-
-    ScriptAppSession session_;
-    ScriptTaskWorkerRuntimeOptions options_;
-    bool initialized_ = false;
-    bool stopped_ = false;
-    DomOwner document_owner_;
-    std::unique_ptr<ScriptRuntime> runtime_;
-    std::unique_ptr<StyleResolver> style_resolver_;
-    RenderObjectPtr render_tree_;
-    LayoutBoxPtr layout_tree_;
-    LayerNodePtr layer_tree_;
-    std::unique_ptr<InputController> input_controller_;
-    ScriptTaskAppFramePublisher frame_publisher_;
-    ScriptTaskWorkerRuntimeFatalRecord fatal_record_;
-    ScriptTaskWorkerRuntimeTelemetry telemetry_;
-    // Tracks rebuilt output after DOM dirty flags are cleared for Core capture.
-    bool pending_frame_publication_ = false;
-    ScriptTaskSupervisor* active_supervisor_ = nullptr;
-    std::uint32_t service_request_sequence_ = 1;
-    bool service_gateway_available_ = false;
-    bool fatal_published_ = false;
-    std::uint32_t fatal_packet_sequence_ = 1;
+    struct State;
+    class OperationPin;
+    State* state_ = nullptr;
 };
 
 } // namespace jellyframe
