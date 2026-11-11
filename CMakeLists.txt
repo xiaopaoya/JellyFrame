@@ -363,14 +363,21 @@ if(JELLYFRAME_BUILD_TESTS)
         ports/esp32s3-idf/tests/resource_reference_tests.cpp
         ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp)
     if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
-        target_sources(jellyframe_esp32s3_resource_reference_tests PRIVATE
+        add_executable(jellyframe_esp32s3_installed_resource_owner_tests
             ports/esp32s3-idf/tests/installed_resource_owner_tests.cpp
+            ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp
             ports/esp32s3-idf/main/jellyframe_esp32s3_installed_resource_owner.cpp
             ports/esp32s3-idf/main/jellyframe_esp32s3_image.cpp)
-        target_link_libraries(jellyframe_esp32s3_resource_reference_tests
+        target_link_libraries(jellyframe_esp32s3_installed_resource_owner_tests
             PRIVATE jellyframe_script_task_runtime)
-        target_compile_definitions(jellyframe_esp32s3_resource_reference_tests PRIVATE
-            JELLYFRAME_TEST_INSTALLED_RESOURCE_OWNER=1
+        target_include_directories(jellyframe_esp32s3_installed_resource_owner_tests PRIVATE
+            ports/esp32s3-idf/main)
+        jellyframe_enable_test_asserts(jellyframe_esp32s3_installed_resource_owner_tests)
+        jellyframe_stage_sanitizer_runtime(jellyframe_esp32s3_installed_resource_owner_tests)
+        add_test(NAME jellyframe_esp32s3_installed_resource_owner_tests
+            COMMAND jellyframe_esp32s3_installed_resource_owner_tests)
+        set_tests_properties(jellyframe_esp32s3_installed_resource_owner_tests PROPERTIES SKIP_RETURN_CODE 77)
+        target_compile_definitions(jellyframe_esp32s3_installed_resource_owner_tests PRIVATE
             CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM=1
             CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER=1
             "JELLYFRAME_CORE_SYSTEM_FONT_FIXTURE=\"${CMAKE_CURRENT_SOURCE_DIR}/ports/esp32s3-idf/font/core-system-noto-regular-16.jffont2\"")
@@ -404,7 +411,6 @@ if(JELLYFRAME_BUILD_TESTS)
         COMMAND jellyframe_esp32s3_resource_reference_tests)
     jellyframe_enable_test_asserts(jellyframe_esp32s3_resource_reference_tests)
     jellyframe_stage_sanitizer_runtime(jellyframe_esp32s3_resource_reference_tests)
-    set_tests_properties(jellyframe_esp32s3_resource_reference_tests PROPERTIES SKIP_RETURN_CODE 77)
     if(WIN32 AND TARGET jellyframe_cpu2d_compare)
         add_executable(jellyframe_cpu2d_sampling_tests tests/cpu2d_sampling_tests.cpp)
         target_compile_features(jellyframe_cpu2d_sampling_tests PRIVATE cxx_std_17)

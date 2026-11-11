@@ -169,3 +169,14 @@ int run_installed_resource_owner_tests() {
     return 77;
 }
 #endif
+
+namespace jellyframe_esp32s3 {
+const ResourceBundle& generated_resource_bundle() {
+    static const ResourceBundle empty{};
+    return empty;
+}
+} // namespace jellyframe_esp32s3
+
+int main() {
+    return run_installed_resource_owner_tests();
+}

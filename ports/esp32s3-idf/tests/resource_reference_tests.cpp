@@ -6,10 +6,6 @@
 #include <string>
 #include <vector>
 
-#if defined(JELLYFRAME_TEST_INSTALLED_RESOURCE_OWNER)
-int run_installed_resource_owner_tests();
-#endif
-
 namespace jellyframe_esp32s3 {
 
 const ResourceBundle& generated_resource_bundle() {
@@ -20,10 +16,6 @@ const ResourceBundle& generated_resource_bundle() {
 } // namespace jellyframe_esp32s3
 
 int main() {
-#if defined(JELLYFRAME_TEST_INSTALLED_RESOURCE_OWNER)
-    const int owner_result = run_installed_resource_owner_tests();
-    if (owner_result != 0) return owner_result;
-#endif
     std::ifstream fixture(JELLYFRAME_RESOURCE_REFERENCE_FIXTURE, std::ios::binary);
     if (!fixture.good()) {
         std::cerr << "FAIL resource_reference_tests: cannot open nested stylesheet fixture: "
