@@ -23,6 +23,49 @@ file(GLOB_RECURSE JELLYFRAME_JERRY_CORE_SOURCES
     "${JERRY_ROOT}/jerry-core/*.c")
 list(FILTER JELLYFRAME_JERRY_CORE_SOURCES EXCLUDE REGEX "/tests?/")
 
+# Use the same reviewed patch as host CI, without changing the caller's source
+# tree. Only these three pinned files are copied into the build directory.
+set(JELLYFRAME_JERRY_PATCH_TOOLS "${JELLYFRAME_ROOT}/tools/dependencies")
+set(JELLYFRAME_JERRY_PATCH_ROOT "${CMAKE_CURRENT_BINARY_DIR}/weakref-patched")
+set(JELLYFRAME_JERRY_PATCH_FILES
+    "jerry-core/ecma/base/ecma-helpers.h"
+    "jerry-core/ecma/base/ecma-helpers.c"
+    "jerry-core/ecma/operations/ecma-objects.c")
+foreach(JELLYFRAME_JERRY_PATCH_FILE IN LISTS JELLYFRAME_JERRY_PATCH_FILES)
+    configure_file(
+        "${JERRY_ROOT}/${JELLYFRAME_JERRY_PATCH_FILE}"
+        "${JELLYFRAME_JERRY_PATCH_ROOT}/${JELLYFRAME_JERRY_PATCH_FILE}"
+        COPYONLY)
+endforeach()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${JELLYFRAME_JERRY_PATCH_TOOLS}/patch_jerryscript.py"
+    "${JELLYFRAME_JERRY_PATCH_TOOLS}/jerryscript-weakref-initialization.json"
+    "${JELLYFRAME_JERRY_PATCH_TOOLS}/jerryscript-weakref-initialization.patch")
+if(PYTHON)
+    set(JELLYFRAME_JERRY_PATCH_PYTHON "${PYTHON}")
+else()
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set(JELLYFRAME_JERRY_PATCH_PYTHON "${Python3_EXECUTABLE}")
+endif()
+execute_process(
+    COMMAND "${JELLYFRAME_JERRY_PATCH_PYTHON}"
+        "${JELLYFRAME_JERRY_PATCH_TOOLS}/patch_jerryscript.py"
+        --source-root "${JELLYFRAME_JERRY_PATCH_ROOT}"
+    RESULT_VARIABLE JELLYFRAME_JERRY_PATCH_RESULT
+    OUTPUT_VARIABLE JELLYFRAME_JERRY_PATCH_OUTPUT
+    ERROR_VARIABLE JELLYFRAME_JERRY_PATCH_ERROR)
+if(NOT JELLYFRAME_JERRY_PATCH_RESULT EQUAL 0)
+    message(FATAL_ERROR "JerryScript WeakRef patch failed: ${JELLYFRAME_JERRY_PATCH_OUTPUT}${JELLYFRAME_JERRY_PATCH_ERROR}")
+endif()
+string(STRIP "${JELLYFRAME_JERRY_PATCH_OUTPUT}" JELLYFRAME_JERRY_PATCH_OUTPUT)
+message(STATUS "${JELLYFRAME_JERRY_PATCH_OUTPUT}")
+foreach(JELLYFRAME_JERRY_PATCH_FILE IN LISTS JELLYFRAME_JERRY_PATCH_FILES)
+    if(JELLYFRAME_JERRY_PATCH_FILE MATCHES "\\.c$")
+        list(REMOVE_ITEM JELLYFRAME_JERRY_CORE_SOURCES "${JERRY_ROOT}/${JELLYFRAME_JERRY_PATCH_FILE}")
+        list(APPEND JELLYFRAME_JERRY_CORE_SOURCES "${JELLYFRAME_JERRY_PATCH_ROOT}/${JELLYFRAME_JERRY_PATCH_FILE}")
+    endif()
+endforeach()
+
 configure_file(
     "${JERRY_ROOT}/jerry-core/config.h"
     "${CMAKE_CURRENT_BINARY_DIR}/jerryscript-config.h"
@@ -33,6 +76,7 @@ idf_component_register(
         ${JELLYFRAME_JERRY_CORE_SOURCES}
         "jerry_port_esp32s3.c"
     INCLUDE_DIRS
+        "${JELLYFRAME_JERRY_PATCH_ROOT}/jerry-core/ecma/base"
         "${JERRY_ROOT}/jerry-core/include"
         "${JERRY_ROOT}/jerry-core"
         "${JERRY_ROOT}/jerry-core/api"

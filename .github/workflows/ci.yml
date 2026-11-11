@@ -297,9 +297,13 @@ jobs:
           ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
           path: third_party/jerryscript
 
-      - name: Build JerryScript
+      - name: Patch and build JerryScript
         shell: pwsh
-        run: python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+        run: |
+          python tools/dependencies/patch_jerryscript.py --source-root third_party/jerryscript
+          if ($LASTEXITCODE -ne 0) { throw 'JerryScript WeakRef patch failed' }
+          python third_party/jerryscript/tools/build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+          if ($LASTEXITCODE -ne 0) { throw 'JerryScript build failed' }
 
       - name: Install released Render Core package
         shell: pwsh
@@ -396,9 +400,13 @@ jobs:
           ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
           path: third_party/jerryscript
 
-      - name: Build JerryScript
+      - name: Patch and build JerryScript
         shell: pwsh
-        run: python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+        run: |
+          python tools/dependencies/patch_jerryscript.py --source-root third_party/jerryscript
+          if ($LASTEXITCODE -ne 0) { throw 'JerryScript WeakRef patch failed' }
+          python third_party/jerryscript/tools/build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+          if ($LASTEXITCODE -ne 0) { throw 'JerryScript build failed' }
 
       - name: Configure and install ABI4 Render Core
         shell: pwsh
@@ -497,9 +505,11 @@ jobs:
           ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
           path: third_party/jerryscript
 
-      - name: Build JerryScript
+      - name: Patch and build JerryScript
         shell: pwsh
         run: |
+          python tools/dependencies/patch_jerryscript.py --source-root third_party/jerryscript
+          if ($LASTEXITCODE -ne 0) { throw 'JerryScript WeakRef patch failed' }
           python third_party/jerryscript/tools/build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
           if ($LASTEXITCODE -ne 0) { throw 'JerryScript build failed' }
 
@@ -756,9 +766,13 @@ jobs:
           ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
           path: third_party/jerryscript
 
-      - name: Build JerryScript
+      - name: Patch and build JerryScript
         shell: pwsh
-        run: python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+        run: |
+          python tools/dependencies/patch_jerryscript.py --source-root third_party/jerryscript
+          if ($LASTEXITCODE -ne 0) { throw 'JerryScript WeakRef patch failed' }
+          python third_party/jerryscript/tools/build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+          if ($LASTEXITCODE -ne 0) { throw 'JerryScript build failed' }
 
       - name: Configure ordinary desktop and scripting consumers
         shell: pwsh
