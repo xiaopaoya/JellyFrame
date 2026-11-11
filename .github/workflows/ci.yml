@@ -830,6 +830,7 @@ jobs:
         run: >
           cmake --build build/framework-external-core
           --target jellyframe_app_runtime_tests jellyframe_device_runtime_contracts_tests
+          jellyframe_esp32s3_resource_reference_tests
           --parallel
 
       - name: Run Runtime package consumer CTest
