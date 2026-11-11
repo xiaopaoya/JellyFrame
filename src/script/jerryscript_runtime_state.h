@@ -145,6 +145,9 @@ private:
     std::size_t route_history_index_ = 0;
     std::uint32_t execution_watchdog_depth_ = 0;
     std::uint32_t script_execution_depth_ = 0;
+    // Includes native callback staging before JS execution starts. It does not
+    // pretend to identify gaps between listeners in a legacy native dispatch.
+    std::size_t dom_callback_depth_ = 0;
     std::uint32_t execution_watchdog_remaining_ = 0;
     bool execution_watchdog_interrupted_ = false;
     bool execution_watchdog_interrupt_pending_ = false;

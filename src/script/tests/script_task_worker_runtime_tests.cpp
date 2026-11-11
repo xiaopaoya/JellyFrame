@@ -1,4 +1,5 @@
 #include "script/script_task_worker_runtime.h"
+#include "script/script_event_capabilities.h"
 
 #include "app_runtime/script_task_input_codec.h"
 #include "app_runtime/script_task_service_bridge.h"
@@ -1044,11 +1045,17 @@ void worker_input_node_destruction_clears_interaction_state() {
     check(!up.fatal && !runtime.fatal(), "destroyed input target does not leave a dangling worker pointer");
 }
 
-void worker_event_identity_refusal_becomes_budget_fatal_without_publishing_a_frame() {
+void worker_callback_admission_refusal_becomes_budget_fatal_without_publishing_a_frame() {
     ScriptTaskSupervisor supervisor = make_supervisor();
     const ScriptAppSession session = supervisor.begin(91);
     auto options = runtime_options();
+#if JELLYFRAME_SCRIPT_R3_EVENTS
     options.script.max_active_event_dispatches = 0;
+#else
+    // The surrounding eval is allowed; its nested native callback exceeds the
+    // shared operation allowance. Legacy has no shared Event-record capacity.
+    options.script.max_active_operations = 1;
+#endif
     ScriptTaskWorkerRuntime runtime(session, options);
     check(runtime.initialize(
               "<body><button id='button'>unchanged</button></body>",
@@ -1062,7 +1069,7 @@ void worker_event_identity_refusal_becomes_budget_fatal_without_publishing_a_fra
     const auto result = runtime.eval_with_supervisor(supervisor, "b.click(); 'returned'");
     check(result.ok && runtime.fatal() && runtime.fatal_record().reason ==
               ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded,
-          "Event construction refusal becomes worker budget fatal even if surrounding eval returns normally");
+          "callback admission refusal becomes worker budget fatal even if surrounding eval returns normally");
     check(!runtime.publish_frame(supervisor).accepted(), "failed Event dispatch cannot publish a later worker frame");
     ScriptTaskPacket packet;
     check(supervisor.take_fatal(packet), "Event refusal publishes a bounded fatal value record");
@@ -1280,7 +1287,7 @@ int script_task_worker_runtime_tests_main() {
         worker_fatal_publishes_once_as_a_supervisor_value();
         worker_c_safe_fatal_boundary_publishes_value_record();
         worker_input_node_destruction_clears_interaction_state();
-        worker_event_identity_refusal_becomes_budget_fatal_without_publishing_a_frame();
+        worker_callback_admission_refusal_becomes_budget_fatal_without_publishing_a_frame();
     } catch (const std::exception& error) {
         std::cerr << "script task worker runtime test failed: " << error.what() << '\n';
         return 1;

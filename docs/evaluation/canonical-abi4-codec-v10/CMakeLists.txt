@@ -74,6 +74,8 @@ if(BUILD_V10_WORKER)
   set(script_cpp "${runtime_source}/src/script")
   add_library(runtime_v10_script STATIC
     "${script_cpp}/jerryscript_runtime.cpp" "${script_cpp}/script_task_worker_runtime.cpp")
+  include("${runtime_repo_root}/cmake/jellyframe_script_event_config.cmake")
+  jellyframe_configure_script_events(runtime_v10_script PUBLIC JellyFrame::jellyframe_render_core)
   target_link_libraries(runtime_v10_script PUBLIC runtime_v10_support
     PRIVATE ${JELLYFRAME_SCRIPT_BACKEND_LIBRARIES})
   target_include_directories(runtime_v10_script PRIVATE ${JELLYFRAME_SCRIPT_BACKEND_INCLUDE_DIRS})

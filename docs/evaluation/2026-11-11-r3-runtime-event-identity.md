@@ -1,5 +1,9 @@
 # R3 Runtime shared Event identity checkpoint
 
+Last updated: 2026-11-12; Applies to: 0.6.0-dev
+
+Historical experimental checkpoint; current delivery policy and qualification are tracked separately in the migration execution board.
+
 This checkpoint records an experimental Runtime integration of the Core R3
 dispatch-completion API. It is not a production capability claim.
 

@@ -1,5 +1,9 @@
 # R3 joined backend and worker owner lifetime integration
 
+Last updated: 2026-11-12; Applies to: 0.6.0-dev
+
+Historical experimental checkpoint; current delivery policy and qualification are tracked separately in the migration execution board.
+
 ## Source boundary
 
 Fresh Runtime worktree: `E:/Workspaces/migration-followup/Runtime-r3-owner-joined-20261111`.

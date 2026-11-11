@@ -1,5 +1,9 @@
 # R3 backend facade lifetime checkpoint
 
+Last updated: 2026-11-12; Applies to: 0.6.0-dev
+
+Historical experimental checkpoint; current delivery policy and qualification are tracked separately in the migration execution board.
+
 This experimental backend increment separates `JerryScriptRuntime` (the public
 facade) from `JerryScriptRuntimeState` (the surviving backend). It is scoped to
 physical backend safety; borrowed documents and host resources still require

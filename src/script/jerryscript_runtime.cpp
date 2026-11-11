@@ -1,5 +1,6 @@
 #include "script/jerryscript_runtime.h"
 #include "script/jerryscript_runtime_state.h"
+#include "script/script_event_capabilities.h"
 
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_host_data.h"
@@ -8,15 +9,9 @@
 #include "app_runtime/xml_http_request.h"
 #include "render_core/canvas2d.h"
 #include "render_core/event.h"
-#if !defined(JELLYFRAME_EVENT_DISPATCH_COMPLETION_API) || !defined(JELLYFRAME_EVENT_DISPATCH_FAILURE_API)
-#error "R3 shared Event identity requires Core dispatch completion and failure APIs"
-#endif
 #include "render_core/feature_config.h"
 #include "render_core/form_control.h"
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-#if !defined(JELLYFRAME_EVENT_SUBMIT_KIND_API) || JELLYFRAME_EVENT_SUBMIT_KIND_API != 1
-#error "R3 submit event binding requires Core EventKind::Submit API version 1"
-#endif
 #include "render_core/form_submission.h"
 #endif
 #include "render_core/layout.h"
@@ -60,24 +55,28 @@ public:
     explicit BackendOperationPin(std::shared_ptr<JerryScriptRuntimeState> state)
         : state_(std::move(state)) {
         if (!state_ || state_->stop_requested() ||
-            state_->active_operations_ >= state_->operation_limit()) { state_.reset(); return; }
+            state_->active_operations_ >= state_->operation_limit()) return;
         const auto& options = state_->lifetime_options();
-        if (options.retain_owner && !options.retain_owner(options.owner_context)) { state_.reset(); return; }
+        if (options.retain_owner && !options.retain_owner(options.owner_context)) return;
         release_ = options.release_owner; context_ = options.owner_context;
         ++state_->active_operations_;
+        admitted_ = true;
     }
     BackendOperationPin(const BackendOperationPin&) = delete;
     BackendOperationPin& operator=(const BackendOperationPin&) = delete;
     ~BackendOperationPin() {
-        if (state_) --state_->active_operations_;
+        if (admitted_) --state_->active_operations_;
         state_.reset();
         if (release_) release_(context_);
     }
-    explicit operator bool() const noexcept { return bool(state_); }
+    explicit operator bool() const noexcept { return admitted_; }
 private:
     std::shared_ptr<JerryScriptRuntimeState> state_;
     void (*release_)(void*) noexcept = nullptr;
     void* context_ = nullptr;
+    // Keep State alive through refusal diagnostics too, but release it before
+    // the enclosing owner pin, preserving borrowed-resource teardown order.
+    bool admitted_ = false;
 };
 
 struct ScriptEventListener {
@@ -146,6 +145,18 @@ struct ScriptEventBinding {
     bool default_prevented = false;
 };
 
+#if defined(JELLYFRAME_SCRIPT_EVENT_TESTING)
+namespace {
+thread_local void (*event_staging_test_hook)(void*) noexcept = nullptr;
+thread_local void* event_staging_test_context = nullptr;
+}
+void set_script_event_staging_test_hook(void (*hook)(void*) noexcept, void* context) noexcept {
+    event_staging_test_hook = hook;
+    event_staging_test_context = context;
+}
+#endif
+
+#if JELLYFRAME_SCRIPT_R3_EVENTS
 struct ScriptEventDispatchRecord {
     std::shared_ptr<JerryScriptRuntimeState> pin;
     void (*release_owner)(void*) noexcept = nullptr;
@@ -159,6 +170,7 @@ struct ScriptEventDispatchRecord {
 };
 
 thread_local ScriptEventDispatchRecord* active_script_event_dispatches = nullptr;
+#endif
 
 struct ScriptTimer {
     std::uint32_t id = 0;
@@ -551,6 +563,16 @@ struct ScriptRuntimeAccess {
 
     static const ScriptRuntimeOptions& options(const JerryScriptRuntimeState& runtime) {
         return runtime.options_;
+    }
+
+    static void enter_dom_callback(JerryScriptRuntimeState& runtime) noexcept {
+        ++runtime.dom_callback_depth_;
+    }
+    static void leave_dom_callback(JerryScriptRuntimeState& runtime) noexcept {
+        --runtime.dom_callback_depth_;
+    }
+    static void prune_event_listeners(JerryScriptRuntimeState& runtime) {
+        runtime.prune_inactive_script_event_listeners();
     }
 
     static std::uint32_t& execution_watchdog_depth(JerryScriptRuntimeState& runtime) {
@@ -1838,6 +1860,9 @@ jerry_value_t event_prevent_default(const jerry_call_info_t* call_info_p,
     } else if (binding->cancelable) {
         binding->default_prevented = true;
     }
+#if !JELLYFRAME_SCRIPT_R3_EVENTS
+    set_bool_property(call_info_p->this_value, "defaultPrevented", binding->default_prevented);
+#endif
     return jerry_undefined();
 }
 
@@ -1929,6 +1954,25 @@ void set_method(jerry_value_t object, const char* name, jerry_external_handler_t
 jerry_value_t make_node_wrapper(JerryScriptRuntimeState& runtime, Node& node, bool document_methods);
 jerry_value_t make_event_current_target(JerryScriptRuntimeState& runtime, Event& event);
 
+void stop_failed_script_dispatch(Event& event) noexcept {
+#if JELLYFRAME_SCRIPT_R3_EVENTS
+    (void) fail_event_dispatch(event);
+#else
+    // Legacy Core can stop later listeners, but cannot signal independent
+    // native dispatch failure or suppress noncancelable default actions.
+    event.stop_immediate_propagation();
+#endif
+}
+
+bool script_dispatch_stopped(const Event& event) noexcept {
+#if JELLYFRAME_SCRIPT_R3_EVENTS
+    return event.dispatch_failed() || event.immediate_propagation_stopped();
+#else
+    return event.immediate_propagation_stopped();
+#endif
+}
+
+#if JELLYFRAME_SCRIPT_R3_EVENTS
 jerry_value_t event_get_phase(const jerry_call_info_t* call_info_p,
                               const jerry_value_t[],
                               const jerry_length_t) {
@@ -1965,6 +2009,7 @@ jerry_value_t event_get_default_prevented(const jerry_call_info_t* call_info_p,
     }
     return jerry_boolean(binding->default_prevented);
 }
+#endif
 
 // Existing Node wrapper helpers ordinarily discard property-definition errors.
 // During Event construction they must use checked own properties for target and
@@ -1989,6 +2034,7 @@ void note_object_construction_result(jerry_value_t result) {
     }
 }
 
+#if JELLYFRAME_SCRIPT_R3_EVENTS
 bool define_event_getter(jerry_value_t object,
                          const char* property,
                          jerry_external_handler_t getter) {
@@ -2002,6 +2048,7 @@ bool define_event_getter(jerry_value_t object,
     jerry_property_descriptor_free(&descriptor);
     return ok;
 }
+#endif
 
 // Define own data properties instead of invoking attacker-supplied inherited
 // setters during publication of a native Event object. Every result is checked.
@@ -2020,6 +2067,13 @@ bool define_event_value(jerry_value_t object, const char* property, jerry_value_
 }
 
 jerry_value_t create_event_object(JerryScriptRuntimeState& runtime, Event& event) {
+#if defined(JELLYFRAME_SCRIPT_EVENT_TESTING)
+    const auto hook = event_staging_test_hook;
+    void* const context = event_staging_test_context;
+    event_staging_test_hook = nullptr;
+    event_staging_test_context = nullptr;
+    if (hook != nullptr) hook(context);
+#endif
     ScriptObjectConstructionScope construction;
     JerryValue object(jerry_object());
     auto* binding = new ScriptEventBinding{&event, 0, true, event.cancelable(), event.default_prevented()};
@@ -2035,9 +2089,17 @@ jerry_value_t create_event_object(JerryScriptRuntimeState& runtime, Event& event
     value("type", string_to_value(event.type()).get());
     boolean("bubbles", event.bubbles());
     boolean("cancelable", event.cancelable());
+#if JELLYFRAME_SCRIPT_R3_EVENTS
     ok = define_event_getter(object.get(), "eventPhase", event_get_phase) && ok;
     ok = define_event_getter(object.get(), "currentTarget", event_get_current_target) && ok;
     ok = define_event_getter(object.get(), "defaultPrevented", event_get_default_prevented) && ok;
+#else
+    number("eventPhase", static_cast<int>(event.event_phase()));
+    boolean("defaultPrevented", event.default_prevented());
+    value("currentTarget", JerryValue(event.current_target() != nullptr
+        ? make_node_wrapper(runtime, *const_cast<Node*>(event.current_target()), false)
+        : jerry_null()).get());
+#endif
 
     if (event.target() != nullptr) {
         value("target", JerryValue(make_node_wrapper(runtime, *const_cast<Node*>(event.target()), false)).get());
@@ -2062,12 +2124,17 @@ jerry_value_t create_event_object(JerryScriptRuntimeState& runtime, Event& event
         number("deltaMode", wheel.delta_mode);
     }
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-    if (event.kind() == EventKind::Submit) {
-        const auto& submit = static_cast<const SubmitEvent&>(event);
-        if (submit.submitter() != nullptr) {
+#if JELLYFRAME_SCRIPT_R3_EVENTS
+    const SubmitEvent* submit = event.kind() == EventKind::Submit
+        ? static_cast<const SubmitEvent*>(&event) : nullptr;
+#else
+    const SubmitEvent* submit = dynamic_cast<const SubmitEvent*>(&event);
+#endif
+    if (submit != nullptr) {
+        if (submit->submitter() != nullptr) {
             value("submitter",
                          JerryValue(make_node_wrapper(runtime,
-                                                      *const_cast<Node*>(submit.submitter()),
+                                                      *const_cast<Node*>(submit->submitter()),
                                                       false)).get());
         } else {
             value("submitter", jerry_null());
@@ -2086,6 +2153,7 @@ jerry_value_t create_event_object(JerryScriptRuntimeState& runtime, Event& event
     return object.release();
 }
 
+#if JELLYFRAME_SCRIPT_R3_EVENTS
 void finish_event_dispatch(Event& event, void* context) noexcept {
     auto* record = static_cast<ScriptEventDispatchRecord*>(context);
     if (record == nullptr) {
@@ -2134,7 +2202,7 @@ jerry_value_t make_event_object(JerryScriptRuntimeState& runtime, Event& event) 
             const auto& owner = runtime.lifetime_options();
             if (owner.retain_owner && !owner.retain_owner(owner.owner_context)) {
                 ScriptRuntimeAccess::record_event_failure(runtime, ScriptCallbackFailureStatus::ResourceLimit);
-                (void) fail_event_dispatch(event);
+                stop_failed_script_dispatch(event);
                 return jerry_undefined();
             }
             record->release_owner = owner.release_owner;
@@ -2148,7 +2216,7 @@ jerry_value_t make_event_object(JerryScriptRuntimeState& runtime, Event& event) 
                 active_script_event_dispatches = record.get();
                 try {
                     JerryValue object(create_event_object(runtime, event));
-                    if (jerry_value_is_object(object.get()) && !event.dispatch_failed()) {
+                    if (jerry_value_is_object(object.get()) && !script_dispatch_stopped(event)) {
                         record->object = object.release();
                         ScriptEventDispatchRecord* enrolled = record.release();
                         return jerry_value_copy(enrolled->object);
@@ -2167,9 +2235,26 @@ jerry_value_t make_event_object(JerryScriptRuntimeState& runtime, Event& event) 
         }
     }
     ScriptRuntimeAccess::record_event_failure(runtime, failure_status);
-    (void) fail_event_dispatch(event);
+    stop_failed_script_dispatch(event);
     return jerry_undefined();
 }
+#else
+jerry_value_t make_event_object(JerryScriptRuntimeState& runtime, Event& event) {
+    try {
+        JerryValue object(create_event_object(runtime, event));
+        if (jerry_value_is_object(object.get()) && !script_dispatch_stopped(event)) {
+            return object.release();
+        }
+        ScriptRuntimeAccess::record_event_failure(runtime, ScriptCallbackFailureStatus::Exception);
+    } catch (const std::bad_alloc&) {
+        ScriptRuntimeAccess::record_event_failure(runtime);
+    } catch (const std::length_error&) {
+        ScriptRuntimeAccess::record_event_failure(runtime);
+    }
+    stop_failed_script_dispatch(event);
+    return jerry_undefined();
+}
+#endif
 
 jerry_value_t make_event_current_target(JerryScriptRuntimeState& runtime, Event& event) {
     try {
@@ -2177,14 +2262,14 @@ jerry_value_t make_event_current_target(JerryScriptRuntimeState& runtime, Event&
         JerryValue object(event.current_target() != nullptr
             ? make_node_wrapper(runtime, *const_cast<Node*>(event.current_target()), false)
             : jerry_null());
-        if (!construction.failed() && !jerry_value_is_exception(object.get()) && !event.dispatch_failed()) {
+        if (!construction.failed() && !jerry_value_is_exception(object.get()) && !script_dispatch_stopped(event)) {
             return object.release();
         }
         ScriptRuntimeAccess::record_event_failure(runtime, ScriptCallbackFailureStatus::Exception);
     } catch (const std::bad_alloc&) {
         ScriptRuntimeAccess::record_event_failure(runtime);
     }
-    (void) fail_event_dispatch(event);
+    stop_failed_script_dispatch(event);
     return jerry_undefined();
 }
 
@@ -6901,10 +6986,12 @@ JerryScriptRuntimeState::~JerryScriptRuntimeState() {
 }
 
 bool JerryScriptRuntimeState::bind_document(Node& document) {
-    if (script_execution_depth_ != 0) return false;
+    if (script_execution_depth_ != 0 || dom_callback_depth_ != 0) return false;
+#if JELLYFRAME_SCRIPT_R3_EVENTS
     for (auto* record = active_script_event_dispatches; record != nullptr; record = record->next) {
         if (record->runtime == this) return false;
     }
+#endif
     ScriptDomMutationScope operation_scope(*this);
     callback_failure_ = {};
     clear_xml_http_requests();
@@ -7909,6 +7996,74 @@ std::size_t JerryScriptRuntimeState::active_script_event_listener_count() const 
         }));
 }
 
+namespace {
+
+class ScopedDomCallbackAdmission {
+public:
+    explicit ScopedDomCallbackAdmission(JerryScriptRuntimeState& runtime) noexcept : runtime_(runtime) {
+        ScriptRuntimeAccess::enter_dom_callback(runtime_);
+    }
+    ~ScopedDomCallbackAdmission() { ScriptRuntimeAccess::leave_dom_callback(runtime_); }
+private:
+    JerryScriptRuntimeState& runtime_;
+};
+
+class ScopedEventInvocationSnapshot {
+public:
+    explicit ScopedEventInvocationSnapshot(ScriptEventBinding* binding) noexcept : binding_(binding) {}
+    ~ScopedEventInvocationSnapshot() { finish(); }
+    void finish() noexcept {
+        if (binding_ == nullptr) return;
+        binding_->callback_this = 0;
+#if !JELLYFRAME_SCRIPT_R3_EVENTS
+        if (binding_->event != nullptr) binding_->default_prevented = binding_->event->default_prevented();
+        binding_->event = nullptr;
+        binding_->active = false;
+#endif
+        binding_ = nullptr;
+    }
+private:
+    ScriptEventBinding* binding_;
+};
+
+void invoke_dom_script_listener(ScriptEventListener* listener, Event& event) {
+    if (listener == nullptr || !listener->active || listener->runtime == nullptr || listener->callback == 0) return;
+    JerryScriptRuntimeState* const runtime = listener->runtime;
+    BackendOperationPin operation(runtime->shared_from_this());
+    if (!operation) {
+        if (!runtime->stop_requested()) {
+            ScriptRuntimeAccess::record_event_failure(*runtime);
+            stop_failed_script_dispatch(event);
+        }
+        return;
+    }
+    // Admission and listener retention precede any fallible/reentrant wrapper
+    // staging. Their cleanup runs before the final backend/owner pin drains.
+    ScopedDomCallbackAdmission admission(*runtime);
+    ScriptEventListenerCallbackScope callback_scope(*listener);
+    JerryValue event_object(make_event_object(*runtime, event));
+    if (!jerry_value_is_object(event_object.get())) return;
+    ScriptEventBinding* const binding = native_event_binding(event_object.get());
+    ScopedEventInvocationSnapshot snapshot(binding);
+    JerryValue this_value(make_event_current_target(*runtime, event));
+    if (script_dispatch_stopped(event) || jerry_value_is_undefined(this_value.get()) ||
+        !listener->active || listener->callback == 0) return;
+    if (binding != nullptr) binding->callback_this = this_value.get();
+    const jerry_value_t argument = event_object.get();
+    JerryValue result(run_with_execution_budget(*runtime, [&]() {
+        return jerry_call(listener->callback, this_value.get(), &argument, 1);
+    }));
+    snapshot.finish();
+    callback_scope.finish();
+    if (jerry_value_is_exception(result.get())) {
+        JerryValue exception(jerry_exception_value(result.release(), true));
+        (void) exception;
+    }
+    ScriptRuntimeAccess::prune_event_listeners(*runtime);
+}
+
+} // namespace
+
 void JerryScriptRuntimeState::add_script_event_listener(Node& node,
                                                    std::string type,
                                                    std::uint32_t callback_value,
@@ -7936,37 +8091,7 @@ void JerryScriptRuntimeState::add_script_event_listener(Node& node,
 
     ScriptEventListener* raw = listener.get();
     listener->listener_id = node.add_event_listener(listener->type, [raw](Event& event) {
-        if (raw == nullptr || !raw->active || raw->runtime == nullptr) {
-            return;
-        }
-
-        JerryScriptRuntimeState* const runtime = raw->runtime;
-        BackendOperationPin operation(runtime->shared_from_this());
-        if (!operation) return;
-        // Wrapper construction can reenter JS through existing Node helpers;
-        // retain the callback and listener record before constructing anything.
-        ScriptEventListenerCallbackScope callback_scope(*raw);
-        JerryValue event_object(make_event_object(*runtime, event));
-        if (!jerry_value_is_object(event_object.get())) return;
-        JerryValue this_value(make_event_current_target(*runtime, event));
-        if (event.dispatch_failed() || !raw->active || raw->callback == 0) return;
-        ScriptEventBinding* const event_binding = native_event_binding(event_object.get());
-        const jerry_value_t event_arg = event_object.get();
-        if (event_binding != nullptr) {
-            event_binding->callback_this = this_value.get();
-        }
-        JerryValue result(run_with_execution_budget(*runtime, [&]() {
-            return jerry_call(raw->callback, this_value.get(), &event_arg, 1);
-        }));
-        if (event_binding != nullptr) {
-            event_binding->callback_this = 0;
-        }
-        callback_scope.finish();
-        if (jerry_value_is_exception(result.get())) {
-            JerryValue exception_value(jerry_exception_value(result.release(), true));
-            (void) exception_value;
-        }
-        runtime->prune_inactive_script_event_listeners();
+        invoke_dom_script_listener(raw, event);
     }, listener->options);
 
     event_listeners_.push_back(std::move(listener));
@@ -8024,37 +8149,7 @@ void JerryScriptRuntimeState::set_script_event_handler(Node& node, std::string t
 
     ScriptEventListener* raw = listener.get();
     listener->listener_id = node.add_event_listener(listener->type, [raw](Event& event) {
-        if (raw == nullptr || !raw->active || raw->runtime == nullptr || raw->callback == 0) {
-            return;
-        }
-
-        JerryScriptRuntimeState* const runtime = raw->runtime;
-        BackendOperationPin operation(runtime->shared_from_this());
-        if (!operation) return;
-        // Wrapper construction can reenter JS through existing Node helpers;
-        // retain the callback and listener record before constructing anything.
-        ScriptEventListenerCallbackScope callback_scope(*raw);
-        JerryValue event_object(make_event_object(*runtime, event));
-        if (!jerry_value_is_object(event_object.get())) return;
-        JerryValue this_value(make_event_current_target(*runtime, event));
-        if (event.dispatch_failed() || !raw->active || raw->callback == 0) return;
-        ScriptEventBinding* const event_binding = native_event_binding(event_object.get());
-        const jerry_value_t event_arg = event_object.get();
-        if (event_binding != nullptr) {
-            event_binding->callback_this = this_value.get();
-        }
-        JerryValue result(run_with_execution_budget(*runtime, [&]() {
-            return jerry_call(raw->callback, this_value.get(), &event_arg, 1);
-        }));
-        if (event_binding != nullptr) {
-            event_binding->callback_this = 0;
-        }
-        callback_scope.finish();
-        if (jerry_value_is_exception(result.get())) {
-            JerryValue exception_value(jerry_exception_value(result.release(), true));
-            (void) exception_value;
-        }
-        runtime->prune_inactive_script_event_listeners();
+        invoke_dom_script_listener(raw, event);
     }, listener->options);
 
     event_listeners_.push_back(std::move(listener));

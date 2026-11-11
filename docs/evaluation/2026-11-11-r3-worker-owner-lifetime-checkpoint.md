@@ -1,5 +1,9 @@
 # R3 worker session owner lifetime checkpoint
 
+Last updated: 2026-11-12; Applies to: 0.6.0-dev
+
+Historical experimental checkpoint; current delivery policy and qualification are tracked separately in the migration execution board.
+
 The public worker is an eight-byte facade on x64. Its sole heap session State
 contains the VM facade, DomOwner, complete pipeline, telemetry and supervisor
 gateway context. Public operations capture an allocation-free intrusive pin

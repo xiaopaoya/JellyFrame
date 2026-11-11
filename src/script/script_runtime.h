@@ -107,7 +107,8 @@ struct ScriptRuntimeOptions {
     std::size_t max_dom_string_bytes = 512 * 1024;
     std::size_t max_service_callbacks = 16;
     // Shared DOM Event roots retained until Core dispatch completion. This is
-    // a simultaneous dispatch bound, independent of the listener/VM budgets.
+    // a simultaneous dispatch bound in explicit R3 mode, independent of the
+    // listener/VM budgets. Legacy mode has callback-local objects, not roots.
     std::size_t max_active_event_dispatches = 32;
     // Same-thread public/native operation pins; no allocation per admission.
     std::size_t max_active_operations = 64;

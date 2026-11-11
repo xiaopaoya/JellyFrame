@@ -339,6 +339,7 @@ jobs:
           -DJELLYFRAME_BUILD_TESTS=ON
           -DJELLYFRAME_BUILD_BENCHMARKS=ON
           -DJELLYFRAME_BUILD_SCRIPTING=ON
+          -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=OFF
           -DJELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON
           -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE\third_party\jerryscript"
 
@@ -358,6 +359,7 @@ jobs:
           -DJELLYFRAME_BUILD_TESTS=ON
           -DJELLYFRAME_BUILD_BENCHMARKS=OFF
           -DJELLYFRAME_BUILD_SCRIPTING=ON
+          -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=OFF
           -DJELLYFRAME_ENABLE_ADVANCED_FORMS=OFF
           -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE\third_party\jerryscript"
 
@@ -451,6 +453,7 @@ jobs:
           -DJellyFrameRenderCore_DIR="$env:CORE_INSTALL_PREFIX\lib\cmake\JellyFrameRenderCore"
           -DEXPECTED_CORE_SOURCE_HASH="$env:EXPECTED_CORE_SOURCE_HASH"
           -DEXPECTED_CORE_PROFILE_ID="$env:EXPECTED_CORE_PROFILE_ID"
+          -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=OFF
           -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE\third_party\jerryscript"
 
       - name: Build and run installed v9 consumers
@@ -459,6 +462,104 @@ jobs:
           cmake --build build/canonical-v9-consumers-${{ matrix.profile }} --config Release --parallel
           if ($LASTEXITCODE -ne 0) { throw 'Canonical ABI4 consumers failed to build' }
           ctest --test-dir build/canonical-v9-consumers-${{ matrix.profile }} -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw 'Canonical ABI4 installed consumer tests failed' }
+
+  r3-installed-event-owners:
+    name: R3 Event and Owner Installed Consumers (${{ matrix.profile }})
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: full
+            profile_id: render-core-default
+          - profile: cropped
+            profile_id: render-core-minimal-no-forms-advanced
+
+    steps:
+      - name: Checkout JellyFrame
+        uses: actions/checkout@v5
+
+      - name: Checkout Render Core source
+        uses: actions/checkout@v5
+        with:
+          repository: xiaopaoya/JellyFrame-Render-Core
+          ref: f7aee11cfd6c58b89ecc4922a598a2fada97c48b
+          path: third_party/render-core-source
+
+      - name: Checkout JerryScript
+        uses: actions/checkout@v5
+        with:
+          repository: jerryscript-project/jerryscript
+          ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
+          path: third_party/jerryscript
+
+      - name: Patch and build JerryScript
+        shell: pwsh
+        run: |
+          python tools/dependencies/patch_jerryscript.py --source-root third_party/jerryscript
+          if ($LASTEXITCODE -ne 0) { throw 'JerryScript WeakRef patch failed' }
+          python third_party/jerryscript/tools/build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+          if ($LASTEXITCODE -ne 0) { throw 'JerryScript build failed' }
+
+      - name: Configure and install ABI4 Render Core
+        shell: pwsh
+        run: |
+          $core = 'third_party/render-core-source'
+          $build = "build\core-abi4-${{ matrix.profile }}"
+          $install = "build\core-install-${{ matrix.profile }}"
+          $args = @(
+            '-S', $core, '-B', $build,
+            '-DJELLYFRAME_BUILD_TESTS=OFF',
+            '-DJELLYFRAME_INSTALL_RENDER_CORE=ON',
+            '-DJELLYFRAME_RENDER_CORE_ENGINE_ABI=4'
+          )
+          if ('${{ matrix.profile }}' -eq 'cropped') {
+            $args += @(
+              '-DJELLYFRAME_ENABLE_CANVAS2D=OFF',
+              '-DJELLYFRAME_ENABLE_MODERN_PAINT=OFF',
+              '-DJELLYFRAME_ENABLE_FLEX_GRID=OFF',
+              '-DJELLYFRAME_ENABLE_ADVANCED_FORMS=OFF'
+            )
+          }
+          cmake @args
+          if ($LASTEXITCODE -ne 0) { throw 'Core ABI4 configure failed' }
+          cmake --build $build --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Core ABI4 build failed' }
+          cmake --install $build --config Release --prefix $install
+          if ($LASTEXITCODE -ne 0) { throw 'Core ABI4 install failed' }
+          $manifest = Get-Content "$build\generated\jellyframe_render_core_source_manifest.json" -Raw | ConvertFrom-Json
+          $profile = Get-Content "$build\generated\jellyframe_render_core_profile.json" -Raw | ConvertFrom-Json
+          if ($manifest.sourceHash -ne 'f7c17009b7660a84ef6a492367637187dff6915c4af3418c769902b3b7eb2559' -or
+              $manifest.sourceFileCount -ne 145) {
+            throw 'Pinned R3 Core source identity mismatch'
+          }
+          if ($profile.engineAbi -ne 4 -or $profile.profileId -ne '${{ matrix.profile_id }}') {
+            throw "Unexpected Core ABI/profile: $($profile.engineAbi)/$($profile.profileId)"
+          }
+          "EXPECTED_CORE_SOURCE_HASH=$($manifest.sourceHash)" >> $env:GITHUB_ENV
+          "EXPECTED_CORE_PROFILE_ID=$($profile.profileId)" >> $env:GITHUB_ENV
+          "CORE_INSTALL_PREFIX=$((Resolve-Path $install).Path)" >> $env:GITHUB_ENV
+
+      - name: Configure installed v9 consumers
+        shell: pwsh
+        run: >-
+          cmake -S docs/evaluation/canonical-abi4-codec-v9-consumer
+          -B build/r3-installed-consumers-${{ matrix.profile }}
+          -DJellyFrameRenderCore_DIR="$env:CORE_INSTALL_PREFIX\lib\cmake\JellyFrameRenderCore"
+          -DEXPECTED_CORE_SOURCE_HASH="$env:EXPECTED_CORE_SOURCE_HASH"
+          -DEXPECTED_CORE_PROFILE_ID="$env:EXPECTED_CORE_PROFILE_ID"
+          -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=ON
+          '-DCMAKE_CXX_FLAGS=/GR- /EHsc'
+          -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE\third_party\jerryscript"
+
+      - name: Build and run installed v9 consumers
+        shell: pwsh
+        run: |
+          cmake --build build/r3-installed-consumers-${{ matrix.profile }} --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'Canonical ABI4 consumers failed to build' }
+          ctest --test-dir build/r3-installed-consumers-${{ matrix.profile }} -C Release --output-on-failure
           if ($LASTEXITCODE -ne 0) { throw 'Canonical ABI4 installed consumer tests failed' }
 
   canonical-v10-installed-consumers:
@@ -560,6 +661,7 @@ jobs:
           -DEXPECTED_CORE_SOURCE_HASH="$env:EXPECTED_CORE_SOURCE_HASH"
           -DEXPECTED_CORE_PROFILE_ID="$env:EXPECTED_CORE_PROFILE_ID"
           -DBUILD_V10_WORKER=ON
+          -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=OFF
           -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE/third_party/jerryscript"
 
       - name: Build and run installed v10 consumer and actual worker
@@ -571,6 +673,26 @@ jobs:
           ctest --test-dir $build -C Release -V --output-on-failure --timeout 90
           if ($LASTEXITCODE -ne 0) { throw 'Canonical v10 installed consumer/worker tests failed' }
 
+      - name: Configure legacy Event API checks on pinned Core F5
+        shell: pwsh
+        run: >-
+          cmake -S docs/evaluation/canonical-abi4-codec-v9-consumer
+          -B build/f5-legacy-event-api-${{ matrix.profile }}
+          -DJellyFrameRenderCore_DIR="$env:CORE_F5_INSTALL_PREFIX/lib/cmake/JellyFrameRenderCore"
+          -DEXPECTED_CORE_SOURCE_HASH="$env:EXPECTED_CORE_SOURCE_HASH"
+          -DEXPECTED_CORE_PROFILE_ID="$env:EXPECTED_CORE_PROFILE_ID"
+          -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=OFF
+          -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE/third_party/jerryscript"
+
+      - name: Build and run legacy Event API checks on pinned Core F5
+        shell: pwsh
+        run: |
+          $build = 'build/f5-legacy-event-api-${{ matrix.profile }}'
+          cmake --build $build --config Release --target runtime_canonical_v9_script_api_consumer --parallel
+          if ($LASTEXITCODE -ne 0) { throw 'F5 legacy Event API consumer failed to build' }
+          ctest --test-dir $build -C Release -R '^installed_runtime_canonical_v9_script_api$' --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw 'F5 legacy Event API consumer failed' }
+
       - name: Upload canonical v10 qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -579,6 +701,8 @@ jobs:
           path: |
             build/canonical-v10-consumers-${{ matrix.profile }}/qualified_core_identity.txt
             build/canonical-v10-consumers-${{ matrix.profile }}/Testing/Temporary/LastTest.log
+            build/f5-legacy-event-api-${{ matrix.profile }}/qualified_core_identity.txt
+            build/f5-legacy-event-api-${{ matrix.profile }}/Testing/Temporary/LastTest.log
             build/core-f5-${{ matrix.profile }}/generated/jellyframe_render_core_source_manifest.json
             build/core-f5-${{ matrix.profile }}/generated/jellyframe_render_core_profile.json
           if-no-files-found: warn
@@ -785,6 +909,7 @@ jobs:
           -DJELLYFRAME_BUILD_TESTS=ON
           -DJELLYFRAME_BUILD_BENCHMARKS=OFF
           -DJELLYFRAME_BUILD_SCRIPTING=ON
+          -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=OFF
           -DJELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=OFF
           -DJERRYSCRIPT_ROOT=${{ github.workspace }}/third_party/jerryscript
 

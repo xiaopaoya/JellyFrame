@@ -244,6 +244,11 @@ if(JELLYFRAME_BUILD_SCRIPTING)
         )
     endif()
     add_library(jellyframe_script ${JELLYFRAME_SCRIPT_SOURCES})
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_script_event_config.cmake")
+    jellyframe_configure_script_events(jellyframe_script PUBLIC jellyframe_render_core)
+    if(JELLYFRAME_BUILD_TESTS)
+        target_compile_definitions(jellyframe_script PRIVATE JELLYFRAME_SCRIPT_EVENT_TESTING=1)
+    endif()
     target_link_libraries(jellyframe_script
         PUBLIC jellyframe_app_runtime
         PRIVATE ${JELLYFRAME_SCRIPT_BACKEND_LIBRARIES})
@@ -1204,6 +1209,7 @@ if(JELLYFRAME_BUILD_TESTS)
             ${JELLYFRAME_SCRIPT_TEST_SOURCES}
         )
         target_link_libraries(jellyframe_script_tests PRIVATE jellyframe_script)
+        target_compile_definitions(jellyframe_script_tests PRIVATE JELLYFRAME_SCRIPT_EVENT_TESTING=1)
         if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
             target_compile_definitions(jellyframe_script_tests
                 PRIVATE JELLYFRAME_SCRIPT_TASK_RUNTIME_ENABLED=1)
@@ -1211,6 +1217,14 @@ if(JELLYFRAME_BUILD_TESTS)
         jellyframe_enable_test_asserts(jellyframe_script_tests)
         jellyframe_stage_sanitizer_runtime(jellyframe_script_tests)
         add_test(NAME jellyframe_script_tests COMMAND jellyframe_script_tests)
+        if(Python3_Interpreter_FOUND)
+            add_test(NAME jellyframe_script_event_policy_tests
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/script_event_policy_tests.py
+                    --source-root ${CMAKE_CURRENT_SOURCE_DIR}
+                    --compiler ${CMAKE_CXX_COMPILER})
+            set_tests_properties(jellyframe_script_event_policy_tests PROPERTIES TIMEOUT 90)
+        endif()
 
         if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
             set(JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES

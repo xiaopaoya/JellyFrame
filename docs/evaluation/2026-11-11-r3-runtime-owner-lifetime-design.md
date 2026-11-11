@@ -1,5 +1,9 @@
 # R3 owner lifetime design: required next boundary
 
+Last updated: 2026-11-12; Applies to: 0.6.0-dev
+
+Historical experimental checkpoint; current delivery policy and qualification are tracked separately in the migration execution board.
+
 This design accompanies the experimental shared DOM Event implementation. It
 does not claim that active Runtime destruction is safe. The implemented bind
 admission and dispatch failure rules are independent prerequisites.

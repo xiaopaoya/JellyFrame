@@ -1,4 +1,5 @@
 #include "script/jerryscript_runtime.h"
+#include "script/script_event_capabilities.h"
 #include "script/script_audio_event_queue.h"
 
 #include "app_runtime/app_device_services.h"
@@ -27,6 +28,12 @@
 #include <vector>
 
 using namespace jellyframe;
+
+#if defined(JELLYFRAME_SCRIPT_EVENT_TESTING)
+namespace jellyframe {
+void set_script_event_staging_test_hook(void (*hook)(void*) noexcept, void* context) noexcept;
+}
+#endif
 
 // Arm only from a native listener immediately before the script bridge/getter. This
 // exercises a recoverable C++ allocation failure, not JerryScript heap OOM.
@@ -732,6 +739,7 @@ void javascript_generic_click_event_does_not_fake_mouse_coordinates() {
     check(button->text_content() == "click:undefined", "generic click remains a base Event in JS");
 }
 
+#if JELLYFRAME_SCRIPT_R3_EVENTS
 void javascript_event_identity_is_shared_until_dispatch_completion() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='button'>0</button></body>");
@@ -824,6 +832,8 @@ void javascript_nested_event_identity_and_stop_cleanup_work() {
     check(once.ok && once.value == "103", "throwing once listener is removed and later dispatch completes");
 }
 
+#endif
+
 void backend_facade_reset_survives_admitted_operations() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='button'>0</button></body>");
@@ -888,6 +898,39 @@ void backend_facade_reset_survives_admitted_operations() {
           "logical stop is idempotent and revokes admission");
 }
 
+void backend_facade_reset_during_refused_native_owner_pin_is_safe() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>unchanged</button></body>");
+    std::unique_ptr<ScriptRuntime> runtime;
+    struct Context { std::unique_ptr<ScriptRuntime>* owner; bool deny=false; unsigned retained=0,released=0,denied=0; } context{&runtime};
+    ScriptRuntimeOptions options;
+    options.owner_context = &context;
+    options.retain_owner = [](void* user) noexcept {
+        auto& context = *static_cast<Context*>(user);
+        if (context.deny) {
+            ++context.denied;
+            context.owner->reset();
+            return false;
+        }
+        ++context.retained;
+        return true;
+    };
+    options.release_owner = [](void* user) noexcept { ++static_cast<Context*>(user)->released; };
+    runtime = create_script_runtime(options);
+    check(runtime->bind_document(*document), "denied owner fixture binds");
+    check(runtime->eval("document.getElementById('button').onclick=function(){this.textContent='must not run';};").ok,
+        "denied owner callback registers");
+    context.deny = true;
+    Event click("click");
+    check(dispatch_event(*find_first_by_tag(*document,"button"),click), "owner stop remains an ordinary native dispatch");
+    check(!runtime && context.denied == 1 && context.retained == context.released,
+        "refused native admission tolerates real facade deletion and balances accepted owner pins");
+    check(find_first_by_tag(*document,"button")->text_content() == "unchanged", "refused callback never enters author JS");
+    auto fresh = create_script_runtime();
+    check(fresh->eval("1+1").value == "2", "refused operation drains the old VM after its final State access");
+}
+
+#if JELLYFRAME_SCRIPT_R3_EVENTS
 void javascript_rebind_admission_preserves_active_callbacks_and_event_roots() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='button'>0</button></body>");
@@ -1013,6 +1056,8 @@ void javascript_zero_event_capacity_and_native_allocation_refusal_fail_closed() 
     check(state.ok && state.value == "1", "recovered callback receives a complete Event");
 }
 
+#endif
+
 void javascript_event_publication_does_not_invoke_inherited_event_setters() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='button'>0</button></body>");
@@ -1026,11 +1071,12 @@ void javascript_event_publication_does_not_invoke_inherited_event_setters() {
         "Object.defineProperty(Object.prototype,'tagName',{set:function(v){setterCalls++;throw new Error('poison target');}, configurable:true});"
         "'ready'").ok, "inherited event setter test setup succeeds");
     Event event("click");
-    check(dispatch_event(*button, event) && !event.dispatch_failed(), "Event publication bypasses inherited setters");
+    check(dispatch_event(*button, event), "Event publication bypasses inherited setters");
     auto state = runtime.eval("count + ':' + setterCalls");
     check(state.ok && state.value == "1:0", "Event properties are published as checked own properties");
 }
 
+#if JELLYFRAME_SCRIPT_R3_EVENTS
 void javascript_lazy_current_target_uses_checked_event_staging() {
     HtmlParser parser;
     auto document = parser.parse("<body><button id='button'>0</button></body>");
@@ -1068,6 +1114,109 @@ void javascript_lazy_current_target_uses_checked_event_staging() {
     check(state.ok && state.value == "0:1:null", "refused getter stops later listener and completion clears snapshot");
     check(runtime.bind_document(*document), "lazy getter failure leaves no active completion root");
 }
+
+#endif
+
+#if !JELLYFRAME_SCRIPT_R3_EVENTS
+void javascript_legacy_events_remain_callback_local_snapshots() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>Tap</button></body>");
+    ScriptRuntimeOptions options;
+    options.max_active_event_dispatches = 0; // No shared-dispatch roots in legacy mode.
+    JerryScriptRuntime runtime(options);
+    check(runtime.bind_document(*document), "legacy snapshot document binds");
+    check(runtime.eval(
+        "var first,second;var button=document.getElementById('button');"
+        "button.addEventListener('click',function(e){first=e;e.marker=9;});"
+        "button.onclick=function(e){second=e;e.preventDefault();};").ok,
+        "legacy snapshot listeners register");
+    Event event("click", true, true);
+    check(!dispatch_event(*find_first_by_tag(*document,"button"), event), "legacy cancellation still works");
+    const auto state = runtime.eval(
+        "String(first!==second)+':'+first.marker+':'+typeof second.marker+':'+first.eventPhase+':'+"
+        "String(first.currentTarget!==null)+':'+first.defaultPrevented+':'+second.defaultPrevented");
+    check(state.ok && state.value == "true:9:undefined:2:true:false:true",
+        "legacy mode preserves per-callback objects and data snapshots even on a capable new Core");
+    check(runtime.eval("first.preventDefault();first.stopPropagation();'safe'").ok,
+        "retained legacy Event methods cannot access a completed native dispatch");
+}
+#endif
+
+void javascript_bind_refuses_inside_callback_without_replacing_document() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>Tap</button></body>");
+    auto replacement = parser.parse("<body>replacement</body>");
+    JerryScriptRuntime runtime;
+    check(runtime.bind_document(*document), "callback admission document binds");
+    struct Context { ScriptRuntime* runtime; Node* replacement; unsigned refused = 0; } context{&runtime,replacement.get()};
+    runtime.set_dom_mutation_observer([](void* user,const Node&,DomDirtyFlags,std::uint64_t) {
+        auto& context = *static_cast<Context*>(user);
+        if (!context.runtime->bind_document(*context.replacement)) ++context.refused;
+    }, &context);
+    check(runtime.eval("document.getElementById('button').onclick=function(){this.textContent='changed';};").ok,
+        "callback admission listener registers");
+    Event click("click");
+    check(dispatch_event(*find_first_by_tag(*document,"button"),click) && context.refused == 1,
+        "both modes refuse document replacement inside a native-entered JS callback");
+    check(runtime.eval("document.getElementById('button').textContent").value == "changed",
+        "refused bind preserves the admitted document");
+    check(runtime.bind_document(*replacement), "idle replacement remains possible after callback completion");
+}
+
+void javascript_publication_failure_preserves_mode_specific_native_result() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>Tap</button></body>");
+    Node* button = find_first_by_tag(*document,"button");
+    JerryScriptRuntime runtime;
+    check(runtime.bind_document(*document), "failure contract document binds");
+    check(runtime.eval("var calls=0;document.getElementById('button').onclick=function(){calls++;};").ok,
+        "failure contract callback registers");
+    // Capture listener runs first, immediately before the bridge stages values.
+    const auto arm = button->add_event_listener("click", [](Event&) {
+        script_test_skip_debug_proxies = true;
+        script_test_allocations_before_failure = 0;
+    }, EventListenerOptions{true});
+    unsigned later = 0;
+    button->add_event_listener("click", [&](Event&){++later;});
+    Event click("click",false,false);
+    const bool dispatched = dispatch_event(*button,click);
+    const bool consumed = script_test_allocations_before_failure == -1;
+    script_test_allocations_before_failure = -1;
+    script_test_skip_debug_proxies = false;
+    button->remove_event_listener(arm);
+    check(consumed && later == 0 && !click.default_prevented(),
+        "failed publication consumes its allocation fault and stops later listeners without user cancellation");
+#if JELLYFRAME_SCRIPT_R3_EVENTS
+    check(!dispatched && click.dispatch_failed(), "R3 failure independently changes the native result");
+#else
+    check(dispatched, "legacy Core still returns true for a noncancelable native failure");
+#endif
+    check(runtime.take_script_callback_failure().status == ScriptCallbackFailureStatus::ResourceLimit &&
+        runtime.eval("String(calls)").value == "0", "host failure latch reports refusal and no partial Event reaches JS");
+}
+
+#if defined(JELLYFRAME_SCRIPT_EVENT_TESTING)
+void javascript_native_callback_staging_refuses_document_rebind() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>Tap</button></body>");
+    auto replacement = parser.parse("<body>replacement</body>");
+    JerryScriptRuntime runtime;
+    check(runtime.bind_document(*document), "staging admission document binds");
+    check(runtime.eval("var calls=0;document.getElementById('button').onclick=function(){calls++;};").ok,
+        "staging admission listener registers");
+    struct Context { ScriptRuntime* runtime; Node* replacement; bool called=false,refused=false; } context{&runtime,replacement.get()};
+    set_script_event_staging_test_hook([](void* user) noexcept {
+        auto& context = *static_cast<Context*>(user);
+        context.called = true;
+        context.refused = !context.runtime->bind_document(*context.replacement);
+    }, &context);
+    Event event("click");
+    check(dispatch_event(*find_first_by_tag(*document,"button"),event) && context.called && context.refused,
+        "native callback staging rejects rebind before JavaScript execution begins");
+    check(runtime.eval("String(calls)").value == "1", "refused staging bind preserves the admitted callback");
+    check(runtime.bind_document(*replacement), "staging admission releases after the callback completes");
+}
+#endif
 
 void javascript_event_prevent_default_and_remove_listener_work() {
     HtmlParser parser;
@@ -3299,14 +3448,28 @@ int main() {
         javascript_detached_node_budget_is_bounded();
         javascript_click_listener_mutates_dom();
         javascript_generic_click_event_does_not_fake_mouse_coordinates();
+#if JELLYFRAME_SCRIPT_R3_EVENTS
         javascript_event_identity_is_shared_until_dispatch_completion();
         javascript_nested_event_identity_and_stop_cleanup_work();
+#else
+        javascript_legacy_events_remain_callback_local_snapshots();
+#endif
         backend_facade_reset_survives_admitted_operations();
+        backend_facade_reset_during_refused_native_owner_pin_is_safe();
+#if JELLYFRAME_SCRIPT_R3_EVENTS
         javascript_rebind_admission_preserves_active_callbacks_and_event_roots();
         javascript_event_identity_capacity_aborts_only_the_refused_dispatch();
         javascript_zero_event_capacity_and_native_allocation_refusal_fail_closed();
+#endif
         javascript_event_publication_does_not_invoke_inherited_event_setters();
+#if JELLYFRAME_SCRIPT_R3_EVENTS
         javascript_lazy_current_target_uses_checked_event_staging();
+#endif
+        javascript_bind_refuses_inside_callback_without_replacing_document();
+        javascript_publication_failure_preserves_mode_specific_native_result();
+#if defined(JELLYFRAME_SCRIPT_EVENT_TESTING)
+        javascript_native_callback_staging_refuses_document_rebind();
+#endif
         javascript_event_prevent_default_and_remove_listener_work();
         javascript_event_object_survives_after_dispatch_as_snapshot();
         javascript_event_handler_properties_work();

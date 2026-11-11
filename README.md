@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Render%20Core-0.8.0-1680C7?style=flat-square" alt="Render Core 0.8.0">
 </p>
 
-> Last updated: 2026-11-04; Applies to: 0.6.0-dev
+> Last updated: 2026-11-12; Applies to: 0.6.0-dev
 
 JellyFrame is a compact C++ HTML/CSS/JS UI runtime for low-power wearable and
 embedded devices. It keeps the parts of a browser pipeline that are useful for
@@ -205,7 +205,9 @@ unless `JELLYFRAME_BUILD_SCRIPTING=ON` is requested. The current backend is
 selected at configure time as `jerryscript`.
 
 ```powershell
-git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
+git clone https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
+git -C third_party\jerryscript checkout --detach b7069350c2e52e7dc721dfb75f067147bd79b39b
+python tools/dependencies/patch_jerryscript.py --source-root third_party/jerryscript
 python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
 
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
@@ -219,6 +221,20 @@ cmake --build build/desktop-scripting-release --config Release
 When `JERRYSCRIPT_ROOT` points to a normal JerryScript build tree, CMake finds
 the `jerry-core`, `jerry-ext` and `jerry-port` libraries automatically. Supply
 `JERRYSCRIPT_LIBRARIES` only for a nonstandard install layout.
+
+`JELLYFRAME_ENABLE_R3_SCRIPT_EVENTS` defaults to `OFF`, preserving callback-local
+Event snapshots with the locked ABI3 and older ABI4 packages. With a separately
+qualified Core, opt in with `ON` to share Event identity through dispatch and
+retain the session owner until completion. Core completion/failure APIs must
+both be version1; forms additionally require Submit kind version1. Configure
+and compilation reject an incompatible Core. Selecting ABI4 alone enables
+neither the policy nor production adoption.
+
+Legacy forms require RTTI; a forms-disabled profile supports no-RTTI legacy
+builds. Legacy failure stops later listeners but cannot independently change a
+noncancelable native dispatch result or suppress its default action. Hosts must
+consume `ScriptCallbackFailure`. Operation/worker owner guards apply in both
+modes, while whole-native-dispatch retention requires explicit R3 mode.
 
 The scripting shell supports classic inline/local scripts, small DOM mutation
 APIs, event listeners, form properties, host-pumped timers, host-optional XHR V0

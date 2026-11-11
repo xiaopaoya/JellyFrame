@@ -179,7 +179,9 @@ python tools\jellyframe_cli.py device-reference --store build\device-reference l
 `jellyframe_render_core` 不依赖脚本后端。当前后端在 configure 时选为 `jerryscript`。
 
 ```powershell
-git clone --depth 1 https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
+git clone https://github.com/jerryscript-project/jerryscript.git third_party\jerryscript
+git -C third_party\jerryscript checkout --detach b7069350c2e52e7dc721dfb75f067147bd79b39b
+python tools/dependencies/patch_jerryscript.py --source-root third_party/jerryscript
 python third_party\jerryscript\tools\build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
 
 $jerryRoot = Join-Path (Get-Location) "third_party\jerryscript"
@@ -193,6 +195,17 @@ cmake --build build/desktop-scripting-release --config Release
 `JERRYSCRIPT_ROOT` 指向标准 JerryScript build tree 时，CMake 会自动发现
 `jerry-core`、`jerry-ext` 和 `jerry-port`；只有非标准安装布局才需要手动传入
 `JERRYSCRIPT_LIBRARIES`。
+
+`JELLYFRAME_ENABLE_R3_SCRIPT_EVENTS` 默认 `OFF`，锁定 ABI3 与较旧 ABI4 包继续
+使用每次回调独立的 Event 快照。配对经过验证的新 Core 后，可显式设为 `ON`，
+让同一次派发共享 Event 身份，并将会话所有权保留到派发完成。Core completion／
+failure API 必须均为 version1；启用 forms 时还要求 Submit kind version1。
+配置和编译会拒绝不兼容组合；仅选择 ABI4 不会自动启用此模式或更新生产依赖。
+
+旧模式的 forms 需要 RTTI；关闭 forms 的 Core profile 可用于无 RTTI 构建。
+旧模式的桥接失败可以阻止后续监听器，但不能独立改变不可取消事件的原生派发
+返回值或阻止其默认动作，宿主仍须消费 `ScriptCallbackFailure`。操作与 worker
+所有权保护在两种模式均生效，完整原生派发期间的保留保证要求显式 R3 模式。
 
 脚本壳支持 classic inline/local scripts、小型 DOM mutation API、event listeners、
 表单属性、宿主泵动 timers、宿主可选 XHR V0 和极小 `localStorage` V0。ES modules、远程页面加载、

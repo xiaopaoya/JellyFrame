@@ -79,6 +79,7 @@ class ScriptRuntimeBoundaryTests(unittest.TestCase):
         allowed = {
             self.source_root / "src/script/jerryscript_runtime.cpp",
             self.source_root / "src/script/jerryscript_runtime.h",
+            self.source_root / "src/script/jerryscript_runtime_state.h",
             self.source_root / "src/script/tests/script_runtime_tests.cpp",
         }
         sources = (
