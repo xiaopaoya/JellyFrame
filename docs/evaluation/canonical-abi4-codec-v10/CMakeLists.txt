@@ -74,13 +74,14 @@ if(BUILD_V10_WORKER)
   set(script_cpp "${runtime_source}/src/script")
   add_library(runtime_v10_script STATIC
     "${script_cpp}/jerryscript_runtime.cpp" "${script_cpp}/script_task_worker_runtime.cpp")
-  include("${runtime_repo_root}/cmake/jellyframe_script_event_config.cmake")
-  jellyframe_configure_script_events(runtime_v10_script PUBLIC JellyFrame::jellyframe_render_core)
+  include("${runtime_repo_root}/cmake/jellyframe_script_config.cmake")
+  jellyframe_configure_script(runtime_v10_script PUBLIC JellyFrame::jellyframe_render_core)
   target_link_libraries(runtime_v10_script PUBLIC runtime_v10_support
     PRIVATE ${JELLYFRAME_SCRIPT_BACKEND_LIBRARIES})
   target_include_directories(runtime_v10_script PRIVATE ${JELLYFRAME_SCRIPT_BACKEND_INCLUDE_DIRS})
   target_compile_definitions(runtime_v10_script PUBLIC JELLYFRAME_ENABLE_SCRIPTING=1
-    PRIVATE JELLYFRAME_SCRIPT_ENGINE_JERRYSCRIPT=1)
+    PRIVATE JELLYFRAME_SCRIPT_ENGINE_JERRYSCRIPT=1 JELLYFRAME_SCRIPT_EVENT_TESTING=1
+      JELLYFRAME_SCRIPT_IDENTITY_TESTING=1)
   set_source_files_properties("${script_cpp}/tests/script_runtime_tests.cpp"
     PROPERTIES COMPILE_DEFINITIONS "main=script_runtime_tests_main")
   v10_test(installed_runtime_canonical_v10_worker
@@ -88,7 +89,8 @@ if(BUILD_V10_WORKER)
     "${script_cpp}/tests/script_runtime_tests.cpp"
     "${script_cpp}/tests/script_task_worker_runtime_tests.cpp")
   target_compile_definitions(installed_runtime_canonical_v10_worker
-    PRIVATE JELLYFRAME_SCRIPT_TASK_RUNTIME_ENABLED=1)
+    PRIVATE JELLYFRAME_SCRIPT_TASK_RUNTIME_ENABLED=1 JELLYFRAME_SCRIPT_EVENT_TESTING=1
+      JELLYFRAME_SCRIPT_IDENTITY_TESTING=1)
   target_link_libraries(installed_runtime_canonical_v10_worker PRIVATE runtime_v10_script)
 endif()
 

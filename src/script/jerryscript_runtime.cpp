@@ -1,6 +1,6 @@
 #include "script/jerryscript_runtime.h"
 #include "script/jerryscript_runtime_state.h"
-#include "script/script_event_capabilities.h"
+#include "script/script_capabilities.h"
 
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_host_data.h"
@@ -241,6 +241,11 @@ struct ScriptNodeBinding {
     bool active = false;
     bool layout_snapshot_requested = false;
     bool has_layout_snapshot = false;
+    std::size_t identity_slot_index = 0;
+    std::uint32_t identity_slot_generation = 0;
+    std::uint64_t identity_epoch = 0;
+    bool has_identity_slot = false;
+    bool auxiliary_budgeted = false;
 };
 
 struct ScriptServiceCallback {
@@ -495,9 +500,129 @@ struct ScriptRuntimeAccess {
         runtime.set_dialog_return_value(node, std::move(value));
     }
 
-    static ScriptNodeBinding* bind_script_node(JerryScriptRuntimeState& runtime, Node& node) {
-        return runtime.bind_script_node(node);
+    static ScriptNodeBinding* bind_script_node(JerryScriptRuntimeState& runtime, Node& node,
+                                               bool auxiliary = true) {
+        return runtime.bind_script_node(node, auxiliary);
     }
+
+    static JerryScriptRuntimeState::NodeIdentitySlotHandle reserve_node_identity_slot(
+        JerryScriptRuntimeState& runtime, Node& node, ScriptNodeBinding* binding) {
+        return runtime.reserve_node_identity_slot(node, binding);
+    }
+
+    static bool node_identity_slot_matches(JerryScriptRuntimeState& runtime,
+                                           JerryScriptRuntimeState::NodeIdentitySlotHandle handle,
+                                           const Node& node) {
+        return runtime.node_identity_slot_matches(handle, node);
+    }
+
+    static void release_node_identity_slot(JerryScriptRuntimeState& runtime,
+                                           JerryScriptRuntimeState::NodeIdentitySlotHandle handle,
+                                           Node& node) {
+        runtime.release_node_identity_slot(handle, node);
+    }
+
+    static bool publish_node_identity_weak_ref(JerryScriptRuntimeState& runtime,
+                                               JerryScriptRuntimeState::NodeIdentitySlotHandle handle,
+                                               Node& node,
+                                               jerry_value_t weak_ref) {
+        return runtime.publish_node_identity_weak_ref(handle, node, weak_ref);
+    }
+
+    static bool replace_node_identity_weak_ref(JerryScriptRuntimeState& runtime,
+                                               JerryScriptRuntimeState::NodeIdentitySlotHandle handle,
+                                               Node& node,
+                                               jerry_value_t weak_ref) {
+        return runtime.replace_node_identity_weak_ref(handle, node, weak_ref);
+    }
+
+    static jerry_value_t create_node_identity_weak_ref(JerryScriptRuntimeState& runtime, jerry_value_t wrapper) {
+        return runtime.create_node_identity_weak_ref(wrapper);
+    }
+
+    static jerry_value_t deref_node_identity_weak_ref(JerryScriptRuntimeState& runtime,
+                                                       JerryScriptRuntimeState::NodeIdentitySlotHandle handle,
+                                                       Node& node) {
+        return runtime.deref_node_identity_weak_ref(handle, node);
+    }
+
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY && defined(JELLYFRAME_SCRIPT_IDENTITY_TESTING)
+    static bool run_node_identity_table_contract_tests() {
+        struct OwnedJerryValue {
+            jerry_value_t value;
+            ~OwnedJerryValue() { jerry_value_free(value); }
+        };
+        ScriptRuntimeOptions options;
+        options.max_node_wrapper_cache_entries = 1;
+        JerryScriptRuntimeState runtime(options);
+        auto first_node = std::make_unique<Node>(NodeType::Element);
+        auto second_node = std::make_unique<Node>(NodeType::Element);
+        ScriptNodeBinding first_binding{&runtime, first_node.get(), {}, true, false, false};
+        ScriptNodeBinding competing_binding{&runtime, first_node.get(), {}, true, false, false};
+        const auto first = runtime.reserve_node_identity_slot(*first_node, &first_binding);
+        if (!first.valid || !runtime.node_identity_slot_matches(first, *first_node)) return false;
+        const auto competing = runtime.reserve_node_identity_slot(*first_node, &competing_binding);
+        if (competing.valid || runtime.node_identity_slots_[first.index].binding != &first_binding) return false;
+        const auto exhausted = runtime.reserve_node_identity_slot(*second_node, nullptr);
+        if (exhausted.valid || !runtime.callback_failure_.failed()) return false;
+
+        const ScriptEvaluationResult poisoned_intrinsics = runtime.eval(
+            "WeakRef.prototype.deref = function(){ return 77; };"
+            "WeakRef = function(){ return {}; };");
+        if (!poisoned_intrinsics.ok) return false;
+        OwnedJerryValue wrapper{jerry_object()};
+        OwnedJerryValue weak_ref{create_node_identity_weak_ref(runtime, wrapper.value)};
+        if (jerry_value_is_exception(weak_ref.value) ||
+            !runtime.publish_node_identity_weak_ref(first, *first_node, weak_ref.value)) return false;
+        OwnedJerryValue dereferenced{deref_node_identity_weak_ref(runtime, first, *first_node)};
+        OwnedJerryValue equal{jerry_binary_op(JERRY_BIN_OP_STRICT_EQUAL, wrapper.value, dereferenced.value)};
+        if (!jerry_value_to_boolean(equal.value)) return false;
+        OwnedJerryValue replacement_wrapper{jerry_object()};
+        OwnedJerryValue replacement_weak_ref{create_node_identity_weak_ref(runtime, replacement_wrapper.value)};
+        if (jerry_value_is_exception(replacement_weak_ref.value) ||
+            !runtime.replace_node_identity_weak_ref(first, *first_node, replacement_weak_ref.value)) return false;
+        OwnedJerryValue replacement_deref{deref_node_identity_weak_ref(runtime, first, *first_node)};
+        OwnedJerryValue replacement_equal{jerry_binary_op(
+            JERRY_BIN_OP_STRICT_EQUAL, replacement_wrapper.value, replacement_deref.value)};
+        if (!jerry_value_to_boolean(replacement_equal.value)) return false;
+
+        forget_script_node_binding(runtime, first_binding);
+        if (runtime.node_identity_slots_[first.index].binding != nullptr ||
+            !runtime.node_identity_slot_matches(first, *first_node)) return false;
+        runtime.bound_document_ = first_node.get();
+        first_node.reset();
+        if (runtime.node_identity_slots_[first.index].node != nullptr ||
+            !runtime.node_identity_slots_[first.index].release_pending ||
+            !runtime.node_identity_slots_[first.index].has_weak_ref) return false;
+        if (!runtime.deferred_document_callbacks_release_) return false;
+        runtime.drain_node_identity_releases();
+        if (runtime.node_identity_slots_[first.index].has_weak_ref) return false;
+        if (runtime.deferred_document_callbacks_release_) return false;
+
+        ScriptNodeBinding second_binding{&runtime, second_node.get(), {}, true, false, false};
+        const auto reused = runtime.reserve_node_identity_slot(*second_node, &second_binding);
+        if (!reused.valid || reused.index != first.index || reused.generation == first.generation ||
+            runtime.node_identity_slot_matches(first, *second_node)) return false;
+        runtime.release_node_identity_slot(first, *second_node);
+        if (!runtime.node_identity_slot_matches(reused, *second_node)) return false;
+        runtime.forget_node_identity_binding(first_binding);
+        if (runtime.node_identity_slots_[reused.index].binding != &second_binding) return false;
+        OwnedJerryValue second_wrapper{jerry_object()};
+        OwnedJerryValue second_weak_ref{create_node_identity_weak_ref(runtime, second_wrapper.value)};
+        if (jerry_value_is_exception(second_weak_ref.value) ||
+            !runtime.publish_node_identity_weak_ref(reused, *second_node, second_weak_ref.value)) return false;
+        forget_script_node_binding(runtime, second_binding);
+        runtime.release_node_identity_slot(reused, *second_node);
+        if (runtime.node_identity_slot_matches(reused, *second_node)) return false;
+        const auto epoch_reuse = runtime.reserve_node_identity_slot(*second_node, nullptr);
+        if (!epoch_reuse.valid || epoch_reuse.generation == reused.generation) return false;
+        runtime.clear_node_identity_slots();
+        if (runtime.node_identity_slot_matches(reused, *second_node) ||
+            runtime.node_identity_slot_matches(epoch_reuse, *second_node) ||
+            runtime.node_identity_slots_[reused.index].has_weak_ref || second_binding.has_identity_slot) return false;
+        return true;
+    }
+#endif
 
     static bool submit_script_service_request(JerryScriptRuntimeState& runtime,
                                               std::uint8_t kind,
@@ -525,6 +650,12 @@ struct ScriptRuntimeAccess {
 
     static void forget_script_node_binding(JerryScriptRuntimeState& runtime, ScriptNodeBinding& binding) {
         runtime.forget_script_node_binding(binding);
+        runtime.forget_node_identity_binding(binding);
+    }
+
+    static void retire_finalized_node_identity_binding(JerryScriptRuntimeState& runtime,
+                                                        const ScriptNodeBinding& binding) noexcept {
+        runtime.retire_finalized_node_identity_binding(binding);
     }
 
     static void invalidate_script_node(JerryScriptRuntimeState& runtime, Node& node) {
@@ -635,6 +766,16 @@ struct ScriptRuntimeAccess {
     }
 };
 
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY && defined(JELLYFRAME_SCRIPT_IDENTITY_TESTING)
+bool run_node_identity_table_contract_tests() {
+    return ScriptRuntimeAccess::run_node_identity_table_contract_tests();
+}
+
+void collect_node_wrapper_test_garbage() {
+    jerry_heap_gc(JERRY_GC_PRESSURE_HIGH);
+}
+#endif
+
 namespace {
 
 bool g_runtime_active = false;
@@ -651,12 +792,14 @@ void script_node_destroyed(Node& node, void* context) {
     }
 }
 
+// Native finalization only updates C++ ledgers; JerryScript calls are forbidden here.
 void free_script_node_binding(void* native_p, jerry_object_native_info_t*) {
     auto* binding = static_cast<ScriptNodeBinding*>(native_p);
     if (binding == nullptr) {
         return;
     }
     if (binding->runtime != nullptr) {
+        ScriptRuntimeAccess::retire_finalized_node_identity_binding(*binding->runtime, *binding);
         ScriptRuntimeAccess::forget_script_node_binding(*binding->runtime, *binding);
     }
     delete binding;
@@ -1036,9 +1179,19 @@ jerry_value_t script_service_cancel(const jerry_call_info_t* call_info_p,
                          ScriptRuntimeAccess::cancel_script_service_request(*runtime, request_id));
 }
 
-void bind_native_node(jerry_value_t object, JerryScriptRuntimeState& runtime, Node& node) {
-    jerry_object_set_native_ptr(object, &kNodeNativeInfo, ScriptRuntimeAccess::bind_script_node(runtime, node));
+bool bind_native_node(jerry_value_t object, JerryScriptRuntimeState& runtime, Node& node) {
+    ScriptNodeBinding* binding = nullptr;
+    try {
+        binding = ScriptRuntimeAccess::bind_script_node(runtime, node);
+    } catch (const std::bad_alloc&) {
+        ScriptRuntimeAccess::record_event_failure(runtime);
+    } catch (const std::length_error&) {
+        ScriptRuntimeAccess::record_event_failure(runtime);
+    }
+    if (binding == nullptr) return false;
+    jerry_object_set_native_ptr(object, &kNodeNativeInfo, binding);
     jerry_object_set_native_ptr(object, &kRuntimeNativeInfo, &runtime);
+    return true;
 }
 
 Node* find_by_id(Node& node, const std::string& id) {
@@ -2811,7 +2964,8 @@ jerry_value_t node_get_class_list(const jerry_call_info_t* call_info_p,
         return jerry_undefined();
     }
     JerryValue object(jerry_object());
-    bind_native_node(object.get(), *runtime, *node);
+    if (!bind_native_node(object.get(), *runtime, *node))
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "auxiliary Node binding limit exceeded");
     set_method(object.get(), "contains", class_list_contains);
     set_method(object.get(), "add", class_list_add);
     set_method(object.get(), "remove", class_list_remove);
@@ -3465,7 +3619,22 @@ void set_property(jerry_value_t object, const char* name, jerry_value_t value) {
     if (active_object_construction_failure != nullptr) {
         // Event target/currentTarget staging must not run inherited setters:
         // those can dispose the Node while make_node_wrapper still reads it.
-        if (!define_event_value(object, name, value)) *active_object_construction_failure = true;
+        JerryValue key(jerry_string_sz(name));
+        jerry_property_descriptor_t existing = jerry_property_descriptor();
+        JerryValue found(jerry_object_get_own_prop(object, key.get(), &existing));
+        jerry_property_descriptor_free(&existing);
+        if (jerry_value_is_true(found.get())) {
+            // Native functions already own a nonconfigurable prototype slot.
+            // Update its value while preserving the existing attributes.
+            jerry_property_descriptor_t replacement = jerry_property_descriptor();
+            replacement.flags = JERRY_PROP_IS_VALUE_DEFINED;
+            replacement.value = jerry_value_copy(value);
+            JerryValue result(jerry_object_define_own_prop(object, key.get(), &replacement));
+            note_object_construction_result(result.get());
+            jerry_property_descriptor_free(&replacement);
+        } else if (jerry_value_is_exception(found.get()) || !define_event_value(object, name, value)) {
+            *active_object_construction_failure = true;
+        }
         return;
     }
     JerryValue result(jerry_object_set_sz(object, name, value));
@@ -3474,7 +3643,7 @@ void set_property(jerry_value_t object, const char* name, jerry_value_t value) {
 
 void delete_property(jerry_value_t object, const char* name) {
     JerryValue result(jerry_object_delete_sz(object, name));
-    (void) result;
+    note_object_construction_result(result.get());
 }
 
 void set_number_property(jerry_value_t object, const char* name, double value) {
@@ -4854,7 +5023,8 @@ jerry_value_t dataset_proxy_delete_property(const jerry_call_info_t*,
 jerry_value_t make_dataset_object(JerryScriptRuntimeState& runtime, Node& node) {
     if (jerry_feature_enabled(JERRY_FEATURE_PROXY)) {
         JerryValue target(jerry_object());
-        bind_native_node(target.get(), runtime, node);
+        if (!bind_native_node(target.get(), runtime, node))
+            return jerry_throw_sz(JERRY_ERROR_RANGE, "auxiliary Node binding limit exceeded");
         JerryValue handler(jerry_object());
         set_method(handler.get(), "get", dataset_proxy_get);
         set_method(handler.get(), "set", dataset_proxy_set);
@@ -5002,7 +5172,8 @@ JELLYFRAME_STYLE_ACCESSOR(zIndex, "z-index")
 
 jerry_value_t make_style_object(JerryScriptRuntimeState& runtime, Node& node) {
     JerryValue object(jerry_object());
-    bind_native_node(object.get(), runtime, node);
+    if (!bind_native_node(object.get(), runtime, node))
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "auxiliary Node binding limit exceeded");
     define_accessor(object.get(), "display", style_get_display, style_set_display);
     define_accessor(object.get(), "color", style_get_color, style_set_color);
     define_accessor(object.get(), "background", style_get_background, style_set_background);
@@ -5510,7 +5681,8 @@ jerry_value_t canvas_create_radial_gradient(const jerry_call_info_t* call_info_p
 
 jerry_value_t make_canvas_2d_context(JerryScriptRuntimeState& runtime, Node& node) {
     JerryValue object(jerry_object());
-    bind_native_node(object.get(), runtime, node);
+    if (!bind_native_node(object.get(), runtime, node))
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "auxiliary Node binding limit exceeded");
     define_accessor(object.get(), "fillStyle", canvas_get_fill_style, canvas_set_fill_style);
     define_accessor(object.get(), "strokeStyle", canvas_get_stroke_style, canvas_set_stroke_style);
     define_accessor(object.get(), "lineWidth", canvas_get_line_width, canvas_set_line_width);
@@ -5607,9 +5779,10 @@ jerry_value_t node_prepend(const jerry_call_info_t* call_info_p,
                            const jerry_value_t args_p[],
                            const jerry_length_t args_count);
 
-jerry_value_t make_node_wrapper(JerryScriptRuntimeState& runtime, Node& node, bool document_methods) {
+jerry_value_t make_node_wrapper_object(Node& node, bool document_methods) {
+    ScriptObjectConstructionScope construction;
     JerryValue object(jerry_object());
-    bind_native_node(object.get(), runtime, node);
+    if (jerry_value_is_exception(object.get())) return object.release();
 
     define_accessor(object.get(), "textContent", node_get_text_content, node_set_text_content);
     if (node.type == NodeType::Element) {
@@ -5798,7 +5971,114 @@ jerry_value_t make_node_wrapper(JerryScriptRuntimeState& runtime, Node& node, bo
         set_method(object.get(), "hasFocus", document_has_focus);
     }
 
+    if (construction.failed()) {
+        return jerry_throw_sz(JERRY_ERROR_RANGE, "Node wrapper construction failed");
+    }
     return object.release();
+}
+
+jerry_value_t node_wrapper_resource_error(JerryScriptRuntimeState& runtime, const char* message) {
+    ScriptRuntimeAccess::record_event_failure(runtime);
+    return jerry_throw_sz(JERRY_ERROR_RANGE, message);
+}
+
+jerry_value_t make_node_wrapper(JerryScriptRuntimeState& runtime, Node& node, bool document_methods) {
+#if !JELLYFRAME_SCRIPT_NODE_IDENTITY
+    try {
+        JerryValue object(make_node_wrapper_object(node, document_methods));
+        if (jerry_value_is_exception(object.get())) return object.release();
+        ScriptNodeBinding* binding = ScriptRuntimeAccess::bind_script_node(runtime, node, false);
+        jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, binding);
+        jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
+        return object.release();
+    } catch (const std::bad_alloc&) {
+        return node_wrapper_resource_error(runtime, "Node wrapper allocation failed");
+    } catch (const std::length_error&) {
+        return node_wrapper_resource_error(runtime, "Node wrapper capacity exceeded");
+    }
+#else
+    bool reservation_failed = false;
+    auto handle = [&]() -> decltype(ScriptRuntimeAccess::reserve_node_identity_slot(runtime, node, nullptr)) {
+        try {
+            return ScriptRuntimeAccess::reserve_node_identity_slot(runtime, node, nullptr);
+        } catch (const std::bad_alloc&) {
+            reservation_failed = true;
+            return {};
+        } catch (const std::length_error&) {
+            reservation_failed = true;
+            return {};
+        }
+    }();
+    if (reservation_failed) {
+        return node_wrapper_resource_error(runtime, "canonical Node wrapper reservation failed");
+    }
+    if (!handle.valid || !ScriptRuntimeAccess::node_identity_slot_matches(runtime, handle, node)) {
+        return node_wrapper_resource_error(runtime, "canonical Node wrapper limit exceeded");
+    }
+
+    ScriptNodeBinding* binding = nullptr;
+    bool committed = false;
+    const auto cleanup = [&]() {
+        if (committed) return;
+        if (binding != nullptr) {
+            ScriptRuntimeAccess::forget_script_node_binding(runtime, *binding);
+            delete binding;
+            binding = nullptr;
+        }
+        ScriptRuntimeAccess::release_node_identity_slot(runtime, handle, node);
+    };
+    try {
+        JerryValue cached(ScriptRuntimeAccess::deref_node_identity_weak_ref(runtime, handle, node));
+        if (jerry_value_is_exception(cached.get())) {
+            cleanup();
+            return cached.release();
+        }
+        if (jerry_value_is_object(cached.get())) return cached.release();
+        if (!jerry_value_is_undefined(cached.get())) {
+            cleanup();
+            return node_wrapper_resource_error(runtime, "canonical Node wrapper cache is invalid");
+        }
+
+        JerryValue object(make_node_wrapper_object(node, document_methods));
+        if (jerry_value_is_exception(object.get())) {
+            ScriptRuntimeAccess::record_event_failure(runtime);
+            cleanup();
+            return object.release();
+        }
+
+        binding = ScriptRuntimeAccess::bind_script_node(runtime, node, false);
+        if (binding == nullptr) {
+            cleanup();
+            return node_wrapper_resource_error(runtime, "canonical Node binding allocation failed");
+        }
+        JerryValue weak_ref(ScriptRuntimeAccess::create_node_identity_weak_ref(runtime, object.get()));
+        if (jerry_value_is_exception(weak_ref.get()) || !jerry_value_is_object(weak_ref.get())) {
+            ScriptRuntimeAccess::record_event_failure(runtime);
+            cleanup();
+            return weak_ref.release();
+        }
+
+        const auto bound = ScriptRuntimeAccess::reserve_node_identity_slot(runtime, node, binding);
+        if (!bound.valid || bound.index != handle.index || bound.generation != handle.generation ||
+            bound.epoch != handle.epoch ||
+            !ScriptRuntimeAccess::node_identity_slot_matches(runtime, handle, node) ||
+            !ScriptRuntimeAccess::replace_node_identity_weak_ref(runtime, handle, node, weak_ref.get())) {
+            cleanup();
+            return node_wrapper_resource_error(runtime, "canonical Node wrapper publication failed");
+        }
+
+        jerry_object_set_native_ptr(object.get(), &kNodeNativeInfo, binding);
+        jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
+        committed = true;
+        return object.release();
+    } catch (const std::bad_alloc&) {
+        cleanup();
+        return node_wrapper_resource_error(runtime, "canonical Node wrapper allocation failed");
+    } catch (const std::length_error&) {
+        cleanup();
+        return node_wrapper_resource_error(runtime, "canonical Node wrapper capacity exceeded");
+    }
+#endif
 }
 
 Node& insert_or_move_child(JerryScriptRuntimeState& runtime, Node& parent, Node& child, std::size_t index);
@@ -6688,8 +6968,44 @@ jerry_value_t window_remove_event_listener(const jerry_call_info_t* call_info_p,
 
 } // namespace
 
-ScriptNodeBinding* JerryScriptRuntimeState::bind_script_node(Node& node) {
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY && defined(JELLYFRAME_SCRIPT_IDENTITY_TESTING)
+bool run_node_wrapper_allocation_refusal_test(bool auxiliary, void (*arm)(), void (*disarm)()) {
+    Node document(NodeType::Element);
+    document.tag_name = "#document";
+    auto body = std::make_unique<Node>(NodeType::Element);
+    body->tag_name = "body";
+    document.append_child(std::move(body));
+    JerryScriptRuntimeState runtime;
+    if (!runtime.bind_document(document)) return false;
+    if (auxiliary && !runtime.eval("var allocationTarget=document.body").ok) return false;
+    const char* source = auxiliary
+        ? "(function(){try{allocationTarget.style;return false;}catch(e){return e instanceof RangeError;}})()"
+        : "(function(){try{document.body;return false;}catch(e){return e instanceof RangeError;}})()";
+    JerryValue parsed(jerry_parse(reinterpret_cast<const jerry_char_t*>(source), std::strlen(source), nullptr));
+    if (jerry_value_is_exception(parsed.get())) return false;
+    jerry_value_t result = jerry_undefined();
+    bool escaped = false;
+    arm();
+    try {
+        result = jerry_run(parsed.get());
+    } catch (...) {
+        escaped = true;
+    }
+    disarm();
+    JerryValue owned_result(result);
+    return !escaped && jerry_value_is_true(owned_result.get()) &&
+        runtime.take_script_callback_failure().status == ScriptCallbackFailureStatus::ResourceLimit;
+}
+#endif
+
+ScriptNodeBinding* JerryScriptRuntimeState::bind_script_node(Node& node, bool auxiliary) {
+    auxiliary = auxiliary && JELLYFRAME_SCRIPT_NODE_IDENTITY;
+    if (auxiliary && auxiliary_node_binding_count_ >= options_.max_auxiliary_node_bindings) {
+        ScriptRuntimeAccess::record_event_failure(*this);
+        return nullptr;
+    }
     auto binding = std::make_unique<ScriptNodeBinding>(ScriptNodeBinding{this, &node, {}, true, false, false});
+    binding->auxiliary_budgeted = auxiliary;
     const bool observe = std::find(observed_nodes_.begin(), observed_nodes_.end(), &node) == observed_nodes_.end();
     // All fallible allocations precede publication. In particular, failure to
     // grow either ledger cannot leave a raw binding or an untracked observer.
@@ -6704,6 +7020,7 @@ ScriptNodeBinding* JerryScriptRuntimeState::bind_script_node(Node& node) {
         observed_nodes_.push_back(&node);
     }
     node_bindings_.push_back(binding.get());
+    if (auxiliary) ++auxiliary_node_binding_count_;
     return binding.release();
 }
 
@@ -6715,6 +7032,10 @@ Node* JerryScriptRuntimeState::resolve_script_node(const ScriptNodeBinding& bind
 }
 
 void JerryScriptRuntimeState::forget_script_node_binding(ScriptNodeBinding& binding) {
+    if (binding.auxiliary_budgeted) {
+        if (auxiliary_node_binding_count_ != 0) --auxiliary_node_binding_count_;
+        binding.auxiliary_budgeted = false;
+    }
     layout_snapshot_bindings_.erase(
         std::remove(layout_snapshot_bindings_.begin(), layout_snapshot_bindings_.end(), &binding),
         layout_snapshot_bindings_.end());
@@ -6738,11 +7059,11 @@ void JerryScriptRuntimeState::forget_script_node_binding(ScriptNodeBinding& bind
 }
 
 void JerryScriptRuntimeState::invalidate_script_node(Node& node) {
+    release_node_identity_slot(node);
     if (bound_document_ == &node) {
         bound_document_ = nullptr;
         dom_statistics_cached_document_ = nullptr;
-        clear_animation_frame_callbacks();
-        clear_timers();
+        deferred_document_callbacks_release_ = true;
     }
     if (active_modal_dialog_ == &node) {
         active_modal_dialog_ = nullptr;
@@ -6792,9 +7113,12 @@ void JerryScriptRuntimeState::clear_script_node_bindings() {
             binding->active = false;
             binding->layout_snapshot_requested = false;
             binding->has_layout_snapshot = false;
+            binding->auxiliary_budgeted = false;
         }
     }
     node_bindings_.clear();
+    auxiliary_node_binding_count_ = 0;
+    clear_node_identity_slots();
 }
 
 void JerryScriptRuntimeState::capture_layout_snapshot(const LayoutBox& root,
@@ -6874,14 +7198,238 @@ void JerryScriptRuntimeState::clear_script_local_storage_bindings() {
 
 JerryScriptRuntimeState::JerryScriptRuntimeState(ScriptRuntimeOptions options)
     : options_(options) {
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY
+    if (options_.max_node_wrapper_cache_entries == 0 || options_.max_node_wrapper_cache_entries > 1024) {
+        throw std::invalid_argument("Node identity requires max_node_wrapper_cache_entries between 1 and 1024");
+    }
+    if (options_.max_auxiliary_node_bindings > 1024) {
+        throw std::invalid_argument("max_auxiliary_node_bindings exceeds the supported 1024-binding limit");
+    }
+#endif
     std::lock_guard<std::mutex> lock(g_runtime_mutex);
     if (g_runtime_active) {
         throw std::runtime_error("only one JerryScriptRuntimeState can be active in this build");
     }
 
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY
+    node_identity_slots_.resize(options_.max_node_wrapper_cache_entries);
+    ++document_epoch_;
+#endif
     jerry_init(JERRY_INIT_EMPTY);
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY
+    JerryValue global(jerry_current_realm());
+    JerryValue constructor(jerry_object_get_sz(global.get(), "WeakRef"));
+    JerryValue prototype(jerry_object_get_sz(constructor.get(), "prototype"));
+    JerryValue deref(jerry_object_get_sz(prototype.get(), "deref"));
+    if (!jerry_value_is_function(constructor.get()) || !jerry_value_is_function(deref.get())) {
+        jerry_value_free(deref.release());
+        jerry_value_free(prototype.release());
+        jerry_value_free(constructor.release());
+        jerry_value_free(global.release());
+        jerry_cleanup();
+        throw std::runtime_error("pinned JerryScript WeakRef intrinsics are unavailable");
+    }
+    weak_ref_constructor_ = constructor.release();
+    weak_ref_deref_ = deref.release();
+#endif
     initialized_ = true;
     g_runtime_active = true;
+}
+
+std::size_t JerryScriptRuntimeState::find_node_identity_slot(const Node& node) const noexcept {
+    for (std::size_t i = 0; i < node_identity_slots_.size(); ++i) {
+        if (node_identity_slots_[i].node == &node) return i;
+    }
+    return node_identity_slots_.size();
+}
+
+JerryScriptRuntimeState::NodeIdentitySlotHandle JerryScriptRuntimeState::reserve_node_identity_slot(
+    Node& node, ScriptNodeBinding* binding) {
+    drain_node_identity_releases();
+    const std::size_t existing = find_node_identity_slot(node);
+    if (existing != node_identity_slots_.size()) {
+        const auto& slot = node_identity_slots_[existing];
+        if (binding != nullptr && slot.binding != nullptr && slot.binding != binding) return {};
+        if (binding != nullptr) {
+            if (std::find(node_bindings_.begin(), node_bindings_.end(), binding) == node_bindings_.end()) {
+                if (node_bindings_.size() == node_bindings_.capacity())
+                    node_bindings_.reserve(std::max<std::size_t>(8, node_bindings_.size() * 2));
+                node_bindings_.push_back(binding);
+            }
+            binding->runtime = this;
+            binding->node = &node;
+            binding->active = true;
+            node_identity_slots_[existing].binding = binding;
+            binding->identity_slot_index = existing;
+            binding->identity_slot_generation = slot.generation;
+            binding->identity_epoch = document_epoch_;
+            binding->has_identity_slot = true;
+        }
+        return {existing, slot.generation, document_epoch_, true};
+    }
+    for (std::size_t i = 0; i < node_identity_slots_.size(); ++i) {
+        auto& slot = node_identity_slots_[i];
+        if (slot.node == nullptr) {
+            const bool observe = std::find(observed_nodes_.begin(), observed_nodes_.end(), &node) == observed_nodes_.end();
+            if (binding != nullptr && node_bindings_.size() == node_bindings_.capacity())
+                node_bindings_.reserve(std::max<std::size_t>(8, node_bindings_.size() * 2));
+            if (observe && observed_nodes_.size() == observed_nodes_.capacity())
+                observed_nodes_.reserve(std::max<std::size_t>(8, observed_nodes_.size() * 2));
+            if (observe) {
+                node.add_destroy_observer(script_node_destroyed, this);
+                observed_nodes_.push_back(&node);
+            }
+            if (binding != nullptr) {
+                binding->runtime = this;
+                binding->node = &node;
+                binding->active = true;
+                node_bindings_.push_back(binding);
+            }
+            slot.node = &node;
+            slot.binding = binding;
+            slot.weak_ref_value = jerry_undefined();
+            slot.has_weak_ref = false;
+            slot.release_pending = false;
+            if (++slot.generation == 0) ++slot.generation;
+            ++node_identity_live_count_;
+            if (binding != nullptr) {
+                binding->identity_slot_index = i;
+                binding->identity_slot_generation = slot.generation;
+                binding->identity_epoch = document_epoch_;
+                binding->has_identity_slot = true;
+            }
+            return {i, slot.generation, document_epoch_, true};
+        }
+    }
+    ScriptRuntimeAccess::record_event_failure(*this);
+    return {};
+}
+
+bool JerryScriptRuntimeState::node_identity_slot_matches(NodeIdentitySlotHandle handle,
+                                                          const Node& node) const noexcept {
+    if (!handle.valid || handle.epoch != document_epoch_ || handle.index >= node_identity_slots_.size()) {
+        return false;
+    }
+    const auto& slot = node_identity_slots_[handle.index];
+    return slot.node == &node && slot.generation == handle.generation;
+}
+
+jerry_value_t JerryScriptRuntimeState::create_node_identity_weak_ref(jerry_value_t wrapper) {
+    return jerry_construct(weak_ref_constructor_, &wrapper, 1);
+}
+
+bool JerryScriptRuntimeState::publish_node_identity_weak_ref(NodeIdentitySlotHandle handle,
+                                                              Node& node,
+                                                              jerry_value_t weak_ref) {
+    if (!jerry_value_is_object(weak_ref) || !node_identity_slot_matches(handle, node)) return false;
+    auto& slot = node_identity_slots_[handle.index];
+    if (slot.has_weak_ref || slot.release_pending) return false;
+    slot.weak_ref_value = jerry_value_copy(weak_ref);
+    slot.has_weak_ref = true;
+    return true;
+}
+
+bool JerryScriptRuntimeState::replace_node_identity_weak_ref(NodeIdentitySlotHandle handle,
+                                                              Node& node,
+                                                              jerry_value_t weak_ref) {
+    if (!jerry_value_is_object(weak_ref) || !node_identity_slot_matches(handle, node)) return false;
+    auto& slot = node_identity_slots_[handle.index];
+    const jerry_value_t replacement = jerry_value_copy(weak_ref);
+    if (slot.has_weak_ref) jerry_value_free(slot.weak_ref_value);
+    slot.weak_ref_value = replacement;
+    slot.has_weak_ref = true;
+    slot.release_pending = false;
+    return true;
+}
+
+jerry_value_t JerryScriptRuntimeState::deref_node_identity_weak_ref(NodeIdentitySlotHandle handle,
+                                                                    Node& node) {
+    drain_node_identity_releases();
+    if (!node_identity_slot_matches(handle, node)) return jerry_undefined();
+    const auto& slot = node_identity_slots_[handle.index];
+    if (!slot.has_weak_ref) return jerry_undefined();
+    return jerry_call(weak_ref_deref_, slot.weak_ref_value, nullptr, 0);
+}
+
+void JerryScriptRuntimeState::release_node_identity_slot(NodeIdentitySlotHandle handle, Node& node) noexcept {
+    if (!node_identity_slot_matches(handle, node)) return;
+    release_node_identity_slot(node);
+}
+
+void JerryScriptRuntimeState::release_node_identity_slot(Node& node) noexcept {
+    const std::size_t index = find_node_identity_slot(node);
+    if (index == node_identity_slots_.size()) return;
+    auto& slot = node_identity_slots_[index];
+    slot.node = nullptr;
+    slot.release_pending = slot.has_weak_ref;
+    if (slot.binding != nullptr) {
+        slot.binding->has_identity_slot = false;
+        slot.binding->identity_epoch = 0;
+    }
+    slot.binding = nullptr;
+    if (node_identity_live_count_ != 0) --node_identity_live_count_;
+    if (!slot.has_weak_ref) {
+        slot.release_pending = false;
+        slot.weak_ref_value = jerry_undefined();
+    }
+}
+
+void JerryScriptRuntimeState::forget_node_identity_binding(ScriptNodeBinding& binding) noexcept {
+    if (!binding.has_identity_slot || binding.identity_epoch != document_epoch_ ||
+        binding.identity_slot_index >= node_identity_slots_.size()) return;
+    auto& slot = node_identity_slots_[binding.identity_slot_index];
+    if (slot.generation == binding.identity_slot_generation && slot.binding == &binding) slot.binding = nullptr;
+    binding.has_identity_slot = false;
+}
+
+void JerryScriptRuntimeState::retire_finalized_node_identity_binding(const ScriptNodeBinding& binding) noexcept {
+    if (!binding.has_identity_slot || binding.identity_epoch != document_epoch_ ||
+        binding.identity_slot_index >= node_identity_slots_.size()) return;
+    auto& slot = node_identity_slots_[binding.identity_slot_index];
+    if (slot.generation == binding.identity_slot_generation && slot.binding == &binding) {
+        // Finalizers only mark native metadata. The next ordinary entry point
+        // drops the weak root and makes this slot reusable, without a VM call
+        // or Node lookup from inside GC. Unpublished reservations never enter
+        // this path because they have no native finalizer attached.
+        slot.release_pending = true;
+    }
+}
+
+void JerryScriptRuntimeState::drain_node_identity_releases() noexcept {
+    if (deferred_document_callbacks_release_) {
+        clear_animation_frame_callbacks();
+        clear_timers();
+        deferred_document_callbacks_release_ = false;
+    }
+    for (auto& slot : node_identity_slots_) {
+        if (slot.release_pending && slot.has_weak_ref) {
+            if (slot.node != nullptr) {
+                slot.node = nullptr;
+                if (node_identity_live_count_ != 0) --node_identity_live_count_;
+            }
+            jerry_value_free(slot.weak_ref_value);
+            slot.weak_ref_value = jerry_undefined();
+            slot.has_weak_ref = false;
+            slot.release_pending = false;
+        }
+    }
+}
+
+void JerryScriptRuntimeState::clear_node_identity_slots() noexcept {
+    for (auto& slot : node_identity_slots_) {
+        if (slot.has_weak_ref) jerry_value_free(slot.weak_ref_value);
+        if (slot.binding != nullptr) {
+            slot.binding->has_identity_slot = false;
+            slot.binding->identity_epoch = 0;
+        }
+        slot.node = nullptr;
+        slot.binding = nullptr;
+        slot.weak_ref_value = jerry_undefined();
+        slot.has_weak_ref = false;
+        slot.release_pending = false;
+    }
+    node_identity_live_count_ = 0;
+    ++document_epoch_;
 }
 
 ScriptRuntimeOptions script_runtime_options_from_host_budgets(const HostBudgets& budgets) {
@@ -6973,6 +7521,10 @@ JerryScriptRuntimeState::~JerryScriptRuntimeState() {
         clear_animation_frame_callbacks();
         clear_timers();
         clear_script_node_bindings();
+        if (weak_ref_constructor_ != 0) jerry_value_free(weak_ref_constructor_);
+        if (weak_ref_deref_ != 0) jerry_value_free(weak_ref_deref_);
+        weak_ref_constructor_ = 0;
+        weak_ref_deref_ = 0;
         clear_script_local_storage_bindings();
         clear_script_service_gateway();
         if (canvas_2d_ != nullptr) {
@@ -6985,6 +7537,40 @@ JerryScriptRuntimeState::~JerryScriptRuntimeState() {
     }
 }
 
+namespace {
+
+bool can_replace_document_global(jerry_value_t global, const char* property) {
+    JerryValue key(jerry_string_sz(property));
+    jerry_property_descriptor_t descriptor = jerry_property_descriptor();
+    JerryValue found(jerry_object_get_own_prop(global, key.get(), &descriptor));
+    const bool replaceable = jerry_value_is_false(found.get()) ||
+        (jerry_value_is_true(found.get()) &&
+         ((descriptor.flags & JERRY_PROP_IS_CONFIGURABLE) != 0 ||
+          (descriptor.flags & JERRY_PROP_IS_WRITABLE) != 0));
+    jerry_property_descriptor_free(&descriptor);
+    return replaceable;
+}
+
+bool can_publish_document_globals(jerry_value_t global) {
+    // Publication defines checked own properties without invoking author setters.
+    // Refuse known immutable slots before invalidating the existing document.
+    for (const char* property : {"document", "window", "self", "origin", "isSecureContext",
+                                "crossOriginIsolated", "navigator", "location", "history",
+                                "setTimeout", "clearTimeout", "setInterval", "clearInterval",
+                                "requestAnimationFrame", "cancelAnimationFrame", "btoa", "atob",
+                                "FormData", "addEventListener", "removeEventListener",
+                                "XMLHttpRequest", "Audio", "localStorage", "services"}) {
+        if (!can_replace_document_global(global, property)) return false;
+    }
+#define JELLYFRAME_CHECK_GLOBAL_EVENT_HANDLER(js_name, event_type) \
+    if (!can_replace_document_global(global, #js_name)) return false;
+    JELLYFRAME_WINDOW_EVENT_HANDLER_LIST(JELLYFRAME_CHECK_GLOBAL_EVENT_HANDLER)
+#undef JELLYFRAME_CHECK_GLOBAL_EVENT_HANDLER
+    return true;
+}
+
+} // namespace
+
 bool JerryScriptRuntimeState::bind_document(Node& document) {
     if (script_execution_depth_ != 0 || dom_callback_depth_ != 0) return false;
 #if JELLYFRAME_SCRIPT_R3_EVENTS
@@ -6993,130 +7579,165 @@ bool JerryScriptRuntimeState::bind_document(Node& document) {
     }
 #endif
     ScriptDomMutationScope operation_scope(*this);
-    callback_failure_ = {};
-    clear_xml_http_requests();
-    clear_audio_elements();
-    clear_geolocation_requests();
-    clear_canvas_gradients();
-    clear_dialog_states();
-    clear_script_event_listeners();
-    clear_animation_frame_callbacks();
-    clear_timers();
-    clear_script_node_bindings();
-    clear_script_local_storage_bindings();
-    for (const auto& entry : service_callbacks_) {
-        if (entry != nullptr && entry->callback != 0) {
-            jerry_value_free(entry->callback);
-        }
-    }
-    service_callbacks_.clear();
-    next_service_request_id_ = 1;
-    next_service_client_token_ = 1;
-    detached_nodes_.clear_detached_nodes();
-    if (canvas_2d_ != nullptr) {
-        canvas_2d_->clear();
-    }
-    bound_document_ = &document;
-    dom_statistics_cached_document_ = nullptr;
-    dom_statistics_cached_generation_ = 0;
-    dom_statistics_cached_document_stats_ = {};
-    route_fragment_.clear();
-    route_history_.clear();
-    route_history_index_ = 0;
-
     JerryValue global(jerry_current_realm());
-    jerry_object_set_native_ptr(global.get(), &kRuntimeNativeInfo, this);
-    JerryValue document_object(make_node_wrapper(*this, document, true));
-    JerryValue window_object(jerry_object());
-    JerryValue navigator_object(make_navigator_object(*this));
-    JerryValue location_object(make_location_object(*this));
-    JerryValue history_object(make_history_object(*this));
-    jerry_object_set_native_ptr(window_object.get(), &kRuntimeNativeInfo, this);
+    if (!can_publish_document_globals(global.get())) {
+        ScriptRuntimeAccess::record_event_failure(*this, ScriptCallbackFailureStatus::Exception);
+        return false;
+    }
+    const auto fail_binding = [&]() noexcept {
+        // Replacement has begun. Make every remaining wrapper inert and revoke
+        // further VM entry rather than exposing mixed old/new document state.
+        request_stop();
+        bound_document_ = nullptr;
+        dom_statistics_cached_document_ = nullptr;
+        clear_script_event_listeners();
+        clear_animation_frame_callbacks();
+        clear_timers();
+        clear_script_node_bindings();
+        clear_script_local_storage_bindings();
+        deferred_document_callbacks_release_ = false;
+        return false;
+    };
+    try {
+        callback_failure_ = {};
+        ScriptObjectConstructionScope construction;
+        clear_xml_http_requests();
+        clear_audio_elements();
+        clear_geolocation_requests();
+        clear_canvas_gradients();
+        clear_dialog_states();
+        clear_script_event_listeners();
+        clear_animation_frame_callbacks();
+        clear_timers();
+        clear_script_node_bindings();
+        clear_script_local_storage_bindings();
+        for (const auto& entry : service_callbacks_) {
+            if (entry != nullptr && entry->callback != 0) {
+                jerry_value_free(entry->callback);
+            }
+        }
+        service_callbacks_.clear();
+        next_service_request_id_ = 1;
+        next_service_client_token_ = 1;
+        detached_nodes_.clear_detached_nodes();
+        if (canvas_2d_ != nullptr) {
+            canvas_2d_->clear();
+        }
+        bound_document_ = &document;
+        dom_statistics_cached_document_ = nullptr;
+        dom_statistics_cached_generation_ = 0;
+        dom_statistics_cached_document_stats_ = {};
+        route_fragment_.clear();
+        route_history_.clear();
+        route_history_index_ = 0;
 
-    set_property(window_object.get(), "document", document_object.get());
-    set_property(window_object.get(), "window", window_object.get());
-    set_property(window_object.get(), "self", window_object.get());
-    set_property(window_object.get(), "origin", string_to_value("null").get());
-    set_bool_property(window_object.get(), "isSecureContext", false);
-    set_bool_property(window_object.get(), "crossOriginIsolated", false);
-    set_property(window_object.get(), "navigator", navigator_object.get());
-    set_property(window_object.get(), "location", location_object.get());
-    set_property(window_object.get(), "history", history_object.get());
-    set_property(global.get(), "document", document_object.get());
-    set_property(global.get(), "window", window_object.get());
-    set_property(global.get(), "self", window_object.get());
-    set_property(global.get(), "origin", string_to_value("null").get());
-    set_bool_property(global.get(), "isSecureContext", false);
-    set_bool_property(global.get(), "crossOriginIsolated", false);
-    set_property(global.get(), "navigator", navigator_object.get());
-    set_property(global.get(), "location", location_object.get());
-    set_property(global.get(), "history", history_object.get());
-    set_runtime_method(window_object.get(), "setTimeout", script_set_timeout, *this);
-    set_runtime_method(window_object.get(), "clearTimeout", script_clear_timer, *this);
-    set_runtime_method(window_object.get(), "setInterval", script_set_interval, *this);
-    set_runtime_method(window_object.get(), "clearInterval", script_clear_timer, *this);
-    set_runtime_method(window_object.get(), "requestAnimationFrame", script_request_animation_frame, *this);
-    set_runtime_method(window_object.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
-    set_method(window_object.get(), "btoa", script_btoa);
-    set_method(window_object.get(), "atob", script_atob);
-    set_runtime_method(window_object.get(), "addEventListener", window_add_event_listener, *this);
-    set_runtime_method(window_object.get(), "removeEventListener", window_remove_event_listener, *this);
+        jerry_object_set_native_ptr(global.get(), &kRuntimeNativeInfo, this);
+        JerryValue document_object(make_node_wrapper(*this, document, true));
+        if (!jerry_value_is_object(document_object.get())) {
+            ScriptRuntimeAccess::record_event_failure(*this);
+            return fail_binding();
+        }
+        JerryValue window_object(jerry_object());
+        JerryValue navigator_object(make_navigator_object(*this));
+        JerryValue location_object(make_location_object(*this));
+        JerryValue history_object(make_history_object(*this));
+        jerry_object_set_native_ptr(window_object.get(), &kRuntimeNativeInfo, this);
+
+        set_property(window_object.get(), "document", document_object.get());
+        set_property(window_object.get(), "window", window_object.get());
+        set_property(window_object.get(), "self", window_object.get());
+        set_property(window_object.get(), "origin", string_to_value("null").get());
+        set_bool_property(window_object.get(), "isSecureContext", false);
+        set_bool_property(window_object.get(), "crossOriginIsolated", false);
+        set_property(window_object.get(), "navigator", navigator_object.get());
+        set_property(window_object.get(), "location", location_object.get());
+        set_property(window_object.get(), "history", history_object.get());
+        set_property(global.get(), "document", document_object.get());
+        set_property(global.get(), "window", window_object.get());
+        set_property(global.get(), "self", window_object.get());
+        set_property(global.get(), "origin", string_to_value("null").get());
+        set_bool_property(global.get(), "isSecureContext", false);
+        set_bool_property(global.get(), "crossOriginIsolated", false);
+        set_property(global.get(), "navigator", navigator_object.get());
+        set_property(global.get(), "location", location_object.get());
+        set_property(global.get(), "history", history_object.get());
+        set_runtime_method(window_object.get(), "setTimeout", script_set_timeout, *this);
+        set_runtime_method(window_object.get(), "clearTimeout", script_clear_timer, *this);
+        set_runtime_method(window_object.get(), "setInterval", script_set_interval, *this);
+        set_runtime_method(window_object.get(), "clearInterval", script_clear_timer, *this);
+        set_runtime_method(window_object.get(), "requestAnimationFrame", script_request_animation_frame, *this);
+        set_runtime_method(window_object.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
+        set_method(window_object.get(), "btoa", script_btoa);
+        set_method(window_object.get(), "atob", script_atob);
+        set_runtime_method(window_object.get(), "addEventListener", window_add_event_listener, *this);
+        set_runtime_method(window_object.get(), "removeEventListener", window_remove_event_listener, *this);
 #define JELLYFRAME_DEFINE_WINDOW_EVENT_HANDLER(js_name, event_type) \
-    define_accessor(window_object.get(), #js_name, window_get_##js_name, window_set_##js_name);
-    JELLYFRAME_WINDOW_EVENT_HANDLER_LIST(JELLYFRAME_DEFINE_WINDOW_EVENT_HANDLER)
+        define_accessor(window_object.get(), #js_name, window_get_##js_name, window_set_##js_name);
+        JELLYFRAME_WINDOW_EVENT_HANDLER_LIST(JELLYFRAME_DEFINE_WINDOW_EVENT_HANDLER)
 #undef JELLYFRAME_DEFINE_WINDOW_EVENT_HANDLER
-    set_runtime_method(global.get(), "setTimeout", script_set_timeout, *this);
-    set_runtime_method(global.get(), "clearTimeout", script_clear_timer, *this);
-    set_runtime_method(global.get(), "setInterval", script_set_interval, *this);
-    set_runtime_method(global.get(), "clearInterval", script_clear_timer, *this);
-    set_runtime_method(global.get(), "requestAnimationFrame", script_request_animation_frame, *this);
-    set_runtime_method(global.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
-    set_method(global.get(), "btoa", script_btoa);
-    set_method(global.get(), "atob", script_atob);
+        set_runtime_method(global.get(), "setTimeout", script_set_timeout, *this);
+        set_runtime_method(global.get(), "clearTimeout", script_clear_timer, *this);
+        set_runtime_method(global.get(), "setInterval", script_set_interval, *this);
+        set_runtime_method(global.get(), "clearInterval", script_clear_timer, *this);
+        set_runtime_method(global.get(), "requestAnimationFrame", script_request_animation_frame, *this);
+        set_runtime_method(global.get(), "cancelAnimationFrame", script_cancel_animation_frame, *this);
+        set_method(global.get(), "btoa", script_btoa);
+        set_method(global.get(), "atob", script_atob);
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-    JerryValue form_data_constructor(make_form_data_constructor(*this));
-    set_property(window_object.get(), "FormData", form_data_constructor.get());
-    set_property(global.get(), "FormData", form_data_constructor.get());
+        JerryValue form_data_constructor(make_form_data_constructor(*this));
+        set_property(window_object.get(), "FormData", form_data_constructor.get());
+        set_property(global.get(), "FormData", form_data_constructor.get());
 #else
-    delete_property(window_object.get(), "FormData");
-    delete_property(global.get(), "FormData");
+        delete_property(window_object.get(), "FormData");
+        delete_property(global.get(), "FormData");
 #endif
-    set_runtime_method(global.get(), "addEventListener", window_add_event_listener, *this);
-    set_runtime_method(global.get(), "removeEventListener", window_remove_event_listener, *this);
+        set_runtime_method(global.get(), "addEventListener", window_add_event_listener, *this);
+        set_runtime_method(global.get(), "removeEventListener", window_remove_event_listener, *this);
 #define JELLYFRAME_DEFINE_GLOBAL_EVENT_HANDLER(js_name, event_type) \
-    define_accessor(global.get(), #js_name, window_get_##js_name, window_set_##js_name);
-    JELLYFRAME_WINDOW_EVENT_HANDLER_LIST(JELLYFRAME_DEFINE_GLOBAL_EVENT_HANDLER)
+        define_accessor(global.get(), #js_name, window_get_##js_name, window_set_##js_name);
+        JELLYFRAME_WINDOW_EVENT_HANDLER_LIST(JELLYFRAME_DEFINE_GLOBAL_EVENT_HANDLER)
 #undef JELLYFRAME_DEFINE_GLOBAL_EVENT_HANDLER
-    JerryValue date_object(jerry_object_get_sz(global.get(), "Date"));
-    if (jerry_value_is_object(date_object.get())) {
-        set_runtime_method(date_object.get(), "now", script_date_now, *this);
+        JerryValue date_object(jerry_object_get_sz(global.get(), "Date"));
+        if (jerry_value_is_object(date_object.get())) {
+            set_runtime_method(date_object.get(), "now", script_date_now, *this);
+        }
+        if (network_fetch_ != nullptr) {
+            JerryValue xhr_constructor(make_xml_http_request_constructor(*this));
+            set_property(window_object.get(), "XMLHttpRequest", xhr_constructor.get());
+            set_property(global.get(), "XMLHttpRequest", xhr_constructor.get());
+        } else {
+            delete_property(window_object.get(), "XMLHttpRequest");
+            delete_property(global.get(), "XMLHttpRequest");
+        }
+        if (audio_host_.play != nullptr) {
+            JerryValue audio_constructor(make_audio_constructor(*this));
+            set_property(window_object.get(), "Audio", audio_constructor.get());
+            set_property(global.get(), "Audio", audio_constructor.get());
+        } else {
+            delete_property(window_object.get(), "Audio");
+            delete_property(global.get(), "Audio");
+        }
+        if (local_storage_ != nullptr) {
+            JerryValue local_storage(make_local_storage_object(*this, *local_storage_));
+            set_property(window_object.get(), "localStorage", local_storage.get());
+            set_property(global.get(), "localStorage", local_storage.get());
+        } else {
+            delete_property(window_object.get(), "localStorage");
+            delete_property(global.get(), "localStorage");
+        }
+        install_script_service_gateway();
+        if (construction.failed()) {
+            ScriptRuntimeAccess::record_event_failure(*this, ScriptCallbackFailureStatus::Exception);
+            return fail_binding();
+        }
+        return true;
+    } catch (const std::bad_alloc&) {
+        ScriptRuntimeAccess::record_event_failure(*this);
+        return fail_binding();
+    } catch (const std::length_error&) {
+        ScriptRuntimeAccess::record_event_failure(*this);
+        return fail_binding();
     }
-    if (network_fetch_ != nullptr) {
-        JerryValue xhr_constructor(make_xml_http_request_constructor(*this));
-        set_property(window_object.get(), "XMLHttpRequest", xhr_constructor.get());
-        set_property(global.get(), "XMLHttpRequest", xhr_constructor.get());
-    } else {
-        delete_property(window_object.get(), "XMLHttpRequest");
-        delete_property(global.get(), "XMLHttpRequest");
-    }
-    if (audio_host_.play != nullptr) {
-        JerryValue audio_constructor(make_audio_constructor(*this));
-        set_property(window_object.get(), "Audio", audio_constructor.get());
-        set_property(global.get(), "Audio", audio_constructor.get());
-    } else {
-        delete_property(window_object.get(), "Audio");
-        delete_property(global.get(), "Audio");
-    }
-    if (local_storage_ != nullptr) {
-        JerryValue local_storage(make_local_storage_object(*this, *local_storage_));
-        set_property(window_object.get(), "localStorage", local_storage.get());
-        set_property(global.get(), "localStorage", local_storage.get());
-    } else {
-        delete_property(window_object.get(), "localStorage");
-        delete_property(global.get(), "localStorage");
-    }
-    install_script_service_gateway();
-    return true;
 }
 
 void JerryScriptRuntimeState::set_dom_mutation_observer(ScriptDomMutationCallback callback, void* user) {
@@ -7348,6 +7969,7 @@ ScriptEvaluationResult JerryScriptRuntimeState::eval(std::string_view source, st
     // Conversion can invoke user toString() after evaluation has returned.
     // Keep admission closed until conversion and local roots have drained.
     ScriptDomMutationScope operation_scope(*this);
+    drain_node_identity_releases();
     callback_failure_ = {};
     ScriptEvaluationResult output;
 
@@ -7463,6 +8085,7 @@ bool JerryScriptRuntimeState::dispatch_audio_event(std::uint32_t audio_id, Scrip
 }
 
 std::size_t JerryScriptRuntimeState::pump_timers(std::uint64_t now_ms, std::size_t max_callbacks) {
+    drain_node_identity_releases();
     callback_failure_ = {};
     current_time_ms_ = now_ms;
     timers_.erase(std::remove_if(timers_.begin(), timers_.end(), [](const std::unique_ptr<ScriptTimer>& timer) {
@@ -7511,6 +8134,7 @@ std::size_t JerryScriptRuntimeState::pump_timers(std::uint64_t now_ms, std::size
 }
 
 std::size_t JerryScriptRuntimeState::pump_animation_frame(std::uint64_t now_ms, std::size_t max_callbacks) {
+    drain_node_identity_releases();
     callback_failure_ = {};
     current_time_ms_ = now_ms;
     animation_frame_callbacks_.erase(
@@ -8855,6 +9479,8 @@ ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::st
 }
 
 ScriptCallbackFailure JerryScriptRuntime::take_script_callback_failure() {
+    auto stopped_state = state_;
+    if (stopped_state && stopped_state->stop_requested()) return stopped_state->take_script_callback_failure();
     auto* backend = state_.get();
     BackendOperationPin operation(state_);
     if (!operation) { return {}; }
@@ -8862,6 +9488,8 @@ ScriptCallbackFailure JerryScriptRuntime::take_script_callback_failure() {
 }
 
 bool JerryScriptRuntime::script_callback_failed() const {
+    auto stopped_state = state_;
+    if (stopped_state && stopped_state->stop_requested()) return stopped_state->script_callback_failed();
     auto* backend = state_.get();
     BackendOperationPin operation(state_);
     if (!operation) { return {}; }

@@ -27,3 +27,11 @@
 #elif JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED && !defined(__cpp_rtti) && !defined(_CPPRTTI)
 #error "Legacy script forms require RTTI; select R3 with a capable Core or use a forms-disabled Core profile"
 #endif
+
+// Node identity has its own memory/dependency policy in either Event mode.
+#ifndef JELLYFRAME_SCRIPT_NODE_IDENTITY
+#define JELLYFRAME_SCRIPT_NODE_IDENTITY 0
+#endif
+#if JELLYFRAME_SCRIPT_NODE_IDENTITY != 0 && JELLYFRAME_SCRIPT_NODE_IDENTITY != 1
+#error "JELLYFRAME_SCRIPT_NODE_IDENTITY must be 0 or 1"
+#endif

@@ -236,6 +236,17 @@ noncancelable native dispatch result or suppress its default action. Hosts must
 consume `ScriptCallbackFailure`. Operation/worker owner guards apply in both
 modes, while whole-native-dispatch retention requires explicit R3 mode.
 
+`JELLYFRAME_ENABLE_NODE_IDENTITY` independently enables canonical Node wrappers
+in either Event mode and defaults to `OFF`. Enabling it requires patched
+JerryScript WeakRef support and a cache capacity from 1 through 1024. The
+default 256-slot table uses 5 KiB of ESP32-S3 native metadata plus VM weak
+objects. Auxiliary helper bindings have a separate default cap of 256.
+
+Document binding reports checked publication failure. Busy or immutable-global
+preflight refusal preserves the existing document. Failure after replacement
+begins stops the session and invalidates its bindings. Hosts read the failure
+latch and create a fresh Runtime to recover from that terminal state.
+
 The scripting shell supports classic inline/local scripts, small DOM mutation
 APIs, event listeners, form properties, host-pumped timers, host-optional XHR V0
 and tiny `localStorage` V0. ES modules, remote page loading, full browser

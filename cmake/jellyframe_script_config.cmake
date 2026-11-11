@@ -1,16 +1,25 @@
 include_guard(GLOBAL)
 option(JELLYFRAME_ENABLE_R3_SCRIPT_EVENTS
     "Opt in to Core v1 dispatch completion/failure and shared script Events" OFF)
+option(JELLYFRAME_ENABLE_NODE_IDENTITY
+    "Reuse bounded canonical Node wrappers using the patched JerryScript WeakRef support" OFF)
 get_filename_component(_jellyframe_event_module_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set_property(GLOBAL PROPERTY JELLYFRAME_SCRIPT_EVENT_MODULE_ROOT "${_jellyframe_event_module_root}")
 
-function(jellyframe_configure_script_events target visibility core_target)
+function(jellyframe_configure_script target visibility core_target)
     if(JELLYFRAME_ENABLE_R3_SCRIPT_EVENTS)
         set(policy 1)
     else()
         set(policy 0)
     endif()
-    target_compile_definitions(${target} ${visibility} JELLYFRAME_SCRIPT_R3_EVENTS=${policy})
+    if(JELLYFRAME_ENABLE_NODE_IDENTITY)
+        set(node_identity 1)
+    else()
+        set(node_identity 0)
+    endif()
+    target_compile_definitions(${target} ${visibility}
+        JELLYFRAME_SCRIPT_R3_EVENTS=${policy}
+        JELLYFRAME_SCRIPT_NODE_IDENTITY=${node_identity})
     get_property(module_root GLOBAL PROPERTY JELLYFRAME_SCRIPT_EVENT_MODULE_ROOT)
     get_target_property(core_includes ${core_target} INTERFACE_INCLUDE_DIRECTORIES)
     get_target_property(core_definitions ${core_target} INTERFACE_COMPILE_DEFINITIONS)
@@ -24,7 +33,8 @@ function(jellyframe_configure_script_events target visibility core_target)
     endforeach()
     # Selected Core includes must precede Runtime's bundled legacy Core.
     list(APPEND probe_includes "${module_root}/src")
-    set(probe_definitions "-DJELLYFRAME_SCRIPT_R3_EVENTS=${policy}")
+    set(probe_definitions "-DJELLYFRAME_SCRIPT_R3_EVENTS=${policy}"
+        "-DJELLYFRAME_SCRIPT_NODE_IDENTITY=${node_identity}")
     foreach(definition IN LISTS core_definitions)
         if(definition MATCHES "^[A-Za-z_][A-Za-z0-9_]*(=.*)?$")
             list(APPEND probe_definitions "-D${definition}")
@@ -40,7 +50,7 @@ function(jellyframe_configure_script_events target visibility core_target)
         # change inside a mutable development build directory.
         unset(JELLYFRAME_SCRIPT_EVENT_POLICY_VALID CACHE)
         check_cxx_source_compiles(
-            "#include \"script/script_event_capabilities.h\"\nint main() { return 0; }"
+            "#include \"script/script_capabilities.h\"\nint main() { return 0; }"
             JELLYFRAME_SCRIPT_EVENT_POLICY_VALID)
         if(NOT JELLYFRAME_SCRIPT_EVENT_POLICY_VALID)
             message(FATAL_ERROR
@@ -51,5 +61,5 @@ function(jellyframe_configure_script_events target visibility core_target)
     # unit. No link-time probe of an unbuilt IDF component is attempted here.
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/script-event-policy-${target}.txt"
-        "r3Events=${policy}\ncoreTarget=${core_target}\ncoreIncludes=${core_includes}\ncoreDefinitions=${core_definitions}\n")
+        "r3Events=${policy}\nnodeIdentity=${node_identity}\ncoreTarget=${core_target}\ncoreIncludes=${core_includes}\ncoreDefinitions=${core_definitions}\n")
 endfunction()

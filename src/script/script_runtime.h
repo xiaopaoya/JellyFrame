@@ -102,6 +102,11 @@ struct ScriptRuntimeOptions {
     std::size_t max_form_data_entries = 32;
     std::size_t max_form_data_bytes = 4096;
     std::size_t max_dom_nodes = 4096;
+    // With Node identity enabled, 1..1024 simultaneous canonical wrappers.
+    // The default uses 5 KiB of native slot metadata on a 32-bit target.
+    std::size_t max_node_wrapper_cache_entries = 256;
+    // Separate 0..1024 helper bound when Node identity is enabled.
+    std::size_t max_auxiliary_node_bindings = 256;
     std::size_t max_dom_depth = 64;
     std::size_t max_attributes_per_element = 64;
     std::size_t max_dom_string_bytes = 512 * 1024;
@@ -153,6 +158,9 @@ public:
     // Returns false without changing bindings while script execution or a DOM
     // dispatch completion is active. No pending document pointer is retained;
     // the host retries at a later idle boundary and keeps both owners alive.
+    // Immutable global publication slots also refuse before replacement. A
+    // failure after replacement begins stops this runtime and invalidates its
+    // wrappers. The host consumes callback failure and creates a new runtime.
     virtual bool bind_document(Node& document) = 0;
     // Optional tooling hook. Implementations must not retain a queue or add
     // work when the callback is null.

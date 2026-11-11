@@ -207,6 +207,12 @@ failure API 必须均为 version1；启用 forms 时还要求 Submit kind versio
 返回值或阻止其默认动作，宿主仍须消费 `ScriptCallbackFailure`。操作与 worker
 所有权保护在两种模式均生效，完整原生派发期间的保留保证要求显式 R3 模式。
 
+`JELLYFRAME_ENABLE_NODE_IDENTITY` 独立控制规范化 Node 包装对象，默认关闭，
+可配合两种 Event 模式。开启时要求已修补的 JerryScript WeakRef，缓存容量为
+1～1024，默认 256 项，在 ESP32-S3 上使用 5 KiB 原生表元数据并额外保留 VM
+弱引用对象。辅助对象绑定有独立预算。文档绑定的早期拒绝保留旧文档，替换开始后
+发生发布失败会停止会话并报告错误，宿主可重建 Runtime 恢复。
+
 脚本壳支持 classic inline/local scripts、小型 DOM mutation API、event listeners、
 表单属性、宿主泵动 timers、宿主可选 XHR V0 和极小 `localStorage` V0。ES modules、远程页面加载、
 完整浏览器存储和完整浏览器加载算法不属于嵌入式核心。

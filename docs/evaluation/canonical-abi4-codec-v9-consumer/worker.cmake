@@ -11,7 +11,7 @@ if(NOT JERRYSCRIPT_LIBRARIES)
     "${JERRYSCRIPT_ROOT}/build/lib/MinSizeRel/jerry-core.lib;${JERRYSCRIPT_ROOT}/build/lib/MinSizeRel/jerry-ext.lib;${JERRYSCRIPT_ROOT}/build/lib/MinSizeRel/jerry-port.lib")
 endif()
 include("${_worker_repo}/cmake/jellyframe_script_backend_jerryscript.cmake")
-include("${_worker_repo}/cmake/jellyframe_script_event_config.cmake")
+include("${_worker_repo}/cmake/jellyframe_script_config.cmake")
 file(COPY "${_worker_repo}/src/script/script_task_worker_runtime.cpp"
      DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/worker/src/script")
 file(COPY "${_worker_repo}/src/script/tests/script_task_worker_runtime_tests.cpp"
@@ -124,12 +124,13 @@ target_link_libraries(runtime_canonical_v9_script_api_consumer PRIVATE
 target_compile_features(runtime_canonical_v9_script_api_consumer PRIVATE cxx_std_17)
 target_compile_definitions(runtime_canonical_v9_script_api_consumer PRIVATE
   JELLYFRAME_ENABLE_SCRIPTING=1 JELLYFRAME_SCRIPT_ENGINE_JERRYSCRIPT=1
-  JELLYFRAME_TEST_ASSERTS_ENABLED=1 JELLYFRAME_SCRIPT_EVENT_TESTING=1)
+  JELLYFRAME_TEST_ASSERTS_ENABLED=1 JELLYFRAME_SCRIPT_EVENT_TESTING=1
+  JELLYFRAME_SCRIPT_IDENTITY_TESTING=1)
 if(MSVC)
   target_compile_options(runtime_canonical_v9_script_api_consumer PRIVATE /UNDEBUG)
 else()
   target_compile_options(runtime_canonical_v9_script_api_consumer PRIVATE -UNDEBUG)
 endif()
 add_test(NAME installed_runtime_canonical_v9_script_api COMMAND runtime_canonical_v9_script_api_consumer)
-jellyframe_configure_script_events(runtime_canonical_v9_worker_consumer PRIVATE JellyFrame::jellyframe_render_core)
-jellyframe_configure_script_events(runtime_canonical_v9_script_api_consumer PRIVATE JellyFrame::jellyframe_render_core)
+jellyframe_configure_script(runtime_canonical_v9_worker_consumer PRIVATE JellyFrame::jellyframe_render_core)
+jellyframe_configure_script(runtime_canonical_v9_script_api_consumer PRIVATE JellyFrame::jellyframe_render_core)

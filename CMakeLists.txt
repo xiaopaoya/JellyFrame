@@ -244,10 +244,10 @@ if(JELLYFRAME_BUILD_SCRIPTING)
         )
     endif()
     add_library(jellyframe_script ${JELLYFRAME_SCRIPT_SOURCES})
-    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_script_event_config.cmake")
-    jellyframe_configure_script_events(jellyframe_script PUBLIC jellyframe_render_core)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_script_config.cmake")
+    jellyframe_configure_script(jellyframe_script PUBLIC jellyframe_render_core)
     if(JELLYFRAME_BUILD_TESTS)
-        target_compile_definitions(jellyframe_script PRIVATE JELLYFRAME_SCRIPT_EVENT_TESTING=1)
+        target_compile_definitions(jellyframe_script PRIVATE JELLYFRAME_SCRIPT_EVENT_TESTING=1 JELLYFRAME_SCRIPT_IDENTITY_TESTING=1)
     endif()
     target_link_libraries(jellyframe_script
         PUBLIC jellyframe_app_runtime
@@ -1278,7 +1278,7 @@ if(JELLYFRAME_BUILD_TESTS)
             ${JELLYFRAME_SCRIPT_TEST_SOURCES}
         )
         target_link_libraries(jellyframe_script_tests PRIVATE jellyframe_script)
-        target_compile_definitions(jellyframe_script_tests PRIVATE JELLYFRAME_SCRIPT_EVENT_TESTING=1)
+        target_compile_definitions(jellyframe_script_tests PRIVATE JELLYFRAME_SCRIPT_EVENT_TESTING=1 JELLYFRAME_SCRIPT_IDENTITY_TESTING=1)
         if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
             target_compile_definitions(jellyframe_script_tests
                 PRIVATE JELLYFRAME_SCRIPT_TASK_RUNTIME_ENABLED=1)
