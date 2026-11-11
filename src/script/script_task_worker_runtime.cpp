@@ -237,7 +237,10 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::strin
         set_fatal(ScriptTaskWorkerRuntimeFatalReason::ScriptWatchdog);
         return ScriptTaskWorkerRuntimeInitStatus::Fatal;
     }
-    runtime_->bind_document(*document_owner_.root());
+    if (!runtime_->bind_document(*document_owner_.root())) {
+        set_fatal(ScriptTaskWorkerRuntimeFatalReason::LoadFailure);
+        return ScriptTaskWorkerRuntimeInitStatus::Fatal;
+    }
     runtime_->bind_script_service_gateway(submit_service_request, this, cancel_service_request);
     service_gateway_available_ = true;
     style_resolver_ = std::make_unique<StyleResolver>(std::move(stylesheet));
@@ -600,7 +603,9 @@ bool ScriptTaskWorkerRuntime::consume_callback_failure() {
     }
     set_fatal(failure.status == ScriptCallbackFailureStatus::ExecutionBudgetExceeded
                   ? ScriptTaskWorkerRuntimeFatalReason::ScriptWatchdog
-                  : ScriptTaskWorkerRuntimeFatalReason::ScriptException);
+                  : failure.status == ScriptCallbackFailureStatus::ResourceLimit
+                      ? ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded
+                      : ScriptTaskWorkerRuntimeFatalReason::ScriptException);
     fatal_record_.message_bytes = std::min(failure.message.size(), options_.budgets.max_resource_bytes);
     return true;
 }

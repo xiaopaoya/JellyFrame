@@ -68,7 +68,9 @@ int main() {
     }
 
     std::unique_ptr<ScriptRuntime> runtime = create_script_runtime();
-    runtime->bind_document(*document);
+    if (!runtime->bind_document(*document)) {
+        throw std::runtime_error("script microbench document binding refused");
+    }
     const ScriptEvaluationResult setup = runtime->eval(
         "var cards = [];"
         "for (var index = 0; index < 32; ++index) {"

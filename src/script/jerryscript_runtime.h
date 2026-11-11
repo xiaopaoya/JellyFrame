@@ -33,7 +33,7 @@ public:
     JerryScriptRuntime(const JerryScriptRuntime&) = delete;
     JerryScriptRuntime& operator=(const JerryScriptRuntime&) = delete;
 
-    void bind_document(Node& document) override;
+    bool bind_document(Node& document) override;
     void set_dom_mutation_observer(ScriptDomMutationCallback callback, void* user) override;
     void bind_app_services(AppRuntimeHost& host, NetworkFetchMock& network) override;
     void bind_location_service(AppRuntimeHost& host, AppLocationSnapshotMock& location) override;

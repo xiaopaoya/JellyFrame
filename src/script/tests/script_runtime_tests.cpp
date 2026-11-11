@@ -13,14 +13,35 @@
 #include "render_core/layout.h"
 
 #include <cstdint>
+#include <cstdlib>
 #include <atomic>
 #include <iostream>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
 
 using namespace jellyframe;
+
+// Arm only from a native listener immediately before the script bridge. This
+// exercises a recoverable C++ allocation failure, not JerryScript heap OOM.
+thread_local int script_test_allocations_before_failure = -1;
+
+void* operator new(std::size_t size) {
+    if (script_test_allocations_before_failure == 0) {
+        script_test_allocations_before_failure = -1;
+        throw std::bad_alloc();
+    }
+    if (script_test_allocations_before_failure > 0) --script_test_allocations_before_failure;
+    if (void* value = std::malloc(size == 0 ? 1 : size)) return value;
+    throw std::bad_alloc();
+}
+void* operator new[](std::size_t size) { return ::operator new(size); }
+void operator delete(void* value) noexcept { std::free(value); }
+void operator delete[](void* value) noexcept { std::free(value); }
+void operator delete(void* value, std::size_t) noexcept { std::free(value); }
+void operator delete[](void* value, std::size_t) noexcept { std::free(value); }
 
 namespace {
 
@@ -697,6 +718,241 @@ void javascript_generic_click_event_does_not_fake_mouse_coordinates() {
     Event click("click");
     dispatch_event(*button, click);
     check(button->text_content() == "click:undefined", "generic click remains a base Event in JS");
+}
+
+void javascript_event_identity_is_shared_until_dispatch_completion() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    Node* body = find_first_by_tag(*document, "body");
+    Node* button = find_first_by_tag(*document, "button");
+    check(body != nullptr && button != nullptr, "event path nodes exist");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult result = runtime.eval(
+        "var body = document.body;"
+        "var button = document.getElementById('button');"
+        "var saved = null; var previous = null; var log = '';"
+        "body.addEventListener('click', function (event) {"
+        "  saved = event; event.mark = 'shared';"
+        "  log += 'c:' + String(event.eventPhase) + ':' + String(this === event.currentTarget) + ':';"
+        "}, true);"
+        "button.addEventListener('click', function (event) {"
+        "  log += 'tc:' + String(event === saved) + ':' + String(event.mark) + ':';"
+        "}, true);"
+        "button.addEventListener('click', function (event) {"
+        "  log += 't:' + String(event === saved) + ':' + String(this === event.currentTarget) + ':';"
+        "  event.preventDefault();"
+        "});"
+        "button.onclick = function (event) { log += 'p:' + String(event === saved) + ':'; };"
+        "body.addEventListener('click', function (event) {"
+        "  log += 'b:' + String(event === saved) + ':' + String(event.eventPhase) + ':';"
+        "}, false);"
+        "'ready'");
+    if (!result.ok) {
+        throw std::runtime_error("shared event listener setup failed: " + result.error);
+    }
+
+    Event first("click", true, true);
+    check(!dispatch_event(*button, first), "preventDefault remains shared through dispatch");
+    const ScriptEvaluationResult completed = runtime.eval(
+        "log + String(saved.currentTarget === null) + ':' + String(saved.eventPhase) + ':' +"
+        "String(saved.defaultPrevented) + ':' + String(previous !== saved)");
+    check(completed.ok, "completed Event snapshot can be read");
+    check(completed.value == "c:1:true:tc:true:shared:t:true:true:p:true:b:true:3:true:0:true:true",
+          "Event identity, expandos, phases, and final state persist across listeners");
+
+    const ScriptEvaluationResult save_previous = runtime.eval("previous = saved; 'saved'");
+    check(save_previous.ok, "previous Event snapshot is retained");
+    Event second("click", true, true);
+    check(!dispatch_event(*button, second), "second dispatch remains cancelable");
+    const ScriptEvaluationResult distinct = runtime.eval("String(saved !== previous)");
+    check(distinct.ok && distinct.value == "true", "sequential dispatches receive distinct Event objects");
+}
+
+void javascript_nested_event_identity_and_stop_cleanup_work() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    check(button != nullptr, "nested event target exists");
+
+    JerryScriptRuntime runtime;
+    runtime.bind_document(*document);
+    const ScriptEvaluationResult setup = runtime.eval(
+        "var button = document.getElementById('button');"
+        "var outer = null; var inner = null; var nested = false; var nestedDistinct = false;"
+        "var saved = null; var count = 0; var outerShared = false;"
+        "button.addEventListener('click', function (event) {"
+        "  if (!nested) { outer = event; nested = true; button.click();"
+        "    nestedDistinct = inner !== outer; }"
+        "  else { inner = event; }"
+        "}, { once: true });"
+        "button.addEventListener('click', function (event) {"
+        "  count++; if (!saved) saved = event;"
+        "  if (event === outer) outerShared = true;"
+        "  if (count === 1) throw new Error('listener failure');"
+        "  event.stopImmediatePropagation();"
+        "});"
+        "button.addEventListener('click', function () { count += 100; });"
+        "'ready'");
+    check(setup.ok, "nested and once listeners register");
+
+    Event first("click", true, true);
+    dispatch_event(*button, first);
+    const ScriptEvaluationResult completed = runtime.eval(
+        "String(nestedDistinct) + ':' + String(outerShared) + ':' + count + ':' +"
+        "String(saved.currentTarget === null) + ':' + saved.eventPhase");
+    if (!completed.ok || completed.value != "true:true:102:true:0") {
+        throw std::runtime_error("nested event completion result: " + completed.value + " / " + completed.error);
+    }
+
+    Event second("click", true, true);
+    dispatch_event(*button, second);
+    const ScriptEvaluationResult once = runtime.eval("String(count)");
+    check(once.ok && once.value == "103", "throwing once listener is removed and later dispatch completes");
+}
+
+void javascript_rebind_admission_preserves_active_callbacks_and_event_roots() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    auto replacement = parser.parse("<body><p id='new'>new</p></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    JerryScriptRuntime runtime;
+    check(runtime.bind_document(*document), "idle initial bind is admitted");
+    struct RebindAttempt {
+        ScriptRuntime* runtime;
+        Node* replacement;
+        unsigned refusals = 0;
+    } attempt{&runtime, replacement.get()};
+    runtime.set_dom_mutation_observer([](void* context, const Node&, DomDirtyFlags, std::uint64_t) {
+        auto& attempt = *static_cast<RebindAttempt*>(context);
+        if (!attempt.runtime->bind_document(*attempt.replacement)) ++attempt.refusals;
+    }, &attempt);
+    check(runtime.eval("document.body.setAttribute('data-probe', 'eval'); 'ready'").ok,
+          "eval continues after reentrant bind refusal");
+    check(attempt.refusals == 1, "bind is refused inside eval");
+    auto conversion = runtime.eval("({toString:function(){document.body.setAttribute('data-probe','conversion');return 'converted';}})");
+    check(conversion.ok && conversion.value == "converted" && attempt.refusals == 2,
+          "bind remains refused during eval result conversion after VM evaluation returns");
+    check(runtime.eval(
+        "var saved; var count = 0; var button = document.getElementById('button');"
+        "button.addEventListener('click', function(e) { saved=e; count++; this.textContent='changed'; });"
+        "button.onclick = function(e) { if(e===saved) count++; }; 'ready'").ok,
+        "callback rebind setup succeeds");
+    bool completion_rebind_refused = false;
+    button->add_event_listener("click", [&](Event&) {
+        completion_rebind_refused = !runtime.bind_document(*replacement);
+    });
+    Event click("click");
+    check(dispatch_event(*button, click), "rebind refusal does not abort ordinary dispatch");
+    check(attempt.refusals == 3, "bind is refused inside DOM callback");
+    check(completion_rebind_refused, "bind is refused after JS returns while Event root is still enrolled");
+    auto completed = runtime.eval("count + ':' + saved.currentTarget + ':' + saved.eventPhase");
+    check(completed.ok && completed.value == "2:null:0", "callbacks and final Event snapshot survive refusal");
+    check(runtime.bind_document(*replacement), "idle retry succeeds after completion roots drain");
+    auto rebound = runtime.eval("document.getElementById('new').textContent");
+    check(rebound.ok && rebound.value == "new", "successful retry publishes replacement document");
+}
+
+void javascript_event_identity_capacity_aborts_only_the_refused_dispatch() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    ScriptRuntimeOptions options;
+    options.max_active_event_dispatches = 1;
+    JerryScriptRuntime runtime(options);
+    check(runtime.bind_document(*document), "capacity test bind succeeds");
+    check(runtime.eval(
+        "var saved; var count=0; var button=document.getElementById('button');"
+        "button.addEventListener('click', function(e) { saved=e; count++; button.click(); });"
+        "button.onclick=function(e) { if(e===saved) count++; }; 'ready'").ok,
+        "capacity test listeners register");
+    Event outer("click", true, false);
+    check(dispatch_event(*button, outer) && !outer.dispatch_failed(), "outer admitted noncancelable dispatch completes");
+    check(runtime.take_script_callback_failure().status == ScriptCallbackFailureStatus::ResourceLimit,
+          "refused nested dispatch records a host resource failure");
+    auto state = runtime.eval("count + ':' + saved.currentTarget + ':' + saved.eventPhase");
+    check(state.ok && state.value == "2:null:0", "nested refusal delivers no undefined Event and outer identity remains shared");
+    Event later("click", true, false);
+    check(dispatch_event(*button, later) && !later.dispatch_failed(), "completion reclaims the one active record for later dispatch");
+    check(runtime.take_script_callback_failure().status == ScriptCallbackFailureStatus::ResourceLimit,
+          "later nested refusal is independently reported");
+    state = runtime.eval("String(count)");
+    check(state.ok && state.value == "4", "sequential admitted dispatch runs both callbacks");
+}
+
+void javascript_zero_event_capacity_and_native_allocation_refusal_fail_closed() {
+    for (bool property_handler : {false, true}) {
+        HtmlParser parser;
+        auto document = parser.parse("<body><button id='button'>0</button></body>");
+        Node* button = find_first_by_tag(*document, "button");
+        ScriptRuntimeOptions options;
+        options.max_active_event_dispatches = 0;
+        JerryScriptRuntime runtime(options);
+        check(runtime.bind_document(*document), "zero-capacity bind succeeds");
+        check(runtime.eval(property_handler
+            ? "var count=0; document.getElementById('button').onclick=function(e){count++;}; 'ready'"
+            : "var count=0; document.getElementById('button').addEventListener('click',function(e){count++;}); 'ready'").ok,
+            "zero-capacity listeners register normally");
+        unsigned later_native_calls = 0;
+        button->add_event_listener("click", [&](Event&) { ++later_native_calls; });
+        for (bool cancelable : {false, true}) {
+            Event refused("click", true, cancelable);
+            check(!dispatch_event(*button, refused) && refused.dispatch_failed(),
+                  "capacity refusal has a native failure outcome regardless of cancelability");
+            check(!refused.default_prevented(), "resource failure does not masquerade as preventDefault");
+            check(later_native_calls == 0, "capacity refusal stops later native listeners too");
+            check(runtime.take_script_callback_failure().status == ScriptCallbackFailureStatus::ResourceLimit,
+                  "zero capacity reports resource failure");
+        }
+        auto state = runtime.eval("String(count)");
+        check(state.ok && state.value == "0", "no callback receives an unpublished Event");
+        check(runtime.bind_document(*document), "refusal leaves no enrolled record behind");
+    }
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    JerryScriptRuntime runtime;
+    check(runtime.bind_document(*document), "allocation test bind succeeds");
+    int allocation_stage = 0;
+    auto arm = button->add_event_listener("click", [&](Event&) {
+        script_test_allocations_before_failure = allocation_stage;
+    });
+    check(runtime.eval(
+        "var count=0; document.getElementById('button').onclick=function(e){count++;}; 'ready'").ok,
+        "allocation test handler registers");
+    for (allocation_stage = 0; allocation_stage < 3; ++allocation_stage) {
+        Event refused("click", true, false);
+        check(!dispatch_event(*button, refused) && refused.dispatch_failed(), "native Event construction allocation refusal aborts dispatch");
+        check(script_test_allocations_before_failure == -1, "fault injection was consumed");
+        check(runtime.take_script_callback_failure().status == ScriptCallbackFailureStatus::ResourceLimit,
+              "native Event construction allocation refusal reports resource failure");
+    }
+    auto state = runtime.eval("String(count)");
+    check(state.ok && state.value == "0", "allocation refusal delivers no callback");
+    button->remove_event_listener(arm);
+    Event recovered("click", true, false);
+    check(dispatch_event(*button, recovered) && !recovered.dispatch_failed(), "dispatch recovers after native allocation refusal");
+    state = runtime.eval("String(count)");
+    check(state.ok && state.value == "1", "recovered callback receives a complete Event");
+}
+
+void javascript_event_publication_does_not_invoke_inherited_event_setters() {
+    HtmlParser parser;
+    auto document = parser.parse("<body><button id='button'>0</button></body>");
+    Node* button = find_first_by_tag(*document, "button");
+    JerryScriptRuntime runtime;
+    check(runtime.bind_document(*document), "publication test bind succeeds");
+    check(runtime.eval(
+        "var count=0; var setterCalls=0;"
+        "document.getElementById('button').onclick=function(e){if(e.type==='click')count++;};"
+        "Object.defineProperty(Object.prototype,'bubbles',{set:function(v){setterCalls++;throw new Error('poison');}, configurable:true});"
+        "Object.defineProperty(Object.prototype,'tagName',{set:function(v){setterCalls++;throw new Error('poison target');}, configurable:true});"
+        "'ready'").ok, "inherited event setter test setup succeeds");
+    Event event("click");
+    check(dispatch_event(*button, event) && !event.dispatch_failed(), "Event publication bypasses inherited setters");
+    auto state = runtime.eval("count + ':' + setterCalls");
+    check(state.ok && state.value == "1:0", "Event properties are published as checked own properties");
 }
 
 void javascript_event_prevent_default_and_remove_listener_work() {
@@ -2857,6 +3113,12 @@ int main() {
         javascript_detached_node_budget_is_bounded();
         javascript_click_listener_mutates_dom();
         javascript_generic_click_event_does_not_fake_mouse_coordinates();
+        javascript_event_identity_is_shared_until_dispatch_completion();
+        javascript_nested_event_identity_and_stop_cleanup_work();
+        javascript_rebind_admission_preserves_active_callbacks_and_event_roots();
+        javascript_event_identity_capacity_aborts_only_the_refused_dispatch();
+        javascript_zero_event_capacity_and_native_allocation_refusal_fail_closed();
+        javascript_event_publication_does_not_invoke_inherited_event_setters();
         javascript_event_prevent_default_and_remove_listener_work();
         javascript_event_object_survives_after_dispatch_as_snapshot();
         javascript_event_handler_properties_work();

@@ -6,6 +6,10 @@
 #include "app_runtime/system_events.h"
 #include "app_runtime/xml_http_request.h"
 #include "render_core/canvas2d.h"
+#include "render_core/event.h"
+#if !defined(JELLYFRAME_EVENT_DISPATCH_COMPLETION_API) || !defined(JELLYFRAME_EVENT_DISPATCH_FAILURE_API)
+#error "R3 shared Event identity requires Core dispatch completion and failure APIs"
+#endif
 #include "render_core/feature_config.h"
 #include "render_core/form_control.h"
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
@@ -26,6 +30,7 @@
 #include <sstream>
 #include <limits>
 #include <mutex>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -86,14 +91,41 @@ void finish_script_event_listener_callback(ScriptEventListener& listener) {
     }
 }
 
+class ScriptEventListenerCallbackScope {
+public:
+    explicit ScriptEventListenerCallbackScope(ScriptEventListener& listener) : listener_(&listener) {
+        ++listener_->callback_depth;
+    }
+    ~ScriptEventListenerCallbackScope() { finish(); }
+    void finish() {
+        if (listener_ != nullptr) {
+            finish_script_event_listener_callback(*listener_);
+            listener_ = nullptr;
+        }
+    }
+private:
+    ScriptEventListener* listener_;
+};
+
 } // namespace
 
 struct ScriptEventBinding {
     Event* event = nullptr;
+    jerry_value_t callback_this = 0;
     bool active = false;
     bool cancelable = false;
     bool default_prevented = false;
 };
+
+struct ScriptEventDispatchRecord {
+    EventDispatchCompletion completion;
+    Event* event = nullptr;
+    JerryScriptRuntime* runtime = nullptr;
+    jerry_value_t object = 0;
+    ScriptEventDispatchRecord* next = nullptr;
+};
+
+thread_local ScriptEventDispatchRecord* active_script_event_dispatches = nullptr;
 
 struct ScriptTimer {
     std::uint32_t id = 0;
@@ -508,6 +540,15 @@ struct ScriptRuntimeAccess {
                                                ScriptCallbackFailureStatus status,
                                                std::string message) {
         runtime.record_script_callback_failure(status, std::move(message));
+    }
+
+    // Allocation failure paths cannot allocate a diagnostic string. The enum
+    // remains observable even when no diagnostic storage can be acquired.
+    static void record_event_failure(JerryScriptRuntime& runtime,
+                                     ScriptCallbackFailureStatus status = ScriptCallbackFailureStatus::ResourceLimit) noexcept {
+        if (!runtime.callback_failure_.failed()) {
+            runtime.callback_failure_.status = status;
+        }
     }
 
     static std::string location_hash(const JerryScriptRuntime& runtime) {
@@ -1763,7 +1804,6 @@ jerry_value_t event_prevent_default(const jerry_call_info_t* call_info_p,
     } else if (binding->cancelable) {
         binding->default_prevented = true;
     }
-    set_bool_property(call_info_p->this_value, "defaultPrevented", binding->default_prevented);
     return jerry_undefined();
 }
 
@@ -1854,76 +1894,255 @@ void set_property(jerry_value_t object, const char* name, jerry_value_t value);
 void set_method(jerry_value_t object, const char* name, jerry_external_handler_t handler);
 jerry_value_t make_node_wrapper(JerryScriptRuntime& runtime, Node& node, bool document_methods);
 
-jerry_value_t make_event_object(JerryScriptRuntime& runtime, Event& event) {
+jerry_value_t event_get_phase(const jerry_call_info_t* call_info_p,
+                              const jerry_value_t[],
+                              const jerry_length_t) {
+    ScriptEventBinding* binding = native_event_binding(call_info_p->this_value);
+    return jerry_number(binding != nullptr && binding->active && binding->event != nullptr
+        ? static_cast<int>(binding->event->event_phase())
+        : static_cast<int>(EventPhase::None));
+}
+
+jerry_value_t event_get_current_target(const jerry_call_info_t* call_info_p,
+                                       const jerry_value_t[],
+                                       const jerry_length_t) {
+    ScriptEventBinding* binding = native_event_binding(call_info_p->this_value);
+    JerryScriptRuntime* runtime = native_runtime(call_info_p->this_value);
+    if (binding == nullptr || runtime == nullptr || !binding->active || binding->event == nullptr ||
+        binding->event->current_target() == nullptr) {
+        return jerry_null();
+    }
+    if (binding->callback_this != 0) {
+        return jerry_value_copy(binding->callback_this);
+    }
+    return make_node_wrapper(*runtime,
+                             *const_cast<Node*>(binding->event->current_target()),
+                             false);
+}
+
+jerry_value_t event_get_default_prevented(const jerry_call_info_t* call_info_p,
+                                          const jerry_value_t[],
+                                          const jerry_length_t) {
+    ScriptEventBinding* binding = native_event_binding(call_info_p->this_value);
+    if (binding == nullptr) {
+        return jerry_boolean(false);
+    }
+    if (binding->active && binding->event != nullptr) {
+        binding->default_prevented = binding->event->default_prevented();
+    }
+    return jerry_boolean(binding->default_prevented);
+}
+
+// Existing Node wrapper helpers ordinarily discard property-definition errors.
+// During Event construction they must use checked own properties for target and
+// currentTarget wrappers. This stack scope adds no queue and owns no JS values.
+thread_local bool* active_object_construction_failure = nullptr;
+class ScriptObjectConstructionScope {
+public:
+    ScriptObjectConstructionScope() : previous_(active_object_construction_failure) {
+        active_object_construction_failure = &failed_;
+    }
+    ~ScriptObjectConstructionScope() { active_object_construction_failure = previous_; }
+    bool failed() const { return failed_; }
+private:
+    bool* previous_;
+    bool failed_ = false;
+};
+
+void note_object_construction_result(jerry_value_t result) {
+    if (active_object_construction_failure != nullptr &&
+        (jerry_value_is_exception(result) || !jerry_value_is_true(result))) {
+        *active_object_construction_failure = true;
+    }
+}
+
+bool define_event_getter(jerry_value_t object,
+                         const char* property,
+                         jerry_external_handler_t getter) {
+    jerry_property_descriptor_t descriptor = jerry_property_descriptor();
+    descriptor.flags = JERRY_PROP_IS_GET_DEFINED | JERRY_PROP_IS_CONFIGURABLE_DEFINED |
+        JERRY_PROP_IS_CONFIGURABLE;
+    descriptor.getter = jerry_function_external(getter);
+    JerryValue name(jerry_string_sz(property));
+    JerryValue result(jerry_object_define_own_prop(object, name.get(), &descriptor));
+    const bool ok = !jerry_value_is_exception(result.get()) && jerry_value_is_true(result.get());
+    jerry_property_descriptor_free(&descriptor);
+    return ok;
+}
+
+// Define own data properties instead of invoking attacker-supplied inherited
+// setters during publication of a native Event object. Every result is checked.
+bool define_event_value(jerry_value_t object, const char* property, jerry_value_t value) {
+    if (jerry_value_is_exception(value)) return false;
+    jerry_property_descriptor_t descriptor = jerry_property_descriptor();
+    descriptor.flags = JERRY_PROP_IS_VALUE_DEFINED | JERRY_PROP_IS_WRITABLE_DEFINED |
+        JERRY_PROP_IS_WRITABLE | JERRY_PROP_IS_ENUMERABLE_DEFINED | JERRY_PROP_IS_ENUMERABLE |
+        JERRY_PROP_IS_CONFIGURABLE_DEFINED | JERRY_PROP_IS_CONFIGURABLE;
+    descriptor.value = jerry_value_copy(value);
+    JerryValue name(jerry_string_sz(property));
+    JerryValue result(jerry_object_define_own_prop(object, name.get(), &descriptor));
+    const bool ok = !jerry_value_is_exception(result.get()) && jerry_value_is_true(result.get());
+    jerry_property_descriptor_free(&descriptor);
+    return ok;
+}
+
+jerry_value_t create_event_object(JerryScriptRuntime& runtime, Event& event) {
+    ScriptObjectConstructionScope construction;
     JerryValue object(jerry_object());
-    auto* binding = new ScriptEventBinding{&event, true, event.cancelable(), event.default_prevented()};
+    auto* binding = new ScriptEventBinding{&event, 0, true, event.cancelable(), event.default_prevented()};
     jerry_object_set_native_ptr(object.get(), &kEventNativeInfo, binding);
     jerry_object_set_native_ptr(object.get(), &kRuntimeNativeInfo, &runtime);
 
-    set_property(object.get(), "type", string_to_value(event.type()).get());
-    set_number_property(object.get(), "eventPhase", static_cast<int>(event.event_phase()));
-    set_bool_property(object.get(), "bubbles", event.bubbles());
-    set_bool_property(object.get(), "cancelable", event.cancelable());
-    set_bool_property(object.get(), "defaultPrevented", event.default_prevented());
+    bool ok = true;
+    const auto value = [&](const char* name, jerry_value_t v) {
+        ok = define_event_value(object.get(), name, v) && ok;
+    };
+    const auto number = [&](const char* name, double v) { value(name, JerryValue(jerry_number(v)).get()); };
+    const auto boolean = [&](const char* name, bool v) { value(name, jerry_boolean(v)); };
+    value("type", string_to_value(event.type()).get());
+    boolean("bubbles", event.bubbles());
+    boolean("cancelable", event.cancelable());
+    ok = define_event_getter(object.get(), "eventPhase", event_get_phase) && ok;
+    ok = define_event_getter(object.get(), "currentTarget", event_get_current_target) && ok;
+    ok = define_event_getter(object.get(), "defaultPrevented", event_get_default_prevented) && ok;
 
     if (event.target() != nullptr) {
-        set_property(object.get(), "target", JerryValue(make_node_wrapper(runtime, *const_cast<Node*>(event.target()), false)).get());
+        value("target", JerryValue(make_node_wrapper(runtime, *const_cast<Node*>(event.target()), false)).get());
     } else {
-        set_property(object.get(), "target", jerry_null());
+        value("target", jerry_null());
     }
-    if (event.current_target() != nullptr) {
-        set_property(object.get(), "currentTarget",
-                     JerryValue(make_node_wrapper(runtime, *const_cast<Node*>(event.current_target()), false)).get());
-    } else {
-        set_property(object.get(), "currentTarget", jerry_null());
-    }
-
     if (event.kind() == EventKind::Mouse || event.kind() == EventKind::Wheel) {
         const auto& mouse = static_cast<const MouseEvent&>(event);
-        set_number_property(object.get(), "clientX", mouse.client_x);
-        set_number_property(object.get(), "clientY", mouse.client_y);
-        set_number_property(object.get(), "button", mouse.button);
-        set_number_property(object.get(), "buttons", mouse.buttons);
-        set_bool_property(object.get(), "altKey", mouse.alt_key);
-        set_bool_property(object.get(), "ctrlKey", mouse.ctrl_key);
-        set_bool_property(object.get(), "metaKey", mouse.meta_key);
-        set_bool_property(object.get(), "shiftKey", mouse.shift_key);
+        number("clientX", mouse.client_x);
+        number("clientY", mouse.client_y);
+        number("button", mouse.button);
+        number("buttons", mouse.buttons);
+        boolean("altKey", mouse.alt_key);
+        boolean("ctrlKey", mouse.ctrl_key);
+        boolean("metaKey", mouse.meta_key);
+        boolean("shiftKey", mouse.shift_key);
     }
     if (event.kind() == EventKind::Wheel) {
         const auto& wheel = static_cast<const WheelEvent&>(event);
-        set_number_property(object.get(), "deltaX", wheel.delta_x);
-        set_number_property(object.get(), "deltaY", wheel.delta_y);
-        set_number_property(object.get(), "deltaMode", wheel.delta_mode);
+        number("deltaX", wheel.delta_x);
+        number("deltaY", wheel.delta_y);
+        number("deltaMode", wheel.delta_mode);
     }
 #if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
     if (const auto* submit = dynamic_cast<const SubmitEvent*>(&event)) {
         if (submit->submitter() != nullptr) {
-            set_property(object.get(), "submitter",
+            value("submitter",
                          JerryValue(make_node_wrapper(runtime,
                                                       *const_cast<Node*>(submit->submitter()),
                                                       false)).get());
         } else {
-            set_property(object.get(), "submitter", jerry_null());
+            value("submitter", jerry_null());
         }
     }
 #endif
 
-    set_method(object.get(), "preventDefault", event_prevent_default);
-    set_method(object.get(), "stopPropagation", event_stop_propagation);
-    set_method(object.get(), "stopImmediatePropagation", event_stop_immediate_propagation);
+    value("preventDefault", JerryValue(jerry_function_external(event_prevent_default)).get());
+    value("stopPropagation", JerryValue(jerry_function_external(event_stop_propagation)).get());
+    value("stopImmediatePropagation", JerryValue(jerry_function_external(event_stop_immediate_propagation)).get());
+    if (!ok || construction.failed()) {
+        binding->event = nullptr;
+        binding->active = false;
+        return jerry_undefined();
+    }
     return object.release();
 }
 
-void invalidate_event_object(jerry_value_t object) {
-    ScriptEventBinding* binding = native_event_binding(object);
-    if (binding == nullptr) {
+void finish_event_dispatch(Event& event, void* context) noexcept {
+    auto* record = static_cast<ScriptEventDispatchRecord*>(context);
+    if (record == nullptr) {
         return;
     }
-    if (binding->event != nullptr) {
-        binding->default_prevented = binding->event->default_prevented();
+    ScriptEventDispatchRecord** link = &active_script_event_dispatches;
+    while (*link != nullptr && *link != record) {
+        link = &(*link)->next;
     }
-    binding->event = nullptr;
-    binding->active = false;
+    if (*link == record) {
+        *link = record->next;
+    }
+    ScriptEventBinding* binding = native_event_binding(record->object);
+    if (binding != nullptr) {
+        binding->default_prevented = event.default_prevented();
+        binding->event = nullptr;
+        binding->active = false;
+    }
+    if (record->object != 0) {
+        jerry_value_free(record->object);
+        record->object = 0;
+    }
+    record->event = nullptr;
+    record->runtime = nullptr;
+    delete record;
+}
+
+jerry_value_t make_event_object(JerryScriptRuntime& runtime, Event& event) {
+    std::size_t active_count = 0;
+    for (ScriptEventDispatchRecord* record = active_script_event_dispatches;
+         record != nullptr;
+         record = record->next) {
+        if (record->event == &event && record->runtime == &runtime && record->object != 0) {
+            return jerry_value_copy(record->object);
+        }
+        if (record->runtime == &runtime) ++active_count;
+    }
+
+    ScriptCallbackFailureStatus failure_status = ScriptCallbackFailureStatus::ResourceLimit;
+    if (active_count < ScriptRuntimeAccess::options(runtime).max_active_event_dispatches) {
+        try {
+            auto record = std::make_unique<ScriptEventDispatchRecord>();
+            record->event = &event;
+            record->runtime = &runtime;
+            // Enroll/link before constructing wrappers: wrapper creation may
+            // reenter through existing Node-wrapper hooks. Admission and the
+            // capacity ledger include this unpublished record too.
+            if (attach_event_dispatch_completion(event, record->completion,
+                                                 finish_event_dispatch, record.get())) {
+                record->next = active_script_event_dispatches;
+                active_script_event_dispatches = record.get();
+                try {
+                    JerryValue object(create_event_object(runtime, event));
+                    if (jerry_value_is_object(object.get()) && !event.dispatch_failed()) {
+                        record->object = object.release();
+                        ScriptEventDispatchRecord* enrolled = record.release();
+                        return jerry_value_copy(enrolled->object);
+                    }
+                    failure_status = ScriptCallbackFailureStatus::Exception;
+                } catch (const std::bad_alloc&) {
+                    // No partially built Event is delivered to a listener.
+                }
+                active_script_event_dispatches = record->next;
+            } else {
+                failure_status = ScriptCallbackFailureStatus::Exception;
+            }
+        } catch (const std::bad_alloc&) {
+            // Native record allocation is recoverable. JerryScript's own
+            // fatal heap exhaustion does not return through this path.
+        }
+    }
+    ScriptRuntimeAccess::record_event_failure(runtime, failure_status);
+    (void) fail_event_dispatch(event);
+    return jerry_undefined();
+}
+
+jerry_value_t make_event_listener_this(JerryScriptRuntime& runtime, Event& event) {
+    try {
+        ScriptObjectConstructionScope construction;
+        JerryValue object(event.current_target() != nullptr
+            ? make_node_wrapper(runtime, *const_cast<Node*>(event.current_target()), false)
+            : jerry_undefined());
+        if (!construction.failed() && !jerry_value_is_exception(object.get()) && !event.dispatch_failed()) {
+            return object.release();
+        }
+        ScriptRuntimeAccess::record_event_failure(runtime, ScriptCallbackFailureStatus::Exception);
+    } catch (const std::bad_alloc&) {
+        ScriptRuntimeAccess::record_event_failure(runtime);
+    }
+    (void) fail_event_dispatch(event);
+    return jerry_undefined();
 }
 
 jerry_value_t make_window_event_object(const char* type, jerry_value_t target) {
@@ -3115,8 +3334,14 @@ jerry_value_t node_remove(const jerry_call_info_t* call_info_p,
                           const jerry_length_t args_count);
 
 void set_property(jerry_value_t object, const char* name, jerry_value_t value) {
+    if (active_object_construction_failure != nullptr) {
+        // Event target/currentTarget staging must not run inherited setters:
+        // those can dispose the Node while make_node_wrapper still reads it.
+        if (!define_event_value(object, name, value)) *active_object_construction_failure = true;
+        return;
+    }
     JerryValue result(jerry_object_set_sz(object, name, value));
-    (void) result;
+    note_object_construction_result(result.get());
 }
 
 void delete_property(jerry_value_t object, const char* name) {
@@ -3158,7 +3383,7 @@ void define_accessor(jerry_value_t object,
 
     JerryValue name(jerry_string_sz(property));
     JerryValue result(jerry_object_define_own_prop(object, name.get(), &descriptor));
-    (void) result;
+    note_object_construction_result(result.get());
     jerry_property_descriptor_free(&descriptor);
 }
 
@@ -6336,13 +6561,22 @@ jerry_value_t window_remove_event_listener(const jerry_call_info_t* call_info_p,
 } // namespace
 
 ScriptNodeBinding* JerryScriptRuntime::bind_script_node(Node& node) {
-    auto* binding = new ScriptNodeBinding{this, &node, {}, true, false, false};
-    node_bindings_.push_back(binding);
-    if (std::find(observed_nodes_.begin(), observed_nodes_.end(), &node) == observed_nodes_.end()) {
+    auto binding = std::make_unique<ScriptNodeBinding>(ScriptNodeBinding{this, &node, {}, true, false, false});
+    const bool observe = std::find(observed_nodes_.begin(), observed_nodes_.end(), &node) == observed_nodes_.end();
+    // All fallible allocations precede publication. In particular, failure to
+    // grow either ledger cannot leave a raw binding or an untracked observer.
+    if (node_bindings_.size() == node_bindings_.capacity()) {
+        node_bindings_.reserve(std::max<std::size_t>(8, node_bindings_.size() * 2));
+    }
+    if (observe) {
+        if (observed_nodes_.size() == observed_nodes_.capacity()) {
+            observed_nodes_.reserve(std::max<std::size_t>(8, observed_nodes_.size() * 2));
+        }
         node.add_destroy_observer(script_node_destroyed, this);
         observed_nodes_.push_back(&node);
     }
-    return binding;
+    node_bindings_.push_back(binding.get());
+    return binding.release();
 }
 
 Node* JerryScriptRuntime::resolve_script_node(const ScriptNodeBinding& binding) const {
@@ -6623,7 +6857,12 @@ JerryScriptRuntime::~JerryScriptRuntime() {
     }
 }
 
-void JerryScriptRuntime::bind_document(Node& document) {
+bool JerryScriptRuntime::bind_document(Node& document) {
+    if (script_execution_depth_ != 0) return false;
+    for (auto* record = active_script_event_dispatches; record != nullptr; record = record->next) {
+        if (record->runtime == this) return false;
+    }
+    ScriptDomMutationScope operation_scope(*this);
     callback_failure_ = {};
     clear_xml_http_requests();
     clear_audio_elements();
@@ -6747,6 +6986,7 @@ void JerryScriptRuntime::bind_document(Node& document) {
         delete_property(global.get(), "localStorage");
     }
     install_script_service_gateway();
+    return true;
 }
 
 void JerryScriptRuntime::set_dom_mutation_observer(ScriptDomMutationCallback callback, void* user) {
@@ -6975,6 +7215,9 @@ void JerryScriptRuntime::clear_app_services() {
 }
 
 ScriptEvaluationResult JerryScriptRuntime::eval(std::string_view source, std::string_view source_name) {
+    // Conversion can invoke user toString() after evaluation has returned.
+    // Keep admission closed until conversion and local roots have drained.
+    ScriptDomMutationScope operation_scope(*this);
     callback_failure_ = {};
     ScriptEvaluationResult output;
 
@@ -7655,17 +7898,25 @@ void JerryScriptRuntime::add_script_event_listener(Node& node,
         }
 
         JerryScriptRuntime* const runtime = raw->runtime;
-        JerryValue this_value(event.current_target() != nullptr
-            ? make_node_wrapper(*runtime, *const_cast<Node*>(event.current_target()), false)
-            : jerry_undefined());
+        // Wrapper construction can reenter JS through existing Node helpers;
+        // retain the callback and listener record before constructing anything.
+        ScriptEventListenerCallbackScope callback_scope(*raw);
         JerryValue event_object(make_event_object(*runtime, event));
+        if (!jerry_value_is_object(event_object.get())) return;
+        JerryValue this_value(make_event_listener_this(*runtime, event));
+        if (event.dispatch_failed() || !raw->active || raw->callback == 0) return;
+        ScriptEventBinding* const event_binding = native_event_binding(event_object.get());
         const jerry_value_t event_arg = event_object.get();
-        ++raw->callback_depth;
+        if (event_binding != nullptr) {
+            event_binding->callback_this = this_value.get();
+        }
         JerryValue result(run_with_execution_budget(*runtime, [&]() {
             return jerry_call(raw->callback, this_value.get(), &event_arg, 1);
         }));
-        finish_script_event_listener_callback(*raw);
-        invalidate_event_object(event_object.get());
+        if (event_binding != nullptr) {
+            event_binding->callback_this = 0;
+        }
+        callback_scope.finish();
         if (jerry_value_is_exception(result.get())) {
             JerryValue exception_value(jerry_exception_value(result.release(), true));
             (void) exception_value;
@@ -7733,17 +7984,25 @@ void JerryScriptRuntime::set_script_event_handler(Node& node, std::string type, 
         }
 
         JerryScriptRuntime* const runtime = raw->runtime;
-        JerryValue this_value(event.current_target() != nullptr
-            ? make_node_wrapper(*runtime, *const_cast<Node*>(event.current_target()), false)
-            : jerry_undefined());
+        // Wrapper construction can reenter JS through existing Node helpers;
+        // retain the callback and listener record before constructing anything.
+        ScriptEventListenerCallbackScope callback_scope(*raw);
         JerryValue event_object(make_event_object(*runtime, event));
+        if (!jerry_value_is_object(event_object.get())) return;
+        JerryValue this_value(make_event_listener_this(*runtime, event));
+        if (event.dispatch_failed() || !raw->active || raw->callback == 0) return;
+        ScriptEventBinding* const event_binding = native_event_binding(event_object.get());
         const jerry_value_t event_arg = event_object.get();
-        ++raw->callback_depth;
+        if (event_binding != nullptr) {
+            event_binding->callback_this = this_value.get();
+        }
         JerryValue result(run_with_execution_budget(*runtime, [&]() {
             return jerry_call(raw->callback, this_value.get(), &event_arg, 1);
         }));
-        finish_script_event_listener_callback(*raw);
-        invalidate_event_object(event_object.get());
+        if (event_binding != nullptr) {
+            event_binding->callback_this = 0;
+        }
+        callback_scope.finish();
         if (jerry_value_is_exception(result.get())) {
             JerryValue exception_value(jerry_exception_value(result.release(), true));
             (void) exception_value;

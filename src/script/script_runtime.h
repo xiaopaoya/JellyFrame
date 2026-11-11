@@ -41,6 +41,7 @@ enum class ScriptCallbackFailureStatus : std::uint8_t {
     None,
     Exception,
     ExecutionBudgetExceeded,
+    ResourceLimit,
 };
 
 struct ScriptCallbackFailure {
@@ -105,6 +106,9 @@ struct ScriptRuntimeOptions {
     std::size_t max_attributes_per_element = 64;
     std::size_t max_dom_string_bytes = 512 * 1024;
     std::size_t max_service_callbacks = 16;
+    // Shared DOM Event roots retained until Core dispatch completion. This is
+    // a simultaneous dispatch bound, independent of the listener/VM budgets.
+    std::size_t max_active_event_dispatches = 32;
 };
 
 ScriptRuntimeOptions script_runtime_options_from_host_budgets(const HostBudgets& budgets);
@@ -131,7 +135,10 @@ class ScriptRuntime {
 public:
     virtual ~ScriptRuntime() = default;
 
-    virtual void bind_document(Node& document) = 0;
+    // Returns false without changing bindings while script execution or a DOM
+    // dispatch completion is active. No pending document pointer is retained;
+    // the host retries at a later idle boundary and keeps both owners alive.
+    virtual bool bind_document(Node& document) = 0;
     // Optional tooling hook. Implementations must not retain a queue or add
     // work when the callback is null.
     virtual void set_dom_mutation_observer(ScriptDomMutationCallback callback, void* user) {
