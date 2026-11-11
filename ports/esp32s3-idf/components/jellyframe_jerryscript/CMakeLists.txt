@@ -1,4 +1,11 @@
+if(CMAKE_BUILD_EARLY_EXPANSION)
+    # The requirements subprocess has no JELLYFRAME_BUILD_SCRIPTING cache value.
+    idf_component_register(REQUIRES esp_timer freertos heap log)
+    return()
+endif()
+
 if(NOT JELLYFRAME_BUILD_SCRIPTING)
+    idf_component_register()
     return()
 endif()
 
