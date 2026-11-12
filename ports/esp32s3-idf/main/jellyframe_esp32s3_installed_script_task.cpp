@@ -385,10 +385,17 @@ void ui_entry(void* raw) {
     jellyframe::SoftwareRasterizerScratch scratch;
     std::uint32_t input_sequence = 1;
     while (!state->stop.load()) {
+#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+        jellyframe::ScriptTaskAcceptedAppFrame frame;
+        const auto take_status = jellyframe::take_script_task_app_frame(
+            *state->protocol, state->script_session, frame_codec_options(), frame);
+        const std::uint32_t packet_sequence = frame.sequence();
+#else
         jellyframe::ScriptTaskAppFrame frame;
         std::uint32_t packet_sequence = 0;
         const auto take_status = jellyframe::take_script_task_app_frame(
             *state->protocol, state->script_session, frame_codec_options(), frame, &packet_sequence);
+#endif
         if (take_status == jellyframe::ScriptTaskAppFrameTakeStatus::Accepted) {
             const jellyframe::Rect full{0, 0, width, height};
             jellyframe::ScriptTaskFrameRenderStatus render_status;
