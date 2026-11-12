@@ -374,10 +374,16 @@ void image_surface_cache_requests_resolves_and_releases_surfaces() {
     AppImageSurfaceCache cache;
 
     std::uint32_t handle = 99;
+    check(!cache.ready_handle(host, "/icon", &handle) && handle == 0,
+          "ready-only missing lookup clears output");
+    check(host.requests().size() == 0 && cache.size() == 0,
+          "ready-only missing lookup neither submits nor inserts");
     check(!cache.resolve_or_request(host, images, "/icon", &handle), "image cache miss submits decode");
     check(handle == 0, "image cache miss clears output handle");
     check(cache.state_for_url("/icon") == AppImageSurfaceState::Pending, "image cache pending state");
     check(host.requests().size() == 1, "image cache queued one request");
+    check(!cache.ready_handle(host, "/icon", &handle), "ready-only pending lookup unknown");
+    check(host.requests().size() == 1, "ready-only pending lookup never resubmits");
     check(!cache.resolve_or_request(host, images, "/icon", &handle), "image cache pending does not duplicate request");
     check(host.requests().size() == 1, "image cache still has one request");
 
@@ -395,6 +401,34 @@ void image_surface_cache_requests_resolves_and_releases_surfaces() {
     check(cache.release_all(host, images) == 1, "image cache releases one surface");
     check(images.surface(handle) == nullptr, "image cache release drops surface record");
     check(cache.size() == 0, "image cache clear after release");
+}
+
+void image_surface_cache_ready_lookup_rejects_released_and_old_app_handles() {
+    AppRuntimeHost host = make_host();
+    host.launch("org.example.gallery", AppRole::App);
+    ImageDecodeMock images(ImageDecodePolicy{true, 64, 16, 16, 16 * 16 * 2, 2});
+    check(images.add_fixture(ImageDecodeFixture{"/icon", 8, 8, 8, HostPixelFormat::Rgb565, {}}),
+          "ready-only stale fixture");
+    AppImageSurfaceCache cache;
+    std::uint32_t handle = 0;
+    cache.resolve_or_request(host, images, "/icon", &handle);
+    check(images.complete_next(host), "ready-only stale decode");
+    auto accepted = pump(host);
+    check(cache.handle_completion(accepted.front()), "ready-only stale completion");
+    check(cache.ready_handle(host, "/icon", &handle), "ready-only valid handle");
+    check(images.release_surface(host, handle), "ready-only external release");
+    handle = 99;
+    check(!cache.ready_handle(host, "/icon", &handle) && handle == 0,
+          "ready-only rejects released handle");
+    check(cache.ready_surface_count() == 1 && host.requests().size() == 0,
+          "ready-only stale lookup does not reconcile or submit");
+    check(!cache.resolve_or_request(host, images, "/icon", &handle), "normal lookup repairs stale entry");
+    check(images.complete_next(host), "ready-only replacement decode");
+    accepted = pump(host);
+    check(cache.handle_completion(accepted.front()), "ready-only replacement completion");
+    host.launch("org.example.next", AppRole::App);
+    check(!cache.ready_handle(host, "/icon", &handle) && handle == 0,
+          "ready-only rejects old app ownership");
 }
 
 void image_surface_cache_records_failed_decodes_without_retry_loop() {
@@ -643,6 +677,9 @@ void image_surface_cache_evicts_lru_ready_surfaces() {
     const std::uint32_t handle_a = cache_ready_image(host, images, cache, "/a");
     const std::uint32_t handle_b = cache_ready_image(host, images, cache, "/b");
     const std::uint32_t handle_c = cache_ready_image(host, images, cache, "/c");
+    std::uint32_t selected = 0;
+    check(cache.ready_handle(host, "/a", &selected) && selected == handle_a,
+          "ready-only lookup selects oldest handle without touching LRU");
     check(cache.ready_surface_count() == 3, "image cache eviction starts over surface budget");
     check(cache.evict_unreferenced(host, images) == 1, "image cache eviction releases one lru surface");
     check(images.surface(handle_a) == nullptr, "image cache eviction drops oldest surface");
@@ -1160,6 +1197,7 @@ int main() {
     image_decode_can_complete_worker_popped_request();
     image_decode_stale_worker_pending_is_collectable_after_app_switch();
     image_surface_cache_requests_resolves_and_releases_surfaces();
+    image_surface_cache_ready_lookup_rejects_released_and_old_app_handles();
     image_surface_cache_records_failed_decodes_without_retry_loop();
     image_surface_cache_keeps_transient_budget_rejections_retryable();
     image_surface_cache_records_permanent_request_rejections();

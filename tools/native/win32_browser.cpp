@@ -735,7 +735,11 @@ std::size_t mark_image_source_dirty(Node& document, const std::string& source) {
         pending.pop_back();
         if (current->type == NodeType::Element && current->tag_name == "img" &&
             current->attribute("src") == source) {
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
+            mark_dirty(*current, DomDirtyLayout | DomDirtyPaint);
+#else
             mark_dirty(*current, DomDirtyPaint);
+#endif
             ++marked;
         }
         for (const auto& child : current->children) {
@@ -743,6 +747,15 @@ std::size_t mark_image_source_dirty(Node& document, const std::string& source) {
         }
     }
     return marked;
+}
+
+bool has_dirty_image_attributes(const Node& node) {
+    if (node.type == NodeType::Element && node.tag_name == "img" &&
+        (node.local_dirty_flags & DomDirtyAttributes) != 0U) return true;
+    for (const auto& child : node.children) {
+        if (has_dirty_image_attributes(*child)) return true;
+    }
+    return false;
 }
 
 void add_package_image_fixtures(const Node& document,
@@ -2146,6 +2159,60 @@ bool resolve_browser_image_handle_impl(const Node& node,
     return resolved;
 }
 
+// The host never pumps completions or evicts between this synchronous lookup
+// and layer construction. Retain only selected identities, never dimensions.
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_LAYER_API_VERSION)
+ImageIntrinsicSize browser_surface_size(const AppDecodedSurfaceRecord& surface) {
+    if (surface.width <= 0 || surface.height <= 0 ||
+        surface.width > 8191 || surface.height > 8191)
+        return {ImageIntrinsicSizeState::Invalid, 0, 0};
+    return {ImageIntrinsicSizeState::Known, static_cast<std::uint16_t>(surface.width),
+            static_cast<std::uint16_t>(surface.height)};
+}
+
+#endif
+struct BrowserNaturalImageContext {
+    BrowserImageResolveContext* source;
+    std::vector<std::uint32_t>* selected;
+};
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
+ImageIntrinsicSize browser_natural_image_size(const Node& node, void* raw) {
+    auto& context = *static_cast<BrowserNaturalImageContext*>(raw);
+    auto& source = *context.source;
+    std::uint32_t handle = 0;
+    if (node.type != NodeType::Element || node.tag_name != "img" ||
+        !source.cache->ready_handle(*source.runtime, node.attribute("src"), &handle)) return {};
+    const auto* surface = source.images->surface(handle);
+    if (!surface) return {};
+    const auto size = browser_surface_size(*surface);
+    if (size.state == ImageIntrinsicSizeState::Known &&
+        std::find(context.selected->begin(), context.selected->end(), handle) == context.selected->end())
+        context.selected->push_back(handle); // at most max_queries (128) identities
+    return size;
+}
+
+#endif
+
+// Both-auto unknown images may have no paint geometry. Start bounded requests
+// outside the metadata callback, through exactly the usual resolver/diagnostics.
+void request_browser_content_images(const Node& node, BrowserImageResolveContext& source,
+                                    std::size_t& remaining) {
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
+    if (!remaining) return;
+    if (node.type == NodeType::Element && node.tag_name == "img") {
+        --remaining;
+        std::uint32_t handle = 0;
+        resolve_browser_image_handle_impl(node, ImageResolveKind::Content, 0, handle, &source);
+    }
+    for (const auto& child : node.children) {
+        if (!remaining) break;
+        request_browser_content_images(*child, source, remaining);
+    }
+#else
+    (void)node; (void)source; (void)remaining;
+#endif
+}
+
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_LAYER_API_VERSION)
 bool resolve_browser_image_handle(const Node& node,
                                   ImageResolveKind kind,
@@ -2157,16 +2224,7 @@ bool resolve_browser_image_handle(const Node& node,
                                            resource.image_handle, raw_context)) return false;
     auto* context = static_cast<BrowserImageResolveContext*>(raw_context);
     if (const AppDecodedSurfaceRecord* surface = context->images->surface(resource.image_handle)) {
-        if (surface->width <= 0 || surface->height <= 0 ||
-            surface->width > 8191 || surface->height > 8191) {
-            resource.intrinsic_size.state = ImageIntrinsicSizeState::Invalid;
-        } else {
-            resource.intrinsic_size = ImageIntrinsicSize{
-                ImageIntrinsicSizeState::Known,
-                static_cast<std::uint16_t>(surface->width),
-                static_cast<std::uint16_t>(surface->height),
-            };
-        }
+        resource.intrinsic_size = browser_surface_size(*surface);
     }
     return true;
 }
@@ -3834,6 +3892,13 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
     layout_options.diagnostics = &diagnostics;
     layout_options.text_system = text_backend.text_system;
+    std::vector<std::uint32_t> natural_handles;
+    BrowserNaturalImageContext natural_context{&image_resolve_context, &natural_handles};
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
+    layout_options.natural_image_sizing.provider = {browser_natural_image_size, &natural_context};
+#endif
+    std::size_t request_budget = 128;
+    request_browser_content_images(*page.document, image_resolve_context, request_budget);
     LayoutEngine layout_engine(resolver, text_backend.measure, layout_options);
     auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
@@ -3844,7 +3909,8 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
     LayerTreeBuilder layer_builder(layer_options);
     auto layer_tree = layer_builder.build(*layout_tree);
-    for (int pass = 0; pass < 4 && debug_images.complete_next(app_runtime); ++pass) {
+    int image_drain_pass = 0;
+    for (; image_drain_pass < 256 && debug_images.complete_next(app_runtime); ++image_drain_pass) {
         app_runtime.pump_frame_completions(app_frame_scratch);
         bool image_ready = false;
         for (const HostServiceCompletion& completion : app_frame_scratch.accepted_completions) {
@@ -3858,8 +3924,12 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
             image_ready = handled_image || image_ready;
         }
         if (image_ready) {
+            request_budget = 128;
+            request_browser_content_images(*page.document, image_resolve_context, request_budget);
+            natural_handles.clear();
+            layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
             layer_tree = layer_builder.build(*layout_tree);
-            std::vector<std::uint32_t> protected_handles;
+            std::vector<std::uint32_t> protected_handles = natural_handles;
             collect_image_handles(*layer_tree, protected_handles);
             const AppImageSurfaceEvictionResult evicted =
                 image_cache.evict_unreferenced_with_result(app_runtime,
@@ -3868,6 +3938,12 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
                                                            protected_handles.size());
             report_image_eviction_result(&diagnostics, evicted);
         }
+    }
+
+    if (image_drain_pass == 256) {
+        report_diagnostic(&diagnostics, DiagnosticStage::Package, DiagnosticSeverity::Warning,
+                          "image-capture-drain-limit", "Capture image drain reached 256 completions",
+                          "Remaining images retain unknown/pending geometry in this bounded capture");
     }
 
     SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
@@ -4872,6 +4948,8 @@ private:
     bool debug_sensor_ambient_light_enabled_ = false;
     jellyframe_example::AppPackageManifest active_package_manifest_;
     AppHostDataSnapshot debug_host_data_;
+    bool image_layout_dirty_ = false;
+    std::vector<std::uint32_t> natural_image_handles_;
     AppImageSurfaceCache image_cache_{AppImageSurfaceCacheOptions{8, 512 * 1024}};
     BrowserImageContext image_context_{&debug_images_, &debug_canvas_};
     AppLocalStorageShadow debug_local_storage_{AppPrivateKvPolicy{true, 64, 2048, 64, 32 * 1024}};
@@ -5484,6 +5562,8 @@ private:
     }
 
     void reset_image_services() {
+        natural_image_handles_.clear();
+        image_layout_dirty_ = false;
         image_cache_.release_all(app_runtime_, debug_images_);
         debug_images_.clear();
         add_debug_image_fixtures(debug_images_);
@@ -5618,6 +5698,9 @@ private:
             report_image_completion_failure(&diagnostics_, completion, image_src);
             if (image_cache_.handle_completion(completion)) {
                 ++image_handled;
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
+                image_layout_dirty_ = true;
+#endif
                 if (document_ != nullptr) {
                     const std::size_t marked = mark_image_source_dirty(*document_, image_src);
                     image_dirty_nodes += marked;
@@ -5632,7 +5715,11 @@ private:
             }
         }
         if (image_handled != 0 && image_dirty_fallback_needed && document_ != nullptr) {
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
+            mark_dirty(*document_, DomDirtyLayout | DomDirtyPaint);
+#else
             mark_dirty(*document_, DomDirtyPaint);
+#endif
         }
         host_service_counters_.image_handled += image_handled;
         std::size_t script_handled = 0;
@@ -5722,7 +5809,7 @@ private:
         if (layer_tree_ == nullptr) {
             evicted = image_cache_.evict_unreferenced_with_result(app_runtime_, debug_images_);
         } else {
-            std::vector<std::uint32_t> protected_handles;
+            std::vector<std::uint32_t> protected_handles = natural_image_handles_;
             collect_image_handles(*layer_tree_, protected_handles);
             evicted = image_cache_.evict_unreferenced_with_result(app_runtime_,
                                                                   debug_images_,
@@ -7014,6 +7101,11 @@ private:
         }
         style_resolver_->set_interaction_state(hovered_node, active_node, focused_node);
         const DomDirtyFlags dirty_flags = document_->dirty_flags;
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
+        // A ready-to-ready src change has no completion to invalidate geometry.
+        if ((dirty_flags & DomDirtyAttributes) != 0U && has_dirty_image_attributes(*document_))
+            image_layout_dirty_ = true;
+#endif
         const int current_content_height = layout_tree_ != nullptr
             ? std::max(viewport_height_, layout_tree_->rect.height)
             : frame_buffer_.height;
@@ -7078,7 +7170,7 @@ private:
                     target,
                     frame_scratch_.animation_dirty_region);
             };
-        if (update_plan.action == FrameUpdateAction::RebuildPipeline &&
+        if (!image_layout_dirty_ && update_plan.action == FrameUpdateAction::RebuildPipeline &&
             update_plan.reason == FrameUpdateReason::LayoutDirtyWithPreviousLayout &&
             layout_tree_ != nullptr &&
             layer_tree_ != nullptr &&
@@ -7196,7 +7288,7 @@ private:
         RenderTreeBuilder sampled_render_builder(*style_resolver_, render_options);
         auto next_render_tree = sampled_render_builder.build(*document_);
         finish_trace_stage(FrameTraceStage::RenderTree);
-        if (update_plan.action == FrameUpdateAction::RebuildPipeline &&
+        if (!image_layout_dirty_ && update_plan.action == FrameUpdateAction::RebuildPipeline &&
             update_plan.reason == FrameUpdateReason::LayoutDirtyWithPreviousLayout &&
             render_tree_ != nullptr &&
             layout_tree_ != nullptr &&
@@ -7292,13 +7384,28 @@ private:
             }
             return;
         }
+        if (image_layout_dirty_) {
+            // Intrinsic geometry can move unmarked following siblings. The
+            // node-local dirty bounds do not cover that downstream movement.
+            update_plan.dirty_rect_mode = FrameDirtyRectMode::FullFrame;
+            update_plan.needs_previous_layout = false;
+            update_plan.needs_full_framebuffer = true;
+        }
         record_frame_update(update_plan, dirty_flags);
         LayoutBoxPtr previous_layout = update_plan.needs_previous_layout ? std::move(layout_tree_) : LayoutBoxPtr{};
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets_);
         layout_options.diagnostics = &diagnostics_;
         layout_options.text_system = text_backend.text_system;
+        natural_image_handles_.clear();
+        BrowserNaturalImageContext natural_context{&image_resolve_context, &natural_image_handles_};
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
+        layout_options.natural_image_sizing.provider = {browser_natural_image_size, &natural_context};
+#endif
+        std::size_t request_budget = 128;
+        request_browser_content_images(*document_, image_resolve_context, request_budget);
         LayoutEngine layout_engine(*style_resolver_, text_backend.measure, layout_options);
         auto next_layout_tree = layout_engine.layout(*next_render_tree, viewport_width_, viewport_height_);
+        image_layout_dirty_ = false;
         finish_trace_stage(FrameTraceStage::Layout);
         if (trace_timing_enabled) {
             frame_trace_command_attribution_.prepare_for_tree_build(*document_);
