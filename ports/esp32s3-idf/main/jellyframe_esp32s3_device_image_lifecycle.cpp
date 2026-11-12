@@ -298,13 +298,13 @@ private:
         record_app_log(telemetry.fatal ? DeviceAppLogLevel::Error : DeviceAppLogLevel::Info,
                        app_id, generation, message);
         std::snprintf(message, sizeof(message),
-                      "script-input %.*s posted=%u rejected=%u unsupported=%u queue_dropped=%u worker_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u",
+                      "script-input %.*s posted=%u rejected=%u unsupported=%u queue_dropped=%u worker_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u render_status=%u",
                       static_cast<int>(event.size()), event.data(),
                       static_cast<unsigned>(telemetry.input_posted), static_cast<unsigned>(telemetry.input_rejected),
                       static_cast<unsigned>(telemetry.input_unsupported), static_cast<unsigned>(telemetry.input_queue_dropped),
                       static_cast<unsigned>(telemetry.input_seq), static_cast<unsigned>(telemetry.mutation_seq),
                       static_cast<unsigned>(telemetry.published_seq), static_cast<unsigned>(telemetry.accepted_seq),
-                      static_cast<unsigned>(telemetry.presents_failed));
+                      static_cast<unsigned>(telemetry.presents_failed), static_cast<unsigned>(telemetry.render_status));
         record_app_log(telemetry.fatal ? DeviceAppLogLevel::Error : DeviceAppLogLevel::Info,
                        app_id, generation, message);
     }
@@ -383,9 +383,15 @@ private:
         }
         ESP_LOGE("JellyFrameDevice", "installed script app fatal app=%s generation=%u", app_id.c_str(),
                  static_cast<unsigned>(store_.registry_generation()));
-        record_script_telemetry(app_id, store_.registry_generation(), "failed",
-                                installed_bundle_script_task_telemetry(script_session_));
-        record_app_log(DeviceAppLogLevel::Error, app_id, store_.registry_generation(), "app-runtime-failure");
+        const auto telemetry = installed_bundle_script_task_telemetry(script_session_);
+        record_script_telemetry(app_id, store_.registry_generation(), "failed", telemetry);
+        char failure[kDeviceAppLogMaxMessageBytes + 1]{};
+        std::snprintf(failure, sizeof(failure),
+                      "app-runtime-failure initialized=%u init_status=%u fatal_reason=%u worker=%u ui=%u scripts=%u",
+                      telemetry.initialized ? 1u : 0u, static_cast<unsigned>(telemetry.init_status),
+                      static_cast<unsigned>(telemetry.fatal_reason), telemetry.worker_started ? 1u : 0u,
+                      telemetry.ui_started ? 1u : 0u, static_cast<unsigned>(telemetry.scripts));
+        record_app_log(DeviceAppLogLevel::Error, app_id, store_.registry_generation(), failure);
         (void)recover_to_launcher(DeviceRecoveryReason::AppRuntimeFailure, app_id);
     }
 

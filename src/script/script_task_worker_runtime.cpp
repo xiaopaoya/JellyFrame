@@ -813,19 +813,23 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
         ? &options_.text_catalog->text_system() : options_.text_system;
     if (is_canonical_frame_version(options_.frame_codec.version)) {
         configure_background_resource_resolver(layer_options, style_resolver_.get());
-        if constexpr (HasBackgroundResourceResolver<LayerTreeBuilderOptions>::value) {
-          layer_options.image_resolver = {[](const Node& node, ImageResolveKind kind,
+        layer_options.image_resolver = {[](const Node& node, ImageResolveKind kind,
                                              std::uint16_t resource_id, ImageResolveResult& result,
                                              void* context) {
-            if (kind != ImageResolveKind::Background || resource_id == 0 || context == nullptr) return false;
+            if (context == nullptr) return false;
             auto* runtime = static_cast<State*>(context);
             if (!runtime->options_.image_provider) return false;
-            const std::string* url = runtime->style_resolver_->background_image_resource_url(resource_id);
+            std::string_view url;
+            if (kind == ImageResolveKind::Content) {
+                url = node.attribute("src");
+            } else if (kind == ImageResolveKind::Background && resource_id != 0) {
+                const std::string* background_url = runtime->style_resolver_->background_image_resource_url(resource_id);
+                if (background_url != nullptr) url = *background_url;
+            }
             ResolvedImageResource resolved;
-            return url != nullptr && runtime->options_.image_provider->resolve(*url, resolved) &&
+            return !url.empty() && runtime->options_.image_provider->resolve(url, resolved) &&
                 set_image_resolve_result(result, resolved);
-          }, this};
-        }
+        }, this};
     }
 #else
     layer_options.text_system = options_.text_system;

@@ -128,6 +128,7 @@ struct InstalledBundleScriptSession {
     std::atomic<std::uint32_t> published_frame_seq{0};
     std::atomic<std::uint32_t> accepted_frame_seq{0};
     std::atomic<std::uint32_t> present_failures{0};
+    std::atomic<std::uint8_t> render_status{0xff};
     std::atomic<bool> malformed_v4_probe_published{false};
     std::atomic<bool> malformed_v4_probe_rejected{false};
     std::atomic<std::uint32_t> accepted_after_malformed_v4_probe{0};
@@ -187,6 +188,7 @@ InstalledBundleScriptTaskTelemetry telemetry_snapshot(const InstalledBundleScrip
     telemetry.published_seq = state.published_frame_seq.load();
     telemetry.accepted_seq = state.accepted_frame_seq.load();
     telemetry.presents_failed = state.present_failures.load();
+    telemetry.render_status = state.render_status.load();
     telemetry.malformed_v4_probe_published = state.malformed_v4_probe_published.load();
     telemetry.malformed_v4_probe_rejected = state.malformed_v4_probe_rejected.load();
     telemetry.accepted_after_malformed_v4_probe = state.accepted_after_malformed_v4_probe.load();
@@ -234,7 +236,7 @@ void worker_entry(void* raw) {
     state->worker_started.store(true);
     {
     jellyframe::ScriptTaskWorkerRuntime runtime(state->script_session, worker_options(*state));
-    const auto initialized = runtime.initialize(state->entry_document, state->author_css);
+    const auto initialized = runtime.initialize(*state->protocol, state->entry_document, state->author_css);
     state->init_status.store(static_cast<std::uint8_t>(initialized));
     state->initialized.store(initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted);
     if (initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted) {
@@ -377,6 +379,8 @@ void ui_entry(void* raw) {
     renderer_options.max_clip_depth = 8;
     renderer_options.max_temporary_pixels = pixel_count;
 #if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+    // Canonical replay charges one staging frame before Core offscreen work.
+    renderer_options.max_temporary_pixels = 2 * pixel_count;
     if (state->runtime_resources) {
         state->runtime_resources->bind_ui_resources(renderer_options);
     }
@@ -385,15 +389,23 @@ void ui_entry(void* raw) {
     jellyframe::SoftwareRasterizerScratch scratch;
     std::uint32_t input_sequence = 1;
     while (!state->stop.load()) {
+#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+        jellyframe::ScriptTaskAcceptedAppFrame frame;
+        const auto take_status = jellyframe::take_script_task_app_frame(
+            *state->protocol, state->script_session, frame_codec_options(), frame);
+        const std::uint32_t packet_sequence = frame.sequence();
+#else
         jellyframe::ScriptTaskAppFrame frame;
         std::uint32_t packet_sequence = 0;
         const auto take_status = jellyframe::take_script_task_app_frame(
             *state->protocol, state->script_session, frame_codec_options(), frame, &packet_sequence);
+#endif
         if (take_status == jellyframe::ScriptTaskAppFrameTakeStatus::Accepted) {
             const jellyframe::Rect full{0, 0, width, height};
             jellyframe::ScriptTaskFrameRenderStatus render_status;
             const bool rendered = renderer.render_into(frame, framebuffer, {248, 250, 252, 255},
                                                        &full, 1, &scratch, &render_status);
+            state->render_status.store(static_cast<std::uint8_t>(render_status));
             const bool presented = rendered && jellyframe::present_frame(framebuffer, sink, &full, 1);
             if (presented) {
                 state->accepted_frame_seq.store(packet_sequence);

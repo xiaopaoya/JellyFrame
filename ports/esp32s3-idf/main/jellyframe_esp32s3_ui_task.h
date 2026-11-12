@@ -66,6 +66,7 @@ struct InstalledBundleScriptTaskTelemetry {
     std::uint32_t published_seq = 0;
     std::uint32_t accepted_seq = 0;
     std::uint32_t presents_failed = 0;
+    std::uint8_t render_status = 0xff;
     bool malformed_v4_probe_published = false;
     bool malformed_v4_probe_rejected = false;
     std::uint32_t accepted_after_malformed_v4_probe = 0;
