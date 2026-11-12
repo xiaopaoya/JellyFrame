@@ -818,6 +818,78 @@ void worker_stop_preserves_supervisor_owned_frame_lease() {
 }
 
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+class WorkerImages final : public RuntimeImageProviderSource {
+public:
+    std::uint64_t generation() const noexcept override { return 1; }
+    bool contains(std::uint32_t handle) const noexcept override {
+        return handle == 73 || handle == 74;
+    }
+    bool resolve(std::string_view url, ResolvedImageResource& output) const override {
+        if (url != "/assets/content.bmp" && url != "/assets/background.bmp") return false;
+        output.image_handle = url == "/assets/content.bmp" ? 73 : 74;
+        output.intrinsic_size = {ImageIntrinsicSizeState::Known, 20, 20};
+        return true;
+    }
+    bool paint(FrameBuffer& target, const ImagePaintRequest& request) const override {
+        if (!contains(request.image_handle)) return false;
+        const Color color = request.image_handle == 73 ? Color{231, 17, 53, 255} : Color{19, 173, 67, 255};
+        const auto rect = request.destination;
+        for (int y = std::max(0, rect.y); y < std::min(target.height, rect.y + rect.height); ++y) {
+            for (int x = std::max(0, rect.x); x < std::min(target.width, rect.x + rect.width); ++x) {
+                target.pixel(x, y) = color;
+            }
+        }
+        return true;
+    }
+};
+
+void worker_canonical_resolves_content_and_background_images(std::uint8_t version) {
+    auto supervisor = make_supervisor();
+    const runtime_test_fonts::Fonts fonts;
+    RuntimeImageProvider::Handle images;
+    check(RuntimeImageProvider::create(std::make_shared<const WorkerImages>(), images) ==
+              RuntimeImageProviderStatus::Ready, "immutable worker image provider created");
+    const auto session = supervisor.begin(97, fonts.catalog, images);
+    auto options = runtime_options_v3();
+    options.frame_codec.version = version;
+    options.frame_codec.max_groups = 32;
+    options.text_catalog = fonts.catalog;
+    options.image_provider = images;
+    ScriptTaskWorkerRuntime runtime(session, options);
+    check(runtime.initialize(supervisor,
+              "<body><img src='/assets/content.bmp'><div></div></body>",
+              "body { margin: 0; } img { display: block; width: 20px; height: 20px; border-radius: 12px; } "
+              "div { display: block; width: 20px; height: 20px; "
+              "background-image: url('/assets/background.bmp'); }") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted, "worker image document initializes");
+    check(runtime.publish_frame(supervisor).accepted(), "worker image frame publishes");
+    ScriptTaskAcceptedAppFrame accepted;
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, accepted) ==
+              ScriptTaskAppFrameTakeStatus::Accepted, "consumer accepts worker image frame");
+    bool content = false, background = false;
+    for (const auto& command : accepted.frame().display_list) {
+        if (worker_test_access::worker_command_type(command) != DisplayCommandType::Image) continue;
+        content = content || command.image_paint().image_handle == 73;
+        background = background || command.image_paint().image_handle == 74;
+    }
+    check(background, "worker preserves resolved CSS background image commands");
+    check(content, "worker resolves HTML img src into a content image command");
+    ScriptTaskFrameRendererOptions render_options;
+    render_options.text_catalog = fonts.catalog;
+    render_options.image_provider = images;
+    ScriptTaskFrameRenderer renderer({}, {}, render_options);
+    runtime.stop();
+    ScriptTaskFrameRenderStatus status;
+    const auto pixels = renderer.render(accepted.frame(), {255, 255, 255, 255}, &status);
+    check(status == ScriptTaskFrameRenderStatus::Accepted, "worker image frame replays after worker stop");
+    const auto content_pixel = pixels.pixels[10 * pixels.width + 10];
+    const auto background_pixel = pixels.pixels[30 * pixels.width + 10];
+    check(content_pixel.r == 231 && content_pixel.g == 17 && content_pixel.b == 53,
+          "accepted HTML image paints provider pixels");
+    check(background_pixel.r == 19 && background_pixel.g == 173 && background_pixel.b == 67,
+          "accepted CSS background paints provider pixels");
+    std::cout << "worker v" << int(version) << ": content/background images publish, resolve and paint passed\n";
+}
 void worker_canonical_rejects_invalid_config_and_catalog_mismatch_before_vm(std::uint8_t version) {
     {
         ScriptTaskSupervisor supervisor = make_supervisor();
@@ -1280,6 +1352,7 @@ int script_task_worker_runtime_tests_main() {
             if (!script_task_app_frame_codec_supports_version(version)) continue;
             worker_canonical_rejects_invalid_config_and_catalog_mismatch_before_vm(version);
             worker_canonical_uses_catalog_for_layout_and_publishes_group_frame(version);
+            worker_canonical_resolves_content_and_background_images(version);
         }
         if (script_task_app_frame_codec_supports_version(10))
             worker_v10_mutation_publishes_changed_packed_axes<DisplayCommand>();
