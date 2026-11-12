@@ -1,6 +1,8 @@
 # Runtime shared inline prepared-text v2 qualification
 
-Last updated: 2026-11-12; Applies to: optional Core 0.9/ABI4 evaluation.
+Last updated: 2026-11-13; Applies to: 0.6.0-dev.
+
+Core target: 0.9/ABI4 evaluation.
 
 Canonical Runtime prepared-text admission accepts Core packet capability 1 or 2.
 The separate legacy JFTP3 API gate is unchanged. Core owns decoding, signed Q1000
