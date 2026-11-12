@@ -41,6 +41,73 @@ inline RuntimeImageProvider::Handle owned_images() {
     assert(RuntimeImageProvider::create(std::make_shared<OwnedImages>(), out) == RuntimeImageProviderStatus::Ready);
     return out;
 }
+#if JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION >= 2
+inline void signed_packet_v2() {
+    using Status = ScriptTaskAppFrameCodecStatus;
+    for (const auto version : {std::uint8_t{9}, std::uint8_t{10}}) {
+        if (!script_task_app_frame_codec_supports_version(version)) continue;
+        for (const std::int32_t initial_x : {-6250, 7250}) {
+            runtime_test_fonts::Fonts fonts;
+            TextFontRequest request; request.size_q1000 = 16000;
+            TextRunMetrics metrics; PreparedTextGlyph glyphs[2];
+            assert(fonts.catalog->text_system().prepare("AB", request, glyphs, 2, metrics) == TextSystemStatus::Ok);
+            for (auto& glyph : glyphs) glyph.x += initial_x;
+            DisplayCommand text; text.set_type(DisplayCommandType::PreparedText);
+            text.rect = {0, 0, 64, 64}; text.color = {17, 73, 191, 255};
+            text.text_paint().origin_x = 20; text.text_paint().baseline_y = 32;
+            assert(encode_prepared_text(glyphs, 2, request.size_q1000, 2, text.text, initial_x));
+            assert(text.text[4] == 2);
+            PreparedTextView view; PreparedTextGlyph first;
+            assert(decode_prepared_text(text.text, view) && view.read(0, first) && first.x == initial_x);
+            LayerNode root; root.type = LayerType::Root; root.bounds = text.rect;
+            root.display_list.push_back(text);
+            SoftwareCompositor::Options core_options; core_options.text_system = &fonts.catalog->text_system();
+            SoftwareCompositor core({}, {}, core_options);
+            const Color background{255, 255, 255, 255};
+            const auto expected = core.render(root, 64, 64, background);
+            assert(std::any_of(expected.pixels.begin(), expected.pixels.end(),
+                [](Color color) { return color.r != 255 || color.g != 255 || color.b != 255; }));
+            ScriptTaskAppFrameCodecOptions options; options.version = version;
+            options.max_commands = 8; options.max_groups = 8; options.max_text_bytes = 1024;
+            options.max_payload_bytes = 8192;
+            ScriptTaskAppFrame frame, decoded;
+            assert(make_script_task_group_frame(root, root.bounds, options, frame) == Status::Accepted);
+            std::vector<std::uint8_t> bytes, repeated;
+            assert(encode_script_task_app_frame(frame, options, bytes) == Status::Accepted);
+            assert(decode_script_task_app_frame(bytes, options, decoded) == Status::Accepted);
+            assert(decoded.display_list[0].text == text.text);
+            assert(decode_prepared_text(decoded.display_list[0].text, view) && view.read(0, first) && first.x == initial_x);
+            assert(encode_script_task_app_frame(decoded, options, repeated) == Status::Accepted && repeated == bytes);
+            auto malformed = bytes;
+            const auto packet_at = detail::canonical::header_bytes + detail::canonical::group_bytes(version) +
+                detail::canonical::command_bytes;
+            malformed[packet_at + 4] = 255;
+            ScriptTaskAppFrame sentinel; sentinel.viewport = {91, 92, 93, 94};
+            assert(decode_script_task_app_frame(malformed, options, sentinel) == Status::Malformed);
+            assert(sentinel.viewport.x == 91 && sentinel.display_list.empty());
+            auto unsupported = frame; unsupported.display_list[0].text[4] = static_cast<char>(255);
+            repeated = {3, 4, 5};
+            assert(encode_script_task_app_frame(unsupported, options, repeated) == Status::InvalidValue);
+            assert((repeated == std::vector<std::uint8_t>{3, 4, 5}));
+            ScriptTaskSupervisor supervisor({{2,24},{1,0},{1,8192,8192},0,0});
+            const auto session = supervisor.begin(181, fonts.catalog);
+            ScriptTaskAppFramePublisher publisher(options);
+            assert(publisher.publish(supervisor, session, decoded).accepted());
+            ScriptTaskAcceptedAppFrame accepted;
+            assert(take_script_task_app_frame(supervisor, session, options, accepted) == ScriptTaskAppFrameTakeStatus::Accepted);
+            supervisor.begin(182, {}); fonts.catalog.reset(); root.display_list.clear();
+            ScriptTaskFrameRenderer renderer;
+            FrameBuffer replay(64, 64, background);
+            assert(renderer.render_into(accepted, replay, background) && same_pixels(expected, replay));
+            assert(accepted.frame().display_list[0].text == text.text);
+            assert(renderer.render_into(accepted, replay, background) && same_pixels(expected, replay));
+            assert(accepted.frame().display_list[0].text == text.text);
+        }
+    }
+    std::cout << "canonical v9/v10: genuine v2 signed Q1000 origin roundtrip, atomic refusal and retained catalog pixels passed\n";
+}
+#endif
+
 inline void rendering() {
     using Status = ScriptTaskAppFrameCodecStatus;
     runtime_test_fonts::Fonts fonts;
@@ -539,7 +606,7 @@ inline void run() {
     assert(encode_script_task_app_frame(unsupported, options, reencoded) == Status::UnsupportedGroupFeature);
     unsupported = frame; unsupported.display_list[8].text = "JFSXunsupported-sampling";
     assert(encode_script_task_app_frame(unsupported, options, reencoded) == Status::InvalidValue);
-    unsupported = frame; unsupported.display_list[7].text[4] = 3;
+    unsupported = frame; unsupported.display_list[7].text[4] = static_cast<char>(255);
     assert(encode_script_task_app_frame(unsupported, options, reencoded) == Status::InvalidValue);
     unsupported = frame; unsupported.groups[0].reasons = 1U << 31;
     assert(encode_script_task_app_frame(unsupported, options, reencoded) == Status::InvalidGroup);
@@ -550,6 +617,9 @@ inline void run() {
     assert((reencoded == std::vector<std::uint8_t>{3, 4, 5}));
     std::cout << "canonical v9: 10 typed kinds/JFTP1/all paint clips, nested group values, "
               << bytes.size() << " atomic truncations and malformed/refusal checks passed\n";
+#if JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION >= 2
+    signed_packet_v2();
+#endif
     rendering();
     elliptical_v10_round_trip<DisplayCommand, LayerNode>();
 #else

@@ -36,6 +36,23 @@ if(REQUIRE_NATURAL_IMAGE_API)
     message(FATAL_ERROR "This qualification requires the Core natural-image layout API")
   endif()
 endif()
+option(REQUIRE_SHARED_INLINE_API "Require canonical prepared-text v2 in this qualification" OFF)
+if(REQUIRE_SHARED_INLINE_API)
+  include(CheckCXXSourceCompiles)
+  set(CMAKE_REQUIRED_LIBRARIES JellyFrame::jellyframe_render_core)
+  unset(QUALIFIED_CORE_HAS_SHARED_INLINE_API CACHE)
+  check_cxx_source_compiles("
+    #include <render_core/prepared_text.h>
+    #if !defined(JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION) || JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION != 2
+    #error Canonical prepared-text v2 is required
+    #endif
+    int main() { return 0; }
+  " QUALIFIED_CORE_HAS_SHARED_INLINE_API)
+  unset(CMAKE_REQUIRED_LIBRARIES)
+  if(NOT QUALIFIED_CORE_HAS_SHARED_INLINE_API)
+    message(FATAL_ERROR "This qualification requires canonical prepared-text v2")
+  endif()
+endif()
 get_filename_component(runtime_repo_root "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(runtime_source "${CMAKE_CURRENT_BINARY_DIR}/runtime-source")
 # No bundled render_core headers are copied into this consumer tree. Register

@@ -818,6 +818,58 @@ void worker_stop_preserves_supervisor_owned_frame_lease() {
 }
 
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+#if JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION >= 2
+void worker_shared_inline_paragraph(std::uint8_t version) {
+    FrameBuffer reference;
+    for (const bool nested : {false, true}) {
+        auto supervisor = make_supervisor();
+        runtime_test_fonts::Fonts fonts;
+        const auto session = supervisor.begin(297, fonts.catalog);
+        auto options = runtime_options_v3();
+        options.frame_codec.version = version; options.frame_codec.max_groups = 32;
+        options.text_catalog = fonts.catalog;
+        auto runtime = std::make_unique<ScriptTaskWorkerRuntime>(session, options);
+        const auto html = nested
+            ? "<body><div><span>A<span>B A</span>B </span><span>AB</span></div></body>"
+            : "<body><div><span>AB AB AB</span></div></body>";
+        check(runtime->initialize(supervisor, html,
+            "* { margin: 0; padding: 0; border: 0; } div { width: 25px; font-size: 16px; "
+            "line-height: 20px; text-align: center; }") == ScriptTaskWorkerRuntimeInitStatus::Accepted,
+            "shared paragraph worker initializes");
+        check(runtime->publish_frame(supervisor).accepted(), "shared paragraph publishes");
+        ScriptTaskAcceptedAppFrame accepted;
+        check(take_script_task_app_frame(supervisor, session, options.frame_codec, accepted) ==
+            ScriptTaskAppFrameTakeStatus::Accepted, "shared paragraph frame accepted");
+        bool shifted = false;
+        for (const auto& command : accepted.frame().display_list) {
+            if (worker_test_access::worker_command_type(command) != DisplayCommandType::PreparedText) continue;
+            PreparedTextView view; PreparedTextGlyph first;
+            check(decode_prepared_text(command.text, view), "shared paragraph packet decodes");
+            shifted = shifted || (command.text[4] == 2 && view.read(0, first) && first.x != 0);
+        }
+        check(shifted, "shared paragraph emits genuine nonzero-origin v2 packet");
+        runtime->stop(); runtime.reset(); supervisor.begin(298, {}); fonts.catalog.reset(); options.text_catalog.reset();
+        ScriptTaskFrameRenderer renderer;
+        FrameBuffer pixels(options.viewport.width, options.viewport.height, {});
+        check(renderer.render_into(accepted, pixels, {255, 255, 255, 255}),
+            "shared paragraph retains catalog after worker stop and owner replacement");
+        check(std::any_of(pixels.pixels.begin(), pixels.pixels.end(),
+            [](Color color) { return color.r != 255 || color.g != 255 || color.b != 255; }),
+            "shared paragraph paints visible pixels");
+        if (!nested) reference = std::move(pixels);
+        else {
+            check(reference.pixels.size() == pixels.pixels.size(), "shared paragraph pixel extents match");
+            for (std::size_t i = 0; i < pixels.pixels.size(); ++i) {
+                const auto a = reference.pixels[i], b = pixels.pixels[i];
+                check(a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a,
+                    "nested shared paragraph preserves continuous text pixels");
+            }
+        }
+    }
+    std::cout << "worker v" << int(version) << ": shared inline v2 paragraphs preserve partition pixels and retained catalog\n";
+}
+#endif
+
 class WorkerImages final : public RuntimeImageProviderSource {
 public:
     explicit WorkerImages(ImageIntrinsicSize size = {ImageIntrinsicSizeState::Known, 20, 20}) : size(size) {}
@@ -1431,6 +1483,9 @@ int script_task_worker_runtime_tests_main() {
             worker_canonical_rejects_invalid_config_and_catalog_mismatch_before_vm(version);
             worker_canonical_uses_catalog_for_layout_and_publishes_group_frame(version);
             worker_canonical_resolves_content_and_background_images(version);
+#if JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION >= 2
+            worker_shared_inline_paragraph(version);
+#endif
         }
 #if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
         worker_natural_image_cases();

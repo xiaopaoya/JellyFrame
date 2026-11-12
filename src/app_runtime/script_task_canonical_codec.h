@@ -164,7 +164,7 @@ inline Status validate_groups(const ScriptTaskAppFrame& frame, std::size_t max_g
 
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
 static_assert(kPreparedTextHeaderBytes == 32 && kPreparedTextRecordBytes == 52,
-              "v9 requires the actual canonical JFTP1 contract");
+              "v9/v10 require the canonical JFTP v1/v2 record layout");
 
 // Stable canonical wire kinds; never serialize a Core enum's underlying value.
 template<class E> inline int kind_impl(E t) {
