@@ -810,6 +810,19 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
 #else
     layout_options.text_system = options_.text_system;
 #endif
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1 && JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+    if (is_canonical_frame_version(options_.frame_codec.version) && options_.image_provider) {
+        layout_options.natural_image_sizing = options_.natural_image_sizing;
+        // Metadata and paint resolve against the same immutable, owned snapshot.
+        layout_options.natural_image_sizing.provider = {[](const Node& node, void* context) {
+            const auto* runtime = static_cast<const State*>(context);
+            const auto& images = runtime->options_.image_provider;
+            ResolvedImageResource resolved;
+            return images->resolve(node.attribute("src"), resolved)
+                ? resolved.intrinsic_size : ImageIntrinsicSize{};
+        }, this};
+    }
+#endif
     LayoutEngine layout_engine(*style_resolver_, {}, layout_options);
     LayoutBoxPtr layout_tree = layout_engine.layout(*render_tree, options_.viewport.width, options_.viewport.height);
     if (!layout_tree) return false;

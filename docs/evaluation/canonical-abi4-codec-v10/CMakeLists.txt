@@ -19,6 +19,23 @@ foreach(identity IN ITEMS SOURCE_HASH PROFILE_ID)
 endforeach()
 
 option(BUILD_V10_WORKER "Qualify the actual JerryScript worker and script API" OFF)
+option(REQUIRE_NATURAL_IMAGE_API "Require the Core natural-image layout API in this qualification" OFF)
+if(REQUIRE_NATURAL_IMAGE_API)
+  include(CheckCXXSourceCompiles)
+  set(CMAKE_REQUIRED_LIBRARIES JellyFrame::jellyframe_render_core)
+  unset(QUALIFIED_CORE_HAS_NATURAL_IMAGE_API CACHE)
+  check_cxx_source_compiles("
+    #include <render_core/layout.h>
+    #if !defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) || JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION < 1
+    #error Natural image layout API is required
+    #endif
+    int main() { return 0; }
+  " QUALIFIED_CORE_HAS_NATURAL_IMAGE_API)
+  unset(CMAKE_REQUIRED_LIBRARIES)
+  if(NOT QUALIFIED_CORE_HAS_NATURAL_IMAGE_API)
+    message(FATAL_ERROR "This qualification requires the Core natural-image layout API")
+  endif()
+endif()
 get_filename_component(runtime_repo_root "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(runtime_source "${CMAKE_CURRENT_BINARY_DIR}/runtime-source")
 # No bundled render_core headers are copied into this consumer tree. Register

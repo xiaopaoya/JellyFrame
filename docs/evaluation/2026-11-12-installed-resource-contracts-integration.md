@@ -26,7 +26,14 @@ the new preparation callback. Commit10a332d1 adds owned storage and initializes
 it before task creation. Successful target logs cover the corrected build.
 
 The current physical board remains resource1 with the restored simple acceptance
-app, generation197. Resources2 physical acceptance is pending. The production
+app, generation197. Resources2 human acceptance subsequently passed app font weights, nested CSS
+images and the NEXT counter at generation198, using Runtime10a332d1 and
+Core3468c310. The recorded counters are launch accepted3, render failures0 and
+other failures0. The human observation is retained at
+E:/Experiments/installed-resource-contracts-20261112/resources2-human-observation.json.
+A later counter read could not open COM19, with only COM1/6/9 enumerated, so no
+fresh post-touch counters were collected. Runtime PR61 merged as2d3eddec after
+CI13/13. These observations concern resources2 before natural-image integration. The production
 dependency remains Core0.8/ABI3/frame5. Core PR30 merged7c3c375b after CI3/3,
 with head3468c310 matching this integration's Core code.
 
