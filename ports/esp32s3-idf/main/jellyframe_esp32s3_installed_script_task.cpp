@@ -379,6 +379,8 @@ void ui_entry(void* raw) {
     renderer_options.max_clip_depth = 8;
     renderer_options.max_temporary_pixels = pixel_count;
 #if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+    // Canonical replay charges one staging frame before Core offscreen work.
+    renderer_options.max_temporary_pixels = 2 * pixel_count;
     if (state->runtime_resources) {
         state->runtime_resources->bind_ui_resources(renderer_options);
     }
