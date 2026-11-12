@@ -1,5 +1,7 @@
 # Jerry external context on ESP32-S3
 
+Last updated: 2026-11-11; Applies to: 0.6.0-dev
+
 The component now publicly defines JERRY_EXTERNAL_CONTEXT=1 for the engine,
 port and backend. The existing single-VM gate controls the global port context.
 The existing preferred PSRAM allocation and 8-bit-capable fallback policy is
