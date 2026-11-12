@@ -1,4 +1,4 @@
-﻿#ifndef NOMINMAX
+#ifndef NOMINMAX
 #define NOMINMAX
 #endif
 
@@ -4814,6 +4814,7 @@ private:
     std::unordered_map<const Node*, int> scroll_offsets_;
     VerticalScrollGesture scroll_gesture_;
     const Node* scroll_drag_target_ = nullptr;
+    std::uint64_t script_recovery_generation_ = 0;
     const Node* scroll_inertia_target_ = nullptr;
     AnimationTimeline animation_timeline_;
     std::vector<StyleOverride> style_overrides_;
@@ -4955,10 +4956,11 @@ private:
         return true;
     }
 
-    void rebuild_input_controller(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
+    bool rebuild_input_controller(const Node* hovered_node, const Node* active_node, const Node* focused_node) {
         input_ = std::make_unique<InputController>(
             *layer_tree_,
             input_invalidation_options_from_style(*style_resolver_));
+        if (consume_script_callback_failure("autofocus")) return false;
         input_->set_interaction_state(hovered_node, active_node, focused_node);
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         const Node* modal = script_runtime_ != nullptr ? script_runtime_->active_modal_dialog() : nullptr;
@@ -4968,8 +4970,10 @@ private:
                 active_modal_node_ = modal;
             } else {
                 input_->set_modal_root(nullptr);
+                if (consume_script_callback_failure("modal-focus")) return false;
                 if (modal_focus_restore_node_ != nullptr) {
                     input_->set_focused_node(modal_focus_restore_node_);
+                    if (consume_script_callback_failure("restore-focus")) return false;
                 }
                 active_modal_node_ = nullptr;
                 modal_focus_restore_node_ = nullptr;
@@ -4977,8 +4981,10 @@ private:
         }
         if (modal != nullptr) {
             input_->set_modal_root(modal);
+            if (consume_script_callback_failure("modal-focus")) return false;
         }
 #endif
+        return true;
     }
 
     LPARAM pointer_lparam(int x, int y) const {
@@ -5151,12 +5157,15 @@ private:
                 if (target != nullptr) {
                     if (event.kind == ScriptedFrameEventKind::SetValue) {
                         changed = input_->set_control_value(*target, event.text_value);
+                        if (consume_script_callback_failure("semantic-input")) return;
                         satisfied = form_control_value(*target) == event.text_value;
                     } else if (event.kind == ScriptedFrameEventKind::SetChecked) {
                         changed = input_->set_control_checked(*target, event.boolean_value);
+                        if (consume_script_callback_failure("semantic-input")) return;
                         satisfied = form_control_checked(*target) == event.boolean_value;
                     } else {
                         changed = input_->set_control_selected_index(*target, event.x);
+                        if (consume_script_callback_failure("semantic-input")) return;
                         satisfied = form_control_selected_index(*target) == event.x;
                     }
                 }
@@ -5164,10 +5173,10 @@ private:
                     std::cerr << "semantic event failed: control state could not be applied id=" << event.target_id << '\n';
                     break;
                 }
+                log_control_state(target);
                 if (changed) {
                     rerender_if_dirty(input_->focused_node());
                 }
-                log_control_state(target);
                 break;
             }
             case ScriptedFrameEventKind::Wheel:
@@ -5589,7 +5598,7 @@ private:
     }
 #endif
 
-    bool drain_host_completions() {
+    bool drain_host_completions(bool& callback_failed) {
         const AppCompletionPumpResult result = app_runtime_.pump_frame_completions(app_frame_scratch_);
         if (result.consumed == 0) {
             return false;
@@ -5634,6 +5643,10 @@ private:
                 if (script_runtime_->handle_host_completion(completion)) {
                     ++script_handled;
                 }
+                if (consume_script_callback_failure("host-completion")) {
+                    callback_failed = true;
+                    return false;
+                }
             }
         }
 #endif
@@ -5648,7 +5661,7 @@ private:
         return script_handled != 0 || image_handled != 0;
     }
 
-    bool drain_system_events() {
+    bool drain_system_events(bool& callback_failed) {
         std::vector<AppSystemEvent> accepted;
         const AppSystemEventPumpResult result = system_events_.pump_current(app_runtime_, accepted);
         if (result.consumed == 0) {
@@ -5665,6 +5678,10 @@ private:
             for (const AppSystemEvent& event : accepted) {
                 if (script_runtime_->handle_system_event(event)) {
                     ++script_handled;
+                }
+                if (consume_script_callback_failure("system-event")) {
+                    callback_failed = true;
+                    return false;
                 }
             }
         }
@@ -5691,7 +5708,10 @@ private:
             set_title(std::string("system event rejected: ") + status);
             return;
         }
-        if (drain_system_events() && current_frame_policy().presents_frames) {
+        bool callback_failed = false;
+        const bool handled = drain_system_events(callback_failed);
+        if (callback_failed) return;
+        if (handled && current_frame_policy().presents_frames) {
             rerender_if_dirty(input_ ? input_->focused_node() : nullptr);
         }
         set_title(std::string("system ") + status);
@@ -5998,19 +6018,24 @@ private:
     }
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
-    void recover_active_app_after_script_watchdog(const std::string& detail) {
-        std::cerr << "script watchdog interrupted app: " << detail << '\n';
+    void recover_active_app_after_script_failure(AppTeardownReason reason, const std::string& detail) {
+        ++script_recovery_generation_;
+        reset_scroll_motion();
+        std::cerr << "script stopped reason=" << app_teardown_reason_name(reason) << " detail=" << detail << '\n';
+        // All callers have returned from the synchronous script operation.
+        pending_script_audio_events_.clear();
+        script_runtime_.reset();
+        script_runtime_instance_id_ = 0;
         if (!options_.registry_store_path.empty() && !system_shell_mode_) {
             reset_image_services();
-            pending_script_audio_events_.clear();
-            script_runtime_.reset();
-            script_runtime_instance_id_ = 0;
             KillTimer(hwnd_, kScriptTimerId);
-            const AppTeardownResult teardown = app_runtime_.terminate_current(AppTeardownReason::ScriptWatchdog);
+            const AppTeardownResult teardown = app_runtime_.terminate_current(reason);
             record_installed_app_failure(
                 active_app_id_, app_teardown_reason_name(teardown.reason), detail);
             const std::string crashed_app = active_app_id_.empty() ? "app" : active_app_id_;
-            std::cerr << "script_watchdog_recovery reason=" << app_teardown_reason_name(teardown.reason)
+            std::cerr << (reason == AppTeardownReason::ScriptWatchdog
+                              ? "script_watchdog_recovery reason=" : "script_callback_recovery reason=")
+                      << app_teardown_reason_name(teardown.reason)
                       << " released_instance=" << teardown.app_instance_id
                       << " released_handles=" << teardown.released_handles
                       << " cancelled_requests=" << teardown.cancelled_requests
@@ -6028,7 +6053,11 @@ private:
             }
             return;
         }
-        set_title("script watchdog: " + detail);
+        set_title("script stopped: " + detail);
+    }
+
+    void recover_active_app_after_script_watchdog(const std::string& detail) {
+        recover_active_app_after_script_failure(AppTeardownReason::ScriptWatchdog, detail);
     }
 
     bool handle_script_evaluation_failure(const ScriptEvaluationResult& result,
@@ -6051,6 +6080,28 @@ private:
         return false;
     }
 #endif
+
+    bool consume_script_callback_failure(const char* boundary) {
+#if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        if (script_runtime_ == nullptr) return false;
+        const ScriptCallbackFailure failure = script_runtime_->take_script_callback_failure();
+        if (!failure.failed()) return false;
+        const AppTeardownReason reason = failure.status == ScriptCallbackFailureStatus::ResourceLimit
+            ? AppTeardownReason::BudgetExceeded
+            : failure.status == ScriptCallbackFailureStatus::ExecutionBudgetExceeded
+                ? AppTeardownReason::ScriptWatchdog : AppTeardownReason::RuntimeError;
+        const std::string detail = std::string(boundary) + ": " + failure.message;
+        report_diagnostic(&diagnostics_, DiagnosticStage::Script, DiagnosticSeverity::Error,
+                          "script-callback-failed", "Script callback failed", detail);
+        std::cerr << "script_callback_failure boundary=" << boundary
+                  << " reason=" << app_teardown_reason_name(reason) << " detail=" << failure.message << '\n';
+        recover_active_app_after_script_failure(reason, detail);
+        return true;
+#else
+        (void) boundary;
+        return false;
+#endif
+    }
 
     bool rebuild() {
         try {
@@ -6491,7 +6542,7 @@ private:
             const auto present_started = trace_live_frame
                 ? std::chrono::steady_clock::now()
                 : std::chrono::steady_clock::time_point{};
-            rebuild_input_controller(hovered_node, active_node, focused_node);
+            if (!rebuild_input_controller(hovered_node, active_node, focused_node)) return true;
             update_blit_pixels_for_content_rect(strip_visible_rect);
             publish_vscode_frame();
             InvalidateRect(hwnd_, nullptr, FALSE);
@@ -6545,7 +6596,7 @@ private:
         const auto present_started = trace_live_frame
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        rebuild_input_controller(hovered_node, active_node, focused_node);
+        if (!rebuild_input_controller(hovered_node, active_node, focused_node)) return true;
         if (can_repaint_dirty) {
             update_blit_pixels_for_content_rect(dirty_content_rect);
         } else {
@@ -6600,6 +6651,7 @@ private:
             } else {
                 scroll_offsets_[scroll_node] = next;
             }
+            const std::uint64_t recovery_before = script_recovery_generation_;
             const bool rendered = render_scroll_state_only(input_ ? input_->hovered_node() : nullptr,
                                                            input_ ? input_->active_node() : nullptr,
                                                            input_ ? input_->focused_node() : nullptr,
@@ -6607,6 +6659,8 @@ private:
                                                            &match,
                                                            previous,
                                                            next);
+            // Recovery can replace the document and invalidate the scroll owner.
+            if (script_recovery_generation_ != recovery_before) return true;
             if (rendered) {
                 if (!live_trace_writer_.active() && frame_trace_enabled() && document_ != nullptr) {
                     const std::string owner = frame_trace_command_attribution_.owner_label_for_node(*scroll_node);
@@ -6686,7 +6740,9 @@ private:
             stop_scroll_inertia();
             return false;
         }
+        const std::uint64_t recovery_before = script_recovery_generation_;
         const bool scrolled = scroll_container_by(scroll_inertia_target_, delta_y);
+        if (script_recovery_generation_ != recovery_before) return false;
         if (!scrolled) {
             stop_scroll_inertia();
             return false;
@@ -6935,7 +6991,9 @@ private:
             record_trace_span(stage, trace_stage_started, now);
             trace_stage_started = now;
         };
-        drain_host_completions();
+        bool callback_failed = false;
+        drain_host_completions(callback_failed);
+        if (callback_failed) return;
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ != nullptr && script_runtime_->take_execution_watchdog_interrupt()) {
             finish_trace_stage(FrameTraceStage::Input);
@@ -6943,7 +7001,8 @@ private:
             return;
         }
 #endif
-        drain_system_events();
+        drain_system_events(callback_failed);
+        if (callback_failed) return;
         if (recover_active_app_after_budget_if_needed("render")) {
             finish_trace_stage(FrameTraceStage::Input);
             return;
@@ -7099,7 +7158,7 @@ private:
                 record_trace_span(FrameTraceStage::Paint, paint_started, std::chrono::steady_clock::now());
             }
             const auto present_started = std::chrono::steady_clock::now();
-            rebuild_input_controller(hovered_node, active_node, focused_node);
+            if (!rebuild_input_controller(hovered_node, active_node, focused_node)) return;
             capture_script_layout_snapshot();
             update_blit_pixels();
             publish_vscode_frame();
@@ -7221,7 +7280,7 @@ private:
                 record_trace_span(FrameTraceStage::Paint, paint_started, std::chrono::steady_clock::now());
             }
             const auto present_started = std::chrono::steady_clock::now();
-            rebuild_input_controller(hovered_node, active_node, focused_node);
+            if (!rebuild_input_controller(hovered_node, active_node, focused_node)) return;
             capture_script_layout_snapshot();
             update_blit_pixels();
             publish_vscode_frame();
@@ -7306,7 +7365,7 @@ private:
             record_trace_span(FrameTraceStage::Paint, paint_started, std::chrono::steady_clock::now());
         }
         const auto present_started = std::chrono::steady_clock::now();
-        rebuild_input_controller(hovered_node, active_node, focused_node);
+        if (!rebuild_input_controller(hovered_node, active_node, focused_node)) return;
         update_blit_pixels();
         publish_vscode_frame();
         clear_dirty_flags(*document_);
@@ -7983,15 +8042,19 @@ private:
         input.y = GET_Y_LPARAM(lparam) + scroll_y_;
         input.buttons = buttons_from_keys(wparam);
         input.modifiers = modifiers_from_keys(wparam);
-        if (update_scroll_drag(input.y)) {
+        const std::uint64_t recovery_before = script_recovery_generation_;
+        const bool dragged = update_scroll_drag(input.y);
+        if (script_recovery_generation_ != recovery_before) return;
+        if (dragged) {
             record_trace_event_owner(scroll_drag_target_);
             set_title("drag-scroll scrollY=" + std::to_string(scroll_y_));
             return;
         }
         const Node* target = input_->pointer_move(input);
+        if (consume_script_callback_failure("pointer_move")) return;
         record_trace_event_owner(target);
-        rerender_if_dirty(input_->focused_node());
         set_title("hover " + describe_node(target));
+        rerender_if_dirty(input_->focused_node());
     }
 
     void handle_pointer_down(WPARAM wparam, LPARAM lparam) {
@@ -8005,10 +8068,11 @@ private:
         input.buttons = buttons_from_keys(wparam) | 1;
         input.modifiers = modifiers_from_keys(wparam);
         const Node* target = input_->pointer_down(input);
+        if (consume_script_callback_failure("pointer_down")) return;
         record_trace_event_owner(target);
         begin_scroll_drag(target, input.y);
-        rerender_if_dirty(input_->focused_node());
         set_title("active " + describe_node(target));
+        rerender_if_dirty(input_->focused_node());
     }
 
     void handle_pointer_up(WPARAM wparam, LPARAM lparam) {
@@ -8030,13 +8094,14 @@ private:
         }
         reset_scroll_motion();
         const Node* target = input_->pointer_up(input);
+        if (consume_script_callback_failure("pointer_up")) return;
         record_trace_event_owner(target);
         follow_hash_anchor(target);
         if (process_shell_action_if_needed()) {
             return;
         }
-        rerender_if_dirty(input_->focused_node());
         set_title("up " + describe_node(target));
+        rerender_if_dirty(input_->focused_node());
     }
 
     void handle_wheel(WPARAM wparam, LPARAM lparam) {
@@ -8052,14 +8117,18 @@ private:
         input.delta_y = GET_WHEEL_DELTA_WPARAM(wparam);
         input.modifiers = modifiers_from_keys(wparam);
         const Node* target = input_->wheel(input);
+        if (consume_script_callback_failure("wheel")) return;
         record_trace_event_owner(target);
         stop_scroll_inertia();
-        rerender_if_dirty(input_->focused_node());
         const int scroll_delta = -input.delta_y;
-        if (!scroll_container_by(target, scroll_delta)) {
+        const std::uint64_t recovery_before = script_recovery_generation_;
+        const bool scrolled = scroll_container_by(target, scroll_delta);
+        if (script_recovery_generation_ != recovery_before) return;
+        if (!scrolled) {
             scroll_by(scroll_delta);
         }
         set_title("wheel " + describe_node(target) + " scrollY=" + std::to_string(scroll_y_));
+        rerender_if_dirty(input_->focused_node());
     }
 
     void handle_char(WPARAM wparam) {
@@ -8068,7 +8137,9 @@ private:
         }
         const Node* focus = input_->focused_node();
         record_trace_event_owner(focus);
-        if (input_->text_input(wide_char_to_utf8(static_cast<wchar_t>(wparam)))) {
+        const bool changed = input_->text_input(wide_char_to_utf8(static_cast<wchar_t>(wparam)));
+        if (consume_script_callback_failure("text-input")) return;
+        if (changed) {
             rerender_if_dirty(focus);
         }
     }
@@ -8099,6 +8170,7 @@ private:
         }
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (wparam == VK_ESCAPE && script_runtime_ != nullptr && script_runtime_->request_modal_cancel()) {
+            if (consume_script_callback_failure("modal-cancel")) return;
             rerender_if_dirty(input_->focused_node());
             return;
         }
@@ -8126,7 +8198,9 @@ private:
         }
         const Node* focus = input_->focused_node();
         record_trace_event_owner(focus);
-        if (input_->key_down(key)) {
+        const bool changed = input_->key_down(key);
+        if (consume_script_callback_failure("key-down")) return;
+        if (changed) {
             rerender_if_dirty(focus);
         } else if (key.code == KeyCode::ArrowDown || key.code == KeyCode::ArrowUp) {
             stop_scroll_inertia();
@@ -8152,8 +8226,11 @@ private:
         const AppHostServiceWorkerGroupPumpResult image_pump =
             pump_app_host_service_workers(app_runtime_, image_slot, 1);
         const bool completed_image = image_pump.completions_posted != 0;
-        bool handled_completion = drain_host_completions();
-        const bool handled_system_event = drain_system_events();
+        bool callback_failed = false;
+        bool handled_completion = drain_host_completions(callback_failed);
+        if (callback_failed) return;
+        const bool handled_system_event = drain_system_events(callback_failed);
+        if (callback_failed) return;
         if (recover_active_app_after_budget_if_needed("timer-host")) {
             return;
         }
@@ -8161,7 +8238,9 @@ private:
             frame_options.max_animation_callbacks_per_frame > 0;
         const bool advanced_animation = frame_policy.presents_frames &&
             animation_budget_enabled && advance_animation_timeline(current_time_ms());
+        const std::uint64_t recovery_before = script_recovery_generation_;
         const bool advanced_scroll_inertia = advance_scroll_inertia(frame_policy);
+        if (script_recovery_generation_ != recovery_before) return;
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ == nullptr || !frame_policy.pumps_timers ||
             script_runtime_instance_id_ != app_runtime_.current_app_instance_id()) {
@@ -8182,7 +8261,8 @@ private:
         const AppHostServiceWorkerGroupPumpResult script_service_pump =
             pump_app_host_service_workers(app_runtime_, script_service_slots, script_service_slot_count);
         const bool completed_script_service = script_service_pump.completions_posted != 0;
-        handled_completion = drain_host_completions() || handled_completion;
+        handled_completion = drain_host_completions(callback_failed) || handled_completion;
+        if (callback_failed) return;
         if (script_runtime_ != nullptr && script_runtime_->take_execution_watchdog_interrupt()) {
             recover_active_app_after_script_watchdog("script host-completion execution budget exceeded");
             return;
@@ -8198,10 +8278,13 @@ private:
         const std::uint64_t script_frame_updates_before = frame_update_sequence_;
         const std::size_t callbacks =
             script_runtime_->pump_timers(now_ms, frame_options.max_timer_callbacks_per_frame);
+        if (consume_script_callback_failure("timer")) return;
         const bool audio_event_handled = pump_script_audio_events(now_ms);
+        if (consume_script_callback_failure("audio")) return;
         const std::size_t animation_callbacks = animation_budget_enabled
             ? script_runtime_->pump_animation_frame(now_ms, frame_options.max_animation_callbacks_per_frame)
             : 0;
+        if (consume_script_callback_failure("animation")) return;
         if (observe_script_source && document_ != nullptr &&
             !frame_trace_mutation_sources_.has_kind(FrameTraceMutationSourceKind::Script)) {
             frame_trace_mutation_sources_.observe(
@@ -8280,6 +8363,7 @@ private:
     }
 
     void rerender_if_dirty(const Node* focused_node) {
+        if (consume_script_callback_failure("input")) return;
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
         if (script_runtime_ != nullptr && script_runtime_->take_execution_watchdog_interrupt()) {
             recover_active_app_after_script_watchdog("script event execution budget exceeded");

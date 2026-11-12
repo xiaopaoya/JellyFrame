@@ -572,25 +572,27 @@ jobs:
           ctest --test-dir build/r3-installed-consumers-${{ matrix.profile }} -C Release --output-on-failure
           if ($LASTEXITCODE -ne 0) { throw 'Canonical ABI4 installed consumer tests failed' }
 
-      - name: Verify installed resource ownership and frame selection
+      - name: Verify installed resource ownership and browser failure recovery
         if: matrix.profile == 'full'
         shell: pwsh
         run: |
           $build = 'build/installed-resource-host'
           cmake -S . -B $build `
             -DJELLYFRAME_RENDER_CORE_SOURCE_DIR="$env:GITHUB_WORKSPACE/third_party/render-core-source" `
-            -DJELLYFRAME_BUILD_EXAMPLES=OFF -DJELLYFRAME_BUILD_BENCHMARKS=OFF `
+            -DJELLYFRAME_BUILD_EXAMPLES=ON -DJELLYFRAME_BUILD_BENCHMARKS=OFF `
             -DJELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS=OFF -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF `
             -DJELLYFRAME_BUILD_TESTS=ON -DJELLYFRAME_BUILD_SCRIPTING=ON `
             -DJELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=ON `
+            -DJELLYFRAME_ENABLE_NODE_IDENTITY=${{ matrix.node_identity }} `
             -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE/third_party/jerryscript"
           if ($LASTEXITCODE -ne 0) { throw 'Installed resource host configure failed' }
           cmake --build $build --config Release --parallel --target `
             jellyframe_esp32s3_installed_resource_owner_tests jellyframe_esp32s3_resource_reference_tests `
             jellyframe_esp32s3_frame_admission_0_0_tests jellyframe_esp32s3_frame_admission_0_1_tests `
-            jellyframe_esp32s3_frame_admission_1_0_tests jellyframe_esp32s3_frame_admission_1_1_tests
+            jellyframe_esp32s3_frame_admission_1_0_tests jellyframe_esp32s3_frame_admission_1_1_tests `
+            jellyframe_desktop_shell
           if ($LASTEXITCODE -ne 0) { throw 'Installed resource host build failed' }
-          ctest --test-dir $build -C Release -R '^jellyframe_esp32s3_.*tests$' --output-on-failure
+          ctest --test-dir $build -C Release -R '^(jellyframe_esp32s3_.*tests|jellyframe_browser_callback_failure)$' --output-on-failure
           if ($LASTEXITCODE -ne 0) { throw 'Installed resource host tests failed' }
 
   canonical-v10-installed-consumers:
