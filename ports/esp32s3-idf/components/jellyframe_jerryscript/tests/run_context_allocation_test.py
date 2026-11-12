@@ -41,5 +41,9 @@ if os.name == 'nt' and not args.no_asan:
     # Windows loads Clang's shared ASan runtime from PATH.
     runtime_directory = subprocess.check_output(
         [args.compiler, '--print-runtime-dir'], text=True).strip()
-    environment['PATH'] = runtime_directory + os.pathsep + environment.get('PATH', '')
+    resource_directory = subprocess.check_output(
+        [args.compiler, '--print-resource-dir'], text=True).strip()
+    runtime_paths = [pathlib.Path(runtime_directory),
+                     pathlib.Path(resource_directory) / 'lib' / 'windows']
+    environment['PATH'] = os.pathsep.join(str(path) for path in runtime_paths) + os.pathsep + environment.get('PATH', '')
 subprocess.run([str(build / 'context_test.exe')], check=True, env=environment)
