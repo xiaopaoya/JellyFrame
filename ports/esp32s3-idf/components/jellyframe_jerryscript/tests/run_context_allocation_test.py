@@ -1,5 +1,6 @@
 """Compile the real ESP port against allocation/task stubs with Clang ASan."""
 import argparse
+import os
 import pathlib
 import subprocess
 
@@ -35,4 +36,10 @@ command = [args.compiler, '-g', '-O0', '-std=c2x',
 if not args.no_asan:
     command.insert(1, '-fsanitize=address')
 subprocess.run(command, check=True)
-subprocess.run([str(build / 'context_test.exe')], check=True)
+environment = os.environ.copy()
+if os.name == 'nt' and not args.no_asan:
+    # Windows loads Clang's shared ASan runtime from PATH.
+    runtime_directory = subprocess.check_output(
+        [args.compiler, '--print-runtime-dir'], text=True).strip()
+    environment['PATH'] = runtime_directory + os.pathsep + environment.get('PATH', '')
+subprocess.run([str(build / 'context_test.exe')], check=True, env=environment)
