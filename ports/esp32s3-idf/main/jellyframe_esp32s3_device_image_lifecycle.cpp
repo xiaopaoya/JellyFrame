@@ -285,26 +285,46 @@ private:
                                  const InstalledBundleScriptTaskTelemetry& telemetry) {
         char message[kDeviceAppLogMaxMessageBytes + 1]{};
         std::snprintf(message, sizeof(message),
-                      "script %.*s worker_started=%u ui_started=%u initialized=%u init_status=%u fatal_reason=%u scripts=%u input_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u v4p=%u v4r=%u v4a=%u fatal=%u",
-                      static_cast<int>(event.size()), event.data(), telemetry.worker_started ? 1u : 0u,
-                      telemetry.ui_started ? 1u : 0u, telemetry.initialized ? 1u : 0u,
+                      "script %.*s initialized=%u init_status=%u fatal_reason=%u render_status=%u worker_seq=%u accepted_seq=%u presents_failed=%u posted=%u rejected=%u unsupported=%u dropped=%u fatal=%u on=%u/%u",
+                      static_cast<int>(event.size()), event.data(), telemetry.initialized ? 1u : 0u,
                       static_cast<unsigned>(telemetry.init_status), static_cast<unsigned>(telemetry.fatal_reason),
-                      static_cast<unsigned>(telemetry.scripts),
-                      static_cast<unsigned>(telemetry.input_seq), static_cast<unsigned>(telemetry.mutation_seq),
-                      static_cast<unsigned>(telemetry.published_seq), static_cast<unsigned>(telemetry.accepted_seq),
-                      static_cast<unsigned>(telemetry.presents_failed), telemetry.malformed_v4_probe_published ? 1u : 0u,
-                      telemetry.malformed_v4_probe_rejected ? 1u : 0u,
-                      static_cast<unsigned>(telemetry.accepted_after_malformed_v4_probe), telemetry.fatal ? 1u : 0u);
-        record_app_log(telemetry.fatal ? DeviceAppLogLevel::Error : DeviceAppLogLevel::Info,
-                       app_id, generation, message);
-        std::snprintf(message, sizeof(message),
-                      "script-input %.*s posted=%u rejected=%u unsupported=%u queue_dropped=%u worker_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u render_status=%u",
-                      static_cast<int>(event.size()), event.data(),
+                      static_cast<unsigned>(telemetry.render_status), static_cast<unsigned>(telemetry.input_seq),
+                      static_cast<unsigned>(telemetry.accepted_seq), static_cast<unsigned>(telemetry.presents_failed),
                       static_cast<unsigned>(telemetry.input_posted), static_cast<unsigned>(telemetry.input_rejected),
                       static_cast<unsigned>(telemetry.input_unsupported), static_cast<unsigned>(telemetry.input_queue_dropped),
-                      static_cast<unsigned>(telemetry.input_seq), static_cast<unsigned>(telemetry.mutation_seq),
-                      static_cast<unsigned>(telemetry.published_seq), static_cast<unsigned>(telemetry.accepted_seq),
-                      static_cast<unsigned>(telemetry.presents_failed), static_cast<unsigned>(telemetry.render_status));
+                      telemetry.fatal ? 1u : 0u, telemetry.worker_started ? 1u : 0u, telemetry.ui_started ? 1u : 0u);
+        record_app_log(telemetry.fatal ? DeviceAppLogLevel::Error : DeviceAppLogLevel::Info,
+                       app_id, generation, message);
+        // Existing lifecycle collectors consume this stop-summary schema.
+        if (event == "stopped") {
+            std::snprintf(message, sizeof(message),
+                          "script-input %.*s posted=%u rejected=%u unsupported=%u queue_dropped=%u worker_seq=%u mutation_seq=%u published_seq=%u accepted_seq=%u presents_failed=%u render_status=%u",
+                          static_cast<int>(event.size()), event.data(),
+                          static_cast<unsigned>(telemetry.input_posted), static_cast<unsigned>(telemetry.input_rejected),
+                          static_cast<unsigned>(telemetry.input_unsupported), static_cast<unsigned>(telemetry.input_queue_dropped),
+                          static_cast<unsigned>(telemetry.input_seq), static_cast<unsigned>(telemetry.mutation_seq),
+                          static_cast<unsigned>(telemetry.published_seq), static_cast<unsigned>(telemetry.accepted_seq),
+                          static_cast<unsigned>(telemetry.presents_failed), static_cast<unsigned>(telemetry.render_status));
+            record_app_log(telemetry.fatal ? DeviceAppLogLevel::Error : DeviceAppLogLevel::Info,
+                           app_id, generation, message);
+            return;
+        }
+        const auto& start = telemetry.resources.heap_start;
+        const auto& current = telemetry.resources.heap_current;
+        const auto& low = telemetry.resources.heap_sampled_min;
+        // Each heap tuple is internal free/largest, PSRAM free/largest, in bytes.
+        // Exactly two records keep status and resources together in Logs replies.
+        std::snprintf(message, sizeof(message),
+                      "script-resource n=%u start=%u/%u/%u/%u current=%u/%u/%u/%u sampled_min=%u/%u/%u/%u stack_hwm_bytes=%u/%u",
+                      static_cast<unsigned>(telemetry.resources.resource_samples),
+                      static_cast<unsigned>(start.internal_free), static_cast<unsigned>(start.internal_largest),
+                      static_cast<unsigned>(start.psram_free), static_cast<unsigned>(start.psram_largest),
+                      static_cast<unsigned>(current.internal_free), static_cast<unsigned>(current.internal_largest),
+                      static_cast<unsigned>(current.psram_free), static_cast<unsigned>(current.psram_largest),
+                      static_cast<unsigned>(low.internal_free), static_cast<unsigned>(low.internal_largest),
+                      static_cast<unsigned>(low.psram_free), static_cast<unsigned>(low.psram_largest),
+                      static_cast<unsigned>(telemetry.resources.worker_stack_hwm_bytes),
+                      static_cast<unsigned>(telemetry.resources.ui_stack_hwm_bytes));
         record_app_log(telemetry.fatal ? DeviceAppLogLevel::Error : DeviceAppLogLevel::Info,
                        app_id, generation, message);
     }

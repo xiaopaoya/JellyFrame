@@ -28,12 +28,14 @@
 #endif
 
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/idf_additions.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -111,6 +113,8 @@ jellyframe::ScriptTaskSupervisorOptions supervisor_options() {
 } // namespace
 
 struct InstalledBundleScriptSession {
+    mutable portMUX_TYPE resource_lock = portMUX_INITIALIZER_UNLOCKED;
+    InstalledScriptResourceTelemetry resources;
     std::atomic<bool> stop{false};
     std::atomic<bool> worker_done{false};
     std::atomic<bool> ui_done{false};
@@ -151,6 +155,35 @@ struct InstalledBundleScriptSession {
 
 namespace {
 
+InstalledScriptHeapObservation observe_heap() {
+    return {
+        static_cast<std::uint32_t>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+        static_cast<std::uint32_t>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+        static_cast<std::uint32_t>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)),
+        static_cast<std::uint32_t>(heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT))};
+}
+
+// Only the supervisor samples live task handles, before it deletes either task.
+// Heap/stack queries run outside the short value-copy critical section.
+void sample_resources(InstalledBundleScriptSession& state, TaskHandle_t worker, TaskHandle_t ui) {
+    const auto heap = observe_heap();
+    // ESP-IDF Xtensa StackType_t is uint8_t, so this HWM unit is bytes.
+    const auto worker_hwm = worker == nullptr ? 0u : static_cast<std::uint32_t>(uxTaskGetStackHighWaterMark(worker));
+    const auto ui_hwm = ui == nullptr ? 0u : static_cast<std::uint32_t>(uxTaskGetStackHighWaterMark(ui));
+    portENTER_CRITICAL(&state.resource_lock);
+    auto& resource = state.resources;
+    resource.heap_current = heap;
+    auto& low = resource.heap_sampled_min;
+    low.internal_free = std::min(low.internal_free, heap.internal_free);
+    low.internal_largest = std::min(low.internal_largest, heap.internal_largest);
+    low.psram_free = std::min(low.psram_free, heap.psram_free);
+    low.psram_largest = std::min(low.psram_largest, heap.psram_largest);
+    resource.worker_stack_hwm_bytes = worker_hwm;
+    resource.ui_stack_hwm_bytes = ui_hwm;
+    ++resource.resource_samples;
+    portEXIT_CRITICAL(&state.resource_lock);
+}
+
 jellyframe::ScriptTaskWorkerRuntimeOptions worker_options(const InstalledBundleScriptSession& state) {
     jellyframe::ScriptTaskWorkerRuntimeOptions options;
     options.budgets = installed_script_budgets(state.width, state.height);
@@ -172,6 +205,9 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options(const InstalledBundleS
 
 InstalledBundleScriptTaskTelemetry telemetry_snapshot(const InstalledBundleScriptSession& state) {
     InstalledBundleScriptTaskTelemetry telemetry;
+    portENTER_CRITICAL(&state.resource_lock);
+    telemetry.resources = state.resources;
+    portEXIT_CRITICAL(&state.resource_lock);
     telemetry.initialized = state.initialized.load();
     telemetry.fatal = state.fatal_seen.load();
     telemetry.worker_started = state.worker_started.load();
@@ -476,9 +512,16 @@ void supervisor_entry(void* raw) {
     ESP_LOGI(kTag, "session app=%s generation=%u worker=%d ui=%d viewport=%dx%d",
              state->app_id.c_str(), static_cast<unsigned>(state->generation),
              worker_created == pdPASS ? 1 : 0, ui_created == pdPASS ? 1 : 0, state->width, state->height);
+    sample_resources(*state, worker, ui);
+    std::int64_t last_resource_us = esp_timer_get_time();
     jellyframe::AppFrameScratch completion_scratch;
     completion_scratch.reserve_from_options({8, 4, 8, 2048, 1});
     while (!state->stop.load() && !state->worker_done.load()) {
+        const std::int64_t now_us = esp_timer_get_time();
+        if (now_us - last_resource_us >= 1000000) {
+            sample_resources(*state, worker, ui);
+            last_resource_us = now_us;
+        }
         (void)bridge.pump_service_requests();
         (void)bridge.pump(completion_scratch);
         jellyframe::ScriptTaskPacket fatal;
@@ -499,6 +542,7 @@ void supervisor_entry(void* raw) {
     while (!state->worker_done.load() || !state->ui_done.load()) {
         vTaskDelay(pdMS_TO_TICKS(kSupervisorPollMs));
     }
+    sample_resources(*state, worker, ui);
     if (worker != nullptr) vTaskDeleteWithCaps(worker);
     if (ui != nullptr) vTaskDeleteWithCaps(ui);
     // AppInstalledBundleBinding owns the Runtime host and bundle lease. This
@@ -592,6 +636,10 @@ bool start_installed_bundle_script_task(std::string app_id,
         return false;
     }
 #endif
+    next->resources.heap_start = observe_heap();
+    next->resources.heap_current = next->resources.heap_start;
+    next->resources.heap_sampled_min = next->resources.heap_start;
+    next->resources.resource_samples = 1;
     const BaseType_t created = xTaskCreateWithCaps(
         supervisor_entry, "jf_app_supervisor", kSupervisorStackBytes, next, 7,
         &next->supervisor_task, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
