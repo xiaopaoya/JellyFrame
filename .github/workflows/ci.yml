@@ -630,18 +630,18 @@ jobs:
             cropped: true
           - profile: natural-full
             profile_id: render-core-default
-            core_commit: 93744c8f2816339c6a0d67193ae0f43ea7d8169a
-            source_hash: 97aa69552d4e5e32b4996748330b7fea7312295f307b299129638931a4c2449d
-            source_count: 151
+            core_commit: 82ad1dcc98394d5568d51b6665ae92e629831e55
+            source_hash: 8eb12e841028a0d56ee5eac1b4d8789f55787d784e2a046b4cc7ffc5fed0c0b8
+            source_count: 163
             require_natural: 'ON'
             r3_events: 'ON'
             node_identity: 'ON'
             cropped: false
           - profile: natural-cropped
             profile_id: render-core-minimal-no-forms-advanced
-            core_commit: 93744c8f2816339c6a0d67193ae0f43ea7d8169a
-            source_hash: 97aa69552d4e5e32b4996748330b7fea7312295f307b299129638931a4c2449d
-            source_count: 151
+            core_commit: 82ad1dcc98394d5568d51b6665ae92e629831e55
+            source_hash: 8eb12e841028a0d56ee5eac1b4d8789f55787d784e2a046b4cc7ffc5fed0c0b8
+            source_count: 163
             require_natural: 'ON'
             r3_events: 'ON'
             node_identity: 'ON'
@@ -733,6 +733,7 @@ jobs:
           -DEXPECTED_CORE_SOURCE_HASH="$env:EXPECTED_CORE_SOURCE_HASH"
           -DEXPECTED_CORE_PROFILE_ID="$env:EXPECTED_CORE_PROFILE_ID"
           -DBUILD_V10_WORKER=ON
+          -DREQUIRE_SHARED_INLINE_API=${{ matrix.require_natural }}
           -DREQUIRE_NATURAL_IMAGE_API=${{ matrix.require_natural }}
           -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=${{ matrix.r3_events }}
           -DJELLYFRAME_ENABLE_NODE_IDENTITY=${{ matrix.node_identity }}
