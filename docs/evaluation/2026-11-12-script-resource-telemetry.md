@@ -30,5 +30,20 @@ target acceptance evidence.
 Resource1 at Runtime3f87b9d1/Core37919b82 starts and presents successfully.
 Generation195 first live sample reports internal free203739/largest71680 and
 PSRAM free7275280/largest6553600 bytes, worker/UI stack HWM15888/27132 bytes.
-Thirty measured restart cycles are running. Product reserve, transient pressure,
-sampling overhead and latency admission require further evidence.
+Thirty measured STOP/LAUNCH cycles pass with a fresh accepted frame in every
+cycle and no present failures. All restart baselines match exactly at internal
+free286299/largest92160 and PSRAM free8206956/largest7864320 bytes. Running
+internal free ranges203699–203807 bytes, with sampled minima203355–203451 and
+largest block71680 bytes. Running PSRAM free7275280/largest6422528 bytes remains
+constant. Minimum observed unused worker/UI stacks are15696/27084 bytes against
+configured24576/32768 bytes, corresponding to maximum observed use8880/5684.
+
+Raw cycle results remain under migration-target-acceptance-20261112/
+resource1-lifecycle30. Their SHA256 is
+4cfd21c3d100cd11496ae1932f715cad3641ecedd8003052d3393a603c38f7b5.
+The checked summarizer and resource1-lifecycle-summary.json live in the telemetry
+evidence directory. Matching restart checkpoints qualify repeatability for this
+fixture. Product reserve, transient pressure, sampling overhead and latency
+admission require further evidence. Human visual/touch acceptance belongs to
+migration7/generation194. Resource1/generation195 has automated presentation
+and resource evidence.
