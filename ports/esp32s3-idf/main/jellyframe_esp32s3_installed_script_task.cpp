@@ -141,6 +141,7 @@ struct InstalledBundleScriptSession {
     int width = 0;
     int height = 0;
     std::string app_id;
+    std::string entry_path;
     std::string entry_document;
     std::string author_css;
     std::vector<jellyframe::DocumentScript> scripts;
@@ -626,6 +627,7 @@ bool start_installed_bundle_script_task(std::string app_id,
     next->app_instance_id = app_instance_id;
     next->width = profile.display.width;
     next->height = profile.display.height;
+    next->entry_path = entry_path;
     next->entry_document = std::move(entry_document);
     next->author_css = std::move(author_css);
     next->scripts = std::move(scripts);
