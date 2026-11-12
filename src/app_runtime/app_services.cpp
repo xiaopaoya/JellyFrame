@@ -1591,6 +1591,20 @@ AppImageSurfaceCache::Entry* AppImageSurfaceCache::least_recently_used_unprotect
     return candidate;
 }
 
+bool AppImageSurfaceCache::ready_handle(AppRuntimeHost& host, const std::string& url,
+                                        std::uint32_t* handle) const {
+    if (handle != nullptr) *handle = 0;
+    const Entry* entry = find_url(url);
+    HostHandleInfo info;
+    if (entry == nullptr || entry->state != AppImageSurfaceState::Ready ||
+        entry->app_instance_id != host.current_app_instance_id() ||
+        !host.handles().lookup_copy(entry->handle, info) ||
+        info.kind != HostServiceHandleKind::Surface ||
+        info.app_instance_id != host.current_app_instance_id()) return false;
+    if (handle != nullptr) *handle = entry->handle;
+    return true;
+}
+
 bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
                                               ImageDecodeMock& decoder,
                                               const std::string& url,
@@ -1605,9 +1619,7 @@ bool AppImageSurfaceCache::resolve_or_request(AppRuntimeHost& host,
     Entry* entry = find_url(url);
     if (entry != nullptr) {
         if (entry->state == AppImageSurfaceState::Ready) {
-            HostHandleInfo info;
-            if (host.handles().lookup_copy(entry->handle, info) && info.kind == HostServiceHandleKind::Surface &&
-                info.app_instance_id == host.current_app_instance_id()) {
+            if (ready_handle(host, url, handle)) {
                 if (handle != nullptr) {
                     *handle = entry->handle;
                 }

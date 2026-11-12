@@ -295,6 +295,9 @@ public:
                             ImageDecodeMock& decoder,
                             const std::string& url,
                             std::uint32_t* handle);
+    // Read-only: never submits, reconciles stale entries, or changes LRU order.
+    bool ready_handle(AppRuntimeHost& host, const std::string& url,
+                      std::uint32_t* handle) const;
     bool handle_completion(const HostServiceCompletion& completion);
     AppImageSurfaceEvictionResult evict_unreferenced_with_result(AppRuntimeHost& host,
                                                                  ImageDecodeMock& decoder,
