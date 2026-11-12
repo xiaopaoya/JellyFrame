@@ -128,6 +128,7 @@ struct InstalledBundleScriptSession {
     std::atomic<std::uint32_t> published_frame_seq{0};
     std::atomic<std::uint32_t> accepted_frame_seq{0};
     std::atomic<std::uint32_t> present_failures{0};
+    std::atomic<std::uint8_t> render_status{0xff};
     std::atomic<bool> malformed_v4_probe_published{false};
     std::atomic<bool> malformed_v4_probe_rejected{false};
     std::atomic<std::uint32_t> accepted_after_malformed_v4_probe{0};
@@ -187,6 +188,7 @@ InstalledBundleScriptTaskTelemetry telemetry_snapshot(const InstalledBundleScrip
     telemetry.published_seq = state.published_frame_seq.load();
     telemetry.accepted_seq = state.accepted_frame_seq.load();
     telemetry.presents_failed = state.present_failures.load();
+    telemetry.render_status = state.render_status.load();
     telemetry.malformed_v4_probe_published = state.malformed_v4_probe_published.load();
     telemetry.malformed_v4_probe_rejected = state.malformed_v4_probe_rejected.load();
     telemetry.accepted_after_malformed_v4_probe = state.accepted_after_malformed_v4_probe.load();
@@ -401,6 +403,7 @@ void ui_entry(void* raw) {
             jellyframe::ScriptTaskFrameRenderStatus render_status;
             const bool rendered = renderer.render_into(frame, framebuffer, {248, 250, 252, 255},
                                                        &full, 1, &scratch, &render_status);
+            state->render_status.store(static_cast<std::uint8_t>(render_status));
             const bool presented = rendered && jellyframe::present_frame(framebuffer, sink, &full, 1);
             if (presented) {
                 state->accepted_frame_seq.store(packet_sequence);
