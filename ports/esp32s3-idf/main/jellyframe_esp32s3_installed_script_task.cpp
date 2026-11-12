@@ -234,7 +234,7 @@ void worker_entry(void* raw) {
     state->worker_started.store(true);
     {
     jellyframe::ScriptTaskWorkerRuntime runtime(state->script_session, worker_options(*state));
-    const auto initialized = runtime.initialize(state->entry_document, state->author_css);
+    const auto initialized = runtime.initialize(*state->protocol, state->entry_document, state->author_css);
     state->init_status.store(static_cast<std::uint8_t>(initialized));
     state->initialized.store(initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted);
     if (initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted) {
