@@ -48,7 +48,12 @@ std::vector<std::uint8_t> one_pixel_bmp() {
 
 InstalledResourceSnapshot snapshot_with_image(std::vector<std::uint8_t> image) {
     InstalledResourceSnapshot snapshot;
-    snapshot.entries.push_back({"/apps/demo/images/pixel.bmp", jellyframe::HostResourceKind::Image,
+    std::vector<InstalledResourceReference> references;
+    collect_css_background_image_references(
+        ".pixel{background-image:url(../../images/pixel.bmp)}",
+        "/apps/demo/styles/nested/theme.css", references);
+    if (references.size() != 1 || references[0].url != "/apps/demo/images/pixel.bmp") return snapshot;
+    snapshot.entries.push_back({references[0].url, jellyframe::HostResourceKind::Image,
                                 std::move(image)});
     return snapshot;
 }
@@ -208,26 +213,102 @@ int run_installed_resource_owner_tests() {
                old_worker.text_catalog->resource_id(0) == old_font_id,
                "worker and UI must receive the same provider and font catalog identities")) return 1;
 
-    jellyframe::ScriptTaskSupervisor supervisor;
+    jellyframe::ScriptTaskSupervisorOptions supervisor_options;
+    supervisor_options.frame_mailbox = {4, 4096};
+    supervisor_options.frame_leases = {4, 32 * 1024, 64 * 1024};
+    jellyframe::ScriptTaskSupervisor supervisor(supervisor_options);
     const auto session = begin_installed_script_session(supervisor, 7, active);
     if (!check(session.valid() && supervisor.text_catalog(session) == old_worker.text_catalog &&
-               supervisor.image_provider(session) == old_worker.image_provider,
-               "supervisor must retain the same worker/UI resource identities")) return 1;
+                   supervisor.image_provider(session) == old_worker.image_provider,
+               "supervisor must retain the same worker/UI resource identities"))
+        return 1;
+
+    for (bool inline_attribute : {false, true}) {
+        auto options = old_worker;
+        options.viewport = {0, 0, 16, 16};
+        options.frame_codec = {128, 16 * 1024, 16, 32 * 1024};
+        options.frame_codec.version = 10;
+        options.frame_codec.max_groups = 32;
+        options.script = jellyframe::script_runtime_options_from_host_budgets(options.budgets);
+        unsigned preparation_calls = 0;
+        options.prepare_document_user = &preparation_calls;
+        options.prepare_document = [](jellyframe::Node& node, void* context) {
+            ++*static_cast<unsigned*>(context);
+            return prepare_document_styles(node, "/apps/demo/pages/index.html");
+        };
+        jellyframe::ScriptTaskWorkerRuntime worker(session, options);
+        std::string prepared;
+        if (!check(prepare_stylesheet_resources(
+                       "body{margin:0;display:block}div{display:block;width:16px;height:16px;"
+                       "background-size:cover;background-image:url(../../images/pixel.bmp)}",
+                       "/apps/demo/styles/nested/theme.css", prepared),
+                   "linked CSS prepares"))
+            return 1;
+        const char* html =
+            inline_attribute
+                ? "<body><div style='background-image:url(../images/pixel.bmp)'></div></body>"
+                : "<body><div></div></body>";
+        if (inline_attribute)
+            prepared = "body{margin:0;display:block}div{display:block;width:16px;height:16px;"
+                       "background-size:cover}";
+        if (!check(worker.initialize(supervisor, html, prepared) ==
+                       jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted,
+                   "worker prepares original inline attribute and stylesheet CSS"))
+            return 1;
+        if (!check(preparation_calls == 1, "worker prepares the original DOM once"))
+            return 1;
+        if (!check(worker.publish_frame(supervisor).accepted(),
+                   "derived background frame publishes"))
+            return 1;
+        jellyframe::ScriptTaskAcceptedAppFrame accepted;
+        if (!check(jellyframe::take_script_task_app_frame(supervisor, session, options.frame_codec,
+                                                          accepted) ==
+                       jellyframe::ScriptTaskAppFrameTakeStatus::Accepted,
+                   "derived background frame accepted"))
+            return 1;
+        worker.stop();
+        jellyframe::ScriptTaskFrameRenderer renderer({}, {}, old_ui);
+        jellyframe::ScriptTaskFrameRenderStatus status;
+        auto pixels = renderer.render(accepted.frame(), {255, 255, 255, 255}, &status);
+        if (!check(status == jellyframe::ScriptTaskFrameRenderStatus::Accepted &&
+                       pixels.width > 0 && pixels.height > 0 && pixels.pixels[0].r == 255 &&
+                       pixels.pixels[0].g == 0 && pixels.pixels[0].b == 0,
+                   "stylesheet and original inline background paint retained BMP pixels"))
+            return 1;
+    }
+
+    {
+        auto options = old_worker;
+        options.viewport = {0, 0, 16, 16};
+        options.frame_codec.version = 10;
+        options.prepare_document = [](jellyframe::Node&, void*) { return false; };
+        jellyframe::ScriptTaskWorkerRuntime worker(session, options);
+        if (!check(worker.initialize(supervisor, "<body></body>", "") ==
+                           jellyframe::ScriptTaskWorkerRuntimeInitStatus::ParseRejected &&
+                       !worker.initialized() && !worker.publish_frame(supervisor).accepted(),
+                   "preparation refusal publishes no document or frame"))
+            return 1;
+    }
 
     auto first_owner = active;
     auto first_provider = active->image_provider;
     if (!check(!create_resources({0x42, 0x4d}, font_b, active) && active == first_owner,
-               "corrupt image replacement must be refused without replacing the active owner")) return 1;
-    auto invalid_font = std::make_shared<std::vector<std::uint8_t>>(std::initializer_list<std::uint8_t>{1, 2, 3});
+               "corrupt image replacement must be refused without replacing the active owner"))
+        return 1;
+    auto invalid_font =
+        std::make_shared<std::vector<std::uint8_t>>(std::initializer_list<std::uint8_t>{1, 2, 3});
     if (!check(!create_resources(one_pixel_bmp(), invalid_font, active) && active == first_owner,
-               "invalid font replacement must be refused without replacing the active owner")) return 1;
+               "invalid font replacement must be refused without replacing the active owner"))
+        return 1;
 
     InstalledAppResources::Handle replacement;
     if (!check(create_resources(one_pixel_bmp(), font_b, replacement),
-               "valid replacement should build a fresh owner")) return 1;
+               "valid replacement should build a fresh owner"))
+        return 1;
     if (!check(replacement->image_provider->id() != old_provider_id &&
-               replacement->text_catalog->resource_id(0) != old_font_id,
-               "replacement must publish fresh provider and font resource identities")) return 1;
+                   replacement->text_catalog->resource_id(0) != old_font_id,
+               "replacement must publish fresh provider and font resource identities"))
+        return 1;
     const auto replacement_snapshot = std::weak_ptr<const InstalledResourceSnapshot>(replacement->snapshot);
     active = replacement;
     jellyframe::ScriptTaskWorkerRuntimeOptions new_worker;

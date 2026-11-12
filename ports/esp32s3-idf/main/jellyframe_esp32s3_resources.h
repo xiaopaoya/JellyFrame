@@ -1,7 +1,8 @@
-﻿#pragma once
+#pragma once
 
 #include "render_core/host.h"
 #include "device_runtime_contracts/device_bundle.h"
+#include "render_core/dom.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -65,6 +66,7 @@ struct ResourceBundleContext {
     std::size_t max_resource_bytes = 0;
     std::string_view base_url;
     ResourceLoadStats* stats = nullptr;
+    bool prepare_stylesheets = false;
 };
 
 const ResourceBundle& default_resource_bundle();
@@ -90,6 +92,15 @@ bool snapshot_resource_entry_compatible(const std::vector<InstalledResourceSnaps
                                        std::string_view url,
                                        jellyframe::HostResourceKind kind,
                                        bool& already_loaded);
+
+// Failure leaves output empty. Both source and expanded CSS obey max_bytes.
+// A Core-supported declaration with an invalid local URL refuses preparation;
+// malformed/unsupported declarations retain their authored bytes and fallback.
+// Comments, strings, custom values and @import are not resource-loading inputs.
+bool prepare_stylesheet_resources(std::string_view css, std::string_view base_url,
+                                  std::string& output, std::size_t max_bytes = 48u * 1024u);
+bool prepare_document_styles(jellyframe::Node& document, std::string_view base_url);
+bool stylesheet_rel_token(std::string_view rel);
 
 void collect_css_background_image_references(std::string css,
                                              std::string_view base_url,

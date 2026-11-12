@@ -62,6 +62,10 @@ struct ScriptTaskWorkerRuntimeOptions {
     ScriptTaskInputCodecOptions input_codec;
     ScriptTaskServiceRequestCodecOptions service_request_codec;
     const TextSystem* text_system = nullptr;
+    // Synchronous worker-thread preparation before document publication. A
+    // refusal rejects initialization; user must outlive initialization.
+    bool (*prepare_document)(Node&, void*) = nullptr;
+    void* prepare_document_user = nullptr;
     // Synchronous worker-thread tooling observer. The caller keeps user alive
     // through the active call, including when the observer destroys this facade.
     ScriptDomMutationCallback mutation_observer = nullptr;

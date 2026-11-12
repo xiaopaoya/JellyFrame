@@ -389,6 +389,15 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::State::initialize(std
         return ScriptTaskWorkerRuntimeInitStatus::ParseRejected;
     }
 
+    const auto prepare_document = options_.prepare_document;
+    void* prepare_document_user = options_.prepare_document_user;
+    options_.prepare_document = nullptr;
+    options_.prepare_document_user = nullptr;
+    if (prepare_document && !prepare_document(*parsed.document, prepare_document_user)) {
+        set_fatal(ScriptTaskWorkerRuntimeFatalReason::LoadFailure);
+        return ScriptTaskWorkerRuntimeInitStatus::ParseRejected;
+    }
+
     CssParser css_parser;
     Stylesheet stylesheet = css_parser.parse(
         std::string(css),
