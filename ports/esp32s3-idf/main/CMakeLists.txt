@@ -123,6 +123,11 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     endif()
 endif()
 
+set(JELLYFRAME_ESP32S3_IMAGE_SOURCES)
+if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER)
+    list(APPEND JELLYFRAME_ESP32S3_IMAGE_SOURCES "jellyframe_esp32s3_image.cpp")
+endif()
+
 idf_component_register(
     SRCS
         "main.cpp"
@@ -130,7 +135,7 @@ idf_component_register(
         "jellyframe_esp32s3_device_image_lifecycle.cpp"
         "jellyframe_esp32s3_device_image_store.cpp"
         "jellyframe_esp32s3_hal.cpp"
-        "jellyframe_esp32s3_image.cpp"
+        ${JELLYFRAME_ESP32S3_IMAGE_SOURCES}
         "jellyframe_esp32s3_installed_resource_owner.cpp"
         "jellyframe_esp32s3_jfdp_transport.cpp"
         "jellyframe_esp32s3_input.cpp"
