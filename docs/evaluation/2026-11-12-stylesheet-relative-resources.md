@@ -1,5 +1,7 @@
 # Stylesheet-relative installed CSS delivery
 
+Last updated: 2026-11-12; Applies to: 0.6.0-dev
+
 2026-11-12. Runtime branch codex/stylesheet-resource-urls-20261112, based on
 19c12c92. Core source qualification uses the supplied Core-button-text-delivery
 checkout (37919b82); installed canonical package identifies source hash
