@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "render_core/host.h"
+#include "device_runtime_contracts/device_bundle.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -9,6 +10,10 @@
 #include <vector>
 
 namespace jellyframe_esp32s3 {
+
+inline constexpr std::size_t kInstalledResourceMaxBytes = 48u * 1024u;
+inline constexpr std::size_t kInstalledResourceSnapshotMaxBytes = 96u * 1024u;
+inline constexpr std::size_t kInstalledResourceSnapshotMaxEntries = 16u;
 
 struct ResourceEntry {
     std::string_view url;
@@ -38,6 +43,7 @@ struct InstalledResourceSnapshotEntry {
 };
 
 struct InstalledResourceSnapshot {
+    std::vector<jellyframe::DeviceBundleFont> fonts;
     std::vector<InstalledResourceSnapshotEntry> entries;
     std::vector<ResourceEntry> views;
     ResourceBundle bundle{};

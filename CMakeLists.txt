@@ -362,6 +362,9 @@ if(JELLYFRAME_BUILD_TESTS)
     add_executable(jellyframe_esp32s3_resource_reference_tests
         ports/esp32s3-idf/tests/resource_reference_tests.cpp
         ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp)
+    target_include_directories(jellyframe_esp32s3_resource_reference_tests PRIVATE
+        ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
+        "${CMAKE_CURRENT_SOURCE_DIR}/src")
     if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         function(jellyframe_probe_installed_canonical_owner)
             include(CheckCXXSourceCompiles)

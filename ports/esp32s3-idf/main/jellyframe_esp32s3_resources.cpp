@@ -122,6 +122,7 @@ bool InstalledResourceSnapshot::rebuild_views() {
 }
 
 void InstalledResourceSnapshot::clear() {
+    fonts.clear();
     entries.clear();
     views.clear();
     bundle = {};

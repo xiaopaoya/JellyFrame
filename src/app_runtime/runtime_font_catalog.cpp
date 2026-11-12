@@ -69,7 +69,7 @@ RuntimeFontStatus RuntimeFontCatalog::create(const RuntimeFontRegistration* regi
         for (std::size_t i = 0; i < count; ++i) {
             draft->registrations_[i] = registrations[i];
             draft->faces_[i] = {registrations[i].resource->id(), registrations[i].family_id,
-                                registrations[i].resource->resource()};
+                                registrations[i].resource->resource(), registrations[i].css_family_hash};
         }
         const auto status = draft->system_.bind(draft->faces_.get(), count, limits.text);
         if (status != TextSystemStatus::Ok) return status == TextSystemStatus::ResourceLimit

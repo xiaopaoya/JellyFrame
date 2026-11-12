@@ -278,6 +278,38 @@ void policy_limits_are_reported_without_parsing_sections() {
 } // namespace
 
 int main() {
+    const auto inspect_fonts = [](const std::string& fonts, DeviceBundleFontTable& table) {
+        std::string summary = valid_summary();
+        summary.pop_back();
+        summary += ",\"fonts\":" + fonts + "}";
+        auto bytes = make_bundle(summary);
+        DeviceBundleMemoryReader reader(bytes.data(), bytes.size());
+        DeviceBundleDescriptor descriptor;
+        DeviceBundleInspectionWorkspace workspace;
+        auto status = inspect_device_bundle(reader, static_cast<std::uint32_t>(bytes.size()), policy(), workspace, descriptor);
+        if (status != DeviceBundleStatus::Ok) return status;
+        return read_device_bundle_fonts(reader, descriptor, workspace, table);
+    };
+    DeviceBundleFontTable fonts;
+    assert(inspect_fonts(R"([{"id":"regular","source":"/fonts/regular.jffont2","family":"Named Family","sizes":[16],"weights":[400]},{"source":"/fonts/bold.jffont2","family":"Named Family","weights":[700]}])", fonts) == DeviceBundleStatus::Ok);
+    assert(fonts.count == 2);
+    assert(std::string_view(fonts.fonts[1].source.data()) == "/fonts/bold.jffont2");
+    assert(std::string_view(fonts.fonts[1].family.data()) == "Named Family");
+    assert(inspect_fonts("[{\"source\":\"/a.jffont2\",\"family\":\"" + std::string(kDeviceBundleMaxFontFamilyBytes + 1, 'x') + "\"}]", fonts) == DeviceBundleStatus::InvalidSummary);
+    assert(fonts.count == 0);
+    assert(inspect_fonts("[]", fonts) == DeviceBundleStatus::Ok && fonts.count == 0);
+    for (const auto* invalid : {"null", "{}", R"([{}])", R"([{"source":"../bad.jffont2"}])",
+             R"([{"source":"/a.jffont2","family":42}])", R"([{"source":"/a.jffont2","source":"/b.jffont2"}])",
+             R"([{"source":"/a.jffont2","family":"bad\nfamily"}])"})
+        assert(inspect_fonts(invalid, fonts) == DeviceBundleStatus::InvalidSummary);
+    assert(inspect_fonts(R"([{"source":"/a.jffont2","family":"One"},{"source":"/a.jffont2","family":"Two"}])", fonts) == DeviceBundleStatus::Ok);
+    assert(fonts.count == 2);
+    std::string many = "[";
+    for (std::size_t i = 0; i <= kDeviceBundleMaxFonts; ++i) {
+        if (i) many += ',';
+        many += "{\"source\":\"/font" + std::to_string(i) + ".jffont2\"}";
+    }
+    assert(inspect_fonts(many + "]", fonts) == DeviceBundleStatus::InvalidSummary);
     validates_bundle_and_reads_resource();
     default_policy_is_safe_and_usable();
     rejects_bad_bundle_or_resource_checksum();

@@ -14,6 +14,9 @@
 #include <vector>
 
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+#include "app_runtime/tests/runtime_font_test_fixture.h"
+#include "render_core/text_backend.h"
+#include "render_core/software_renderer.h"
 namespace {
 
 using namespace jellyframe_esp32s3;
@@ -83,6 +86,102 @@ int run_installed_resource_owner_tests() {
     auto font_a = read_font_fixture();
     auto font_b = read_font_fixture();
     if (!check(font_a && font_b, "could not read valid JFFONT2 fixture")) return 1;
+
+    const auto app_snapshot = [] {
+        auto snapshot = snapshot_with_image(one_pixel_bmp());
+        for (unsigned weight : {400u, 700u}) {
+            jellyframe::DeviceBundleFont metadata;
+            const std::string path = "/fonts/face" + std::to_string(weight) + ".jffont2";
+            std::copy(path.begin(), path.end(), metadata.source.begin());
+            const std::string family = "Named Family";
+            std::copy(family.begin(), family.end(), metadata.family.begin());
+            snapshot.fonts.push_back(metadata);
+            snapshot.entries.push_back({path, jellyframe::HostResourceKind::Font,
+                jellyframe::runtime_test_fonts::font_bytes(weight)});
+        }
+        return snapshot;
+    };
+    InstalledAppResources::Handle named;
+    const auto admit = [&](InstalledResourceSnapshot snapshot) {
+        return create_installed_app_resources(std::move(snapshot), {}, "/apps/demo/index.html",
+            font_a->data(), font_a->size(), erase_owner(font_a), host_clock_us, named);
+    };
+    if (!check(admit(app_snapshot()), "declared named-family regular/bold should register")) return 1;
+    if (!check(named->text_catalog->size() == 3 && named->text_catalog->registration(0).family_id == 0 &&
+        named->text_catalog->registration(1).family_id == jellyframe::normalized_font_family_hash("Named Family") &&
+        named->text_catalog->registration(2).family_id == named->text_catalog->registration(1).family_id,
+        "firmware fallback must precede app faces in declaration order")) return 1;
+    auto prior_named = named;
+    auto retained_catalog = named->text_catalog;
+    const auto verify_app_text = [&](const jellyframe::RuntimeFontCatalog& catalog) {
+        using namespace jellyframe;
+        std::uint32_t family = 0;
+        if (!catalog.text_system().resolve_family_hash(normalized_font_family_hash("Named Family"), family) || !family)
+            return false;
+        TextFontRequest request;
+        request.families = &family;
+        request.family_count = 1;
+        for (unsigned weight : {400u, 700u}) {
+            request.weight = static_cast<std::uint16_t>(weight);
+            TextRunMetrics metrics;
+            PreparedTextGlyph glyph;
+            if (catalog.text_system().prepare("A", request, &glyph, 1, metrics) != TextSystemStatus::Ok ||
+                glyph.resource_id != catalog.resource_id(weight == 400 ? 1 : 2) ||
+                metrics.advance != 9600 || metrics.ascent != 12800) return false;
+            std::string packet;
+            PreparedTextView view;
+            if (!encode_prepared_text(&glyph, 1, request.size_q1000, 1, packet) ||
+                !decode_prepared_text(packet, view)) return false;
+            FrameBuffer target(16, 16, Color{0, 0, 0, 255});
+            if (catalog.text_system().paint(view, target, {0, 0, 16, 16}, 4000, 8000,
+                                          Color{255, 255, 255, 255}) != TextSystemStatus::Ok) return false;
+            bool painted = false;
+            for (const auto& pixel : target.pixels) painted = painted || pixel.r != 0;
+            if (!painted) return false;
+        }
+        return true;
+    };
+    if (!check(verify_app_text(*retained_catalog), "named family must resolve, measure, select weights and paint")) return 1;
+    std::weak_ptr<const InstalledResourceSnapshot> named_snapshot = named->snapshot;
+    for (unsigned fault = 0; fault < 7; ++fault) {
+        auto invalid = app_snapshot();
+        if (fault == 0) invalid.entries.back().bytes = {1,2,3};
+        if (fault == 1) invalid.entries.pop_back();
+        if (fault == 2) invalid.entries.back().kind = jellyframe::HostResourceKind::Image;
+        if (fault == 3) invalid.fonts.resize(jellyframe::kDeviceBundleMaxFonts + 1);
+        if (fault == 4) invalid.fonts.back().source.fill('x');
+        if (fault == 5) invalid.entries.back().bytes.resize(kInstalledResourceMaxBytes + 1);
+        if (fault == 6) invalid.fonts.back().family[0] = '\n';
+        if (!check(!admit(std::move(invalid)) && named == prior_named,
+                   "invalid app metadata/bytes must preserve previous owner")) return 1;
+    }
+    if (!check(admit(app_snapshot()) && named != prior_named,
+               "valid replacement should publish a fresh named catalog")) return 1;
+    prior_named.reset();
+    if (!check(!named_snapshot.expired(), "catalog alone must pin old app font bytes")) return 1;
+    if (!check(verify_app_text(*retained_catalog), "old catalog must still paint after refused and valid replacements")) return 1;
+    retained_catalog.reset();
+    if (!check(named_snapshot.expired(), "old font snapshot releases after final catalog drains")) return 1;
+    named.reset();
+    auto aliased = app_snapshot();
+    auto alias = aliased.fonts.front();
+    alias.family.fill('\0');
+    const std::string alias_name = "Family Alias";
+    std::copy(alias_name.begin(), alias_name.end(), alias.family.begin());
+    aliased.fonts.push_back(alias);
+    if (!check(admit(std::move(aliased)), "same source may be declared under another family")) return 1;
+    std::uint32_t alias_family = 0;
+    jellyframe::TextFontRequest alias_request;
+    jellyframe::TextRunMetrics alias_metrics;
+    alias_request.families = &alias_family;
+    alias_request.family_count = 1;
+    if (!check(named->text_catalog->text_system().resolve_family_hash(
+                   jellyframe::normalized_font_family_hash(alias_name), alias_family) &&
+               named->text_catalog->text_system().measure("A", alias_request, alias_metrics) ==
+                   jellyframe::TextSystemStatus::Ok &&
+               alias_metrics.primary_resource_id == named->text_catalog->resource_id(3),
+               "source alias must resolve and measure through its own registration")) return 1;
+    named.reset();
 
     InstalledAppResources::Handle active;
     if (!check(create_resources(one_pixel_bmp(), font_a, active),

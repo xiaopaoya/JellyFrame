@@ -28,6 +28,7 @@ void InstalledAppResources::bind_ui_resources(
 #include <new>
 #include <string>
 #include <utility>
+#include "render_core/text_backend.h"
 
 namespace jellyframe_esp32s3 {
 namespace {
@@ -110,6 +111,14 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
                                     BmpImageAdapter::Clock clock,
                                     InstalledAppResources::Handle& output) {
     if (!clock) return false;
+    if (snapshot.entries.size() > kInstalledResourceSnapshotMaxEntries) return false;
+    std::size_t snapshot_bytes = 0;
+    for (const auto& entry : snapshot.entries) {
+        if (entry.bytes.size() > kInstalledResourceMaxBytes ||
+            entry.bytes.size() > budgets.max_resource_bytes ||
+            entry.bytes.size() > kInstalledResourceSnapshotMaxBytes - snapshot_bytes) return false;
+        snapshot_bytes += entry.bytes.size();
+    }
     try {
         auto candidate = std::make_shared<InstalledAppResources>();
         auto owned_snapshot = std::make_shared<InstalledResourceSnapshot>(std::move(snapshot));
@@ -120,8 +129,31 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
         RuntimeFontResource::Handle core_font;
         if (RuntimeFontResource::retain(core_font_bytes, core_font_size, core_font_owner, core_font) !=
                 RuntimeFontStatus::Ready) return false;
-        const RuntimeFontRegistration registration{std::move(core_font), 0};
-        if (RuntimeFontCatalog::create(&registration, 1, candidate->text_catalog) != RuntimeFontStatus::Ready)
+        std::vector<RuntimeFontRegistration> registrations;
+        registrations.push_back({std::move(core_font), 0});
+        if (owned_snapshot->fonts.size() > kDeviceBundleMaxFonts) return false;
+        for (const auto& metadata : owned_snapshot->fonts) {
+            if (metadata.source.back() != '\0' || metadata.family.back() != '\0') return false;
+            const std::string_view path(metadata.source.data());
+            if (path.size() < 8 || path.substr(path.size() - 8) != ".jffont2") return false;
+            std::string normalized;
+            if (!resolve_local_resource_url(path, "/", normalized) || normalized != path) return false;
+            for (const unsigned char ch : std::string_view(metadata.family.data()))
+                if (ch < 0x20) return false;
+            const InstalledResourceSnapshotEntry* match = nullptr;
+            for (const auto& entry : owned_snapshot->entries) {
+                if (entry.url != path) continue;
+                if (match || entry.kind != HostResourceKind::Font) return false;
+                match = &entry;
+            }
+            if (!match || match->bytes.empty()) return false;
+            RuntimeFontResource::Handle resource;
+            if (RuntimeFontResource::retain(match->bytes.data(), match->bytes.size(), owned_snapshot, resource) !=
+                RuntimeFontStatus::Ready) return false;
+            const auto family_hash = normalized_font_family_hash(metadata.family.data());
+            registrations.push_back({std::move(resource), family_hash, family_hash});
+        }
+        if (RuntimeFontCatalog::create(registrations.data(), registrations.size(), candidate->text_catalog) != RuntimeFontStatus::Ready)
             return false;
 
         auto source = std::make_shared<InstalledSnapshotImageSource>(

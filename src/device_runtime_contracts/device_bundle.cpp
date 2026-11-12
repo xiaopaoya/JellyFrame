@@ -180,7 +180,8 @@ bool copy_json_string(std::string_view source, std::size_t& index, std::array<ch
 
 class SummaryParser {
 public:
-    SummaryParser(std::string_view source, DeviceBundleSummary& summary) : source_(source), summary_(summary) {}
+    SummaryParser(std::string_view source, DeviceBundleSummary& summary, DeviceBundleFontTable* fonts = nullptr)
+        : source_(source), summary_(summary), fonts_(fonts) {}
 
     bool parse() {
         skip_space();
@@ -228,6 +229,7 @@ private:
         MinJellyFrame = 1u << 6,
         MinRenderCore = 1u << 7,
         Script = 1u << 8,
+        Fonts = 1u << 9,
     };
 
     void skip_space() {
@@ -257,6 +259,7 @@ private:
     }
 
     bool parse_member(std::string_view key) {
+        if (key == "fonts") return fonts_ ? mark_once(Fonts) && parse_fonts() : skip_value(0);
         if (key == "id") {
             return mark_once(Id) && copy_json_string(source_, index_, summary_.app_id);
         }
@@ -316,6 +319,46 @@ private:
             return parse_uint32(summary_.version_code);
         }
         return skip_value(0);
+    }
+
+    bool parse_fonts() {
+        if (!consume('[')) return false;
+        skip_space();
+        if (consume(']')) return true;
+        for (;;) {
+            if (fonts_->count == fonts_->fonts.size() || !consume('{')) return false;
+            auto& font = fonts_->fonts[fonts_->count];
+            bool source_seen = false, family_seen = false;
+            skip_space();
+            if (consume('}')) return false;
+            for (;;) {
+                std::array<char, 32> key{};
+                if (!copy_json_string(source_, index_, key)) return false;
+                skip_space();
+                if (!consume(':')) return false;
+                skip_space();
+                const std::string_view name(key.data());
+                if (name == "source") {
+                    if (source_seen || !copy_json_string(source_, index_, font.source)) return false;
+                    source_seen = true;
+                } else if (name == "family") {
+                    if (family_seen || !copy_json_string(source_, index_, font.family)) return false;
+                    family_seen = true;
+                } else if (!skip_value(1)) return false;
+                skip_space();
+                if (consume('}')) break;
+                if (!consume(',')) return false;
+                skip_space();
+            }
+            const std::string_view source(font.source.data());
+            if (!source_seen || !path_is_normalized(reinterpret_cast<const std::uint8_t*>(source.data()), source.size()) ||
+                string_has_control_character(font.family.data())) return false;
+            ++fonts_->count;
+            skip_space();
+            if (consume(']')) return true;
+            if (!consume(',')) return false;
+            skip_space();
+        }
     }
 
     bool parse_uint32(std::uint32_t& output) {
@@ -526,6 +569,7 @@ private:
 
     std::string_view source_;
     DeviceBundleSummary& summary_;
+    DeviceBundleFontTable* fonts_ = nullptr;
     std::size_t index_ = 0;
     std::uint16_t seen_ = 0;
 };
@@ -617,6 +661,25 @@ std::string_view DeviceBundleSummary::version_name_view() const {
 
 std::string_view DeviceBundleSummary::entry_path_view() const {
     return std::string_view(entry_path.data());
+}
+
+DeviceBundleStatus read_device_bundle_fonts(const DeviceBundleReader& reader,
+                                            const DeviceBundleDescriptor& descriptor,
+                                            DeviceBundleInspectionWorkspace& workspace,
+                                            DeviceBundleFontTable& fonts) {
+    fonts.clear();
+    if (!descriptor.summary_bytes || descriptor.summary_bytes > workspace.summary_bytes.size() ||
+        !section_is_valid(descriptor.bundle_bytes, descriptor.summary_offset, descriptor.summary_bytes))
+        return DeviceBundleStatus::InvalidSummary;
+    if (!reader.read_at(descriptor.summary_offset, workspace.summary_bytes.data(), descriptor.summary_bytes))
+        return DeviceBundleStatus::ReadFailed;
+    DeviceBundleSummary summary;
+    const std::string_view json(reinterpret_cast<const char*>(workspace.summary_bytes.data()), descriptor.summary_bytes);
+    if (!SummaryParser(json, summary, &fonts).parse()) {
+        fonts.clear();
+        return DeviceBundleStatus::InvalidSummary;
+    }
+    return DeviceBundleStatus::Ok;
 }
 
 DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,

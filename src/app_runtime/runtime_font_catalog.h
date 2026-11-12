@@ -49,6 +49,7 @@ private:
 struct RuntimeFontRegistration {
     RuntimeFontResource::Handle resource;
     std::uint32_t family_id = 0;
+    std::uint32_t css_family_hash = 0;
 };
 
 struct RuntimeFontCatalogLimits {

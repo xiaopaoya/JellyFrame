@@ -96,6 +96,8 @@ public:
     }
 
     bool copy_active_descriptor(DeviceBundleDescriptor& descriptor) const;
+    DeviceBundleStatus read_active_fonts(DeviceBundleInspectionWorkspace& workspace,
+                                         DeviceBundleFontTable& fonts) const;
 
 private:
     void release_active_bundle();

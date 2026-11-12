@@ -19,6 +19,26 @@ constexpr std::size_t kDeviceBundleMaxAppNameBytes = 95;
 constexpr std::size_t kDeviceBundleMaxVersionNameBytes = 63;
 constexpr std::size_t kDeviceBundleMaxEntryPathBytes = 191;
 constexpr std::size_t kDeviceBundleMaxRuntimeVersionBytes = 31;
+constexpr std::size_t kDeviceBundleMaxFonts = 8;
+constexpr std::size_t kDeviceBundleMaxFontFamilyBytes = 95;
+
+// Routing metadata from the existing normalized fonts[] summary. Metrics,
+// strikes and weights are authoritative only in the validated font resource.
+struct DeviceBundleFont {
+    std::array<char, kDeviceBundleMaxResourcePathBytes + 1> source{};
+    std::array<char, kDeviceBundleMaxFontFamilyBytes + 1> family{};
+};
+struct DeviceBundleFontTable {
+    std::array<DeviceBundleFont, kDeviceBundleMaxFonts> fonts{};
+    std::size_t count = 0;
+    void clear() noexcept {
+        count = 0;
+        for (auto& font : fonts) {
+            font.source.fill('\0');
+            font.family.fill('\0');
+        }
+    }
+};
 
 enum class DeviceBundleStatus : std::uint8_t {
     Ok,
@@ -146,6 +166,14 @@ DeviceBundleStatus find_device_bundle_resource(const DeviceBundleReader& reader,
                                                const DeviceBundleDescriptor& descriptor,
                                                std::string_view app_path,
                                                DeviceBundleResource& resource);
+
+// Optional launch-time font admission. Reuses the normalized summary parser;
+// callers keep the table and workspace off small device task stacks. Output
+// is cleared on refusal and never exposes bytes owned by storage.
+DeviceBundleStatus read_device_bundle_fonts(const DeviceBundleReader& reader,
+                                            const DeviceBundleDescriptor& descriptor,
+                                            DeviceBundleInspectionWorkspace& workspace,
+                                            DeviceBundleFontTable& fonts);
 
 DeviceBundleStatus read_device_bundle_resource(const DeviceBundleReader& reader,
                                                const DeviceBundleDescriptor& descriptor,
