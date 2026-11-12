@@ -900,6 +900,11 @@ jobs:
       - name: Checkout JellyFrame Runtime
         uses: actions/checkout@v5
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
       - name: Build locked Render Core 0.8.0 ABI3 package
         shell: pwsh
         run: |
