@@ -119,6 +119,15 @@ bool AppInstalledBundleBinding::copy_active_descriptor(DeviceBundleDescriptor& d
     return true;
 }
 
+DeviceBundleStatus AppInstalledBundleBinding::read_active_fonts(DeviceBundleInspectionWorkspace& workspace,
+                                                                DeviceBundleFontTable& fonts) const {
+    if (!active_lease_) {
+        fonts.clear();
+        return DeviceBundleStatus::ResourceNotFound;
+    }
+    return read_device_bundle_fonts(*active_lease_, active_lease_->descriptor(), workspace, fonts);
+}
+
 void AppInstalledBundleBinding::release_active_bundle() {
     if (active_lease_ != nullptr) {
         active_lease_->release();

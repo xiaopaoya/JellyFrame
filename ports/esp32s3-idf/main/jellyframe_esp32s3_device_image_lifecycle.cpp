@@ -4,6 +4,7 @@
 #include "jellyframe_esp32s3_core_system_font.h"
 #endif
 #include "jellyframe_esp32s3_ui_task.h"
+#include "jellyframe_esp32s3_installed_frame_admission.h"
 
 #include "app_runtime/app_installed_bundle.h"
 #include "device_runtime_contracts/device_install_transaction.h"
@@ -40,9 +41,6 @@ constexpr TickType_t kUsbIoTimeout = pdMS_TO_TICKS(50);
 constexpr std::int64_t kUsbWriteDeadlineUs = 2500000;
 constexpr std::int64_t kPartialFrameTimeoutUs = 500000;
 constexpr std::size_t kInstalledAppEntryMaxBytes = 16u * 1024u;
-constexpr std::size_t kInstalledResourceMaxBytes = 48u * 1024u;
-constexpr std::size_t kInstalledResourceSnapshotMaxBytes = 96u * 1024u;
-constexpr std::size_t kInstalledResourceSnapshotMaxEntries = 16u;
 
 constexpr char kImageId[] = "org.jellyframe.ws147.developer";
 constexpr char kProfileId[] = "rect-172x320";
@@ -66,6 +64,7 @@ jellyframe::HostResourceKind resource_kind_for_path(std::string_view path) {
     const std::string_view suffix = path.substr(dot);
     if (suffix == ".css") return jellyframe::HostResourceKind::Stylesheet;
     if (suffix == ".js") return jellyframe::HostResourceKind::ClassicScript;
+    if (suffix == ".jffont2") return jellyframe::HostResourceKind::Font;
     if (suffix == ".bmp" || suffix == ".png" || suffix == ".jpg" || suffix == ".jpeg" ||
         suffix == ".gif" || suffix == ".webp") return jellyframe::HostResourceKind::Image;
     return jellyframe::HostResourceKind::Other;
@@ -76,7 +75,7 @@ void collect_resource_references(const jellyframe::Node& node,
                                  std::vector<InstalledResourceReference>& output) {
     const std::string& src = node.attribute("src");
     const std::string& href = node.attribute("href");
-    if (node.tag_name == "link" && node.attribute("rel") == "stylesheet" && !href.empty()) {
+    if (node.tag_name == "link" && stylesheet_rel_token(node.attribute("rel")) && !href.empty()) {
         output.push_back({jellyframe::HostResourceKind::Stylesheet, href, std::string(base_url)});
     } else if (node.tag_name == "script" && !src.empty()) {
         output.push_back({jellyframe::HostResourceKind::ClassicScript, src, std::string(base_url)});
@@ -122,7 +121,22 @@ bool snapshot_active_resources(const jellyframe::AppInstalledBundleBinding& bind
     }
     const std::string entry_path(descriptor.summary.entry_path_view());
     std::vector<InstalledResourceReference> references;
+    if (!prepare_document_styles(*document, entry_path)) return false;
     collect_resource_references(*document, entry_path, references);
+#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+    std::unique_ptr<DeviceBundleFontTable> font_table(new (std::nothrow) DeviceBundleFontTable);
+    std::unique_ptr<DeviceBundleInspectionWorkspace> font_workspace(new (std::nothrow) DeviceBundleInspectionWorkspace);
+    if (!font_table || !font_workspace) return false;
+    if (binding.read_active_fonts(*font_workspace, *font_table) != DeviceBundleStatus::Ok) return false;
+    for (std::size_t i = 0; i < font_table->count; ++i) {
+        const auto& font = font_table->fonts[i];
+        // Canonical installed text requires JFFONT2. Never silently drop a
+        // declaration that the immutable catalog cannot consume.
+        if (resource_kind_for_path(font.source.data()) != HostResourceKind::Font) return false;
+        snapshot.fonts.push_back(font);
+        references.push_back({HostResourceKind::Font, font.source.data(), "/"});
+    }
+#endif
     const auto load_reference = [&](const auto& reference) {
         std::string path;
         if (!resolve_local_resource_url(reference.url, reference.base_url, path)) return false;
@@ -130,14 +144,14 @@ bool snapshot_active_resources(const jellyframe::AppInstalledBundleBinding& bind
         if (!snapshot_resource_entry_compatible(snapshot.entries, path, reference.kind, already_loaded)) return false;
         if (already_loaded) return true;
         if (snapshot.entries.size() >= kInstalledResourceSnapshotMaxEntries) return false;
+        const jellyframe::HostResourceKind path_kind = resource_kind_for_path(path);
+        if (path_kind != reference.kind) return false;
         std::vector<std::uint8_t> bytes(kInstalledResourceMaxBytes);
         std::size_t read_bytes = 0;
         if (binding.read_active_resource(path, bytes.data(), bytes.size(), read_bytes) != DeviceBundleStatus::Ok ||
             read_bytes == 0 || read_bytes > kInstalledResourceMaxBytes ||
             snapshot.total_bytes > kInstalledResourceSnapshotMaxBytes - read_bytes) return false;
         bytes.resize(read_bytes);
-        const jellyframe::HostResourceKind path_kind = resource_kind_for_path(path);
-        if (path_kind != reference.kind) return false;
         snapshot.total_bytes += read_bytes;
         snapshot.entries.push_back(InstalledResourceSnapshotEntry{std::move(path), path_kind, std::move(bytes)});
         return true;
@@ -150,7 +164,9 @@ bool snapshot_active_resources(const jellyframe::AppInstalledBundleBinding& bind
     for (const InstalledResourceSnapshotEntry& entry : snapshot.entries) {
         if (entry.kind != jellyframe::HostResourceKind::Stylesheet) continue;
         const std::string css(reinterpret_cast<const char*>(entry.bytes.data()), entry.bytes.size());
-        collect_css_background_image_references(css, entry.url, css_images);
+        std::string prepared;
+        if (!prepare_stylesheet_resources(css, entry.url, prepared, kInstalledResourceMaxBytes)) return false;
+        collect_css_background_image_references(std::move(prepared), entry.url, css_images);
     }
     collect_inline_background_images(*document, entry_path, css_images);
     for (const auto& reference : css_images) {

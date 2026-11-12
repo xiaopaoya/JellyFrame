@@ -182,6 +182,11 @@ void active_resource_queries_require_an_active_lease() {
     assert(binding.read_active_resource("/index.html", output.data(), output.size(), output_size) ==
            DeviceBundleStatus::ResourceNotFound);
     assert(output_size == 0);
+    DeviceBundleInspectionWorkspace workspace;
+    DeviceBundleFontTable fonts;
+    fonts.count = 1;
+    assert(binding.read_active_fonts(workspace, fonts) == DeviceBundleStatus::ResourceNotFound);
+    assert(fonts.count == 0);
 }
 
 } // namespace

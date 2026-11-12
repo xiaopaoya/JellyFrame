@@ -92,6 +92,19 @@ if(BUILD_V10_WORKER)
     PRIVATE JELLYFRAME_SCRIPT_TASK_RUNTIME_ENABLED=1 JELLYFRAME_SCRIPT_EVENT_TESTING=1
       JELLYFRAME_SCRIPT_IDENTITY_TESTING=1)
   target_link_libraries(installed_runtime_canonical_v10_worker PRIVATE runtime_v10_script)
+  v10_test(installed_stylesheet_resources
+    "${runtime_repo_root}/ports/esp32s3-idf/tests/installed_resource_owner_tests.cpp"
+    "${runtime_repo_root}/ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp"
+    "${runtime_repo_root}/ports/esp32s3-idf/main/jellyframe_esp32s3_installed_resource_owner.cpp"
+    "${runtime_repo_root}/ports/esp32s3-idf/main/jellyframe_esp32s3_image.cpp")
+  target_link_libraries(installed_stylesheet_resources PRIVATE runtime_v10_script)
+  target_include_directories(installed_stylesheet_resources PRIVATE "${runtime_repo_root}/ports/esp32s3-idf/main")
+  target_compile_definitions(installed_stylesheet_resources PRIVATE
+    JELLYFRAME_SCRIPT_EVENT_TESTING=1 JELLYFRAME_SCRIPT_IDENTITY_TESTING=1
+    CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM=1
+    CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER=1
+    "JELLYFRAME_CORE_SYSTEM_FONT_FIXTURE=\"${runtime_repo_root}/ports/esp32s3-idf/font/core-system-noto-regular-16.jffont2\"")
+
 endif()
 
 message(STATUS "Core package=${JellyFrameRenderCore_PACKAGE_VERSION} ABI=${JellyFrameRenderCore_ENGINE_ABI} profile=${JellyFrameRenderCore_PROFILE_ID}")

@@ -141,6 +141,7 @@ struct InstalledBundleScriptSession {
     int width = 0;
     int height = 0;
     std::string app_id;
+    std::string entry_path;
     std::string entry_document;
     std::string author_css;
     std::vector<jellyframe::DocumentScript> scripts;
@@ -188,6 +189,11 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options(const InstalledBundleS
     jellyframe::ScriptTaskWorkerRuntimeOptions options;
     options.budgets = installed_script_budgets(state.width, state.height);
     options.script = jellyframe::script_runtime_options_from_host_budgets(options.budgets);
+    options.prepare_document = [](jellyframe::Node& document, void* raw) {
+        const auto& session = *static_cast<const InstalledBundleScriptSession*>(raw);
+        return prepare_document_styles(document, session.entry_path);
+    };
+    options.prepare_document_user = const_cast<InstalledBundleScriptSession*>(&state);
     options.viewport = {0, 0, state.width, state.height};
     options.frame_codec = frame_codec_options();
     options.input_codec = {32, 256};
@@ -590,7 +596,8 @@ bool start_installed_bundle_script_task(std::string app_id,
     jellyframe::HtmlParser parser;
     const std::unique_ptr<jellyframe::Node> document = parser.parse(
         entry_document, jellyframe::html_parser_options_from_budgets(budgets));
-    if (!document) return false;
+    if (!document || !prepare_document_styles(*document, entry_path)) return false;
+    resource_context.prepare_stylesheets = true;
     std::string author_css = jellyframe::combine_author_css(
         "", *document, load_linked_stylesheet, &resource_context,
         jellyframe::document_style_collection_options_from_budgets(budgets));
@@ -620,6 +627,7 @@ bool start_installed_bundle_script_task(std::string app_id,
     next->app_instance_id = app_instance_id;
     next->width = profile.display.width;
     next->height = profile.display.height;
+    next->entry_path = entry_path;
     next->entry_document = std::move(entry_document);
     next->author_css = std::move(author_css);
     next->scripts = std::move(scripts);

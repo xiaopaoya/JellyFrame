@@ -362,6 +362,9 @@ if(JELLYFRAME_BUILD_TESTS)
     add_executable(jellyframe_esp32s3_resource_reference_tests
         ports/esp32s3-idf/tests/resource_reference_tests.cpp
         ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp)
+    target_include_directories(jellyframe_esp32s3_resource_reference_tests PRIVATE
+        ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
+        "${CMAKE_CURRENT_SOURCE_DIR}/src")
     if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         function(jellyframe_probe_installed_canonical_owner)
             include(CheckCXXSourceCompiles)
@@ -386,7 +389,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 ports/esp32s3-idf/main/jellyframe_esp32s3_image.cpp)
         endif()
         target_link_libraries(jellyframe_esp32s3_installed_resource_owner_tests
-            PRIVATE jellyframe_script_task_runtime)
+            PRIVATE jellyframe_script_task_runtime jellyframe_script)
         target_include_directories(jellyframe_esp32s3_installed_resource_owner_tests PRIVATE
             ports/esp32s3-idf/main)
         jellyframe_enable_test_asserts(jellyframe_esp32s3_installed_resource_owner_tests)
@@ -395,6 +398,7 @@ if(JELLYFRAME_BUILD_TESTS)
             COMMAND jellyframe_esp32s3_installed_resource_owner_tests)
         set_tests_properties(jellyframe_esp32s3_installed_resource_owner_tests PROPERTIES SKIP_RETURN_CODE 77)
         target_compile_definitions(jellyframe_esp32s3_installed_resource_owner_tests PRIVATE
+            JELLYFRAME_SCRIPT_EVENT_TESTING=1 JELLYFRAME_SCRIPT_IDENTITY_TESTING=1
             CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM=1
             CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER=1
             "JELLYFRAME_CORE_SYSTEM_FONT_FIXTURE=\"${CMAKE_CURRENT_SOURCE_DIR}/ports/esp32s3-idf/font/core-system-noto-regular-16.jffont2\"")

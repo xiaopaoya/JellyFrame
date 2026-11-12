@@ -61,6 +61,49 @@ Builds are E:/Builds/runtime-frame10-*. Image hashes identify these precise
 build inputs. Device installation, page transitions, input, accepted-frame
 lifetime and dynamic resource watermarks remain pending.
 
-The catalog currently supplies the firmware JFFONT2 system font. App-provided
-font metadata and stylesheet-relative CSS resource extraction require their
-existing separate contracts. Snapshot budgets and URL/kind refusal are retained.
+The catalog retains the firmware JFFONT2 system font at index zero. The installed
+frame10 font route additionally reads the existing normalized JFAPPV0 summary's
+`fonts[].source` and optional `family` through the existing bounded summary
+parser. It snapshots every declared JFFONT2 in declaration order and registers
+its normalized CSS family hash with Core. Multiple resources in one family
+support different native weights; source aliases are allowed. The `sizes`,
+`weights`, profile and license fields remain packaging/diagnostic metadata:
+validated JFFONT2 bytes alone determine Core metrics, native weight and paint.
+
+Font admission is bounded to eight declarations, 255 source bytes and 95 family
+bytes, within the existing 4 KiB summary. Nine catalog faces (firmware plus eight
+app declarations) fit the existing 64-face/16-family Core defaults. Declared
+legacy JFFONT, missing or corrupt bytes, invalid paths/families, and exhausted
+snapshot budgets refuse the entire candidate. App fonts share the existing
+16-entry, 48 KiB per-resource and 96 KiB aggregate snapshot budgets. In
+particular, large CJK font supplements exceeding 48 KiB are refused by this
+bounded installed target. The firmware system font is outside those app budgets.
+
+The font table and summary-read workspace are temporary heap allocations;
+DeviceBundleSummary and DeviceBundleDescriptor retain their original size.
+Storage leases remain supervisor-owned. Font catalog handles independently pin
+the same immutable snapshot bytes after owner replacement and session teardown.
+Refusal preserves the previous published owner. The ordinary/old-Core session
+path skips optional font admission and retains its prior behavior.
+
+Follow-up evidence is under E:/Experiments/installed-font-metadata-20261112.
+MSVC Release new-Core focused tests cover named-family hash resolution,
+regular/bold selection, exact Core metrics, prepared glyph paint, invalid
+metadata/bytes/kind/limits, preserved output, and old-catalog paint after
+replacement. Protocol tests exercise the same summary parser's optional font
+reader. The actual locked Core 0.8/ABI3 executes ordinary resource and protocol
+checks with an explicit canonical-owner skip.
+Clang ASan+UBSan passes all three focused owner/resource/protocol tests with
+assertions enabled; Runtime and Core are instrumented. The existing
+instrumented JerryScript core/ext libraries are reused, the platform port is
+uninstrumented, and leak detection is disabled as in the previous fixture.
+
+Six changed translation units also compile with ESP-IDF 5.3.1 / Xtensa GCC
+13.2 using the existing CoreText=ON/BMP=ON profile (profile `11`), with fresh
+objects and `-fstack-usage` files outside the frozen build. The launch frame
+changes from 1552 to 1616 bytes, frame dispatch 928 to 976 bytes and owner
+creation 208 to 224 bytes. The new font reader uses 592 bytes. These are
+compiler-local static frame sizes, not measured complete task high-water marks.
+No task stack size was increased. This is object compilation, not a new full
+firmware link or device qualification. Stylesheet-relative CSS extraction
+remains a separate follow-up.
