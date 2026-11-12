@@ -13,6 +13,7 @@
 #endif
 
 #include "app_runtime/app_host.h"
+#include "app_runtime/script_task_command_access.h"
 #include "device_runtime_contracts/device_bundle.h"
 #include "render_core/bitmap_font.h"
 #include "render_core/budget.h"
@@ -1287,9 +1288,10 @@ jellyframe::LayerNodePtr clone_layer_tree(const jellyframe::LayerNode& source) {
 
 bool layer_tree_contains_gradient(const jellyframe::LayerNode& layer) {
     for (const jellyframe::DisplayCommand& command : layer.display_list) {
-        if (command.type() == jellyframe::DisplayCommandType::LinearGradient ||
-            command.type() == jellyframe::DisplayCommandType::ConicGradient ||
-            command.type() == jellyframe::DisplayCommandType::RadialGradient) {
+        const auto type = jellyframe::detail::command_type(command);
+        if (type == jellyframe::DisplayCommandType::LinearGradient ||
+            type == jellyframe::DisplayCommandType::ConicGradient ||
+            type == jellyframe::DisplayCommandType::RadialGradient) {
             return true;
         }
     }
