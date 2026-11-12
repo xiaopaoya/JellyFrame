@@ -1,5 +1,7 @@
 # Win32 Browser natural image metadata
 
+Last updated: 2026-11-13; Applies to: 0.6.0-dev.
+
 The Win32 Browser can use dimensions from decoded, app-owned surfaces during a
 synchronous layout call. Its natural-size callback is read-only: it performs
 validated handle lookup and reads the same decoded record used by painting.
