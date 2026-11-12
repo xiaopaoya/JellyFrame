@@ -46,7 +46,25 @@ struct InstalledBundleUiTaskTelemetry {
     std::uint32_t internal_free_min = 0;
     std::uint32_t psram_free_min = 0;
 };
+// Heap values are global capability-pool observations in bytes. Session minima
+// cover the startup, >=1s and final samples. Transients can fall between samples.
+// Stack HWM is each task's lifetime minimum unused bytes (zero if uncreated).
+struct InstalledScriptHeapObservation {
+    std::uint32_t internal_free = 0;
+    std::uint32_t internal_largest = 0;
+    std::uint32_t psram_free = 0;
+    std::uint32_t psram_largest = 0;
+};
+struct InstalledScriptResourceTelemetry {
+    InstalledScriptHeapObservation heap_start;
+    InstalledScriptHeapObservation heap_current;
+    InstalledScriptHeapObservation heap_sampled_min;
+    std::uint32_t resource_samples = 0;
+    std::uint32_t worker_stack_hwm_bytes = 0;
+    std::uint32_t ui_stack_hwm_bytes = 0;
+};
 struct InstalledBundleScriptTaskTelemetry {
+    InstalledScriptResourceTelemetry resources;
     bool initialized = false;
     bool fatal = false;
     bool worker_started = false;
