@@ -612,31 +612,63 @@ jobs:
         include:
           - profile: full
             profile_id: render-core-default
+            core_commit: a0067eebde0ffe677e6e38acdd4c75da8bc78b50
+            source_hash: 369973a9b051cdff8af56f5bd11a94cd17c75de6940473d2fa6dcee8b171c33c
+            source_count: 139
+            require_natural: 'OFF'
+            r3_events: 'OFF'
+            node_identity: 'OFF'
+            cropped: false
           - profile: cropped
             profile_id: render-core-minimal-no-forms-advanced
+            core_commit: a0067eebde0ffe677e6e38acdd4c75da8bc78b50
+            source_hash: 369973a9b051cdff8af56f5bd11a94cd17c75de6940473d2fa6dcee8b171c33c
+            source_count: 139
+            require_natural: 'OFF'
+            r3_events: 'OFF'
+            node_identity: 'OFF'
+            cropped: true
+          - profile: natural-full
+            profile_id: render-core-default
+            core_commit: 93744c8f2816339c6a0d67193ae0f43ea7d8169a
+            source_hash: 97aa69552d4e5e32b4996748330b7fea7312295f307b299129638931a4c2449d
+            source_count: 151
+            require_natural: 'ON'
+            r3_events: 'ON'
+            node_identity: 'ON'
+            cropped: false
+          - profile: natural-cropped
+            profile_id: render-core-minimal-no-forms-advanced
+            core_commit: 93744c8f2816339c6a0d67193ae0f43ea7d8169a
+            source_hash: 97aa69552d4e5e32b4996748330b7fea7312295f307b299129638931a4c2449d
+            source_count: 151
+            require_natural: 'ON'
+            r3_events: 'ON'
+            node_identity: 'ON'
+            cropped: true
     env:
-      CORE_F5_COMMIT: a0067eebde0ffe677e6e38acdd4c75da8bc78b50
-      EXPECTED_CORE_SOURCE_HASH: 369973a9b051cdff8af56f5bd11a94cd17c75de6940473d2fa6dcee8b171c33c
-      EXPECTED_CORE_SOURCE_FILE_COUNT: '139'
+      QUALIFIED_CORE_COMMIT: ${{ matrix.core_commit }}
+      EXPECTED_CORE_SOURCE_HASH: ${{ matrix.source_hash }}
+      EXPECTED_CORE_SOURCE_FILE_COUNT: ${{ matrix.source_count }}
       EXPECTED_CORE_PROFILE_ID: ${{ matrix.profile_id }}
 
     steps:
       - name: Checkout JellyFrame Runtime
         uses: actions/checkout@v5
 
-      - name: Checkout merged Core F5 PR 20
+      - name: Checkout qualified Core revision
         uses: actions/checkout@v5
         with:
           repository: xiaopaoya/JellyFrame-Render-Core
-          ref: a0067eebde0ffe677e6e38acdd4c75da8bc78b50
-          path: third_party/render-core-f5
+          ref: ${{ matrix.core_commit }}
+          path: third_party/render-core-qualified
 
       - name: Verify exact merged Core revision
         shell: pwsh
         run: |
-          $revision = (git -C third_party/render-core-f5 rev-parse HEAD).Trim()
-          if ($LASTEXITCODE -ne 0 -or $revision -ne $env:CORE_F5_COMMIT) {
-            throw "Expected merged Core F5 $env:CORE_F5_COMMIT, got $revision"
+          $revision = (git -C third_party/render-core-qualified rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $revision -ne $env:QUALIFIED_CORE_COMMIT) {
+            throw "Expected qualified Core $env:QUALIFIED_CORE_COMMIT, got $revision"
           }
 
       - name: Checkout JerryScript
@@ -654,17 +686,17 @@ jobs:
           python third_party/jerryscript/tools/build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
           if ($LASTEXITCODE -ne 0) { throw 'JerryScript build failed' }
 
-      - name: Build and install pinned Core F5 profile
+      - name: Build and install qualified Core profile
         shell: pwsh
         run: |
-          $build = 'build/core-f5-${{ matrix.profile }}'
-          $install = 'build/core-f5-install-${{ matrix.profile }}'
+          $build = 'build/core-qualified-${{ matrix.profile }}'
+          $install = 'build/core-qualified-install-${{ matrix.profile }}'
           $coreArgs = @(
-            '-S', 'third_party/render-core-f5', '-B', $build,
+            '-S', 'third_party/render-core-qualified', '-B', $build,
             '-DJELLYFRAME_BUILD_TESTS=OFF',
             '-DJELLYFRAME_INSTALL_RENDER_CORE=ON'
           )
-          if ('${{ matrix.profile }}' -eq 'cropped') {
+          if ('${{ matrix.cropped }}' -eq 'true') {
             $coreArgs += @(
               '-DJELLYFRAME_ENABLE_CANVAS2D=OFF',
               '-DJELLYFRAME_ENABLE_MODERN_PAINT=OFF',
@@ -673,35 +705,37 @@ jobs:
             )
           }
           cmake @coreArgs
-          if ($LASTEXITCODE -ne 0) { throw 'Core F5 configure failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Qualified Core configure failed' }
           $manifest = Get-Content "$build/generated/jellyframe_render_core_source_manifest.json" -Raw | ConvertFrom-Json
           $profile = Get-Content "$build/generated/jellyframe_render_core_profile.json" -Raw | ConvertFrom-Json
           if ($manifest.sourceHash -ne $env:EXPECTED_CORE_SOURCE_HASH -or
               $manifest.sourceFileCount -ne [int]$env:EXPECTED_CORE_SOURCE_FILE_COUNT -or
               @($manifest.files).Count -ne [int]$env:EXPECTED_CORE_SOURCE_FILE_COUNT) {
-            throw 'Core F5 source manifest does not match the merged source pin'
+            throw 'Qualified Core source manifest does not match the merged source pin'
           }
           $packageVersion = [version]($profile.packageVersion -replace '-.*$', '')
           if ($packageVersion -lt [version]'0.9' -or $profile.engineAbi -ne 4 -or
               $profile.profileId -ne $env:EXPECTED_CORE_PROFILE_ID) {
-            throw "Unexpected Core F5 package/ABI/profile: $($profile | ConvertTo-Json -Compress)"
+            throw "Unexpected qualified Core package/ABI/profile: $($profile | ConvertTo-Json -Compress)"
           }
           cmake --build $build --config Release --parallel
-          if ($LASTEXITCODE -ne 0) { throw 'Core F5 build failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Qualified Core build failed' }
           cmake --install $build --config Release --prefix $install
-          if ($LASTEXITCODE -ne 0) { throw 'Core F5 install failed' }
-          "CORE_F5_INSTALL_PREFIX=$((Resolve-Path $install).Path)" >> $env:GITHUB_ENV
+          if ($LASTEXITCODE -ne 0) { throw 'Qualified Core install failed' }
+          "QUALIFIED_CORE_INSTALL_PREFIX=$((Resolve-Path $install).Path)" >> $env:GITHUB_ENV
 
       - name: Configure installed v10 consumer and actual worker
         shell: pwsh
         run: >-
           cmake -S docs/evaluation/canonical-abi4-codec-v10
           -B build/canonical-v10-consumers-${{ matrix.profile }}
-          -DJellyFrameRenderCore_DIR="$env:CORE_F5_INSTALL_PREFIX/lib/cmake/JellyFrameRenderCore"
+          -DJellyFrameRenderCore_DIR="$env:QUALIFIED_CORE_INSTALL_PREFIX/lib/cmake/JellyFrameRenderCore"
           -DEXPECTED_CORE_SOURCE_HASH="$env:EXPECTED_CORE_SOURCE_HASH"
           -DEXPECTED_CORE_PROFILE_ID="$env:EXPECTED_CORE_PROFILE_ID"
           -DBUILD_V10_WORKER=ON
-          -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=OFF
+          -DREQUIRE_NATURAL_IMAGE_API=${{ matrix.require_natural }}
+          -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=${{ matrix.r3_events }}
+          -DJELLYFRAME_ENABLE_NODE_IDENTITY=${{ matrix.node_identity }}
           -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE/third_party/jerryscript"
 
       - name: Build and run installed v10 consumer and actual worker
@@ -714,17 +748,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Canonical v10 installed consumer/worker tests failed' }
 
       - name: Configure legacy Event API checks on pinned Core F5
+        if: matrix.require_natural == 'OFF'
         shell: pwsh
         run: >-
           cmake -S docs/evaluation/canonical-abi4-codec-v9-consumer
           -B build/f5-legacy-event-api-${{ matrix.profile }}
-          -DJellyFrameRenderCore_DIR="$env:CORE_F5_INSTALL_PREFIX/lib/cmake/JellyFrameRenderCore"
+          -DJellyFrameRenderCore_DIR="$env:QUALIFIED_CORE_INSTALL_PREFIX/lib/cmake/JellyFrameRenderCore"
           -DEXPECTED_CORE_SOURCE_HASH="$env:EXPECTED_CORE_SOURCE_HASH"
           -DEXPECTED_CORE_PROFILE_ID="$env:EXPECTED_CORE_PROFILE_ID"
           -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=OFF
           -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE/third_party/jerryscript"
 
       - name: Build and run legacy Event API checks on pinned Core F5
+        if: matrix.require_natural == 'OFF'
         shell: pwsh
         run: |
           $build = 'build/f5-legacy-event-api-${{ matrix.profile }}'
@@ -743,8 +779,8 @@ jobs:
             build/canonical-v10-consumers-${{ matrix.profile }}/Testing/Temporary/LastTest.log
             build/f5-legacy-event-api-${{ matrix.profile }}/qualified_core_identity.txt
             build/f5-legacy-event-api-${{ matrix.profile }}/Testing/Temporary/LastTest.log
-            build/core-f5-${{ matrix.profile }}/generated/jellyframe_render_core_source_manifest.json
-            build/core-f5-${{ matrix.profile }}/generated/jellyframe_render_core_profile.json
+            build/core-qualified-${{ matrix.profile }}/generated/jellyframe_render_core_source_manifest.json
+            build/core-qualified-${{ matrix.profile }}/generated/jellyframe_render_core_profile.json
           if-no-files-found: warn
 
   render-core-standalone:

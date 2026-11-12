@@ -1,6 +1,8 @@
 # Runtime natural image metadata integration
 
-Last updated 2026-11-12. Runtime base2d3eddec.
+Last updated: 2026-11-12; Applies to: 0.6.0-dev
+
+Runtime base2d3eddec.
 
 Canonical ScriptTaskWorkerRuntime frame9/10 layout now uses the immutable
 RuntimeImageProvider already bound to its paint resolver. The integration is
@@ -41,5 +43,19 @@ The ordinary Win32 Browser uses mutable AppImageSurfaceCache::resolve_or_request
 and ImageDecodeMock through BrowserImageResolveContext. It has no corresponding
 owned immutable RuntimeImageProvider binding, so its natural sizing integration
 remains pending. Inline, picture, positioned, Flex/Grid and other contexts remain
-bounded by Core's current admission. This qualification includes no new firmware,
-device observation, sanitizer run or performance measurement.
+bounded by Core's current admission. Device and performance qualification remain
+pending for this integration.
+
+Clang22 ASan+UBSan with assertions, R3 and Node identity enabled passes the
+combined script suite and ten natural-image cases against Core7d3ae5fb. Runtime
+and Jerry core/ext are instrumented, with the existing Jerry platform port
+uninstrumented. Raw sanitizer logs live in the same evidence directory.
+
+The v10 installed-consumer CI matrix retains the two pinned F5 profiles and adds
+full/cropped Core93744c8f, source97aa6955/151, with R3 and Node identity enabled.
+An explicit required-API configure probe prevents natural-image qualification
+from passing through an older Core's skipped cases. Local required-API admission
+passes on the new package and refuses pre-API source8dfb6769. The new package's
+three installed checks pass with the accepted patched Jerry engine. An initial
+R3/Node run linked an older local Jerry build and failed in script_runtime.
+That failed log is retained, followed by the corrected engine inputs and pass.
