@@ -73,6 +73,12 @@ struct ScriptTaskWorkerRuntimeOptions {
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
     RuntimeFontCatalog::Handle text_catalog;
     RuntimeImageProvider::Handle image_provider;
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
+    // Bounds/statistics for Core's pass-local metadata memo. The worker binds
+    // provider/context to image_provider before each synchronous layout call.
+    // A supplied statistics pointer must outlive this worker and all rebuilds.
+    NaturalImageSizingOptions natural_image_sizing;
+#endif
 #endif
 };
 

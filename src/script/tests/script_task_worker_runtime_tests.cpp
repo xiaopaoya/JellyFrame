@@ -820,14 +820,18 @@ void worker_stop_preserves_supervisor_owned_frame_lease() {
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
 class WorkerImages final : public RuntimeImageProviderSource {
 public:
+    explicit WorkerImages(ImageIntrinsicSize size = {ImageIntrinsicSizeState::Known, 20, 20}) : size(size) {}
+    ImageIntrinsicSize size;
+    mutable std::size_t resolves = 0;
     std::uint64_t generation() const noexcept override { return 1; }
     bool contains(std::uint32_t handle) const noexcept override {
         return handle == 73 || handle == 74;
     }
     bool resolve(std::string_view url, ResolvedImageResource& output) const override {
+        ++resolves;
         if (url != "/assets/content.bmp" && url != "/assets/background.bmp") return false;
         output.image_handle = url == "/assets/content.bmp" ? 73 : 74;
-        output.intrinsic_size = {ImageIntrinsicSizeState::Known, 20, 20};
+        output.intrinsic_size = size;
         return true;
     }
     bool paint(FrameBuffer& target, const ImagePaintRequest& request) const override {
@@ -842,6 +846,80 @@ public:
         return true;
     }
 };
+
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
+void worker_natural_image_snapshot(std::string_view sizing, ImageIntrinsicSize size,
+                                   std::size_t query_limit, int width, int height,
+                                   std::size_t accepted_metadata, std::size_t expected_queries = 1) {
+    auto supervisor = make_supervisor();
+    const runtime_test_fonts::Fonts fonts;
+    auto source = std::make_shared<const WorkerImages>(size);
+    RuntimeImageProvider::Handle images;
+    check(RuntimeImageProvider::create(source, images) == RuntimeImageProviderStatus::Ready,
+          "natural image snapshot created");
+    const auto session = supervisor.begin(197, fonts.catalog, images);
+    auto options = runtime_options_v3();
+    options.frame_codec.version = 10;
+    options.frame_codec.max_groups = 32;
+    options.text_catalog = fonts.catalog;
+    options.image_provider = images;
+    NaturalImageSizingStatistics statistics;
+    options.natural_image_sizing.statistics = &statistics;
+    options.natural_image_sizing.max_queries = query_limit;
+    ScriptTaskWorkerRuntime runtime(session, options);
+    const std::string css = "body { margin: 0; } img { display: block; " + std::string(sizing) + " }";
+    check(runtime.initialize(supervisor, "<body><img src='/assets/content.bmp'></body>", css) ==
+          ScriptTaskWorkerRuntimeInitStatus::Accepted, "natural worker initializes through supervisor");
+    check(statistics.queries == (query_limit ? expected_queries : 0u) && statistics.accepted == accepted_metadata,
+          "natural metadata has one pass-local query or bounded refusal");
+    check(runtime.publish_frame(supervisor).accepted(), "natural frame publishes");
+    ScriptTaskAcceptedAppFrame accepted;
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, accepted) ==
+          ScriptTaskAppFrameTakeStatus::Accepted, "natural frame accepted");
+    bool found = false;
+    for (const auto& command : accepted.frame().display_list) {
+        if (worker_test_access::worker_command_type(command) != DisplayCommandType::Image) continue;
+        found = true;
+        check(command.rect.width == width && command.rect.height == height,
+              "natural image command preserves computed dimensions");
+    }
+    check(found == (width > 0 && height > 0), "natural fallback image command admission");
+    check(source->resolves == statistics.queries + 1u,
+          "source calls distinguish layout metadata from paint handle resolution");
+    const auto queries_before_replay = source->resolves;
+    runtime.stop();
+    supervisor.begin(198, fonts.catalog); // Release supervisor's old resource owner.
+    options.image_provider.reset();
+    images.reset();
+    ScriptTaskFrameRendererOptions render_options;
+    render_options.text_catalog = fonts.catalog;
+    ScriptTaskFrameRenderer renderer({}, {}, render_options);
+    ScriptTaskFrameRenderStatus status;
+    FrameBuffer pixels(accepted.frame().viewport.width, accepted.frame().viewport.height, {});
+    renderer.render_into(accepted, pixels, {255, 255, 255, 255}, nullptr, 0, nullptr, &status);
+    check(status == ScriptTaskFrameRenderStatus::Accepted, "accepted snapshot replays after owner replacement");
+    if (found) {
+        const auto pixel = pixels.pixels[(height / 2) * pixels.width + width / 2];
+        check(pixel.r == 231 && pixel.g == 17 && pixel.b == 53, "retained natural snapshot paints pixels");
+    }
+    check(source->resolves == queries_before_replay, "replay performs no metadata or URL resolution");
+}
+
+void worker_natural_image_cases() {
+    const ImageIntrinsicSize known{ImageIntrinsicSizeState::Known, 40, 20};
+    worker_natural_image_snapshot("", known, 128, 40, 20, 1);
+    worker_natural_image_snapshot("width: 20px;", known, 128, 20, 10, 1);
+    worker_natural_image_snapshot("height: 10px;", known, 128, 20, 10, 1);
+    worker_natural_image_snapshot("width: 20px; aspect-ratio: 1 / 1;", known, 128, 20, 20, 1);
+    worker_natural_image_snapshot("max-width: 20px;", known, 128, 20, 10, 1);
+    worker_natural_image_snapshot("min-height: 30px;", known, 128, 60, 30, 1);
+    worker_natural_image_snapshot("", {ImageIntrinsicSizeState::Known, 0, 20}, 128, 0, 0, 0);
+    worker_natural_image_snapshot("", known, 0, 0, 0, 0);
+    worker_natural_image_snapshot("", {}, 128, 0, 0, 0);
+    worker_natural_image_snapshot("width: 20px; height: 10px;", known, 128, 20, 10, 0, 0);
+    std::cout << "worker natural image: 10 metadata, dimensions, fallback and retained-pixel cases passed\n";
+}
+#endif
 
 void worker_canonical_resolves_content_and_background_images(std::uint8_t version) {
     auto supervisor = make_supervisor();
@@ -1354,6 +1432,9 @@ int script_task_worker_runtime_tests_main() {
             worker_canonical_uses_catalog_for_layout_and_publishes_group_frame(version);
             worker_canonical_resolves_content_and_background_images(version);
         }
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
+        worker_natural_image_cases();
+#endif
         if (script_task_app_frame_codec_supports_version(10))
             worker_v10_mutation_publishes_changed_packed_axes<DisplayCommand>();
 #endif
