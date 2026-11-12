@@ -13,9 +13,10 @@ New-Core qualification enables it, preventing a green result from skipped v2
 cases. The old packet-v1 package still builds and passes the existing three
 checks, and enabling the required-v2 probe against it fails configuration.
 
-Frozen Core commit: d4a094ca84c0ea259aa7f39a1b86750e126d4de9.
+Frozen Core commit: 82ad1dcc98394d5568d51b6665ae92e629831e55.
 Installed source identity:
-0f0806e9a3a1d624fb6cabd406068b079bca035552f84daa772511069d67688e.
+8eb12e841028a0d56ee5eac1b4d8789f55787d784e2a046b4cc7ffc5fed0c0b8
+(163 files).
 Clang22 Release full and cropped installed consumers each pass 3/3 CTest checks
 with R3 events and Node identity enabled. Full profile is render-core-default;
 cropped is render-core-minimal-no-forms-advanced. The consumers stage Runtime
