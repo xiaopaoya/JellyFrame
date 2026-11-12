@@ -942,23 +942,26 @@ jobs:
           cmake --build build\abi3-default --config Release --target jellyframe_desktop_shell --parallel
           if ($LASTEXITCODE -ne 0) { throw 'Runtime ABI3 desktop shell failed to build' }
 
-      - name: Checkout merged Render Core PR #17
+      - name: Checkout merged Core natural image API
         uses: actions/checkout@v5
         with:
           repository: xiaopaoya/JellyFrame-Render-Core
-          ref: 431789fd78fc7f9a654f2f4a13d5e28be8f6e32f
+          ref: 82ad1dcc98394d5568d51b6665ae92e629831e55
           path: third_party/render-core-source
 
       - name: Verify merged Core source identity
         shell: pwsh
         run: |
           $coreRevision = (git -C third_party\render-core-source rev-parse HEAD).Trim()
-          if ($coreRevision -ne '431789fd78fc7f9a654f2f4a13d5e28be8f6e32f') {
-            throw "Expected merged Core PR #17 at 431789fd78fc7f9a654f2f4a13d5e28be8f6e32f, got $coreRevision"
+          if ($coreRevision -ne '82ad1dcc98394d5568d51b6665ae92e629831e55') {
+            throw "Expected merged Core natural image API at 82ad1dcc98394d5568d51b6665ae92e629831e55, got $coreRevision"
           }
           $coreAbi4 = Select-String -Path third_party\render-core-source\cmake\render_core_version.cmake `
             -Pattern 'set\(JELLYFRAME_RENDER_CORE_ENGINE_ABI "4"' -Quiet
           if (-not $coreAbi4) { throw 'Checked-out Core source does not declare ABI4' }
+          $naturalApi = Select-String -Path third_party\render-core-source\include\render_core\layout.h `
+            -Pattern '#define JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION 1' -Quiet
+          if (-not $naturalApi) { throw 'Checked-out Core source does not declare natural image layout API v1' }
 
       - name: Checkout JerryScript
         uses: actions/checkout@v5
@@ -1000,8 +1003,8 @@ jobs:
           }
           if ($provenance.provider -ne 'source-override' -or $provenance.engineAbi -ne 4 -or
               $provenance.lockEnforced -ne $false -or
-              $provenance.sourceHash -ne '488874f1f2ce0880a47da5695cbe88a13a14b927461360cff3b58f8e9d2e6172' -or
-              $provenance.sourceFileCount -ne 138 -or
+              $provenance.sourceHash -ne '8eb12e841028a0d56ee5eac1b4d8789f55787d784e2a046b4cc7ffc5fed0c0b8' -or
+              $provenance.sourceFileCount -ne 163 -or
               $provenance.lockedVersion -ne '0.8.0' -or $provenance.lockedEngineAbi -ne 3 -or
               $provenance.lockedSourceHash -ne 'fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795') {
             throw "Unexpected Core source-override provenance: $($provenance | ConvertTo-Json -Compress)"
@@ -1025,3 +1028,16 @@ jobs:
         run: >-
           python tests\tool_regression\runtime_abi4_same_thread_tests.py
           build\abi4-same-thread\Release\jellyframe_desktop_shell.exe
+      - name: Exercise natural image sizing in the Win32 Browser
+        shell: pwsh
+        run: >-
+          python tests\tool_regression\browser_natural_image_tests.py
+          build\abi4-same-thread\Release\jellyframe_desktop_shell.exe
+          build\browser-natural-image-evidence
+      - name: Upload natural image Browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-natural-image-abi4-windows
+          path: build/browser-natural-image-evidence
+          if-no-files-found: warn

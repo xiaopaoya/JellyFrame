@@ -35,6 +35,12 @@ images plus three zero-width metadata consumers, checks the following sibling
 position after decode, checks replacement from one known source to another,
 and compares normal versus full-repaint captures.
 
+The Windows CI job `windows-abi4-same-thread` checks out the exact Core commit,
+verifies the natural image API and source identity, and runs this Browser oracle
+alongside Runtime tests. Its locked ABI 3 build remains in the same job as the
+compatibility check. The qualification does not change Runtime's production
+Core lock.
+
 This qualification covers the synchronous Win32 Browser only. It does not
 qualify worker frames, pseudo-browser geometry, firmware ports, shared-inline
 Core behavior, or arbitrary image counts beyond the stated host/Core bounds.
