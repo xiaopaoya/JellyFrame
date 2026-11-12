@@ -305,6 +305,13 @@ jobs:
           python third_party/jerryscript/tools/build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
           if ($LASTEXITCODE -ne 0) { throw 'JerryScript build failed' }
 
+      - name: Verify ESP32 external context allocation
+        shell: pwsh
+        run: |
+          python ports/esp32s3-idf/components/jellyframe_jerryscript/tests/run_context_allocation_test.py `
+            --build-dir build/esp32-context-allocation --jerry-root third_party/jerryscript
+          if ($LASTEXITCODE -ne 0) { throw 'ESP32 context allocation test failed' }
+
       - name: Install released Render Core package
         shell: pwsh
         run: |
