@@ -3,6 +3,7 @@
 #endif
 
 #include "app_runtime/app_host.h"
+#include "app_runtime/core_system_font_catalog.h"
 #include "app_runtime/app_budget.h"
 #include "app_runtime/authorized_file_broker.h"
 #include "app_runtime/app_device_services.h"
@@ -947,6 +948,7 @@ struct BrowserOptions {
     bool capture_frames = false;
     bool vscode_debug = false;
     bool force_full_repaint = false;
+    bool use_app_fonts = false;
     std::string output_path;
     std::string frame_output_dir;
     std::string vscode_frame_dir;
@@ -977,7 +979,6 @@ struct BrowserOptions {
     int viewport_height = 640;
     bool viewport_width_set = false;
     bool viewport_height_set = false;
-    bool use_app_fonts = false;
     int frame_count = 30;
     std::uint32_t frame_step_ms = 33;
     std::uint64_t frame_start_ms = 1000;
@@ -1998,99 +1999,6 @@ void blend_pixel(FrameBuffer& target, int x, int y, Color source) {
     };
 }
 
-bool draw_text_with_gdi(FrameBuffer& target,
-                        Rect rect,
-                        Color color,
-                        const std::string& text,
-                        int font_size,
-                        int font_weight,
-                        TextCommandAlign align,
-                        bool single_line,
-                        void*) {
-    const std::wstring wide = utf8_to_wide(text);
-    if (wide.empty() || rect.width <= 0 || rect.height <= 0 || color.a == 0) {
-        return false;
-    }
-
-    const int bitmap_width = rect.width + std::max(4, rect.height / 8);
-    BITMAPINFO info{};
-    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    info.bmiHeader.biWidth = bitmap_width;
-    info.bmiHeader.biHeight = -rect.height;
-    info.bmiHeader.biPlanes = 1;
-    info.bmiHeader.biBitCount = 32;
-    info.bmiHeader.biCompression = BI_RGB;
-
-    void* bits = nullptr;
-    HDC screen_dc = GetDC(nullptr);
-    HDC memory_dc = CreateCompatibleDC(screen_dc);
-    HBITMAP bitmap = CreateDIBSection(screen_dc, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
-    ReleaseDC(nullptr, screen_dc);
-    if (memory_dc == nullptr || bitmap == nullptr || bits == nullptr) {
-        if (bitmap != nullptr) {
-            DeleteObject(bitmap);
-        }
-        if (memory_dc != nullptr) {
-            DeleteDC(memory_dc);
-        }
-        return false;
-    }
-
-    HGDIOBJ old_bitmap = SelectObject(memory_dc, bitmap);
-    RECT bounds{0, 0, rect.width, rect.height};
-    HBRUSH black = CreateSolidBrush(RGB(0, 0, 0));
-    FillRect(memory_dc, &bounds, black);
-    DeleteObject(black);
-
-    const int font_height = -std::max(8, font_size);
-    const int gdi_weight = font_weight >= 600 ? FW_BOLD : FW_NORMAL;
-    HFONT font = CreateFontW(font_height, 0, 0, 0, gdi_weight, FALSE, FALSE, FALSE,
-                             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                             ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
-                             L"Microsoft YaHei UI");
-    HGDIOBJ old_font = font != nullptr ? SelectObject(memory_dc, font) : nullptr;
-    SetBkMode(memory_dc, TRANSPARENT);
-    SetTextColor(memory_dc, RGB(255, 255, 255));
-    UINT flags = DT_NOPREFIX;
-    if (align == TextCommandAlign::Center) {
-        flags |= DT_CENTER;
-    } else if (align == TextCommandAlign::End) {
-        flags |= DT_RIGHT;
-    } else {
-        flags |= DT_LEFT;
-    }
-    flags |= single_line ? (DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS) : DT_WORDBREAK;
-    DrawTextW(memory_dc, wide.c_str(), static_cast<int>(wide.size()), &bounds, flags);
-
-    const auto* pixels = static_cast<const std::uint32_t*>(bits);
-    for (int y = 0; y < rect.height; ++y) {
-        for (int x = 0; x < rect.width; ++x) {
-            const std::uint32_t pixel = pixels[static_cast<std::size_t>(y * bitmap_width + x)];
-            const int blue = static_cast<int>(pixel & 0xffU);
-            const int green = static_cast<int>((pixel >> 8U) & 0xffU);
-            const int red = static_cast<int>((pixel >> 16U) & 0xffU);
-            const int coverage = std::max(red, std::max(green, blue));
-            if (coverage == 0) {
-                continue;
-            }
-            Color source = color;
-            source.a = clamp_u8((static_cast<int>(source.a) * coverage + 127) / 255);
-            blend_pixel(target, rect.x + x, rect.y + y, source);
-        }
-    }
-
-    if (old_font != nullptr) {
-        SelectObject(memory_dc, old_font);
-    }
-    if (font != nullptr) {
-        DeleteObject(font);
-    }
-    SelectObject(memory_dc, old_bitmap);
-    DeleteObject(bitmap);
-    DeleteDC(memory_dc);
-    return true;
-}
-
 struct BrowserImageContext {
     ImageDecodeMock* images = nullptr;
     Canvas2DRegistry* canvas = nullptr;
@@ -2566,6 +2474,12 @@ bool paint_image_surface(FrameBuffer& target,
 }
 #endif
 
+struct BrowserTextBackend {
+    TextMeasureProvider measure;
+    TextPainter painter;
+    const TextSystem* text_system = nullptr;
+};
+
 HFONT create_gdi_text_font(int font_size, int font_weight) {
     const int font_height = -std::max(8, font_size);
     const int gdi_weight = font_weight >= 600 ? FW_BOLD : FW_NORMAL;
@@ -2580,60 +2494,101 @@ bool measure_text_with_gdi(const std::string& text,
                            int font_weight,
                            TextMetrics* metrics,
                            void*) {
-    if (metrics == nullptr) {
-        return false;
-    }
+    if (metrics == nullptr) return false;
     const std::wstring wide = utf8_to_wide(text);
-    if (!text.empty() && wide.empty()) {
-        return false;
-    }
-
+    if (!text.empty() && wide.empty()) return false;
     HDC dc = GetDC(nullptr);
-    if (dc == nullptr) {
-        return false;
-    }
+    if (dc == nullptr) return false;
     HFONT font = create_gdi_text_font(font_size, font_weight);
     HGDIOBJ old_font = font != nullptr ? SelectObject(dc, font) : nullptr;
-
     SIZE size{0, 0};
     bool ok = true;
-    if (!wide.empty() &&
-        GetTextExtentPoint32W(dc, wide.c_str(), static_cast<int>(wide.size()), &size) == 0) {
+    if (!wide.empty() && GetTextExtentPoint32W(dc, wide.c_str(), static_cast<int>(wide.size()), &size) == 0)
         ok = false;
-    }
     TEXTMETRICW text_metric{};
-    if (GetTextMetricsW(dc, &text_metric) == 0) {
-        ok = false;
-    }
-
+    if (GetTextMetricsW(dc, &text_metric) == 0) ok = false;
     if (ok) {
         metrics->width = std::max(0L, size.cx);
         metrics->line_height = std::max(1L, text_metric.tmHeight + text_metric.tmExternalLeading);
     }
-
-    if (old_font != nullptr) {
-        SelectObject(dc, old_font);
-    }
-    if (font != nullptr) {
-        DeleteObject(font);
-    }
+    if (old_font != nullptr) SelectObject(dc, old_font);
+    if (font != nullptr) DeleteObject(font);
     ReleaseDC(nullptr, dc);
     return ok;
 }
 
-struct BrowserTextBackend {
-    TextMeasureProvider measure;
-    TextPainter painter;
-    const TextSystem* text_system = nullptr;
-};
+bool draw_text_with_gdi(FrameBuffer& target,
+                        Rect rect,
+                        Color color,
+                        const std::string& text,
+                        int font_size,
+                        int font_weight,
+                        TextCommandAlign align,
+                        bool single_line,
+                        void*) {
+    const std::wstring wide = utf8_to_wide(text);
+    if (wide.empty() || rect.width <= 0 || rect.height <= 0 || color.a == 0) return false;
+    const int bitmap_width = rect.width + std::max(4, rect.height / 8);
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = bitmap_width;
+    info.bmiHeader.biHeight = -rect.height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HDC screen_dc = GetDC(nullptr);
+    HDC memory_dc = CreateCompatibleDC(screen_dc);
+    HBITMAP bitmap = CreateDIBSection(screen_dc, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+    ReleaseDC(nullptr, screen_dc);
+    if (memory_dc == nullptr || bitmap == nullptr || bits == nullptr) {
+        if (bitmap != nullptr) DeleteObject(bitmap);
+        if (memory_dc != nullptr) DeleteDC(memory_dc);
+        return false;
+    }
+    HGDIOBJ old_bitmap = SelectObject(memory_dc, bitmap);
+    RECT bounds{0, 0, rect.width, rect.height};
+    HBRUSH black = CreateSolidBrush(RGB(0, 0, 0));
+    FillRect(memory_dc, &bounds, black);
+    DeleteObject(black);
+    HFONT font = create_gdi_text_font(font_size, font_weight);
+    HGDIOBJ old_font = font != nullptr ? SelectObject(memory_dc, font) : nullptr;
+    SetBkMode(memory_dc, TRANSPARENT);
+    SetTextColor(memory_dc, RGB(255, 255, 255));
+    UINT flags = DT_NOPREFIX;
+    if (align == TextCommandAlign::Center) flags |= DT_CENTER;
+    else if (align == TextCommandAlign::End) flags |= DT_RIGHT;
+    else flags |= DT_LEFT;
+    flags |= single_line ? (DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS) : DT_WORDBREAK;
+    DrawTextW(memory_dc, wide.c_str(), static_cast<int>(wide.size()), &bounds, flags);
+    const auto* pixels = static_cast<const std::uint32_t*>(bits);
+    for (int y = 0; y < rect.height; ++y) {
+        for (int x = 0; x < rect.width; ++x) {
+            const std::uint32_t pixel = pixels[static_cast<std::size_t>(y * bitmap_width + x)];
+            const int coverage = std::max(static_cast<int>(pixel & 0xffU),
+                std::max(static_cast<int>((pixel >> 8U) & 0xffU), static_cast<int>((pixel >> 16U) & 0xffU)));
+            if (coverage == 0) continue;
+            Color source = color;
+            source.a = clamp_u8((static_cast<int>(source.a) * coverage + 127) / 255);
+            blend_pixel(target, rect.x + x, rect.y + y, source);
+        }
+    }
+    if (old_font != nullptr) SelectObject(memory_dc, old_font);
+    if (font != nullptr) DeleteObject(font);
+    SelectObject(memory_dc, old_bitmap);
+    DeleteObject(bitmap);
+    DeleteDC(memory_dc);
+    return true;
+}
 
 BrowserTextBackend make_browser_text_backend(const BrowserOptions& options, AppRuntimeHost* runtime) {
     if (options.use_app_fonts && runtime != nullptr) {
+        if (runtime->fonts().primary_font() != nullptr) {
+            return BrowserTextBackend{runtime->fonts().measure_provider(),
+                                      runtime->fonts().painter(), nullptr};
+        }
         if (const TextSystem* text_system = runtime->fonts().core_text_system()) {
             return BrowserTextBackend{{}, {}, text_system};
-        }
-        if (runtime->fonts().primary_font() != nullptr) {
-            return BrowserTextBackend{runtime->fonts().measure_provider(), runtime->fonts().painter(), nullptr};
         }
     }
     return BrowserTextBackend{
@@ -2641,6 +2596,13 @@ BrowserTextBackend make_browser_text_backend(const BrowserOptions& options, AppR
         TextPainter{draw_text_with_gdi, nullptr},
         nullptr,
     };
+}
+
+void attach_desktop_system_font_catalog(AppRuntimeHost& runtime) {
+    if (!runtime.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog,
+                                                       kNotoSansScSystemFontCatalogSize)) {
+        throw std::runtime_error("Core system font catalog is invalid; desktop text startup was refused");
+    }
 }
 
 void bind_browser_text_backend(Canvas2DRegistry& canvas, const BrowserTextBackend& backend) {
@@ -3397,7 +3359,7 @@ void print_win32_browser_usage(std::ostream& output, const std::string& program_
         << "                                 set-checked, select-index.\n"
         << "  --viewport-width N             Override viewport width.\n"
         << "  --viewport-height N            Override viewport height.\n"
-        << "  --use-app-fonts                Use package .jffont/.jffont2 fonts when available.\n"
+        << "  --use-app-fonts                Opt into app/Core catalog text for validation.\n"
         << "  --audio-smoke SOURCE           Win32-only host audio smoke test. SOURCE can\n"
         << "                                 be a local file, or /path in --app package.\n"
         << "  --audio-smoke-ms N             Playback duration for --audio-smoke, default 1000.\n"
@@ -3745,7 +3707,7 @@ void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifes
                               DiagnosticStage::Package,
                               DiagnosticSeverity::Warning,
                               "app-font-resource-invalid",
-                              "Manifest font resource is invalid or its Core font catalog has no default face",
+                              "Manifest font supplement is invalid or cannot be added to the Core font catalog",
                               source);
             continue;
         }
@@ -3769,7 +3731,7 @@ void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifes
                               DiagnosticStage::Package,
                               DiagnosticSeverity::Warning,
                               "app-font-resource-invalid",
-                              "Manifest font resource is invalid or its Core font catalog has no default face",
+                              "Manifest font supplement is invalid or cannot be added to the Core font catalog",
                               source);
         }
     }
@@ -3856,6 +3818,7 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     AppFrameScratch app_frame_scratch;
     app_frame_scratch.reserve_from_options(app_runtime_options);
     AppRuntimeHost* runtime = nullptr;
+    attach_desktop_system_font_catalog(app_runtime);
     if (!options.app_path.empty()) {
         app_runtime.launch(options.app_path, AppRole::App);
         runtime = &app_runtime;
@@ -4381,6 +4344,7 @@ public:
         }
         frame_scratch_.reserve_from_budgets(budgets_);
         app_frame_scratch_.reserve_from_options(desktop_app_runtime_options(options_));
+        attach_desktop_system_font_catalog(app_runtime_);
         if (!options_.launch_app_id.empty()) {
             app_runtime_.launch(options_.launch_app_id, AppRole::App);
         } else if (!options_.app_path.empty()) {
@@ -9228,15 +9192,21 @@ int main(int argc, char** argv) {
 
     const bool capture_frames_mode = options.capture_frames;
     const bool vscode_debug_mode = options.vscode_debug;
-    BrowserApp app(std::move(options));
+    std::unique_ptr<BrowserApp> app;
+    try {
+        app = std::make_unique<BrowserApp>(std::move(options));
+    } catch (const std::exception& error) {
+        std::cerr << "desktop startup failed: " << error.what() << '\n';
+        return 1;
+    }
     HINSTANCE instance = GetModuleHandleW(nullptr);
     const int show_command = (capture_frames_mode || vscode_debug_mode) ? SW_HIDE : SW_SHOWNORMAL;
-    if (!app.initialize(instance, show_command)) {
+    if (!app->initialize(instance, show_command)) {
         std::cerr << "failed to create desktop shell window\n";
         return 1;
     }
     if (capture_frames_mode) {
-        return app.capture_frames();
+        return app->capture_frames();
     }
-    return app.run();
+    return app->run();
 }
