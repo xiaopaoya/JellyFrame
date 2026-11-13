@@ -1,14 +1,13 @@
 #include "jellyframe_esp32s3_installed_resource_owner.h"
 #include "jellyframe_esp32s3_installed_frame_admission.h"
+#include "app_runtime/core_system_font_catalog.h"
 
 #include "app_runtime/script_task_frame_renderer.h"
 #include "script/script_task_worker_runtime.h"
 
 #include <atomic>
 #include <cstdint>
-#include <fstream>
 #include <iostream>
-#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -58,25 +57,17 @@ InstalledResourceSnapshot snapshot_with_image(std::vector<std::uint8_t> image) {
     return snapshot;
 }
 
-std::shared_ptr<std::vector<std::uint8_t>> read_font_fixture() {
-    std::ifstream input(JELLYFRAME_CORE_SYSTEM_FONT_FIXTURE, std::ios::binary);
-    if (!input.good()) return {};
-    auto bytes = std::make_shared<std::vector<std::uint8_t>>(
-        (std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    return bytes->empty() ? std::shared_ptr<std::vector<std::uint8_t>>{} : bytes;
-}
-
-std::shared_ptr<const void> erase_owner(const std::shared_ptr<std::vector<std::uint8_t>>& bytes) {
-    return bytes ? std::shared_ptr<const void>(bytes, bytes->data()) : std::shared_ptr<const void>{};
+std::shared_ptr<const void> system_font_owner() {
+    return {jellyframe::kNotoSansScSystemFontCatalog, [](const void*) {}};
 }
 
 bool create_resources(std::vector<std::uint8_t> image,
-                      const std::shared_ptr<std::vector<std::uint8_t>>& font,
                       InstalledAppResources::Handle& output) {
     const jellyframe::HostBudgets budgets{};
     return create_installed_app_resources(snapshot_with_image(std::move(image)), budgets,
-        "/apps/demo/index.html", font ? font->data() : nullptr, font ? font->size() : 0,
-        erase_owner(font), host_clock_us, output);
+        "/apps/demo/index.html", jellyframe::kNotoSansScSystemFontCatalog,
+        jellyframe::kNotoSansScSystemFontCatalogSize,
+        system_font_owner(), host_clock_us, output);
 }
 
 bool check(bool condition, const char* message) {
@@ -88,10 +79,6 @@ bool check(bool condition, const char* message) {
 } // namespace
 
 int run_installed_resource_owner_tests() {
-    auto font_a = read_font_fixture();
-    auto font_b = read_font_fixture();
-    if (!check(font_a && font_b, "could not read valid JFFONT2 fixture")) return 1;
-
     const auto app_snapshot = [] {
         auto snapshot = snapshot_with_image(one_pixel_bmp());
         for (unsigned weight : {400u, 700u}) {
@@ -109,12 +96,14 @@ int run_installed_resource_owner_tests() {
     InstalledAppResources::Handle named;
     const auto admit = [&](InstalledResourceSnapshot snapshot) {
         return create_installed_app_resources(std::move(snapshot), {}, "/apps/demo/index.html",
-            font_a->data(), font_a->size(), erase_owner(font_a), host_clock_us, named);
+            jellyframe::kNotoSansScSystemFontCatalog,
+            jellyframe::kNotoSansScSystemFontCatalogSize, system_font_owner(), host_clock_us, named);
     };
     if (!check(admit(app_snapshot()), "declared named-family regular/bold should register")) return 1;
-    if (!check(named->text_catalog->size() == 3 && named->text_catalog->registration(0).family_id == 0 &&
-        named->text_catalog->registration(1).family_id == jellyframe::normalized_font_family_hash("Named Family") &&
-        named->text_catalog->registration(2).family_id == named->text_catalog->registration(1).family_id,
+    if (!check(named->text_catalog->size() == 5 && named->text_catalog->registration(0).family_id == 0 &&
+        named->text_catalog->registration(1).family_id == 0 && named->text_catalog->registration(2).family_id == 0 &&
+        named->text_catalog->registration(3).family_id == jellyframe::normalized_font_family_hash("Named Family") &&
+        named->text_catalog->registration(4).family_id == named->text_catalog->registration(3).family_id,
         "firmware fallback must precede app faces in declaration order")) return 1;
     auto prior_named = named;
     auto retained_catalog = named->text_catalog;
@@ -131,7 +120,7 @@ int run_installed_resource_owner_tests() {
             TextRunMetrics metrics;
             PreparedTextGlyph glyph;
             if (catalog.text_system().prepare("A", request, &glyph, 1, metrics) != TextSystemStatus::Ok ||
-                glyph.resource_id != catalog.resource_id(weight == 400 ? 1 : 2) ||
+                glyph.resource_id != catalog.resource_id(weight == 400 ? 3 : 4) ||
                 metrics.advance != 9600 || metrics.ascent != 12800) return false;
             std::string packet;
             PreparedTextView view;
@@ -184,15 +173,14 @@ int run_installed_resource_owner_tests() {
                    jellyframe::normalized_font_family_hash(alias_name), alias_family) &&
                named->text_catalog->text_system().measure("A", alias_request, alias_metrics) ==
                    jellyframe::TextSystemStatus::Ok &&
-               alias_metrics.primary_resource_id == named->text_catalog->resource_id(3),
+               alias_metrics.primary_resource_id == named->text_catalog->resource_id(5),
                "source alias must resolve and measure through its own registration")) return 1;
     named.reset();
 
     InstalledAppResources::Handle active;
-    if (!check(create_resources(one_pixel_bmp(), font_a, active),
+    if (!check(create_resources(one_pixel_bmp(), active),
                "valid snapshot and Core font should build an owner")) return 1;
     std::weak_ptr<const InstalledResourceSnapshot> old_snapshot = active->snapshot;
-    std::weak_ptr<std::vector<std::uint8_t>> old_font = font_a;
     const std::uint64_t old_provider_id = active->image_provider->id();
     const std::uint64_t old_font_id = active->text_catalog->resource_id(0);
     jellyframe::ResolvedImageResource resolved;
@@ -292,17 +280,11 @@ int run_installed_resource_owner_tests() {
 
     auto first_owner = active;
     auto first_provider = active->image_provider;
-    if (!check(!create_resources({0x42, 0x4d}, font_b, active) && active == first_owner,
+    if (!check(!create_resources({0x42, 0x4d}, active) && active == first_owner,
                "corrupt image replacement must be refused without replacing the active owner"))
         return 1;
-    auto invalid_font =
-        std::make_shared<std::vector<std::uint8_t>>(std::initializer_list<std::uint8_t>{1, 2, 3});
-    if (!check(!create_resources(one_pixel_bmp(), invalid_font, active) && active == first_owner,
-               "invalid font replacement must be refused without replacing the active owner"))
-        return 1;
-
     InstalledAppResources::Handle replacement;
-    if (!check(create_resources(one_pixel_bmp(), font_b, replacement),
+    if (!check(create_resources(one_pixel_bmp(), replacement),
                "valid replacement should build a fresh owner"))
         return 1;
     if (!check(replacement->image_provider->id() != old_provider_id &&
@@ -327,15 +309,14 @@ int run_installed_resource_owner_tests() {
                "old snapshot must remain pinned while worker/UI handles retain its provider")) return 1;
     first_provider.reset();
     first_owner.reset();
-    font_a.reset();
     old_worker = {};
     old_ui = {};
-    if (!check(!old_snapshot.expired() && !old_font.expired(),
+    if (!check(!old_snapshot.expired(),
                "supervisor must retain resources after worker/UI handles drain")) return 1;
     supervisor.begin_teardown(session);
     supervisor.complete_teardown(session);
-    if (!check(old_snapshot.expired() && old_font.expired(),
-               "old snapshot and font owner must release after the last worker/UI handle drains")) return 1;
+    if (!check(old_snapshot.expired(),
+               "old snapshot must release after the last worker/UI handle drains")) return 1;
 
     new_worker = {};
     new_ui = {};

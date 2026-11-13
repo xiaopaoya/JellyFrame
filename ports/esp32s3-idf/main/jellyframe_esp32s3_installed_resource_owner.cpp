@@ -105,8 +105,8 @@ private:
 bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
                                     const jellyframe::HostBudgets& budgets,
                                     std::string_view entry_path,
-                                    const std::uint8_t* core_font_bytes,
-                                    std::size_t core_font_size,
+                                    const jellyframe::CoreFontResourceView* core_fonts,
+                                    std::size_t core_font_count,
                                     std::shared_ptr<const void> core_font_owner,
                                     BmpImageAdapter::Clock clock,
                                     InstalledAppResources::Handle& output) {
@@ -126,11 +126,15 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
         candidate->snapshot = owned_snapshot;
 
         using namespace jellyframe;
-        RuntimeFontResource::Handle core_font;
-        if (RuntimeFontResource::retain(core_font_bytes, core_font_size, core_font_owner, core_font) !=
-                RuntimeFontStatus::Ready) return false;
+        if (!core_fonts || core_font_count != 3 || !core_font_owner) return false;
         std::vector<RuntimeFontRegistration> registrations;
-        registrations.push_back({std::move(core_font), 0});
+        registrations.reserve(core_font_count + owned_snapshot->fonts.size());
+        for (std::size_t i = 0; i < core_font_count; ++i) {
+            RuntimeFontResource::Handle core_font;
+            if (RuntimeFontResource::retain(core_fonts[i].data, core_fonts[i].size,
+                                            core_font_owner, core_font) != RuntimeFontStatus::Ready) return false;
+            registrations.push_back({std::move(core_font), 0});
+        }
         if (owned_snapshot->fonts.size() > kDeviceBundleMaxFonts) return false;
         for (const auto& metadata : owned_snapshot->fonts) {
             if (metadata.source.back() != '\0' || metadata.family.back() != '\0') return false;

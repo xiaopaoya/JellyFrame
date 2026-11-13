@@ -24,7 +24,7 @@
 #include "script/script_task_worker_runtime.h"
 #if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && \
     CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
-#include "jellyframe_esp32s3_core_system_font.h"
+#include "app_runtime/core_system_font_catalog.h"
 #endif
 
 #include "esp_log.h"
@@ -632,12 +632,22 @@ bool start_installed_bundle_script_task(std::string app_id,
     next->author_css = std::move(author_css);
     next->scripts = std::move(scripts);
     next->host = &host;
+#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && \
+    CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+    if (!host.attach_core_system_font_catalog_view(
+            jellyframe::kNotoSansScSystemFontCatalog,
+            jellyframe::kNotoSansScSystemFontCatalogSize)) {
+        vSemaphoreDelete(next->stopped);
+        delete next;
+        return false;
+    }
+#endif
 #if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
     auto static_font_owner = std::shared_ptr<const void>(
-        jellyframe_esp32s3_generated::kCoreSystemFont, [](const void*) {});
+        jellyframe::kNotoSansScSystemFontCatalog, [](const void*) {});
     if (!create_installed_app_resources(std::move(resources), budgets, entry_path,
-            jellyframe_esp32s3_generated::kCoreSystemFont,
-            jellyframe_esp32s3_generated::kCoreSystemFontBytes,
+            jellyframe::kNotoSansScSystemFontCatalog,
+            jellyframe::kNotoSansScSystemFontCatalogSize,
             std::move(static_font_owner), esp_timer_get_time, next->runtime_resources)) {
         vSemaphoreDelete(next->stopped);
         delete next;

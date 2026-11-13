@@ -13,24 +13,6 @@ set(JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_CPP
     "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}/jellyframe_esp32s3_noto_sans_sc_font.cpp")
 set(JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_H
     "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}/jellyframe_esp32s3_noto_sans_sc_font.h")
-set(JELLYFRAME_ESP32S3_CORE_FONT_GENERATOR
-    "${CMAKE_CURRENT_LIST_DIR}/../tools/generate_core_system_font.py")
-set(JELLYFRAME_ESP32S3_CORE_FONT_OUTPUT_DIR
-    "${CMAKE_CURRENT_BINARY_DIR}/generated_core_system_font")
-set(JELLYFRAME_ESP32S3_GENERATED_CORE_FONT_CPP
-    "${JELLYFRAME_ESP32S3_CORE_FONT_OUTPUT_DIR}/jellyframe_esp32s3_core_system_font.cpp")
-set(JELLYFRAME_ESP32S3_GENERATED_CORE_FONT_H
-    "${JELLYFRAME_ESP32S3_CORE_FONT_OUTPUT_DIR}/jellyframe_esp32s3_core_system_font.h")
-set(JELLYFRAME_ESP32S3_CORE_FONT_RESOURCE
-    "${CMAKE_CURRENT_LIST_DIR}/../font/core-system-noto-regular-16.jffont2")
-set(JELLYFRAME_ESP32S3_CORE_FONT_SOURCES)
-set(JELLYFRAME_ESP32S3_CORE_FONT_INCLUDE_DIRS)
-if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM)
-    list(APPEND JELLYFRAME_ESP32S3_CORE_FONT_SOURCES
-        "${JELLYFRAME_ESP32S3_GENERATED_CORE_FONT_CPP}")
-    list(APPEND JELLYFRAME_ESP32S3_CORE_FONT_INCLUDE_DIRS
-        "${JELLYFRAME_ESP32S3_CORE_FONT_OUTPUT_DIR}")
-endif()
 if(JELLYFRAME_RENDER_CORE_SOURCE_DIR)
     get_filename_component(JELLYFRAME_ESP32S3_CORE_INCLUDE_ROOT
         "${JELLYFRAME_RENDER_CORE_SOURCE_DIR}/include" ABSOLUTE)
@@ -39,9 +21,6 @@ else()
         "${CMAKE_CURRENT_LIST_DIR}/../../../src")
 endif()
 file(MAKE_DIRECTORY "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}")
-if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM)
-    file(MAKE_DIRECTORY "${JELLYFRAME_ESP32S3_CORE_FONT_OUTPUT_DIR}")
-endif()
 
 # The JFDP identity must name the exact immutable Developer Image build. Keep
 # the published image as the default while allowing release candidates to set
@@ -106,21 +85,6 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
         VERBATIM
     )
 
-    if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM)
-        add_custom_command(
-            OUTPUT
-                "${JELLYFRAME_ESP32S3_GENERATED_CORE_FONT_CPP}"
-                "${JELLYFRAME_ESP32S3_GENERATED_CORE_FONT_H}"
-            COMMAND "${Python3_EXECUTABLE}" "${JELLYFRAME_ESP32S3_CORE_FONT_GENERATOR}"
-                --font-resource "${JELLYFRAME_ESP32S3_CORE_FONT_RESOURCE}"
-                --output-dir "${JELLYFRAME_ESP32S3_CORE_FONT_OUTPUT_DIR}"
-            DEPENDS
-                "${JELLYFRAME_ESP32S3_CORE_FONT_GENERATOR}"
-                "${JELLYFRAME_ESP32S3_CORE_FONT_RESOURCE}"
-            COMMENT "Embedding prepared Core default font resource"
-            VERBATIM
-        )
-    endif()
 endif()
 
 set(JELLYFRAME_ESP32S3_IMAGE_SOURCES)
@@ -153,12 +117,10 @@ idf_component_register(
         "boards/waveshare_touch_lcd_169_board.cpp"
         "${JELLYFRAME_ESP32S3_GENERATED_RESOURCES}"
         "${JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_CPP}"
-        ${JELLYFRAME_ESP32S3_CORE_FONT_SOURCES}
     INCLUDE_DIRS
         "."
         "${JELLYFRAME_ESP32S3_CORE_INCLUDE_ROOT}"
         "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}"
-        ${JELLYFRAME_ESP32S3_CORE_FONT_INCLUDE_DIRS}
     REQUIRES
         esp_timer
         esp_partition
