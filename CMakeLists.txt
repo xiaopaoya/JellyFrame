@@ -678,6 +678,12 @@ if(JELLYFRAME_BUILD_TESTS)
         endif()
 
         add_test(
+            NAME jellyframe_render_core_bootstrap_tests
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_bootstrap_tests.py
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+        add_test(
             NAME jellyframe_script_runtime_boundary_tests
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/script_runtime_boundary_tests.py
