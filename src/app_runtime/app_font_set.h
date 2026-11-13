@@ -14,6 +14,11 @@
 
 namespace jellyframe {
 
+struct CoreFontResourceView {
+    const std::uint8_t* data = nullptr;
+    std::size_t size = 0;
+};
+
 enum class AppFontLoadStatus {
     Loaded,
     EmptyInstance,
@@ -58,6 +63,8 @@ public:
                                             std::string_view family = {});
     bool set_core_system_font(const std::uint8_t* data, std::size_t size);
     bool attach_core_system_font_view(const std::uint8_t* data, std::size_t size);
+    bool set_core_system_font_catalog(const CoreFontResourceView* resources, std::size_t count);
+    bool attach_core_system_font_catalog_view(const CoreFontResourceView* resources, std::size_t count);
     const TextSystem* core_text_system() const;
     std::size_t clear_app_instance(std::uint32_t app_instance_id);
     void clear();
@@ -116,6 +123,12 @@ private:
         FontResource resource;
     };
 
+    struct CoreSystemFont {
+        std::uint64_t resource_id = 0;
+        std::vector<std::uint8_t> bytes;
+        FontResource resource;
+    };
+
     AppFontLoadResult add_jffont(std::uint32_t app_instance_id,
                                  const std::uint8_t* data,
                                  std::size_t size,
@@ -126,7 +139,9 @@ private:
                                     std::size_t size,
                                     bool copy_bytes,
                                     std::string_view family);
-    bool bind_core_system_font(const std::uint8_t* data, std::size_t size, bool copy_bytes);
+    bool bind_core_system_font_catalog(const CoreFontResourceView* resources,
+                                       std::size_t count,
+                                       bool copy_bytes);
     bool rebuild_core_text_system();
     void refresh_context();
     const BitmapFontFallbackContext* context_for_family(std::uint32_t font_family_hash);
@@ -135,13 +150,11 @@ private:
     std::uint32_t app_instance_id_ = 0;
     const BitmapFont* system_font_ = nullptr;
     std::vector<LoadedFont> fonts_;
-    std::vector<std::uint8_t> core_system_font_bytes_;
-    FontResource core_system_font_;
+    std::vector<CoreSystemFont> core_system_fonts_;
     std::vector<CoreFont> core_fonts_;
     std::vector<TextFontFace> core_faces_;
     TextSystem core_text_system_;
-    std::uint64_t core_system_resource_id_ = 1;
-    std::uint64_t next_core_resource_id_ = 2;
+    std::uint64_t next_core_resource_id_ = 1;
     bool core_text_system_ready_ = false;
     BitmapFontContext primary_context_{};
     std::vector<const BitmapFont*> fallback_fonts_;

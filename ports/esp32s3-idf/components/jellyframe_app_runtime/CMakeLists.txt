@@ -95,6 +95,7 @@ idf_component_register(
         "${JELLYFRAME_ROOT}/src/app_runtime/app_compute_jobs.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/app_device_services.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/app_font_set.cpp"
+        "${JELLYFRAME_ROOT}/src/app_runtime/core_system_font_catalog.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/app_frame_policy.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/app_host.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/app_host_data.cpp"

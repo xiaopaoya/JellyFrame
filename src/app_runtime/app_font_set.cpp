@@ -188,41 +188,53 @@ AppFontLoadResult AppFontSet::attach_core_font_view(std::uint32_t app_instance_i
 }
 
 bool AppFontSet::set_core_system_font(const std::uint8_t* data, std::size_t size) {
-    return bind_core_system_font(data, size, true);
+    const CoreFontResourceView resource{data, size};
+    return set_core_system_font_catalog(&resource, 1);
 }
 
 bool AppFontSet::attach_core_system_font_view(const std::uint8_t* data, std::size_t size) {
-    return bind_core_system_font(data, size, false);
+    const CoreFontResourceView resource{data, size};
+    return attach_core_system_font_catalog_view(&resource, 1);
 }
 
-bool AppFontSet::bind_core_system_font(const std::uint8_t* data, std::size_t size, bool copy_bytes) {
-    if (data == nullptr || size == 0) return false;
-    std::vector<std::uint8_t> candidate_bytes;
-    FontResource candidate_font;
-    if (copy_bytes) {
-        try {
-            candidate_bytes.assign(data, data + size);
-        } catch (...) {
-            return false;
+bool AppFontSet::set_core_system_font_catalog(const CoreFontResourceView* resources, std::size_t count) {
+    return bind_core_system_font_catalog(resources, count, true);
+}
+
+bool AppFontSet::attach_core_system_font_catalog_view(const CoreFontResourceView* resources,
+                                                      std::size_t count) {
+    return bind_core_system_font_catalog(resources, count, false);
+}
+
+bool AppFontSet::bind_core_system_font_catalog(const CoreFontResourceView* resources,
+                                              std::size_t count,
+                                              bool copy_bytes) {
+    if (resources == nullptr || count == 0 || count > 64 ||
+        count > UINT64_MAX - next_core_resource_id_) return false;
+    std::vector<CoreSystemFont> candidate;
+    try {
+        candidate.reserve(count);
+        for (std::size_t i = 0; i < count; ++i) {
+            if (resources[i].data == nullptr || resources[i].size == 0) return false;
+            CoreSystemFont face;
+            if (copy_bytes) face.bytes.assign(resources[i].data, resources[i].data + resources[i].size);
+            const auto* data = copy_bytes ? face.bytes.data() : resources[i].data;
+            const auto size = copy_bytes ? face.bytes.size() : resources[i].size;
+            if (face.resource.load(data, size) != FontResourceStatus::Loaded) return false;
+            face.resource_id = next_core_resource_id_ + i;
+            candidate.push_back(std::move(face));
         }
-    }
-    const std::uint8_t* candidate_data = copy_bytes ? candidate_bytes.data() : data;
-    const std::size_t candidate_size = copy_bytes ? candidate_bytes.size() : size;
-    if (candidate_font.load(candidate_data, candidate_size) != FontResourceStatus::Loaded)
+    } catch (...) {
         return false;
-    auto old_bytes = std::move(core_system_font_bytes_);
-    const FontResource old_font = core_system_font_;
-    const std::uint64_t old_resource_id = core_system_resource_id_;
-    core_system_font_bytes_ = std::move(candidate_bytes);
-    core_system_font_ = candidate_font;
-    core_system_resource_id_ = next_core_resource_id_++;
+    }
+    auto old = std::move(core_system_fonts_);
+    core_system_fonts_ = std::move(candidate);
     if (!rebuild_core_text_system()) {
-        core_system_font_bytes_ = std::move(old_bytes);
-        core_system_font_ = old_font;
-        core_system_resource_id_ = old_resource_id;
+        core_system_fonts_ = std::move(old);
         rebuild_core_text_system();
         return false;
     }
+    next_core_resource_id_ += count;
     return true;
 }
 
@@ -272,10 +284,10 @@ bool AppFontSet::rebuild_core_text_system() {
     std::vector<TextFontFace> candidate_faces;
     std::unordered_map<std::uint32_t, std::uint32_t> family_ids;
     try {
-        candidate_faces.reserve(core_fonts_.size() + (core_system_font_.valid() ? 1U : 0U));
+        candidate_faces.reserve(core_fonts_.size() + core_system_fonts_.size());
         family_ids.reserve(core_fonts_.size());
-        if (core_system_font_.valid())
-            candidate_faces.push_back({core_system_resource_id_, 0, core_system_font_, 0});
+        for (const auto& loaded : core_system_fonts_)
+            candidate_faces.push_back({loaded.resource_id, 0, loaded.resource, 0});
         std::uint32_t next_family_id = 1;
         for (const auto& loaded : core_fonts_) {
             std::uint32_t family_id = 0;
