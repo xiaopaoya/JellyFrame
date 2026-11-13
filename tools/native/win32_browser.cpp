@@ -2478,6 +2478,7 @@ struct BrowserTextBackend {
     TextMeasureProvider measure;
     TextPainter painter;
     const TextSystem* text_system = nullptr;
+    bool core_text = false;
 };
 
 HFONT create_gdi_text_font(int font_size, int font_weight) {
@@ -2585,16 +2586,17 @@ BrowserTextBackend make_browser_text_backend(const BrowserOptions& options, AppR
     if (options.use_app_fonts && runtime != nullptr) {
         if (runtime->fonts().primary_font() != nullptr) {
             return BrowserTextBackend{runtime->fonts().measure_provider(),
-                                      runtime->fonts().painter(), nullptr};
+                                      runtime->fonts().painter(), nullptr, false};
         }
         if (const TextSystem* text_system = runtime->fonts().core_text_system()) {
-            return BrowserTextBackend{{}, {}, text_system};
+            return BrowserTextBackend{{}, {}, text_system, true};
         }
     }
     return BrowserTextBackend{
         TextMeasureProvider{measure_text_with_gdi, nullptr},
         TextPainter{draw_text_with_gdi, nullptr},
         nullptr,
+        false,
     };
 }
 
@@ -4622,6 +4624,8 @@ public:
                   << "  frames=" << options_.frame_count << '\n'
                   << "  frame_step_ms=" << options_.frame_step_ms << '\n'
                   << "  viewport=" << viewport_width_ << "x" << viewport_height_ << '\n'
+                  << "  text_policy="
+                  << (make_browser_text_backend(options_, &app_runtime_).core_text ? "core" : "legacy") << '\n'
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
                   << "  scripting=on\n"
 #else
