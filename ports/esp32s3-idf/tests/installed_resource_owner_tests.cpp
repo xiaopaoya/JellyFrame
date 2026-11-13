@@ -94,17 +94,23 @@ int run_installed_resource_owner_tests() {
         return snapshot;
     };
     InstalledAppResources::Handle named;
+    const std::size_t app_font_start = jellyframe::kNotoSansScSystemFontCatalogSize;
     const auto admit = [&](InstalledResourceSnapshot snapshot) {
         return create_installed_app_resources(std::move(snapshot), {}, "/apps/demo/index.html",
             jellyframe::kNotoSansScSystemFontCatalog,
             jellyframe::kNotoSansScSystemFontCatalogSize, system_font_owner(), host_clock_us, named);
     };
     if (!check(admit(app_snapshot()), "declared named-family regular/bold should register")) return 1;
-    if (!check(named->text_catalog->size() == 5 && named->text_catalog->registration(0).family_id == 0 &&
-        named->text_catalog->registration(1).family_id == 0 && named->text_catalog->registration(2).family_id == 0 &&
-        named->text_catalog->registration(3).family_id == jellyframe::normalized_font_family_hash("Named Family") &&
-        named->text_catalog->registration(4).family_id == named->text_catalog->registration(3).family_id,
+    if (!check(named->text_catalog->size() == app_font_start + 2,
         "firmware fallback must precede app faces in declaration order")) return 1;
+    for (std::size_t i = 0; i < app_font_start; ++i) {
+        if (!check(named->text_catalog->registration(i).family_id == 0,
+                   "system fallback faces must remain in the default family")) return 1;
+    }
+    const std::uint32_t named_family = jellyframe::normalized_font_family_hash("Named Family");
+    if (!check(named->text_catalog->registration(app_font_start).family_id == named_family &&
+               named->text_catalog->registration(app_font_start + 1).family_id == named_family,
+               "named app faces must follow every system fallback face")) return 1;
     auto prior_named = named;
     auto retained_catalog = named->text_catalog;
     const auto verify_app_text = [&](const jellyframe::RuntimeFontCatalog& catalog) {
@@ -120,7 +126,7 @@ int run_installed_resource_owner_tests() {
             TextRunMetrics metrics;
             PreparedTextGlyph glyph;
             if (catalog.text_system().prepare("A", request, &glyph, 1, metrics) != TextSystemStatus::Ok ||
-                glyph.resource_id != catalog.resource_id(weight == 400 ? 3 : 4) ||
+                glyph.resource_id != catalog.resource_id(app_font_start + (weight == 400 ? 0 : 1)) ||
                 metrics.advance != 9600 || metrics.ascent != 12800) return false;
             std::string packet;
             PreparedTextView view;
@@ -173,7 +179,7 @@ int run_installed_resource_owner_tests() {
                    jellyframe::normalized_font_family_hash(alias_name), alias_family) &&
                named->text_catalog->text_system().measure("A", alias_request, alias_metrics) ==
                    jellyframe::TextSystemStatus::Ok &&
-               alias_metrics.primary_resource_id == named->text_catalog->resource_id(5),
+               alias_metrics.primary_resource_id == named->text_catalog->resource_id(app_font_start + 2),
                "source alias must resolve and measure through its own registration")) return 1;
     named.reset();
 

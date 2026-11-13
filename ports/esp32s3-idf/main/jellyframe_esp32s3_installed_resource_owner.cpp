@@ -126,7 +126,7 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
         candidate->snapshot = owned_snapshot;
 
         using namespace jellyframe;
-        if (!core_fonts || core_font_count != 3 || !core_font_owner) return false;
+        if (!core_fonts || !core_font_count || !core_font_owner) return false;
         std::vector<RuntimeFontRegistration> registrations;
         registrations.reserve(core_font_count + owned_snapshot->fonts.size());
         for (std::size_t i = 0; i < core_font_count; ++i) {
