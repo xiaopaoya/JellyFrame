@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare and embed the shared Noto Sans SC 16 px Core system catalog."""
+"""Prepare and embed the shared Noto Sans SC Core system catalog."""
 
 from __future__ import annotations
 
@@ -53,22 +53,23 @@ def main() -> int:
     prepare = load_preparer(args.core_tool).prepare
     coverage = "".join(chr(cp) for cp in resource_codepoints(args.existing_regular.read_bytes()))
     faces = (
-        ("regular", "NotoSansSC-Regular.otf", 400),
-        ("medium", "NotoSansSC-Medium.otf", 500),
-        ("bold", "NotoSansSC-Bold.otf", 700),
+        ("regular", "NotoSansSC-Regular.otf", 400, 16, coverage),
+        ("medium", "NotoSansSC-Medium.otf", 500, 16, coverage),
+        ("bold", "NotoSansSC-Bold.otf", 700, 16, coverage),
+        ("bold-numeric", "NotoSansSC-Bold.otf", 700, 34, "0123456789: C"),
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     catalog_dir = args.catalog_dir or args.output_dir
     catalog_dir.mkdir(parents=True, exist_ok=True)
     prepared = []
-    for name, filename, expected_weight in faces:
+    for name, filename, expected_weight, size, face_coverage in faces:
         source = args.font_dir / filename
         font_bytes = source.read_bytes()
-        blob, report = prepare(font_bytes, coverage, size=16, bits=4)
-        if report["weight"] != expected_weight or len(report["glyphs"]) != len(coverage):
+        blob, report = prepare(font_bytes, face_coverage, size=size, bits=4)
+        if report["weight"] != expected_weight or len(report["glyphs"]) != len(set(face_coverage)):
             raise ValueError(f"unexpected face metadata for {source}")
         report.pop("glyphs")
-        asset_name = f"core-system-noto-{name}-16.jffont2"
+        asset_name = f"core-system-noto-{name}-{size}.jffont2"
         (args.output_dir / asset_name).write_bytes(blob)
         report.update({
             "asset": asset_name,
@@ -76,7 +77,7 @@ def main() -> int:
             "sourceFileSha256": hashlib.sha256(font_bytes).hexdigest(),
             "license": "SIL Open Font License 1.1",
             "licenseFile": "LICENSE-NOTO-SANS-SC.txt",
-            "coverageCodepoints": len(coverage),
+            "coverageCodepoints": len(set(face_coverage)),
         })
         prepared.append((asset_name, blob, report))
 
@@ -88,12 +89,12 @@ def main() -> int:
     source = ['#include "app_runtime/core_system_font_catalog.h"',
               "\nnamespace jellyframe {"]
     for index, (asset_name, blob, _) in enumerate(prepared):
-        symbol = f"kNotoSansScSystemFont{faces[index][0].title()}16"
+        symbol = f"kNotoSansScSystemFont{faces[index][0].title().replace('-', '')}{faces[index][3]}"
         source.extend((f"namespace {{ constexpr std::uint8_t {symbol}[] = {{",
                        cpp_bytes(blob), "}; }"))
     source.append("const CoreFontResourceView kNotoSansScSystemFontCatalog[] = {")
     for index, (_, _, _) in enumerate(prepared):
-        symbol = f"kNotoSansScSystemFont{faces[index][0].title()}16"
+        symbol = f"kNotoSansScSystemFont{faces[index][0].title().replace('-', '')}{faces[index][3]}"
         source.append(f"    {{{symbol}, sizeof({symbol})}},")
     source.extend(("};", "const std::size_t kNotoSansScSystemFontCatalogSize =",
                    "    sizeof(kNotoSansScSystemFontCatalog) / sizeof(kNotoSansScSystemFontCatalog[0]);",
@@ -104,7 +105,7 @@ def main() -> int:
         "family": "Noto Sans SC",
         "version": "2.002",
         "profile": {"rasterPixelSize": 16, "coverageBits": 4, "coverageCodepoints": len(coverage)},
-        "faceOrder": ["regular-400", "medium-500", "bold-700"],
+        "faceOrder": ["regular-400-16", "medium-500-16", "bold-700-16", "bold-numeric-700-34"],
         "license": "SIL Open Font License 1.1",
         "licenseFile": "LICENSE-NOTO-SANS-SC.txt",
         "aggregateAssetBytes": sum(len(blob) for _, blob, _ in prepared),

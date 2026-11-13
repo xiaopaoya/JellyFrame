@@ -392,7 +392,7 @@ void core_system_font_catalog_owns_copies_and_borrows_views() {
     assert(metrics.primary_resource_id==2);
 }
 
-void generated_noto_catalog_binds_and_selects_all_three_weights() {
+void generated_noto_catalog_binds_and_selects_all_weights_and_display_strike() {
     AppRuntimeHost host=make_host();
     assert(host.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog,
                                                       kNotoSansScSystemFontCatalogSize));
@@ -409,6 +409,16 @@ void generated_noto_catalog_binds_and_selects_all_three_weights() {
         assert(metrics.primary_resource_id==resource_id);
         assert(metrics.glyph_count==2);
     }
+
+    TextFontRequest display_request;
+    display_request.size_q1000=34000;
+    display_request.weight=700;
+    PreparedTextGlyph display_glyphs[5];
+    TextRunMetrics display_metrics;
+    assert(system->prepare("09:41",display_request,display_glyphs,5,display_metrics)==TextSystemStatus::Ok);
+    assert(display_metrics.primary_resource_id==4);
+    assert(display_metrics.glyph_count==5);
+    for (const auto& glyph : display_glyphs) assert(glyph.resource_id==4);
 }
 
 
@@ -916,7 +926,7 @@ int main() {
     app_font_set_can_attach_borrowed_jffont_view();
     core_system_font_catalog_selects_weights_and_rolls_back_invalid_updates();
     core_system_font_catalog_owns_copies_and_borrows_views();
-    generated_noto_catalog_binds_and_selects_all_three_weights();
+    generated_noto_catalog_binds_and_selects_all_weights_and_display_strike();
     core_font_catalog_tracks_app_lifetime_and_family_identity();
     crash_current_tears_down_active_instance_state();
     terminate_current_supports_watchdog_and_user_kill_reasons();

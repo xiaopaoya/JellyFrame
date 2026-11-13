@@ -5,13 +5,14 @@
 The ESP32-S3 production bitmap pack is generated offline from the three font
 files in `source/noto-sans-sc-2.002`. They are retained with the port so a
 developer does not need an undocumented `C:\Windows\Fonts` installation to
-reproduce the pack. The generated C++ output is written to the build tree,
-not kept as a checked-in source file. The checked-in
-The checked-in catalog contains Core-prepared 16 px, 4-bit Regular, Medium and
-Bold default-family faces. Every face covers the same 4,539 codepoints recorded
-by the prior Regular asset. The immutable Runtime table is generated as
-`src/app_runtime/core_system_font_catalog.cpp`; consumers attach its three
-views in Regular, Medium, Bold order without heap copies. The retained UI can
+reproduce the pack. The legacy bitmap-pack generator writes its C++ output to
+the build tree. The checked-in Core catalog contains 16 px, 4-bit Regular, Medium and
+Bold default-family faces. Each covers the same 4,539 codepoints as the prior
+Regular asset. A compact 34 px Bold face covers `0123456789: C` for large
+numeric displays; Core selects it at matching sizes and falls back to the
+16 px faces for other characters. The immutable Runtime table is generated as
+`src/app_runtime/core_system_font_catalog.cpp`; consumers attach its four
+views without heap copies. The retained UI can
 opt into the Core text path through
 `JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM`; it is disabled by default until
 device visual acceptance is complete.
@@ -21,8 +22,10 @@ device visual acceptance is complete.
 | `core-system-noto-regular-16.jffont2` | 400 | 716,274 | `7454E5A35C99E1BFBEB0CF226C0E9C128C1D9520B40EC9037A293A2A6C43A320` |
 | `core-system-noto-medium-16.jffont2` | 500 | 717,419 | `032DDF64D6EC6D0694F564850C5668BC8B7F43FB099DCDE522568A340EAE5593` |
 | `core-system-noto-bold-16.jffont2` | 700 | 726,078 | `0D8083B975AFDA901D70998991C3CDA1BA70D0C29F151D13D4BF44BD3A821301` |
+| `core-system-noto-bold-numeric-34.jffont2` | 700 | 3,303 | `2CAB434C3A986C31B0F164419A3144F890CAB8C782A8E4FBAE4BEF8E4C6EE99A` |
 
-The catalog contributes 2,159,771 bytes (about 2.06 MiB) to the image plan. An
+The 16 px faces contribute 2,159,771 bytes (about 2.06 MiB); the compact
+numeric face adds only its small glyph subset. An
 8 MiB partition has 6,228,837 bytes remaining after the font assets alone;
 other code and resources consume part of that capacity. Final linked image
 size and remaining margin require a port build measurement.
@@ -77,7 +80,7 @@ pinned Core preparer checkout:
 
 ```powershell
 python tools/prepare_core_system_font_catalog.py `
-  --core-tool E:\Workspaces\migration-followup\Core-remove-host-text-adapter-20261114\tools\prepare_font_resource.py `
+  --core-tool E:\Workspaces\migration-followup\Core-coretext-dirty-cache-fix-20261114\tools\prepare_font_resource.py `
   --font-dir ports/esp32s3-idf/font/source/noto-sans-sc-2.002 `
   --output-dir ports/esp32s3-idf/font `
   --catalog-dir src/app_runtime `

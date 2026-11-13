@@ -7,13 +7,14 @@
     "coverageCodepoints": 4539
   },
   "faceOrder": [
-    "regular-400",
-    "medium-500",
-    "bold-700"
+    "regular-400-16",
+    "medium-500-16",
+    "bold-700-16",
+    "bold-numeric-700-34"
   ],
   "license": "SIL Open Font License 1.1",
   "licenseFile": "LICENSE-NOTO-SANS-SC.txt",
-  "aggregateAssetBytes": 2159771,
+  "aggregateAssetBytes": 2163074,
   "assets": [
     {
       "format": "JFFONT2",
@@ -101,6 +102,35 @@
       "license": "SIL Open Font License 1.1",
       "licenseFile": "LICENSE-NOTO-SANS-SC.txt",
       "coverageCodepoints": 4539
+    },
+    {
+      "format": "JFFONT2",
+      "profile": "scalar-bitmap-v1",
+      "sourceSha256": "d1961be1161ea1be08496c920862d06ea5c23a757628f4fd69368de1d9f51bed",
+      "resourceSha256": "2cab434c3a986c31b0f164419a3144f890cab8c782a8e4fbae4bef8e4c6ee99a",
+      "resourceBytes": 3303,
+      "unitsPerEm": 1000,
+      "rasterPixelSize": 34,
+      "weight": 700,
+      "coverageBits": 4,
+      "metricsSource": "hhea",
+      "ascent": 1160,
+      "descent": 288,
+      "lineGap": 0,
+      "advanceSource": "original hmtx units, not hinted/rounded Pillow string width",
+      "raster": {
+        "pillow": "12.3.0",
+        "fontTools": "4.60.1",
+        "freeType": "2.14.3",
+        "layout": "BASIC",
+        "anchor": "ls"
+      },
+      "asset": "core-system-noto-bold-numeric-34.jffont2",
+      "sourceFile": "NotoSansSC-Bold.otf",
+      "sourceFileSha256": "d1961be1161ea1be08496c920862d06ea5c23a757628f4fd69368de1d9f51bed",
+      "license": "SIL Open Font License 1.1",
+      "licenseFile": "LICENSE-NOTO-SANS-SC.txt",
+      "coverageCodepoints": 13
     }
   ]
 }
