@@ -1,6 +1,6 @@
 # ESP32-S3 Tools
 
-> Last updated: 2026-11-14; Applies to: 0.6.2-ws147.1; compatibility baseline: 0.5.0
+> Last updated: 2026-11-14; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 Helper scripts for generating or validating ESP32-S3 port resources.
 
