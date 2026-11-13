@@ -53,7 +53,7 @@ if(REQUIRE_SHARED_INLINE_API)
     message(FATAL_ERROR "This qualification requires canonical prepared-text v2")
   endif()
 endif()
-option(QUALIFY_NATURAL_INLINE_IMAGES "Run post-PR35 inline natural-image worker qualification" OFF)
+option(QUALIFY_NATURAL_INLINE_IMAGES "Run Core-mainline inline natural-image worker qualification" OFF)
 if(QUALIFY_NATURAL_INLINE_IMAGES AND
    (NOT BUILD_V10_WORKER OR NOT REQUIRE_NATURAL_IMAGE_API OR NOT REQUIRE_SHARED_INLINE_API))
   message(FATAL_ERROR "Natural inline qualification requires the worker, natural-image API and shared-inline API checks")
