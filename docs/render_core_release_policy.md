@@ -21,12 +21,12 @@ sidecar. The latest signed release is `v0.8.0` / ABI 3, and Runtime production
 package mode remains locked to that release with source manifest identity
 `fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795` and
 archive SHA-256 `b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`.
-Core `master` is now `0.9.0-dev` / ABI 4 at `a600fce8`; its current normalized
-source manifest is `f0deff48544dccac2e3998f874ff403470f932918466237b866eb6d9a9474c2b`
-across 111 manifest entries. It includes shared-inline list ordinal generated
-text and native decimal/disc marker overlays. Runtime's full/cropped ABI4 matrix
-now pins this revision and its distinct CMake package source identity
-`4dd06135f3c3a1dce651c5a1b2cc4b2237460e0a8fa628ab7d79fdb29bcf7e14` across 163
+Core `master` is now `0.9.0-dev` / ABI 4 at `ef042b26`. It includes shared-inline
+list ordinal generated text, native decimal/disc marker overlays, and isolated
+shaping-foundation prototypes that do not encode shaping tables or change
+Runtime behavior. Runtime's full/cropped ABI4 matrix pins this revision and its
+CMake package source identity
+`aa908e3852afd4a06ed6df6b26a5cc759cfefcd7d39c02270d1304aa633d18c4` across 165
 implementation inputs; those CI jobs are the qualification gate. No signed ABI4 release exists yet, and no
 Device OS image acceptance artifact was found in the checked workspace. ABI4
 is not the production dependency.

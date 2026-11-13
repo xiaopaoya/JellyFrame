@@ -656,9 +656,9 @@ jobs:
             cropped: true
           - profile: generated-full
             profile_id: render-core-default
-            core_commit: a600fce8b964aaf2f2ed9658efc55b6b535155b5
-            source_hash: 4dd06135f3c3a1dce651c5a1b2cc4b2237460e0a8fa628ab7d79fdb29bcf7e14
-            source_count: 163
+            core_commit: ef042b262d7cb4921c49621311b43a59e2e07388
+            source_hash: aa908e3852afd4a06ed6df6b26a5cc759cfefcd7d39c02270d1304aa633d18c4
+            source_count: 165
             require_natural: 'ON'
             qualify_natural_inline: 'ON'
             qualify_generated_inline: 'ON'
@@ -667,9 +667,9 @@ jobs:
             cropped: false
           - profile: generated-cropped
             profile_id: render-core-minimal-no-forms-advanced
-            core_commit: a600fce8b964aaf2f2ed9658efc55b6b535155b5
-            source_hash: 4dd06135f3c3a1dce651c5a1b2cc4b2237460e0a8fa628ab7d79fdb29bcf7e14
-            source_count: 163
+            core_commit: ef042b262d7cb4921c49621311b43a59e2e07388
+            source_hash: aa908e3852afd4a06ed6df6b26a5cc759cfefcd7d39c02270d1304aa633d18c4
+            source_count: 165
             require_natural: 'ON'
             qualify_natural_inline: 'ON'
             qualify_generated_inline: 'ON'

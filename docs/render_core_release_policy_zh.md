@@ -18,9 +18,8 @@
 首个带签名的 `v0.6.0` release 建立了确定性 source archive 和 SHA-256 sidecar。最新带签名发布为 `v0.8.0` / ABI 3；Runtime 生产 package mode 仍锁定该发布，其 source manifest identity 为
 `fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795`，archive SHA-256 为
 `b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`。Core `master` 当前为
-`0.9.0-dev` / ABI 4，提交 `a600fce8`，规范化 source manifest 为
-`f0deff48544dccac2e3998f874ff403470f932918466237b866eb6d9a9474c2b`，共 111 个 manifest 条目；该版本已包含 shared-inline `counter(list-num)` 与 native decimal/disc list marker。
-Runtime 的 full/cropped ABI4 matrix 已固定此提交及另一种 CMake package source identity：`4dd06135f3c3a1dce651c5a1b2cc4b2237460e0a8fa628ab7d79fdb29bcf7e14`，覆盖 163 个实现输入；对应 CI jobs 是该版本的验收门槛。目前尚无带签名 ABI4 release；在已检查的工作区中也未找到 Device OS 镜像验收 artifact。ABI4 仍不是生产依赖。
+`0.9.0-dev` / ABI 4，提交 `ef042b26`；包含 shared-inline list ordinal 生成文本、native decimal/disc list marker，以及隔离的 shaping 基础原型。原型尚未编码 shaping 表，也未改变 Runtime 行为。
+Runtime 的 full/cropped ABI4 matrix 固定此提交及 CMake package source identity：`aa908e3852afd4a06ed6df6b26a5cc759cfefcd7d39c02270d1304aa633d18c4`，覆盖 165 个实现输入；对应 CI jobs 是该版本的验收门槛。目前尚无带签名 ABI4 release；在已检查的工作区中也未找到 Device OS 镜像验收 artifact。ABI4 仍不是生产依赖。
 这不表示许可证、贡献者政策或开源意向的改变。Runtime 只能通过显式 dependency-lock 更新接纳 release。
 CI 会校验已发布 archive 的 SHA-256、安装并运行锁定 package-consumer regression，避免误把 monorepo export 当成已发布 dependency。
 
