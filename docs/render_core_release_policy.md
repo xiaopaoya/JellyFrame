@@ -21,11 +21,11 @@ sidecar. The latest signed release is `v0.8.0` / ABI 3, and Runtime production
 package mode remains locked to that release with source manifest identity
 `fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795` and
 archive SHA-256 `b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`.
-Core `master` is now `0.9.0-dev` / ABI 4 at `ef042b26`. It includes shared-inline
+Core `master` is now `0.9.0-dev` / ABI 4 at `b0bfd834`. It includes shared-inline
 list ordinal generated text, native decimal/disc marker overlays, and isolated
-shaping-foundation prototypes that do not encode shaping tables or change
-Runtime behavior. Runtime's full/cropped ABI4 matrix pins this revision and its
-CMake package source identity
+shaping-foundation and bounded Noto shaping-closure tooling prototypes. This
+work does not add package implementation inputs or change Runtime behavior.
+Runtime's full/cropped ABI4 matrix pins this revision and its CMake package source identity
 `aa908e3852afd4a06ed6df6b26a5cc759cfefcd7d39c02270d1304aa633d18c4` across 165
 implementation inputs; those CI jobs are the qualification gate. No signed ABI4 release exists yet, and no
 Device OS image acceptance artifact was found in the checked workspace. ABI4
