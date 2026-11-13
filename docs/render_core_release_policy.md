@@ -21,9 +21,9 @@ sidecar. The latest signed release is `v0.8.0` / ABI 3, and Runtime production
 package mode remains locked to that release with source manifest identity
 `fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795` and
 archive SHA-256 `b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`.
-Core `master` is now `0.9.0-dev` / ABI 4 at `a186f28e`; its current source
-manifest is `b841715f8f2bf1ac8ba02ff31c0f3e97c1dd5161517e58c248961cef97e72454`
-across 163 files. Runtime CI qualifies this ABI4 source through installed
+Core `master` is now `0.9.0-dev` / ABI 4 at `076b8b0f`; its current normalized
+source manifest is `5cf5b2e2dd3b9dde6ac8268514f2addd033ddd69f09809b07f6601e49c53c714`
+across 111 manifest entries. Runtime CI qualifies this ABI4 source through installed
 consumers and local source overrides. No signed ABI4 release exists yet, and no
 Device OS image acceptance artifact was found in the checked workspace. ABI4
 is not the production dependency.

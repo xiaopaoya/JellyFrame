@@ -18,8 +18,8 @@
 首个带签名的 `v0.6.0` release 建立了确定性 source archive 和 SHA-256 sidecar。最新带签名发布为 `v0.8.0` / ABI 3；Runtime 生产 package mode 仍锁定该发布，其 source manifest identity 为
 `fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795`，archive SHA-256 为
 `b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`。Core `master` 当前为
-`0.9.0-dev` / ABI 4，提交 `a186f28e`，source manifest 为
-`b841715f8f2bf1ac8ba02ff31c0f3e97c1dd5161517e58c248961cef97e72454`，共 163 个文件。
+`0.9.0-dev` / ABI 4，提交 `076b8b0f`，规范化 source manifest 为
+`5cf5b2e2dd3b9dde6ac8268514f2addd033ddd69f09809b07f6601e49c53c714`，共 111 个 manifest 条目。
 Runtime CI 已通过 ABI4 installed consumer 和 local source override 验收。目前尚无带签名 ABI4 release；在已检查的工作区中也未找到 Device OS 镜像验收 artifact。ABI4 仍不是生产依赖。
 这不表示许可证、贡献者政策或开源意向的改变。Runtime 只能通过显式 dependency-lock 更新接纳 release。
 CI 会校验已发布 archive 的 SHA-256、安装并运行锁定 package-consumer regression，避免误把 monorepo export 当成已发布 dependency。
