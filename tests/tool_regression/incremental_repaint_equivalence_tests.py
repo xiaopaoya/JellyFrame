@@ -19,6 +19,8 @@ class CaptureCase:
     frame_events: tuple[str, ...] = ()
     frame_step_ms: int | None = None
     frame_start_ms: int | None = None
+    use_app_fonts: bool = False
+    require_pixel_mutation: bool = False
 
 
 CASES = (
@@ -82,6 +84,8 @@ def run_capture(shell: Path, repo: Path, case: CaptureCase, output: Path, force_
         command.extend(("--frame-start-ms", str(case.frame_start_ms)))
     for event in case.frame_events:
         command.extend(("--frame-event", event))
+    if case.use_app_fonts:
+        command.append("--use-app-fonts")
     if force_full:
         command.append("--force-full-repaint")
     result = subprocess.run(command, cwd=repo, capture_output=True, text=True, check=False)
@@ -90,6 +94,43 @@ def run_capture(shell: Path, repo: Path, case: CaptureCase, output: Path, force_
             f"capture failed ({result.returncode}): {' '.join(command)}\n"
             f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
+    expected_policy = "core" if case.use_app_fonts else "legacy"
+    if f"text_policy={expected_policy}" not in result.stdout:
+        raise RuntimeError(
+            f"{case.name}: expected text_policy={expected_policy} in capture output\n"
+            f"stdout:\n{result.stdout}"
+        )
+
+
+def make_core_letter_spacing_case(root: Path) -> CaptureCase:
+    app = root / "core-letter-spacing-app"
+    app.mkdir()
+    (app / "index.html").write_text(
+        "<!doctype html><meta charset='utf-8'><body style='margin:0;background:#fff'>"
+        "<input id='label' value='AB' style='width:180px;height:40px;font-size:16px;"
+        "letter-spacing:2px;color:#000;background:#fff;border:0'></body>",
+        encoding="utf-8",
+    )
+    (app / "jellyframe.app.json").write_text(
+        '{"id":"org.jellyframe.tests.core-letter-spacing",'
+        '"name":"Core Letter Spacing Repaint","role":"app",'
+        '"versionName":"1.0.0","versionCode":1,"entry":"/index.html",'
+        '"runtime":{"minJellyFrame":"0.6.0","minRenderCore":"0.8.0","script":"none"},'
+        '"viewport":{"designWidth":240,"designHeight":100},"fonts":[]}',
+        encoding="utf-8",
+    )
+    (app / "repaint.jfcapture").write_text(
+        "frames 3\nstep-ms 33\nstart-ms 1000\nevent 1 set-value label CDE\n",
+        encoding="utf-8",
+    )
+    return CaptureCase(
+        name="core-letter-spacing",
+        app=str(app),
+        frame_count=3,
+        frame_script="repaint.jfcapture",
+        use_app_fonts=True,
+        require_pixel_mutation=True,
+    )
 
 
 def main() -> int:
@@ -101,7 +142,8 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="jellyframe-repaint-") as temporary:
         root = Path(temporary)
         total_frames = 0
-        for case in CASES:
+        cases = (*CASES, make_core_letter_spacing_case(root))
+        for case in cases:
             incremental = root / case.name / "incremental"
             full = root / case.name / "full"
             run_capture(shell, repo, case, incremental, False)
@@ -114,6 +156,11 @@ def main() -> int:
                     f"{case.name}: expected {case.frame_count} frames per mode, got "
                     f"{len(incremental_frames)} and {len(full_frames)}"
                 )
+            if case.require_pixel_mutation:
+                if incremental_frames[0].read_bytes() == incremental_frames[1].read_bytes():
+                    raise RuntimeError(f"{case.name}: scripted label mutation did not change pixels")
+                if full_frames[0].read_bytes() == full_frames[1].read_bytes():
+                    raise RuntimeError(f"{case.name}: full repaint did not capture the label mutation")
             for index, (incremental_frame, full_frame) in enumerate(
                 zip(incremental_frames, full_frames)
             ):
@@ -126,7 +173,7 @@ def main() -> int:
 
     print(
         "incremental repaint matches full repaint for "
-        f"{total_frames} deterministic frames across {len(CASES)} app flows"
+        f"{total_frames} deterministic frames across {len(cases)} app flows"
     )
     return 0
 
