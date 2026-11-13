@@ -1,6 +1,6 @@
 # ESP32-S3 Tools
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-11-14; Applies to: 0.6.2-ws147.1; compatibility baseline: 0.5.0
 
 Helper scripts for generating or validating ESP32-S3 port resources.
 
@@ -11,8 +11,9 @@ target.
   bounded C++ resource table consumed by the port build.
 - `generate_noto_sans_sc_font_pack.py`: offline font-pack generation; source
   fonts and licensing records live under `../font/`.
-- `generate_core_system_font.py`: prepares the family-0 JFFONT2 Core resource
-  from the vendored Noto Regular face for embedded read-only storage.
+- Core system font resources and their generated Runtime table are prepared by
+  `../../tools/prepare_core_system_font_catalog.py`; source hashes, asset
+  hashes and the reproduction command are in `../font/SOURCE.md`.
 - `collect_p3_1_acceptance.py`, `collect_p3_4_mixed_soak.py` and
   `collect_value_frame_v2_soak.py`: evidence collectors for port-owned
   reports, not runtime firmware tools. The value-frame v2 collector writes a

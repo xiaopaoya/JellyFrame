@@ -9,10 +9,11 @@
 #include "jellyframe_esp32s3_input.h"
 #include "jellyframe_esp32s3_resources.h"
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
-#include "jellyframe_esp32s3_core_system_font.h"
+#include "app_runtime/core_system_font_catalog.h"
 #endif
 
 #include "app_runtime/app_host.h"
+#include "app_runtime/app_font_set.h"
 #include "app_runtime/script_task_command_access.h"
 #include "device_runtime_contracts/device_bundle.h"
 #include "render_core/bitmap_font.h"
@@ -2339,10 +2340,10 @@ void run_retained_ui_task(void* raw_context) {
     context->text_painter = jellyframe::TextPainter{app_font_paint_callback,
                                                     &context->font_context};
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
-    if (!context->core_text_fonts.attach_core_system_font_view(
-            jellyframe_esp32s3_generated::kCoreSystemFont,
-            jellyframe_esp32s3_generated::kCoreSystemFontBytes)) {
-        ESP_LOGE(kTag, "Core default font resource failed validation");
+    if (!context->core_text_fonts.attach_core_system_font_catalog_view(
+            jellyframe::kNotoSansScSystemFontCatalog,
+            jellyframe::kNotoSansScSystemFontCatalogSize)) {
+        ESP_LOGE(kTag, "Core system font catalog failed validation");
         context.reset();
         vTaskDelete(nullptr);
         return;
