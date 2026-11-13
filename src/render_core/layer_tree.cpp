@@ -403,20 +403,15 @@ bool same_text_measure_provider(const TextMeasureProvider& left,
 const TextLayoutCache* valid_text_layout_cache(const LayoutBox& box,
                                                const LayerTreeBuilderOptions& options) {
     const TextLayoutCache& cache = box.text_layout_cache;
-    bool ancestor_dirty = false;
-    for (const Node* current = box.node == nullptr ? nullptr : box.node->parent;
-         current != nullptr;
-         current = current->parent) {
-        if ((current->local_dirty_flags & (DomDirtyText | DomDirtyStyle | DomDirtyLayout |
-                                           DomDirtyAttributes | DomDirtyTree)) != 0U) {
-            ancestor_dirty = true;
-            break;
-        }
+    const Node* document_root = box.node;
+    while (document_root != nullptr && document_root->parent != nullptr) {
+        document_root = document_root->parent;
     }
+    // Dirty flags remain set until presentation; generation rejects old caches
+    // while allowing text freshly laid out in the current mutation transaction.
     if (!cache.valid || box.node == nullptr || box.node->type != NodeType::Text ||
-        ancestor_dirty ||
-        (box.node->local_dirty_flags & (DomDirtyText | DomDirtyStyle | DomDirtyLayout |
-                                        DomDirtyAttributes | DomDirtyTree)) != 0U ||
+        document_root == nullptr ||
+        cache.document_mutation_generation != document_root->mutation_generation ||
         cache.source_text != box.node->text ||
         cache.viewport_width != box.viewport_width ||
         cache.viewport_height != box.viewport_height ||

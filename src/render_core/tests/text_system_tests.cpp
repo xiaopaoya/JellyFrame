@@ -367,6 +367,73 @@ void html_layout_to_core_paint() {
     count_stale_commands(count_stale_commands,*stale_layers);
     assert(stale_prepared_commands==0);
 }
+void route_relayout_keeps_prepared_text_while_dom_is_dirty() {
+    auto font=asset();
+    TextFontFace face{1,0,font.font};
+    TextSystem system;
+    assert(system.bind(&face,1)==S::Ok);
+
+    HtmlParser html;
+    CssParser css;
+    auto document=html.parse(
+        "<body><section id='home' class='active'><p>AB</p></section>"
+        "<section id='activity'><p>BA</p></section></body>");
+    StyleResolver resolver(css.parse(
+        "body { margin: 0; } section { display: none; } "
+        "section.active { display: block; } "
+        "p { margin: 0; font-size: 16px; white-space: nowrap; }"));
+    LayoutEngineOptions layout_options;
+    layout_options.text_system=&system;
+    LayerTreeBuilderOptions layer_options;
+    layer_options.text_system=&system;
+
+    const auto build_frame=[&]() {
+        auto render=RenderTreeBuilder(resolver).build(*document);
+        auto layout=LayoutEngine(resolver,{},layout_options).layout(*render,80,40);
+        auto layers=LayerTreeBuilder(layer_options).build(*layout);
+        return std::pair{std::move(layout),std::move(layers)};
+    };
+    const auto count_prepared=[&](const auto& self,const LayerNode& layer)->std::size_t {
+        std::size_t count=0;
+        for (const auto& command:layer.display_list)
+            count+=command.type==DisplayCommandType::PreparedText;
+        for (const auto& child:layer.children) count+=self(self,*child);
+        return count;
+    };
+
+    auto [initial_layout,initial_layers]=build_frame();
+    assert(count_prepared(count_prepared,*initial_layers)==1);
+    clear_dirty_flags(*document);
+
+    Node* home=nullptr;
+    Node* activity=nullptr;
+    const auto find_views=[&](const auto& self,Node& node)->void {
+        if (node.attribute("id")=="home") home=&node;
+        if (node.attribute("id")=="activity") activity=&node;
+        for (auto& child:node.children) self(self,*child);
+    };
+    find_views(find_views,*document);
+    assert(home && activity);
+    home->set_attribute("class","inactive");
+    activity->set_attribute("class","active");
+
+    auto [routed_layout,routed_layers]=build_frame();
+    assert((subtree_dirty_flags(*document)&(DomDirtyStyle|DomDirtyLayout|DomDirtyAttributes))!=0U);
+    assert(count_prepared(count_prepared,*routed_layers)==1);
+    const Node* activity_text=activity->children.front()->children.front().get();
+    const auto find_layout_box=[&](const auto& self,const LayoutBox& box)->const LayoutBox* {
+        if (box.node==activity_text) return &box;
+        for (const auto& child:box.children) {
+            if (const LayoutBox* found=self(self,*child)) return found;
+        }
+        return nullptr;
+    };
+    const LayoutBox* active_text_box=find_layout_box(find_layout_box,*routed_layout);
+    assert(active_text_box!=nullptr);
+    assert(active_text_box->text_layout_cache.valid);
+    assert(active_text_box->text_layout_cache.prepared_text);
+    assert(active_text_box->text_layout_cache.source_text=="BA");
+}
 bool forbidden_host_measure(const std::string&,int,int,TextMetrics*,void* context) {
     ++*static_cast<unsigned*>(context);
     return false;
@@ -447,6 +514,7 @@ int main(int argc,char** argv) {
 #endif
     if (argc>1) return inspect(argc,argv);
     weights();strikes_and_families();fallback_and_geometry();refusals_and_budgets();
-    prepared_packet_paint();html_layout_to_core_paint();core_layout_refusals_do_not_fall_back_to_host_text();
+    prepared_packet_paint();html_layout_to_core_paint();
+    route_relayout_keeps_prepared_text_while_dom_is_dirty();core_layout_refusals_do_not_fall_back_to_host_text();
     std::cout<<"text system selection/geometry/transaction/budget tests passed\n";
 }

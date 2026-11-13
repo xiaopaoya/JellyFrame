@@ -12,6 +12,9 @@
 - Runtime PR #75 已合并为 `6302dd1d`；ABI4 installed consumer、v10 与 R3 矩阵、Windows、standalone Core 和 ASan/UBSan CI 全部通过。该 PR 加入共享 Noto Sans SC 16 px Regular/Medium/Bold Core 字体目录、拥有/借用式事务 API、资源 provenance 工具和目录字重/生命周期测试。
 - B2 Runtime PR #76 已合并为 `2e89b0de`，全部 CI 通过。它将 Core 文本放在显式 `--use-app-fonts` 验证路径中，兼容门槛通过前保留 GDI 默认与旧 JFFONT 绘制。B1 Runtime PR #77 已合并为 `af594be4`，全部 CI 通过；full/cropped Core source 主机配置均通过 6/6 聚焦 CTest，覆盖已安装资源所有权、四种 CoreText/BMP 组合及 App Runtime。WS147 命名 profile 已由 ESP-IDF v5.3.1 构建成功，镜像 7,395,718 字节，在 8 MiB app 分区中余量 12%；同代码 band-shell 基线为 5,230,594 字节、余量 38%，profile 增加 2,165,124 字节。两种构建的 IRAM 均为 16,383/16,384 字节，说明近满载是已有基线状态，并非 Core text 新增。当前未枚举到 WS147 串口，尚未实机验收。
 - Runtime 生产依赖仍锁定带签名的 Core `0.8.0` / ABI 3。ABI4 尚无签名发布，也不是生产依赖。
+- 页面路由回归已定位到 `valid_text_layout_cache`：dirty ancestor 会一直保留到 present，因此 layer builder 把当前布局刚生成的文字缓存也拒绝了。Core PR #56 已合并，改为用 document mutation generation 判断缓存新旧，并加入 `display:none` 首页/Activity 路由回归；独立 Core Release CTest 为 33/33。Runtime 镜像修复已通过 Core text-system 与 App Runtime 主机聚焦测试（2/2）。
+- WS147 Core 字体目录现加入了紧凑的 34px 粗体数字字面。该字面的 hhea ascent+descent 在 34px 下约为 49.2px；此前首页时钟行高仅 36px，天气大字依赖较小的默认行高。候选 CSS 已将两处大字行高设为 50px；172x320 Core 字体桌面捕获和浏览器对照均显示字形完整、首页内容未溢出。修改后已用 ESP-IDF v5.3.1 重建命名 profile：BIN 为 7,399,152 字节，8 MiB app 分区剩余 989,456 字节（12%）；ELF SHA-256 `07808D86C5A8ACA85A38862DA947FECE2356497E4886D54BA69F7AF2DC6621D0`，BIN SHA-256 `17B60B4983D56ECDE126AE8244F83105DB19810C7A38DF06197DA8B4A929522E`。尚未刷写，实机验收待完成。
+- 桌面 PR #79（`45c6677d`）已合并，增加了 Core `letter-spacing` 文本变更的重绘等价用例，检查实际选择的文本后端和像素确有变化，并逐字节比较增量重绘与强制全量重绘；聚焦重绘、shell CLI 和 app-shell workflow 本地测试通过。该门槛覆盖一个变更场景；切换桌面默认路径前仍需更广泛的支持属性覆盖。
 - 当前生产默认仍未启用完整 Core 字体路径。WS147 默认配置仍使用回调/v6，Core-text 命名 profile 需显式选择；桌面默认仍为 GDI，Core 路径仅用于显式 opt-in 验证。`TextMeasureProvider` 与 `TextPainter` 仍是 Core 公共 API，因为生产消费者仍在使用；目前只移除了没有生产调用方的 `HostTextAdapter` 便利层。
 - 当前没有 ABI4 命名设备 profile 的 provenance 或 ABI4 固件验收记录。这是主机集成后的设备准入门槛，桌面 CI 不能代替它。
 
@@ -74,5 +77,5 @@ A/B 期间可以并行审计 Core API 和迁移测试，但必须等所有生产
 1. **已完成：**PR #54、#55、#71、#72、#73 均已合并；Runtime 签名 ABI3 source bootstrap 可复现，Core 未使用的 wrapper 已移除。
 2. **已完成：**Runtime full/cropped ABI4 资格验证现已覆盖 Core `64c1cb42` 和 source identity `213ff3196864f2d7da9152bf246c29bda9849da50daff272baf551a7f9179cc5`（163 个实现输入），workflow 为 `43472234209`。
 3. **已完成：**PR #75 的共享字体目录/API 在全部 CI 通过后合并。
-4. **主机集成和目标固件构建已完成，设备门槛待验收：**PR #76（桌面）与 #77（WS147）已合并且 CI 通过；WS147 命名 profile 已由 IDF v5.3.1 构建，app 分区余量为 12%。实机验收通过前，WS147 正常 Kconfig 默认值保持不变；Core 文本通过属性覆盖和增量重绘等价门槛前，桌面继续显式 opt-in。
+4. **主机集成完成，验收门槛待完成：**PR #76（桌面）、#77（WS147）、Core #56 与 Runtime #79 均已合并且所需 CI 通过。此前 WS147 命名 profile 的 IDF v5.3.1 构建有 12% app 分区余量；修正行高后需重建，再在开发板可用时进行实机验收。实机验收通过前，WS147 正常 Kconfig 默认值保持不变；更广泛的支持属性覆盖通过前，桌面 Core 文本继续显式 opt-in。
 5. B 完成后继续 C 的回调消费者清单；所有消费者迁移前不移除 provider API。ABI4 签名发布、Runtime 生产锁和设备采用继续受 B、C、D gate 控制。

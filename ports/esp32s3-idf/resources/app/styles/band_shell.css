@@ -70,7 +70,7 @@ button {
 h1 {
   margin: 0;
   font-size: 34px;
-  line-height: 36px;
+  line-height: 50px;
   white-space: nowrap;
   text-shadow: 0 3px 5px #050609;
 }
@@ -206,7 +206,7 @@ h1 {
 .tip b { width: 20px; padding-top: 5px; margin-right: 7px; text-align: center; background: #25351c; border-radius: 8px; color: var(--lime); }
 
 .weather-hero { position: relative; height: 108px; margin-top: 15px; padding: 13px; background: radial-gradient(circle at 78% 14%, rgba(241, 253, 255, 0.24) 0%, transparent 100%), linear-gradient(to bottom right, #315a7a, #142331); border: 1px solid color-mix(in srgb, #a7e5ff 18%, #315a7a); border-radius: 16px; box-shadow: 0 7px 10px 1px color-mix(in srgb, rgba(0, 0, 0, 0.42) 74%, rgba(98, 223, 247, 0.28)); }
-.weather-hero strong { display: block; font-size: 34px; }
+.weather-hero strong { display: block; font-size: 34px; line-height: 50px; }
 .weather-hero span, .weather-hero small { display: block; margin-top: 4px; color: #b6cedd; font-size: 7px; }
 .weather-hero b { position: absolute; right: 13px; top: 19px; color: #ffd16b; font-size: 9px; }
 .forecast { grid-template-columns: repeat(4, 1fr); margin-top: 8px; }
