@@ -1,6 +1,6 @@
 # Render Core 发布与拆仓政策
 
-> 最后更新：2026-11-04；适用版本：0.6.0-dev
+> 最后更新：2026-11-13；适用版本：0.6.0-dev；Core 0.9.0-dev / ABI 4 验收、Runtime 0.8.0 / ABI 3 生产锁
 
 本政策规定当前 monorepo 边界迁移到独立 `jellyframe-render-core` 工程的方式。它补充 [engine_architecture_zh.md](engine_architecture_zh.md)，不是面向 App 作者的兼容性承诺。
 
@@ -15,10 +15,14 @@
 ## 迁移状态
 
 保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库保留现有许可证和贡献者历史。
-首个带签名的 `v0.6.0` release 建立了确定性 source archive 和 SHA-256 sidecar；Runtime 现已接纳带签名的 `v0.7.0` / ABI 2。独立仓库 `master` 已在 2026-08-30 合入来自 JellyFrame `7735b9a1` 的 `0.6.2-dev` 同步提交 `769ec5d`，但该开发头不是 Runtime package dependency。这不表示许可证、贡献者政策或开源意向的改变。
-Runtime 只能通过显式 dependency-lock 更新接纳 release；in-tree provider 仍是同步开发的默认路径，版本为 `0.6.2` / ABI 1。
-Runtime CI 会下载已发布 archive、校验经审阅的 SHA-256、安装并运行锁定 package-consumer regression；
-这可避免误把 monorepo export 当成已发布 dependency。
+首个带签名的 `v0.6.0` release 建立了确定性 source archive 和 SHA-256 sidecar。最新带签名发布为 `v0.8.0` / ABI 3；Runtime 生产 package mode 仍锁定该发布，其 source manifest identity 为
+`fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795`，archive SHA-256 为
+`b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`。Core `master` 当前为
+`0.9.0-dev` / ABI 4，提交 `076b8b0f`，规范化 source manifest 为
+`5cf5b2e2dd3b9dde6ac8268514f2addd033ddd69f09809b07f6601e49c53c714`，共 111 个 manifest 条目。
+Runtime CI 已通过 ABI4 installed consumer 和 local source override 验收。目前尚无带签名 ABI4 release；在已检查的工作区中也未找到 Device OS 镜像验收 artifact。ABI4 仍不是生产依赖。
+这不表示许可证、贡献者政策或开源意向的改变。Runtime 只能通过显式 dependency-lock 更新接纳 release。
+CI 会校验已发布 archive 的 SHA-256、安装并运行锁定 package-consumer regression，避免误把 monorepo export 当成已发布 dependency。
 
 ## 发布单元
 
@@ -89,4 +93,4 @@ python project_tools\rehearse_render_core_history_export.py `
 
 ## 拆仓门槛
 
-Core 已完成物理拆分：首个带签名的 `v0.6.0` release、当前锁定的 `v0.7.0` / ABI 2 package 与 Runtime package-consumer CI 已关闭该边界。Device OS 迁移前，剩余的 profile-consumer/provenance 检查必须绿色，且不得存在 Runtime/port 私有 include 反向进入 Core。下一个高价值 Core 能力包必须在该受治理边界上开发；大量新 CSS 工作不得回流到过渡 monorepo。
+Core 已完成物理拆分：Runtime 当前通过 `v0.8.0` / ABI 3 签名发布包和 package-consumer CI 验证生产边界。ABI4 仍处于验收轨道；发布签名包、同步更新 Runtime 锁与 archive 校验，并在命名 Device OS profile 记录 ABI4 provenance 后，才可切换生产依赖。Device OS 镜像验收前不得声明设备能力。下一个高价值 Core 能力包必须在该受治理边界上开发；大量新 CSS 工作不得回流到过渡 monorepo。
