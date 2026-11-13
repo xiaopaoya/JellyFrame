@@ -10,7 +10,7 @@
 - Runtime PR #72 已合并为 `5c45c65a`；新增中英双语任务表，区分 ABI4 资格验证、生产采用、回调退役与设备验收。CI 已通过。
 - Runtime PR #73 已合并为 `2c253566`；为带签名的 Core `0.8.0` / ABI3 archive 增加 checksum 校验的离线 bootstrap。Runtime CI 已通过；PR 前本地 67 项 CTest 也全部通过。bootstrap 让当前生产锁可复现，但不会切换到 ABI4，也没有建立默认字体目录。
 - Runtime PR #75 已合并为 `6302dd1d`；ABI4 installed consumer、v10 与 R3 矩阵、Windows、standalone Core 和 ASan/UBSan CI 全部通过。该 PR 加入共享 Noto Sans SC 16 px Regular/Medium/Bold Core 字体目录、拥有/借用式事务 API、资源 provenance 工具和目录字重/生命周期测试。
-- B2 已开 Runtime PR #76；CI 发现 Core 文本路径尚不支持 `letter-spacing`，且触发增量重绘差异。PR 已调整为显式 `--use-app-fonts` 验证路径，保留 GDI 默认与旧 JFFONT 绘制，直至兼容门槛通过。本地 Win32 构建和四项聚焦 CTest 通过，更新后的 PR CI 正在运行。B1 已开 PR #77；full/cropped Core source 主机配置各通过 6/6 聚焦 CTest，覆盖已安装资源所有权、四种 CoreText/BMP 组合及 App Runtime，CI 正在运行。当前环境没有 ESP-IDF，因此尚不能据此验收固件。
+- B2 Runtime PR #76 已合并为 `2e89b0de`，全部 CI 通过。它将 Core 文本放在显式 `--use-app-fonts` 验证路径中，兼容门槛通过前保留 GDI 默认与旧 JFFONT 绘制。B1 Runtime PR #77 已合并为 `af594be4`，全部 CI 通过；full/cropped Core source 主机配置均通过 6/6 聚焦 CTest，覆盖已安装资源所有权、四种 CoreText/BMP 组合及 App Runtime。当前环境没有 ESP-IDF，因此这两个合并都不代表固件验收完成。
 - Runtime 生产依赖仍锁定带签名的 Core `0.8.0` / ABI 3。ABI4 尚无签名发布，也不是生产依赖。
 - 当前生产主线上的完整 Core 字体路径仍为 opt-in。ESP32 原生 UI 与已安装 worker 仍走回调/v6；桌面在 B2 审查合并前仍默认走 GDI。`TextMeasureProvider` 与 `TextPainter` 仍是 Core 公共 API，因为生产消费者仍在使用；目前只移除了没有生产调用方的 `HostTextAdapter` 便利层。
 - 当前没有 ABI4 命名设备 profile 的 provenance 或 ABI4 固件验收记录。这是主机集成后的设备准入门槛，桌面 CI 不能代替它。
@@ -25,8 +25,8 @@ Runtime PR #73 已建立当前签名 Core package 的干净 checkout 与 checksu
 
 ### B. Runtime 消费者迁移（资源契约固定后并行）
 
-- **B1 原生 UI 与已安装应用 worker（PR #77）：**将保留式 UI 和已安装 worker 切至共享字体目录，并新增命名 `sdkconfig.ws147_core_text.defaults` profile，同时保持生产 Kconfig 默认值不变。full/cropped 主机组合本地通过；仍需 PR CI、ESP-IDF 构建和 WS147 实机验收。
-- **B2 桌面（PR #76，分阶段）：**加入显式 Core catalog 验证路径与 JFFONT2 应用补充字体，同时保留当前 GDI 默认和旧 JFFONT bitmap 路径。首次无条件启用 Core 时，既有字体策略与增量重绘等价测试失败，并拒绝了 `letter-spacing`；这些结果确定了兼容门槛，不能视为测试噪音。分阶段实现本地桌面构建和四项聚焦 CTest 通过，PR CI 正在运行。只有 Core 支持现有页面属性且增量重绘整套等价测试通过后，才能切换默认。
+- **B1 原生 UI 与已安装应用 worker（PR #77 已合并）：**将保留式 UI 和已安装 worker 切至共享字体目录，并新增命名 `sdkconfig.ws147_core_text.defaults` profile，同时保持生产 Kconfig 默认值不变。full/cropped 主机组合和 PR CI 均已通过；仍需 ESP-IDF 构建和 WS147 实机验收。
+- **B2 桌面（PR #76 已合并，分阶段）：**加入显式 Core catalog 验证路径与 JFFONT2 应用补充字体，同时保留当前 GDI 默认和旧 JFFONT bitmap 路径。首次无条件启用 Core 时，既有字体策略与增量重绘等价测试失败，并拒绝了 `letter-spacing`；这些结果确定了兼容门槛，不能视为测试噪音。分阶段实现的本地检查和全部 PR CI 均已通过。只有 Core 支持现有页面属性且增量重绘整套等价测试通过后，才能切换默认。
 
 **退出证据：**没有生产默认路径再选择回调度量/绘制；已安装 package 与 source override 的图像一致；应用字体和损坏资源拒绝测试通过。
 
@@ -74,5 +74,5 @@ A/B 期间可以并行审计 Core API 和迁移测试，但必须等所有生产
 1. **已完成：**PR #54、#55、#71、#72、#73 均已合并；Runtime 签名 ABI3 source bootstrap 可复现，Core 未使用的 wrapper 已移除。
 2. **已完成：**Runtime full/cropped ABI4 资格验证现已覆盖 Core `64c1cb42` 和 source identity `213ff3196864f2d7da9152bf246c29bda9849da50daff272baf551a7f9179cc5`（163 个实现输入），workflow 为 `43472234209`。
 3. **已完成：**PR #75 的共享字体目录/API 在全部 CI 通过后合并。
-4. **审查中：**PR #76（桌面，Core 文本保持显式验证模式）与 #77（WS147）已发布，等待 CI。WS147 正常 Kconfig 默认值保持不变，直到命名 profile 固件与实机验收通过。
+4. **主机集成已完成（分阶段）：**PR #76（桌面）与 #77（WS147）已合并且 CI 通过。命名 profile 固件与实机验收通过前，WS147 正常 Kconfig 默认值保持不变；Core 文本通过属性覆盖和增量重绘等价门槛前，桌面继续显式 opt-in。
 5. B 完成后继续 C 的回调消费者清单；所有消费者迁移前不移除 provider API。ABI4 签名发布、Runtime 生产锁和设备采用继续受 B、C、D gate 控制。
