@@ -391,6 +391,18 @@ jobs:
             profile_id: render-core-default
           - profile: cropped
             profile_id: render-core-minimal-no-forms-advanced
+          - profile: current-mainline-full
+            profile_id: render-core-default
+            core_commit: d9cdb2390fafee466c77aab85333d42360f61f2d
+            source_hash: c1af69d7a0fc1b63fe5339c0300438be521a5b18d9807a3265bc487123a2036f
+            source_count: 163
+            cropped: false
+          - profile: current-mainline-cropped
+            profile_id: render-core-minimal-no-forms-advanced
+            core_commit: d9cdb2390fafee466c77aab85333d42360f61f2d
+            source_hash: c1af69d7a0fc1b63fe5339c0300438be521a5b18d9807a3265bc487123a2036f
+            source_count: 163
+            cropped: true
 
     steps:
       - name: Checkout JellyFrame
@@ -400,7 +412,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: xiaopaoya/JellyFrame-Render-Core
-          ref: master
+          ref: ${{ matrix.core_commit || 'master' }}
           path: third_party/render-core-source
 
       - name: Checkout JerryScript
@@ -430,7 +442,7 @@ jobs:
             '-DJELLYFRAME_INSTALL_RENDER_CORE=ON',
             '-DJELLYFRAME_RENDER_CORE_ENGINE_ABI=4'
           )
-          if ('${{ matrix.profile }}' -eq 'cropped') {
+          if ('${{ matrix.profile }}' -eq 'cropped' -or '${{ matrix.cropped }}' -eq 'true') {
             $args += @(
               '-DJELLYFRAME_ENABLE_CANVAS2D=OFF',
               '-DJELLYFRAME_ENABLE_MODERN_PAINT=OFF',
@@ -446,6 +458,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Core ABI4 install failed' }
           $manifest = Get-Content "$build\generated\jellyframe_render_core_source_manifest.json" -Raw | ConvertFrom-Json
           $profile = Get-Content "$build\generated\jellyframe_render_core_profile.json" -Raw | ConvertFrom-Json
+          $expectedCoreSourceHash = '${{ matrix.source_hash }}'
+          $expectedCoreSourceCount = [int]'${{ matrix.source_count || 0 }}'
+          if ($expectedCoreSourceHash -ne '' -and
+              ($manifest.sourceHash -ne $expectedCoreSourceHash -or
+               $manifest.sourceFileCount -ne $expectedCoreSourceCount)) {
+            throw "Unexpected Core source identity: $($manifest.sourceHash)/$($manifest.sourceFileCount)"
+          }
           if ($profile.engineAbi -ne 4 -or $profile.profileId -ne '${{ matrix.profile_id }}') {
             throw "Unexpected Core ABI/profile: $($profile.engineAbi)/$($profile.profileId)"
           }
@@ -670,28 +689,6 @@ jobs:
             core_commit: b0bfd834b60f7429a69a68d89b4541be89519f1a
             source_hash: aa908e3852afd4a06ed6df6b26a5cc759cfefcd7d39c02270d1304aa633d18c4
             source_count: 165
-            require_natural: 'ON'
-            qualify_natural_inline: 'ON'
-            qualify_generated_inline: 'ON'
-            r3_events: 'ON'
-            node_identity: 'ON'
-            cropped: true
-          - profile: current-mainline-full
-            profile_id: render-core-default
-            core_commit: d9cdb2390fafee466c77aab85333d42360f61f2d
-            source_hash: c1af69d7a0fc1b63fe5339c0300438be521a5b18d9807a3265bc487123a2036f
-            source_count: 163
-            require_natural: 'ON'
-            qualify_natural_inline: 'ON'
-            qualify_generated_inline: 'ON'
-            r3_events: 'ON'
-            node_identity: 'ON'
-            cropped: false
-          - profile: current-mainline-cropped
-            profile_id: render-core-minimal-no-forms-advanced
-            core_commit: d9cdb2390fafee466c77aab85333d42360f61f2d
-            source_hash: c1af69d7a0fc1b63fe5339c0300438be521a5b18d9807a3265bc487123a2036f
-            source_count: 163
             require_natural: 'ON'
             qualify_natural_inline: 'ON'
             qualify_generated_inline: 'ON'
