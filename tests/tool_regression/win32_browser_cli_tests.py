@@ -289,6 +289,36 @@ def write_install_candidate(
     )
 
 
+def write_font_capture_app(
+    root: Path, font_bytes: bytes | None, family: str = "Probe", select_family: bool = True
+) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    style = "<style>main{font-family:Probe;font-weight:500}</style>" if select_family else ""
+    (root / "index.html").write_text(
+        f"<!doctype html><meta charset='utf-8'>{style}<main>Core font capture 中文</main>", encoding="utf-8"
+    )
+    fonts = []
+    if font_bytes is not None:
+        font_path = root / "fonts" / "probe.jffont2"
+        font_path.parent.mkdir(parents=True, exist_ok=True)
+        font_path.write_bytes(font_bytes)
+        fonts = [{"family": family, "source": "/fonts/probe.jffont2"}]
+    (root / "jellyframe.app.json").write_text(
+        json.dumps({
+            "id": "org.jellyframe.desktop-font-probe",
+            "name": "Desktop Font Probe",
+            "role": "app",
+            "versionName": "1.0.0",
+            "versionCode": 1,
+            "entry": "/index.html",
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"},
+            "viewport": {"designWidth": 240, "designHeight": 100},
+            "fonts": fonts,
+        }),
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
     if len(sys.argv) not in (2, 3) or (len(sys.argv) == 3 and sys.argv[2] != "--scripting"):
         print("usage: win32_browser_cli_tests.py PATH_TO_EXE [--scripting]")
@@ -329,9 +359,53 @@ def main() -> int:
     require("--app-runtime-jobs" in help_result.stdout, "--help must document app runtime queue override")
     require("--authorized-file-smoke" in help_result.stdout, "--help must document authorized file broker smoke")
     require("--system-survival-smoke" in help_result.stdout, "--help must document system survival smoke")
+    require("Core catalog text is always enabled" in help_result.stdout,
+            "help must explain that Core text is the desktop default")
     require("--vscode-debug" in help_result.stdout, "--help must document isolated VS Code debug mode")
     require("--vscode-frame-dir" in help_result.stdout, "--help must document VS Code frame output")
     require("--render-trace" in help_result.stdout, "--help must document bounded render trace output")
+
+    with tempfile.TemporaryDirectory(prefix="jellyframe-desktop-core-font-") as directory:
+        root = Path(directory)
+        default_app = root / "default-app"
+        default_capture = root / "default.bmp"
+        write_font_capture_app(default_app, None, select_family=False)
+        default_result = run_case(exe, ["--app", str(default_app), "--capture", str(default_capture)])
+        require(default_result.returncode == 0,
+                "app without font supplements must render with the Core system default: " + default_result.stdout)
+        require("text_backend=core-catalog" in default_result.stdout,
+                "default text selection must use Core without an app-font flag or supplement")
+        default_pixels = re.search(r"non_background_pixels=(\d+)", default_result.stdout)
+        require(default_pixels is not None and int(default_pixels.group(1)) > 0,
+                "Core system default must paint visible glyph pixels")
+
+        valid_app = root / "valid-app"
+        valid_capture = root / "valid.bmp"
+        app_font = (REPO_ROOT / "ports" / "esp32s3-idf" / "font" /
+                    "core-system-noto-medium-16.jffont2").read_bytes()
+        write_font_capture_app(valid_app, app_font)
+        valid_result = run_case(exe, ["--app", str(valid_app), "--capture", str(valid_capture)])
+        require(valid_result.returncode == 0,
+                "normal app capture must use the Core catalog and accept a valid app supplement: " +
+                valid_result.stdout)
+        require("text_backend=core-catalog" in valid_result.stdout,
+                "normal capture must report Core catalog text without an opt-in flag")
+        require("diagnostics: 0" in valid_result.stdout,
+                "valid Core app-font supplement must not emit a refusal diagnostic")
+        require(valid_capture.is_file() and valid_capture.stat().st_size > 54,
+                "Core catalog text capture must produce visual output")
+        malformed_app = root / "malformed-app"
+        malformed_capture = root / "malformed.bmp"
+        write_font_capture_app(malformed_app, b"JFFONT2\0broken", select_family=False)
+        malformed_result = run_case(exe, ["--app", str(malformed_app), "--capture", str(malformed_capture)])
+        require(malformed_result.returncode == 0,
+                "a malformed app supplement must be refused while the system catalog remains usable")
+        require("app-font-resource-invalid" in malformed_result.stdout,
+                "malformed Core supplement refusal must be deterministic and named")
+        require("text_backend=core-catalog" in malformed_result.stdout,
+                "malformed app supplement must not switch away from Core system text")
+        require(malformed_capture.is_file() and malformed_capture.stat().st_size > 54,
+                "system Core font must still paint text after a malformed supplement is refused")
 
     unknown_option_result = run_case(exe, ["--not-a-real-option"])
     require(unknown_option_result.returncode != 0, "unknown options must fail")
