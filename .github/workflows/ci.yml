@@ -616,6 +616,7 @@ jobs:
             source_hash: 369973a9b051cdff8af56f5bd11a94cd17c75de6940473d2fa6dcee8b171c33c
             source_count: 139
             require_natural: 'OFF'
+            qualify_natural_inline: 'OFF'
             r3_events: 'OFF'
             node_identity: 'OFF'
             cropped: false
@@ -625,24 +626,27 @@ jobs:
             source_hash: 369973a9b051cdff8af56f5bd11a94cd17c75de6940473d2fa6dcee8b171c33c
             source_count: 139
             require_natural: 'OFF'
+            qualify_natural_inline: 'OFF'
             r3_events: 'OFF'
             node_identity: 'OFF'
             cropped: true
           - profile: natural-full
             profile_id: render-core-default
-            core_commit: 82ad1dcc98394d5568d51b6665ae92e629831e55
-            source_hash: 8eb12e841028a0d56ee5eac1b4d8789f55787d784e2a046b4cc7ffc5fed0c0b8
+            core_commit: 8a62e2d1d663bd5ffdfa6208166592d93d356584
+            source_hash: f83a0ffd0e60ec356131add3b7433d4558983f1ff6f307e9b803a5c0a4aaa7d9
             source_count: 163
             require_natural: 'ON'
+            qualify_natural_inline: 'ON'
             r3_events: 'ON'
             node_identity: 'ON'
             cropped: false
           - profile: natural-cropped
             profile_id: render-core-minimal-no-forms-advanced
-            core_commit: 82ad1dcc98394d5568d51b6665ae92e629831e55
-            source_hash: 8eb12e841028a0d56ee5eac1b4d8789f55787d784e2a046b4cc7ffc5fed0c0b8
+            core_commit: 8a62e2d1d663bd5ffdfa6208166592d93d356584
+            source_hash: f83a0ffd0e60ec356131add3b7433d4558983f1ff6f307e9b803a5c0a4aaa7d9
             source_count: 163
             require_natural: 'ON'
+            qualify_natural_inline: 'ON'
             r3_events: 'ON'
             node_identity: 'ON'
             cropped: true
@@ -735,6 +739,7 @@ jobs:
           -DBUILD_V10_WORKER=ON
           -DREQUIRE_SHARED_INLINE_API=${{ matrix.require_natural }}
           -DREQUIRE_NATURAL_IMAGE_API=${{ matrix.require_natural }}
+          -DQUALIFY_NATURAL_INLINE_IMAGES=${{ matrix.qualify_natural_inline }}
           -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=${{ matrix.r3_events }}
           -DJELLYFRAME_ENABLE_NODE_IDENTITY=${{ matrix.node_identity }}
           -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE/third_party/jerryscript"

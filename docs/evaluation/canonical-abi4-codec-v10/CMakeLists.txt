@@ -53,6 +53,11 @@ if(REQUIRE_SHARED_INLINE_API)
     message(FATAL_ERROR "This qualification requires canonical prepared-text v2")
   endif()
 endif()
+option(QUALIFY_NATURAL_INLINE_IMAGES "Run post-PR35 inline natural-image worker qualification" OFF)
+if(QUALIFY_NATURAL_INLINE_IMAGES AND
+   (NOT BUILD_V10_WORKER OR NOT REQUIRE_NATURAL_IMAGE_API OR NOT REQUIRE_SHARED_INLINE_API))
+  message(FATAL_ERROR "Natural inline qualification requires the worker, natural-image API and shared-inline API checks")
+endif()
 get_filename_component(runtime_repo_root "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(runtime_source "${CMAKE_CURRENT_BINARY_DIR}/runtime-source")
 # No bundled render_core headers are copied into this consumer tree. Register
@@ -125,6 +130,10 @@ if(BUILD_V10_WORKER)
   target_compile_definitions(installed_runtime_canonical_v10_worker
     PRIVATE JELLYFRAME_SCRIPT_TASK_RUNTIME_ENABLED=1 JELLYFRAME_SCRIPT_EVENT_TESTING=1
       JELLYFRAME_SCRIPT_IDENTITY_TESTING=1)
+  if(QUALIFY_NATURAL_INLINE_IMAGES)
+    target_compile_definitions(installed_runtime_canonical_v10_worker
+      PRIVATE JELLYFRAME_TEST_NATURAL_INLINE_IMAGES=1)
+  endif()
   target_link_libraries(installed_runtime_canonical_v10_worker PRIVATE runtime_v10_script)
   v10_test(installed_stylesheet_resources
     "${runtime_repo_root}/ports/esp32s3-idf/tests/installed_resource_owner_tests.cpp"
