@@ -359,8 +359,8 @@ def main() -> int:
     require("--app-runtime-jobs" in help_result.stdout, "--help must document app runtime queue override")
     require("--authorized-file-smoke" in help_result.stdout, "--help must document authorized file broker smoke")
     require("--system-survival-smoke" in help_result.stdout, "--help must document system survival smoke")
-    require("Core catalog text is always enabled" in help_result.stdout,
-            "help must explain that Core text is the desktop default")
+    require("Opt into app/Core catalog text for validation" in help_result.stdout,
+            "help must explain the opt-in app/Core text validation path")
     require("--vscode-debug" in help_result.stdout, "--help must document isolated VS Code debug mode")
     require("--vscode-frame-dir" in help_result.stdout, "--help must document VS Code frame output")
     require("--render-trace" in help_result.stdout, "--help must document bounded render trace output")
@@ -372,9 +372,9 @@ def main() -> int:
         write_font_capture_app(default_app, None, select_family=False)
         default_result = run_case(exe, ["--app", str(default_app), "--capture", str(default_capture)])
         require(default_result.returncode == 0,
-                "app without font supplements must render with the Core system default: " + default_result.stdout)
-        require("text_backend=core-catalog" in default_result.stdout,
-                "default text selection must use Core without an app-font flag or supplement")
+                "app without font supplements must render with the desktop compatibility default: " + default_result.stdout)
+        require("app_fonts=off" in default_result.stdout,
+                "desktop must preserve the compatibility text backend unless app/Core text is requested")
         default_pixels = re.search(r"non_background_pixels=(\d+)", default_result.stdout)
         require(default_pixels is not None and int(default_pixels.group(1)) > 0,
                 "Core system default must paint visible glyph pixels")
@@ -384,12 +384,13 @@ def main() -> int:
         app_font = (REPO_ROOT / "ports" / "esp32s3-idf" / "font" /
                     "core-system-noto-medium-16.jffont2").read_bytes()
         write_font_capture_app(valid_app, app_font)
-        valid_result = run_case(exe, ["--app", str(valid_app), "--capture", str(valid_capture)])
+        valid_result = run_case(exe, ["--app", str(valid_app), "--capture", str(valid_capture),
+                                      "--use-app-fonts"])
         require(valid_result.returncode == 0,
                 "normal app capture must use the Core catalog and accept a valid app supplement: " +
                 valid_result.stdout)
-        require("text_backend=core-catalog" in valid_result.stdout,
-                "normal capture must report Core catalog text without an opt-in flag")
+        require("app_fonts=on" in valid_result.stdout,
+                "explicit Core catalog capture must report the selected app/Core text path")
         require("diagnostics: 0" in valid_result.stdout,
                 "valid Core app-font supplement must not emit a refusal diagnostic")
         require(valid_capture.is_file() and valid_capture.stat().st_size > 54,
@@ -397,13 +398,14 @@ def main() -> int:
         malformed_app = root / "malformed-app"
         malformed_capture = root / "malformed.bmp"
         write_font_capture_app(malformed_app, b"JFFONT2\0broken", select_family=False)
-        malformed_result = run_case(exe, ["--app", str(malformed_app), "--capture", str(malformed_capture)])
+        malformed_result = run_case(exe, ["--app", str(malformed_app), "--capture", str(malformed_capture),
+                                          "--use-app-fonts"])
         require(malformed_result.returncode == 0,
                 "a malformed app supplement must be refused while the system catalog remains usable")
         require("app-font-resource-invalid" in malformed_result.stdout,
                 "malformed Core supplement refusal must be deterministic and named")
-        require("text_backend=core-catalog" in malformed_result.stdout,
-                "malformed app supplement must not switch away from Core system text")
+        require("app_fonts=on" in malformed_result.stdout,
+                "malformed app supplement must not disable the explicit app/Core text path")
         require(malformed_capture.is_file() and malformed_capture.stat().st_size > 54,
                 "system Core font must still paint text after a malformed supplement is refused")
 

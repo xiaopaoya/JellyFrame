@@ -948,6 +948,7 @@ struct BrowserOptions {
     bool capture_frames = false;
     bool vscode_debug = false;
     bool force_full_repaint = false;
+    bool use_app_fonts = false;
     std::string output_path;
     std::string frame_output_dir;
     std::string vscode_frame_dir;
@@ -2479,14 +2480,122 @@ struct BrowserTextBackend {
     const TextSystem* text_system = nullptr;
 };
 
+HFONT create_gdi_text_font(int font_size, int font_weight) {
+    const int font_height = -std::max(8, font_size);
+    const int gdi_weight = font_weight >= 600 ? FW_BOLD : FW_NORMAL;
+    return CreateFontW(font_height, 0, 0, 0, gdi_weight, FALSE, FALSE, FALSE,
+                       DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                       ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+                       L"Microsoft YaHei UI");
+}
+
+bool measure_text_with_gdi(const std::string& text,
+                           int font_size,
+                           int font_weight,
+                           TextMetrics* metrics,
+                           void*) {
+    if (metrics == nullptr) return false;
+    const std::wstring wide = utf8_to_wide(text);
+    if (!text.empty() && wide.empty()) return false;
+    HDC dc = GetDC(nullptr);
+    if (dc == nullptr) return false;
+    HFONT font = create_gdi_text_font(font_size, font_weight);
+    HGDIOBJ old_font = font != nullptr ? SelectObject(dc, font) : nullptr;
+    SIZE size{0, 0};
+    bool ok = true;
+    if (!wide.empty() && GetTextExtentPoint32W(dc, wide.c_str(), static_cast<int>(wide.size()), &size) == 0)
+        ok = false;
+    TEXTMETRICW text_metric{};
+    if (GetTextMetricsW(dc, &text_metric) == 0) ok = false;
+    if (ok) {
+        metrics->width = std::max(0L, size.cx);
+        metrics->line_height = std::max(1L, text_metric.tmHeight + text_metric.tmExternalLeading);
+    }
+    if (old_font != nullptr) SelectObject(dc, old_font);
+    if (font != nullptr) DeleteObject(font);
+    ReleaseDC(nullptr, dc);
+    return ok;
+}
+
+bool draw_text_with_gdi(FrameBuffer& target,
+                        Rect rect,
+                        Color color,
+                        const std::string& text,
+                        int font_size,
+                        int font_weight,
+                        TextCommandAlign align,
+                        bool single_line,
+                        void*) {
+    const std::wstring wide = utf8_to_wide(text);
+    if (wide.empty() || rect.width <= 0 || rect.height <= 0 || color.a == 0) return false;
+    const int bitmap_width = rect.width + std::max(4, rect.height / 8);
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = bitmap_width;
+    info.bmiHeader.biHeight = -rect.height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HDC screen_dc = GetDC(nullptr);
+    HDC memory_dc = CreateCompatibleDC(screen_dc);
+    HBITMAP bitmap = CreateDIBSection(screen_dc, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+    ReleaseDC(nullptr, screen_dc);
+    if (memory_dc == nullptr || bitmap == nullptr || bits == nullptr) {
+        if (bitmap != nullptr) DeleteObject(bitmap);
+        if (memory_dc != nullptr) DeleteDC(memory_dc);
+        return false;
+    }
+    HGDIOBJ old_bitmap = SelectObject(memory_dc, bitmap);
+    RECT bounds{0, 0, rect.width, rect.height};
+    HBRUSH black = CreateSolidBrush(RGB(0, 0, 0));
+    FillRect(memory_dc, &bounds, black);
+    DeleteObject(black);
+    HFONT font = create_gdi_text_font(font_size, font_weight);
+    HGDIOBJ old_font = font != nullptr ? SelectObject(memory_dc, font) : nullptr;
+    SetBkMode(memory_dc, TRANSPARENT);
+    SetTextColor(memory_dc, RGB(255, 255, 255));
+    UINT flags = DT_NOPREFIX;
+    if (align == TextCommandAlign::Center) flags |= DT_CENTER;
+    else if (align == TextCommandAlign::End) flags |= DT_RIGHT;
+    else flags |= DT_LEFT;
+    flags |= single_line ? (DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS) : DT_WORDBREAK;
+    DrawTextW(memory_dc, wide.c_str(), static_cast<int>(wide.size()), &bounds, flags);
+    const auto* pixels = static_cast<const std::uint32_t*>(bits);
+    for (int y = 0; y < rect.height; ++y) {
+        for (int x = 0; x < rect.width; ++x) {
+            const std::uint32_t pixel = pixels[static_cast<std::size_t>(y * bitmap_width + x)];
+            const int coverage = std::max(static_cast<int>(pixel & 0xffU),
+                std::max(static_cast<int>((pixel >> 8U) & 0xffU), static_cast<int>((pixel >> 16U) & 0xffU)));
+            if (coverage == 0) continue;
+            Color source = color;
+            source.a = clamp_u8((static_cast<int>(source.a) * coverage + 127) / 255);
+            blend_pixel(target, rect.x + x, rect.y + y, source);
+        }
+    }
+    if (old_font != nullptr) SelectObject(memory_dc, old_font);
+    if (font != nullptr) DeleteObject(font);
+    SelectObject(memory_dc, old_bitmap);
+    DeleteObject(bitmap);
+    DeleteDC(memory_dc);
+    return true;
+}
+
 BrowserTextBackend make_browser_text_backend(const BrowserOptions& options, AppRuntimeHost* runtime) {
-    (void)options;
-    if (runtime != nullptr) {
+    if (options.use_app_fonts && runtime != nullptr) {
+        if (runtime->fonts().primary_font() != nullptr) {
+            return BrowserTextBackend{runtime->fonts().measure_provider(),
+                                      runtime->fonts().painter(), nullptr};
+        }
         if (const TextSystem* text_system = runtime->fonts().core_text_system()) {
             return BrowserTextBackend{{}, {}, text_system};
         }
     }
-    throw std::runtime_error("Core system font catalog is unavailable; desktop text startup was refused");
+    return BrowserTextBackend{
+        TextMeasureProvider{measure_text_with_gdi, nullptr},
+        TextPainter{draw_text_with_gdi, nullptr},
+        nullptr,
+    };
 }
 
 void attach_desktop_system_font_catalog(AppRuntimeHost& runtime) {
@@ -3250,7 +3359,7 @@ void print_win32_browser_usage(std::ostream& output, const std::string& program_
         << "                                 set-checked, select-index.\n"
         << "  --viewport-width N             Override viewport width.\n"
         << "  --viewport-height N            Override viewport height.\n"
-        << "  --use-app-fonts                Compatibility flag; Core catalog text is always enabled.\n"
+        << "  --use-app-fonts                Opt into app/Core catalog text for validation.\n"
         << "  --audio-smoke SOURCE           Win32-only host audio smoke test. SOURCE can\n"
         << "                                 be a local file, or /path in --app package.\n"
         << "  --audio-smoke-ms N             Playback duration for --audio-smoke, default 1000.\n"
@@ -3588,17 +3697,9 @@ void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifes
         jellyframe_example::PackageResourceView view;
         if (jellyframe_example::load_package_resource_view(source, manifest.entry, view, &package_context) &&
             view.stable) {
-            if (!is_core_font(view.data, view.size)) {
-                report_diagnostic(diagnostics,
-                                  DiagnosticStage::Package,
-                                  DiagnosticSeverity::Warning,
-                                  "app-font-resource-unsupported",
-                                  "Legacy JFFONT supplements are not supported by the Core text catalog",
-                                  source);
-                continue;
-            }
-            const AppFontLoadResult result =
-                app_runtime->attach_current_core_font_view(view.data, view.size, family);
+            const AppFontLoadResult result = is_core_font(view.data, view.size)
+                ? app_runtime->attach_current_core_font_view(view.data, view.size, family)
+                : app_runtime->attach_current_jffont_view(view.data, view.size, family);
             if (result.loaded()) {
                 continue;
             }
@@ -3622,16 +3723,9 @@ void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifes
             continue;
         }
         const auto* data = reinterpret_cast<const std::uint8_t*>(bytes.data());
-        if (!is_core_font(data, bytes.size())) {
-            report_diagnostic(diagnostics,
-                              DiagnosticStage::Package,
-                              DiagnosticSeverity::Warning,
-                              "app-font-resource-unsupported",
-                              "Legacy JFFONT supplements are not supported by the Core text catalog",
-                              source);
-            continue;
-        }
-        const AppFontLoadResult result = app_runtime->load_current_core_font(data, bytes.size(), family);
+        const AppFontLoadResult result = is_core_font(data, bytes.size())
+            ? app_runtime->load_current_core_font(data, bytes.size(), family)
+            : app_runtime->load_current_jffont(data, bytes.size(), family);
         if (!result.loaded()) {
             report_diagnostic(diagnostics,
                               DiagnosticStage::Package,
@@ -8804,7 +8898,7 @@ int main(int argc, char** argv) {
             continue;
         }
         if (arg == "--use-app-fonts") {
-            // The compatibility flag remains accepted; Core text is always active.
+            options.use_app_fonts = true;
             continue;
         }
         if (arg == "--audio-smoke") {
@@ -8999,7 +9093,7 @@ int main(int argc, char** argv) {
                 std::cout << "JellyFrame Desktop Shell capture\n"
                           << "  output=" << options.output_path << '\n'
                           << "  viewport_width=" << options.viewport_width << '\n'
-                          << "  text_backend=core-catalog\n"
+                          << "  app_fonts=" << (options.use_app_fonts ? "on" : "off") << '\n'
                           << "  image=" << frame_buffer.width << "x" << frame_buffer.height << '\n'
                           << "  non_background_pixels="
                           << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';
@@ -9024,7 +9118,7 @@ int main(int argc, char** argv) {
                 std::cout << "JellyFrame Desktop Shell capture\n"
                           << "  output=" << options.output_path << '\n'
                           << "  viewport_width=" << options.viewport_width << '\n'
-                          << "  text_backend=core-catalog\n"
+                          << "  app_fonts=" << (options.use_app_fonts ? "on" : "off") << '\n'
                           << "  image=" << frame_buffer.width << "x" << frame_buffer.height << '\n'
                           << "  non_background_pixels="
                           << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';
@@ -9059,7 +9153,7 @@ int main(int argc, char** argv) {
             std::cout << "JellyFrame Desktop Shell capture\n"
                       << "  output=" << options.output_path << '\n'
                       << "  viewport_width=" << options.viewport_width << '\n'
-                      << "  text_backend=core-catalog\n"
+                      << "  app_fonts=" << (options.use_app_fonts ? "on" : "off") << '\n'
                       << "  image=" << frame_buffer.width << "x" << frame_buffer.height << '\n'
                       << "  non_background_pixels="
                       << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';
