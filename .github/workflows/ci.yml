@@ -676,6 +676,28 @@ jobs:
             r3_events: 'ON'
             node_identity: 'ON'
             cropped: true
+          - profile: current-mainline-full
+            profile_id: render-core-default
+            core_commit: d9cdb2390fafee466c77aab85333d42360f61f2d
+            source_hash: c1af69d7a0fc1b63fe5339c0300438be521a5b18d9807a3265bc487123a2036f
+            source_count: 163
+            require_natural: 'ON'
+            qualify_natural_inline: 'ON'
+            qualify_generated_inline: 'ON'
+            r3_events: 'ON'
+            node_identity: 'ON'
+            cropped: false
+          - profile: current-mainline-cropped
+            profile_id: render-core-minimal-no-forms-advanced
+            core_commit: d9cdb2390fafee466c77aab85333d42360f61f2d
+            source_hash: c1af69d7a0fc1b63fe5339c0300438be521a5b18d9807a3265bc487123a2036f
+            source_count: 163
+            require_natural: 'ON'
+            qualify_natural_inline: 'ON'
+            qualify_generated_inline: 'ON'
+            r3_events: 'ON'
+            node_identity: 'ON'
+            cropped: true
     env:
       QUALIFIED_CORE_COMMIT: ${{ matrix.core_commit }}
       EXPECTED_CORE_SOURCE_HASH: ${{ matrix.source_hash }}
