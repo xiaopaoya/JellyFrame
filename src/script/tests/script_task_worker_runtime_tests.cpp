@@ -870,6 +870,88 @@ void worker_shared_inline_paragraph(std::uint8_t version) {
 }
 #endif
 
+#if defined(JELLYFRAME_TEST_GENERATED_INLINE_TEXT) && JELLYFRAME_TEST_GENERATED_INLINE_TEXT
+void worker_generated_inline_text(std::uint8_t version) {
+    auto supervisor = make_supervisor();
+    runtime_test_fonts::Fonts fonts;
+    const auto session = supervisor.begin(301, fonts.catalog);
+    auto options = runtime_options_v3();
+    options.frame_codec.version = version;
+    options.frame_codec.max_groups = 32;
+    options.text_catalog = fonts.catalog;
+    auto runtime = std::make_unique<ScriptTaskWorkerRuntime>(session, options);
+    const auto html = "<body><div id='host'><span id='member'>A</span></div></body>";
+    const auto css =
+        "* { margin: 0; padding: 0; border: 0; } "
+        "#host { display: block; width: 120px; font-size: 16px; line-height: 20px; color: black; } "
+        "#host::before { content: 'A'; color: red; } "
+        "#member { display: inline; } "
+        "#member::before { content: 'B'; color: green; } "
+        "#member::after { content: '?'; color: blue; } "
+        "#host::after { content: 'B'; color: red; }";
+    check(runtime->initialize(supervisor, html, css) == ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "generated inline text worker initializes");
+    check(runtime->publish_frame(supervisor).accepted(), "generated inline text frame publishes");
+    ScriptTaskAcceptedAppFrame accepted;
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, accepted) ==
+              ScriptTaskAppFrameTakeStatus::Accepted,
+          "generated inline text frame is accepted and decoded");
+
+    struct ObservedGlyph { std::uint32_t codepoint; Color color; };
+    std::vector<ObservedGlyph> observed;
+    for (const auto& command : accepted.frame().display_list) {
+        if (worker_test_access::worker_command_type(command) != DisplayCommandType::PreparedText) continue;
+        PreparedTextView view;
+        check(decode_prepared_text(command.text, view), "generated text packet decodes");
+        for (std::size_t i = 0; i < view.size(); ++i) {
+            PreparedTextGlyph glyph;
+            check(view.read(i, glyph), "generated text glyph reads");
+            observed.push_back({glyph.source_codepoint, command.color});
+        }
+    }
+    const std::vector<std::uint32_t> expected_order{'A', 'B', 'A', '?', 'B'};
+    check(observed.size() == expected_order.size(), "worker frame carries all generated and DOM text");
+    for (std::size_t i = 0; i < expected_order.size(); ++i)
+        check(observed[i].codepoint == expected_order[i],
+              "worker frame preserves host/member before-text-after source order");
+    const auto same_color = [&](std::size_t a_index, std::size_t b_index) {
+        const auto a = observed[a_index].color, b = observed[b_index].color;
+        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+    };
+    check(same_color(0, 4), "host before and after text retain one host paint style");
+    check(!same_color(0, 2) && !same_color(1, 2) && !same_color(3, 2),
+          "generated source paints remain distinct from DOM text paint");
+    check(!same_color(0, 1) && !same_color(0, 3) && !same_color(1, 3),
+          "host and inline-member generated sources retain their individual paint styles");
+
+    runtime->stop();
+    runtime.reset();
+    supervisor.begin(302, {});
+    fonts.catalog.reset();
+    options.text_catalog.reset();
+    ScriptTaskFrameRenderer renderer;
+    FrameBuffer first(options.viewport.width, options.viewport.height, {255, 255, 255, 255});
+    FrameBuffer second(options.viewport.width, options.viewport.height, {255, 255, 255, 255});
+    ScriptTaskFrameRenderStatus status;
+    check(renderer.render_into(accepted, first, {255, 255, 255, 255}, nullptr, 0, nullptr, &status) &&
+          status == ScriptTaskFrameRenderStatus::Accepted,
+          "generated text retained frame paints after worker and catalog teardown");
+    check(renderer.render_into(accepted, second, {255, 255, 255, 255}, nullptr, 0, nullptr, &status) &&
+          status == ScriptTaskFrameRenderStatus::Accepted,
+          "generated text retained frame replays without resolving live DOM state");
+    bool visible = false;
+    for (std::size_t i = 0; i < first.pixels.size(); ++i) {
+        const auto a = first.pixels[i], b = second.pixels[i];
+        check(a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a,
+              "generated text retained replay is pixel-identical");
+        visible = visible || a.r != 255 || a.g != 255 || a.b != 255;
+    }
+    check(visible, "generated text retained replay paints visible pixels");
+    std::cout << "worker v" << int(version)
+              << ": generated before/text/after order, colors and retained replay passed\n";
+}
+#endif
+
 class WorkerImages final : public RuntimeImageProviderSource {
 public:
     explicit WorkerImages(ImageIntrinsicSize size = {ImageIntrinsicSizeState::Known, 20, 20}) : size(size) {}
@@ -1568,6 +1650,9 @@ int script_task_worker_runtime_tests_main() {
             worker_canonical_resolves_content_and_background_images(version);
 #if JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION >= 2
             worker_shared_inline_paragraph(version);
+#endif
+#if defined(JELLYFRAME_TEST_GENERATED_INLINE_TEXT) && JELLYFRAME_TEST_GENERATED_INLINE_TEXT
+            worker_generated_inline_text(version);
 #endif
         }
 #if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
