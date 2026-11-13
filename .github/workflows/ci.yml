@@ -617,6 +617,7 @@ jobs:
             source_count: 139
             require_natural: 'OFF'
             qualify_natural_inline: 'OFF'
+            qualify_generated_inline: 'OFF'
             r3_events: 'OFF'
             node_identity: 'OFF'
             cropped: false
@@ -627,6 +628,7 @@ jobs:
             source_count: 139
             require_natural: 'OFF'
             qualify_natural_inline: 'OFF'
+            qualify_generated_inline: 'OFF'
             r3_events: 'OFF'
             node_identity: 'OFF'
             cropped: true
@@ -637,6 +639,7 @@ jobs:
             source_count: 163
             require_natural: 'ON'
             qualify_natural_inline: 'ON'
+            qualify_generated_inline: 'OFF'
             r3_events: 'ON'
             node_identity: 'ON'
             cropped: false
@@ -647,6 +650,29 @@ jobs:
             source_count: 163
             require_natural: 'ON'
             qualify_natural_inline: 'ON'
+            qualify_generated_inline: 'OFF'
+            r3_events: 'ON'
+            node_identity: 'ON'
+            cropped: true
+          - profile: generated-full
+            profile_id: render-core-default
+            core_commit: 4acc496ed865308e91c68fc711eea14da1c84991
+            source_hash: b841715f8f2bf1ac8ba02ff31c0f3e97c1dd5161517e58c248961cef97e72454
+            source_count: 163
+            require_natural: 'ON'
+            qualify_natural_inline: 'ON'
+            qualify_generated_inline: 'ON'
+            r3_events: 'ON'
+            node_identity: 'ON'
+            cropped: false
+          - profile: generated-cropped
+            profile_id: render-core-minimal-no-forms-advanced
+            core_commit: 4acc496ed865308e91c68fc711eea14da1c84991
+            source_hash: b841715f8f2bf1ac8ba02ff31c0f3e97c1dd5161517e58c248961cef97e72454
+            source_count: 163
+            require_natural: 'ON'
+            qualify_natural_inline: 'ON'
+            qualify_generated_inline: 'ON'
             r3_events: 'ON'
             node_identity: 'ON'
             cropped: true
@@ -740,6 +766,7 @@ jobs:
           -DREQUIRE_SHARED_INLINE_API=${{ matrix.require_natural }}
           -DREQUIRE_NATURAL_IMAGE_API=${{ matrix.require_natural }}
           -DQUALIFY_NATURAL_INLINE_IMAGES=${{ matrix.qualify_natural_inline }}
+          -DQUALIFY_GENERATED_INLINE_TEXT=${{ matrix.qualify_generated_inline }}
           -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=${{ matrix.r3_events }}
           -DJELLYFRAME_ENABLE_NODE_IDENTITY=${{ matrix.node_identity }}
           -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE/third_party/jerryscript"
