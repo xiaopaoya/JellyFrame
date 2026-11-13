@@ -1,5 +1,6 @@
 #include "app_runtime/app_host.h"
 #include "app_runtime/app_budget.h"
+#include "app_runtime/core_system_font_catalog.h"
 #include "app_runtime/system_events.h"
 #include "render_core/software_renderer.h"
 
@@ -316,6 +317,98 @@ void core_font_catalog_tracks_app_lifetime_and_family_identity() {
     assert(system && system->generation()>app_catalog_generation);
     assert(system && system->measure("AB",TextFontRequest{},default_metrics)==TextSystemStatus::Ok);
     assert(default_metrics.primary_resource_id!=previous_system_resource);
+}
+
+void core_system_font_catalog_selects_weights_and_rolls_back_invalid_updates() {
+    AppRuntimeHost host=make_host();
+    host.launch("org.example.system-catalog",AppRole::App);
+    auto regular=tiny_core_font_bytes();
+    auto medium=regular;
+    auto bold=regular;
+    regular[64]=3;
+    write_u16(medium,40,500);
+    write_u16(bold,40,700);
+    medium[64]=1;
+    bold[64]=2;
+    auto refresh_crc=[](std::vector<std::uint8_t>& bytes) {
+        std::fill(bytes.begin()+96,bytes.begin()+100,0);
+        std::uint32_t crc=0xffffffffU;
+        for (const auto byte:bytes) {
+            crc^=byte;
+            for (unsigned bit=0;bit<8;++bit)
+                crc=(crc>>1U)^((crc&1U)?0xedb88320U:0U);
+        }
+        write_u32(bytes,96,~crc);
+    };
+    refresh_crc(regular);
+    refresh_crc(medium);
+    refresh_crc(bold);
+    FontResource resource_regular,resource_medium,resource_bold;
+    assert(resource_regular.load(regular.data(),regular.size())==FontResourceStatus::Loaded);
+    assert(resource_medium.load(medium.data(),medium.size())==FontResourceStatus::Loaded);
+    assert(resource_bold.load(bold.data(),bold.size())==FontResourceStatus::Loaded);
+    const std::array<CoreFontResourceView,3> catalog{{
+        {regular.data(),regular.size()}, {medium.data(),medium.size()}, {bold.data(),bold.size()}
+    }};
+    assert(host.set_core_system_font_catalog(catalog.data(),catalog.size()));
+    const TextSystem* system=host.fonts().core_text_system();
+    assert(system && system->ready());
+    for (const auto [weight,expected_id] : std::array<std::pair<std::uint16_t,std::uint64_t>,3>{{
+             {400,1}, {500,2}, {700,3}}}) {
+        TextFontRequest request;
+        request.weight=weight;
+        TextRunMetrics metrics;
+        assert(system->measure("A",request,metrics)==TextSystemStatus::Ok);
+        assert(metrics.primary_resource_id==expected_id);
+    }
+    const auto generation=system->generation();
+    const std::array<CoreFontResourceView,3> invalid{{
+        catalog[0], {nullptr,0}, catalog[2]
+    }};
+    assert(!host.set_core_system_font_catalog(invalid.data(),invalid.size()));
+    assert(system->generation()==generation);
+    TextRunMetrics metrics;
+    TextFontRequest bold_request;
+    bold_request.weight=700;
+    assert(system->measure("A",bold_request,metrics)==TextSystemStatus::Ok);
+    assert(metrics.primary_resource_id==3);
+}
+
+void core_system_font_catalog_owns_copies_and_borrows_views() {
+    AppRuntimeHost host=make_host();
+    host.launch("org.example.system-catalog-lifetime",AppRole::App);
+    auto owned=tiny_core_font_bytes();
+    const CoreFontResourceView owned_view{owned.data(),owned.size()};
+    assert(host.set_core_system_font_catalog(&owned_view,1));
+    std::fill(owned.begin(),owned.end(),0);
+    TextRunMetrics metrics;
+    assert(host.fonts().core_text_system()->measure("A",TextFontRequest{},metrics)==TextSystemStatus::Ok);
+
+    auto borrowed=tiny_core_font_bytes();
+    const auto* borrowed_data=borrowed.data();
+    const CoreFontResourceView borrowed_view{borrowed_data,borrowed.size()};
+    assert(host.attach_core_system_font_catalog_view(&borrowed_view,1));
+    assert(host.fonts().core_text_system()->measure("A",TextFontRequest{},metrics)==TextSystemStatus::Ok);
+    assert(metrics.primary_resource_id==2);
+}
+
+void generated_noto_catalog_binds_and_selects_all_three_weights() {
+    AppRuntimeHost host=make_host();
+    assert(host.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog,
+                                                      kNotoSansScSystemFontCatalogSize));
+    const TextSystem* system=host.fonts().core_text_system();
+    assert(system && system->ready());
+    const std::array<std::pair<std::uint16_t,std::uint64_t>,3> cases{{
+        {400,1}, {500,2}, {700,3}
+    }};
+    for (const auto [weight,resource_id] : cases) {
+        TextFontRequest request;
+        request.weight=weight;
+        TextRunMetrics metrics;
+        assert(system->measure("A\xe4\xb8\xad",request,metrics)==TextSystemStatus::Ok);
+        assert(metrics.primary_resource_id==resource_id);
+        assert(metrics.glyph_count==2);
+    }
 }
 
 
@@ -821,6 +914,9 @@ int main() {
     app_font_set_uses_system_font_before_app_supplement();
     app_font_set_selects_named_app_family_before_system_font();
     app_font_set_can_attach_borrowed_jffont_view();
+    core_system_font_catalog_selects_weights_and_rolls_back_invalid_updates();
+    core_system_font_catalog_owns_copies_and_borrows_views();
+    generated_noto_catalog_binds_and_selects_all_three_weights();
     core_font_catalog_tracks_app_lifetime_and_family_identity();
     crash_current_tears_down_active_instance_state();
     terminate_current_supports_watchdog_and_user_kill_reasons();

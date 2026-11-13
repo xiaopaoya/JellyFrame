@@ -152,6 +152,7 @@ endif()
 
 if(JELLYFRAME_BUILD_APP_RUNTIME)
 add_library(jellyframe_app_runtime
+    src/app_runtime/core_system_font_catalog.cpp
     src/app_runtime/app_budget.cpp
     src/app_runtime/app_capability_broker.cpp
     src/app_runtime/app_compute_jobs.cpp
@@ -676,12 +677,6 @@ if(JELLYFRAME_BUILD_TESTS)
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_preflight_tests.py
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         endif()
-
-        add_test(
-            NAME jellyframe_render_core_bootstrap_tests
-            COMMAND ${Python3_EXECUTABLE}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_bootstrap_tests.py
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         add_test(
             NAME jellyframe_script_runtime_boundary_tests

@@ -6,9 +6,13 @@
 JFFONT2 catalog. The Core path is exposed through `set_core_system_font`,
 `load_core_font`, `attach_core_font_view`, and `core_text_system`.
 
-The system resource can be copied or attached as a borrowed read-only view and
-remains bound as family ID 0. Borrowed bytes must remain unchanged and outlive
-the font set. App resources belong to the active app instance. A named family is
+The system catalog can be copied with `set_core_system_font_catalog` or
+attached as borrowed read-only views with
+`attach_core_system_font_catalog_view`; the singular system-font methods remain
+one-entry wrappers. Every system face remains bound as family ID 0, and Core
+matches requested weights among the registered faces. All candidate views are
+validated before the current system catalog is replaced. Borrowed bytes must
+remain unchanged and outlive the font set. App resources belong to the active app instance. A named family is
 mapped from Core's
 normalized CSS family hash to a catalog-local family ID; an empty family name
 registers another face in family 0. Each resource, including replacements for
@@ -24,7 +28,7 @@ until the next successful catalog update or app teardown. Consumers must not
 retain it across those operations. Its generation increments on each successful
 rebind; layout caches must key on both the service pointer and generation. App
 launch/teardown clears app faces and rebuilds the catalog from the system
-resource, if one is configured.
+catalog, if one is configured.
 
 Manifest package loading now distinguishes JFFONT2 by its resource magic and
 registers it through the Core catalog API; JFFONT0/1 still use the legacy

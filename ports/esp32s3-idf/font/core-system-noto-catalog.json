@@ -1,0 +1,106 @@
+{
+  "family": "Noto Sans SC",
+  "version": "2.002",
+  "profile": {
+    "rasterPixelSize": 16,
+    "coverageBits": 4,
+    "coverageCodepoints": 4539
+  },
+  "faceOrder": [
+    "regular-400",
+    "medium-500",
+    "bold-700"
+  ],
+  "license": "SIL Open Font License 1.1",
+  "licenseFile": "LICENSE-NOTO-SANS-SC.txt",
+  "aggregateAssetBytes": 2159771,
+  "assets": [
+    {
+      "format": "JFFONT2",
+      "profile": "scalar-bitmap-v1",
+      "sourceSha256": "a2b93e6c2db05d6bbbf6f27d413ec73269735b7b679019c8a5aa9670ff0ffbf2",
+      "resourceSha256": "7454e5a35c99e1bfbeb0cf226c0e9c128c1d9520b40ec9037a293a2a6c43a320",
+      "resourceBytes": 716274,
+      "unitsPerEm": 1000,
+      "rasterPixelSize": 16,
+      "weight": 400,
+      "coverageBits": 4,
+      "metricsSource": "hhea",
+      "ascent": 1160,
+      "descent": 288,
+      "lineGap": 0,
+      "advanceSource": "original hmtx units, not hinted/rounded Pillow string width",
+      "raster": {
+        "pillow": "12.3.0",
+        "fontTools": "4.60.1",
+        "freeType": "2.14.3",
+        "layout": "BASIC",
+        "anchor": "ls"
+      },
+      "asset": "core-system-noto-regular-16.jffont2",
+      "sourceFile": "NotoSansSC-Regular.otf",
+      "sourceFileSha256": "a2b93e6c2db05d6bbbf6f27d413ec73269735b7b679019c8a5aa9670ff0ffbf2",
+      "license": "SIL Open Font License 1.1",
+      "licenseFile": "LICENSE-NOTO-SANS-SC.txt",
+      "coverageCodepoints": 4539
+    },
+    {
+      "format": "JFFONT2",
+      "profile": "scalar-bitmap-v1",
+      "sourceSha256": "9c62ceb174d7529ae4a7f2071f6531991cfadbc2f1897910b48ba951a580ac57",
+      "resourceSha256": "032ddf64d6ec6d0694f564850c5668bc8b7f43fb099dcde522568a340eae5593",
+      "resourceBytes": 717419,
+      "unitsPerEm": 1000,
+      "rasterPixelSize": 16,
+      "weight": 500,
+      "coverageBits": 4,
+      "metricsSource": "hhea",
+      "ascent": 1160,
+      "descent": 288,
+      "lineGap": 0,
+      "advanceSource": "original hmtx units, not hinted/rounded Pillow string width",
+      "raster": {
+        "pillow": "12.3.0",
+        "fontTools": "4.60.1",
+        "freeType": "2.14.3",
+        "layout": "BASIC",
+        "anchor": "ls"
+      },
+      "asset": "core-system-noto-medium-16.jffont2",
+      "sourceFile": "NotoSansSC-Medium.otf",
+      "sourceFileSha256": "9c62ceb174d7529ae4a7f2071f6531991cfadbc2f1897910b48ba951a580ac57",
+      "license": "SIL Open Font License 1.1",
+      "licenseFile": "LICENSE-NOTO-SANS-SC.txt",
+      "coverageCodepoints": 4539
+    },
+    {
+      "format": "JFFONT2",
+      "profile": "scalar-bitmap-v1",
+      "sourceSha256": "d1961be1161ea1be08496c920862d06ea5c23a757628f4fd69368de1d9f51bed",
+      "resourceSha256": "0d8083b975afda901d70998991c3cda1ba70d0c29f151d13d4bf44bd3a821301",
+      "resourceBytes": 726078,
+      "unitsPerEm": 1000,
+      "rasterPixelSize": 16,
+      "weight": 700,
+      "coverageBits": 4,
+      "metricsSource": "hhea",
+      "ascent": 1160,
+      "descent": 288,
+      "lineGap": 0,
+      "advanceSource": "original hmtx units, not hinted/rounded Pillow string width",
+      "raster": {
+        "pillow": "12.3.0",
+        "fontTools": "4.60.1",
+        "freeType": "2.14.3",
+        "layout": "BASIC",
+        "anchor": "ls"
+      },
+      "asset": "core-system-noto-bold-16.jffont2",
+      "sourceFile": "NotoSansSC-Bold.otf",
+      "sourceFileSha256": "d1961be1161ea1be08496c920862d06ea5c23a757628f4fd69368de1d9f51bed",
+      "license": "SIL Open Font License 1.1",
+      "licenseFile": "LICENSE-NOTO-SANS-SC.txt",
+      "coverageCodepoints": 4539
+    }
+  ]
+}

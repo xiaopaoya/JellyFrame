@@ -143,6 +143,15 @@ bool AppRuntimeHost::attach_core_system_font_view(const std::uint8_t* data, std:
     return fonts_.attach_core_system_font_view(data, size);
 }
 
+bool AppRuntimeHost::set_core_system_font_catalog(const CoreFontResourceView* resources, std::size_t count) {
+    return fonts_.set_core_system_font_catalog(resources, count);
+}
+
+bool AppRuntimeHost::attach_core_system_font_catalog_view(const CoreFontResourceView* resources,
+                                                          std::size_t count) {
+    return fonts_.attach_core_system_font_catalog_view(resources, count);
+}
+
 std::size_t AppRuntimeHost::clear_current_fonts() {
     return fonts_.clear_app_instance(lifecycle_.current_app_instance_id());
 }

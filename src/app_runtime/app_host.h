@@ -93,6 +93,8 @@ public:
                                                     std::string_view family = {});
     bool set_core_system_font(const std::uint8_t* data, std::size_t size);
     bool attach_core_system_font_view(const std::uint8_t* data, std::size_t size);
+    bool set_core_system_font_catalog(const CoreFontResourceView* resources, std::size_t count);
+    bool attach_core_system_font_catalog_view(const CoreFontResourceView* resources, std::size_t count);
     std::size_t clear_current_fonts();
 
     // A zero job_id is a host-originated event with no worker request. Every
