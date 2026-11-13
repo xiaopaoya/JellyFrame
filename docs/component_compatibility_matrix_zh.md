@@ -1,6 +1,6 @@
 # 组件兼容性矩阵
 
-> 最后更新：2026-11-06；适用版本：0.6.0-dev
+> 最后更新：2026-11-13；适用状态：Core 0.9.0-dev 验收 / Runtime 0.8.0 生产锁
 
 这份矩阵记录三个计划中的产品边界之间的兼容性证据。它不同于 HTML/CSS
 能力全表：能力全表描述 app 可见行为，本文件描述哪个构建产物可以消费哪个
@@ -14,7 +14,7 @@
 | JellyFrame App Runtime | 解压后的 Core 源码归档 | `0.6.2` source profile | `verified` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` 会为独立 Runtime 构建选用解压后的归档，并运行 App Runtime CTest；仍与 package 模式互斥。 |
 | Render Core standalone 测试 | 无 Runtime、无 JerryScript | `0.6.2` / ABI `1` | `verified` | 已验证独立配置、构建、CTest 和安装；package 只包含 Core target、公共头文件和能力 profile。 |
 | Render Core 源码归档 | 无 Runtime、无 JerryScript | `0.8.0` / ABI `3` | `released` | 带签名的 `v0.8.0` 源码归档；SHA-256 为 `b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`。 |
-| 独立 Core `master` | 无 Runtime、无 JerryScript | `0.6.2-dev` / ABI `1` | `verified standalone only` | JellyFrame 主线 `7735b9a1` 已在独立仓库合并提交 `769ec5d` 同步；PR CI 已验证构建、CTest、安装、归档和源码分发。这不是 signed Runtime dependency。 |
+| 独立 Core `master` | 无 Runtime、无 JerryScript | `0.9.0-dev` / ABI `4` / source `b841715f…e72454`（163 个文件） | `qualification track` | 当前 master `a186f28e`；Core standalone 与 Runtime ABI4 full/cropped consumers 已通过，包括 worker frame v9/v10 generated-text/replay 覆盖。目前没有签名 ABI4 package；已检查的工作区未找到 Device OS 镜像验收 artifact。 |
 | Render Core 源码归档 | 无 Runtime、无 JerryScript | `0.6.2` / ABI `1` | `released` | 带签名 `v0.6.2` release 的确定性 `.tar.gz` 与 SHA-256 sidecar。声明为文本的成员会规范为 LF，不透明二进制成员保持原样；CI 会用等价的 CRLF/LF 源树证明 archive 字节相同，再解压、构建、运行 CTest、安装并配置 Runtime package consumer。 |
 | JellyFrame App Runtime | 已安装 Render Core package | `0.8.0` / ABI `3` / 规范化的锁定 source manifest identity | `verified` | Runtime 使用 `JELLYFRAME_RENDER_CORE_PROVIDER=package`；会将 package manifest 与精确锁定的 source hash 比对，再复制到构建 provenance。identity 会规范化文本换行，因此同一源码的 Windows 与 Unix checkout 得到相同结果。 |
 | JellyFrame App Runtime | 已安装 Render Core package | 错误版本、ABI 或 source identity | `rejected` | 配置阶段执行精确版本、engine ABI 和 source hash 检查；package 模式不允许偷偷回退到源码 Core。 |
@@ -36,7 +36,7 @@ JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = fa5914ce1559da5b12522fa28775287a5355
 
 这份锁是消费者策略，不表示未来所有 Render Core 构建都必须保持同一版本。
 
-首个独立 release 是 `v0.6.0`；独立开发头仍基于 `0.6.2-dev`，Runtime package 模式已接纳带签名的
+首个独立 release 是 `v0.6.0`；独立开发头为 `0.9.0-dev` / ABI 4，仍处于验收轨道；Runtime package 模式已接纳带签名的
 [`v0.8.0`](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.8.0)。
 其确定性 source archive 的 SHA-256 为
 `b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`。

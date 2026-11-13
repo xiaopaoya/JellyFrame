@@ -1,6 +1,6 @@
 # Render Core Release And Extraction Policy
 
-> Last updated: 2026-11-04; Applies to: 0.6.0-dev
+> Last updated: 2026-11-13; Applies to: Core 0.9.0-dev / ABI 4 qualification and Runtime 0.8.0 / ABI 3 production lock
 
 This policy governs the transition from the current monorepo boundary to an independently governed `jellyframe-render-core` project. It complements [engine_architecture.md](engine_architecture.md); it is not a user-facing app compatibility promise.
 
@@ -17,16 +17,21 @@ This policy governs the transition from the current monorepo boundary to an inde
 The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository retains
 the existing license and contributor history unchanged. Its first signed
 `v0.6.0` release established the deterministic source archive and SHA-256
-sidecar; the Runtime now accepts signed `v0.7.0` / ABI 2. Its `master` still contains
-the reviewed `0.6.2-dev` synchronization from JellyFrame `7735b9a1` at merge
-`769ec5d`; this development head is not a Runtime dependency. No license change,
-contributor-policy change or open-source intent is implied. The Runtime
-accepts a release only through an explicit dependency-lock update;
-its in-tree provider remains the default for synchronized development at
-`0.6.2` / ABI 1.
-The Runtime CI downloads the published archive, verifies the reviewed
-SHA-256, installs it and runs the locked package-consumer regression; this
-prevents a monorepo export from being mistaken for the released dependency.
+sidecar. The latest signed release is `v0.8.0` / ABI 3, and Runtime production
+package mode remains locked to that release with source manifest identity
+`fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795` and
+archive SHA-256 `b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`.
+Core `master` is now `0.9.0-dev` / ABI 4 at `a186f28e`; its current source
+manifest is `b841715f8f2bf1ac8ba02ff31c0f3e97c1dd5161517e58c248961cef97e72454`
+across 163 files. Runtime CI qualifies this ABI4 source through installed
+consumers and local source overrides. No signed ABI4 release exists yet, and no
+Device OS image acceptance artifact was found in the checked workspace. ABI4
+is not the production dependency.
+No license change, contributor-policy change or open-source intent is implied.
+The Runtime accepts a release only through an explicit dependency-lock update.
+CI verifies the published archive SHA-256, installs the archive and runs the
+locked package-consumer regression; this prevents a monorepo export from being
+mistaken for the released dependency.
 
 ## Release Unit
 
@@ -139,9 +144,11 @@ actual signed repository publication.
 
 ## Extraction Gate
 
-Core physical extraction is complete: the first signed `v0.6.0` release, the
-currently locked `v0.7.0` / ABI 2 package and Runtime package-consumer CI close that
-boundary. Before Device OS migration,
+Core physical extraction is complete: the signed `v0.8.0` / ABI 3 release is
+the current Runtime package lock, and Runtime package-consumer CI verifies that
+boundary. ABI4 remains a qualification track until a signed release is
+published, the Runtime lock and archive verification move together, and a
+named Device OS profile records ABI4 provenance. Before Device OS migration,
 the remaining profile-consumer/provenance check must be green and no private
 Runtime/port include may enter Core. The next high-value Core capability pack
 must be developed on this governed boundary; large new CSS work must not return
