@@ -1,8 +1,8 @@
 # Render Core Release And Extraction Policy
 
-> Last updated: 2026-11-13; Applies to: 0.6.0-dev; Core 0.9.0-dev / ABI 4 qualification and Runtime 0.8.0 / ABI 3 production lock
+> Last updated: 2026-11-14; Applies to: 0.6.0-dev; Core 0.9.0-dev / ABI 4 qualification and Runtime 0.8.0 / ABI 3 production lock
 
-This policy governs the transition from the current monorepo boundary to an independently governed `jellyframe-render-core` project. It complements [engine_architecture.md](engine_architecture.md); it is not a user-facing app compatibility promise.
+This policy governs the transition from the current monorepo boundary to an independently governed `jellyframe-render-core` project. It complements [engine_architecture.md](engine_architecture.md); it is not a user-facing app compatibility promise. The coordinated ABI4 integration and legacy text API retirement work is tracked in the [migration plan](render_core_abi4_migration_plan.md).
 
 ## Ownership
 
@@ -21,13 +21,16 @@ sidecar. The latest signed release is `v0.8.0` / ABI 3, and Runtime production
 package mode remains locked to that release with source manifest identity
 `fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795` and
 archive SHA-256 `b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`.
-Core `master` is now `0.9.0-dev` / ABI 4 at `b0bfd834`. It includes shared-inline
-list ordinal generated text, native decimal/disc marker overlays, and isolated
-shaping-foundation and bounded Noto shaping-closure tooling prototypes. This
-work does not add package implementation inputs or change Runtime behavior.
-Runtime's full/cropped ABI4 matrix pins this revision and its CMake package source identity
+Core `master` is now `0.9.0-dev` / ABI 4 at `de9733d2`. Its latest change adds
+offline shaping-closure tooling, tests and documentation; it does not add package
+implementation inputs or change Runtime behavior. Runtime PR #71 merged as
+`50170381` and qualifies the preceding implementation commit `b0bfd834`, which
+contains shared-inline list ordinal generated text and native decimal/disc marker
+overlays. Runtime's full/cropped ABI4 matrix pins that implementation revision
+and its CMake package source identity
 `aa908e3852afd4a06ed6df6b26a5cc759cfefcd7d39c02270d1304aa633d18c4` across 165
-implementation inputs; those CI jobs are the qualification gate. No signed ABI4 release exists yet, and no
+implementation inputs. Both PR and post-merge master workflows passed. No signed
+ABI4 release exists yet, and no
 Device OS image acceptance artifact was found in the checked workspace. ABI4
 is not the production dependency.
 No license change, contributor-policy change or open-source intent is implied.

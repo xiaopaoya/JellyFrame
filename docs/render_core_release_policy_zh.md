@@ -1,8 +1,8 @@
 # Render Core 发布与拆仓政策
 
-> 最后更新：2026-11-13；适用版本：0.6.0-dev；Core 0.9.0-dev / ABI 4 验收、Runtime 0.8.0 / ABI 3 生产锁
+> 最后更新：2026-11-14；适用版本：0.6.0-dev；Core 0.9.0-dev / ABI 4 验收、Runtime 0.8.0 / ABI 3 生产锁
 
-本政策规定当前 monorepo 边界迁移到独立 `jellyframe-render-core` 工程的方式。它补充 [engine_architecture_zh.md](engine_architecture_zh.md)，不是面向 App 作者的兼容性承诺。
+本政策规定当前 monorepo 边界迁移到独立 `jellyframe-render-core` 工程的方式。它补充 [engine_architecture_zh.md](engine_architecture_zh.md)，不是面向 App 作者的兼容性承诺。ABI4 集成与旧文本 API 退役的协同任务见[迁移计划](render_core_abi4_migration_plan_zh.md)。
 
 ## 所有权
 
@@ -18,8 +18,7 @@
 首个带签名的 `v0.6.0` release 建立了确定性 source archive 和 SHA-256 sidecar。最新带签名发布为 `v0.8.0` / ABI 3；Runtime 生产 package mode 仍锁定该发布，其 source manifest identity 为
 `fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795`，archive SHA-256 为
 `b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`。Core `master` 当前为
-`0.9.0-dev` / ABI 4，提交 `b0bfd834`；包含 shared-inline list ordinal 生成文本、native decimal/disc list marker，以及隔离的 shaping foundation 和 bounded Noto shaping-closure 工具原型。这些工作没有增加 package implementation inputs，也没有改变 Runtime 行为。
-Runtime 的 full/cropped ABI4 matrix 固定此提交及 CMake package source identity：`aa908e3852afd4a06ed6df6b26a5cc759cfefcd7d39c02270d1304aa633d18c4`，覆盖 165 个实现输入；对应 CI jobs 是该版本的验收门槛。目前尚无带签名 ABI4 release；在已检查的工作区中也未找到 Device OS 镜像验收 artifact。ABI4 仍不是生产依赖。
+`0.9.0-dev` / ABI 4 当前 master 为 `de9733d2`。最新提交增加离线 shaping-closure 工具、测试和文档，没有增加 package implementation inputs，也没有改变 Runtime 行为。Runtime PR #71 已合并为 `50170381`，其 full/cropped ABI4 matrix 验收的是前一实现提交 `b0bfd834`，其中包含 shared-inline list ordinal 生成文本和 native decimal/disc list marker overlays。该 matrix 使用的 CMake package source identity 为 `aa908e3852afd4a06ed6df6b26a5cc759cfefcd7d39c02270d1304aa633d18c4`，覆盖 165 个实现输入。PR 与合并后的 master workflow 均已通过。目前尚无带签名 ABI4 release；在已检查的工作区中也未找到 Device OS 镜像验收 artifact。ABI4 仍不是生产依赖。
 这不表示许可证、贡献者政策或开源意向的改变。Runtime 只能通过显式 dependency-lock 更新接纳 release。
 CI 会校验已发布 archive 的 SHA-256、安装并运行锁定 package-consumer regression，避免误把 monorepo export 当成已发布 dependency。
 
