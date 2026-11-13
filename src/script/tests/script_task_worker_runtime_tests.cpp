@@ -971,6 +971,89 @@ void worker_natural_image_cases() {
     worker_natural_image_snapshot("width: 20px; height: 10px;", known, 128, 20, 10, 0, 0);
     std::cout << "worker natural image: 10 metadata, dimensions, fallback and retained-pixel cases passed\n";
 }
+
+#if defined(JELLYFRAME_TEST_NATURAL_INLINE_IMAGES) && JELLYFRAME_TEST_NATURAL_INLINE_IMAGES
+// Behavioral qualification is explicitly enabled for the pinned post-PR35 Core.
+// The earlier natural-image API also exists on block-only Core revisions.
+void worker_natural_inline_image_snapshot(ImageIntrinsicSize size, bool expect_image) {
+    auto supervisor = make_supervisor();
+    const runtime_test_fonts::Fonts fonts;
+    auto source = std::make_shared<const WorkerImages>(size);
+    RuntimeImageProvider::Handle images;
+    check(RuntimeImageProvider::create(source, images) == RuntimeImageProviderStatus::Ready,
+          "natural inline image snapshot created");
+    const auto session = supervisor.begin(199, fonts.catalog, images);
+    auto options = runtime_options_v3();
+    options.frame_codec.version = 10;
+    options.frame_codec.max_groups = 32;
+    options.text_catalog = fonts.catalog;
+    options.image_provider = images;
+    NaturalImageSizingStatistics statistics;
+    options.natural_image_sizing.statistics = &statistics;
+    ScriptTaskWorkerRuntime runtime(session, options);
+    const std::string html =
+        "<body><div id='line'><span>A<img src='/assets/content.bmp'>B</span></div></body>";
+    const std::string css =
+        "body { margin: 0; } #line { display: block; width: 100px; font-size: 16px; line-height: 24px; } "
+        "span { display: inline; } img { display: inline; }";
+    check(runtime.initialize(supervisor, html, css) == ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "natural inline worker initializes through supervisor");
+    check(statistics.queries == 1 && statistics.accepted == (expect_image ? 1u : 0u),
+          "inline metadata is queried once and accepted only when valid");
+    check(runtime.publish_frame(supervisor).accepted(), "natural inline frame publishes");
+    ScriptTaskAcceptedAppFrame accepted;
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, accepted) ==
+          ScriptTaskAppFrameTakeStatus::Accepted, "natural inline frame accepted");
+    std::size_t image_commands = 0;
+    std::size_t text_commands = 0;
+    Rect image_rect{};
+    for (const auto& command : accepted.frame().display_list) {
+        const auto type = worker_test_access::worker_command_type(command);
+        if (type == DisplayCommandType::Image) {
+            ++image_commands;
+            image_rect = command.rect;
+            check(text_commands == 1, "natural image stays between its two text owners");
+            check(command.rect.width >= 40 && command.rect.width <= 41 && command.rect.height == 20,
+                  "inline natural image command covers its Q1000 width and integral height");
+        } else if (type == DisplayCommandType::PreparedText) {
+            ++text_commands;
+        }
+    }
+    check(image_commands == (expect_image ? 1u : 0u),
+          "natural inline image is emitted once or omitted for unknown metadata");
+    check(text_commands == 2,
+          "shared inline text on both sides of the image survives acceptance or fallback");
+    check(source->resolves == statistics.queries + 1u,
+          "inline metadata lookup and paint handle resolution are distinct provider calls");
+    const auto resolves_before_replay = source->resolves;
+    runtime.stop();
+    supervisor.begin(200, fonts.catalog);
+    options.image_provider.reset();
+    images.reset();
+    ScriptTaskFrameRendererOptions render_options;
+    render_options.text_catalog = fonts.catalog;
+    ScriptTaskFrameRenderer renderer({}, {}, render_options);
+    FrameBuffer pixels(accepted.frame().viewport.width, accepted.frame().viewport.height, {});
+    ScriptTaskFrameRenderStatus status;
+    check(renderer.render_into(accepted, pixels, {255, 255, 255, 255}, nullptr, 0, nullptr, &status) &&
+          status == ScriptTaskFrameRenderStatus::Accepted,
+          "natural inline accepted frame replays after worker and provider release");
+    check(source->resolves == resolves_before_replay,
+          "natural inline replay does not resolve metadata or image URLs again");
+    if (expect_image) {
+        const auto pixel = pixels.pixel(image_rect.x + image_rect.width / 2,
+                                        image_rect.y + image_rect.height / 2);
+        check(pixel.r == 231 && pixel.g == 17 && pixel.b == 53,
+              "retained natural inline image paints provider pixels");
+    }
+}
+
+void worker_natural_inline_image_cases() {
+    worker_natural_inline_image_snapshot({ImageIntrinsicSizeState::Known, 40, 20}, true);
+    worker_natural_inline_image_snapshot({}, false);
+    std::cout << "worker natural inline image: accepted sizing, fallback text and retained replay passed\n";
+}
+#endif
 #endif
 
 void worker_canonical_resolves_content_and_background_images(std::uint8_t version) {
@@ -1489,6 +1572,9 @@ int script_task_worker_runtime_tests_main() {
         }
 #if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
         worker_natural_image_cases();
+#if defined(JELLYFRAME_TEST_NATURAL_INLINE_IMAGES) && JELLYFRAME_TEST_NATURAL_INLINE_IMAGES
+        worker_natural_inline_image_cases();
+#endif
 #endif
         if (script_task_app_frame_codec_supports_version(10))
             worker_v10_mutation_publishes_changed_packed_axes<DisplayCommand>();
