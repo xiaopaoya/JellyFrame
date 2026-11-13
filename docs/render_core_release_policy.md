@@ -1,6 +1,6 @@
 # Render Core Release And Extraction Policy
 
-> Last updated: 2026-11-13; Applies to: Core 0.9.0-dev / ABI 4 qualification and Runtime 0.8.0 / ABI 3 production lock
+> Last updated: 2026-11-13; Applies to: 0.6.0-dev; Core 0.9.0-dev / ABI 4 qualification and Runtime 0.8.0 / ABI 3 production lock
 
 This policy governs the transition from the current monorepo boundary to an independently governed `jellyframe-render-core` project. It complements [engine_architecture.md](engine_architecture.md); it is not a user-facing app compatibility promise.
 

@@ -1,6 +1,6 @@
 # Component Compatibility Matrix
 
-> Last updated: 2026-11-13; Applies to: Core 0.9.0-dev qualification / Runtime 0.8.0 production lock
+> Last updated: 2026-11-13; Applies to: 0.6.0-dev; Core 0.9.0-dev qualification / Runtime 0.8.0 production lock
 
 This matrix records compatibility evidence across the three planned product
 boundaries. It is intentionally narrower than the HTML/CSS capability tables:
