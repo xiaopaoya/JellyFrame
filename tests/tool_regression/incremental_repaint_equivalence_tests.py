@@ -28,6 +28,7 @@ class CaptureCase:
     require_text_presence: bool = False
     text_region: tuple[int, int, int, int] | None = None
     require_forecast_presence: bool = False
+    forecast_frame_indices: tuple[int, ...] = ()
 
 
 CASES = (
@@ -174,9 +175,12 @@ def adapt_sample_case(case: CaptureCase, repo: Path, root: Path, core_version: s
     return replace(case, app=str(destination))
 
 
-def make_band_shell_case(repo: Path, root: Path, core_version: str) -> CaptureCase:
+def make_band_shell_case(
+    repo: Path, root: Path, core_version: str, exercise_route: bool = False
+) -> CaptureCase:
     source = repo / "ports/esp32s3-idf/resources/app"
-    destination = root / "band-shell-launcher"
+    suffix = "route" if exercise_route else "static"
+    destination = root / f"band-shell-launcher-{suffix}"
     (destination / "styles").mkdir(parents=True)
     shutil.copy2(source / "band_shell.html", destination / "band_shell.html")
     shutil.copy2(source / "styles/band_shell.css", destination / "styles/band_shell.css")
@@ -188,21 +192,51 @@ def make_band_shell_case(repo: Path, root: Path, core_version: str) -> CaptureCa
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
 
-    # Keep launcher markup and styling byte-for-byte. The firmware binds routes
-    # natively, while this desktop shell may be built without scripting, so expose
-    # the actual weather view directly instead of pretending to exercise that route.
+    # Keep launcher markup and styling byte-for-byte. Device routes switch the
+    # active view class; the host fixture uses that same state transition.
     html_path = destination / "band_shell.html"
     html = html_path.read_text(encoding="utf-8")
-    html = html.replace('id="view-home" class="band-view active"', 'id="view-home" class="band-view"')
-    html = html.replace('id="view-weather" class="band-view"', 'id="view-weather" class="band-view active"')
+    capture_script = None
+    frame_count = 1
+    frame_indices: tuple[int, ...] = ()
+    if exercise_route:
+        shim = """<script>
+          (function() {
+            var routes = {'home-to-weather': 'view-weather', 'weather-home': 'view-home'};
+            Object.keys(routes).forEach(function(id) {
+              var control = document.getElementById(id);
+              if (!control) return;
+              control.addEventListener('click', function() {
+                document.querySelectorAll('.band-view').forEach(function(view) {
+                  view.setAttribute('class', 'band-view' + (view.id === routes[id] ? ' active' : ''));
+                });
+              });
+            });
+          })();
+        </script>"""
+        html = html.replace("</body>", shim + "</body>")
+        capture_script = str(destination / "launcher-weather-route.jfcapture")
+        Path(capture_script).write_text(
+            "frames 9\nstep-ms 33\nstart-ms 1000\n"
+            "event 2 click 86 214\n"
+            "event 7 click 25 20\n",
+            encoding="utf-8",
+        )
+        frame_count = 9
+        frame_indices = (3, 4, 5, 6)
+    else:
+        html = html.replace('id="view-home" class="band-view active"', 'id="view-home" class="band-view"')
+        html = html.replace('id="view-weather" class="band-view"', 'id="view-weather" class="band-view active"')
     html_path.write_text(html, encoding="utf-8")
     return CaptureCase(
-        name="launcher-weather-source",
+        name="launcher-weather-route" if exercise_route else "launcher-weather-source",
         app=str(destination),
-        frame_count=1,
+        frame_count=frame_count,
+        frame_script=capture_script,
         viewport_width=172,
         viewport_height=320,
         require_forecast_presence=True,
+        forecast_frame_indices=frame_indices,
     )
 
 
@@ -291,7 +325,10 @@ def main() -> int:
             make_text_property_case(root, "lineHeight", "28px", "40px", core_version),
         )
         cases = tuple(adapt_sample_case(case, repo, root, core_version) for case in CASES) + text_property_cases
-        cases += (make_band_shell_case(repo, root, core_version),)
+        cases += (
+            make_band_shell_case(repo, root, core_version),
+            make_band_shell_case(repo, root, core_version, exercise_route=True),
+        )
         if selected_case is not None:
             cases = tuple(case for case in cases if case.name == selected_case)
             if not cases:
@@ -393,17 +430,21 @@ def main() -> int:
                         (82, 165, 116, 197),
                         (117, 165, 151, 197),
                     )
-                    for index in range(backend_case.frame_count):
-                        frame = incremental_frames[index]
-                        missing = [
-                            region for region in forecast_regions
-                            if not bmp_region_has_light_ink(frame, region)
-                        ]
-                        if missing:
-                            raise RuntimeError(
-                                f"launcher-weather-source: forecast text is missing in incremental frame {index}; "
-                                f"missing regions={missing} ({frame.name})"
-                            )
+                    frame_indices = backend_case.forecast_frame_indices or tuple(
+                        range(backend_case.frame_count)
+                    )
+                    for mode, frames in (("incremental", incremental_frames), ("full", full_frames)):
+                        for index in frame_indices:
+                            frame = frames[index]
+                            missing = [
+                                region for region in forecast_regions
+                                if not bmp_region_has_light_ink(frame, region)
+                            ]
+                            if missing:
+                                raise RuntimeError(
+                                    f"{backend_case.name}: forecast text is missing in {mode} frame {index}; "
+                                    f"missing regions={missing} ({frame.name})"
+                                )
                 for index, (incremental_frame, full_frame) in enumerate(
                     zip(incremental_frames, full_frames)
                 ):
