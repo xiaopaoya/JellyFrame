@@ -32,5 +32,8 @@ Core hash and 138-file count. Static IRAM remained exactly 16,383/16,384 bytes
 for the current configuration. Stat D/IRAM use fell by 8,328 bytes (71,163 to
 62,835), all in `.text`; flash `.text` grew by 8,992 bytes (839,072 to 848,064),
 and total image size grew by 664 bytes. The experiment therefore confirms a
-DIRAM reserve trade, not relief from the exhausted static IRAM budget. Leave
-the profile opt-in; hardware flash-erase/write stress remains outstanding.
+D/IRAM reserve trade. The unchanged 16,383/16,384-byte result refers only to
+the dedicated static-IRAM linker category; the baseline manifest still reports
+about 270 KB in the D/IRAM data window. This is not evidence of a total
+internal-memory shortage and is not a current release blocker. Leave the
+profile opt-in because hardware flash-erase/write stress remains outstanding.
