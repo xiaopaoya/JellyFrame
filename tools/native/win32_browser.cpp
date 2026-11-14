@@ -2479,6 +2479,13 @@ struct BrowserTextBackend {
     TextPainter painter;
     const TextSystem* text_system = nullptr;
     bool core_text = false;
+    bool app_font_set = false;
+
+    const char* name() const {
+        if (core_text) return "core-text";
+        if (app_font_set) return "app-font-set";
+        return "gdi";
+    }
 };
 
 HFONT create_gdi_text_font(int font_size, int font_weight) {
@@ -2586,7 +2593,7 @@ BrowserTextBackend make_browser_text_backend(const BrowserOptions& options, AppR
     if (options.use_app_fonts && runtime != nullptr) {
         if (runtime->fonts().primary_font() != nullptr) {
             return BrowserTextBackend{runtime->fonts().measure_provider(),
-                                      runtime->fonts().painter(), nullptr, false};
+                                      runtime->fonts().painter(), nullptr, false, true};
         }
         if (const TextSystem* text_system = runtime->fonts().core_text_system()) {
             return BrowserTextBackend{{}, {}, text_system, true};
@@ -3812,7 +3819,8 @@ LoadedPage load_page(const BrowserOptions& options,
     return page;
 }
 
-FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
+FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
+                                          std::string* selected_text_backend = nullptr) {
     const HostBudgets budgets = desktop_browser_budgets();
     VectorDiagnosticSink diagnostics;
     const AppRuntimeHostOptions app_runtime_options = desktop_app_runtime_options();
@@ -3830,6 +3838,9 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options) {
     }
     LoadedPage page = load_page(options, budgets, &diagnostics, runtime);
     BrowserTextBackend text_backend = make_browser_text_backend(options, runtime);
+    if (selected_text_backend != nullptr) {
+        *selected_text_backend = text_backend.name();
+    }
     ImageDecodeMock debug_images(ImageDecodePolicy{true, 1024, 256, 256, 256 * 256 * 4, 4});
     add_debug_image_fixtures(debug_images);
     if (page.package_mode) {
@@ -4626,6 +4637,7 @@ public:
                   << "  viewport=" << viewport_width_ << "x" << viewport_height_ << '\n'
                   << "  text_policy="
                   << (make_browser_text_backend(options_, &app_runtime_).core_text ? "core" : "legacy") << '\n'
+                  << "  text_backend=" << make_browser_text_backend(options_, &app_runtime_).name() << '\n'
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
                   << "  scripting=on\n"
 #else
@@ -9092,12 +9104,14 @@ int main(int argc, char** argv) {
             if (options.capture) {
                 options.html_path.clear();
                 options.css_path.clear();
-                FrameBuffer frame_buffer = render_page_with_browser_text(options);
+                std::string selected_text_backend;
+                FrameBuffer frame_buffer = render_page_with_browser_text(options, &selected_text_backend);
                 write_image(frame_buffer, options.output_path);
                 std::cout << "JellyFrame Desktop Shell capture\n"
                           << "  output=" << options.output_path << '\n'
                           << "  viewport_width=" << options.viewport_width << '\n'
                           << "  app_fonts=" << (options.use_app_fonts ? "on" : "off") << '\n'
+                          << "  text_backend=" << selected_text_backend << '\n'
                           << "  image=" << frame_buffer.width << "x" << frame_buffer.height << '\n'
                           << "  non_background_pixels="
                           << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';
@@ -9117,12 +9131,14 @@ int main(int argc, char** argv) {
     } else if (options.capture) {
         if (!options.inline_html.empty()) {
             try {
-                FrameBuffer frame_buffer = render_page_with_browser_text(options);
+                std::string selected_text_backend;
+                FrameBuffer frame_buffer = render_page_with_browser_text(options, &selected_text_backend);
                 write_image(frame_buffer, options.output_path);
                 std::cout << "JellyFrame Desktop Shell capture\n"
                           << "  output=" << options.output_path << '\n'
                           << "  viewport_width=" << options.viewport_width << '\n'
                           << "  app_fonts=" << (options.use_app_fonts ? "on" : "off") << '\n'
+                          << "  text_backend=" << selected_text_backend << '\n'
                           << "  image=" << frame_buffer.width << "x" << frame_buffer.height << '\n'
                           << "  non_background_pixels="
                           << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';
@@ -9149,15 +9165,14 @@ int main(int argc, char** argv) {
             }
         }
         try {
-            FrameBuffer frame_buffer = render_page_with_browser_text(options.html_path,
-                                                                      options.css_path,
-                                                                      options.viewport_width,
-                                                                      options.viewport_height);
+            std::string selected_text_backend;
+            FrameBuffer frame_buffer = render_page_with_browser_text(options, &selected_text_backend);
             write_image(frame_buffer, options.output_path);
             std::cout << "JellyFrame Desktop Shell capture\n"
                       << "  output=" << options.output_path << '\n'
                       << "  viewport_width=" << options.viewport_width << '\n'
                       << "  app_fonts=" << (options.use_app_fonts ? "on" : "off") << '\n'
+                      << "  text_backend=" << selected_text_backend << '\n'
                       << "  image=" << frame_buffer.width << "x" << frame_buffer.height << '\n'
                       << "  non_background_pixels="
                       << count_non_background_pixels(frame_buffer, Color{255, 255, 255, 255}) << '\n';

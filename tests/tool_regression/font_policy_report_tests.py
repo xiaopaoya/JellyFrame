@@ -135,6 +135,7 @@ def main() -> int:
         print(output, end="")
         assert "diagnostics: 0" in output
         assert "app_fonts=on" in output
+        assert "text_backend=app-font-set" in output
         assert capture.is_file() and capture.stat().st_size > 54
 
         warning_report = output_dir / "font_size_warning.report.json"
