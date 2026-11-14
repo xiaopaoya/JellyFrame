@@ -36,7 +36,7 @@ Runtime PR #73 已建立当前签名 Core package 的干净 checkout 与 checksu
 ### B. Runtime 消费者迁移（资源契约固定后并行）
 
 - **B1 原生 UI 与已安装应用 worker（PR #77 已合并）：**将保留式 UI 和已安装 worker 资源接入共享字体目录，并新增命名 `sdkconfig.ws147_core_text.defaults` profile，生产 Kconfig 默认值保持不变。WS147 常规路径仍创建 `TextMeasureProvider`/`TextPainter` 回调；CoreText profile 才会绕过它们。full/cropped 主机组合、PR CI 与 IDF v5.3.1 构建均通过。ABI3 staged profile 与单独 ABI4 候选都仍需实机验收。
-- **B2 桌面（PR #76 已合并，分阶段）：**加入显式 Core catalog 验证路径与 JFFONT2 应用补充字体，同时保留 GDI 默认和旧 JFFONT bitmap 路径。GDI 默认路径提供度量与绘制回调；旧 JFFONT 仍经由 AppFontSet 回调。首次无条件启用 Core 时，既有字体策略与增量重绘等价测试失败，并拒绝了 `letter-spacing`；这些结果确定了兼容门槛，不能视为测试噪音。先扩展支持属性的增量/全量重绘正向对照，再让桌面内置 catalog 文本默认走 CoreText；旧应用字体路径在兼容验收前保留。
+- **B2 桌面（PR #76 已合并，分阶段）：**加入显式 Core catalog 验证路径与 JFFONT2 应用补充字体，同时保留 GDI 默认和旧 JFFONT bitmap 路径。GDI 默认路径提供度量与绘制回调；旧 JFFONT 仍经由 AppFontSet 回调。首次无条件启用 Core 时，既有字体策略与增量重绘等价测试失败，并拒绝了 `letter-spacing`；这些结果确定了兼容门槛，不能视为测试噪音。现有重绘门槛覆盖五类 CSS 文本属性以及动画、路由、天气、滚动和 watch-face 流程，验证实际像素发生变化，并逐帧对比全量重绘。此前该门槛没有在 Windows ABI4 source-override CI job 中运行；PR #89 已将其接入。该 lane 在精确 Core 源码身份上通过后，再将桌面内置 catalog 文本切到 CoreText，JFFONT fallback 暂时保留。
 
 **退出证据：**没有生产默认路径再选择回调度量/绘制；已安装 package 与 source override 的图像一致；应用字体和损坏资源拒绝测试通过。
 
@@ -85,5 +85,5 @@ A/B 期间可以并行审计 Core API 和迁移测试，但必须等所有生产
 2. **已完成：**Runtime full/cropped ABI4 资格验证现已覆盖 Core `64c1cb42` 和 source identity `213ff3196864f2d7da9152bf246c29bda9849da50daff272baf551a7f9179cc5`（163 个实现输入），workflow 为 `43472234209`。
 3. **已完成：**PR #75 的共享字体目录/API 在全部 CI 通过后合并。
 4. **主机缓存修复已合入，实机验收仍未确认：**Runtime PR #83、Core PR #57、Runtime PR #85 均已合并且 CI 通过。此前设备报告没有关联实际 ELF/backend/profile。ABI4 候选已有 manifest，但还未刷写；它使用 Core `0.9.0-dev` source override，app 分区余量 9%、IRAM 余量 1 字节。先建立可复现的固件身份/启动日志采集，再在同一镜像分别验收首页、Activity、Weather。不能只凭该构建切换 WS147 默认值。
-5. **下一迁移切片：**扩展桌面 CoreText 支持属性的增量/全量重绘正向对照，然后让桌面内置 catalog 文本默认使用 CoreText、暂时保留旧 JFFONT fallback。并行把 ESP32 callback/v6 与桌面 GDI/JFFONT 消费者列作 provider 退役阻塞项。使用隔离 worktree 和精确 Core/Runtime identity；仍有这些生产路径时，不移除 `TextMeasureProvider`/`TextPainter`。
+5. **下一迁移切片：**在 Windows ABI4 source-override CI lane 运行现有 CoreText 正向重绘矩阵（PR #89 已接入），再以该精确 Core identity 作为桌面内置 catalog 采用门槛，并暂时保留 JFFONT fallback。并行把 ESP32 callback/v6 与桌面 GDI/JFFONT 消费者列作 provider 退役阻塞项。使用隔离 worktree 和精确 Core/Runtime identity；仍有这些生产路径时，不移除 `TextMeasureProvider`/`TextPainter`。
 6. 桌面/设备消费者验收后，再协调 callback API 移除、最终 Core ABI4 release/archive、Runtime package-lock/default adoption 和命名 ABI4 设备资格验证。ABI4 full/cropped CI 只证明 installed-consumer 兼容性，不等于签名发布或实机验收。
