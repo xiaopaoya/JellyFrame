@@ -433,7 +433,14 @@ if(JELLYFRAME_BUILD_TESTS)
         COMMAND jellyframe_esp32s3_resource_reference_tests)
     jellyframe_enable_test_asserts(jellyframe_esp32s3_resource_reference_tests)
     jellyframe_stage_sanitizer_runtime(jellyframe_esp32s3_resource_reference_tests)
-    if(JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 4)
+    include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_INCLUDES ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS})
+    unset(JELLYFRAME_RENDER_CORE_NATURAL_IMAGE_API_AVAILABLE CACHE)
+    check_cxx_source_compiles(
+        "#include <render_core/layout.h>\n#if !defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) || JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION < 1\n#error natural image layout API is unavailable\n#endif\nint main() { return 0; }"
+        JELLYFRAME_RENDER_CORE_NATURAL_IMAGE_API_AVAILABLE)
+    unset(CMAKE_REQUIRED_INCLUDES)
+    if(JELLYFRAME_RENDER_CORE_NATURAL_IMAGE_API_AVAILABLE)
         add_executable(jellyframe_esp32s3_image_metadata_tests
             ports/esp32s3-idf/tests/image_metadata_tests.cpp
             ports/esp32s3-idf/main/jellyframe_esp32s3_image.cpp
