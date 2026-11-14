@@ -157,6 +157,7 @@ def make_text_property_case(
         frame_count=3,
         frame_script="repaint.jfcapture",
         require_pixel_mutation=True,
+        require_text_presence=True,
         text_region=(0, 0, 220, 48),
     )
 
@@ -417,9 +418,9 @@ def main() -> int:
                         raise RuntimeError(f"{backend_case.name}: text proof region is missing")
                     for mode, frames in (("incremental", incremental_frames), ("full", full_frames)):
                         for index, frame in enumerate(frames):
-                            if not bmp_region_has_visible_pixels(frame, backend_case.text_region):
+                            if not bmp_region_has_ink(frame, backend_case.text_region):
                                 raise RuntimeError(
-                                    f"{backend_case.name}: {mode} repaint has no visible route title "
+                                    f"{backend_case.name}: {mode} repaint has no visible text "
                                     f"at frame {index} ({frame.name})"
                                 )
                 if backend_case.require_forecast_presence and backend_case.use_app_fonts:
