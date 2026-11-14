@@ -17,6 +17,7 @@ the render-core and app-runtime C++ unit suites.
 | Visual diagnostics and layout captures | `pipeline_visual_diagnostics_tests.py`, `flex_grid_capture_tests.py` |
 | Template and external-author workflow | `template_trial_tests.py` |
 | Native showcase interactions and repaint equivalence | `app_showcase_capture_tests.py BUILD_TOOL_DIR OUTPUT_DIR` (scripting-enabled Win32 shell) |
+| Core-text incremental repaint property matrix | `jellyframe_win32_incremental_repaint_equivalence` (scripting-enabled Win32 shell with in-tree Core text) |
 | Font/resource policy | `font_policy_report_tests.py` |
 | Link-map and build slicing | `render_core_link_map_tests.py` |
 | Source-aware render performance reports and project history | `render_performance_report_tests.py`, `device_performance_manifest_tests.py`, `device_performance_compare_tests.py`, `embedded_ui_workload_tests.py`, `vscode_performance_sessions_tests.js` |
