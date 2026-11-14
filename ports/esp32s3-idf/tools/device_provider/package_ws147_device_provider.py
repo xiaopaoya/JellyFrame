@@ -170,9 +170,8 @@ def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, di
         version_parts[name] = match.group(1)
     idf_version = ".".join(version_parts[name] for name in ("MAJOR", "MINOR", "PATCH"))
 
-    compiler_path = Path(compiler.replace("/", "\\"))
-    toolchain_parts = compiler_path.parts
-    versioned_toolchain = next((part for part in toolchain_parts if re.fullmatch(r"esp-[0-9.]+_[0-9]+", part)), None)
+    versioned_toolchain_match = re.search(r"(?:^|[\\/])(esp-[0-9.]+_[0-9]+)(?:[\\/]|$)", compiler)
+    versioned_toolchain = versioned_toolchain_match.group(1) if versioned_toolchain_match else None
     if versioned_toolchain is None:
         raise SystemExit("ESP-IDF build provenance does not identify a versioned compiler toolchain")
     defaults = [Path(value).stem.removeprefix("sdkconfig.").removesuffix(".defaults")

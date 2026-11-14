@@ -1,5 +1,7 @@
 # FreeRTOS IRAM Reserve Experiment
 
+> Last updated: 2026-11-14; Applies to: 0.6.0-dev
+
 > Historical experiment; interpretation corrected 2026-11-14 by Runtime PR #98 (`92f6b62d`). Applies to the 0.6.0-dev experiment only; this is not a current capacity blocker.
 
 This opt-in build profile tests `CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH=y`
