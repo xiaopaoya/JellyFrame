@@ -1016,8 +1016,8 @@ jobs:
           $coreAbi4 = Select-String -Path third_party\render-core-source\cmake\render_core_version.cmake `
             -Pattern 'set\(JELLYFRAME_RENDER_CORE_ENGINE_ABI "4"' -Quiet
           if (-not $coreAbi4) { throw 'Checked-out Core source does not declare ABI4' }
-          $contentsApi = Select-String -Path third_party\render-core-source\include\render_core\layout.h `
-            -Pattern 'DisplayContents' -Quiet
+          $contentsApi = Select-String -Path third_party\render-core-source\include\render_core\style.h `
+            -Pattern 'Contents,' -Quiet
           if (-not $contentsApi) { throw 'Checked-out Core source does not include display:contents support' }
 
       - name: Checkout JerryScript
