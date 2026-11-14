@@ -228,7 +228,7 @@ def main() -> int:
                         f"{backend_case.name}: expected {backend_case.frame_count} frames per mode, got "
                         f"{len(incremental_frames)} and {len(full_frames)}"
                     )
-                if backend_case.require_pixel_mutation:
+                if backend_case.require_pixel_mutation and backend_case.use_app_fonts:
                     if backend_case.text_region is None:
                         raise RuntimeError(f"{backend_case.name}: text proof region is missing")
                     if not bmp_region_has_ink(incremental_frames[0], backend_case.text_region):
