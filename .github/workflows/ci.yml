@@ -616,7 +616,6 @@ jobs:
             jellyframe_esp32s3_installed_resource_owner_tests jellyframe_esp32s3_resource_reference_tests `
             jellyframe_esp32s3_frame_admission_0_0_tests jellyframe_esp32s3_frame_admission_0_1_tests `
             jellyframe_esp32s3_frame_admission_1_0_tests jellyframe_esp32s3_frame_admission_1_1_tests `
-            jellyframe_esp32s3_image_metadata_tests `
             jellyframe_desktop_shell
           if ($LASTEXITCODE -ne 0) { throw 'Installed resource host build failed' }
           ctest --test-dir $build -C Release -R '^(jellyframe_esp32s3_.*tests|jellyframe_browser_callback_failure)$' --output-on-failure
@@ -1073,7 +1072,15 @@ jobs:
         run: >-
           cmake --build build/abi4-same-thread --config Release
           --target jellyframe_desktop_shell jellyframe_script_tests jellyframe_app_runtime_tests
+          jellyframe_esp32s3_image_metadata_tests
           --parallel
+
+      - name: Run ABI4 image metadata test
+        shell: pwsh
+        run: >-
+          ctest --test-dir build/abi4-same-thread -C Release
+          -R "^jellyframe_esp32s3_image_metadata_tests$"
+          --output-on-failure
 
       - name: Run ordinary script and App Runtime unit tests
         shell: pwsh
