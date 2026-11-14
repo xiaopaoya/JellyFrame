@@ -64,10 +64,12 @@ def parse_device_image_manifest(data: bytes | str) -> dict[str, Any]:
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise DeviceImageManifestError(f"invalid manifest JSON: {error}") from error
 
-    manifest = _object(manifest, "manifest", {
+    required = {
         "format", "formatVersion", "imageId", "imageVersion", "runtimeVersion",
         "renderCore", "source", "board", "profile", "transport", "storage", "recovery",
-    })
+    }
+    if not isinstance(manifest, dict) or not required.issubset(manifest) or set(manifest) - required - {"buildProvenance"}:
+        raise DeviceImageManifestError("manifest has unknown or missing fields")
     if manifest["format"] != FORMAT or manifest["formatVersion"] != FORMAT_VERSION:
         raise DeviceImageManifestError("unsupported manifest format")
     for field in ("imageId",):
@@ -78,6 +80,25 @@ def parse_device_image_manifest(data: bytes | str) -> dict[str, Any]:
     render_core = _object(manifest["renderCore"], "renderCore", {"version", "abi"})
     _string(render_core["version"], "renderCore.version", _VERSION_RE)
     _positive_int(render_core["abi"], "renderCore.abi")
+
+    if "buildProvenance" in manifest:
+        provenance = manifest["buildProvenance"]
+        allowed_provenance = {
+            "renderCoreSourceIdentity", "renderCoreSourceInputCount",
+            "idfVersion", "idfRevision", "toolchain", "target", "buildProfile", "sdkconfigSha256",
+        }
+        if (not isinstance(provenance, dict) or not provenance or
+                set(provenance) - allowed_provenance):
+            raise DeviceImageManifestError("buildProvenance has unknown or missing fields")
+        if "renderCoreSourceIdentity" in provenance:
+            _string(provenance["renderCoreSourceIdentity"], "buildProvenance.renderCoreSourceIdentity", _HEX64_RE)
+        if "renderCoreSourceInputCount" in provenance:
+            _positive_int(provenance["renderCoreSourceInputCount"], "buildProvenance.renderCoreSourceInputCount")
+        for field in ("idfVersion", "idfRevision", "toolchain", "target", "buildProfile"):
+            if field in provenance:
+                _string(provenance[field], f"buildProvenance.{field}")
+        if "sdkconfigSha256" in provenance:
+            _string(provenance["sdkconfigSha256"], "buildProvenance.sdkconfigSha256", _HEX64_RE)
 
     source = _object(manifest["source"], "source", {"revision", "firmwareSha256"})
     _string(source["revision"], "source.revision", _HEX40_RE)

@@ -1,6 +1,6 @@
 # FreeRTOS IRAM Reserve Experiment
 
-> Last updated: 2026-11-10; Applies to: 0.6.0-dev
+> Historical experiment; interpretation corrected 2026-11-14 by Runtime PR #98 (`92f6b62d`). Applies to the 0.6.0-dev experiment only; this is not a current capacity blocker.
 
 This opt-in build profile tests `CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH=y`
 with ESP-IDF 5.3.1 on the WS147 ESP32-S3 port. It is not included in normal
@@ -32,8 +32,9 @@ Core hash and 138-file count. Static IRAM remained exactly 16,383/16,384 bytes
 for the current configuration. Stat D/IRAM use fell by 8,328 bytes (71,163 to
 62,835), all in `.text`; flash `.text` grew by 8,992 bytes (839,072 to 848,064),
 and total image size grew by 664 bytes. The experiment therefore confirms a
-D/IRAM reserve trade. The unchanged 16,383/16,384-byte result refers only to
-the dedicated static-IRAM linker category; the baseline manifest still reports
-about 270 KB in the D/IRAM data window. This is not evidence of a total
-internal-memory shortage and is not a current release blocker. Leave the
-profile opt-in because hardware flash-erase/write stress remains outstanding.
+D/IRAM reserve trade. The unchanged 16,383/16,384-byte result describes only
+the dedicated static-IRAM linker category. The roughly 270 KB reported in the
+D/IRAM data window is separate and remains available for data allocations.
+This option does not materially change the static category and is not needed
+to address an internal-memory shortage. Leave the profile opt-in; hardware
+flash-erase/write stress remains outstanding.

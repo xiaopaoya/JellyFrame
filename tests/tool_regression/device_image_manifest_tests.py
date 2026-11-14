@@ -47,6 +47,28 @@ class DeviceImageManifestTests(unittest.TestCase):
         }))["devices"][0]
         contract.validate_provider_device(parsed, checked_device)
 
+    def test_accepts_and_strictly_validates_optional_build_provenance(self):
+        value = manifest()
+        value["buildProvenance"] = {
+            "renderCoreSourceIdentity": "d" * 64,
+            "renderCoreSourceInputCount": 163,
+            "idfVersion": "5.3.1",
+            "idfRevision": "v5.3.1",
+            "toolchain": "xtensa-esp-elf 13.2.0",
+            "target": "esp32s3",
+            "buildProfile": "ws147-core-text",
+            "sdkconfigSha256": "e" * 64,
+        }
+        parsed = contract.parse_device_image_manifest(json.dumps(value))
+        self.assertEqual(parsed["buildProvenance"], value["buildProvenance"])
+        value["buildProvenance"]["renderCoreSourceIdentity"] = "invalid"
+        with self.assertRaises(contract.DeviceImageManifestError):
+            contract.parse_device_image_manifest(json.dumps(value))
+        value = manifest()
+        value["buildProvenance"] = {"unknown": "field"}
+        with self.assertRaises(contract.DeviceImageManifestError):
+            contract.parse_device_image_manifest(json.dumps(value))
+
     def test_rejects_duplicate_and_incomplete_manifests(self):
         with self.assertRaises(contract.DeviceImageManifestError):
             contract.parse_device_image_manifest('{"format":"a","format":"b"}')
