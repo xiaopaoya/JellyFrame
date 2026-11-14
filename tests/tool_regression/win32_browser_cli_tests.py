@@ -375,6 +375,8 @@ def main() -> int:
                 "app without font supplements must render with the desktop compatibility default: " + default_result.stdout)
         require("app_fonts=off" in default_result.stdout,
                 "desktop must preserve the compatibility text backend unless app/Core text is requested")
+        require("text_backend=gdi" in default_result.stdout,
+                "desktop default capture must report GDI as the selected text backend")
         default_pixels = re.search(r"non_background_pixels=(\d+)", default_result.stdout)
         require(default_pixels is not None and int(default_pixels.group(1)) > 0,
                 "Core system default must paint visible glyph pixels")
@@ -391,6 +393,8 @@ def main() -> int:
                 valid_result.stdout)
         require("app_fonts=on" in valid_result.stdout,
                 "explicit Core catalog capture must report the selected app/Core text path")
+        require("text_backend=core-text" in valid_result.stdout,
+                "catalog-only app capture must report Core TextSystem as the selected backend")
         require("diagnostics: 0" in valid_result.stdout,
                 "valid Core app-font supplement must not emit a refusal diagnostic")
         require(valid_capture.is_file() and valid_capture.stat().st_size > 54,
@@ -406,6 +410,8 @@ def main() -> int:
                 "malformed Core supplement refusal must be deterministic and named")
         require("app_fonts=on" in malformed_result.stdout,
                 "malformed app supplement must not disable the explicit app/Core text path")
+        require("text_backend=core-text" in malformed_result.stdout,
+                "refusing a malformed supplement must leave Core TextSystem selected")
         require(malformed_capture.is_file() and malformed_capture.stat().st_size > 54,
                 "system Core font must still paint text after a malformed supplement is refused")
 
