@@ -1072,7 +1072,15 @@ jobs:
         run: >-
           cmake --build build/abi4-same-thread --config Release
           --target jellyframe_desktop_shell jellyframe_script_tests jellyframe_app_runtime_tests
+          jellyframe_esp32s3_image_metadata_tests
           --parallel
+
+      - name: Run ABI4 image metadata test
+        shell: pwsh
+        run: >-
+          ctest --test-dir build/abi4-same-thread -C Release
+          -R "^jellyframe_esp32s3_image_metadata_tests$"
+          --output-on-failure
 
       - name: Run ordinary script and App Runtime unit tests
         shell: pwsh

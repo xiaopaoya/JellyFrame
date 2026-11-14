@@ -1743,6 +1743,11 @@ bool rebuild_pipeline(TimerUiTaskContext& context) {
 
     auto layout_options = jellyframe::layout_engine_options_from_budgets(context.budgets);
     layout_options.text_system = context.core_text_system;
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER && \
+    defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION)
+    layout_options.natural_image_sizing.provider =
+        make_bmp_natural_image_size_provider(context.image_adapter);
+#endif
     jellyframe::LayoutEngine layout_engine(style_resolver, context.text_measure, layout_options);
     const std::uint64_t layout_start = esp_timer_get_time();
     context.pipeline.layout_tree =

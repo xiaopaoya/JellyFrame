@@ -47,6 +47,10 @@ public:
                  std::uint16_t background_resource_id,
                  jellyframe::ResolvedImageResource& result);
 
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION)
+    jellyframe::ImageIntrinsicSize natural_size(const jellyframe::Node& node);
+#endif
+
     bool paint(jellyframe::FrameBuffer& target,
                const jellyframe::ImagePaintRequest& request);
 
@@ -54,6 +58,7 @@ public:
 
 private:
     enum class CacheStatus : std::uint8_t {
+        MetadataOnly,
         Ready,
         Missing,
         Corrupt,
@@ -81,10 +86,14 @@ private:
 
     Entry* find(std::string_view url);
     const Entry* find(std::uint32_t handle) const;
+    bool decode_cached(Entry& entry);
     CacheStatus decode(std::string_view url, std::string_view bytes, Entry& entry);
 };
 
 jellyframe::ImageHandleResolver make_bmp_image_resolver(BmpImageAdapter& adapter);
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION)
+jellyframe::NaturalImageSizeProvider make_bmp_natural_image_size_provider(BmpImageAdapter& adapter);
+#endif
 jellyframe::ImagePainter make_bmp_image_painter(BmpImageAdapter& adapter);
 
 } // namespace jellyframe_esp32s3
