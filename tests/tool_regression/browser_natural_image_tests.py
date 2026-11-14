@@ -85,6 +85,44 @@ def main():
     assert pixels[2 * w + 15] == (0, 0, 255), "replacement natural width20 not applied"
     assert pixels[55 * w + 5] == (0, 255, 0), "replacement natural height5 did not move sibling to y55"
     assert pixels[65 * w + 5] == (255, 255, 255)
+
+    # Exercise both one-auto-axis ratio directions, authored definite axes,
+    # and an unresolved source through the same Browser layout/paint path.
+    sizing = evidence / "sizing"
+    sizing.mkdir(exist_ok=True)
+    data = bytes((0, 0, 255)) * 10 + bytes(2)
+    payload = data * 5
+    header = b"BM" + struct.pack("<IHHI", 54 + len(payload), 0, 0, 54)
+    header += struct.pack("<IiiHHIIiiII", 40, 10, 5, 1, 24, 0, len(payload), 0, 0, 0, 0)
+    (sizing / "ten-by-five.bmp").write_bytes(header + payload)
+    (sizing / "jellyframe.app.json").write_text(json.dumps(manifest))
+    (sizing / "index.html").write_text(
+        '<html><head><link rel="stylesheet" href="/style.css"></head><body>'
+        '<img id="width-ratio" src="/ten-by-five.bmp">'
+        '<img id="height-ratio" src="/ten-by-five.bmp">'
+        '<img id="definite" src="/ten-by-five.bmp">'
+        '<img id="unresolved" src="/missing.bmp">'
+        '<div id="following"></div></body></html>')
+    (sizing / "style.css").write_text(
+        'html,body{margin:0;padding:0;background:#ffffff}img{display:block}'
+        '#width-ratio{width:20px;height:auto}'
+        '#height-ratio{width:auto;height:20px}'
+        '#definite{width:12px;height:6px}'
+        '#following{width:10px;height:10px;background:#00ff00}')
+    result = subprocess.run(
+        [str(exe), "--app", str(sizing), "--viewport-width", "100", "--viewport-height", "60",
+         "--capture", str(evidence / "sizing.bmp")],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    (evidence / "sizing.log").write_text(result.stdout)
+    if result.returncode:
+        raise AssertionError(result.stdout)
+    w, h, pixels = read_bmp_pixels(evidence / "sizing.bmp")
+    assert (w, h) == (100, 60)
+    assert pixels[9 * w + 19] == (255, 0, 0), "width definite/height auto ratio not painted at 20x10"
+    assert pixels[29 * w + 39] == (255, 0, 0), "height definite/width auto ratio not painted at 40x20"
+    assert pixels[35 * w + 11] == (255, 0, 0), "both definite axes not painted at 12x6"
+    assert all(pixels[y * w + 5] == (0, 255, 0) for y in range(36, 46)), \
+        "unresolved image changed following content position"
     # An unused background declaration registers a package fixture without
     # requesting it. The changed src now goes Unknown -> completion -> Known.
     (app / "index.html").write_text(html.replace('<img class="metadata" src="/replacement.bmp">', '<div style="height:240px;width:1px"></div>'))
