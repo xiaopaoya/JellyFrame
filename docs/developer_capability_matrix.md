@@ -301,7 +301,7 @@ These functions are conservative fallbacks, not a full CSS value algebra.
 | Aspect ratio | Works | Provides intrinsic height when explicit height/content height is absent. |
 | Positioned boxes | Subset | Bounded `relative`, `absolute` and `fixed` positioning for app overlays, badges and pinned panels. Out-of-flow boxes do not consume block/flex/grid/inline placement space. |
 | Replaced elements | Subset | Common controls/media are leaf boxes with fallback sizing; real image/video layout is deferred. |
-| Text measurement | Subset | Core exposes `TextMeasureProvider`; fallback is tiny but UTF-8-aware. Win32 shell uses GDI measurement. `HostTextAdapter` can wrap LVGL/vendor measurement callbacks. |
+| Text measurement | Subset | New integrations should use Core `TextSystem` so layout and glyph preparation share Core-owned font metrics. Existing ABI3/Win32 consumers still have provider/GDI compatibility paths during migration; do not add a new port-specific text backend. |
 | Bidi/text shaping | Deferred | Production non-Latin text needs a platform text backend or future shaping strategy. |
 | Fragmentation/multicolumn | Deferred | Not implemented. |
 

@@ -159,25 +159,27 @@ Render Core 可以提供平台无关的规划工具，但绝不选择显示控�
 
 ## Vendor 与 LVGL 后端策略
 
-JellyFrame 的主渲染路径应继续独立于 LVGL 和厂商 UI widget tree。核心负责 HTML/CSS parsing、DOM/style/layout/layer 构建、软件 framebuffer 渲染和输入事件派发。开发板 port 可以把 LVGL 或厂商 BSP 当作很薄的适配层，用于屏幕初始化、触摸/背光初始化、文本测量/绘制 callback，或最终 dirty rectangle flush；但不应把 JellyFrame DOM/CSS/layout 映射成 LVGL widget tree。那会让 layout、style、focus、event 和 font 形成两套系统，难以验收，也会抬高移植复杂度。
+JellyFrame 的主渲染路径应继续独立于 LVGL 和厂商 UI widget tree。核心负责 HTML/CSS parsing、DOM/style/layout/layer 构建、软件 framebuffer 渲染、字体选择/度量/字形准备和输入事件派发。开发板 port 可以把 LVGL 或厂商 BSP 当作很薄的适配层，用于屏幕初始化、触摸/背光初始化或最终 dirty rectangle flush；不应把 JellyFrame DOM/CSS/layout 映射成 LVGL widget tree，也不应以厂商文本测量/绘制替代 Core 文本。这会形成互相竞争的 layout、style、focus、event 和 font 系统。
 
-ESP32-S3 推荐路径是：JellyFrame software `FrameBuffer` -> `embedded_framebuffer` RGB565 转换 -> `flush(Rect)`/`packed_flush(Rect)` -> `esp_lcd_panel_draw_bitmap` 或等价屏幕驱动调用。输入从 board queue 进入 `InputController`；文本通过 `TextMeasureProvider` 和 `TextPainter` 注入。如果厂商 SDK 强绑定 LVGL，只包装最终 panel/input/text hooks，`src/render_core` 不应包含 LVGL 头文件。
+ESP32-S3 推荐路径是：JellyFrame software `FrameBuffer` -> `embedded_framebuffer` RGB565 转换 -> `flush(Rect)`/`packed_flush(Rect)` -> `esp_lcd_panel_draw_bitmap` 或等价屏幕驱动调用。输入从 board queue 进入 `InputController`；文本使用 Core 持有的 `TextSystem` 和产品声明的 Core 字体目录，布局度量和字形准备由同一实现负责。新移植不得增加 port 自有的测量/绘制 callback。现有 ABI3/provider 路径仅作为存量兼容方案，迁移完成前保留，不代表目标 port 契约。
 
 ## 文本后端
 
-当前形状：
+迁移状态：
 
 - `text_backend.h` 中的 `TextMeasureProvider`
 - `software_renderer.h` 中的 `TextPainter`
-- Win32 壳注入 GDI 测量和绘制，用于可读 UTF-8/中文验证。
-- 核心 fallback 保持极小：测量按 UTF-8 码点估算，绘制使用 ASCII bitmap，并为非 ASCII 码点绘制占位 glyph。
+- 新集成应使用 Core `TextSystem` 和声明好的 Core 字体目录，确保布局度量与字形准备来自同一实现。
+- Win32 GDI 和基于 provider 的嵌入式路径在迁移期间保留为兼容通路，不是跨 port 的规范文本契约。
 
-嵌入式后端可以提供：
+现有存量消费者仍提供：
 
 - 面向 `tiny`、app-specific、`cn-standard` 或按市场划分 profile 的生成式 bitmap font pack；
-- 仅作为宿主文本 hook 的 LVGL text draw bridge；
-- vendor font engine；
-- 面向确实需要复杂文字系统的 shaping-capable text painter。
+- bitmap/JFFONT 测量与绘制 callback；
+- Win32 GDI 测量与绘制；
+- 旧应用位图字体使用的 AppFontSet callback。
+
+这些接口仅在对应消费者完成 Core 字体目录迁移和一致性测试前保留。新 port 不应再增加厂商文本后端。
 
 不要让 render core 自己读取或解析任意字体文件。当前生产路径是编译期 bitmap font pack；后续高优先级的
 `.jfapp` 包内动态字体补充也应通过受控 font resource provider 和同一个宿主文本后端接入。测量和绘制

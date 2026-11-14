@@ -63,7 +63,7 @@ procedure；不得复用 fixture 或 desktop-reference 的值。
 
 目标：加入可维护的 port 目录，不破坏现有核心构建。
 
-任务要求：
+旧 ABI3 callback 路径要求（仅适用于现有消费者）：
 
 - 新建或整理 `ports/esp32s3-idf/`，保留为独立 ESP-IDF app。
 - 新建或整理 `ports/virtual_board/`，保留为桌面性能估算工具。
@@ -71,7 +71,7 @@ procedure；不得复用 fixture 或 desktop-reference 的值。
 - ESP-IDF render component 名称使用 `jellyframe_render_core`。
 - 日志 tag、Kconfig menu、README 和 benchmark 输出使用 JellyFrame。
 
-实现方式：
+旧 callback 初始化方式（仅适用于现有 ABI3 消费者）：
 
 - ESP-IDF app 目录只包含 port 代码、Kconfig、sdkconfig defaults 和 component CMake。
 - component CMake 引用主线 `src/render_core/*.cpp`，源码清单必须跟根 CMake 当前的
@@ -263,15 +263,21 @@ internal RAM 压力处理建议：
 
 目标：确保开发者写中文 UI 时能预测字体覆盖、测量和绘制结果。
 
-核心已提供：
+新 port 的规范文本路径：
+
+- Core `TextSystem` 负责字体 family/face 选择、字体度量和 prepared glyph。
+- 产品声明或挂载一次 Core 字体目录，再让 layout、layer 构建和绘制使用同一个 `TextSystem`。
+- 新 port 不实现自有测量/绘制 callback；度量来源不一致会导致不同 port 的布局和绘制结果不兼容。
+
+现有消费者仍在使用的兼容接口：
 
 - `TextMeasureProvider` 和 `TextPainter` callback 接口。
 - `src/render_core/bitmap_font.h` 中的 bitmap font 数据结构、测量 callback 和绘制 callback。
 - `jellyframe_font_resource_check`，可扫描 HTML/CSS/JS 使用的非 ASCII 字符、检查字体覆盖、
   估算 bitmap pack 预算并建议字体 profile。
 - `jellyframe_font_pack_gen`，可从 BDF 字体子集生成 C++ `BitmapFont` header。
-- `src/render_core/text_adapter.h` 中的 `HostTextAdapter`，用于把 LVGL/vendor 测量和绘制 callback
-  包装成核心需要的接口，同时不把平台头文件带进 core。
+- 现有 ABI3 ESP32 和 Win32 消费者在迁移期间仍使用 provider callback。新集成不得以这些接口为起点；
+  只有所有生产消费者及其测试完成迁移后，才可移除这些接口。
 
 任务要求：
 
@@ -280,8 +286,7 @@ internal RAM 压力处理建议：
   app-specific subset，全球化产品应按市场选择字体子集。
 - 在板级或应用构建流程中生成 bitmap font pack；生产固件不得依赖运行时矢量字体 rasterizer。
 - 把生成的 `BitmapFont` C++ header 编译进 ESP-IDF app、RTOS app 或板级 BSP。
-- 在 port 层创建持久 `BitmapFontContext`，测量和绘制必须使用同一份 glyph metrics。
-- 把 `bitmap_font_measure_callback` 接入 `LayoutEngine`，把 `bitmap_font_paint_callback` 接入 `SoftwareCompositor`。
+- 选择覆盖产品脚本、字号和字重需求且授权清楚的 Core 字体目录。Core text system 提供 layout 与绘制共用的度量和 prepared glyph geometry。
 - 字体回调内部不得堆分配，不得访问文件系统，不得阻塞等待外设。
 - 缺字必须显示可见 fallback glyph，并保持稳定 advance，不允许破坏布局。
 - 桌面构建或发布前运行字体覆盖检查；缺字应让构建失败，或至少产生明确警告。
@@ -309,7 +314,8 @@ internal RAM 压力处理建议：
    这些数字应记录到 port 文档中。
 
 4. 将 `app_font.h` 放入 port 或应用资源目录，并加入 ESP-IDF/RTOS 构建。
-5. 在创建 layout engine 和 compositor 时注入同一个 font context：
+5. 已迁移 profile 应将字体目录挂到 Core text system，并把同一个 text system 交给 layout 和 renderer。
+   下方 provider callback 初始化仅说明旧 ABI3 兼容路径，不可作为新 port 模板：
 
    ```cpp
    static jellyframe::BitmapFontContext font_context{&app_font, 1};
