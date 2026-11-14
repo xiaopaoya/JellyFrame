@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -20,8 +22,12 @@ class CaptureCase:
     frame_step_ms: int | None = None
     frame_start_ms: int | None = None
     use_app_fonts: bool = False
+    viewport_width: int = 300
+    viewport_height: int = 300
     require_pixel_mutation: bool = False
+    require_text_presence: bool = False
     text_region: tuple[int, int, int, int] | None = None
+    require_forecast_presence: bool = False
 
 
 CASES = (
@@ -38,6 +44,8 @@ CASES = (
         app="samples/apps/packages/jelly_route_tabs",
         frame_count=9,
         frame_script="capture_route_tabs.jfcapture",
+        require_text_presence=True,
+        text_region=(0, 60, 300, 110),
     ),
     CaptureCase(
         name="weather",
@@ -75,9 +83,9 @@ def run_capture(shell: Path, repo: Path, case: CaptureCase, output: Path, force_
         "--frame-count",
         str(case.frame_count),
         "--viewport-width",
-        "300",
+        str(case.viewport_width),
         "--viewport-height",
-        "300",
+        str(case.viewport_height),
     ))
     if case.frame_step_ms is not None:
         command.extend(("--frame-step-ms", str(case.frame_step_ms)))
@@ -108,7 +116,9 @@ def run_capture(shell: Path, repo: Path, case: CaptureCase, output: Path, force_
         )
 
 
-def make_text_property_case(root: Path, property_name: str, initial: str, changed: str) -> CaptureCase:
+def make_text_property_case(
+    root: Path, property_name: str, initial: str, changed: str, core_version: str
+) -> CaptureCase:
     app = root / f"text-property-{property_name}"
     app.mkdir()
     (app / "index.html").write_text(
@@ -131,7 +141,7 @@ def make_text_property_case(root: Path, property_name: str, initial: str, change
         f'{{"id":"org.jellyframe.tests.text-property-{property_name}",'
         f'"name":"Text Property {property_name}","role":"app",'
         '"versionName":"1.0.0","versionCode":1,"entry":"/index.html",'
-        '"runtime":{"minJellyFrame":"0.6.0","minRenderCore":"0.8.0","script":"classic"},'
+        '"runtime":{"minJellyFrame":"0.6.0","minRenderCore":"' + core_version + '","script":"classic"},'
         '"viewport":{"designWidth":240,"designHeight":100},"fonts":[]}',
         encoding="utf-8",
     )
@@ -147,6 +157,52 @@ def make_text_property_case(root: Path, property_name: str, initial: str, change
         frame_script="repaint.jfcapture",
         require_pixel_mutation=True,
         text_region=(0, 0, 220, 48),
+    )
+
+
+def adapt_sample_case(case: CaptureCase, repo: Path, root: Path, core_version: str) -> CaptureCase:
+    source = Path(case.app)
+    if source.is_absolute():
+        return case
+    source = repo / source
+    destination = root / f"sample-{case.name}"
+    shutil.copytree(source, destination)
+    manifest_path = destination / "jellyframe.app.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["runtime"]["minRenderCore"] = core_version
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    return replace(case, app=str(destination))
+
+
+def make_band_shell_case(repo: Path, root: Path, core_version: str) -> CaptureCase:
+    source = repo / "ports/esp32s3-idf/resources/app"
+    destination = root / "band-shell-launcher"
+    (destination / "styles").mkdir(parents=True)
+    shutil.copy2(source / "band_shell.html", destination / "band_shell.html")
+    shutil.copy2(source / "styles/band_shell.css", destination / "styles/band_shell.css")
+    manifest = json.loads((source / "jellyframe.app.json").read_text(encoding="utf-8"))
+    manifest["entry"] = "/band_shell.html"
+    manifest["runtime"]["minRenderCore"] = core_version
+    manifest["viewport"] = {"designWidth": 172, "designHeight": 320, "shape": "rect"}
+    (destination / "jellyframe.app.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+
+    # Keep launcher markup and styling byte-for-byte. The firmware binds routes
+    # natively, while this desktop shell may be built without scripting, so expose
+    # the actual weather view directly instead of pretending to exercise that route.
+    html_path = destination / "band_shell.html"
+    html = html_path.read_text(encoding="utf-8")
+    html = html.replace('id="view-home" class="band-view active"', 'id="view-home" class="band-view"')
+    html = html.replace('id="view-weather" class="band-view"', 'id="view-weather" class="band-view active"')
+    html_path.write_text(html, encoding="utf-8")
+    return CaptureCase(
+        name="launcher-weather-source",
+        app=str(destination),
+        frame_count=1,
+        viewport_width=172,
+        viewport_height=320,
+        require_forecast_presence=True,
     )
 
 
@@ -180,12 +236,45 @@ def bmp_region_has_ink(path: Path, region: tuple[int, int, int, int]) -> bool:
     return any(pixels[offset:offset + 3] != b"\xff\xff\xff" for offset in range(0, len(pixels), 3))
 
 
+def bmp_region_has_light_ink(path: Path, region: tuple[int, int, int, int]) -> bool:
+    pixels = bmp_region_pixels(path, region)
+    return any(
+        min(pixels[offset:offset + 3]) > 96
+        for offset in range(0, len(pixels), 3)
+    )
+
+
+def bmp_region_has_visible_pixels(path: Path, region: tuple[int, int, int, int]) -> bool:
+    pixels = bmp_region_pixels(path, region)
+    return any(
+        max(pixels[offset:offset + 3]) > 32
+        for offset in range(0, len(pixels), 3)
+    )
+
+
 def main() -> int:
-    include_core_text = "--include-core-text" in sys.argv[3:]
-    args = [argument for argument in sys.argv[1:] if argument != "--include-core-text"]
+    include_core_text = False
+    core_version = "0.8.0"
+    selected_case: str | None = None
+    args: list[str] = []
+    index = 1
+    while index < len(sys.argv):
+        argument = sys.argv[index]
+        if argument == "--include-core-text":
+            include_core_text = True
+            index += 1
+        elif argument == "--core-version" and index + 1 < len(sys.argv):
+            core_version = sys.argv[index + 1]
+            index += 2
+        elif argument == "--case" and index + 1 < len(sys.argv):
+            selected_case = sys.argv[index + 1]
+            index += 2
+        else:
+            args.append(argument)
+            index += 1
     if len(args) != 2:
         print(
-            "usage: incremental_repaint_equivalence_tests.py SHELL REPO [--include-core-text]",
+            "usage: incremental_repaint_equivalence_tests.py SHELL REPO [--core-version VERSION] [--include-core-text] [--case NAME]",
             file=sys.stderr,
         )
         return 2
@@ -195,13 +284,18 @@ def main() -> int:
         root = Path(temporary)
         total_frames = 0
         text_property_cases = (
-            make_text_property_case(root, "color", "rgb(0,0,0)", "rgb(220,0,0)"),
-            make_text_property_case(root, "fontSize", "20px", "28px"),
-            make_text_property_case(root, "fontWeight", "400", "700"),
-            make_text_property_case(root, "textAlign", "start", "end"),
-            make_text_property_case(root, "lineHeight", "28px", "40px"),
+            make_text_property_case(root, "color", "rgb(0,0,0)", "rgb(220,0,0)", core_version),
+            make_text_property_case(root, "fontSize", "20px", "28px", core_version),
+            make_text_property_case(root, "fontWeight", "400", "700", core_version),
+            make_text_property_case(root, "textAlign", "start", "end", core_version),
+            make_text_property_case(root, "lineHeight", "28px", "40px", core_version),
         )
-        cases = (*CASES, *text_property_cases)
+        cases = tuple(adapt_sample_case(case, repo, root, core_version) for case in CASES) + text_property_cases
+        cases += (make_band_shell_case(repo, root, core_version),)
+        if selected_case is not None:
+            cases = tuple(case for case in cases if case.name == selected_case)
+            if not cases:
+                raise RuntimeError(f"unknown capture case: {selected_case}")
         run_count = 0
         policies = [(False, "legacy")]
         if include_core_text:
@@ -281,6 +375,35 @@ def main() -> int:
                         raise RuntimeError(
                             f"{backend_case.name}: full repaint did not restore the original style"
                         )
+                if backend_case.require_text_presence and backend_case.use_app_fonts:
+                    if backend_case.text_region is None:
+                        raise RuntimeError(f"{backend_case.name}: text proof region is missing")
+                    for mode, frames in (("incremental", incremental_frames), ("full", full_frames)):
+                        for index, frame in enumerate(frames):
+                            if not bmp_region_has_visible_pixels(frame, backend_case.text_region):
+                                raise RuntimeError(
+                                    f"{backend_case.name}: {mode} repaint has no visible route title "
+                                    f"at frame {index} ({frame.name})"
+                                )
+                if backend_case.require_forecast_presence and backend_case.use_app_fonts:
+                    # Check launcher forecast text rows separately from the yellow icon dots.
+                    forecast_regions = (
+                        (12, 165, 46, 197),
+                        (47, 165, 81, 197),
+                        (82, 165, 116, 197),
+                        (117, 165, 151, 197),
+                    )
+                    for index in range(backend_case.frame_count):
+                        frame = incremental_frames[index]
+                        missing = [
+                            region for region in forecast_regions
+                            if not bmp_region_has_light_ink(frame, region)
+                        ]
+                        if missing:
+                            raise RuntimeError(
+                                f"launcher-weather-source: forecast text is missing in incremental frame {index}; "
+                                f"missing regions={missing} ({frame.name})"
+                            )
                 for index, (incremental_frame, full_frame) in enumerate(
                     zip(incremental_frames, full_frames)
                 ):

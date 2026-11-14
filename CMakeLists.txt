@@ -1100,6 +1100,8 @@ if(JELLYFRAME_BUILD_TESTS)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         set(_jellyframe_incremental_repaint_options)
+        list(APPEND _jellyframe_incremental_repaint_options
+             --core-version "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
         if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
             list(APPEND _jellyframe_incremental_repaint_options --include-core-text)
         endif()
