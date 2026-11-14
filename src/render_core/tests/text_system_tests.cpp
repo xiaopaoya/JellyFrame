@@ -278,7 +278,7 @@ void html_layout_to_core_paint() {
     TextSystem system;
     assert(system.bind(faces.data(),faces.size())==S::Ok);
     HtmlParser html;CssParser css;
-    auto document=html.parse("<body><div>AB</div></body>");
+    auto document=html.parse("<body><div>AB</div><img id='icon'></body>");
     StyleResolver resolver(css.parse("div { font-family: 'Core Test'; font-size: 16px; white-space: nowrap; }"));
     LayoutEngineOptions layout_options;layout_options.text_system=&system;
     auto layout=LayoutEngine(resolver,{},layout_options).layout(*document,80,40);
@@ -294,7 +294,8 @@ void html_layout_to_core_paint() {
     assert(text_box->text_layout_cache.prepared_baseline_y>text_box->rect.y);
 
     LayerTreeBuilderOptions layer_options;layer_options.text_system=&system;
-    auto layers=LayerTreeBuilder(layer_options).build(*layout);
+    LayerTreeBuilder layer_tree_builder(layer_options);
+    auto layers=layer_tree_builder.build(*layout);
     bool found_prepared=false;
     for (const auto& command:layers->display_list)
         found_prepared|=command.type==DisplayCommandType::PreparedText;
@@ -304,6 +305,30 @@ void html_layout_to_core_paint() {
     std::size_t ink=0;
     for (const auto pixel:frame.pixels) ink+=pixel.r<255 || pixel.g<255 || pixel.b<255;
     assert(ink>0);
+
+    Node* image=nullptr;
+    const auto find_image=[&](const auto& self,Node& node)->void {
+        if (node.type==NodeType::Element && node.attribute("id")=="icon") {
+            image=&node;
+            return;
+        }
+        for (const auto& child:node.children) if (image==nullptr) self(self,*child);
+    };
+    find_image(find_image,*document);
+    assert(image!=nullptr);
+    mark_dirty(*image,DomDirtyPaint);
+    auto repainted_layers=layer_tree_builder.build(*layout);
+    bool retained_prepared_text=false;
+    for (const auto& command:repainted_layers->display_list)
+        retained_prepared_text|=command.type==DisplayCommandType::PreparedText;
+    assert(retained_prepared_text);
+    const auto repainted_frame=SoftwareCompositor({},compositor_options).render(
+        *repainted_layers,80,40,Color{255,255,255,255});
+    assert(repainted_frame.pixels.size()==frame.pixels.size());
+    for (std::size_t i=0;i<frame.pixels.size();++i) {
+        const auto left=frame.pixels[i],right=repainted_frame.pixels[i];
+        assert(left.r==right.r && left.g==right.g && left.b==right.b && left.a==right.a);
+    }
 
     auto positioned_document=html.parse("<body><div>AB</div></body>");
     StyleResolver positioned_resolver(css.parse(

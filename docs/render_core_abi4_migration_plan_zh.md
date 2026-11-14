@@ -15,6 +15,7 @@
 - 页面路由回归已定位到 `valid_text_layout_cache`：dirty ancestor 会一直保留到 present，因此 layer builder 把当前布局刚生成的文字缓存也拒绝了。Core PR #56 已合并，改为用 document mutation generation 判断缓存新旧，并加入 `display:none` 首页/Activity 路由回归；独立 Core Release CTest 为 33/33。Runtime 镜像修复已通过 Core text-system 与 App Runtime 主机聚焦测试（2/2）。
 - WS147 Core 字体目录现加入了紧凑的 34px 粗体数字字面。该字面的 hhea ascent+descent 在 34px 下约为 49.2px；此前首页时钟行高仅 36px，天气大字依赖较小的默认行高。候选 CSS 已将两处大字行高设为 50px；172x320 Core 字体桌面捕获和浏览器对照均显示字形完整、首页内容未溢出。修改后已用 ESP-IDF v5.3.1 重建命名 profile：BIN 为 7,399,152 字节，8 MiB app 分区剩余 989,456 字节（12%）；ELF SHA-256 `07808D86C5A8ACA85A38862DA947FECE2356497E4886D54BA69F7AF2DC6621D0`，BIN SHA-256 `17B60B4983D56ECDE126AE8244F83105DB19810C7A38DF06197DA8B4A929522E`。尚未刷写，实机验收待完成。
 - 桌面 PR #79（`45c6677d`）已合并，增加了 Core `letter-spacing` 文本变更的重绘等价用例，检查实际选择的文本后端和像素确有变化，并逐字节比较增量重绘与强制全量重绘；聚焦重绘、shell CLI 和 app-shell workflow 本地测试通过。该门槛覆盖一个变更场景；切换桌面默认路径前仍需更广泛的支持属性覆盖。
+- 后续 Core 重绘检查发现，无关图片的 paint-only 变更会递增全局 document mutation generation，从而使所有布局持有的文本缓存失效。增量重绘保留了旧文字像素，全量重绘则暴露出缺失的 Core 文字命令。现在缓存有效性改为依据文本节点及已解析的布局输入判定；Core 单测和桌面等价门槛已通过，覆盖 240 帧及两种文本后端。该修复目前在本地，仍待 PR/CI 审查。
 - 当前生产默认仍未启用完整 Core 字体路径。WS147 默认配置仍使用回调/v6，Core-text 命名 profile 需显式选择；桌面默认仍为 GDI，Core 路径仅用于显式 opt-in 验证。`TextMeasureProvider` 与 `TextPainter` 仍是 Core 公共 API，因为生产消费者仍在使用；目前只移除了没有生产调用方的 `HostTextAdapter` 便利层。
 - 当前没有 ABI4 命名设备 profile 的 provenance 或 ABI4 固件验收记录。这是主机集成后的设备准入门槛，桌面 CI 不能代替它。
 
