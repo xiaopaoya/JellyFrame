@@ -11,9 +11,13 @@
 namespace jellyframe {
 
 // The source itself owns every callback context and image byte. Published sources
-// are immutable: no reset/reconfigure or concurrent mutation until all provider
-// handles drain. Generation is defense against accidental sequential reset, not
-// synchronization. Lazy caches must preserve handle identity and synchronize reads.
+// are immutable: resolve(package_url) must keep returning the same handle and
+// metadata for that resource until all provider handles drain, and paint must use
+// those same bytes for that handle. This lets layout metadata lookup and later
+// layer construction resolve independently against one snapshot without changing
+// resource identity. Generation is defense against accidental sequential reset,
+// not synchronization. Lazy caches must preserve handle identity and synchronize
+// reads.
 class RuntimeImageProviderSource {
 public:
     virtual ~RuntimeImageProviderSource() = default;

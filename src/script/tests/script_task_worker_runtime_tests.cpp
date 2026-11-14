@@ -957,6 +957,8 @@ public:
     explicit WorkerImages(ImageIntrinsicSize size = {ImageIntrinsicSizeState::Known, 20, 20}) : size(size) {}
     ImageIntrinsicSize size;
     mutable std::size_t resolves = 0;
+    mutable std::uint32_t metadata_handle = 0;
+    mutable std::uint32_t painted_handle = 0;
     std::uint64_t generation() const noexcept override { return 1; }
     bool contains(std::uint32_t handle) const noexcept override {
         return handle == 73 || handle == 74;
@@ -965,11 +967,14 @@ public:
         ++resolves;
         if (url != "/assets/content.bmp" && url != "/assets/background.bmp") return false;
         output.image_handle = url == "/assets/content.bmp" ? 73 : 74;
-        output.intrinsic_size = size;
+        output.intrinsic_size = url == "/assets/content.bmp"
+            ? size : ImageIntrinsicSize{ImageIntrinsicSizeState::Known, 7, 13};
+        if (resolves == 1) metadata_handle = output.image_handle;
         return true;
     }
     bool paint(FrameBuffer& target, const ImagePaintRequest& request) const override {
         if (!contains(request.image_handle)) return false;
+        painted_handle = request.image_handle;
         const Color color = request.image_handle == 73 ? Color{231, 17, 53, 255} : Color{19, 173, 67, 255};
         const auto rect = request.destination;
         for (int y = std::max(0, rect.y); y < std::min(target.height, rect.y + rect.height); ++y) {
@@ -1035,6 +1040,8 @@ void worker_natural_image_snapshot(std::string_view sizing, ImageIntrinsicSize s
     if (found) {
         const auto pixel = pixels.pixels[(height / 2) * pixels.width + width / 2];
         check(pixel.r == 231 && pixel.g == 17 && pixel.b == 53, "retained natural snapshot paints pixels");
+        check(source->metadata_handle == 73 && source->painted_handle == source->metadata_handle,
+              "natural metadata and paint retain the selected content image handle");
     }
     check(source->resolves == queries_before_replay, "replay performs no metadata or URL resolution");
 }
