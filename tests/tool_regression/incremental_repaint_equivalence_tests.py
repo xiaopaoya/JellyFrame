@@ -21,6 +21,7 @@ class CaptureCase:
     frame_start_ms: int | None = None
     use_app_fonts: bool = False
     require_pixel_mutation: bool = False
+    text_region: tuple[int, int, int, int] | None = None
 
 
 CASES = (
@@ -100,54 +101,83 @@ def run_capture(shell: Path, repo: Path, case: CaptureCase, output: Path, force_
             f"{case.name}: expected text_policy={expected_policy} in capture output\n"
             f"stdout:\n{result.stdout}"
         )
-    if case.name == "text-properties-core" and "layout-core-text-refused" in result.stdout:
+    if case.require_pixel_mutation and case.use_app_fonts and "layout-core-text-refused" in result.stdout:
         raise RuntimeError(
             f"{case.name}: Core text layout refused a positive repaint fixture\n"
             f"stdout:\n{result.stdout}"
         )
 
 
-def make_text_property_case(root: Path) -> CaptureCase:
-    app = root / "text-property-app"
+def make_text_property_case(root: Path, property_name: str, initial: str, changed: str) -> CaptureCase:
+    app = root / f"text-property-{property_name}"
     app.mkdir()
     (app / "index.html").write_text(
         "<!doctype html><meta charset='utf-8'><style>"
         "body{margin:0;background:#fff;color:#000}"
-        "#label{width:170px;height:32px;margin:0;font-family:sans-serif;"
-        "font-weight:700;font-size:16px;line-height:20px;"
-        "text-align:right;background:#fff;color:#000;border:0}"
-        ".wrap{width:125px;margin:0;font-family:sans-serif;font-weight:400;"
-        "font-size:12px;line-height:14px;white-space:normal;"
-        "overflow-wrap:anywhere;text-transform:uppercase;text-align:center;"
-        "text-decoration:underline}"
-        ".weight{font-family:sans-serif;font-size:24px;font-weight:700;"
-        "line-height:28px;text-decoration:line-through}"
-        "</style><body><input id='label' value='AB'>"
-        "<p class='wrap'>Long unbrokenword and wrapped alphabetic text</p>"
-        "<p class='weight'>Core Text 2026</p>"
-        "</body>",
+        "#label{display:block;width:220px;height:48px;margin:0;padding:0;"
+        "font-family:sans-serif;font-size:20px;font-weight:400;line-height:28px;"
+        "text-align:start;color:#000;background:#fff;border:0}"
+        "#toggle{display:block;width:100px;height:24px;margin:0}"
+        "</style><body><p id='label'>CORE TEXT</p><button id='toggle'>Toggle</button>"
+        f"<script>var label=document.getElementById('label');"
+        f"var initial='{initial}', changed='{changed}';"
+        f"label.style.{property_name}=initial;"
+        f"document.getElementById('toggle').addEventListener('click',function(){{"
+        f"label.style.{property_name}=label.style.{property_name}===changed?initial:changed;"
+        "});</script></body>",
         encoding="utf-8",
     )
     (app / "jellyframe.app.json").write_text(
-        '{"id":"org.jellyframe.tests.text-property-repaint",'
-        '"name":"Text Property Repaint","role":"app",'
+        f'{{"id":"org.jellyframe.tests.text-property-{property_name}",'
+        f'"name":"Text Property {property_name}","role":"app",'
         '"versionName":"1.0.0","versionCode":1,"entry":"/index.html",'
-        '"runtime":{"minJellyFrame":"0.6.0","minRenderCore":"0.8.0","script":"none"},'
+        '"runtime":{"minJellyFrame":"0.6.0","minRenderCore":"0.8.0","script":"classic"},'
         '"viewport":{"designWidth":240,"designHeight":100},"fonts":[]}',
         encoding="utf-8",
     )
     (app / "repaint.jfcapture").write_text(
-        "frames 3\nstep-ms 33\nstart-ms 1000\nevent 1 set-value label CDE\n"
-        "event 2 set-value label AB\n",
+        "frames 3\nstep-ms 33\nstart-ms 1000\nevent 1 click-id toggle\n"
+        "event 2 click-id toggle\n",
         encoding="utf-8",
     )
     return CaptureCase(
-        name="text-properties",
+        name=f"text-{property_name}",
         app=str(app),
         frame_count=3,
         frame_script="repaint.jfcapture",
         require_pixel_mutation=True,
+        text_region=(0, 0, 220, 48),
     )
+
+
+def bmp_region_pixels(path: Path, region: tuple[int, int, int, int]) -> bytes:
+    data = path.read_bytes()
+    if len(data) < 54 or data[:2] != b"BM":
+        raise RuntimeError(f"{path}: expected a Windows BMP capture")
+    pixel_offset = int.from_bytes(data[10:14], "little")
+    width = int.from_bytes(data[18:22], "little", signed=True)
+    signed_height = int.from_bytes(data[22:26], "little", signed=True)
+    bits_per_pixel = int.from_bytes(data[28:30], "little")
+    if width <= 0 or signed_height == 0 or bits_per_pixel not in (24, 32):
+        raise RuntimeError(f"{path}: unsupported BMP geometry or pixel format")
+    height = abs(signed_height)
+    left, top, right, bottom = region
+    if left < 0 or top < 0 or right > width or bottom > height:
+        raise RuntimeError(f"{path}: text proof region is outside the captured frame")
+    pixel_bytes = bits_per_pixel // 8
+    stride = ((width * pixel_bytes + 3) // 4) * 4
+    pixels = bytearray()
+    for y in range(top, bottom):
+        bmp_y = height - 1 - y if signed_height > 0 else y
+        for x in range(left, right):
+            offset = pixel_offset + bmp_y * stride + x * pixel_bytes
+            pixels.extend(data[offset:offset + 3])
+    return bytes(pixels)
+
+
+def bmp_region_has_ink(path: Path, region: tuple[int, int, int, int]) -> bool:
+    pixels = bmp_region_pixels(path, region)
+    return any(pixels[offset:offset + 3] != b"\xff\xff\xff" for offset in range(0, len(pixels), 3))
 
 
 def main() -> int:
@@ -164,7 +194,14 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="jellyframe-repaint-") as temporary:
         root = Path(temporary)
         total_frames = 0
-        cases = (*CASES, make_text_property_case(root))
+        text_property_cases = (
+            make_text_property_case(root, "color", "rgb(0,0,0)", "rgb(220,0,0)"),
+            make_text_property_case(root, "fontSize", "20px", "28px"),
+            make_text_property_case(root, "fontWeight", "400", "700"),
+            make_text_property_case(root, "textAlign", "start", "end"),
+            make_text_property_case(root, "lineHeight", "28px", "40px"),
+        )
+        cases = (*CASES, *text_property_cases)
         run_count = 0
         policies = [(False, "legacy")]
         if include_core_text:
@@ -192,6 +229,40 @@ def main() -> int:
                         f"{len(incremental_frames)} and {len(full_frames)}"
                     )
                 if backend_case.require_pixel_mutation:
+                    if backend_case.text_region is None:
+                        raise RuntimeError(f"{backend_case.name}: text proof region is missing")
+                    if not bmp_region_has_ink(incremental_frames[0], backend_case.text_region):
+                        raise RuntimeError(
+                            f"{backend_case.name}: initial Core text fixture contains no visible glyph pixels"
+                        )
+                    if not bmp_region_has_ink(full_frames[0], backend_case.text_region):
+                        raise RuntimeError(
+                            f"{backend_case.name}: initial full repaint contains no visible glyph pixels"
+                        )
+                    incremental_region = [
+                        bmp_region_pixels(frame, backend_case.text_region)
+                        for frame in incremental_frames
+                    ]
+                    full_region = [
+                        bmp_region_pixels(frame, backend_case.text_region)
+                        for frame in full_frames
+                    ]
+                    if incremental_region[0] == incremental_region[1]:
+                        raise RuntimeError(
+                            f"{backend_case.name}: style mutation did not change text-region pixels"
+                        )
+                    if incremental_region[0] != incremental_region[-1]:
+                        raise RuntimeError(
+                            f"{backend_case.name}: restoring the style did not restore text-region pixels"
+                        )
+                    if full_region[0] == full_region[1]:
+                        raise RuntimeError(
+                            f"{backend_case.name}: full repaint did not show changed text-region pixels"
+                        )
+                    if full_region[0] != full_region[-1]:
+                        raise RuntimeError(
+                            f"{backend_case.name}: full repaint did not restore text-region pixels"
+                        )
                     for before, after in zip(incremental_frames, incremental_frames[1:]):
                         if before.read_bytes() == after.read_bytes():
                             raise RuntimeError(
