@@ -143,18 +143,26 @@ def make_text_property_case(root: Path) -> CaptureCase:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("usage: incremental_repaint_equivalence_tests.py SHELL REPO", file=sys.stderr)
+    include_core_text = "--include-core-text" in sys.argv[3:]
+    args = [argument for argument in sys.argv[1:] if argument != "--include-core-text"]
+    if len(args) != 2:
+        print(
+            "usage: incremental_repaint_equivalence_tests.py SHELL REPO [--include-core-text]",
+            file=sys.stderr,
+        )
         return 2
-    shell = Path(sys.argv[1]).resolve()
-    repo = Path(sys.argv[2]).resolve()
+    shell = Path(args[0]).resolve()
+    repo = Path(args[1]).resolve()
     with tempfile.TemporaryDirectory(prefix="jellyframe-repaint-") as temporary:
         root = Path(temporary)
         total_frames = 0
         cases = (*CASES, make_text_property_case(root))
         run_count = 0
+        policies = [(False, "legacy")]
+        if include_core_text:
+            policies.append((True, "core"))
         for case in cases:
-            for use_app_fonts, policy in ((False, "legacy"), (True, "core")):
+            for use_app_fonts, policy in policies:
                 backend_case = replace(
                     case,
                     name=f"{case.name}-{policy}",
