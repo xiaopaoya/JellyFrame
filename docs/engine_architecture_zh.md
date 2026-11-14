@@ -238,7 +238,7 @@ Style resolution 时，resolver 只收集相关 buckets，按 source order 排�
 - Dirty-region planning 可以让 paint-only 变更复用现有 frame，对有界 layout-dirty
   frame 比较 previous/current layout，并提供 affected layers / display commands 的
   display-invalidation 诊断。完整 retained display-list diffing 仍延后。
-- 文本 layout 接受 `TextMeasureProvider`；文本输出接受 `TextPainter`。core fallback 保持很小，Win32 browser 同时使用 GDI 测量和绘制。
+- 新集成使用 Core `TextSystem` 统一负责字体选择、度量和 prepared glyph，使布局与绘制遵循同一字体契约。现有 ABI3/Win32 provider 与 GDI 路径在生产消费者和测试完成迁移前作为兼容路径保留。
 - Event dispatch 保持平台无关。核心用户可以挂 C++ callbacks；可选脚本运行时构建也会把文档化的
   `addEventListener` 和 `on*` handler 子集接到同一条事件路径。
 

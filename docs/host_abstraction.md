@@ -200,26 +200,30 @@ Still missing:
 
 ## Vendor And LVGL Backend Policy
 
-Keep JellyFrame's main rendering path independent from LVGL and vendor UI widget trees. The core should continue to own HTML/CSS parsing, DOM/style/layout/layer construction, software framebuffer rendering and input event dispatch. A board port may use LVGL or a vendor BSP as a thin adapter for panel initialization, touch/backlight setup, text measurement/painting callbacks or final dirty-rectangle flushes, but it should not map JellyFrame DOM/CSS/layout into an LVGL widget tree. That would create two competing layout, style, focus, event and font systems.
+Keep JellyFrame's main rendering path independent from LVGL and vendor UI widget trees. The core should continue to own HTML/CSS parsing, DOM/style/layout/layer construction, software framebuffer rendering, font selection/metrics/glyph preparation, and input event dispatch. A board port may use LVGL or a vendor BSP as a thin adapter for panel initialization, touch/backlight setup, or final dirty-rectangle flushes, but it should not map JellyFrame DOM/CSS/layout into an LVGL widget tree or substitute vendor text measurement and painting for Core text. That would create competing layout, style, focus, event, and font systems.
 
-For ESP32-S3, the preferred path is: JellyFrame software `FrameBuffer` -> `embedded_framebuffer` RGB565 conversion -> `flush(Rect)`/`packed_flush(Rect)` -> `esp_lcd_panel_draw_bitmap` or an equivalent panel driver call. Input should flow from board queues into `InputController`; text should flow through `TextMeasureProvider` and `TextPainter`. If a vendor SDK is LVGL-centric, wrap only the final panel/input/text hooks and keep `src/render_core` free of LVGL headers.
+For ESP32-S3, the preferred path is: JellyFrame software `FrameBuffer` -> `embedded_framebuffer` RGB565 conversion -> `flush(Rect)`/`packed_flush(Rect)` -> `esp_lcd_panel_draw_bitmap` or an equivalent panel driver call. Input should flow from board queues into `InputController`; text should use the Core-owned `TextSystem` and the product's declared Core font catalog. Do not introduce port-specific measurement or painting callbacks for a new integration. Existing ABI3/provider-based paths are transitional compatibility only while their consumers migrate; they do not define the target port contract.
 
 ## Text Backend
 
-Current shape:
+Migration status:
 
 - `TextMeasureProvider` in `text_backend.h`
 - `TextPainter` in `software_renderer.h`
-- Win32 shell injects GDI measurement and painting for readable UTF-8/Chinese.
-- Core fallback remains tiny: UTF-8-aware measurement plus ASCII bitmap painting
-  with non-ASCII placeholder glyphs.
+- New integrations should use Core `TextSystem` with a declared Core font catalog,
+  so layout metrics and glyph preparation come from the same implementation.
+- Win32 GDI and provider-based embedded paths remain compatibility routes during
+  migration; they are not the canonical cross-port text contract.
 
-Embedded backends can provide:
+Legacy consumers currently provide:
 
 - generated bitmap font packs for `tiny`, app-specific, `cn-standard` or market-specific profiles;
-- LVGL text draw bridge used only as a host text hook;
-- vendor font engine;
-- shaping-capable text painter for production scripts that need it.
+- bitmap/JFFONT measurement and painting callbacks;
+- Win32 GDI measurement and painting;
+- AppFontSet callbacks for older app-specific bitmap fonts.
+
+Keep these only for existing consumers until their Core catalog migration and
+parity tests are complete. Do not add a new vendor text backend to a port.
 
 Do not let the render core read or parse arbitrary font files by itself. The
 current production path is compile-time bitmap font packs; future high-priority

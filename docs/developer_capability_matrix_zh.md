@@ -284,7 +284,7 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | Aspect ratio | 可用 | 没有显式高度/内容高度时提供 intrinsic height。 |
 | Positioned boxes | 子集 | 有界支持 `relative`、`absolute` 和 `fixed` 定位，适合 app overlay、角标和固定面板。Out-of-flow box 不占 block/flex/grid/inline placement 空间。 |
 | Replaced elements | 子集 | 常见控件/媒体作为 leaf boxes，有 fallback 尺寸；真实 image/video layout 延后。 |
-| 文本测量 | 子集 | core 暴露 `TextMeasureProvider`；fallback 很小但按 UTF-8 码点估算。Win32 壳使用 GDI 测量。`HostTextAdapter` 可包装 LVGL/vendor 测量 callback。 |
+| 文本测量 | 子集 | 新集成应使用 Core `TextSystem`，让布局度量与字形准备由 Core 统一负责。现有 ABI3/Win32 消费者迁移期间仍保留 provider/GDI 兼容路径；新 port 不应增加自有文本后端。 |
 | Bidi/text shaping | 延后 | 生产级非拉丁文本需要平台 text backend 或后续 shaping 策略。 |
 | Fragmentation/multicolumn | 延后 | 未实现。 |
 

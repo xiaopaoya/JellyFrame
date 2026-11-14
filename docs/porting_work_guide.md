@@ -87,7 +87,7 @@ procedure; do not reuse fixture or desktop-reference values.
 Goal: add maintainable port directories without breaking the existing core
 build.
 
-Requirements:
+Legacy ABI3 callback requirements (existing consumers only):
 
 - Add or normalize `ports/esp32s3-idf/` as an independent ESP-IDF app.
 - Add or normalize `ports/virtual_board/` as a desktop performance estimator.
@@ -95,7 +95,7 @@ Requirements:
 - Name the ESP-IDF render component `jellyframe_render_core`.
 - Use JellyFrame in log tags, Kconfig menus, READMEs and benchmark output.
 
-Implementation:
+Legacy callback setup (existing ABI3 consumers only):
 
 - The ESP-IDF app directory should contain only port code, Kconfig, sdkconfig
   defaults and component CMake files.
@@ -338,7 +338,15 @@ Recommended real-device performance telemetry:
 
 Goal: make Chinese UI text predictable in coverage, measurement and painting.
 
-Provided by the core/tooling:
+Canonical text path for new ports:
+
+- Core `TextSystem` owns family/face selection, font metrics and prepared glyphs.
+- Declare or attach the product's Core font catalog once, then use that same
+  `TextSystem` for layout, layer construction and painting.
+- Do not implement port-specific measurement or painting callbacks for a new
+  port; differing metric sources make layout and rendering disagree across ports.
+
+Legacy compatibility still present in existing consumers:
 
 - `TextMeasureProvider` and `TextPainter` callback interfaces.
 - Bitmap font data structures, measurement callback and painting callback in
@@ -348,8 +356,10 @@ Provided by the core/tooling:
   recommending a font profile.
 - `jellyframe_font_pack_gen` for generating a C++ `BitmapFont` header from a
   BDF font subset.
-- `HostTextAdapter` in `src/render_core/text_adapter.h` for wrapping LVGL/vendor
-  measure and paint callbacks without adding platform headers to the core.
+- Existing ABI3 ESP32 and Win32 consumers still use provider callbacks while
+  their migration is in progress. Do not use these interfaces as the starting
+  point for new integrations; removal is gated on migrating every production
+  consumer and its tests.
 
 Requirements:
 
@@ -361,10 +371,9 @@ Requirements:
   must not depend on a runtime vector font rasterizer.
 - Compile the generated `BitmapFont` C++ header into the ESP-IDF app, RTOS app
   or board support package.
-- Create a persistent `BitmapFontContext` in the port layer. Measurement and
-  painting must use the same glyph metrics.
-- Wire `bitmap_font_measure_callback` into `LayoutEngine` and
-  `bitmap_font_paint_callback` into `SoftwareCompositor`.
+- Select a Core font catalog whose licensed faces cover the product's required
+  scripts, sizes and weights. The Core text system supplies the metrics and
+  prepared glyph geometry consumed by both layout and painting.
 - Font callbacks must not allocate heap memory, touch the filesystem or block on
   peripherals.
 - Missing glyphs must draw a visible fallback glyph with stable advance; they
@@ -397,7 +406,10 @@ Implementation:
 
 4. Place `app_font.h` in the port or app resource directory and include it in
    the ESP-IDF/RTOS build.
-5. Inject the same font context when creating the layout engine and compositor:
+5. In migrated profiles, attach the catalog to the Core text system and pass
+   that same text system to layout and rendering. Provider callback setup below
+   describes the legacy ABI3 compatibility path only; it is not suitable as a
+   template for a new port:
 
    ```cpp
    static jellyframe::BitmapFontContext font_context{&app_font, 1};

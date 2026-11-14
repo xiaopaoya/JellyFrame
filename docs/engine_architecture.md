@@ -304,9 +304,10 @@ source order, then runs selector matching and cascade comparison.
   frame, compare previous/current layout for bounded layout-dirty frames, and
   expose display-invalidation diagnostics over affected layers and commands.
   Full retained display-list diffing is still deferred.
-- Text layout accepts `TextMeasureProvider`; text output accepts `TextPainter`.
-  Core fallback is tiny, while the Win32 browser uses GDI for both measurement
-  and painting.
+- New integrations use Core `TextSystem` for font selection, metrics and
+  prepared glyphs, keeping layout and painting on one font contract. Existing
+  ABI3/Win32 provider and GDI paths remain transitional compatibility routes
+  until their production consumers and tests migrate.
 - Event dispatch is platform-neutral. Core users can attach C++ callbacks;
   optional script-runtime builds also bind the documented `addEventListener` and
   `on*` handler subset through the same event path.
