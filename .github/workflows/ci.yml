@@ -1003,22 +1003,22 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: xiaopaoya/JellyFrame-Render-Core
-          ref: 82ad1dcc98394d5568d51b6665ae92e629831e55
+          ref: be8762708ecc3cbae5837eecba1b716be2e1b0d4
           path: third_party/render-core-source
 
       - name: Verify merged Core source identity
         shell: pwsh
         run: |
           $coreRevision = (git -C third_party\render-core-source rev-parse HEAD).Trim()
-          if ($coreRevision -ne '82ad1dcc98394d5568d51b6665ae92e629831e55') {
-            throw "Expected merged Core natural image API at 82ad1dcc98394d5568d51b6665ae92e629831e55, got $coreRevision"
+          if ($coreRevision -ne 'be8762708ecc3cbae5837eecba1b716be2e1b0d4') {
+            throw "Expected qualified Core master at be8762708ecc3cbae5837eecba1b716be2e1b0d4, got $coreRevision"
           }
           $coreAbi4 = Select-String -Path third_party\render-core-source\cmake\render_core_version.cmake `
             -Pattern 'set\(JELLYFRAME_RENDER_CORE_ENGINE_ABI "4"' -Quiet
           if (-not $coreAbi4) { throw 'Checked-out Core source does not declare ABI4' }
-          $naturalApi = Select-String -Path third_party\render-core-source\include\render_core\layout.h `
-            -Pattern '#define JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION 1' -Quiet
-          if (-not $naturalApi) { throw 'Checked-out Core source does not declare natural image layout API v1' }
+          $contentsApi = Select-String -Path third_party\render-core-source\include\render_core\style.h `
+            -Pattern 'Contents,' -Quiet
+          if (-not $contentsApi) { throw 'Checked-out Core source does not include display:contents support' }
 
       - name: Checkout JerryScript
         uses: actions/checkout@v5
@@ -1060,7 +1060,7 @@ jobs:
           }
           if ($provenance.provider -ne 'source-override' -or $provenance.engineAbi -ne 4 -or
               $provenance.lockEnforced -ne $false -or
-              $provenance.sourceHash -ne '8eb12e841028a0d56ee5eac1b4d8789f55787d784e2a046b4cc7ffc5fed0c0b8' -or
+              $provenance.sourceHash -ne 'c804cdf023750de7feaf6c73ac841285e18b53b8468ffac6d99d2946615f27d8' -or
               $provenance.sourceFileCount -ne 163 -or
               $provenance.lockedVersion -ne '0.8.0' -or $provenance.lockedEngineAbi -ne 3 -or
               $provenance.lockedSourceHash -ne 'fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795') {
@@ -1078,7 +1078,7 @@ jobs:
         shell: pwsh
         run: >-
           ctest --test-dir build/abi4-same-thread -C Release
-          -R "^(jellyframe_script_tests|jellyframe_app_runtime_tests)$"
+          -R "^(jellyframe_script_tests|jellyframe_app_runtime_tests|jellyframe_win32_incremental_repaint_equivalence)$"
           --output-on-failure
       - name: Exercise ordinary ABI4 desktop app entry
         shell: pwsh
