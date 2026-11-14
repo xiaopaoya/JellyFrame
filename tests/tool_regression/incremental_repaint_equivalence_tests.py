@@ -100,6 +100,11 @@ def run_capture(shell: Path, repo: Path, case: CaptureCase, output: Path, force_
             f"{case.name}: expected text_policy={expected_policy} in capture output\n"
             f"stdout:\n{result.stdout}"
         )
+    if case.name == "text-properties-core" and "layout-core-text-refused" in result.stdout:
+        raise RuntimeError(
+            f"{case.name}: Core text layout refused a positive repaint fixture\n"
+            f"stdout:\n{result.stdout}"
+        )
 
 
 def make_text_property_case(root: Path) -> CaptureCase:
@@ -109,14 +114,17 @@ def make_text_property_case(root: Path) -> CaptureCase:
         "<!doctype html><meta charset='utf-8'><style>"
         "body{margin:0;background:#fff;color:#000}"
         "#label{width:170px;height:32px;margin:0;font-family:sans-serif;"
-        "font-weight:700;font-size:16px;line-height:20px;letter-spacing:2px;"
+        "font-weight:700;font-size:16px;line-height:20px;"
         "text-align:right;background:#fff;color:#000;border:0}"
         ".wrap{width:125px;margin:0;font-family:sans-serif;font-weight:400;"
         "font-size:12px;line-height:14px;white-space:normal;"
-        "overflow-wrap:anywhere;text-transform:uppercase;"
-        "text-decoration:underline;text-shadow:1px 1px 0 #f00}"
+        "overflow-wrap:anywhere;text-transform:uppercase;text-align:center;"
+        "text-decoration:underline}"
+        ".weight{font-family:sans-serif;font-size:24px;font-weight:700;"
+        "line-height:28px;text-decoration:line-through}"
         "</style><body><input id='label' value='AB'>"
-        "<p class='wrap'>Long unbrokenword and wrapped 文字</p>"
+        "<p class='wrap'>Long unbrokenword and wrapped alphabetic text</p>"
+        "<p class='weight'>Core Text 2026</p>"
         "</body>",
         encoding="utf-8",
     )
