@@ -1165,18 +1165,11 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
                                   int min_width,
                                   int height) const {
     box.text_layout_cache = TextLayoutCache{};
-    const Node* document_root = box.node;
-    while (document_root != nullptr && document_root->parent != nullptr) {
-        document_root = document_root->parent;
-    }
-    const std::uint64_t document_mutation_generation = document_root != nullptr
-        ? document_root->mutation_generation : 0;
     const std::string text = transformed_render_text(*box.node, box.style.text_transform);
     if (options_.text_system != nullptr) {
         TextLayoutCache& cache = box.text_layout_cache;
         cache.text_system = options_.text_system;
         cache.text_system_generation = options_.text_system->generation();
-        cache.document_mutation_generation = document_mutation_generation;
         cache.source_text = box.node->text;
         cache.rendered_text = text;
         cache.font_size = box.style.font_size;
@@ -1426,7 +1419,6 @@ int LayoutEngine::layout_text_box(LayoutBox& box,
     box.rect = Rect{text_x, border_box_y, text_width, text_height};
     TextLayoutCache& cache = box.text_layout_cache;
     cache.valid = true;
-    cache.document_mutation_generation = document_mutation_generation;
     cache.source_text = box.node->text;
     cache.rendered_text = text;
     cache.lines = std::move(lines);

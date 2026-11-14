@@ -6,7 +6,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 
@@ -102,78 +102,120 @@ def run_capture(shell: Path, repo: Path, case: CaptureCase, output: Path, force_
         )
 
 
-def make_core_letter_spacing_case(root: Path) -> CaptureCase:
-    app = root / "core-letter-spacing-app"
+def make_text_property_case(root: Path) -> CaptureCase:
+    app = root / "text-property-app"
     app.mkdir()
     (app / "index.html").write_text(
-        "<!doctype html><meta charset='utf-8'><body style='margin:0;background:#fff'>"
-        "<input id='label' value='AB' style='width:180px;height:40px;font-size:16px;"
-        "letter-spacing:2px;color:#000;background:#fff;border:0'></body>",
+        "<!doctype html><meta charset='utf-8'><style>"
+        "body{margin:0;background:#fff;color:#000}"
+        "#label{width:170px;height:32px;margin:0;font-family:sans-serif;"
+        "font-weight:700;font-size:16px;line-height:20px;letter-spacing:2px;"
+        "text-align:right;background:#fff;color:#000;border:0}"
+        ".wrap{width:125px;margin:0;font-family:sans-serif;font-weight:400;"
+        "font-size:12px;line-height:14px;white-space:normal;"
+        "overflow-wrap:anywhere;text-transform:uppercase;"
+        "text-decoration:underline;text-shadow:1px 1px 0 #f00}"
+        "</style><body><input id='label' value='AB'>"
+        "<p class='wrap'>Long unbrokenword and wrapped 文字</p>"
+        "</body>",
         encoding="utf-8",
     )
     (app / "jellyframe.app.json").write_text(
-        '{"id":"org.jellyframe.tests.core-letter-spacing",'
-        '"name":"Core Letter Spacing Repaint","role":"app",'
+        '{"id":"org.jellyframe.tests.text-property-repaint",'
+        '"name":"Text Property Repaint","role":"app",'
         '"versionName":"1.0.0","versionCode":1,"entry":"/index.html",'
         '"runtime":{"minJellyFrame":"0.6.0","minRenderCore":"0.8.0","script":"none"},'
         '"viewport":{"designWidth":240,"designHeight":100},"fonts":[]}',
         encoding="utf-8",
     )
     (app / "repaint.jfcapture").write_text(
-        "frames 3\nstep-ms 33\nstart-ms 1000\nevent 1 set-value label CDE\n",
+        "frames 3\nstep-ms 33\nstart-ms 1000\nevent 1 set-value label CDE\n"
+        "event 2 set-value label AB\n",
         encoding="utf-8",
     )
     return CaptureCase(
-        name="core-letter-spacing",
+        name="text-properties",
         app=str(app),
         frame_count=3,
         frame_script="repaint.jfcapture",
-        use_app_fonts=True,
         require_pixel_mutation=True,
     )
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("usage: incremental_repaint_equivalence_tests.py SHELL REPO", file=sys.stderr)
+    include_core_text = "--include-core-text" in sys.argv[3:]
+    args = [argument for argument in sys.argv[1:] if argument != "--include-core-text"]
+    if len(args) != 2:
+        print(
+            "usage: incremental_repaint_equivalence_tests.py SHELL REPO [--include-core-text]",
+            file=sys.stderr,
+        )
         return 2
-    shell = Path(sys.argv[1]).resolve()
-    repo = Path(sys.argv[2]).resolve()
+    shell = Path(args[0]).resolve()
+    repo = Path(args[1]).resolve()
     with tempfile.TemporaryDirectory(prefix="jellyframe-repaint-") as temporary:
         root = Path(temporary)
         total_frames = 0
-        cases = (*CASES, make_core_letter_spacing_case(root))
+        cases = (*CASES, make_text_property_case(root))
+        run_count = 0
+        policies = [(False, "legacy")]
+        if include_core_text:
+            policies.append((True, "core"))
         for case in cases:
-            incremental = root / case.name / "incremental"
-            full = root / case.name / "full"
-            run_capture(shell, repo, case, incremental, False)
-            run_capture(shell, repo, case, full, True)
-
-            incremental_frames = sorted(incremental.glob("frame_*.bmp"))
-            full_frames = sorted(full.glob("frame_*.bmp"))
-            if len(incremental_frames) != case.frame_count or len(full_frames) != case.frame_count:
-                raise RuntimeError(
-                    f"{case.name}: expected {case.frame_count} frames per mode, got "
-                    f"{len(incremental_frames)} and {len(full_frames)}"
+            for use_app_fonts, policy in policies:
+                backend_case = replace(
+                    case,
+                    name=f"{case.name}-{policy}",
+                    use_app_fonts=use_app_fonts,
                 )
-            if case.require_pixel_mutation:
-                if incremental_frames[0].read_bytes() == incremental_frames[1].read_bytes():
-                    raise RuntimeError(f"{case.name}: scripted label mutation did not change pixels")
-                if full_frames[0].read_bytes() == full_frames[1].read_bytes():
-                    raise RuntimeError(f"{case.name}: full repaint did not capture the label mutation")
-            for index, (incremental_frame, full_frame) in enumerate(
-                zip(incremental_frames, full_frames)
-            ):
-                if incremental_frame.read_bytes() != full_frame.read_bytes():
+                incremental = root / backend_case.name / "incremental"
+                full = root / backend_case.name / "full"
+                run_capture(shell, repo, backend_case, incremental, False)
+                run_capture(shell, repo, backend_case, full, True)
+
+                incremental_frames = sorted(incremental.glob("frame_*.bmp"))
+                full_frames = sorted(full.glob("frame_*.bmp"))
+                if (
+                    len(incremental_frames) != backend_case.frame_count
+                    or len(full_frames) != backend_case.frame_count
+                ):
                     raise RuntimeError(
-                        f"{case.name}: incremental repaint diverged from full repaint at frame {index}: "
-                        f"{incremental_frame.name}"
+                        f"{backend_case.name}: expected {backend_case.frame_count} frames per mode, got "
+                        f"{len(incremental_frames)} and {len(full_frames)}"
                     )
-            total_frames += case.frame_count
+                if backend_case.require_pixel_mutation:
+                    for before, after in zip(incremental_frames, incremental_frames[1:]):
+                        if before.read_bytes() == after.read_bytes():
+                            raise RuntimeError(
+                                f"{backend_case.name}: scripted text mutation did not change pixels"
+                            )
+                    for before, after in zip(full_frames, full_frames[1:]):
+                        if before.read_bytes() == after.read_bytes():
+                            raise RuntimeError(
+                                f"{backend_case.name}: full repaint did not capture the text mutation"
+                            )
+                    if incremental_frames[0].read_bytes() != incremental_frames[-1].read_bytes():
+                        raise RuntimeError(
+                            f"{backend_case.name}: returning to the original style did not restore pixels"
+                        )
+                    if full_frames[0].read_bytes() != full_frames[-1].read_bytes():
+                        raise RuntimeError(
+                            f"{backend_case.name}: full repaint did not restore the original style"
+                        )
+                for index, (incremental_frame, full_frame) in enumerate(
+                    zip(incremental_frames, full_frames)
+                ):
+                    if incremental_frame.read_bytes() != full_frame.read_bytes():
+                        raise RuntimeError(
+                            f"{backend_case.name}: incremental repaint diverged from full repaint at frame {index}: "
+                            f"{incremental_frame.name}"
+                        )
+                total_frames += backend_case.frame_count
+                run_count += 1
 
     print(
         "incremental repaint matches full repaint for "
-        f"{total_frames} deterministic frames across {len(cases)} app flows"
+        f"{total_frames} deterministic frames across {run_count} backend/app flows"
     )
     return 0
 

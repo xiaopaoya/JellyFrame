@@ -17,6 +17,7 @@
 - 最近一次实机反馈称，运行“合并主线固件”时切页后文字消失，首页时钟模糊且有裁切。此次固件的精确 ELF、所选文本后端/profile，以及问题发生在 Activity、Weather 还是两者，尚未记录。先作为未解决的设备回归处理，不能据此断言 PR #56 的缓存修复无效，也不能断定它与旧故障完全同因；应先核验固件身份和路由表现，再用匹配的主机 profile 复现。
 - WS147 Core 字体目录加入了紧凑的 34px 粗体数字字面；字面 hhea ascent+descent 在 34px 下约为 49.2px，此前首页时钟行高只有 36px。候选 CSS 已将两处大字行高设为 50px，172x320 桌面捕获和浏览器对照显示字形完整、首页无溢出。Runtime PR #80 已合并为 `dbe4ca05`，17 项 CI 全部通过；修复路由文本缓存代次判断、34px 行高，并移除拒绝扩展字体目录的三字面硬编码。ESP-IDF v5.3.1 staged CoreText band-shell 镜像为 7,399,152 字节，8 MiB app 分区剩余 989,456 字节（12%）；ELF SHA-256 `058CD0C45CAFD9BAEA7C6EC6C71F985F3B13C7BBDEF9414F7B18BE81F15FACC1`，BIN SHA-256 `EBAC43BDB563FB9462E1BEBF55A7C1D78C178706F103AB94909DF709F48B06F9`。镜像已刷入 WS147（COM19）；启动日志确认板型、`/band_shell.html`、字体包加载及 `first_present_ok=1`。用户对实际画面和页面切换的验收仍待回复。此 staged 镜像仍使用 Runtime 已签名 ABI3 依赖，不构成 ABI4 设备资格。
 - 桌面 PR #79（`45c6677d`）已合并，增加了 Core `letter-spacing` 文本变更的重绘等价用例，检查实际选择的文本后端和像素确有变化，并逐字节比较增量重绘与强制全量重绘；聚焦重绘、shell CLI 和 app-shell workflow 本地测试通过。该门槛覆盖一个变更场景；切换桌面默认路径前仍需更广泛的支持属性覆盖。
+- 后续 Core 重绘检查发现，无关图片的 paint-only 变更会递增全局 document mutation generation，从而使所有布局持有的文本缓存失效。增量重绘保留了旧文字像素，全量重绘则暴露出缺失的 Core 文字命令。现在缓存有效性改为依据文本节点及已解析的布局输入判定；Core 单测和桌面等价门槛已通过，覆盖 240 帧及两种文本后端。该修复目前在本地，仍待 PR/CI 审查。
 - 当前生产默认仍未启用完整 Core 字体路径。WS147 默认配置仍使用回调/v6，Core-text 命名 profile 需显式选择；桌面默认仍为 GDI，Core 路径仅用于显式 opt-in 验证。`TextMeasureProvider` 与 `TextPainter` 仍是 Core 公共 API，因为生产消费者仍在使用；目前只移除了没有生产调用方的 `HostTextAdapter` 便利层。
 - 当前没有 ABI4 命名设备 profile 的 provenance 或 ABI4 固件验收记录。已刷写的 CoreText 镜像是 ABI3 依赖下的 staged profile，可证明集成运行，不满足 ABI4 设备准入。
 

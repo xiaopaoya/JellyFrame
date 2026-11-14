@@ -41,7 +41,6 @@ struct TextLayoutCache {
     TextMeasureProvider text_measure;
     const TextSystem* text_system = nullptr;
     std::uint64_t text_system_generation = 0;
-    std::uint64_t document_mutation_generation = 0;
     bool prepared_text = false;
     std::string prepared_packet;
     std::vector<PreparedTextLine> prepared_lines;
