@@ -47,6 +47,48 @@ bool is_bmp_url(std::string_view url) {
     return dot != std::string_view::npos && url.substr(dot) == ".bmp";
 }
 
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION)
+bool inspect_bmp_intrinsic_size(std::string_view bytes,
+                                jellyframe::ImageIntrinsicSize& size) {
+    size = {};
+    if (bytes.size() < 54) return false;
+    const auto* data = reinterpret_cast<const std::uint8_t*>(bytes.data());
+    if (data[0] != 'B' || data[1] != 'M') return false;
+    const std::uint32_t pixel_offset = read_u32(data + 10);
+    const std::uint32_t dib_size = read_u32(data + 14);
+    if (dib_size < 40 || dib_size > bytes.size() - 14) return false;
+
+    const std::int32_t width = read_i32(data + 18);
+    const std::int32_t signed_height = read_i32(data + 22);
+    const std::int64_t height = signed_height < 0
+        ? -static_cast<std::int64_t>(signed_height)
+        : static_cast<std::int64_t>(signed_height);
+    if (width <= 0 || height == 0) {
+        size = {jellyframe::ImageIntrinsicSizeState::Invalid, 0, 0};
+        return true;
+    }
+    const std::uint16_t planes = read_u16(data + 26);
+    const std::uint16_t bits = read_u16(data + 28);
+    const std::uint32_t compression = read_u32(data + 30);
+    if (planes != 1 || compression != 0 || (bits != 24 && bits != 32)) return false;
+
+    const std::size_t row_bits = static_cast<std::size_t>(width) * bits;
+    const std::size_t row_bytes = ((row_bits + 31U) / 32U) * 4U;
+    const std::size_t pixel_height = static_cast<std::size_t>(height);
+    if (pixel_offset < 14U + dib_size || pixel_offset > bytes.size() ||
+        row_bytes > std::numeric_limits<std::size_t>::max() / pixel_height ||
+        row_bytes * pixel_height > bytes.size() - pixel_offset) return false;
+
+    if (width > kMaxDimension || height > kMaxDimension ||
+        static_cast<std::size_t>(width) * pixel_height > kMaxDecodedBytes / 3U) return false;
+
+    size = {jellyframe::ImageIntrinsicSizeState::Known,
+            static_cast<std::uint16_t>(width),
+            static_cast<std::uint16_t>(height)};
+    return true;
+}
+#endif
+
 void blend_pixel(jellyframe::Color& destination, jellyframe::Color source) {
     if (source.a == 255) {
         destination = source;
@@ -162,6 +204,30 @@ BmpImageAdapter::CacheStatus BmpImageAdapter::decode(std::string_view url,
     return CacheStatus::Ready;
 }
 
+bool BmpImageAdapter::decode_cached(Entry& entry) {
+#if !defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION)
+    (void)entry;
+    return false;
+#else
+    if (entry.status != CacheStatus::MetadataOnly) return entry.status == CacheStatus::Ready;
+    std::string bytes;
+    const std::uint32_t missing_before = resource_stats_.missing_loads;
+    const std::uint32_t rejected_before = resource_stats_.rejected_loads;
+    if (!load_resource(jellyframe::HostResourceRequest{
+            jellyframe::HostResourceKind::Image, entry.url, resource_context_.base_url},
+            bytes, &resource_context_)) {
+        entry.status = rejected_before != resource_stats_.rejected_loads
+            ? CacheStatus::Oversized
+            : (missing_before != resource_stats_.missing_loads ? CacheStatus::Missing : CacheStatus::Corrupt);
+        return false;
+    }
+    const std::int64_t start = clock_ ? clock_() : 0;
+    entry.status = decode(entry.url, bytes, entry);
+    if (clock_) stats_.decode_us += static_cast<std::uint64_t>(clock_() - start);
+    return entry.status == CacheStatus::Ready;
+#endif
+}
+
 bool BmpImageAdapter::resolve(const jellyframe::Node& node,
                               jellyframe::ImageResolveKind kind,
                               std::uint16_t background_resource_id,
@@ -178,38 +244,66 @@ bool BmpImageAdapter::resolve(const jellyframe::Node& node,
     if (url.empty()) {
         return false;
     }
+    std::string canonical_url;
+    if (url.size() > kMaxUrlBytes ||
+        !resolve_local_resource_url(url, resource_context_.base_url, canonical_url) ||
+        canonical_url.size() > kMaxUrlBytes) {
+        ++stats_.budget_rejected;
+        return false;
+    }
     ++stats_.requests;
-    if (Entry* cached = find(url)) {
+    if (Entry* cached = find(canonical_url)) {
         ++stats_.cache_hits;
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION)
+        if (cached->status == CacheStatus::MetadataOnly) {
+            decode_cached(*cached);
+            switch (cached->status) {
+            case CacheStatus::Ready: ++stats_.decoded; break;
+            case CacheStatus::Missing: ++stats_.missing; break;
+            case CacheStatus::Corrupt: ++stats_.corrupt; break;
+            case CacheStatus::Oversized: ++stats_.oversized; break;
+            case CacheStatus::Unsupported: ++stats_.unsupported; break;
+            case CacheStatus::BudgetRejected: ++stats_.budget_rejected; break;
+            case CacheStatus::MetadataOnly: break;
+            }
+        }
+#else
+        if (cached->status == CacheStatus::MetadataOnly) return false;
+#endif
         if (cached->status == CacheStatus::Ready)
             result = {cached->handle, {jellyframe::ImageIntrinsicSizeState::Known,
                                        static_cast<std::uint16_t>(cached->width),
                                        static_cast<std::uint16_t>(cached->height)}};
         return cached->status == CacheStatus::Ready;
     }
-    if (url.size() > kMaxUrlBytes || entries_.size() >= kMaxCacheEntries) {
+    if (entries_.size() >= kMaxCacheEntries) {
         ++stats_.budget_rejected;
         return false;
     }
     Entry entry;
-    entry.url = std::string(url);
+    entry.url = canonical_url;
     entry.handle = static_cast<std::uint32_t>(entries_.size() + 1);
-    if (!is_bmp_url(url)) {
+    if (!is_bmp_url(canonical_url)) {
         entry.status = CacheStatus::Unsupported;
     } else {
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION)
+        entry.status = CacheStatus::MetadataOnly;
+        decode_cached(entry);
+#else
         std::string bytes;
         const std::uint32_t missing_before = resource_stats_.missing_loads;
         const std::uint32_t rejected_before = resource_stats_.rejected_loads;
         if (!load_resource(jellyframe::HostResourceRequest{
-                jellyframe::HostResourceKind::Image, url, resource_context_.base_url}, bytes, &resource_context_)) {
+                jellyframe::HostResourceKind::Image, canonical_url, resource_context_.base_url}, bytes, &resource_context_)) {
             entry.status = rejected_before != resource_stats_.rejected_loads
                 ? CacheStatus::Oversized
                 : (missing_before != resource_stats_.missing_loads ? CacheStatus::Missing : CacheStatus::Corrupt);
         } else {
             const std::int64_t start = clock_ ? clock_() : 0;
-            entry.status = decode(url, bytes, entry);
+            entry.status = decode(canonical_url, bytes, entry);
             if (clock_) stats_.decode_us += static_cast<std::uint64_t>(clock_() - start);
         }
+#endif
     }
     const std::uint32_t handle = entry.handle;
     switch (entry.status) {
@@ -219,6 +313,7 @@ bool BmpImageAdapter::resolve(const jellyframe::Node& node,
     case CacheStatus::Oversized: ++stats_.oversized; break;
     case CacheStatus::Unsupported: ++stats_.unsupported; break;
     case CacheStatus::BudgetRejected: ++stats_.budget_rejected; break;
+    case CacheStatus::MetadataOnly: break;
     }
     try {
         entries_.push_back(std::move(entry));
@@ -233,6 +328,54 @@ bool BmpImageAdapter::resolve(const jellyframe::Node& node,
                        static_cast<std::uint16_t>(stored.height)}};
     return true;
 }
+
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION)
+jellyframe::ImageIntrinsicSize BmpImageAdapter::natural_size(const jellyframe::Node& node) {
+    const std::string_view url = node.attribute("src");
+    if (url.empty() || url.size() > kMaxUrlBytes) return {};
+    std::string canonical_url;
+    if (!resolve_local_resource_url(url, resource_context_.base_url, canonical_url) ||
+        canonical_url.size() > kMaxUrlBytes || !is_bmp_url(canonical_url)) return {};
+
+    if (const Entry* cached = find(canonical_url)) {
+        if (cached->status == CacheStatus::MetadataOnly || cached->status == CacheStatus::Ready) {
+            return {jellyframe::ImageIntrinsicSizeState::Known,
+                    static_cast<std::uint16_t>(cached->width),
+                    static_cast<std::uint16_t>(cached->height)};
+        }
+        return {};
+    }
+    if (entries_.size() >= kMaxCacheEntries || resource_context_.bundle == nullptr ||
+        resource_context_.bundle->entries == nullptr) return {};
+
+    for (std::size_t index = 0; index < resource_context_.bundle->count; ++index) {
+        const ResourceEntry& source = resource_context_.bundle->entries[index];
+        if (source.url != canonical_url || source.kind != jellyframe::HostResourceKind::Image ||
+            source.bytes == nullptr || source.size == 0 ||
+            (resource_context_.max_resource_bytes > 0 && source.size > resource_context_.max_resource_bytes)) {
+            continue;
+        }
+        jellyframe::ImageIntrinsicSize size;
+        const std::string_view bytes(reinterpret_cast<const char*>(source.bytes), source.size);
+        if (!inspect_bmp_intrinsic_size(bytes, size)) return {};
+        if (size.state != jellyframe::ImageIntrinsicSizeState::Known) return size;
+
+        Entry metadata;
+        metadata.url = std::move(canonical_url);
+        metadata.status = CacheStatus::MetadataOnly;
+        metadata.handle = static_cast<std::uint32_t>(entries_.size() + 1);
+        metadata.width = size.width;
+        metadata.height = size.height;
+        try {
+            entries_.push_back(std::move(metadata));
+        } catch (const std::bad_alloc&) {
+            return {};
+        }
+        return size;
+    }
+    return {};
+}
+#endif
 
 bool BmpImageAdapter::paint(jellyframe::FrameBuffer& target,
                             const jellyframe::ImagePaintRequest& request) {
@@ -295,6 +438,13 @@ bool resolve_callback(const jellyframe::Node& node,
     return adapter != nullptr && adapter->resolve(node, kind, background_resource_id, result);
 }
 
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION)
+jellyframe::ImageIntrinsicSize natural_size_callback(const jellyframe::Node& node, void* context) {
+    auto* adapter = static_cast<BmpImageAdapter*>(context);
+    return adapter != nullptr ? adapter->natural_size(node) : jellyframe::ImageIntrinsicSize{};
+}
+#endif
+
 bool paint_callback(jellyframe::FrameBuffer& target,
                     const jellyframe::ImagePaintRequest& request,
                     void* context) {
@@ -306,6 +456,12 @@ bool paint_callback(jellyframe::FrameBuffer& target,
 jellyframe::ImageHandleResolver make_bmp_image_resolver(BmpImageAdapter& adapter) {
     return jellyframe::ImageHandleResolver{resolve_callback, &adapter};
 }
+
+#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION)
+jellyframe::NaturalImageSizeProvider make_bmp_natural_image_size_provider(BmpImageAdapter& adapter) {
+    return jellyframe::NaturalImageSizeProvider{natural_size_callback, &adapter};
+}
+#endif
 
 jellyframe::ImagePainter make_bmp_image_painter(BmpImageAdapter& adapter) {
     return jellyframe::ImagePainter{paint_callback, &adapter};

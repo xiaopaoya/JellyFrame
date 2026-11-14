@@ -433,6 +433,25 @@ if(JELLYFRAME_BUILD_TESTS)
         COMMAND jellyframe_esp32s3_resource_reference_tests)
     jellyframe_enable_test_asserts(jellyframe_esp32s3_resource_reference_tests)
     jellyframe_stage_sanitizer_runtime(jellyframe_esp32s3_resource_reference_tests)
+    if(JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 4)
+        add_executable(jellyframe_esp32s3_image_metadata_tests
+            ports/esp32s3-idf/tests/image_metadata_tests.cpp
+            ports/esp32s3-idf/main/jellyframe_esp32s3_image.cpp
+            ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp)
+        target_include_directories(jellyframe_esp32s3_image_metadata_tests BEFORE PRIVATE
+            ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS})
+        target_include_directories(jellyframe_esp32s3_image_metadata_tests PRIVATE
+            ports/esp32s3-idf/main
+            "${CMAKE_CURRENT_SOURCE_DIR}/src")
+        target_link_libraries(jellyframe_esp32s3_image_metadata_tests PRIVATE jellyframe_render_core)
+        target_compile_features(jellyframe_esp32s3_image_metadata_tests PRIVATE cxx_std_17)
+        target_compile_definitions(jellyframe_esp32s3_image_metadata_tests PRIVATE
+            CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER=1)
+        add_test(NAME jellyframe_esp32s3_image_metadata_tests
+            COMMAND jellyframe_esp32s3_image_metadata_tests)
+        jellyframe_enable_test_asserts(jellyframe_esp32s3_image_metadata_tests)
+        jellyframe_stage_sanitizer_runtime(jellyframe_esp32s3_image_metadata_tests)
+    endif()
     if(WIN32 AND TARGET jellyframe_cpu2d_compare)
         add_executable(jellyframe_cpu2d_sampling_tests tests/cpu2d_sampling_tests.cpp)
         target_compile_features(jellyframe_cpu2d_sampling_tests PRIVATE cxx_std_17)
