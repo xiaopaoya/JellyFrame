@@ -393,14 +393,14 @@ jobs:
             profile_id: render-core-minimal-no-forms-advanced
           - profile: current-mainline-full
             profile_id: render-core-default
-            core_commit: be8762708ecc3cbae5837eecba1b716be2e1b0d4
-            source_hash: c804cdf023750de7feaf6c73ac841285e18b53b8468ffac6d99d2946615f27d8
+            core_commit: 34ae4b8877e8ba11a2f424791efebc4b1dbba3ba
+            source_hash: bbfa81de99ca687d036ef151f87b3e7bac1a29cd8f2c9e1c8c45547b7c1f4552
             source_count: 163
             cropped: false
           - profile: current-mainline-cropped
             profile_id: render-core-minimal-no-forms-advanced
-            core_commit: be8762708ecc3cbae5837eecba1b716be2e1b0d4
-            source_hash: c804cdf023750de7feaf6c73ac841285e18b53b8468ffac6d99d2946615f27d8
+            core_commit: 34ae4b8877e8ba11a2f424791efebc4b1dbba3ba
+            source_hash: bbfa81de99ca687d036ef151f87b3e7bac1a29cd8f2c9e1c8c45547b7c1f4552
             source_count: 163
             cropped: true
 
@@ -937,7 +937,7 @@ jobs:
         run: >
           cmake --build build/framework-external-core
           --target jellyframe_app_runtime_tests jellyframe_device_runtime_contracts_tests
-          jellyframe_esp32s3_resource_reference_tests
+          jellyframe_esp32s3_resource_reference_tests jellyframe_esp32s3_band_navigation_tests
           --parallel
 
       - name: Run Runtime package consumer CTest
@@ -1003,15 +1003,15 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: xiaopaoya/JellyFrame-Render-Core
-          ref: be8762708ecc3cbae5837eecba1b716be2e1b0d4
+          ref: 34ae4b8877e8ba11a2f424791efebc4b1dbba3ba
           path: third_party/render-core-source
 
       - name: Verify merged Core source identity
         shell: pwsh
         run: |
           $coreRevision = (git -C third_party\render-core-source rev-parse HEAD).Trim()
-          if ($coreRevision -ne 'be8762708ecc3cbae5837eecba1b716be2e1b0d4') {
-            throw "Expected qualified Core master at be8762708ecc3cbae5837eecba1b716be2e1b0d4, got $coreRevision"
+          if ($coreRevision -ne '34ae4b8877e8ba11a2f424791efebc4b1dbba3ba') {
+            throw "Expected qualified Core master at 34ae4b8877e8ba11a2f424791efebc4b1dbba3ba, got $coreRevision"
           }
           $coreAbi4 = Select-String -Path third_party\render-core-source\cmake\render_core_version.cmake `
             -Pattern 'set\(JELLYFRAME_RENDER_CORE_ENGINE_ABI "4"' -Quiet
@@ -1060,7 +1060,7 @@ jobs:
           }
           if ($provenance.provider -ne 'source-override' -or $provenance.engineAbi -ne 4 -or
               $provenance.lockEnforced -ne $false -or
-              $provenance.sourceHash -ne 'c804cdf023750de7feaf6c73ac841285e18b53b8468ffac6d99d2946615f27d8' -or
+              $provenance.sourceHash -ne 'bbfa81de99ca687d036ef151f87b3e7bac1a29cd8f2c9e1c8c45547b7c1f4552' -or
               $provenance.sourceFileCount -ne 163 -or
               $provenance.lockedVersion -ne '0.8.0' -or $provenance.lockedEngineAbi -ne 3 -or
               $provenance.lockedSourceHash -ne 'fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795') {

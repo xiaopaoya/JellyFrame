@@ -360,6 +360,19 @@ endif()
 
 if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
+    add_executable(jellyframe_esp32s3_band_navigation_tests
+        ports/esp32s3-idf/tests/band_navigation_tests.cpp)
+    target_include_directories(jellyframe_esp32s3_band_navigation_tests PRIVATE
+        ports/esp32s3-idf/main
+        ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS})
+    target_link_libraries(jellyframe_esp32s3_band_navigation_tests PRIVATE jellyframe_render_core)
+    target_compile_features(jellyframe_esp32s3_band_navigation_tests PRIVATE cxx_std_17)
+    add_test(NAME jellyframe_esp32s3_band_navigation_tests
+        COMMAND jellyframe_esp32s3_band_navigation_tests)
+    jellyframe_enable_test_asserts(jellyframe_esp32s3_band_navigation_tests)
+    target_compile_definitions(jellyframe_esp32s3_band_navigation_tests PRIVATE
+        "JELLYFRAME_BAND_SHELL_FIXTURE=\"${CMAKE_CURRENT_SOURCE_DIR}/ports/esp32s3-idf/resources/app/band_shell.html\"")
+
     add_executable(jellyframe_esp32s3_resource_reference_tests
         ports/esp32s3-idf/tests/resource_reference_tests.cpp
         ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp)
