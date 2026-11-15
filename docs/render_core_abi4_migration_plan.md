@@ -2,7 +2,7 @@
 
 > Last updated: 2026-11-15; Applies to: 0.6.0-dev. Core development contract: 0.9.0-dev / ABI4.
 
-> **Latest checkpoint (2026-11-15):** Runtime PRs #99-#103 are merged; each passed all 19 CI checks. PR #103 (`d6fcaff4`) makes application fonts JFFONT2-only, removes the legacy AppFontSet/AppHost callback path, and qualifies the exact Core #62 source (`38148e73`, source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`) in current-mainline and ordinary ABI4 lanes. Runtime commit `66be335c` separates the ESP32 build boundary: CoreText omits generation/compilation of the legacy Noto C++ bitmap pack; the legacy profile and explicitly selected bitmap-painter fixtures retain it. A CoreText P4/P5/P6 benchmark smoke and benchmark Kconfig allowance are built from Runtime `8b59afd6` and Core follow-up `89acc36a` with IDF 5.3.1: CoreText enabled, legacy font macro disabled, map free of legacy font symbols, BIN 3,503,280 bytes (SHA-256 `29634ea9860508ff46f1ad6c1d7d65e0d16b8296f18a2c6e13771f85dc8e5535`). This is build evidence only; the smoke has not run on hardware. CoreText remains opt-in, and non-retained/Win32 production defaults remain open. Runtime still locks signed Core 0.8.0 / ABI3; ABI4 has not been signed or released. A fresh, unflashed `0.6.2-abi4-mainline2` image binds both exact revisions and the current source identity; device acceptance remains pending.
+> **Latest checkpoint (2026-11-15):** Runtime PRs #99-#105 are merged; #99-#103 and #105 passed all 19 CI checks each. PR #103 (`d6fcaff4`) makes application fonts JFFONT2-only, removes the legacy AppFontSet/AppHost callback path, and qualifies the exact Core #62 source (`38148e73`, source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`) in current-mainline and ordinary ABI4 lanes. PR #105 (`81d99750`) separates the ESP32 build boundary: CoreText omits generation/compilation of the legacy Noto C++ bitmap pack; the legacy profile and explicitly selected bitmap-painter fixtures retain it. A CoreText P4/P5/P6 benchmark smoke and benchmark Kconfig allowance are built from Runtime `8b59afd6` and Core follow-up `89acc36a` with IDF 5.3.1: CoreText enabled, legacy font macro disabled, map free of legacy font symbols, BIN 3,503,280 bytes (SHA-256 `29634ea9860508ff46f1ad6c1d7d65e0d16b8296f18a2c6e13771f85dc8e5535`). This is build evidence only; the smoke has not run on hardware. CoreText remains opt-in, and non-retained/Win32 production defaults remain open. Runtime still locks signed Core 0.8.0 / ABI3; ABI4 has not been signed or released. A fresh, unflashed `0.6.2-abi4-mainline2` image binds both exact revisions and the current source identity; it remains unaccepted. A separate `mainline1` image passed native Home/Activity/Weather/back visual acceptance on 2026-11-15; its exact identity and limits are recorded below.
 
 This is the current execution plan. Earlier checkpoint narratives are preserved
 in Git history and their linked PRs; they are not additional open tasks. The
@@ -15,10 +15,10 @@ actual call sites and the exact native device candidate.
 | --- | --- | --- |
 | Released dependency | Signed Core v0.8.0 / ABI3 remains Runtime's production lock. | Publish the reviewed final ABI4 contract, then update the exact lock. |
 | Core mainline | PR #62, `38148e73`, CI 4/4 (run `43673424532`), 0.9.0-dev / ABI4; source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`, 163 implementation inputs. | Remaining consumer/property migration and callback retirement. |
-| Runtime mainline | PR #103, `d6fcaff4`, CI 19/19 (run `43675905306`); #99-#103 are merged, including ABI4 identity/consumer qualification, embedded host, installed worker, ellipsis repaint qualification and JFFONT2-only app fonts. | Remaining generated BitmapFont/default consumers, full callback retirement and release criteria. |
+| Runtime mainline | PR #103, `d6fcaff4`, CI 19/19 (run `43675905306`); #99-#103 and #105 are merged, including ABI4 identity/consumer qualification, embedded host, installed worker, ellipsis repaint qualification, JFFONT2-only app fonts and CoreText font-pack isolation. | Remaining generated BitmapFont/default consumers, full callback retirement and release criteria. |
 | Embedded host | PR #100 binds one TextSystem/JFFONT2 fixture to layout, layers and paint. Locked ABI3 and source ABI4 full/cropped tests pass. | No remaining provider callback in this example. |
 | Installed worker | PR #101 makes canonical v10/painterless CoreText independent of BMP. | Exact device acceptance remains downstream. |
-| Native WS147 | `0.6.2-abi4-mainline2` built from Runtime #103/Core #62; app BIN 7,614,704 B, 773,904 B free in the 8 MiB app partition, 16 MiB factory/package hashes verified. | Flash/observe this exact artifact on Home/Activity/Weather/back; it does not qualify installed worker/BMP, which are disabled in this profile. |
+| Native WS147 | `0.6.2-abi4-mainline2` built from Runtime #103/Core #62; app BIN 7,614,704 B, 773,904 B free in the 8 MiB app partition, 16 MiB factory/package hashes verified. A distinct `mainline1` image passed Home/Activity/Weather/back observation on 2026-11-15. | Flash/observe the exact `mainline2` artifact; `mainline1` evidence does not qualify it or installed worker/BMP, which are disabled in these profiles. |
 | ABI5 and shaping | Separate optional candidates; ABI5 tracked reuse has correctness/package evidence but no qualified performance gain. | Not enabled in Runtime and not an ABI4 release prerequisite. |
 
 The experimental source declares 0.6.2 / ABI9. Neither that number nor a count
@@ -107,11 +107,20 @@ It uses `/band_shell.html`, CoreText ON, BMP/installed scripting OFF. Its BIN,
 package/ZIP and factory segment are identical. Use boot app version plus ELF
 SHA for board identity; see the inventory for full hashes.
 
-Home/Activity/Weather/back, all eight forecast text rows, legibility and clipping
-remain pending on this exact image. The latest missing-forecast-text observation
-is not closed by desktop route tests or by an unidentified older board image.
+The separately tested `mainline1` identity is Runtime `75a435c5`, Core
+`34ae4b88`, BIN SHA-256
+`AFB9F47E015FF5EB06AD441EBC322F50B04D6149CFA3E70B8C96675EF46C696E`, and ELF
+SHA-256 `B462F78731662B53A21DEAEE1F86E4E0995F37D2F964BEDA3D27B284FA522910`.
+Boot logs identified `/band_shell.html`, CoreText at 240 MHz, touch detection and
+successful first present. The user confirmed that Home text was complete and
+legible, Activity and Weather rendered their text, all four Weather small cards
+contained text, and navigation returned normally. This closes that observation
+only for this exact native image. It does not qualify the separate `mainline2`
+artifact, installed worker/BMP, or the P4/P5/P6 benchmark smoke. The previous
+missing-small-card-text report remains relevant to those other identities.
 Installed worker/BMP tests require their own named image and resource profile.
-No device acceptance can be inferred from a build or positive assumption.
+The `mainline2` device acceptance remains pending; no device acceptance can be
+inferred from a build or positive assumption.
 
 ## Dependency order
 
@@ -141,5 +150,6 @@ gates. Optional ABI5 reuse and production shaping remain separate.
    coordinated pre-release change.
 4. Only after consumer, full/cropped, feature-disabled and archive gates pass,
    sign and publish ABI4 and update Runtime's exact production dependency lock.
-5. Separately run the reserved `mainline2` WS147 acceptance when the user is
-   available; it does not substitute for the host/API release gates.
+5. Run the reserved `mainline2` WS147 acceptance when the user is available;
+   the successful `mainline1` observation is recorded but does not substitute
+   for this exact artifact or the host/API release gates.
