@@ -8,6 +8,7 @@
 #endif
 #include "jellyframe_esp32s3_input.h"
 #include "jellyframe_esp32s3_resources.h"
+#include "jellyframe_esp32s3_band_navigation.h"
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
 #include "app_runtime/core_system_font_catalog.h"
 #endif
@@ -2176,20 +2177,7 @@ void bind_timer_events(TimerUiTaskContext& context) {
 }
 
 void set_band_view(TimerUiTaskContext& context, const char* active_id) {
-    static constexpr const char* kViewIds[] = {
-        "view-home",
-        "view-apps",
-        "view-activity",
-        "view-weather",
-        "view-quick",
-        "view-notices",
-    };
-    for (const char* view_id : kViewIds) {
-        if (jellyframe::Node* view = find_by_id(*context.document, view_id)) {
-            view->set_attribute("class", std::string("band-view") +
-                (std::string_view(view_id) == active_id ? " active" : ""));
-        }
-    }
+    jellyframe::esp32s3::set_band_view(*context.document, active_id);
     ++context.telemetry.band_route_transitions;
     ESP_LOGI(kTag, "band_shell route=%s count=%u", active_id,
              static_cast<unsigned>(context.telemetry.band_route_transitions));
@@ -2293,35 +2281,13 @@ bool run_native_app_runtime_recovery_preflight() {
 #endif
 
 void bind_band_navigation(TimerUiTaskContext& context) {
-    struct Route {
-        const char* control_id;
-        const char* view_id;
-    };
-    static constexpr Route kRoutes[] = {
-        {"home-to-activity", "view-activity"},
-        {"home-to-apps", "view-apps"},
-        {"home-to-weather", "view-weather"},
-        {"home-to-quick", "view-quick"},
-        {"home-to-notices", "view-notices"},
-        {"apps-home", "view-home"},
-        {"apps-activity", "view-activity"},
-        {"apps-weather", "view-weather"},
-        {"apps-quick", "view-quick"},
-        {"activity-home", "view-home"},
-        {"weather-home", "view-home"},
-        {"quick-home", "view-home"},
-        {"notices-home", "view-home"},
-    };
-    for (const Route& route : kRoutes) {
-        if (jellyframe::Node* control = find_by_id(*context.document, route.control_id)) {
-            TimerUiTaskContext* const context_ptr = &context;
-            control->add_event_listener("click", [context_ptr, view_id = route.view_id](jellyframe::Event&) {
-                set_band_view(*context_ptr, view_id);
-            });
-        } else {
-            ESP_LOGW(kTag, "band shell control is missing: %s", route.control_id);
-        }
-    }
+    TimerUiTaskContext* const context_ptr = &context;
+    jellyframe::esp32s3::bind_band_navigation(
+        *context.document,
+        [context_ptr](const char* view_id) { set_band_view(*context_ptr, view_id); },
+        [](const char* control_id) {
+            ESP_LOGW(kTag, "band shell control is missing: %s", control_id);
+        });
 }
 
 void run_retained_ui_task(void* raw_context) {

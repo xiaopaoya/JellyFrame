@@ -2,6 +2,8 @@
 
 Last updated: 2026-11-11; Applies to: 0.6.0-dev
 
+> Historical measurement, superseded for capacity interpretation by Runtime PR #98 (`92f6b62d`, merged 2026-11-14). The `16,383 / 16,384` value below is only the dedicated static-IRAM linker category. It does not mean total internal memory has one byte left: the same build's D/IRAM data window had about 270 KB available. Do not treat this measurement as an active memory blocker.
+
 The component now publicly defines JERRY_EXTERNAL_CONTEXT=1 for the engine,
 port and backend. The existing single-VM gate controls the global port context.
 The existing preferred PSRAM allocation and 8-bit-capable fallback policy is

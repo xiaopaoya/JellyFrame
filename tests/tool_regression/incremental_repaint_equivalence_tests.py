@@ -122,20 +122,32 @@ def make_text_property_case(
 ) -> CaptureCase:
     app = root / f"text-property-{property_name}"
     app.mkdir()
+    letter_spacing_case = property_name == "letterSpacing"
+    property_css = (
+        "letter-spacing:0px}#label.spaced{letter-spacing:2px"
+        if letter_spacing_case else ""
+    )
+    mutation_script = (
+        "var spaced=false;document.getElementById('toggle').addEventListener('click',function(){"
+        "spaced=!spaced;label.setAttribute('class',spaced?'spaced':'');});"
+        if letter_spacing_case else
+        f"var initial='{initial}', changed='{changed}';"
+        f"label.style.{property_name}=initial;"
+        f"document.getElementById('toggle').addEventListener('click',function(){{"
+        f"label.style.{property_name}=label.style.{property_name}===changed?initial:changed;"
+        "});"
+    )
     (app / "index.html").write_text(
         "<!doctype html><meta charset='utf-8'><style>"
         "body{margin:0;background:#fff;color:#000}"
         "#label{display:block;width:220px;height:48px;margin:0;padding:0;"
         "font-family:sans-serif;font-size:20px;font-weight:400;line-height:28px;"
-        "text-align:start;color:#000;background:#fff;border:0}"
+        "text-align:start;color:#000;background:#fff;border:0;"
+        f"{property_css}}}"
         "#toggle{display:block;width:100px;height:24px;margin:0}"
         "</style><body><p id='label'>CORE TEXT</p><button id='toggle'>Toggle</button>"
-        f"<script>var label=document.getElementById('label');"
-        f"var initial='{initial}', changed='{changed}';"
-        f"label.style.{property_name}=initial;"
-        f"document.getElementById('toggle').addEventListener('click',function(){{"
-        f"label.style.{property_name}=label.style.{property_name}===changed?initial:changed;"
-        "});</script></body>",
+        f"<script>var label=document.getElementById('label');{mutation_script}"
+        "</script></body>",
         encoding="utf-8",
     )
     (app / "jellyframe.app.json").write_text(
@@ -271,9 +283,9 @@ def bmp_region_has_ink(path: Path, region: tuple[int, int, int, int]) -> bool:
     return any(pixels[offset:offset + 3] != b"\xff\xff\xff" for offset in range(0, len(pixels), 3))
 
 
-def bmp_region_has_light_ink(path: Path, region: tuple[int, int, int, int]) -> bool:
+def bmp_region_light_pixel_count(path: Path, region: tuple[int, int, int, int]) -> int:
     pixels = bmp_region_pixels(path, region)
-    return any(
+    return sum(
         min(pixels[offset:offset + 3]) > 96
         for offset in range(0, len(pixels), 3)
     )
@@ -324,6 +336,7 @@ def main() -> int:
             make_text_property_case(root, "fontWeight", "400", "700", core_version),
             make_text_property_case(root, "textAlign", "start", "end", core_version),
             make_text_property_case(root, "lineHeight", "28px", "40px", core_version),
+            make_text_property_case(root, "letterSpacing", "0px", "2px", core_version),
         )
         cases = tuple(adapt_sample_case(case, repo, root, core_version) for case in CASES) + text_property_cases
         cases += (
@@ -424,27 +437,29 @@ def main() -> int:
                                     f"at frame {index} ({frame.name})"
                                 )
                 if backend_case.require_forecast_presence and backend_case.use_app_fonts:
-                    # Check launcher forecast text rows separately from the yellow icon dots.
-                    forecast_regions = (
-                        (12, 165, 46, 197),
-                        (47, 165, 81, 197),
-                        (82, 165, 116, 197),
-                        (117, 165, 151, 197),
+                    # Prove each expected text row is visible away from card backgrounds and icons.
+                    forecast_labels = (
+                        ("10", "26", (12, 47)),
+                        ("12", "29", (47, 82)),
+                        ("14", "31", (82, 117)),
+                        ("16", "30", (117, 152)),
                     )
+                    forecast_rows = ((171, 184), (187, 200))
                     frame_indices = backend_case.forecast_frame_indices or tuple(
                         range(backend_case.frame_count)
                     )
                     for mode, frames in (("incremental", incremental_frames), ("full", full_frames)):
                         for index in frame_indices:
                             frame = frames[index]
-                            missing = [
-                                region for region in forecast_regions
-                                if not bmp_region_has_light_ink(frame, region)
-                            ]
+                            missing = []
+                            for hour, temperature, (left, right) in forecast_labels:
+                                for label, (top, bottom) in zip((hour, temperature), forecast_rows):
+                                    if bmp_region_light_pixel_count(frame, (left, top, right, bottom)) < 2:
+                                        missing.append(label)
                             if missing:
                                 raise RuntimeError(
-                                    f"{backend_case.name}: forecast text is missing in {mode} frame {index}; "
-                                    f"missing regions={missing} ({frame.name})"
+                                    f"{backend_case.name}: forecast labels lack visible glyph pixels in "
+                                    f"{mode} frame {index}; missing={missing} ({frame.name})"
                                 )
                 for index, (incremental_frame, full_frame) in enumerate(
                     zip(incremental_frames, full_frames)

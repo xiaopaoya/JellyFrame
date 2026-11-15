@@ -23,12 +23,36 @@ python ports\esp32s3-idf\tools\device_provider\package_ws147_device_provider.py 
   --factory-image <factory-16mb.bin> `
   --source-revision <40-lowercase-hex> `
   --image-version 0.6.2-ws147.1 `
+  --build-dir <esp-idf-build-directory> `
   --output <release-directory>
 ```
 
 The factory image input must be an offset-zero, complete 16 MiB image created
 from the same firmware build. The packager writes both firmware and factory
-SHA-256 values into the immutable Developer Image manifest.
+SHA-256 values into the immutable Developer Image manifest. When using
+`--build-manifest`, that manifest must provide
+`sources.renderCore.packageVersion` and
+`sources.renderCore.engineAbi` (the earlier `actualSourceIdentities.renderCore`
+layout is also accepted). The preferred `--build-dir` mode reads the generated
+Core source manifest/provenance/profile, ESP-IDF `project_description.json`,
+`CMakeCache.txt`, and `sdkconfig`; it cross-checks Core identity/version/ABI
+and ESP target, hashes the `app_bin` named by `project_description.json`, and
+rejects a supplied firmware file whose hash differs. It records the Core source
+identity/count, IDF version from the IDF tree's `tools/cmake/version.cmake`,
+the separate `git_revision` value, versioned compiler toolchain, target,
+selected WS147 defaults plus Core profile, and sdkconfig SHA-256 into
+`buildProvenance`. Missing files, invalid metadata, or inconsistent identities
+are rejected. `--build-manifest` remains
+available for external build systems: it records only the optional provenance
+fields actually provided (`sourceHash`/`sourceIdentity`,
+`sourceFileCount`/`sourceInputCount`, `idfVersion`/`espIdfVersion`,
+`toolchain`/`toolchainId`, and `buildProfile`/`profileId`) and rejects invalid
+values. It does not infer omitted fields. For a controlled build without build
+metadata,
+pass `--render-core-version` and `--render-core-abi` together. Supplying neither
+retains the historical `0.6.2` / ABI 1 default for existing release commands;
+neither that default nor explicit Core metadata claims source/build provenance.
+Explicit values that disagree with supplied build metadata are rejected.
 
 ## Installation
 
