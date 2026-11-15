@@ -2,6 +2,8 @@
 
 > Last updated: 2026-11-15; Applies to: 0.6.0-dev. Core development contract: 0.9.0-dev / ABI4.
 
+> **Latest checkpoint (2026-11-15):** Runtime PRs #99-#103 are merged; each passed all 19 CI checks. PR #103 (`d6fcaff4`) makes application fonts JFFONT2-only, removes the legacy AppFontSet/AppHost callback path, and qualifies the exact Core #62 source (`38148e73`, source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`) in current-mainline and ordinary ABI4 lanes. Runtime still locks signed Core 0.8.0 / ABI3; ABI4 has not been signed or released. Generated C++ BitmapFont defaults and remaining native/desktop callback consumers are still open. A fresh, unflashed `0.6.2-abi4-mainline2` image binds both exact revisions and the current source identity; device acceptance remains pending.
+
 This is the current execution plan. Earlier checkpoint narratives are preserved
 in Git history and their linked PRs; they are not additional open tasks. The
 [consumer retirement inventory](render_core_text_consumer_retirement.md) records
@@ -13,10 +15,10 @@ actual call sites and the exact native device candidate.
 | --- | --- | --- |
 | Released dependency | Signed Core v0.8.0 / ABI3 remains Runtime's production lock. | Publish the reviewed final ABI4 contract, then update the exact lock. |
 | Core mainline | PR #62, `38148e73`, CI 4/4 (run `43673424532`), 0.9.0-dev / ABI4; source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`, 163 implementation inputs. | Remaining consumer/property migration and callback retirement. |
-| Runtime mainline | PR #102, `2f87d52e`, after CI 19/19 (run `43671336751`); exact Core #61 pin and positive ellipsis repaint gate are merged. | Default adoption is separate from successful source-override qualification. |
+| Runtime mainline | PR #103, `d6fcaff4`, CI 19/19 (run `43675905306`); #99-#103 are merged, including ABI4 identity/consumer qualification, embedded host, installed worker, ellipsis repaint qualification and JFFONT2-only app fonts. | Remaining generated BitmapFont/default consumers, full callback retirement and release criteria. |
 | Embedded host | PR #100 binds one TextSystem/JFFONT2 fixture to layout, layers and paint. Locked ABI3 and source ABI4 full/cropped tests pass. | No remaining provider callback in this example. |
 | Installed worker | PR #101 makes canonical v10/painterless CoreText independent of BMP. | Exact device acceptance remains downstream. |
-| Native WS147 | Exact `0.6.2-abi4-mainline1` built and package-verified, not flashed. | Observe this exact artifact on Home/Activity/Weather/back. |
+| Native WS147 | `0.6.2-abi4-mainline2` built from Runtime #103/Core #62; app BIN 7,614,704 B, 773,904 B free in the 8 MiB app partition, 16 MiB factory/package hashes verified. | Flash/observe this exact artifact on Home/Activity/Weather/back; it does not qualify installed worker/BMP, which are disabled in this profile. |
 | ABI5 and shaping | Separate optional candidates; ABI5 tracked reuse has correctness/package evidence but no qualified performance gain. | Not enabled in Runtime and not an ABI4 release prerequisite. |
 
 The experimental source declares 0.6.2 / ABI9. Neither that number nor a count
@@ -34,9 +36,9 @@ Core PR #60 adds bounded letter spacing and JFTP v3 positions, retaining v1/v2
 decoding. Core selection, metrics, preparation and rasterization are canonical;
 ports register immutable resources rather than implementing text policy.
 
-Remaining: replace generated C++ BitmapFont default resources. The current
-app-font change removes serialized JFFONT0/1 and AppFontSet callback precedence;
-manifest/import resources are canonical JFFONT2 with offline Core preparation.
+Completed in Runtime #103: serialized JFFONT0/1 and AppFontSet callback
+precedence are removed; manifests/imports use canonical JFFONT2 with offline
+Core preparation. Remaining: replace generated C++ BitmapFont default resources.
 Preserve deterministic family/weight selection, font-byte lifetime, missing-font
 refusal and resource budgets. Do not add more host text callbacks.
 
@@ -46,10 +48,10 @@ refusal and resource budgets. Do not add more host text callbacks.
 | --- | --- | --- |
 | Embedded host | Complete in #100. | Visible ink, click/checkbox/select and RGB565 flush; ABI3 and ABI4 full/cropped. |
 | ESP32 installed worker | Merged #101 painterless canonical v10 path; owned catalog/snapshot survives replay; BMP is optional. | Host full/cropped and locked ABI3 matrix, real IDF builds, CI, later exact device profile. |
-| ESP32 retained native/default | Named CoreText profile is merged; default still uses generated BitmapFont providers. | Migrate default resource contract and qualify supported properties/routes. |
+| ESP32 retained native/default | Named CoreText profile is merged; default still uses generated BitmapFont providers. | Migrate generated defaults to the Core-owned resource contract and qualify supported properties/routes. |
 | ESP32 non-retained main entry | Separate provider factories remain. | Migrate or explicitly retire the entry, not only retained UI. |
 | Win32 default | Explicit CoreText catalog mode is merged; GDI remains default. | Bounded ellipsis/property parity, repaint gates and catalog default adoption. |
-| AppFontSet | Current change accepts JFFONT2 only, removes callback accessors and browser precedence, and converts samples/tools. | Full/cropped/locked-ABI3 consumer gates and named-font visible-output qualification; PR/CI. |
+| AppFontSet | Complete in #103: JFFONT2-only catalog, callback accessors/browser precedence removed, samples and tools converted. | No remaining AppFontSet work; generated C++ BitmapFont defaults are tracked separately. |
 
 Canvas2D already uses TextSystem and is not an outstanding callback consumer.
 The installed-worker change refuses ordinary callback-dependent `Text` commands
@@ -120,13 +122,15 @@ gates. Optional ABI5 reuse and production shaping remain separate.
 
 ## Immediate next actions
 
-1. Review/CI/merge the current Runtime JFFONT2-only app-font/tool change.
-   Core #62 is merged; current CI pins its exact commit/source identity.
-2. Extend open-popup/generated-text consumers and native/desktop defaults before
-   adoption. #101 worker, #61 ellipsis and #102 qualification are already merged.
-3. Convert remaining callback users/tests and remove the obsolete public API
-   together after their resource/default migrations.
-4. Publish signed ABI4 and switch the exact Runtime lock only after those gates.
-5. Run the reserved native board acceptance when the user is available; retain
-   device failures separately from host/package completion and prepare installed
-   device admission on a capacity-qualified profile.
+1. Merged: Runtime #99-#103; all five PRs passed 19/19 CI. #103 closes the
+   serialized AppFontSet/JFFONT0/1 path and validates against exact Core #62.
+2. Migrate generated C++ BitmapFont defaults and remaining native/non-retained
+   and Win32 GDI consumers; close popup/generated-content ownership and qualify
+   the supported property set without adding host callbacks.
+3. Convert remaining callback-dependent tests/fixtures, then remove the public
+   provider/range/family/additive APIs and implementation branches in one
+   coordinated pre-release change.
+4. Only after consumer, full/cropped, feature-disabled and archive gates pass,
+   sign and publish ABI4 and update Runtime's exact production dependency lock.
+5. Separately run the reserved `mainline2` WS147 acceptance when the user is
+   available; it does not substitute for the host/API release gates.
