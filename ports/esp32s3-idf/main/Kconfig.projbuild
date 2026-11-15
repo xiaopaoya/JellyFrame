@@ -263,14 +263,15 @@ config JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
         image cache. This does not enable PNG, JPEG, GIF, WebP, audio or video.
 
 config JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
-    bool "Use Core TextSystem in the retained device UI"
-    depends on JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_DEVICE_IMAGE_LIFECYCLE_ACCEPTANCE
+    bool "Use Core TextSystem in the retained device UI and installed Apps"
+    depends on JELLYFRAME_ESP32S3_RUN_BENCHMARK || JELLYFRAME_ESP32S3_RUN_TIMER_UI_TASK || JELLYFRAME_ESP32S3_RUN_BAND_SHELL_UI_TASK || JELLYFRAME_ESP32S3_RUN_DEVICE_IMAGE_LIFECYCLE_ACCEPTANCE
     default n
     help
-        Opt in to Core-owned font selection, text measurement, layout packets
-        and software painting for retained UI tasks and installed Apps. The
-        default remains the existing port bitmap backend until board visuals
-        are accepted.
+        Use Core-owned font selection, text measurement, layout packets and
+        software painting for retained UI tasks and installed Apps. This
+        also enables the CoreText P4/P5/P6 benchmark smoke. The generated
+        legacy BitmapFont pack is excluded unless a legacy bitmap painter
+        acceptance fixture is explicitly selected.
 
 config JELLYFRAME_ESP32S3_RUN_FLEX_GRID_ACCEPTANCE
     bool "Run Flex/Grid ON/OFF acceptance fixture"

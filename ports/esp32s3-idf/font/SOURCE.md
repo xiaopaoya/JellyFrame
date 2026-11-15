@@ -12,10 +12,11 @@ Regular asset. A compact 34 px Bold face covers `0123456789: C` for large
 numeric displays; Core selects it at matching sizes and falls back to the
 16 px faces for other characters. The immutable Runtime table is generated as
 `src/app_runtime/core_system_font_catalog.cpp`; consumers attach its four
-views without heap copies. The retained UI can
-opt into the Core text path through
-`JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM`; it is disabled by default until
-device visual acceptance is complete.
+views without heap copies. The retained UI selects the Core text path through
+`JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM`. When enabled, the generated C++
+bitmap pack is omitted unless a legacy bitmap-painter acceptance fixture is
+also selected. With Core Text disabled, the generated pack remains the legacy
+default until device visual acceptance promotes the Core path.
 
 | asset | weight | bytes | SHA-256 |
 |---|---:|---:|---|

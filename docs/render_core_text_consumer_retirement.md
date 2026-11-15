@@ -22,12 +22,18 @@ layer-cache identity and compositor branches. Remove them together only after
 the production consumers above migrate. Tests, benchmarks and ESP32 acceptance
 fixtures also need conversion, but are not product-default consumers.
 Canvas2D text already uses TextSystem; it is not a remaining callback branch.
-Ordinary generated pseudo-content and open native select popup text still have
-legacy `Text` emission paths in Core. Core #62 migrates closed form-control
-labels/select arrows through transactional PreparedText; its full tests pass
-33/33, cropped focused and installed consumers pass, and it merged after CI 4/4 (run `43673424532`).
-The painterless installed profile rejects ordinary Text commands before writes;
-this is not a claim that all generated/widget contexts have migrated.
+Ordinary generated pseudo-content still has a legacy `Text` emission path in
+Core. Core #62 migrates closed form-control labels/select arrows through
+transactional PreparedText; its full tests pass 33/33, cropped focused and
+installed consumers pass, and it merged after CI 4/4 (run `43673424532`). Core
+follow-up `89acc36a` migrates visible open-select popup rows to Core-prepared
+packets, refuses the complete overlay if any visible row cannot be prepared,
+and never falls back to host callbacks. Full CTest passes 33/33. Cropped CTest
+is 31/32 because the existing shared-inline shadow assertion fails identically
+on the pre-change base. The follow-up is committed locally but still needs
+PR/CI qualification. The painterless installed profile rejects ordinary Text
+commands before writes; generated pseudo-content and other generated/widget
+contexts remain open.
 
 The embedded-host example passed MSVC Release execution with the locked
 installed Core0.8/ABI3 package and source-overridden Core PR60 in full/cropped

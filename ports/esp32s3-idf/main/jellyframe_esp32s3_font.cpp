@@ -96,17 +96,17 @@ constexpr jellyframe::BitmapFont kBringupFont{
     6,
 };
 
-struct FontFamilyContext {
+struct LegacyFontFamilyContext {
     const jellyframe_esp32s3_generated::FontFace* faces = nullptr;
     std::size_t face_count = 0;
 };
 
-FontFamilyContext kProductionFontFamily{
+LegacyFontFamilyContext kLegacyFontFamily{
     jellyframe_esp32s3_generated::kNotoSansScFaces,
     jellyframe_esp32s3_generated::kNotoSansScFaceCount,
 };
 
-const ProductionFontStats kProductionFontStats{
+const LegacyBitmapFontStats kLegacyBitmapFontStats{
     "Noto Sans SC",
     jellyframe_esp32s3_generated::kNotoSansScCoverageName,
     jellyframe_esp32s3_generated::kNotoSansScFaceCount,
@@ -116,7 +116,7 @@ const ProductionFontStats kProductionFontStats{
     jellyframe_esp32s3_generated::kNotoSansScBitsPerPixel,
 };
 
-const jellyframe_esp32s3_generated::FontFace* choose_face(const FontFamilyContext& family,
+const jellyframe_esp32s3_generated::FontFace* choose_face(const LegacyFontFamilyContext& family,
                                                           int font_size,
                                                           int font_weight) {
     if (family.faces == nullptr || family.face_count == 0) {
@@ -137,15 +137,15 @@ const jellyframe_esp32s3_generated::FontFace* choose_face(const FontFamilyContex
     return best;
 }
 
-bool production_measure_callback(const std::string& text,
-                                 int font_size,
-                                 int font_weight,
-                                 jellyframe::TextMetrics* metrics,
-                                 void*) {
+bool legacy_measure_callback(const std::string& text,
+                             int font_size,
+                             int font_weight,
+                             jellyframe::TextMetrics* metrics,
+                             void*) {
     if (metrics == nullptr) {
         return false;
     }
-    const auto* face = choose_face(kProductionFontFamily, font_size, font_weight);
+    const auto* face = choose_face(kLegacyFontFamily, font_size, font_weight);
     if (face == nullptr || face->font == nullptr) {
         return false;
     }
@@ -154,16 +154,16 @@ bool production_measure_callback(const std::string& text,
     return true;
 }
 
-bool production_measure_range_callback(const char* data,
-                                       std::size_t length,
-                                       int font_size,
-                                       int font_weight,
-                                       jellyframe::TextMetrics* metrics,
-                                       void*) {
+bool legacy_measure_range_callback(const char* data,
+                                   std::size_t length,
+                                   int font_size,
+                                   int font_weight,
+                                   jellyframe::TextMetrics* metrics,
+                                   void*) {
     if (metrics == nullptr || (data == nullptr && length != 0)) {
         return false;
     }
-    const auto* face = choose_face(kProductionFontFamily, font_size, font_weight);
+    const auto* face = choose_face(kLegacyFontFamily, font_size, font_weight);
     if (face == nullptr || face->font == nullptr) {
         return false;
     }
@@ -175,16 +175,16 @@ bool production_measure_range_callback(const char* data,
     return true;
 }
 
-bool production_paint_callback(jellyframe::FrameBuffer& target,
-                               jellyframe::Rect rect,
-                               jellyframe::Color color,
-                               const std::string& text,
-                               int font_size,
-                               int font_weight,
-                               jellyframe::TextCommandAlign align,
-                               bool single_line,
-                               void*) {
-    const auto* face = choose_face(kProductionFontFamily, font_size, font_weight);
+bool legacy_paint_callback(jellyframe::FrameBuffer& target,
+                           jellyframe::Rect rect,
+                           jellyframe::Color color,
+                           const std::string& text,
+                           int font_size,
+                           int font_weight,
+                           jellyframe::TextCommandAlign align,
+                           bool single_line,
+                           void*) {
+    const auto* face = choose_face(kLegacyFontFamily, font_size, font_weight);
     if (face == nullptr || face->font == nullptr) {
         return false;
     }
@@ -203,55 +203,55 @@ jellyframe::BitmapFontContext make_bringup_font_context(int scale) {
     return jellyframe::BitmapFontContext{&kBringupFont, scale};
 }
 
-AppFontContext make_app_font_context() {
+LegacyBitmapFontContext make_legacy_bitmap_font_context() {
     return {};
 }
 
-const ProductionFontStats& production_font_stats() {
-    return kProductionFontStats;
+const LegacyBitmapFontStats& legacy_bitmap_font_stats() {
+    return kLegacyBitmapFontStats;
 }
 
-jellyframe::TextMeasureProvider make_production_text_measure_provider() {
-    return jellyframe::TextMeasureProvider{production_measure_callback,
+jellyframe::TextMeasureProvider make_legacy_bitmap_text_measure_provider() {
+    return jellyframe::TextMeasureProvider{legacy_measure_callback,
                                            nullptr,
                                            nullptr,
                                            nullptr,
-                                           production_measure_range_callback,
+                                           legacy_measure_range_callback,
                                            nullptr};
 }
 
-jellyframe::TextPainter make_production_text_painter() {
-    return jellyframe::TextPainter{production_paint_callback, nullptr};
+jellyframe::TextPainter make_legacy_bitmap_text_painter() {
+    return jellyframe::TextPainter{legacy_paint_callback, nullptr};
 }
 
-bool app_font_measure_callback(const std::string& text,
-                               int font_size,
-                               int font_weight,
-                               jellyframe::TextMetrics* metrics,
-                               void* context) {
-    return production_measure_callback(text, font_size, font_weight, metrics, context);
+bool legacy_app_font_measure_callback(const std::string& text,
+                                      int font_size,
+                                      int font_weight,
+                                      jellyframe::TextMetrics* metrics,
+                                      void* context) {
+    return legacy_measure_callback(text, font_size, font_weight, metrics, context);
 }
 
-bool app_font_measure_range_callback(const char* data,
-                                     std::size_t length,
-                                     int font_size,
-                                     int font_weight,
-                                     jellyframe::TextMetrics* metrics,
-                                     void* context) {
-    return production_measure_range_callback(data, length, font_size, font_weight, metrics, context);
+bool legacy_app_font_measure_range_callback(const char* data,
+                                            std::size_t length,
+                                            int font_size,
+                                            int font_weight,
+                                            jellyframe::TextMetrics* metrics,
+                                            void* context) {
+    return legacy_measure_range_callback(data, length, font_size, font_weight, metrics, context);
 }
 
-bool app_font_paint_callback(jellyframe::FrameBuffer& target,
-                             jellyframe::Rect rect,
-                             jellyframe::Color color,
-                             const std::string& text,
-                             int font_size,
-                             int font_weight,
-                             jellyframe::TextCommandAlign align,
-                             bool single_line,
-                             void* context) {
-    return production_paint_callback(target, rect, color, text, font_size, font_weight,
-                                     align, single_line, context);
+bool legacy_app_font_paint_callback(jellyframe::FrameBuffer& target,
+                                    jellyframe::Rect rect,
+                                    jellyframe::Color color,
+                                    const std::string& text,
+                                    int font_size,
+                                    int font_weight,
+                                    jellyframe::TextCommandAlign align,
+                                    bool single_line,
+                                    void* context) {
+    return legacy_paint_callback(target, rect, color, text, font_size, font_weight,
+                                 align, single_line, context);
 }
 
 } // namespace jellyframe_esp32s3

@@ -264,7 +264,7 @@ void ui_entry(void* raw) {
     panel.packed_pixels = packed.get(); panel.packed_pixel_capacity = pixels;
     auto packed_sink = make_rgb565_sink(panel);
     const HostFrameSink sink = embedded_frame_sink(packed_sink);
-    const SoftwareRasterizer rasterizer(make_production_text_painter());
+    const SoftwareRasterizer rasterizer(legacy_bitmap_text_painter());
     xSemaphoreGive(state->ui_started);
     bool launcher_drawn = false;
     while (!state->stop.load()) {

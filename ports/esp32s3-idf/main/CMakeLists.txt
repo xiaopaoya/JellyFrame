@@ -13,6 +13,15 @@ set(JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_CPP
     "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}/jellyframe_esp32s3_noto_sans_sc_font.cpp")
 set(JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_H
     "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}/jellyframe_esp32s3_noto_sans_sc_font.h")
+set(JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED OFF)
+if(NOT CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM OR
+   CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE OR
+   CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_FRAME_V2_ACCEPTANCE OR
+   CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_TASK_VALUE_FRAME_V4_ACCEPTANCE OR
+   CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_SERVICE_ECHO_ACCEPTANCE OR
+   CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_FAULT_RECOVERY_ACCEPTANCE)
+    set(JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED ON)
+endif()
 if(JELLYFRAME_RENDER_CORE_SOURCE_DIR)
     get_filename_component(JELLYFRAME_ESP32S3_CORE_INCLUDE_ROOT
         "${JELLYFRAME_RENDER_CORE_SOURCE_DIR}/include" ABSOLUTE)
@@ -20,7 +29,9 @@ else()
     set(JELLYFRAME_ESP32S3_CORE_INCLUDE_ROOT
         "${CMAKE_CURRENT_LIST_DIR}/../../../src")
 endif()
-file(MAKE_DIRECTORY "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}")
+if(JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED)
+    file(MAKE_DIRECTORY "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}")
+endif()
 
 # The JFDP identity must name the exact immutable Developer Image build. Keep
 # the published image as the default while allowing release candidates to set
@@ -69,21 +80,23 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
         VERBATIM
     )
 
-    add_custom_command(
-        OUTPUT
-            "${JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_CPP}"
-            "${JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_H}"
-        COMMAND "${Python3_EXECUTABLE}" "${JELLYFRAME_ESP32S3_FONT_GENERATOR}"
-            --output-dir "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}"
-            --sizes 8,9,10,11,12,14,16,20,24
-            --compact-ascii-sizes 8,9,10,11,12,14
-            --bits-per-pixel 1
-        DEPENDS
-            "${JELLYFRAME_ESP32S3_FONT_GENERATOR}"
-            ${JELLYFRAME_ESP32S3_FONT_INPUTS}
-        COMMENT "Generating JellyFrame ESP32-S3 Noto Sans SC font pack"
-        VERBATIM
-    )
+    if(JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED)
+        add_custom_command(
+            OUTPUT
+                "${JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_CPP}"
+                "${JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_H}"
+            COMMAND "${Python3_EXECUTABLE}" "${JELLYFRAME_ESP32S3_FONT_GENERATOR}"
+                --output-dir "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}"
+                --sizes 8,9,10,11,12,14,16,20,24
+                --compact-ascii-sizes 8,9,10,11,12,14
+                --bits-per-pixel 1
+            DEPENDS
+                "${JELLYFRAME_ESP32S3_FONT_GENERATOR}"
+                ${JELLYFRAME_ESP32S3_FONT_INPUTS}
+            COMMENT "Generating JellyFrame ESP32-S3 legacy Noto Sans SC bitmap pack"
+            VERBATIM
+        )
+    endif()
 
 endif()
 
@@ -92,10 +105,19 @@ if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER)
     list(APPEND JELLYFRAME_ESP32S3_IMAGE_SOURCES "jellyframe_esp32s3_image.cpp")
 endif()
 
+set(JELLYFRAME_ESP32S3_FONT_SOURCES)
+set(JELLYFRAME_ESP32S3_FONT_INCLUDE_DIRS)
+if(JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED)
+    list(APPEND JELLYFRAME_ESP32S3_FONT_SOURCES
+        "jellyframe_esp32s3_font.cpp"
+        "${JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_CPP}")
+    list(APPEND JELLYFRAME_ESP32S3_FONT_INCLUDE_DIRS
+        "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}")
+endif()
+
 idf_component_register(
     SRCS
         "main.cpp"
-        "jellyframe_esp32s3_font.cpp"
         "jellyframe_esp32s3_device_image_lifecycle.cpp"
         "jellyframe_esp32s3_device_image_store.cpp"
         "jellyframe_esp32s3_hal.cpp"
@@ -116,11 +138,11 @@ idf_component_register(
         "boards/waveshare_touch_lcd_boards.cpp"
         "boards/waveshare_touch_lcd_169_board.cpp"
         "${JELLYFRAME_ESP32S3_GENERATED_RESOURCES}"
-        "${JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_CPP}"
+        ${JELLYFRAME_ESP32S3_FONT_SOURCES}
     INCLUDE_DIRS
         "."
         "${JELLYFRAME_ESP32S3_CORE_INCLUDE_ROOT}"
-        "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}"
+        ${JELLYFRAME_ESP32S3_FONT_INCLUDE_DIRS}
     REQUIRES
         esp_timer
         esp_partition
@@ -156,6 +178,7 @@ if(NOT JELLYFRAME_ESP32S3_SOURCE_REVISION MATCHES "^[0-9a-f]+$" OR
     message(FATAL_ERROR "unable to resolve ESP32-S3 Developer Image source revision: ${JELLYFRAME_ESP32S3_GIT_RESULT}")
 endif()
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
+    "JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED=$<BOOL:${JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED}>"
     "JELLYFRAME_ESP32S3_SOURCE_REVISION=\"${JELLYFRAME_ESP32S3_SOURCE_REVISION}\""
     "JELLYFRAME_ESP32S3_IMAGE_VERSION=\"${JELLYFRAME_ESP32S3_IMAGE_VERSION}\""
     "JELLYFRAME_ESP32S3_RENDER_CORE_VERSION=\"${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}\""

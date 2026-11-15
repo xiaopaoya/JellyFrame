@@ -381,7 +381,7 @@ void ui_entry(void* raw) {
     jellyframe::ScriptTaskFrameRendererOptions renderer_options;
     renderer_options.max_clip_depth = kMaxClipDepth; renderer_options.max_temporary_pixels = kMaxTemporaryPixels;
     renderer_options.diagnostics = &diagnostics;
-    const jellyframe::ScriptTaskFrameRenderer renderer(make_production_text_painter(), renderer_options);
+    const jellyframe::ScriptTaskFrameRenderer renderer(legacy_bitmap_text_painter(), renderer_options);
     jellyframe::SoftwareRasterizerScratch scratch;
     ESP_LOGI(kTag, "v4_ui codec_version=4 viewport=%dx%d max_temporary_pixels=%u framebuffer_pixels=%u", width, height,
              static_cast<unsigned>(kMaxTemporaryPixels), static_cast<unsigned>(pixels));

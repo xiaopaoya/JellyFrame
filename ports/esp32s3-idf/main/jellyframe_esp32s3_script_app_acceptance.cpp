@@ -268,7 +268,7 @@ void ui_entry(void* raw) {
     panel.packed_pixel_capacity = pixels;
     auto packed_sink = make_rgb565_sink(panel);
     const jellyframe::HostFrameSink sink = jellyframe::embedded_frame_sink(packed_sink);
-    const jellyframe::SoftwareRasterizer rasterizer(make_production_text_painter());
+    const jellyframe::SoftwareRasterizer rasterizer(legacy_bitmap_text_painter());
     std::uint32_t input_sequence = 1;
     ESP_LOGI(kTag, "ui_task kind=script-app viewport=%dx%d hardware_display=%d", width, height, board.hardware_display_ready ? 1 : 0);
     while (!state->stop.load()) {
