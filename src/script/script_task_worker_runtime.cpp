@@ -823,7 +823,11 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
         }, this};
     }
 #endif
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     LayoutEngine layout_engine(*style_resolver_, layout_options);
+#else
+    LayoutEngine layout_engine(*style_resolver_, TextMeasureProvider{}, layout_options);
+#endif
     LayoutBoxPtr layout_tree = layout_engine.layout(*render_tree, options_.viewport.width, options_.viewport.height);
     if (!layout_tree) return false;
     // Text layout caches were just rebuilt from this DOM snapshot. Core's layer

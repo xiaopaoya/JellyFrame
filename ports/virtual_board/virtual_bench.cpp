@@ -285,13 +285,21 @@ int run_virtual_bench(int argc, char** argv) {
     auto render_tree = builder.build(*document, render_tree_arena);
 
     const double layout_us = average_microseconds(options.iterations, [&] {
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         LayoutEngine layout_engine(resolver, layout_options);
+#else
+        LayoutEngine layout_engine(resolver, TextMeasureProvider{}, layout_options);
+#endif
         MonotonicArena layout_arena;
         auto layout_tree = layout_engine.layout(*render_tree, options.width, layout_arena);
         (void)layout_tree;
     });
 
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     LayoutEngine layout_engine(resolver, layout_options);
+#else
+    LayoutEngine layout_engine(resolver, TextMeasureProvider{}, layout_options);
+#endif
     MonotonicArena layout_arena;
     auto layout_tree = layout_engine.layout(*render_tree, options.width, layout_arena);
 
@@ -473,7 +481,11 @@ int run_virtual_bench(int argc, char** argv) {
         RenderTreeBuilder local_builder(local_resolver, render_options);
         MonotonicArena local_render_tree_arena;
         auto local_render_tree = local_builder.build(*local_document, local_render_tree_arena);
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         LayoutEngine local_layout(local_resolver, layout_options);
+#else
+        LayoutEngine local_layout(local_resolver, TextMeasureProvider{}, layout_options);
+#endif
         MonotonicArena local_layout_arena;
         auto local_layout_tree = local_layout.layout(*local_render_tree, options.width, local_layout_arena);
         LayerTreeBuilder local_layer_tree_builder(layer_options);

@@ -517,6 +517,7 @@ void ScriptTaskFrameDiffAccumulator::reset() {
 }
 
 ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(ScriptTaskFrameRendererOptions options)
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     : rasterizer_(ImagePainter{},
                   options.diagnostics,
                   SoftwareRasterizerOptions{
@@ -524,9 +525,17 @@ ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(ScriptTaskFrameRendererOptions 
                       options.rasterizer_statistics,
                       options.rasterizer_timing}),
       options_(options) {}
+#else
+    : rasterizer_(TextPainter{}, ImagePainter{}, options.diagnostics,
+                  SoftwareRasterizerOptions{options.max_temporary_pixels,
+                                            options.rasterizer_statistics,
+                                            options.rasterizer_timing}),
+      options_(options) {}
+#endif
 
 ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(ImagePainter image_painter,
                                                  ScriptTaskFrameRendererOptions options)
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     : rasterizer_(image_painter,
                   options.diagnostics,
                   SoftwareRasterizerOptions{
@@ -535,11 +544,38 @@ ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(ImagePainter image_painter,
                       options.rasterizer_timing}),
       options_(options),
       image_painter_(image_painter) {}
+#else
+    : rasterizer_(TextPainter{}, image_painter, options.diagnostics,
+                  SoftwareRasterizerOptions{options.max_temporary_pixels,
+                                            options.rasterizer_statistics,
+                                            options.rasterizer_timing}),
+      options_(options),
+      image_painter_(image_painter) {}
+
+ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
+                                                 ImagePainter image_painter,
+                                                 ScriptTaskFrameRendererOptions options)
+    : rasterizer_(text_painter, image_painter, options.diagnostics,
+                  SoftwareRasterizerOptions{options.max_temporary_pixels,
+                                            options.rasterizer_statistics,
+                                            options.rasterizer_timing}),
+      options_(options),
+      text_painter_(text_painter),
+      image_painter_(image_painter) {}
+#endif
 
 bool ScriptTaskFrameRenderer::command_visual_bounds(const DisplayCommand& command, Rect& output) const {
     if (detail::command_type(command) == DisplayCommandType::Text) {
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         output = {};
         return false;
+#else
+        if (!text_painter_.writes_only_within_rect || command.rect.width <= 0 || command.rect.height <= 0) {
+            output = {};
+            return false;
+        }
+        return transform_bounds(command, output);
+#endif
     }
     if (detail::command_type(command) == DisplayCommandType::Image) {
         if (!image_painter_.writes_only_within_rect || command.rect.width <= 0 || command.rect.height <= 0) {

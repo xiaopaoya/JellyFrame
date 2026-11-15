@@ -4,6 +4,8 @@
 #include "render_core/layout.h"
 #include "render_core/style.h"
 
+#include "display_command_access.h"
+
 #include <iostream>
 
 using namespace jellyframe;
@@ -48,11 +50,12 @@ int main() {
     DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
 
     for (const DisplayCommand& command : display_list) {
-        if (command.type() == DisplayCommandType::FillRect) {
+        const auto type = native::display_command_type(command);
+        if (type == DisplayCommandType::FillRect) {
             std::cout << "fill_rect ";
-        } else if (command.type() == DisplayCommandType::LinearGradient) {
+        } else if (type == DisplayCommandType::LinearGradient) {
             std::cout << "gradient  ";
-        } else if (command.type() == DisplayCommandType::StrokeRect) {
+        } else if (type == DisplayCommandType::StrokeRect) {
             std::cout << "stroke    ";
         } else {
             std::cout << "text      ";
@@ -63,10 +66,12 @@ int main() {
                   << " h=" << command.rect.height
                   << " color=";
         print_color(command.color);
-        if (command.type() == DisplayCommandType::Text && !command.text.empty()) {
+        if (type == DisplayCommandType::Text && !command.text.empty()) {
             std::cout << " value=\"" << command.text << "\"";
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         } else if (command.type() == DisplayCommandType::PreparedText) {
             std::cout << " prepared_packet_bytes=" << command.text.size();
+#endif
         }
         std::cout << '\n';
     }

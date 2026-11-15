@@ -18,6 +18,7 @@
 #endif
 
 #include "example_css_io.h"
+#include "display_command_access.h"
 
 #include <algorithm>
 #include <chrono>
@@ -167,9 +168,11 @@ void accumulate_layout_bounds(const LayoutBox& box, LayoutBounds& bounds) {
 void accumulate_display_bounds(const DisplayList& display_list, LayoutBounds& bounds) {
     for (const DisplayCommand& command : display_list) {
         Rect rect = command.rect;
-        if (command.type() == DisplayCommandType::LinearGradient ||
-            command.type() == DisplayCommandType::RadialGradient ||
-            command.type() == DisplayCommandType::ConicGradient) {
+        const auto type = native::display_command_type(command);
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+        if (type == DisplayCommandType::LinearGradient ||
+            type == DisplayCommandType::RadialGradient ||
+            type == DisplayCommandType::ConicGradient) {
             const BackgroundPaintClip clip = command.basic_paint().background_paint_clip;
             if (clip.width > 0 && clip.height > 0) {
                 const std::int64_t clip_left = static_cast<std::int64_t>(rect.x) + clip.dx;
@@ -186,6 +189,9 @@ void accumulate_display_bounds(const DisplayList& display_list, LayoutBounds& bo
                     : Rect{};
             }
         }
+#else
+        (void)type;
+#endif
         if (rect.width <= 0 || rect.height <= 0) {
             continue;
         }
@@ -749,7 +755,11 @@ int main(int argc, char** argv) {
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
         layout_options.diagnostics = &diagnostics;
         layout_options.text_system = text_system;
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         LayoutEngine layout_engine(resolver, layout_options);
+#else
+        LayoutEngine layout_engine(resolver, TextMeasureProvider{}, layout_options);
+#endif
         stage_start = Clock::now();
         auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
         timings.layout_us = elapsed_us(stage_start, Clock::now());
@@ -768,7 +778,11 @@ int main(int argc, char** argv) {
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
         compositor_options.diagnostics = &diagnostics;
         compositor_options.text_system = text_system;
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         SoftwareCompositor compositor(ImagePainter{}, compositor_options);
+#else
+        SoftwareCompositor compositor(TextPainter{}, ImagePainter{}, compositor_options);
+#endif
         const Color background = page_background_color(*document, resolver);
         stage_start = Clock::now();
         FrameBuffer frame_buffer = compositor.render(*layer_tree, options.viewport_width, options.viewport_height, background);
