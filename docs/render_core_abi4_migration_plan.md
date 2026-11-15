@@ -2,7 +2,7 @@
 
 > Last updated: 2026-11-15; Applies to: 0.6.0-dev. Core development contract: 0.9.0-dev / ABI4.
 
-> **Latest checkpoint (2026-11-15):** Runtime PRs #99-#103 are merged; each passed all 19 CI checks. PR #103 (`d6fcaff4`) makes application fonts JFFONT2-only, removes the legacy AppFontSet/AppHost callback path, and qualifies the exact Core #62 source (`38148e73`, source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`) in current-mainline and ordinary ABI4 lanes. Runtime still locks signed Core 0.8.0 / ABI3; ABI4 has not been signed or released. Generated C++ BitmapFont defaults and remaining native/desktop callback consumers are still open. A fresh, unflashed `0.6.2-abi4-mainline2` image binds both exact revisions and the current source identity; device acceptance remains pending.
+> **Latest checkpoint (2026-11-15):** Runtime PRs #99-#103 are merged; each passed all 19 CI checks. PR #103 (`d6fcaff4`) makes application fonts JFFONT2-only, removes the legacy AppFontSet/AppHost callback path, and qualifies the exact Core #62 source (`38148e73`, source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`) in current-mainline and ordinary ABI4 lanes. A local, unsubmitted port change now omits generation/compilation of the legacy Noto C++ bitmap pack in CoreText builds while retaining the legacy profile and explicitly selected bitmap-painter fixtures. This is a build-boundary milestone, not completion of default-consumer migration: CoreText remains opt-in, and non-retained/Win32 consumers remain open. Runtime still locks signed Core 0.8.0 / ABI3; ABI4 has not been signed or released. A fresh, unflashed `0.6.2-abi4-mainline2` image binds both exact revisions and the current source identity; device acceptance remains pending.
 
 This is the current execution plan. Earlier checkpoint narratives are preserved
 in Git history and their linked PRs; they are not additional open tasks. The
@@ -38,9 +38,16 @@ ports register immutable resources rather than implementing text policy.
 
 Completed in Runtime #103: serialized JFFONT0/1 and AppFontSet callback
 precedence are removed; manifests/imports use canonical JFFONT2 with offline
-Core preparation. Remaining: replace generated C++ BitmapFont default resources.
-Preserve deterministic family/weight selection, font-byte lifetime, missing-font
-refusal and resource budgets. Do not add more host text callbacks.
+Core preparation. A local port change has now separated the ESP32 build
+boundary: CoreText builds do not generate or link the legacy Noto C++ bitmap
+pack, while CoreText-off builds and explicitly selected legacy painter fixtures
+retain it. ESP-IDF 5.3.1 builds succeeded for both profiles; the CoreText band
+shell map contains no legacy font symbols, and the legacy profile generated and
+linked 27 faces. These were different sdkconfig profiles, so BIN sizes are not
+a direct measurement of the pack's net cost. Remaining: make CoreText the
+qualified default, migrate/retire remaining generated-font consumers, and
+preserve deterministic family/weight selection, font-byte lifetime,
+missing-font refusal and resource budgets. Do not add more host text callbacks.
 
 ### B. Runtime consumer migration
 
@@ -48,7 +55,7 @@ refusal and resource budgets. Do not add more host text callbacks.
 | --- | --- | --- |
 | Embedded host | Complete in #100. | Visible ink, click/checkbox/select and RGB565 flush; ABI3 and ABI4 full/cropped. |
 | ESP32 installed worker | Merged #101 painterless canonical v10 path; owned catalog/snapshot survives replay; BMP is optional. | Host full/cropped and locked ABI3 matrix, real IDF builds, CI, later exact device profile. |
-| ESP32 retained native/default | Named CoreText profile is merged; default still uses generated BitmapFont providers. | Migrate generated defaults to the Core-owned resource contract and qualify supported properties/routes. |
+| ESP32 retained native/default | Named CoreText profile is merged; a local unsubmitted build-boundary change omits the generated C++ pack when CoreText is selected. CoreText remains opt-in; legacy remains the default profile. | Qualify CoreText as default, then remove or explicitly retain only isolated legacy consumers; qualify supported properties/routes. |
 | ESP32 non-retained main entry | Separate provider factories remain. | Migrate or explicitly retire the entry, not only retained UI. |
 | Win32 default | Explicit CoreText catalog mode is merged; GDI remains default. | Bounded ellipsis/property parity, repaint gates and catalog default adoption. |
 | AppFontSet | Complete in #103: JFFONT2-only catalog, callback accessors/browser precedence removed, samples and tools converted. | No remaining AppFontSet work; generated C++ BitmapFont defaults are tracked separately. |

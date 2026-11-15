@@ -91,6 +91,7 @@ std::size_t external_script_count(const std::vector<DocumentScript>& scripts) {
     return total;
 }
 
+#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
 Node* find_by_id(Node& root, const std::string& id) {
     std::vector<Node*> stack;
     stack.push_back(&root);
@@ -113,6 +114,7 @@ std::uint32_t rect_area(Rect rect) {
     }
     return static_cast<std::uint32_t>(rect.width) * static_cast<std::uint32_t>(rect.height);
 }
+#endif
 
 struct StridedFlushProbe {
     std::uint32_t calls = 0;
@@ -453,6 +455,7 @@ void run_p3_display_smoke(const FrameBuffer& frame_buffer, int width, int height
              packed_probe.last_dirty.height);
 }
 
+#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
 void seed_p5_input_smoke(jellyframe_esp32s3::BoardInputQueue& queue) {
     using jellyframe_esp32s3::BoardInputEvent;
     using jellyframe_esp32s3::BoardInputKind;
@@ -476,8 +479,10 @@ void seed_p5_input_smoke(jellyframe_esp32s3::BoardInputQueue& queue) {
         queue.enqueue(BoardInputEvent{BoardInputKind::Wheel, 10, 10, 0, 1});
     }
 }
+#endif
 
 void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
+#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
     constexpr char kSmokeHtml[] =
         "<body><main class='app'>"
         "<h1>STATUS \xe4\xb8\xad</h1>"
@@ -493,8 +498,8 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
         "input { height: 24px; background: #ffffff; color: #111827; border: 1px solid #94a3b8; }";
 
     const TextMeasureProvider text_measure =
-        jellyframe_esp32s3::make_production_text_measure_provider();
-    const TextPainter text_painter = jellyframe_esp32s3::make_production_text_painter();
+        jellyframe_esp32s3::make_legacy_bitmap_text_measure_provider();
+    const TextPainter text_painter = jellyframe_esp32s3::make_legacy_bitmap_text_painter();
 
     TextMetrics ascii_metrics{};
     TextMetrics cjk_metrics{};
@@ -505,7 +510,7 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
         text_measure.measure("\xe4\xb8\xad\xe6\x96\x87", 20, 500, &cjk_metrics, text_measure.context);
     const bool bold_ok = text_measure.measure != nullptr &&
         text_measure.measure("BOLD", 24, 700, &bold_metrics, text_measure.context);
-    const auto& font_stats = jellyframe_esp32s3::production_font_stats();
+    const auto& font_stats = jellyframe_esp32s3::legacy_bitmap_font_stats();
 
     HtmlParser html_parser;
     CssParser css_parser;
@@ -606,6 +611,11 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
              static_cast<unsigned>(rect_area(dirty_rect)),
              static_cast<unsigned>(panel.flush_count - flush_count_before_dirty),
              static_cast<unsigned>(panel.flushed_bytes - flush_bytes_before_dirty));
+#else
+    (void)width;
+    (void)height;
+    (void)budgets;
+#endif
 }
 
 [[maybe_unused]] void run_benchmark() {

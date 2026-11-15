@@ -549,7 +549,7 @@ void ui_entry(void* raw) {
     panel.packed_pixel_capacity = pixels;
     auto packed_sink = make_rgb565_sink(panel);
     auto sink = jellyframe::embedded_frame_sink(packed_sink);
-    const jellyframe::SoftwareRasterizer rasterizer(make_production_text_painter());
+    const jellyframe::SoftwareRasterizer rasterizer(legacy_bitmap_text_painter());
     ESP_LOGI(kTag, "script_echo_ui kind=service-echo viewport=%dx%d hardware_display=%d",
              width, height, board.hardware_display_ready ? 1 : 0);
     xSemaphoreGive(state->ui_started);

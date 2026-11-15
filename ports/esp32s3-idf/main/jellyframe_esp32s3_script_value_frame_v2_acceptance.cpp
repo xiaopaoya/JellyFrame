@@ -369,7 +369,7 @@ void ui_entry(void* raw) {
     renderer_options.diagnostics = &diagnostics;
     jellyframe::SoftwareRasterizerStatistics rasterizer_statistics;
     renderer_options.rasterizer_statistics = &rasterizer_statistics;
-    const jellyframe::ScriptTaskFrameRenderer renderer(make_production_text_painter(), renderer_options);
+    const jellyframe::ScriptTaskFrameRenderer renderer(legacy_bitmap_text_painter(), renderer_options);
     jellyframe::SoftwareRasterizerScratch scratch;
     ESP_LOGI(kTag, "v2_ui ready viewport=%dx%d temporary_pixels_limit=%u hardware_display=%d",
              width, height, static_cast<unsigned>(kMaxTemporaryPixels), board.hardware_display_ready ? 1 : 0);

@@ -479,7 +479,9 @@ struct TimerUiTaskContext {
     BoardInputQueue input_queue;
     jellyframe::HostBudgets budgets;
     jellyframe::HostDeviceCapabilities capabilities;
-    AppFontContext font_context{};
+#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
+    LegacyBitmapFontContext font_context{};
+#endif
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     BmpImageAdapter image_adapter;
 #endif
@@ -2301,15 +2303,17 @@ void run_retained_ui_task(void* raw_context) {
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     context->image_adapter.configure(context->budgets, context->document_url, nullptr, esp_timer_get_time);
 #endif
-    context->font_context = make_app_font_context();
-    context->text_measure = jellyframe::TextMeasureProvider{app_font_measure_callback,
+#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
+    context->font_context = make_legacy_bitmap_font_context();
+    context->text_measure = jellyframe::TextMeasureProvider{legacy_app_font_measure_callback,
                                                             &context->font_context,
                                                             nullptr,
                                                             nullptr,
-                                                            app_font_measure_range_callback,
+                                                            legacy_app_font_measure_range_callback,
                                                             nullptr};
-    context->text_painter = jellyframe::TextPainter{app_font_paint_callback,
+    context->text_painter = jellyframe::TextPainter{legacy_app_font_paint_callback,
                                                     &context->font_context};
+#endif
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
     if (!context->core_text_fonts.attach_core_system_font_catalog_view(
             jellyframe::kNotoSansScSystemFontCatalog,
@@ -2323,7 +2327,8 @@ void run_retained_ui_task(void* raw_context) {
     context->text_measure = {};
     context->text_painter = {};
 #endif
-    const auto& font_stats = production_font_stats();
+#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
+    const auto& font_stats = legacy_bitmap_font_stats();
     ESP_LOGI(kTag,
              "font_pack family=\"%s\" coverage=%s faces=%u coverage_chars=%u glyphs=%u bitmap_bytes=%u bits_per_pixel=%u",
              font_stats.family,
@@ -2333,6 +2338,7 @@ void run_retained_ui_task(void* raw_context) {
              static_cast<unsigned>(font_stats.glyph_count),
              static_cast<unsigned>(font_stats.bitmap_bytes),
              static_cast<unsigned>(font_stats.bits_per_pixel));
+#endif
     context->frame_scratch.reserve_from_budgets(context->budgets);
     jellyframe::AppRuntimeHostOptions app_options;
     app_options.max_in_flight_jobs = context->capabilities.async.max_in_flight_jobs;
