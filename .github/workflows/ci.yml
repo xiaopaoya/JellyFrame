@@ -722,6 +722,30 @@ jobs:
             r3_events: 'ON'
             node_identity: 'ON'
             cropped: true
+          - profile: core63-select-popup-full
+            profile_id: render-core-default
+            core_commit: 89acc36adbb3897ab63c2e49b7568bc6bb4a32fa
+            source_hash: e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67
+            source_count: 163
+            require_natural: 'OFF'
+            qualify_natural_inline: 'OFF'
+            qualify_generated_inline: 'OFF'
+            qualify_core_select_popup: 'ON'
+            r3_events: 'OFF'
+            node_identity: 'OFF'
+            cropped: false
+          - profile: core63-select-popup-cropped
+            profile_id: render-core-minimal-no-forms-advanced
+            core_commit: 89acc36adbb3897ab63c2e49b7568bc6bb4a32fa
+            source_hash: e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67
+            source_count: 163
+            require_natural: 'OFF'
+            qualify_natural_inline: 'OFF'
+            qualify_generated_inline: 'OFF'
+            qualify_core_select_popup: 'ON'
+            r3_events: 'OFF'
+            node_identity: 'OFF'
+            cropped: true
     env:
       QUALIFIED_CORE_COMMIT: ${{ matrix.core_commit }}
       EXPECTED_CORE_SOURCE_HASH: ${{ matrix.source_hash }}
@@ -813,6 +837,7 @@ jobs:
           -DREQUIRE_NATURAL_IMAGE_API=${{ matrix.require_natural }}
           -DQUALIFY_NATURAL_INLINE_IMAGES=${{ matrix.qualify_natural_inline }}
           -DQUALIFY_GENERATED_INLINE_TEXT=${{ matrix.qualify_generated_inline }}
+          -DQUALIFY_CORE_SELECT_POPUP_TEXT=${{ matrix.qualify_core_select_popup }}
           -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=${{ matrix.r3_events }}
           -DJELLYFRAME_ENABLE_NODE_IDENTITY=${{ matrix.node_identity }}
           -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE/third_party/jerryscript"

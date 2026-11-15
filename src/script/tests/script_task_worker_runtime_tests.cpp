@@ -1766,7 +1766,9 @@ int script_task_worker_runtime_tests_main() {
             worker_canonical_rejects_invalid_config_and_catalog_mismatch_before_vm(version);
             worker_canonical_uses_catalog_for_layout_and_publishes_group_frame(version);
             worker_canonical_resolves_content_and_background_images(version);
+#if defined(JELLYFRAME_TEST_CORE_SELECT_POPUP_TEXT) && JELLYFRAME_TEST_CORE_SELECT_POPUP_TEXT
             worker_core_text_select_popup_prepares_and_selects_visible_options(version);
+#endif
 #if JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION >= 2
             worker_shared_inline_paragraph(version);
 #endif
