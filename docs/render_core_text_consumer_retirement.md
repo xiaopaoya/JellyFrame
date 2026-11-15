@@ -2,44 +2,50 @@
 
 > Last updated: 2026-11-15; Applies to: 0.6.0-dev. Core contract: 0.9.0-dev / ABI4.
 
-Current source audit: 2026-11-15. Runtime mainline `1d9071a0` (PR110), Core
-`8aceb6d8` (PR63), 0.9.0-dev / ABI4. This is a consumer migration checklist,
+Current source audit: 2026-11-15. Runtime mainline `fa5176a0` (PR111), Core
+`1d5c746d` (PR65), 0.9.0-dev / ABI4. This is a consumer migration checklist,
 not a declaration that legacy callback APIs have been removed.
+
+Runtime's in-tree source-override integration was built against Core identity
+`52ae4354efdae95d4dbfdfb6a2ef1ad8fbbfb99029bdd922105ac2447302f62d` (163
+files); Release build and CTest passed 60/60. The Runtime test configuration
+now links Core's style-resolver test hooks when that source is present.
 
 ## Production consumers
 
 | Consumer | Actual selection and resources | Remaining change |
 | --- | --- | --- |
-| ESP32 retained UI (`jellyframe_esp32s3_ui_task.cpp`) | Named CoreText profile binds the shared JFFONT2 catalog and clears providers. The current unmerged WS147 band-shell defaults select this profile; the exact Core #63 ESP-IDF build and profile guard pass. The explicit legacy typography profile still exercises generated C++ Noto faces. | Review/merge the WS147 default change; keep legacy only as an explicit acceptance profile, then qualify visible routes/properties before removing callback construction and port-owned measurement/scaling. |
-| ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects supported canonical v10 and a painterless renderer, independently of BMP. Owned text catalog/snapshot survives accepted-frame replay. CoreText OFF retains the explicit legacy painter path. Core #63 uses the same Core catalog for open select popup rows. Runtime #107 tests the exact Core source through canonical v10 worker input, prepared packets, B-row pixels, selection and close. Runtime #109 adds a full-feature WS147 installed-worker profile and select-popup app; CI passed 21/21 and the IDF image/package/provider regressions passed. | Capture user-visible popup appearance/touch on the dedicated profile when available, then migrate remaining callback-dependent generated/widget text. |
+| ESP32 retained UI (`jellyframe_esp32s3_ui_task.cpp`) | Runtime #111 enables the named CoreText WS147 band-shell profile; it binds the shared JFFONT2 catalog and clears providers. The exact Core #63 ESP-IDF build and profile guard pass. The explicit legacy typography profile still exercises generated C++ Noto faces. | Keep legacy only as an explicit acceptance profile; qualify any new named device image before removing callback construction and port-owned measurement/scaling. |
+| ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects supported canonical v10 and a painterless renderer, independently of BMP. Owned text catalog/snapshot survives accepted-frame replay. CoreText OFF retains the explicit legacy painter path. Runtime #107 tests Core #63 popup input, prepared packets, B-row pixels, selection and close; #109 adds a full-feature WS147 installed-worker profile. Core #65 routes generated pseudo labels/list markers through TextSystem or explicit refusal. | Qualify the exact Core #65 source in reachable worker producers; user-visible popup appearance/touch remains a separate named-profile device gate. |
 | ESP32 P4/P5/P6 smoke (`main.cpp`) | The separate generated-BitmapFont provider factory is called only by this benchmark/smoke fixture, not by a product runtime route. The CoreText smoke runs before benchmark framebuffer admission. PR #110 built it with IDF 5.3.1 and exact Core #63 identity `e842b2e6...af1adb67`; the map excludes the legacy Noto C++ pack. | Keep legacy coverage on its explicit legacy profile. The CoreText smoke is build-qualified; physical execution is optional diagnostics, not a product-consumer migration gate. |
-| Desktop default (`tools/native/win32_browser.cpp`) | GDI measurement/painting using the OS font; Core catalog is opt-in. PR #110 disables text-dirty layout reuse in CoreText because the reuse validator only accepts legacy provider metrics; text mutation rebuilds layout instead. The current unmerged ABI4 matrix covers alignment and text property mutation; 293 incremental/full repaint frames across 27 flows pass against Core #63. | Review/merge the matrix, close remaining supported-property gaps, then decide whether to adopt the catalog default. |
+| Desktop default (`tools/native/win32_browser.cpp`) | GDI measurement/painting using the OS font; Core catalog is opt-in. PR #110 disables text-dirty layout reuse in CoreText because the reuse validator only accepts legacy provider metrics; text mutation rebuilds layout instead. PR #111 merges the ABI4 property matrix; 293 incremental/full repaint frames across 27 flows pass against Core #63. | Decide whether to adopt the catalog default after the callback API/fixture migration; GDI remains an explicit path. |
 | Desktop application fonts (`src/app_runtime/app_font_set.cpp`) | Complete in Runtime #103: JFFONT2-only, callback loaders/accessors and browser precedence removed; tools/samples/import UI use canonical resources. | No remaining AppFontSet migration; generated C++ port defaults remain separate. |
 | Embedded host example | This change binds one TextSystem to layout, layers and compositor using a complete tiny JFFONT2 fixture. | No remaining measurement/painter callback in this example. Device-default changes are separate. |
 
-Core #63 generated-content/list-marker paths can still emit legacy `push_text()`
-when shared-inline handling is inapplicable or resource admission fails. Before
-callback retirement, move those cases to Core TextSystem preparation or reject
-them explicitly, and test both outcomes. Core still contains callback/default layout, wrapping, ellipsis, repaint/reuse,
+Core #65 routes generated pseudo-content/list-marker fallback through Core
+TextSystem preparation or explicitly refuses it without emitting legacy Text
+commands; the unbound legacy path remains available. Runtime should qualify the
+exact Core #65 source wherever these producers are reachable. Core still
+contains callback/default layout, wrapping, ellipsis, repaint/reuse,
 layer-cache identity and compositor branches. Remove them together only after
 the production consumers above migrate. Tests, benchmarks and ESP32 acceptance
 fixtures also need conversion, but are not product-default consumers.
 Canvas2D text already uses TextSystem; it is not a remaining callback branch.
-Ordinary generated pseudo-content still has a legacy `Text` emission path in
-Core. Core #62 migrates closed form-control labels/select arrows through
+Core #62 migrates closed form-control labels/select arrows through
 transactional PreparedText; its full tests pass 33/33, cropped focused and
 installed consumers pass, and it merged after CI 4/4 (run `43673424532`). Core
 follow-up `89acc36a` migrates visible open-select popup rows to Core-prepared
 packets, refuses the complete overlay if any visible row cannot be prepared,
-and never falls back to host callbacks. Runtime PRs #107-#110 are merged;
+and never falls back to host callbacks. Runtime PRs #107-#111 are merged;
 the dedicated Core #63 full/cropped worker lanes pass in CI. Full Core CTest
 passes 33/33. Cropped CTest is 31/32 because the existing shared-inline shadow
 assertion fails identically on the pre-change base. Runtime #109 adds the
 WS147 full-feature profile and select-popup app, but this is separate from the
 previously accepted native `mainline1` image; record the exact device image
 before claiming popup visual acceptance. The painterless installed profile
-rejects ordinary Text commands before writes; generated pseudo-content and
-other generated/widget contexts remain open.
+rejects ordinary callback-dependent Text commands before writes. Core #65
+closes the generated pseudo-content/list-marker fallback; any other generated
+or widget context still needs an explicit inventory and consumer test.
 
 The embedded-host example passed MSVC Release execution with the locked
 installed Core0.8/ABI3 package and source-overridden Core PR60 in full/cropped

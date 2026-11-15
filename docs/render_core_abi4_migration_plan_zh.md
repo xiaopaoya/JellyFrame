@@ -2,7 +2,7 @@
 
 > 最后更新：2026-11-15；适用版本：0.6.0-dev。Core 开发契约：0.9.0-dev / ABI4。
 
-> **最新检查点（2026-11-15）：**Runtime PR #99–#110 已合并，最新 merge commit `1d9071a0`。PR #110 通过 21/21 项 CI：把 P4/P5/P6 CoreText smoke 放到 benchmark framebuffer 准入之前，覆盖 ASCII/CJK 与 400/500/700 字重；并修正 Win32 CoreText 文本变化时误用旧 provider 度量判定布局复用的问题，当前保守重建布局。IDF 5.3.1、Core identity `e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67`（163 inputs）构建通过，CoreText=y，map 中没有旧 Noto C++ 字体符号，smoke BIN 3,503,456 B（SHA-256 `150a148ce548e97b95f7b7a7c95c7ec4f07a5b51e7f9fb715cdc218aa8c22aae`）。这是构建证据，尚未刷板运行。PR #107（`9ebaf806`）及专用 Core #63 v10 worker full/cropped lane 覆盖 popup 输入、prepared packet、可见行像素、选项选择和弹层关闭；PR #109（merge `725184c3`）增加 WS147 installed-worker 验收配置和 select-popup app，并修正 provider 在发送 `INSTALL_BEGIN` 前准备本地取消会话。Core PR #63（merge `8aceb6d8`，source commit `89acc36a`，source identity `e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67`，163 个实现输入）让开放 select popup 行使用 Core `PreparedText`。PR #103（`d6fcaff4`）将应用字体统一为 JFFONT2 并移除旧 AppFontSet/AppHost 回调路径；PR #105（`81d99750`）在 CoreText 构建中排除旧 Noto C++ 字体包。当前未合并 Runtime 工作树还把 WS147 band-shell profile 默认切到 CoreText；profile 回归和 Core #63 / ESP-IDF 5.3.1 构建通过，BIN 3,524,112 B（SHA-256 `38865D6AB9FCA8D57ABE3766BA8029E4DCF68516B87FC6DBEB5998790DFA751E`），8 MiB app 分区约余 58%，map 无旧 Noto C++ 字体符号。这只是构建证据，不是新实机验收；已完成的 `mainline1` 观察不重做。Win32 CoreText start/end、left/right 对齐和属性变化的增量/全量重绘已对精确 Core #63 ABI4 验证通过（293 帧、27 组流程），矩阵尚未合入。ABI4 尚未签名发布，Runtime 仍锁定签名 Core 0.8.0 / ABI3；`mainline2` 与 installed-worker popup 仍为独立镜像。
+> **最新检查点（2026-11-15）：**Runtime PR #111 已以 `fa5176a0` 合并；#99–#111 均已合并。#111 合入 WS147 band-shell CoreText 默认 profile，以及 Win32 ABI4 属性和增量/全量重绘矩阵（293 帧、27 组流程）。`mainline1` 实机观察已经完成，不再重复。Core PR #65 已以 `1d5c746d` 合并（source `d327eee4`）：shared-inline 未接管时，generated pseudo label/list marker 现由 Core TextSystem 准备，或明确拒绝且不再发出旧 Text 命令；未绑定 TextSystem 的 legacy 路径仍保留。Core #65 四项 CI 全通过。Runtime `fa5176a0` 随后以 Core #65 精确源码 identity `52ae4354efdae95d4dbfdfb6a2ef1ad8fbbfb99029bdd922105ac2447302f62d`（163 个文件）进行 source override 集成；Runtime in-tree 测试配置补入 Core test hook 后，Release build 和 CTest 60/60 通过。这是 host source-override 证据，不等于签名包锁定或设备验收。Runtime 仍锁定签名 Core 0.8.0 / ABI3；ABI4 尚未签名发布。`mainline2` 与 installed-worker popup 仍是独立设备 profile，本次没有新的实机验收。
 
 本文件是当前执行计划。旧检查点保存在 Git 历史和对应 PR 中，不再作为额外待办。
 [文本消费者退役清单](render_core_text_consumer_retirement.md)记录实际调用方与原生设备候选的完整身份。
@@ -12,10 +12,10 @@
 | 边界 | 当前状态 | 剩余门槛 |
 | --- | --- | --- |
 | 已发布依赖 | Runtime 生产锁仍为签名 Core v0.8.0 / ABI3。 | 最终 ABI4 契约发布后，更新精确依赖锁。 |
-| Core 主线 | PR #63（`8aceb6d8`）含 source commit `89acc36a`，CI 已通过；0.9.0-dev / ABI4，source identity `e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67`，163 个实现输入。开放 select popup 行现使用 Core `PreparedText`。 | Runtime 消费者资格、generated-content 与回调退役。 |
-| Runtime 主线 | PR #110，merge `1d9071a0`，CI 21/21；#99–#110 均已合并，新增 CoreText benchmark smoke 覆盖和 Win32 CoreText 文本变更重用回归。 | 审查并合入当前 ESP32 CoreText 默认 profile 与 Win32 ABI4 属性/重绘矩阵；generated-content 回调退役和 ABI4 发布门槛仍未完成。 |
+| Core 主线 | PR #65（merge `1d5c746d`，source `d327eee4`）在 #63 后补齐 generated pseudo label/list marker 的 Core TextSystem 准备或明确拒绝；四项 CI 全通过。 | 盘点并退役其余 provider/painter/range/family/additive 回调接口及 fixture。 |
+| Runtime 主线 | PR #111，merge `fa5176a0`；#99–#111 均已合并，包含 WS147 CoreText 默认 profile 与 Win32 属性/重绘矩阵。精确 Core #65 source override 的 Release build 与 CTest 60/60 通过。 | 完成消费者/fixture 清点和回调 API 退役；ABI4 发布门槛仍未完成。 |
 | Embedded host | #100 为 layout/layers/paint 绑定同一个 TextSystem/JFFONT2；锁定 ABI3 和 source ABI4 full/cropped 测试通过。 | 该示例不再依赖文本 provider 回调。 |
-| Installed worker | 已合并 #101，让无 painter 的 canonical v10/CoreText 独立于 BMP 工作。#107 用 canonical v10 worker、精确 Core #63 源码和 prepared packet 覆盖 popup 输入、行像素、选择与关闭；#109 增加 full-feature WS147 profile 与 select-popup app，并通过 IDF 构建、打包及 provider 回归。 | 独立 popup profile 尚缺人工画面/触控观察；还需迁移剩余依赖回调的 generated/widget 文本。 |
+| Installed worker | 已合并 #101，让无 painter 的 canonical v10/CoreText 独立于 BMP 工作。#107 覆盖 Core #63 popup 输入、prepared packet、行像素、选择与关闭；#109 增加 full-feature WS147 profile。Core #65 generated pseudo-content 已纳入 Runtime source-override build/CTest。 | popup 画面/触控是单独命名 profile 的设备验收；继续清点可能依赖回调的 widget 文本。 |
 | 原生 WS147 | `0.6.2-abi4-mainline2` 已基于 Runtime #103/Core #62 构建；app BIN 7,614,704 B，8 MiB app 分区余 773,904 B，16 MiB factory/包哈希已核验。另一份 `mainline1` 于 2026-11-15 通过页面观察。 | 仍需验收精确的 `mainline2` 产物；`mainline1` 不能替代该镜像或 installed worker/BMP 的测试。 |
 | ABI5 与 shaping | 独立可选候选；ABI5 tracked reuse 有正确性与包测试，尚无合格性能收益。 | 未启用到 Runtime，也不阻塞 ABI4 发布。 |
 
@@ -46,14 +46,16 @@ CoreText band-shell 和 P4/P5/P6 smoke 的 map 中没有旧字体符号，legacy
 | --- | --- | --- |
 | Embedded host | #100 完成。 | 可见文字、click/checkbox/select、RGB565 flush；ABI3 与 ABI4 full/cropped。 |
 | ESP32 installed worker | 已合并 #101：无 painter 的 canonical v10；目录/快照覆盖重放寿命，BMP 可选。 | 主机 full/cropped、锁定 ABI3、真实 IDF 构建、CI，随后精确设备 profile 验收。 |
-| ESP32 retained native/default | Runtime commit `66be335c` 在 CoreText 构建中排除 generated C++ 字体包。当前未合并工作树已把 WS147 band-shell profile 默认设为 CoreText；profile 回归和精确 Core #63 ESP-IDF 构建通过，legacy typography acceptance 仍显式隔离。 | 审查/合入 profile 改动；legacy typography acceptance 保持隔离，页面路由/支持属性另行验收。 |
+| ESP32 retained native/default | Runtime #111 将 WS147 band-shell profile 默认设为 CoreText；profile guard 与精确 Core #63 ESP-IDF 构建通过，legacy typography acceptance 仍显式隔离。 | legacy typography acceptance 保持隔离；后续设备验收需绑定命名镜像，已验收的 `mainline1` 不重测。 |
 | ESP32 P4/P5/P6 smoke | `main.cpp` 中独立 provider 仅被 benchmark/smoke fixture 使用；CoreText profile 现在已有单独 CoreText smoke 构建证据。 | 保留旧 fixture 为显式 legacy-only，并让 CoreText smoke 覆盖同等 ASCII/CJK/字重和控件场景；它不是产品默认消费者。 |
-| Win32 默认路径 | 显式 CoreText 目录模式已合并，默认仍为 GDI。#110 修正 CoreText 文本变化不能使用 legacy provider 校验布局复用，并通过脚本回归。当前未合并 ABI4 矩阵覆盖 start/end、left/right 对齐和属性变化的增量/全量重绘，293 帧、27 组流程通过。 | 审查/合入矩阵，关闭剩余已支持属性缺口，再决定是否采用 CoreText 默认目录。 |
+| Win32 默认路径 | 显式 CoreText 目录模式已合并，默认仍为 GDI。#110 修正 CoreText 文本变化的布局复用资格；#111 合入 ABI4 属性/重绘矩阵，293 帧、27 组流程通过。 | 在 API/fixture 退役后决定是否将 Core catalog 设为默认；GDI 当前仍是明确可选路径。 |
 | AppFontSet | #103 已完成：目录仅接受 JFFONT2，移除回调访问器/浏览器优先级，并转换样例和工具。 | AppFontSet 无剩余工作；generated C++ BitmapFont 默认资源另行跟踪。 |
 
 Canvas2D 已使用 TextSystem，不是剩余回调消费者。Installed worker 候选在写帧缓冲前
-拒绝依赖回调的普通 `Text` 命令；这是有界准入规则，不代表旧路径支持的全部
-生成内容或控件文字均已迁移。
+拒绝依赖回调的普通 `Text` 命令；这是有界准入规则。Core #65 现将 generated
+pseudo-content/list-marker 的 fallback 交给 TextSystem 准备或明确拒绝，不再发出旧
+Text 命令。Runtime 仍需对可达这些 producer 的路径验证精确 Core #65 源码，并清点其他
+回调消费者和仅由测试/fixture 使用的旧路径。
 
 已合并 #101 的 worker 主机证据：Core PR60 full 和关闭四类可选能力的 cropped 均通过 7/7；
 BMP OFF/ON 都覆盖可见 prepared text、JavaScript 文字修改、退出后的重放和原子拒绝。
@@ -62,7 +64,7 @@ CoreText OFF 的 legacy 路径保持显式选择。
 
 ### C. Core 文本 API 收敛
 
-Core #61 已在四项 CI 全部通过（run `43670844631`）后合并为 `3152300a`。有界 owner-side ellipsis 的 MSVC full 测试 33/33、已安装 full/cropped 文本消费者各 1/1 通过；cropped 唯一 shared-inline 阴影断言失败在未修改基线同样复现。Runtime #102 已合入该精确源码 pin、五帧真实字体增量/全量省略号测试和 clip-only 可见对照。Core #62 为闭合原生控件 label/select arrow 提供 Core 度量与事务式 prepared packet，已合并为 `38148e73`。Core #63（`89acc36a`）在发布 popup overlay 前准备所有可见选项；缺字或预算拒绝时整个 overlay 都会拒绝。本 Runtime 分支用触控、prepared packet、B 行像素和选中/关闭回归验证该消费者。generated-content 所有权和更广属性/默认采用仍独立推进。另有 generated-content/list-marker 在 shared-inline 不适用或准入失败时仍可能发出旧 `push_text()`；退役旧回调前，须改为 Core TextSystem 准备路径或明确拒绝，并覆盖两种结果。实现必须保留源文本布局/固有尺寸，在最终几何
+Core #61 已在四项 CI 全部通过（run `43670844631`）后合并为 `3152300a`。有界 owner-side ellipsis 的 MSVC full 测试 33/33、已安装 full/cropped 文本消费者各 1/1 通过；cropped 唯一 shared-inline 阴影断言失败在未修改基线同样复现。Runtime #102 已合入该精确源码 pin、五帧真实字体增量/全量省略号测试和 clip-only 可见对照。Core #62 为闭合原生控件 label/select arrow 提供 Core 度量与事务式 prepared packet，已合并为 `38148e73`。Core #63（`89acc36a`）在发布 popup overlay 前准备所有可见选项；缺字或预算拒绝时整个 overlay 都会拒绝。Core #65（`d327eee4`）将 generated pseudo label/list marker fallback 迁移到 Core TextSystem 准备或明确拒绝，四项 CI 全通过。Runtime 仍需在可达这些 producer 的路径验证精确 #65 源码，并继续盘点更广的回调 API/fixture 退役范围。实现必须保留源文本布局/固有尺寸，在最终几何
 确定后按 owner 裁剪，使用 Q1000/spacing 和输出预算，并对不支持的完整上下文拒绝，
 不回退宿主。混合 owner 需要整段截断所有权，不能各叶节点独立截断。
 
@@ -114,9 +116,9 @@ Installed worker/BMP 必须使用独立命名镜像和资源配置。
 
 ## 紧接着的工作
 
-1. 已合并：Runtime #99–#110。Runtime #110 通过 21/21 CI；完成 P4/P5/P6 CoreText smoke 构建验证，并修复 Win32 CoreText 文本变化的布局重用资格。
-2. 审查并合入当前 ESP32 CoreText 默认 profile 与 Win32 ABI4 属性/重绘矩阵。Band-shell CoreText 构建与 profile guard 通过；Win32 矩阵 293 帧、27 组流程通过。
-3. 闭合 Core generated-content/list-marker 所有权：将旧 `push_text()` fallback 改为 Core TextSystem 准备或明确拒绝，并覆盖两种结果；legacy typography acceptance 保持独立。
-4. 决定 Win32 GDI 默认是否迁移；转换剩余依赖回调的测试/fixture，再在协调预发布变更中删除公开 provider/range/family/additive API 及实现分支。
-5. 消费者、full/cropped、禁用特性与源码归档门槛通过后，签名发布 ABI4 并更新 Runtime 精确生产依赖锁。
-6. 硬件可用时分别跟踪 `mainline2` 与 installed-worker popup 专用镜像；`mainline1` 观察已记录，不重复测试，也不能替代主机/API 发布门槛。
+1. 已完成：Runtime #111 合入 WS147 CoreText 默认 profile，以及 Win32 293 帧、27 组流程的属性与增量/全量重绘矩阵。
+2. 已由 Core #65 完成：generated pseudo label/list marker 使用 Core TextSystem 准备或明确拒绝；Core 四项 CI 全部通过。
+3. 已完成：Runtime 使用精确 Core #65 identity `52ae4354...7302f62d` 完成 Release build 与 CTest 60/60；source override 测试配置也已链接 Core test hook。这证明 host 集成，不代表签名包锁定或设备验收。
+4. 完成生产、测试和 fixture 对回调 API 的消费者清点，并决定 Win32 是否继续以 GDI 为默认；随后在协调预发布变更中移除 provider/range/family/additive API 和实现分支。
+5. 最终 API 审查、full/cropped、禁用特性、installed consumer 与源码归档门槛通过后，签名发布 ABI4 并更新 Runtime 精确生产依赖锁。
+6. 需要时分别跟踪 `mainline2` WS147 和 installed-worker popup 专用镜像；`mainline1` 验收已完成，不重复进行。
