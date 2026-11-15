@@ -122,3 +122,19 @@ Installed worker/BMP 必须使用独立命名镜像和资源配置。
 4. 完成生产、测试和 fixture 对回调 API 的消费者清点，并决定 Win32 是否继续以 GDI 为默认；随后在协调预发布变更中移除 provider/range/family/additive API 和实现分支。
 5. 最终 API 审查、full/cropped、禁用特性、installed consumer 与源码归档门槛通过后，签名发布 ABI4 并更新 Runtime 精确生产依赖锁。
 6. 需要时分别跟踪 `mainline2` WS147 和 installed-worker popup 专用镜像；`mainline1` 验收已完成，不重复进行。
+
+### 回调 API 退役执行切片（2026-11-15 审计）
+
+Core `1d5c746d` 与 Runtime PR #112（提交 `8e833b35`，merge `59f61c40`）核对后，确认这不是只删几个类型声明的清理：provider identity 参与布局缓存有效性，LayerTree 仍会生成回调型 `Text` 命令，SoftwareRasterizer 仍能通过 `TextPainter` 或内置 bitmap fallback 绘制。以下切片按接口依赖排序，完成前不得删除公共声明：
+
+| 切片 | 核心文件边界 | 必须达到的结果 |
+| --- | --- | --- |
+| 1. Layout / intrinsic / repaint | Core `layout.h/.cpp`、`intrinsic_source_query*`、`text_layout_reuse*`、`text_repaint*`、`style_repaint*` | 正常文本度量、换行、grid intrinsic 和 text-dirty reuse 只读取绑定的 TextSystem / Core 缓存身份；无 catalog、缺字或超预算必须明确拒绝。删除缓存中的 provider/context 身份。 |
+| 2. LayerTree producers | Core `layer_tree.h/.cpp` 与 prepared-text/shared-inline producer | 不再读取 `LayerTreeBuilderOptions::text_measure`，不发出普通回调型 `Text` 命令；所有支持的文本使用 PreparedText，其他情况事务式拒绝，不回落到 host 或 bitmap renderer。 |
+| 3. Raster consumer | Core `software_renderer.h/.cpp` | 移除公开 TextPainter 构造参数、成员和调用；保留 Core TextSystem 对 PreparedText 的绘制。对遗留 Text 命令做确定性拒绝且不写目标。 |
+| 4. Runtime consumers | `tools/native/win32_browser.cpp`、ESP32 retained UI/installed worker/显式 typography fixture、P4/P5/P6 smoke、ScriptTaskFrameRenderer/Canvas/benchmark | Win32 不再将 GDI 作为文本度量或绘制后端；设备产品和 worker 只注册 Core 字体资源。决定并落实 legacy acceptance fixtures 的去留，不让旧回调继续成为必需构建路径。 |
+| 5. API / consumer sweep | Core public headers、Core tests/benchmarks/package consumers、Runtime installed-package consumers 与 porting docs | 删除 `TextMeasureProvider`、`TextPainter`、range/family/additive hooks 和实现分支；改写 callback 专用单测及 `c5_flex_grid_consumer`、`wrapped_row_flex_consumer`，复核 full/cropped、禁用能力和 installed package。 |
+
+已核实的非重复工作：AppFontSet 已 JFFONT2-only；Canvas2D、embedded host 已使用 Core TextSystem；installed worker 有受限的 painterless v10 路径，但它拒绝一般 legacy Text 命令，不能算作完整迁移。WS147 `mainline1` 已完成实机验收，不重测；它不替代 `mainline2` 或 worker/BMP 命名 profile 的验收。
+
+测试迁移重点：Core 的 `shared_inline_tests.cpp::generated_text_fallback_and_invalidation` 已覆盖 #65 生成文本使用 TextSystem 或拒绝的行为；`text_system_tests.cpp::core_prepared_text_ellipsis` 覆盖 ellipsis owner 冲突时整体拒绝。纯旧接口覆盖主要在 `text_provider_tests.cpp`，应改为 TextSystem 换行/度量行为测试或删除。Runtime 的 `canonical-abi4-installed-consumers` full/cropped 是安装消费者主门槛，但需要将精确 Core #65 source identity 纳入；还要迁移 `c5_flex_grid_consumer` 与 `wrapped_row_flex_consumer`。保留并运行 R3 full/cropped、Node identity on/off、无 RTTI 矩阵。16 组 feature profile 当前是 configure/manifest 检查，不应误报为 16 组完整编译。

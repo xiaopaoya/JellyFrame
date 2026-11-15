@@ -162,3 +162,38 @@ gates. Optional ABI5 reuse and production shaping remain separate.
 6. Track `mainline2` WS147 and installed-worker popup as separate named images
    when useful; the accepted `mainline1` observation is complete and must not be
    repeated.
+
+### Callback API retirement slices (2026-11-15 audit)
+
+Review of Core `1d5c746d` and Runtime PR #112 (head `8e833b35`, merge
+`59f61c40`) confirms this is not a declaration-only cleanup: provider identity
+participates in layout-cache validity, LayerTree can still emit callback-based
+`Text` commands, and SoftwareRasterizer can still paint them through
+`TextPainter` or its built-in bitmap fallback. Do not remove the public
+declarations before these ordered slices are complete:
+
+| Slice | Main file boundary | Required result |
+| --- | --- | --- |
+| 1. Layout / intrinsic / repaint | Core `layout.h/.cpp`, `intrinsic_source_query*`, `text_layout_reuse*`, `text_repaint*`, `style_repaint*` | Text measurement, wrapping, grid intrinsic sizing and text-dirty reuse use only the bound TextSystem/Core cache identity. Missing catalog, glyph or budget must refuse explicitly. Remove provider/context identity from caches. |
+| 2. LayerTree producers | Core `layer_tree.h/.cpp` and prepared-text/shared-inline producers | Stop reading `LayerTreeBuilderOptions::text_measure` and emitting ordinary callback-based `Text`; supported text becomes PreparedText, and other cases refuse transactionally without host or bitmap fallback. |
+| 3. Raster consumer | Core `software_renderer.h/.cpp` | Remove public TextPainter constructors, state and dispatch. Keep Core TextSystem painting for PreparedText. Legacy Text commands must refuse deterministically without target writes. |
+| 4. Runtime consumers | `tools/native/win32_browser.cpp`, ESP32 retained UI/installed worker/explicit typography fixtures, P4/P5/P6 smoke, ScriptTaskFrameRenderer/Canvas/benchmarks | Remove GDI as a text measurement/paint backend; products and workers register Core font resources. Decide and implement the fate of legacy acceptance fixtures so callback code is no longer a required build path. |
+| 5. API / consumer sweep | Core public headers, tests/benchmarks/package consumers, Runtime installed-package consumers and porting docs | Delete `TextMeasureProvider`, `TextPainter`, range/family/additive hooks and implementation branches. Rewrite callback-specific tests and `c5_flex_grid_consumer` / `wrapped_row_flex_consumer`; rerun full/cropped, feature-disabled and installed-package gates. |
+
+Already migrated and not to be counted again: AppFontSet is JFFONT2-only;
+Canvas2D and the embedded host use Core TextSystem; the installed worker has a
+bounded painterless v10 path, but it refuses general legacy Text commands and
+does not establish full migration. WS147 `mainline1` hardware acceptance is
+complete and must not be repeated; it does not qualify `mainline2` or separate
+worker/BMP named profiles.
+
+Test migration notes: Core `shared_inline_tests.cpp::generated_text_fallback_and_invalidation`
+already covers #65 generated text preparation/refusal; `text_system_tests.cpp::core_prepared_text_ellipsis`
+covers whole-owner refusal when generated text conflicts with ellipsis. The
+callback-only `text_provider_tests.cpp` should be rewritten as TextSystem
+measurement/wrapping coverage or removed. Runtime's full/cropped
+`canonical-abi4-installed-consumers` is the main installed-consumer gate, but
+must include the exact Core #65 source identity. Convert
+`c5_flex_grid_consumer` and `wrapped_row_flex_consumer`, and retain the R3
+full/cropped, Node identity on/off and no-RTTI matrix. The 16 feature-profile
+matrix currently configures/checks manifests; it is not 16 full build runs.
