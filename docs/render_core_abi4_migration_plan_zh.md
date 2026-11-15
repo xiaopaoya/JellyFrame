@@ -2,7 +2,7 @@
 
 > 最后更新：2026-11-15；适用版本：0.6.0-dev。Core 开发契约：0.9.0-dev / ABI4。
 
-> **最新检查点（2026-11-15）：**Runtime PR #99–#103 已合并，每个 PR 的 19 项 CI 全部通过。PR #103（`d6fcaff4`）将应用字体统一为 JFFONT2，移除旧 AppFontSet/AppHost 回调路径，并在 current-mainline 与常规 ABI4 lane 中固定验证 Core #62（`38148e73`，source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`）。本地尚未提交的移植改动已将构建边界拆开：选择 CoreText 时不再生成/编译旧 Noto C++ 位图字体包；CoreText 关闭或显式选择旧 painter 验收 fixture 时仍保留旧路径。这只是构建边界里程碑，并未完成默认消费者迁移：CoreText 仍为 opt-in，非 retained/Win32 消费者仍待处理。Runtime 仍锁定签名 Core 0.8.0 / ABI3；ABI4 尚未签名发布。最新 `0.6.2-abi4-mainline2` 已由 Runtime #103/Core #62 构建并核验 BIN、factory 与包身份，尚未刷写，等待实机验收。
+> **最新检查点（2026-11-15）：**Runtime PR #99–#103 已合并，每个 PR 的 19 项 CI 全部通过。PR #103（`d6fcaff4`）将应用字体统一为 JFFONT2，移除旧 AppFontSet/AppHost 回调路径，并在 current-mainline 与常规 ABI4 lane 中固定验证 Core #62（`38148e73`，source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`）。Runtime commit `66be335c` 已将 ESP32 构建边界拆开：选择 CoreText 时不再生成/编译旧 Noto C++ 位图字体包；CoreText 关闭或显式选择旧 painter 验收 fixture 时仍保留旧路径。该提交尚未推送或通过 PR 审核。这只是构建边界里程碑，并未完成默认消费者迁移：CoreText 仍为 opt-in，非 retained/Win32 消费者仍待处理。Runtime 仍锁定签名 Core 0.8.0 / ABI3；ABI4 尚未签名发布。最新 `0.6.2-abi4-mainline2` 已由 Runtime #103/Core #62 构建并核验 BIN、factory 与包身份，尚未刷写，等待实机验收。
 
 本文件是当前执行计划。旧检查点保存在 Git 历史和对应 PR 中，不再作为额外待办。
 [文本消费者退役清单](render_core_text_consumer_retirement.md)记录实际调用方与原生设备候选的完整身份。
@@ -46,7 +46,7 @@ CoreText band-shell 的 map 中没有旧字体符号，legacy profile 则生成�
 | --- | --- | --- |
 | Embedded host | #100 完成。 | 可见文字、click/checkbox/select、RGB565 flush；ABI3 与 ABI4 full/cropped。 |
 | ESP32 installed worker | 已合并 #101：无 painter 的 canonical v10；目录/快照覆盖重放寿命，BMP 可选。 | 主机 full/cropped、锁定 ABI3、真实 IDF 构建、CI，随后精确设备 profile 验收。 |
-| ESP32 retained native/default | 命名 CoreText profile 已合并；本地未提交改动在 CoreText 构建中排除 generated C++ 字体包。CoreText 仍为 opt-in，legacy 仍是默认配置。 | 资格通过后将 CoreText 设为默认，再移除或隔离剩余旧消费者，并验收支持属性和页面路由。 |
+| ESP32 retained native/default | 命名 CoreText profile 已合并；Runtime commit `66be335c` 在 CoreText 构建中排除 generated C++ 字体包。CoreText 仍为 opt-in，legacy 仍是默认配置。 | 资格通过后将 CoreText 设为默认，再移除或隔离剩余旧消费者，并验收支持属性和页面路由。 |
 | ESP32 非 retained main 入口 | 仍有独立的 provider 工厂。 | 同步迁移或明确退役该入口，不能只改 retained UI。 |
 | Win32 默认路径 | 显式 CoreText 目录模式已合并，默认仍为 GDI。 | 有界 ellipsis/属性兼容、重绘验证及目录默认采用。 |
 | AppFontSet | #103 已完成：目录仅接受 JFFONT2，移除回调访问器/浏览器优先级，并转换样例和工具。 | AppFontSet 无剩余工作；generated C++ BitmapFont 默认资源另行跟踪。 |
