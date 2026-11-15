@@ -428,11 +428,9 @@ void ui_entry(void* raw) {
     }
 #endif
 #if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
-    const jellyframe::ScriptTaskFrameRenderer renderer({}, renderer_options);
-#elif JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
-    const jellyframe::ScriptTaskFrameRenderer renderer(legacy_bitmap_text_painter(), renderer_options);
+    const jellyframe::ScriptTaskFrameRenderer renderer(renderer_options);
 #else
-    const jellyframe::ScriptTaskFrameRenderer renderer({}, renderer_options);
+    const jellyframe::ScriptTaskFrameRenderer renderer(renderer_options);
 #endif
     jellyframe::SoftwareRasterizerScratch scratch;
     std::uint32_t input_sequence = 1;

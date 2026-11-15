@@ -38,7 +38,9 @@
 #include "render_core/software_renderer.h"
 #include "render_core/style.h"
 #include "render_core/style_repaint.h"
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
 #include "render_core/text_repaint.h"
+#endif
 
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
 #include "script/script_runtime.h"
@@ -2475,8 +2477,10 @@ bool paint_image_surface(FrameBuffer& target,
 #endif
 
 struct BrowserTextBackend {
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     TextMeasureProvider measure;
     TextPainter painter;
+#endif
     const TextSystem* text_system = nullptr;
     bool core_text = false;
     bool app_font_set = false;
@@ -2488,6 +2492,7 @@ struct BrowserTextBackend {
     }
 };
 
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
 HFONT create_gdi_text_font(int font_size, int font_weight) {
     const int font_height = -std::max(8, font_size);
     const int gdi_weight = font_weight >= 600 ? FW_BOLD : FW_NORMAL;
@@ -2588,8 +2593,17 @@ bool draw_text_with_gdi(FrameBuffer& target,
     DeleteDC(memory_dc);
     return true;
 }
+#endif
 
 BrowserTextBackend make_browser_text_backend(const BrowserOptions& options, AppRuntimeHost* runtime) {
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    (void)options;
+    if (runtime == nullptr) throw std::runtime_error("Core font backend requires an active Runtime");
+    if (const TextSystem* text_system = runtime->fonts().core_text_system()) {
+        return BrowserTextBackend{text_system, true};
+    }
+    throw std::runtime_error("Core font catalog is not ready; text startup refused");
+#else
     if (options.use_app_fonts) {
         if (runtime == nullptr) throw std::runtime_error("Core font backend requires an active Runtime");
         if (const TextSystem* text_system = runtime->fonts().core_text_system()) {
@@ -2603,6 +2617,7 @@ BrowserTextBackend make_browser_text_backend(const BrowserOptions& options, AppR
         nullptr,
         false,
     };
+#endif
 }
 
 void attach_desktop_system_font_catalog(AppRuntimeHost& runtime) {
@@ -3366,7 +3381,7 @@ void print_win32_browser_usage(std::ostream& output, const std::string& program_
         << "                                 set-checked, select-index.\n"
         << "  --viewport-width N             Override viewport width.\n"
         << "  --viewport-height N            Override viewport height.\n"
-        << "  --use-app-fonts                Opt into app/Core catalog text for validation.\n"
+        << "  --use-app-fonts                Select Core catalog text (default with ABI4).\n"
         << "  --audio-smoke SOURCE           Win32-only host audio smoke test. SOURCE can\n"
         << "                                 be a local file, or /path in --app package.\n"
         << "  --audio-smoke-ms N             Playback duration for --audio-smoke, default 1000.\n"
@@ -3819,7 +3834,6 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
     AppFrameScratch app_frame_scratch;
     app_frame_scratch.reserve_from_options(app_runtime_options);
     AppRuntimeHost* runtime = nullptr;
-    attach_desktop_system_font_catalog(app_runtime);
     if (!options.app_path.empty()) {
         app_runtime.launch(options.app_path, AppRole::App);
         runtime = &app_runtime;
@@ -3827,6 +3841,7 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
         app_runtime.launch("org.jellyframe.debug.capture", AppRole::App);
         runtime = &app_runtime;
     }
+    attach_desktop_system_font_catalog(app_runtime);
     LoadedPage page = load_page(options, budgets, &diagnostics, runtime);
     BrowserTextBackend text_backend = make_browser_text_backend(options, runtime);
     if (selected_text_backend != nullptr) {
@@ -3866,11 +3881,17 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
 #endif
     std::size_t request_budget = 128;
     request_browser_content_images(*page.document, image_resolve_context, request_budget);
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    LayoutEngine layout_engine(resolver, layout_options);
+#else
     LayoutEngine layout_engine(resolver, text_backend.measure, layout_options);
+#endif
     auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     layer_options.diagnostics = &diagnostics;
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     layer_options.text_measure = text_backend.measure;
+#endif
     layer_options.text_system = text_backend.text_system;
     layer_options.paint_scroll_indicators = true;
     layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
@@ -3916,7 +3937,11 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
     SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
     compositor_options.diagnostics = &diagnostics;
     compositor_options.text_system = text_backend.text_system;
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    SoftwareCompositor compositor(ImagePainter{paint_image_surface, &image_context}, compositor_options);
+#else
     SoftwareCompositor compositor(text_backend.painter, ImagePainter{paint_image_surface, &image_context}, compositor_options);
+#endif
     FrameBuffer frame_buffer = compositor.render(*layer_tree,
                                                  options.viewport_width,
                                                  options.viewport_height,
@@ -4348,7 +4373,6 @@ public:
         }
         frame_scratch_.reserve_from_budgets(budgets_);
         app_frame_scratch_.reserve_from_options(desktop_app_runtime_options(options_));
-        attach_desktop_system_font_catalog(app_runtime_);
         if (!options_.launch_app_id.empty()) {
             app_runtime_.launch(options_.launch_app_id, AppRole::App);
         } else if (!options_.app_path.empty()) {
@@ -4358,6 +4382,7 @@ public:
         } else {
             app_runtime_.launch("org.jellyframe.debug.page", AppRole::App);
         }
+        attach_desktop_system_font_catalog(app_runtime_);
         const char* weather_json =
             "{\"modes\":{"
             "\"hourly\":{\"temp\":\"27\",\"condition\":\"Rain soon\",\"summary\":\"Next hour 35%\",\"wind\":\"9\",\"rain\":\"35\",\"updated\":\"Live\",\"icon\":\"rain\"},"
@@ -6520,7 +6545,9 @@ private:
         layer_options.diagnostics = &diagnostics_;
         layer_options.paint_scroll_indicators = true;
         BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         layer_options.text_measure = text_backend.measure;
+#endif
         layer_options.text_system = text_backend.text_system;
         BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &debug_canvas_, &diagnostics_};
         image_resolve_context.style_resolver = style_resolver_.get();
@@ -6550,9 +6577,13 @@ private:
             compositor_options.command_observer =
                 SoftwareRasterizerCommandObserver{observe_frame_trace_command, &frame_trace_command_attribution_};
         }
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+        SoftwareCompositor compositor(ImagePainter{paint_image_surface, &image_context_}, compositor_options);
+#else
         SoftwareCompositor compositor(text_backend.painter,
                                       ImagePainter{paint_image_surface, &image_context_},
                                       compositor_options);
+#endif
         const int content_height = std::max(viewport_height_, layout_tree_->rect.height);
         const Rect content_bounds{0, 0, viewport_width_, content_height};
         dirty_content_rect = intersect_rect(dirty_content_rect, content_bounds);
@@ -7104,7 +7135,9 @@ private:
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
         layer_options.diagnostics = &diagnostics_;
         layer_options.paint_scroll_indicators = true;
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         layer_options.text_measure = text_backend.measure;
+#endif
         layer_options.text_system = text_backend.text_system;
         BrowserImageResolveContext image_resolve_context{&app_runtime_, &debug_images_, &image_cache_, &debug_canvas_, &diagnostics_};
         image_resolve_context.style_resolver = style_resolver_.get();
@@ -7123,9 +7156,13 @@ private:
             compositor_options.command_observer =
                 SoftwareRasterizerCommandObserver{observe_frame_trace_command, &frame_trace_command_attribution_};
         }
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+        SoftwareCompositor compositor(ImagePainter{paint_image_surface, &image_context_}, compositor_options);
+#else
         SoftwareCompositor compositor(text_backend.painter,
                                       ImagePainter{paint_image_surface, &image_context_},
                                       compositor_options);
+#endif
         const auto merge_override_invalidation =
             [this](const LayoutBox& layout,
                    const std::vector<StyleOverride>& previous_overrides,
@@ -7141,6 +7178,7 @@ private:
                     target,
                     frame_scratch_.animation_dirty_region);
             };
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         if (!image_layout_dirty_ && update_plan.action == FrameUpdateAction::RebuildPipeline &&
             update_plan.reason == FrameUpdateReason::LayoutDirtyWithPreviousLayout &&
             !text_backend.core_text &&
@@ -7154,6 +7192,7 @@ private:
             update_plan.needs_previous_layout = false;
             update_plan.needs_full_framebuffer = false;
         }
+#endif
         if (update_plan.action == FrameUpdateAction::RepaintExisting &&
             update_plan.dirty_rect_mode == FrameDirtyRectMode::CurrentLayout &&
             layout_tree_ != nullptr) {
@@ -7264,11 +7303,18 @@ private:
             update_plan.reason == FrameUpdateReason::LayoutDirtyWithPreviousLayout &&
             render_tree_ != nullptr &&
             layout_tree_ != nullptr &&
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+            style_dirty_can_reuse_layout(*document_,
+                                         *render_tree_,
+                                         *next_render_tree,
+                                         *layout_tree_) &&
+#else
             style_dirty_can_reuse_layout(*document_,
                                          *render_tree_,
                                          *next_render_tree,
                                          *layout_tree_,
                                          text_backend.measure) &&
+#endif
             apply_render_styles_to_layout(*next_render_tree, *layout_tree_)) {
             std::vector<StyleOverride> previous_repaint_overrides;
             std::vector<StyleOverride> current_repaint_overrides;
@@ -7375,7 +7421,11 @@ private:
 #endif
         std::size_t request_budget = 128;
         request_browser_content_images(*document_, image_resolve_context, request_budget);
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+        LayoutEngine layout_engine(*style_resolver_, layout_options);
+#else
         LayoutEngine layout_engine(*style_resolver_, text_backend.measure, layout_options);
+#endif
         auto next_layout_tree = layout_engine.layout(*next_render_tree, viewport_width_, viewport_height_);
         image_layout_dirty_ = false;
         finish_trace_stage(FrameTraceStage::Layout);

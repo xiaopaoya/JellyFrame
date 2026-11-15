@@ -41,7 +41,7 @@ int main() {
     frame.groups.push_back(root);
     DisplayCommand command; detail::set_command_type(command, DisplayCommandType::Image); command.rect = frame.viewport;
     detail::command_image_handle(command) = 73; frame.display_list.push_back(command);
-    ScriptTaskFrameRendererOptions options; options.image_provider = owner; ScriptTaskFrameRenderer renderer({}, {}, options);
+    ScriptTaskFrameRendererOptions options; options.image_provider = owner; ScriptTaskFrameRenderer renderer(options);
     FrameBuffer target(4,4,{1,2,3,4});
     calls = 0; assert(renderer.render_into(frame, target, {})); const long allocations = calls;
     assert(allocations > 0);

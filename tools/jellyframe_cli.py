@@ -13,6 +13,7 @@ import app_registry
 import device_image_manifest
 import device_provider_client
 import device_reference
+from jellyframe_versions import active_render_core_release_version
 
 
 OFFICIAL_TRIAL_SAMPLE_NAMES = (
@@ -3059,6 +3060,9 @@ def cmd_targets(args: argparse.Namespace) -> int:
 
 def update_template_manifest(manifest_path: Path, args: argparse.Namespace) -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    runtime = manifest.get("runtime")
+    if isinstance(runtime, dict):
+        runtime["minRenderCore"] = active_render_core_release_version()
     if args.app_id:
         validate_app_id(args.app_id)
         manifest["id"] = args.app_id
@@ -3562,7 +3566,7 @@ def cmd_trial(args: argparse.Namespace) -> int:
             [
                 sys.executable, str(cli), "doctor", "--trial", "--strict",
                 "--build-dir", str(args.build_dir), "--report-dir", str(doctor_reports),
-                "--targets", ",".join(targets),
+                "--targets", ",".join(targets), "--samples-dir", str(args.samples_dir),
             ],
             True):
         return fail()
@@ -3588,7 +3592,7 @@ def cmd_trial(args: argparse.Namespace) -> int:
             scaffold_report):
         return fail()
 
-    showcase = repo_root() / "samples" / "apps" / "packages" / "jelly_component_recipes"
+    showcase = args.samples_dir / "jelly_component_recipes"
     for target in targets:
         check_report = output_dir / f"component-recipes.{target}.check.report.json"
         if not run_step(
@@ -3624,7 +3628,7 @@ def cmd_trial(args: argparse.Namespace) -> int:
             return fail()
 
     rejected = work_dir / "canvas-missing-host-service"
-    shutil.copytree(repo_root() / "samples" / "apps" / "packages" / "jelly_canvas_gauges", rejected)
+    shutil.copytree(args.samples_dir / "jelly_canvas_gauges", rejected)
     rejected_manifest_path = rejected / "jellyframe.app.json"
     rejected_manifest = json.loads(rejected_manifest_path.read_text(encoding="utf-8-sig"))
     rejected_target = rejected_manifest.get("targets", {}).get(targets[0], {})
@@ -4241,6 +4245,8 @@ def main() -> int:
     )
     trial.add_argument("--build-dir", default=default_build_dir(), type=Path,
                        help="Directory containing built developer tools.")
+    trial.add_argument("--samples-dir", default=repo_root() / "samples" / "apps" / "packages", type=Path,
+                       help="Directory containing source-package samples for this trial.")
     trial.add_argument("--output-dir", required=True, type=Path,
                        help="Empty directory below the CMake build root for generated trial evidence.")
     trial.add_argument("--clean", action="store_true",

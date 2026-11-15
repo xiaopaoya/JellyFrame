@@ -9,6 +9,7 @@
 
 #include "example_css_io.h"
 #include "native_file_io.h"
+#include "display_command_access.h"
 
 #include <fstream>
 #include <iostream>
@@ -39,6 +40,8 @@ const char* command_name(DisplayCommandType type) {
         return "box_shadow";
     case DisplayCommandType::Text:
         return "text";
+    case DisplayCommandType::PreparedText:
+        return "prepared_text";
     case DisplayCommandType::Image:
         return "image";
     }
@@ -46,14 +49,24 @@ const char* command_name(DisplayCommandType type) {
 }
 
 void print_command(const DisplayCommand& command, std::size_t index) {
-    std::cout << "  [" << index << "] " << command_name(command.type)
+    const auto type = native::display_command_type(command);
+    std::cout << "  [" << index << "] " << command_name(type)
               << " x=" << command.rect.x
               << " y=" << command.rect.y
               << " w=" << command.rect.width
               << " h=" << command.rect.height;
-    if (!command.text.empty()) {
+    if (type == DisplayCommandType::Text && !command.text.empty()) {
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+        std::cout << " font_weight=" << command.text_paint().font_weight
+                  << " text=\"" << command.text << "\"";
+#else
         std::cout << " font_weight=" << command.font_weight
                   << " text=\"" << command.text << "\"";
+#endif
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    } else if (command.type() == DisplayCommandType::PreparedText) {
+        std::cout << " packet_bytes=" << command.text.size();
+#endif
     }
     std::cout << '\n';
 }

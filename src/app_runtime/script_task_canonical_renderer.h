@@ -39,7 +39,7 @@ inline bool same_group(const ScriptTaskFrameGroup& a, const ScriptTaskFrameGroup
 }
 
 inline bool render(const ScriptTaskAppFrame& frame, FrameBuffer& target, Color background,
-                   const Rect* dirty, std::size_t dirty_count, TextPainter text, ImagePainter image,
+                   const Rect* dirty, std::size_t dirty_count, ImagePainter image,
                    const ScriptTaskFrameRendererOptions& options, ScriptTaskFrameRenderStatus* status) {
     const auto fail = [&](ScriptTaskFrameRenderStatus why) { if (status) *status = why; return false; };
     if (target.width != frame.viewport.width || target.height != frame.viewport.height ||
@@ -94,7 +94,7 @@ inline bool render(const ScriptTaskAppFrame& frame, FrameBuffer& target, Color b
         core.diagnostics = &sink; core.rasterizer_timing = options.rasterizer_timing;
         core.text_system = options.text_catalog ? &options.text_catalog->text_system() : nullptr;
         core.text_limits = options.text_limits;
-        SoftwareCompositor compositor(text, image, core);
+        SoftwareCompositor compositor(image, core);
         compositor.render_into(tree.root(), staged, background, dirty, dirty_count);
         if (sink.refused) return fail(ScriptTaskFrameRenderStatus::InvalidFrame);
         target = std::move(staged);

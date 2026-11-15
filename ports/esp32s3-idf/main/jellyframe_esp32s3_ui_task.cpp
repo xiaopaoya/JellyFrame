@@ -485,8 +485,9 @@ struct TimerUiTaskContext {
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     BmpImageAdapter image_adapter;
 #endif
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
     jellyframe::TextMeasureProvider text_measure{};
-    jellyframe::TextPainter text_painter{};
+#endif
     jellyframe::AppFontSet core_text_fonts{0};
     const jellyframe::TextSystem* core_text_system = nullptr;
     jellyframe::FrameScratch frame_scratch;
@@ -1222,7 +1223,9 @@ int resolve_scroll_y(const jellyframe::Node& node, int max_scroll_y, void* raw_c
 jellyframe::LayerTreeBuilderOptions make_layer_tree_options(
     TimerUiTaskContext& context, jellyframe::StyleResolver& style_resolver) {
     jellyframe::LayerTreeBuilderOptions options = jellyframe::layer_tree_options_from_budgets(context.budgets);
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
     options.text_measure = context.text_measure;
+#endif
     options.text_system = context.core_text_system;
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     context.image_adapter.set_background_resource_resolver(&style_resolver);
@@ -1751,7 +1754,11 @@ bool rebuild_pipeline(TimerUiTaskContext& context) {
     layout_options.natural_image_sizing.provider =
         make_bmp_natural_image_size_provider(context.image_adapter);
 #endif
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
     jellyframe::LayoutEngine layout_engine(style_resolver, context.text_measure, layout_options);
+#else
+    jellyframe::LayoutEngine layout_engine(style_resolver, layout_options);
+#endif
     const std::uint64_t layout_start = esp_timer_get_time();
     context.pipeline.layout_tree =
         layout_engine.layout(*context.pipeline.render_tree, context.width, context.height, context.pipeline.layout_arena);
@@ -1972,7 +1979,7 @@ bool render_and_present(TimerUiTaskContext& context,
 #endif
     auto compositor_options = jellyframe::software_compositor_options_from_budgets(context.budgets);
     compositor_options.text_system = context.core_text_system;
-    jellyframe::SoftwareCompositor compositor(context.text_painter, image_painter, compositor_options);
+    jellyframe::SoftwareCompositor compositor(image_painter, compositor_options);
     const std::uint64_t compose_start = esp_timer_get_time();
     if (rebuild_framebuffer_for_normal_present) {
         compositor.render_into(*context.pipeline.layer_tree,
@@ -2303,7 +2310,8 @@ void run_retained_ui_task(void* raw_context) {
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     context->image_adapter.configure(context->budgets, context->document_url, nullptr, esp_timer_get_time);
 #endif
-#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
+#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED && \
+    (!defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4)
     context->font_context = make_legacy_bitmap_font_context();
     context->text_measure = jellyframe::TextMeasureProvider{legacy_app_font_measure_callback,
                                                             &context->font_context,
@@ -2311,8 +2319,6 @@ void run_retained_ui_task(void* raw_context) {
                                                             nullptr,
                                                             legacy_app_font_measure_range_callback,
                                                             nullptr};
-    context->text_painter = jellyframe::TextPainter{legacy_app_font_paint_callback,
-                                                    &context->font_context};
 #endif
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
     if (!context->core_text_fonts.attach_core_system_font_catalog_view(
@@ -2324,8 +2330,9 @@ void run_retained_ui_task(void* raw_context) {
         return;
     }
     context->core_text_system = context->core_text_fonts.core_text_system();
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
     context->text_measure = {};
-    context->text_painter = {};
+#endif
 #endif
 #if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
     const auto& font_stats = legacy_bitmap_font_stats();
@@ -2615,6 +2622,7 @@ void run_retained_ui_task(void* raw_context) {
             frame_plan.update.needs_previous_layout = false;
             frame_plan.update.needs_full_framebuffer = false;
         }
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
         if (frame_plan.update.action == jellyframe::FrameUpdateAction::RebuildPipeline &&
             frame_plan.update.reason == jellyframe::FrameUpdateReason::LayoutDirtyWithPreviousLayout &&
             context->pipeline.layout_tree != nullptr &&
@@ -2629,6 +2637,7 @@ void run_retained_ui_task(void* raw_context) {
             frame_plan.update.needs_previous_layout = false;
             frame_plan.update.needs_full_framebuffer = false;
         }
+#endif
         const std::uint64_t frame_planning_elapsed_us =
             static_cast<std::uint64_t>(esp_timer_get_time() - frame_planning_start);
         context->telemetry.frame_planning_us += frame_planning_elapsed_us;

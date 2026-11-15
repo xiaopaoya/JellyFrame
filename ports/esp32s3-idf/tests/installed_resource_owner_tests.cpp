@@ -261,7 +261,7 @@ int run_installed_resource_owner_tests() {
                    "derived background frame accepted"))
             return 1;
         worker.stop();
-        jellyframe::ScriptTaskFrameRenderer renderer({}, {}, old_ui);
+        jellyframe::ScriptTaskFrameRenderer renderer({}, old_ui);
         jellyframe::ScriptTaskFrameRenderStatus status;
         auto pixels = renderer.render(accepted.frame(), {255, 255, 255, 255}, &status);
         if (!check(status == jellyframe::ScriptTaskFrameRenderStatus::Accepted &&

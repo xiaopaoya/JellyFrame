@@ -19,18 +19,19 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: flex_grid_capture_tests.py PATH_TO_EXE")
+    if len(sys.argv) not in (2, 3):
+        print("usage: flex_grid_capture_tests.py PATH_TO_EXE [FIXTURE_DIR]")
         return 2
 
     executable = Path(sys.argv[1])
+    fixture = Path(sys.argv[2]) if len(sys.argv) == 3 else FIXTURE
     require(executable.exists(), f"missing executable: {executable}")
     with tempfile.TemporaryDirectory(prefix="jellyframe-flex-grid-capture-") as directory:
         result = subprocess.run(
             [
                 str(executable),
                 "--app",
-                str(FIXTURE),
+                str(fixture),
                 "--capture-frames",
                 directory,
                 "--frame-count",

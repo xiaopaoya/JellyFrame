@@ -83,11 +83,12 @@ def assert_image_diagnostics(report_path: Path) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("usage: package_image_fixture_tests.py WIN32_BROWSER_EXE BUILD_TOOL_DIR", file=sys.stderr)
+    if len(sys.argv) not in (3, 4):
+        print("usage: package_image_fixture_tests.py WIN32_BROWSER_EXE BUILD_TOOL_DIR [WATCH_WEATHER_DIR]", file=sys.stderr)
         return 2
     win32_browser = Path(sys.argv[1])
     build_tool_dir = Path(sys.argv[2])
+    watch_weather = Path(sys.argv[3]) if len(sys.argv) == 4 else WATCH_WEATHER
     with tempfile.TemporaryDirectory(prefix="jellyframe-package-image-") as directory:
         output_dir = Path(directory)
         report = output_dir / "watch_weather.report.json"
@@ -97,7 +98,7 @@ def main() -> int:
             str(REPO_ROOT / "tools" / "jellyframe_cli.py"),
             "check",
             "--root",
-            str(WATCH_WEATHER),
+            str(watch_weather),
             "--target",
             "round-300",
             "--report",
@@ -111,7 +112,7 @@ def main() -> int:
             "--capture",
             str(capture),
             "--app",
-            str(WATCH_WEATHER),
+            str(watch_weather),
             "--viewport-width",
             "300",
             "--viewport-height",

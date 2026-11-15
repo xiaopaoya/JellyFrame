@@ -89,11 +89,13 @@ def assert_font_size_warning_report(report_path: Path) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("usage: font_policy_report_tests.py WIN32_BROWSER_EXE BUILD_TOOL_DIR", file=sys.stderr)
+    if len(sys.argv) not in (3, 5):
+        print("usage: font_policy_report_tests.py WIN32_BROWSER_EXE BUILD_TOOL_DIR [FONT_POLICY_DIR FONT_SIZE_WARNING_DIR]", file=sys.stderr)
         return 2
     win32_browser = Path(sys.argv[1])
     build_tool_dir = Path(sys.argv[2])
+    font_policy = Path(sys.argv[3]) if len(sys.argv) == 5 else FONT_POLICY
+    font_size_warning = Path(sys.argv[4]) if len(sys.argv) == 5 else FONT_SIZE_WARNING
     with tempfile.TemporaryDirectory(prefix="jellyframe-font-policy-") as directory:
         output_dir = Path(directory)
         report = output_dir / "font_policy.report.json"
@@ -103,7 +105,7 @@ def main() -> int:
             str(REPO_ROOT / "tools" / "jellyframe_cli.py"),
             "check",
             "--root",
-            str(FONT_POLICY),
+            str(font_policy),
             "--target",
             "round-300",
             "--report",
@@ -118,7 +120,7 @@ def main() -> int:
             "--capture",
             str(capture),
             "--app",
-            str(FONT_POLICY),
+            str(font_policy),
             "--viewport-width",
             "300",
             "--viewport-height",
@@ -139,7 +141,7 @@ def main() -> int:
             sys.executable,
             str(REPO_ROOT / "tools" / "package_app.py"),
             "--root",
-            str(FONT_SIZE_WARNING),
+            str(font_size_warning),
             "--target",
             "rect-172x320",
             "--report",

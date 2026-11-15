@@ -121,7 +121,7 @@ int main() {
     assert(take_script_task_app_frame(supervisor, second, codec, raw) == ScriptTaskAppFrameTakeStatus::Accepted);
     assert(!render(renderer, raw) && status == ScriptTaskFrameRenderStatus::InvalidFrame && same(target, expected));
     ScriptTaskFrameRendererOptions tiny; tiny.max_temporary_pixels = 1;
-    assert(!render(ScriptTaskFrameRenderer({}, tiny), accepted) && same(target, expected));
+    assert(!render(ScriptTaskFrameRenderer(tiny), accepted) && same(target, expected));
     supervisor.begin_teardown(second); supervisor.complete_teardown(second);
     raw = {}; accepted = {};
     assert(weak.expired());
