@@ -2,8 +2,8 @@
 
 > Last updated: 2026-11-15; Applies to: 0.6.0-dev. Core contract: 0.9.0-dev / ABI4.
 
-Current source audit: 2026-11-15. Runtime base `36edc545` (PR100), Core
-`34ae4b88` (PR60), 0.9.0-dev / ABI4. This is a consumer migration checklist,
+Current source audit: 2026-11-15. Runtime base `8262edf7` (PR101), Core
+`3152300a` (PR61), 0.9.0-dev / ABI4. This is a consumer migration checklist,
 not a declaration that legacy callback APIs have been removed.
 
 ## Production consumers
@@ -65,20 +65,28 @@ log is `idf-bmp0-build.log`. Cropped BIN SHA-256 values:
 These are build-only artifacts from this change, not flashed/accepted images.
 The native launcher candidate below is separate and remains byte-for-byte fixed.
 
-## CoreText ellipsis prerequisite
+## Bounded CoreText ellipsis
 
-Core `src/layout.cpp` refuses `text_overflow_ellipsis` before preparation;
-shared-inline admission also excludes it. The font service admits U+2026, so
-this is an integration gap rather than an inability to represent that scalar.
-The legacy callback path paints ASCII `...` and is not a CoreText fallback.
+Core PR #61 is merged as `3152300a` after CI 4/4. It finalizes the retained
+paint packet on one actual direct-run owner after final geometry; it preserves
+source layout/intrinsics, uses Q1000 advances/spacing and enforces complete
+source/output budgets. U+2026 requires actual coverage; only missing marker
+coverage permits three real dots. A clipped lone/first scalar needs no invisible
+marker resource. There is no host fallback or new packet/API version.
 
-The next bounded implementation should handle the established single direct
-LTR nowrap run in Core, prepare source and marker once, select a scalar-safe
-prefix with Q1000 advances/spacing, and emit the existing prepared packet.
-Keep full-source/marker resource bounds and atomic refusal. Negative spacing
-does not justify assuming monotonic prefix widths. Mixed-owner paragraphs need
-whole-paragraph cutoff ownership; removing their refusal or truncating each
-leaf independently would be incorrect. No new host measurement hook is needed.
+Mixed owners, generated/native-marker contexts, overflowing multiline text and
+active negative indent remain outside this bounded profile. Refused inline
+contexts suppress legacy generated fragments while independent block contexts
+continue normally. This is not general paragraph ellipsis or complete desktop
+property parity. See Core's current TextSystem reference for exact admission.
+
+Full MSVC CTest passes 33/33; the cropped suite is 31/32 with its only failure
+reproduced on untouched base. Installed full/cropped text consumers each pass
+1/1; real Noto visible output passes. Runtime's proposed exact-Core pin adds five
+deterministic real-font frames across width/source changes: visible ink, restored
+pixels, incremental/full equality, no refusal, and narrow frames different from
+clip-only references. Source identity:
+`c11045754fa28b9bf3e5e0e9a8720dc202efd7dd9c66c159c058f5edee7dd69b`, 163 inputs.
 
 ## Native WS147 candidate for hardware qualification
 

@@ -12,10 +12,10 @@ actual call sites and the exact native device candidate.
 | Boundary | Current state | Remaining gate |
 | --- | --- | --- |
 | Released dependency | Signed Core v0.8.0 / ABI3 remains Runtime's production lock. | Publish the reviewed final ABI4 contract, then update the exact lock. |
-| Core mainline | PR #60, `34ae4b88`, 0.9.0-dev / ABI4; source identity `bbfa81de99ca687d036ef151f87b3e7bac1a29cd8f2c9e1c8c45547b7c1f4552`, 163 implementation inputs. | Remaining consumer/property migration and callback retirement. |
-| Runtime mainline | PR #100, `36edc545`, after CI 19/19 (run `43667442247`). PR #99 and its post-merge CI also passed 19/19. | Default adoption is separate from successful source-override qualification. |
+| Core mainline | PR #61, `3152300a`, 0.9.0-dev / ABI4; source identity `c11045754fa28b9bf3e5e0e9a8720dc202efd7dd9c66c159c058f5edee7dd69b`, 163 implementation inputs. | Remaining consumer/property migration and callback retirement. |
+| Runtime mainline | PR #101, `8262edf7`, after CI 19/19 (run `43670532408`); #100 migrated the embedded host. | Default adoption is separate from successful source-override qualification. |
 | Embedded host | PR #100 binds one TextSystem/JFFONT2 fixture to layout, layers and paint. Locked ABI3 and source ABI4 full/cropped tests pass. | No remaining provider callback in this example. |
-| Installed worker | Current proposed change makes canonical v10/painterless CoreText independent of BMP. | Review/CI/merge; exact device acceptance remains downstream. |
+| Installed worker | PR #101 makes canonical v10/painterless CoreText independent of BMP. | Exact device acceptance remains downstream. |
 | Native WS147 | Exact `0.6.2-abi4-mainline1` built and package-verified, not flashed. | Observe this exact artifact on Home/Activity/Weather/back. |
 | ABI5 and shaping | Separate optional candidates; ABI5 tracked reuse has correctness/package evidence but no qualified performance gain. | Not enabled in Runtime and not an ABI4 release prerequisite. |
 
@@ -44,7 +44,7 @@ refusal and resource budgets. Do not add more host text callbacks.
 | Consumer | Progress | Exit evidence |
 | --- | --- | --- |
 | Embedded host | Complete in #100. | Visible ink, click/checkbox/select and RGB565 flush; ABI3 and ABI4 full/cropped. |
-| ESP32 installed worker | Proposed painterless canonical v10 path; owned catalog/snapshot survives replay; BMP is optional. | Host full/cropped and locked ABI3 matrix, real IDF builds, CI, later exact device profile. |
+| ESP32 installed worker | Merged #101 painterless canonical v10 path; owned catalog/snapshot survives replay; BMP is optional. | Host full/cropped and locked ABI3 matrix, real IDF builds, CI, later exact device profile. |
 | ESP32 retained native/default | Named CoreText profile is merged; default still uses generated BitmapFont providers. | Migrate default resource contract and qualify supported properties/routes. |
 | ESP32 non-retained main entry | Separate provider factories remain. | Migrate or explicitly retire the entry, not only retained UI. |
 | Win32 default | Explicit CoreText catalog mode is merged; GDI remains default. | Bounded ellipsis/property parity, repaint gates and catalog default adoption. |
@@ -55,7 +55,7 @@ The installed-worker change refuses ordinary callback-dependent `Text` commands
 before framebuffer writes; that is a bounded admission policy, not proof that
 all formerly supported generated/widget text contexts have migrated.
 
-Current host evidence for the proposed worker change: full and four-family
+Host evidence for merged #101: full and four-family
 cropped Core PR60 each pass 7/7 resource/admission/text tests. Both BMP variants
 prove visible prepared text, JavaScript mutation, replay after teardown and
 atomic refusal. Locked installed ABI3 passes four admission tests; the two
@@ -63,7 +63,7 @@ canonical tests intentionally skip. The CoreText-OFF legacy path is explicit.
 
 ### C. Core-owned text API consolidation
 
-Bounded Core ellipsis is being implemented/reviewed separately. It must preserve
+Core PR #61 merged as `3152300a` after all four CI jobs passed (run `43670844631`). It implements bounded owner-side paint ellipsis; full MSVC tests pass 33/33 and installed full/cropped text consumers pass 1/1 each. The cropped suite's sole shared-inline shadow assertion reproduces unchanged on its base. The current Runtime qualification change pins this exact source and adds five real-font incremental/full ellipsis frames, including a visible clip-only control. Broader property/default qualification remains separate. It must preserve
 source layout/intrinsic dimensions, apply owner clipping after final geometry,
 account for Q1000/spacing and output budgets, and refuse unsupported complete
 contexts without host fallback. Mixed owners need whole-paragraph cutoff
@@ -119,10 +119,10 @@ gates. Optional ABI5 reuse and production shaping remain separate.
 
 ## Immediate next actions
 
-1. Finish independent review and CI for painterless installed CoreText with BMP
-   OFF/ON, preserving the exact ABI3 legacy path and refusal/lifetime tests.
-2. Finish the bounded Core ellipsis slice, real-font/repaint/package checks and
-   CI; then qualify its exact Core identity in Runtime before desktop adoption.
+1. Complete Runtime qualification of merged Core #61 with exact full/cropped
+   package/source identity and the positive real-font ellipsis repaint gate.
+2. Extend remaining property/resource consumers before default adoption; #101
+   worker and #61 bounded ellipsis implementation are merged, not open work.
 3. Migrate native/default and AppFontSet resources; convert remaining callback
    users/tests and remove the obsolete public API together.
 4. Publish signed ABI4 and switch the exact Runtime lock only after those gates.

@@ -10,10 +10,10 @@
 | 边界 | 当前状态 | 剩余门槛 |
 | --- | --- | --- |
 | 已发布依赖 | Runtime 生产锁仍为签名 Core v0.8.0 / ABI3。 | 最终 ABI4 契约发布后，更新精确依赖锁。 |
-| Core 主线 | PR #60，`34ae4b88`，0.9.0-dev / ABI4；source identity `bbfa81de99ca687d036ef151f87b3e7bac1a29cd8f2c9e1c8c45547b7c1f4552`，163 个实现输入。 | 剩余消费者、属性迁移和回调退役。 |
-| Runtime 主线 | PR #100，`36edc545`，CI 19/19，run `43667442247`；#99 及合并后 CI 也通过 19/19。 | source override 资格验证不等于生产默认采用。 |
+| Core 主线 | PR #61，`3152300a`，0.9.0-dev / ABI4；source identity `c11045754fa28b9bf3e5e0e9a8720dc202efd7dd9c66c159c058f5edee7dd69b`，163 个实现输入。 | 剩余消费者、属性迁移和回调退役。 |
+| Runtime 主线 | PR #101，`8262edf7`，CI 19/19，run `43670532408`；#100 已迁移 embedded host。 | source override 资格验证不等于生产默认采用。 |
 | Embedded host | #100 为 layout/layers/paint 绑定同一个 TextSystem/JFFONT2；锁定 ABI3 和 source ABI4 full/cropped 测试通过。 | 该示例不再依赖文本 provider 回调。 |
-| Installed worker | 本轮候选让无 painter 的 canonical v10/CoreText 独立于 BMP 工作。 | 审查、CI、合并；实机验收仍是下游门槛。 |
+| Installed worker | 已合并 #101，让无 painter 的 canonical v10/CoreText 独立于 BMP 工作。 | 实机验收仍是下游门槛。 |
 | 原生 WS147 | 精确候选 `0.6.2-abi4-mainline1` 已构建并核验包，尚未刷写。 | 在该产物上观察 Home/Activity/Weather/返回。 |
 | ABI5 与 shaping | 独立可选候选；ABI5 tracked reuse 有正确性与包测试，尚无合格性能收益。 | 未启用到 Runtime，也不阻塞 ABI4 发布。 |
 
@@ -38,7 +38,7 @@
 | 消费者 | 进展 | 完成证据 |
 | --- | --- | --- |
 | Embedded host | #100 完成。 | 可见文字、click/checkbox/select、RGB565 flush；ABI3 与 ABI4 full/cropped。 |
-| ESP32 installed worker | 候选采用无 painter 的 canonical v10；目录/快照覆盖重放寿命，BMP 可选。 | 主机 full/cropped、锁定 ABI3、真实 IDF 构建、CI，随后精确设备 profile 验收。 |
+| ESP32 installed worker | 已合并 #101：无 painter 的 canonical v10；目录/快照覆盖重放寿命，BMP 可选。 | 主机 full/cropped、锁定 ABI3、真实 IDF 构建、CI，随后精确设备 profile 验收。 |
 | ESP32 retained native/default | 命名 CoreText profile 已合并，默认仍使用 generated BitmapFont provider。 | 迁移默认资源契约并验收所支持属性和页面路由。 |
 | ESP32 非 retained main 入口 | 仍有独立的 provider 工厂。 | 同步迁移或明确退役该入口，不能只改 retained UI。 |
 | Win32 默认路径 | 显式 CoreText 目录模式已合并，默认仍为 GDI。 | 有界 ellipsis/属性兼容、重绘验证及目录默认采用。 |
@@ -48,14 +48,14 @@ Canvas2D 已使用 TextSystem，不是剩余回调消费者。Installed worker �
 拒绝依赖回调的普通 `Text` 命令；这是有界准入规则，不代表旧路径支持的全部
 生成内容或控件文字均已迁移。
 
-本轮 worker 主机证据：Core PR60 full 和关闭四类可选能力的 cropped 均通过 7/7；
+已合并 #101 的 worker 主机证据：Core PR60 full 和关闭四类可选能力的 cropped 均通过 7/7；
 BMP OFF/ON 都覆盖可见 prepared text、JavaScript 文字修改、退出后的重放和原子拒绝。
 锁定的已安装 ABI3 包通过四项 admission 测试，两项 canonical 测试按预期跳过。
 CoreText OFF 的 legacy 路径保持显式选择。
 
 ### C. Core 文本 API 收敛
 
-Core 的有界 ellipsis 正在独立实现和审查：必须保留源文本布局/固有尺寸，在最终几何
+Core #61 已在四项 CI 全部通过（run `43670844631`）后合并为 `3152300a`。有界 owner-side ellipsis 的 MSVC full 测试 33/33、已安装 full/cropped 文本消费者各 1/1 通过；cropped 唯一 shared-inline 阴影断言失败在未修改基线同样复现。当前 Runtime 资格验证更新固定该精确源码，并增加五帧真实字体增量/全量省略号测试和 clip-only 可见对照。更广属性/默认采用仍独立推进。该实现必须保留源文本布局/固有尺寸，在最终几何
 确定后按 owner 裁剪，使用 Q1000/spacing 和输出预算，并对不支持的完整上下文拒绝，
 不回退宿主。混合 owner 需要整段截断所有权，不能各叶节点独立截断。
 
@@ -102,10 +102,8 @@ Installed worker/BMP 必须使用独立命名镜像和资源配置；构建通�
 
 ## 紧接着的工作
 
-1. 完成 BMP OFF/ON 下无 painter 的 installed CoreText 审查、CI 和合并，保留精确
-   ABI3 legacy 路径以及拒绝/寿命测试。
-2. 完成有界 Core ellipsis、真实字体/重绘/包验证和 CI，再用其精确 Core 身份验证
-   Runtime，随后推进桌面默认采用。
+1. 完成 Runtime 对已合并 Core #61 的精确 full/cropped 包/源码资格验证，以及正向真实字体 ellipsis 重绘门槛。
+2. 在默认采用前继续补齐属性/资源消费者；#101 worker 和 #61 有界 ellipsis 实现已合并，不再列为开放工作。
 3. 迁移 native/default 与 AppFontSet 资源；转换剩余回调调用方和测试，集中删除旧 API。
 4. 上述门槛通过后签名发布 ABI4，并切换 Runtime 精确依赖锁。
 5. 用户方便时执行已预留的原生板测；设备问题单独跟踪，并在容量合格的 profile 上
