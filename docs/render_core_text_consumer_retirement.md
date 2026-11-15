@@ -2,36 +2,35 @@
 
 > Last updated: 2026-11-16; Applies to: 0.6.0-dev. Core contract: 0.9.0-dev / ABI4.
 
-Current source audit: 2026-11-15. Runtime mainline `fa5176a0` (PR111), Core
-`1d5c746d` (PR65), 0.9.0-dev / ABI4. This is a consumer migration checklist,
-not a declaration that legacy callback APIs have been removed.
+Current source audit: 2026-11-16. Runtime PR #114 merged as `a197ceb4`; Core PR
+#66 merged as `079de28a`, 0.9.0-dev / ABI4. Both post-merge CI runs passed.
+Runtime production remains locked to signed Core 0.8.0 / ABI3; ABI4 package
+publication and production locking are still pending.
 
-The isolated ABI4 retirement candidate has no Runtime host text-measure or
-paint consumers. Runtime Release CTest passes 113/113 against the exact Core
-source override, including Core style-reuse tests, route-tabs, motion-lab and
-incremental/full pixel equivalence. Core full/cropped Release CTest passes
-33/33 and 32/32. Final source-archive and installed-package consumer gates are
-still pending on a clean exact-candidate snapshot.
+The merged ABI4 Runtime has no production host text-measure or paint consumers.
+Runtime Release CTest passed 113/113 against the exact Core source override,
+including Core style-reuse tests, route-tabs, motion-lab and incremental/full
+pixel equivalence. Core full/cropped Release CTest passed 33/33 and 32/32 on the
+candidate. Core #66 CI, including Standalone Build and Archive, and Runtime
+#114 full/cropped source-installed consumers passed. The versioned signed
+release archive and Runtime tests against that published archive remain.
 
 ## Production consumers
 
 | Consumer | Actual selection and resources | Remaining change |
 | --- | --- | --- |
-| ESP32 retained UI (`jellyframe_esp32s3_ui_task.cpp`) | Runtime #111 enables the named CoreText WS147 band-shell profile; it binds the shared JFFONT2 catalog and clears providers. The exact Core #63 ESP-IDF build and profile guard pass. The explicit legacy typography profile still exercises generated C++ Noto faces. | Keep legacy only as an explicit acceptance profile; qualify any new named device image before removing callback construction and port-owned measurement/scaling. |
-| ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects supported canonical v10 and a painterless renderer, independently of BMP. Owned text catalog/snapshot survives accepted-frame replay. CoreText OFF retains the explicit legacy painter path. Runtime #107 tests Core #63 popup input, prepared packets, B-row pixels, selection and close; #109 adds a full-feature WS147 installed-worker profile. Core #65 routes generated pseudo labels/list markers through TextSystem or explicit refusal. User accepted title/options/selection/touch on `0.6.2-abi4-installed-core63-device1`; JFDP accepted the first frame and reported zero render/present failures. | Keep this device observation scoped to its named profile; remove the remaining legacy painter path and qualify other profiles independently. |
+| ESP32 retained UI (`jellyframe_esp32s3_ui_task.cpp`) | Runtime #114 moves production text to Core TextSystem; ABI3 compatibility remains behind ABI guards. The accepted `mainline1` image predates #114/#66. | Qualify a new named device image after pinning the signed ABI4 package. |
+| ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects canonical v10 and a painterless renderer independently of BMP; owned catalog/snapshot survives accepted-frame replay. The user accepted popup title/options/selection/touch on `0.6.2-abi4-installed-core63-device1`; that image predates Core #66. | Rebuild and qualify a worker image against the pinned signed ABI4 package. |
 | ESP32 P4/P5/P6 smoke (`main.cpp`) | The separate generated-BitmapFont provider factory is called only by this benchmark/smoke fixture, not by a product runtime route. The CoreText smoke runs before benchmark framebuffer admission. PR #110 built it with IDF 5.3.1 and exact Core #63 identity `e842b2e6...af1adb67`; the map excludes the legacy Noto C++ pack. | Keep legacy coverage on its explicit legacy profile. The CoreText smoke is build-qualified; physical execution is optional diagnostics, not a product-consumer migration gate. |
 | Desktop default (`tools/native/win32_browser.cpp`) | The ABI4 candidate selects Core TextSystem by default and compiles GDI only on ABI3. Text content changes still rebuild without host metrics. Paint-only style changes can reuse layout after Core compares the old/new computed layout fields and render-tree shape; shared-inline caches and DOM tree/text dirtiness are conservatively rejected. Runtime CTest confirms route-tabs `rebuild=1`, motion-lab `style_stable>0`, and incremental/full pixel equivalence. | No remaining Win32 callback migration; retain ABI3 GDI only behind its compatibility build boundary. |
 | Desktop application fonts (`src/app_runtime/app_font_set.cpp`) | Complete in Runtime #103: JFFONT2-only, callback loaders/accessors and browser precedence removed; tools/samples/import UI use canonical resources. | No remaining AppFontSet migration; generated C++ port defaults remain separate. |
 | Embedded host example | This change binds one TextSystem to layout, layers and compositor using a complete tiny JFFONT2 fixture. | No remaining measurement/painter callback in this example. Device-default changes are separate. |
 
-Core #65 routes generated pseudo-content/list-marker fallback through Core
-TextSystem preparation or explicitly refuses it without emitting legacy Text
-commands; the unbound legacy path remains available. Runtime should qualify the
-exact Core #65 source wherever these producers are reachable. Core still
-contains callback/default layout, wrapping, ellipsis, repaint/reuse,
-layer-cache identity and compositor branches. Remove them together only after
-the production consumers above migrate. Tests, benchmarks and ESP32 acceptance
-fixtures also need conversion, but are not product-default consumers.
+Runtime #114 qualifies generated pseudo-content paths through Core TextSystem
+preparation or explicit refusal; Core #66 removes the legacy callback branches.
+Runtime no longer needs to qualify the old callback fallback.
+Historical test, benchmark and porting-guide references should be scoped to
+ABI3 compatibility or history; do not restore an ABI4 alias.
 Canvas2D text already uses TextSystem; it is not a remaining callback branch.
 Core #62 migrates closed form-control labels/select arrows through
 transactional PreparedText; its full tests pass 33/33, cropped focused and
@@ -49,10 +48,10 @@ updated the result. Its identity is Runtime `f609a1d45fef39db5f22cbc9ad5c5d98c34
 Core source `e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67`,
 and BIN SHA-256 `8dba1f73835e35697ef13c7d63159c966b8ab487dab752d8f3b20ee7a2ad6a0f`.
 After acceptance, the board was restored to the already accepted native
-`mainline1` image; this does not add new evidence for that image. The painterless installed profile
-rejects ordinary callback-dependent Text commands before writes. Core #65
-closes the generated pseudo-content/list-marker fallback; any other generated
-or widget context still needs an explicit inventory and consumer test.
+`mainline1` image; this does not add new evidence for that image. The painterless
+installed profile rejects unsupported ordinary Text commands before writes.
+Runtime #114 covers generated pseudo-content through Core-owned preparation or
+refusal; Core #66 removes the callback fallback contract.
 
 The embedded-host example passed MSVC Release execution with the locked
 installed Core0.8/ABI3 package and source-overridden Core PR60 in full/cropped
@@ -158,5 +157,5 @@ This observation closes only the tested native image. It does not qualify the
 separate `mainline2` candidate, installed worker/BMP delivery, or the P4/P5/P6
 benchmark smoke. Keep those as separate named acceptance gates.
 
-Core ABI4 is still unreleased. Runtime production remains signed Core0.8/ABI3.
+Core ABI4 is still unreleased. Runtime production remains signed Core 0.8.0/ABI3.
 ABI5 tracked-style reuse and shaping are separate unqualified candidates.
