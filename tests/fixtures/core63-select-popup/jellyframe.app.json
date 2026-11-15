@@ -1,0 +1,43 @@
+{
+  "$schema": "../../../tools/schemas/jellyframe.app.schema.json",
+  "format": "jellyframe.app",
+  "formatVersion": 0,
+  "id": "org.jellyframe.acceptance.core63-select-popup",
+  "name": "Core 63 Select Popup",
+  "version": {
+    "name": "0.1.0",
+    "code": 1
+  },
+  "entry": "/index.html",
+  "runtime": {
+    "minJellyFrame": "0.6.0",
+    "minRenderCore": "0.8.0",
+    "script": "classic"
+  },
+  "viewport": {
+    "designWidth": 172,
+    "designHeight": 320,
+    "shape": "rect"
+  },
+  "budgets": {
+    "maxResourceBytes": 16384,
+    "maxDomNodes": 64,
+    "maxCssRules": 32,
+    "maxDisplayCommands": 96,
+    "maxEventListeners": 8
+  },
+  "capabilities": [],
+  "targets": {
+    "rect-172x320": {
+      "viewport": {
+        "width": 172,
+        "height": 320,
+        "shape": "rect"
+      },
+      "output": "jfapp"
+    }
+  },
+  "requiresFeatures": [
+    "forms.advanced"
+  ]
+}

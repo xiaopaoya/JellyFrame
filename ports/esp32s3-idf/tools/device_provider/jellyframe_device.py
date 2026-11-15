@@ -766,12 +766,12 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
             transaction = int(time.monotonic_ns() & 0xffffffff) or 1
             events: list[dict[str, Any]] = []
             sequence = 1
-            begin = decode_result(wire.request(INSTALL_BEGIN, begin_payload(transaction, app_id, bundle, args.allow_downgrade),
-                                               INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS))
-            if begin["resultCode"] != "accepted":
-                return exit_code_for(begin["resultCode"]), [stream_event("result", "install", args.request_id, sequence, resultCode=begin["resultCode"], device=device, transaction=begin["transaction"])]
             live_session = LiveInstallSession(config.endpoint_id, transaction, device)
             try:
+                begin = decode_result(wire.request(INSTALL_BEGIN, begin_payload(transaction, app_id, bundle, args.allow_downgrade),
+                                                   INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS))
+                if begin["resultCode"] != "accepted":
+                    return exit_code_for(begin["resultCode"]), [stream_event("result", "install", args.request_id, sequence, resultCode=begin["resultCode"], device=device, transaction=begin["transaction"])]
                 for offset in range(0, len(bundle), 1024):
                     if live_session.cancel_requested.is_set():
                         aborted = decode_result(wire.request(INSTALL_ABORT, transaction_payload(transaction),
