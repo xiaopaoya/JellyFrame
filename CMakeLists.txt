@@ -360,6 +360,11 @@ endif()
 
 if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
+    if(TARGET jellyframe_embedded_host_demo)
+        add_test(NAME jellyframe_embedded_host_core_text
+            COMMAND jellyframe_embedded_host_demo)
+        jellyframe_stage_sanitizer_runtime(jellyframe_embedded_host_demo)
+    endif()
     add_executable(jellyframe_esp32s3_band_navigation_tests
         ports/esp32s3-idf/tests/band_navigation_tests.cpp)
     target_include_directories(jellyframe_esp32s3_band_navigation_tests PRIVATE

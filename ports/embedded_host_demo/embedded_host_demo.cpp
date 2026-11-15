@@ -1,4 +1,4 @@
-﻿#include "render_core/bitmap_font.h"
+#include "render_core/text_system.h"
 #include "render_core/budget.h"
 #include "render_core/css_parser.h"
 #include "render_core/embedded_framebuffer.h"
@@ -57,25 +57,34 @@ constexpr char kHtml[] =
 constexpr char kCss[] =
     "body { margin: 0; padding: 4px; background: #000000; color: #ffffff; }"
     ".app { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }"
-    "h1 { grid-column: span 2; margin: 0; font-size: 14px; text-align: center; }"
+    "h1 { grid-column: span 2; margin: 0; font-size: 14px; font-weight: 400; color: #00ff00; text-align: left; }"
     "button, select { height: 24px; border-radius: 4px; border: 1px solid #ffffff;"
     "background: #1f2937; color: #ffffff; text-align: center; }"
     "input { width: 24px; height: 24px; }";
 
-constexpr std::uint8_t kRowsA[] = {
-    0x20, 0x50, 0x88, 0xf8, 0x88, 0x88, 0x88,
+// Complete JFFONT2: space and hand-authored 5x7 A/B coverage strikes.
+constexpr std::uint8_t kFontResource[] = {
+    0x4a, 0x46, 0x46, 0x4f, 0x4e, 0x54, 0x32, 0x00, 0x02, 0x00, 0x80, 0x00, 0x28, 0x00, 0x01, 0x00,
+    0x3e, 0x01, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0xf8, 0x00, 0x00, 0x00,
+    0x46, 0x00, 0x00, 0x00, 0xe8, 0x03, 0x08, 0x00, 0x90, 0x01, 0x08, 0x00, 0x6b, 0x03, 0x00, 0x00,
+    0x7d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x92, 0x67, 0x1c, 0x73, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x20, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x77, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x41, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+    0xee, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf9, 0xff, 0xff, 0xff, 0x05, 0x00, 0x07, 0x00,
+    0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x23, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x42, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0xee, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xf9, 0xff, 0xff, 0xff, 0x05, 0x00, 0x07, 0x00, 0x05, 0x00, 0x00, 0x00, 0x23, 0x00, 0x00, 0x00,
+    0x23, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0x00,
+    0xff, 0x00, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00,
+    0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00,
+    0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0xff,
+    0x00, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00,
 };
-
-constexpr std::uint8_t kRowsB[] = {
-    0xf0, 0x88, 0x88, 0xf0, 0x88, 0x88, 0xf0,
-};
-
-constexpr BitmapFontGlyph kGlyphs[] = {
-    BitmapFontGlyph{0x41, 5, 7, 6, 1, kRowsA},
-    BitmapFontGlyph{0x42, 5, 7, 6, 1, kRowsB},
-};
-
-constexpr BitmapFont kFont{kGlyphs, 2, 8, 6};
 
 struct FlushProbe {
     int count = 0;
@@ -110,7 +119,7 @@ struct Pipeline {
     LayerNodePtr layer_tree;
 };
 
-Pipeline build_pipeline(BitmapFontContext& font_context, const HostBudgets& budgets) {
+Pipeline build_pipeline(const TextSystem& text_system, const HostBudgets& budgets) {
     HtmlParser html_parser;
     CssParser css_parser;
     Pipeline pipeline;
@@ -120,20 +129,21 @@ Pipeline build_pipeline(BitmapFontContext& font_context, const HostBudgets& budg
 
     RenderTreeBuilder render_tree_builder(*pipeline.resolver, render_tree_options_from_budgets(budgets));
     pipeline.render_tree = render_tree_builder.build(*pipeline.document);
-    LayoutEngine layout_engine(*pipeline.resolver,
-                               TextMeasureProvider{bitmap_font_measure_callback, &font_context},
-                               layout_engine_options_from_budgets(budgets));
+    auto options = layout_engine_options_from_budgets(budgets);
+    options.text_system = &text_system;
+    LayoutEngine layout_engine(*pipeline.resolver, {}, options);
     pipeline.layout_tree = layout_engine.layout(*pipeline.render_tree, kViewportWidth);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
-    layer_options.text_measure = TextMeasureProvider{bitmap_font_measure_callback, &font_context};
+    layer_options.text_system = &text_system;
     LayerTreeBuilder layer_tree_builder(layer_options);
     pipeline.layer_tree = layer_tree_builder.build(*pipeline.layout_tree);
     return pipeline;
 }
 
-FrameBuffer render_to_rgba(const LayerNode& layer_tree, BitmapFontContext& font_context, const HostBudgets& budgets) {
-    SoftwareCompositor compositor(TextPainter{bitmap_font_paint_callback, &font_context},
-                                  software_compositor_options_from_budgets(budgets));
+FrameBuffer render_to_rgba(const LayerNode& layer_tree, const TextSystem& text_system, const HostBudgets& budgets) {
+    auto options = software_compositor_options_from_budgets(budgets);
+    options.text_system = &text_system;
+    SoftwareCompositor compositor({}, options);
     return compositor.render(layer_tree, kViewportWidth, kViewportHeight, Color{0, 0, 0, 255});
 }
 
@@ -145,9 +155,17 @@ std::vector<std::uint8_t> make_rgb565_buffer() {
 } // namespace
 
 int run_embedded_host_demo() {
-    BitmapFontContext font_context{&kFont, 2};
+    // Borrowed resource bytes and registration outlive layout, layers and paint.
+    TextFontFace face;
+    face.resource_id = 1;
+    TextSystem text_system;
+    if (face.resource.load(kFontResource, sizeof(kFontResource)) != FontResourceStatus::Loaded ||
+        text_system.bind(&face, 1) != TextSystemStatus::Ok) {
+        std::cerr << "embedded host demo failed: Core font binding failed\n";
+        return 1;
+    }
     const HostBudgets budgets = embedded_demo_budgets();
-    Pipeline pipeline = build_pipeline(font_context, budgets);
+    Pipeline pipeline = build_pipeline(text_system, budgets);
 
     Node* button = find_by_id(*pipeline.document, "button");
     Node* checkbox = find_by_id(*pipeline.document, "check");
@@ -160,6 +178,11 @@ int run_embedded_host_demo() {
     int button_clicks = 0;
     button->add_event_listener("click", [&](Event&) { ++button_clicks; });
 
+    FrameBuffer rgba = render_to_rgba(*pipeline.layer_tree, text_system, budgets);
+    if (rgba.width <= 0 || rgba.height <= 0) {
+        std::cerr << "embedded host demo failed: framebuffer budget exceeded\n";
+        return 1;
+    }
     InputController input(*pipeline.layer_tree);
     input.focus_next();
     input.activate_focused();
@@ -168,9 +191,22 @@ int run_embedded_host_demo() {
     input.focus_next();
     input.activate_focused();
 
-    FrameBuffer rgba = render_to_rgba(*pipeline.layer_tree, font_context, budgets);
-    if (rgba.width <= 0 || rgba.height <= 0) {
-        std::cerr << "embedded host demo failed: framebuffer budget exceeded\n";
+    // Green belongs only to heading ink, so controls/backgrounds cannot pass.
+    std::size_t visible_glyph_pixels = 0;
+    for (const auto& pixel : rgba.pixels)
+        if (pixel.g > 128 && pixel.r == 0 && pixel.b == 0) ++visible_glyph_pixels;
+    // Advanced forms opens the popup; the cropped base control cycles options.
+#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    constexpr const char* expected_select = "A";
+#else
+    constexpr const char* expected_select = "B";
+#endif
+    if (visible_glyph_pixels < 20 || button_clicks != 1 ||
+        !ensure_form_control_state(*checkbox).checked || form_control_display_text(*select) != expected_select) {
+        std::cerr << "embedded host demo failed: visible glyph/input proof failed: ink="
+                  << visible_glyph_pixels << " clicks=" << button_clicks
+                  << " checked=" << ensure_form_control_state(*checkbox).checked
+                  << " select=" << form_control_display_text(*select) << "\n";
         return 1;
     }
     std::vector<std::uint8_t> rgb565 = make_rgb565_buffer();
@@ -193,6 +229,12 @@ int run_embedded_host_demo() {
         return 1;
     }
 
+    if (flush_probe_state.count != 1 || flush_probe_state.total_area != kViewportWidth * kViewportHeight ||
+        rgb565.size() != static_cast<std::size_t>(kViewportWidth * kViewportHeight * 2)) {
+        std::cerr << "embedded host demo failed: framebuffer/flush proof failed\n";
+        return 1;
+    }
+    std::cout << "  visible_glyph_pixels=" << visible_glyph_pixels << '\n';
     std::cout << "JellyFrame embedded host demo\n";
     std::cout << "  viewport=" << kViewportWidth << "x" << kViewportHeight << '\n';
     std::cout << "  rgb565_bytes=" << rgb565.size() << '\n';
@@ -208,7 +250,7 @@ int run_embedded_host_demo() {
         nullptr,
         nullptr,
         nullptr,
-        sizeof(kHtml) + sizeof(kCss),
+        sizeof(kHtml) + sizeof(kCss) + sizeof(kFontResource),
     });
     std::cout << "  estimated_pipeline_bytes=" << pipeline_statistics.estimated_heap_bytes << '\n';
     std::cout << "  framebuffer_bytes=" << pipeline_statistics.framebuffer_bytes << '\n';
