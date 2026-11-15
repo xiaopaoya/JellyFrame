@@ -7143,6 +7143,7 @@ private:
             };
         if (!image_layout_dirty_ && update_plan.action == FrameUpdateAction::RebuildPipeline &&
             update_plan.reason == FrameUpdateReason::LayoutDirtyWithPreviousLayout &&
+            !text_backend.core_text &&
             layout_tree_ != nullptr &&
             layer_tree_ != nullptr &&
             text_dirty_can_reuse_layout(*document_, *layout_tree_, text_backend.measure)) {

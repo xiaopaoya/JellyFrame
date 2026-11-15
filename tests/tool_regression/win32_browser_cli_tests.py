@@ -1324,6 +1324,55 @@ def main() -> int:
         require(app["failure"]["reason"] == "load-failed", "win32 bad-entry launch must record failure reason")
 
     if scripting_enabled:
+        with tempfile.TemporaryDirectory(prefix="jellyframe-core-text-dirty-layout-") as directory:
+            root = Path(directory)
+            app = root / "app"
+            app.mkdir()
+            (app / "index.html").write_text(
+                "<!doctype html><meta charset='utf-8'><style>"
+                "body{margin:0;width:220px;height:80px;background:#fff;color:#000}"
+                "#label{display:block;margin:0;font-size:16px;line-height:20px}"
+                "#toggle{display:block;width:80px;height:24px;margin-top:20px}"
+                "</style><p id='label'>Core</p><button id='toggle'>Change</button><script>"
+                "document.getElementById('toggle').addEventListener('click',function(){"
+                "document.getElementById('label').textContent='CoreText selected metrics';"
+                "});</script>",
+                encoding="utf-8",
+            )
+            (app / "jellyframe.app.json").write_text(json.dumps({
+                "id": "org.jellyframe.tests.core-text-dirty-layout",
+                "name": "Core Text Dirty Layout",
+                "role": "app",
+                "versionName": "1.0.0",
+                "versionCode": 1,
+                "entry": "/index.html",
+                "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": LOCKED_CORE_VERSION,
+                            "script": "classic"},
+                "viewport": {"designWidth": 220, "designHeight": 80},
+            }), encoding="utf-8")
+            (app / "capture.jfcapture").write_text(
+                "frames 3\nstep-ms 33\nstart-ms 1000\nevent 1 click-id toggle\n",
+                encoding="utf-8",
+            )
+            captures = root / "captures"
+            trace = root / "trace.jsonl"
+            result = run_case(exe, [
+                "--app", str(app), "--use-app-fonts", "--frame-script", str(app / "capture.jfcapture"),
+                "--capture-frames", str(captures), "--render-trace", str(trace),
+            ])
+            require(result.returncode == 0, "CoreText text-dirty capture must pass: " + result.stdout)
+            require("text_backend=core-text" in result.stdout,
+                    "CoreText text-dirty capture must keep the selected Core TextSystem backend")
+            records = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
+            require(len(records) == 4, "CoreText text-dirty capture must trace all three frames")
+            require(records[2]["action"] == "rebuild-pipeline" and
+                    records[2]["reason"] == "layout-dirty-with-previous-layout",
+                    "CoreText text mutation must rebuild layout without legacy metric validation: " +
+                    json.dumps(records[2], sort_keys=True))
+            require((captures / "frame_000.bmp").read_bytes() !=
+                    (captures / "frame_001.bmp").read_bytes(),
+                    "CoreText text mutation must update the captured output")
+
         with tempfile.TemporaryDirectory(prefix="jellyframe-dialog-modal-") as directory:
             captures = Path(directory) / "captures"
             dialog_result = run_case(
