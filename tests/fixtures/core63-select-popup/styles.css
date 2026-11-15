@@ -1,0 +1,9 @@
+* { box-sizing: border-box; }
+html, body { width: 172px; min-height: 320px; margin: 0; }
+body { padding: 12px; background: #10151b; color: #edf3f8; font: 16px sans-serif; }
+main { width: 148px; }
+h1 { margin: 4px 0 12px; color: #69d5ee; font-size: 18px; }
+p { margin: 0 0 18px; color: #c0ccd6; line-height: 22px; }
+label { display: block; margin-bottom: 6px; color: #f2c35b; font-weight: 700; }
+select { width: 148px; height: 42px; padding: 4px 8px; border: 2px solid #49a873; background: #f3f6f8; color: #10151b; font-size: 16px; }
+output { display: block; margin-top: 24px; padding: 10px 6px; border: 1px solid #718096; color: #f2c35b; line-height: 22px; }
