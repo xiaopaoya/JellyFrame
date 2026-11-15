@@ -70,7 +70,14 @@ CASES = (
 )
 
 
-def run_capture(shell: Path, repo: Path, case: CaptureCase, output: Path, force_full: bool) -> None:
+def run_capture(
+    shell: Path,
+    repo: Path,
+    case: CaptureCase,
+    output: Path,
+    force_full: bool,
+    expected_policy: str | None,
+) -> str:
     app = repo / case.app
     command = [
         str(shell),
@@ -105,17 +112,31 @@ def run_capture(shell: Path, repo: Path, case: CaptureCase, output: Path, force_
             f"capture failed ({result.returncode}): {' '.join(command)}\n"
             f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
-    expected_policy = "core" if case.use_app_fonts else "legacy"
-    if f"text_policy={expected_policy}" not in result.stdout:
+    policy_lines = [line.strip().split("=", 1)[1] for line in result.stdout.splitlines()
+                    if line.strip().startswith("text_policy=")]
+    if not policy_lines or any(policy != policy_lines[0] for policy in policy_lines):
         raise RuntimeError(
-            f"{case.name}: expected text_policy={expected_policy} in capture output\n"
+            f"{case.name}: capture did not report one consistent text policy\n"
             f"stdout:\n{result.stdout}"
         )
-    if case.require_pixel_mutation and case.use_app_fonts and "layout-core-text-refused" in result.stdout:
+    actual_policy = policy_lines[0]
+    if expected_policy is not None and actual_policy != expected_policy:
+        raise RuntimeError(
+            f"{case.name}: expected text_policy={expected_policy}, got {actual_policy}\n"
+            f"stdout:\n{result.stdout}"
+        )
+    if case.require_pixel_mutation and actual_policy == "core" and "layout-core-text-refused" in result.stdout:
         raise RuntimeError(
             f"{case.name}: Core text layout refused a positive repaint fixture\n"
             f"stdout:\n{result.stdout}"
         )
+    return actual_policy
+
+
+def detect_default_text_policy(shell: Path, repo: Path, case: CaptureCase, root: Path) -> str:
+    probe = replace(case, name="default-text-policy-probe", frame_count=1, use_app_fonts=False)
+    output = root / "default-text-policy-probe"
+    return run_capture(shell, repo, probe, output, False, None)
 
 
 def make_text_property_case(
@@ -470,22 +491,25 @@ def main() -> int:
             if not cases:
                 raise RuntimeError(f"unknown capture case: {selected_case}")
         run_count = 0
-        policies = [(False, "legacy")]
-        if include_core_text:
+        default_policy = detect_default_text_policy(shell, repo, cases[0], root)
+        if default_policy not in ("core", "legacy"):
+            raise RuntimeError(f"unsupported default text policy reported by shell: {default_policy}")
+        policies = [(False, default_policy)]
+        if include_core_text and default_policy == "legacy":
             policies.append((True, "core"))
         for case in cases:
-            for use_app_fonts, policy in policies:
-                if case.use_app_fonts and not use_app_fonts:
+            for force_core, policy in policies:
+                if case.use_app_fonts and policy != "core":
                     continue
                 backend_case = replace(
                     case,
                     name=f"{case.name}-{policy}",
-                    use_app_fonts=use_app_fonts,
+                    use_app_fonts=force_core or case.use_app_fonts,
                 )
                 incremental = root / backend_case.name / "incremental"
                 full = root / backend_case.name / "full"
-                run_capture(shell, repo, backend_case, incremental, False)
-                run_capture(shell, repo, backend_case, full, True)
+                run_capture(shell, repo, backend_case, incremental, False, policy)
+                run_capture(shell, repo, backend_case, full, True, policy)
 
                 incremental_frames = sorted(incremental.glob("frame_*.bmp"))
                 full_frames = sorted(full.glob("frame_*.bmp"))
@@ -497,7 +521,7 @@ def main() -> int:
                         f"{backend_case.name}: expected {backend_case.frame_count} frames per mode, got "
                         f"{len(incremental_frames)} and {len(full_frames)}"
                     )
-                if backend_case.require_pixel_mutation and backend_case.use_app_fonts:
+                if backend_case.require_pixel_mutation and policy == "core":
                     if backend_case.text_region is None:
                         raise RuntimeError(f"{backend_case.name}: text proof region is missing")
                     if not bmp_region_has_ink(incremental_frames[0], backend_case.text_region):
@@ -588,7 +612,7 @@ def main() -> int:
                         raise RuntimeError(
                             f"{backend_case.name}: full repaint did not restore the original style"
                         )
-                if backend_case.require_text_presence and backend_case.use_app_fonts:
+                if backend_case.require_text_presence and policy == "core":
                     if backend_case.text_region is None:
                         raise RuntimeError(f"{backend_case.name}: text proof region is missing")
                     for mode, frames in (("incremental", incremental_frames), ("full", full_frames)):
@@ -598,7 +622,7 @@ def main() -> int:
                                     f"{backend_case.name}: {mode} repaint has no visible text "
                                     f"at frame {index} ({frame.name})"
                                 )
-                if backend_case.require_forecast_presence and backend_case.use_app_fonts:
+                if backend_case.require_forecast_presence and policy == "core":
                     # Prove each expected text row is visible away from card backgrounds and icons.
                     forecast_labels = (
                         ("10", "26", (12, 47)),
@@ -643,7 +667,7 @@ def main() -> int:
                     )
                     clip_output = root / backend_case.name / "clip-reference"
                     try:
-                        run_capture(shell, repo, backend_case, clip_output, True)
+                        run_capture(shell, repo, backend_case, clip_output, True, policy)
                     finally:
                         html_path.write_text(original, encoding="utf-8")
                     clip_frames = sorted(clip_output.glob("frame_*.bmp"))

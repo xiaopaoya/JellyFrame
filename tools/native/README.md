@@ -35,7 +35,9 @@ CMake emits the corresponding executable. Use
   with scripted time, event injection, per-frame BMP output and an optional
   contact-sheet image. Lower-level `--capture-frames DIR --frame-count 30
   --frame-step-ms 33` and repeated `--frame-event` arguments remain available
-  for quick smoke tests.
+  for quick smoke tests. With the ABI4 canonical-value Core API, the shell uses
+  its immutable Core font catalog for layout and glyph preparation by default;
+  the ABI3 build retains its GDI default and explicit Core-catalog option.
 - `win32_browser.cpp` also has a Win32-only host audio smoke path:
   `--audio-smoke local.wav` or `--app package --audio-smoke /audio/tone.wav`.
   This validates package-resource handoff to the desktop host adapter; it does

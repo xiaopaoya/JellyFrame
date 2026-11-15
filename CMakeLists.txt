@@ -302,6 +302,10 @@ if(JELLYFRAME_BUILD_EXAMPLES)
     add_jellyframe_tool(jellyframe_layer_tree_dump tools/native/layer_tree_dump.cpp)
     add_jellyframe_tool(jellyframe_pipeline_dump tools/native/pipeline_dump.cpp)
     add_jellyframe_tool(jellyframe_pseudo_browser tools/native/pseudo_browser.cpp)
+    if(JELLYFRAME_BUILD_APP_RUNTIME)
+        target_link_libraries(jellyframe_pseudo_browser PRIVATE jellyframe_app_runtime)
+        target_compile_definitions(jellyframe_pseudo_browser PRIVATE JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME=1)
+    endif()
     add_jellyframe_tool(jellyframe_font_resource_check tools/native/font_resource_check.cpp)
     add_jellyframe_tool(jellyframe_font_pack_gen tools/native/font_pack_gen.cpp)
     add_jellyframe_tool(jellyframe_embedded_host_demo ports/embedded_host_demo/embedded_host_demo.cpp)
@@ -322,28 +326,30 @@ if(JELLYFRAME_BUILD_EXAMPLES)
 endif()
 
 if(JELLYFRAME_BUILD_BENCHMARKS)
-    add_jellyframe_tool(jellyframe_render_core_microbench src/render_core/benchmarks/microbench.cpp)
-    jellyframe_enable_render_core_link_map(jellyframe_render_core_microbench)
-    if(WIN32)
-        add_jellyframe_tool(jellyframe_cpu2d_compare src/render_core/benchmarks/cpu2d_compare_win32.cpp)
-        target_link_libraries(jellyframe_cpu2d_compare PRIVATE gdi32 msimg32 gdiplus bcrypt)
-        target_compile_definitions(jellyframe_cpu2d_compare PRIVATE
-            JELLYFRAME_CPU2D_CORE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
-        if(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
-            if(NOT JELLYFRAME_LVGL_SOURCE_DIR OR NOT EXISTS "${JELLYFRAME_LVGL_SOURCE_DIR}/include/lvgl/lvgl.h")
-                message(FATAL_ERROR "JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER requires JELLYFRAME_LVGL_SOURCE_DIR")
-            endif()
-            if(NOT JELLYFRAME_LVGL_LIBRARY OR NOT EXISTS "${JELLYFRAME_LVGL_LIBRARY}")
-                message(FATAL_ERROR "JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER requires JELLYFRAME_LVGL_LIBRARY")
-            endif()
-            target_include_directories(jellyframe_cpu2d_compare PRIVATE
-                "${JELLYFRAME_LVGL_SOURCE_DIR}/include"
-                "${JELLYFRAME_LVGL_SOURCE_DIR}/src")
-            target_compile_definitions(jellyframe_cpu2d_compare PRIVATE LV_CONF_SKIP=1 LV_LVGL_H_INCLUDE_SIMPLE=1
-                JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER=1)
-            target_link_libraries(jellyframe_cpu2d_compare PRIVATE "${JELLYFRAME_LVGL_LIBRARY}")
-            if(MSVC)
-                target_compile_options(jellyframe_cpu2d_compare PRIVATE /utf-8)
+    if(JELLYFRAME_RENDER_CORE_ENGINE_ABI LESS 4)
+        add_jellyframe_tool(jellyframe_render_core_microbench src/render_core/benchmarks/microbench.cpp)
+        jellyframe_enable_render_core_link_map(jellyframe_render_core_microbench)
+        if(WIN32)
+            add_jellyframe_tool(jellyframe_cpu2d_compare src/render_core/benchmarks/cpu2d_compare_win32.cpp)
+            target_link_libraries(jellyframe_cpu2d_compare PRIVATE gdi32 msimg32 gdiplus bcrypt)
+            target_compile_definitions(jellyframe_cpu2d_compare PRIVATE
+                JELLYFRAME_CPU2D_CORE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
+            if(JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER)
+                if(NOT JELLYFRAME_LVGL_SOURCE_DIR OR NOT EXISTS "${JELLYFRAME_LVGL_SOURCE_DIR}/include/lvgl/lvgl.h")
+                    message(FATAL_ERROR "JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER requires JELLYFRAME_LVGL_SOURCE_DIR")
+                endif()
+                if(NOT JELLYFRAME_LVGL_LIBRARY OR NOT EXISTS "${JELLYFRAME_LVGL_LIBRARY}")
+                    message(FATAL_ERROR "JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER requires JELLYFRAME_LVGL_LIBRARY")
+                endif()
+                target_include_directories(jellyframe_cpu2d_compare PRIVATE
+                    "${JELLYFRAME_LVGL_SOURCE_DIR}/include"
+                    "${JELLYFRAME_LVGL_SOURCE_DIR}/src")
+                target_compile_definitions(jellyframe_cpu2d_compare PRIVATE LV_CONF_SKIP=1 LV_LVGL_H_INCLUDE_SIMPLE=1
+                    JELLYFRAME_CPU2D_ENABLE_LVGL_ADAPTER=1)
+                target_link_libraries(jellyframe_cpu2d_compare PRIVATE "${JELLYFRAME_LVGL_LIBRARY}")
+                if(MSVC)
+                    target_compile_options(jellyframe_cpu2d_compare PRIVATE /utf-8)
+                endif()
             endif()
         endif()
     endif()
@@ -498,17 +504,21 @@ if(JELLYFRAME_BUILD_TESTS)
         jellyframe_enable_test_asserts(jellyframe_esp32s3_image_metadata_tests)
         jellyframe_stage_sanitizer_runtime(jellyframe_esp32s3_image_metadata_tests)
     endif()
-    if(WIN32 AND TARGET jellyframe_cpu2d_compare)
+    if(WIN32)
         add_executable(jellyframe_cpu2d_sampling_tests tests/cpu2d_sampling_tests.cpp)
         target_compile_features(jellyframe_cpu2d_sampling_tests PRIVATE cxx_std_17)
         add_test(NAME jellyframe_cpu2d_sampling_tests COMMAND jellyframe_cpu2d_sampling_tests)
+        if(JELLYFRAME_RENDER_CORE_ENGINE_ABI LESS 4)
+            add_jellyframe_tool(jellyframe_cpu2d_rounded_fixture_tests tests/cpu2d_rounded_fixture_tests.cpp)
+            add_test(NAME jellyframe_cpu2d_rounded_fixture_tests COMMAND jellyframe_cpu2d_rounded_fixture_tests)
+        endif()
+    endif()
+    if(WIN32 AND TARGET jellyframe_cpu2d_compare)
         add_test(NAME jellyframe_cpu2d_rounded_qualification
                  COMMAND jellyframe_cpu2d_compare
                          "${CMAKE_CURRENT_BINARY_DIR}/cpu2d_rounded_qualification" 1 rounded-qualification)
         set_tests_properties(jellyframe_cpu2d_rounded_qualification PROPERTIES
             PASS_REGULAR_EXPRESSION "rounded_qualification=not-comparable different_pixels=[1-9][0-9]* core_oracle=pass performance_measured=false")
-        add_jellyframe_tool(jellyframe_cpu2d_rounded_fixture_tests tests/cpu2d_rounded_fixture_tests.cpp)
-        add_test(NAME jellyframe_cpu2d_rounded_fixture_tests COMMAND jellyframe_cpu2d_rounded_fixture_tests)
         add_jellyframe_tool(jellyframe_cpu2d_text_fixture_tests tests/cpu2d_text_fixture_tests.cpp)
         add_test(NAME jellyframe_cpu2d_text_fixture_tests COMMAND jellyframe_cpu2d_text_fixture_tests)
         add_test(NAME jellyframe_cpu2d_compare_bitmap_text_smoke
@@ -814,6 +824,22 @@ if(JELLYFRAME_BUILD_TESTS)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         if(JELLYFRAME_BUILD_APP_RUNTIME)
+            if(JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS)
+                set(JELLYFRAME_CANDIDATE_TEST_APPS_DIR
+                    "${CMAKE_BINARY_DIR}/test_inputs/candidate_apps")
+                add_test(
+                    NAME jellyframe_stage_candidate_app_packages
+                    COMMAND ${Python3_EXECUTABLE}
+                            ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/stage_candidate_app_packages.py
+                            ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages
+                            ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps
+                            ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/system
+                            ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}
+                            "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+                set_tests_properties(jellyframe_stage_candidate_app_packages PROPERTIES
+                    FIXTURES_SETUP jellyframe_candidate_app_packages)
+            endif()
             add_test(
                 NAME jellyframe_documentation_freshness
                 COMMAND ${Python3_EXECUTABLE}
@@ -883,10 +909,13 @@ if(JELLYFRAME_BUILD_TESTS)
                             ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                             trial
                             --build-dir $<TARGET_FILE_DIR:jellyframe_desktop_shell>
+                            --samples-dir ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages
                             --output-dir ${CMAKE_BINARY_DIR}/test_outputs/external_trial
                             --clean)
                 set_tests_properties(jellyframe_cli_external_trial_evidence PROPERTIES
-                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                    FIXTURES_REQUIRED jellyframe_candidate_app_packages
+                    ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
             endif()
 
             add_test(
@@ -971,22 +1000,28 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/watch_weather
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/watch_weather
                         --target round-300
                         --targets round-300,rect-320x240
                         --report ${CMAKE_BINARY_DIR}/test_outputs/watch_weather.responsive.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_cli_check_watch_weather_responsive PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
+                ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
 
             add_test(
                 NAME jellyframe_cli_doctor_sample_packages
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         doctor
+                        --samples-dir ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                         --report-dir ${CMAKE_BINARY_DIR}/test_outputs/doctor
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_cli_doctor_sample_packages PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
+                ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
                 PASS_REGULAR_EXPRESSION
                     "doctor summary: samples=[0-9]+ checked=[0-9]+ failed=0 diagnostics=[0-9]+/[0-9]+/[0-9]+")
 
@@ -1029,7 +1064,10 @@ if(JELLYFRAME_BUILD_TESTS)
         set(JELLYFRAME_WIN32_BROWSER_CLI_TEST_ARGS
             ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/win32_browser_cli_tests.py
-            $<TARGET_FILE:jellyframe_desktop_shell>)
+            $<TARGET_FILE:jellyframe_desktop_shell>
+            --core-version "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
+            --core-abi "${JELLYFRAME_RENDER_CORE_ENGINE_ABI}"
+            --candidate-apps-root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR})
         if(JELLYFRAME_BUILD_SCRIPTING)
             list(APPEND JELLYFRAME_WIN32_BROWSER_CLI_TEST_ARGS --scripting)
         endif()
@@ -1044,114 +1082,142 @@ if(JELLYFRAME_BUILD_TESTS)
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/desktop_app_shell_workflow_tests.py
                     $<TARGET_FILE:jellyframe_desktop_shell>
                     --output-dir ${CMAKE_BINARY_DIR}/test_outputs/desktop_app_shell_workflow
+                    --core-version "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
+                    --launcher-app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/system/sample_launcher
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_desktop_shell_cli_contract jellyframe_desktop_app_shell_workflow PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages
+            ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
 
         add_test(
             NAME jellyframe_win32_flex_grid_capture
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/flex_grid_capture_tests.py
                     $<TARGET_FILE:jellyframe_desktop_shell>
+                    ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_flex_grid_probe
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_win32_flex_grid_capture PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
         add_test(
             NAME jellyframe_win32_service_status_frame_script
             COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                    --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_service_status
-                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_service_status/capture_system_events.jfcapture
+                    --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_service_status
+                    --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_service_status/capture_system_events.jfcapture
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_service_status_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
                 "service_activity network=18 audio=36 sensors=16 location=16 pause_audio=0 throttle_sensors=20 throttle_location=20")
+        set_tests_properties(jellyframe_win32_service_status_frame_script PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
         add_test(
             NAME jellyframe_win32_service_status_host_data_frame_script
             COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                    --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_service_status
-                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_service_status/capture_system_events.jfcapture
+                    --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_service_status
+                    --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_service_status/capture_system_events.jfcapture
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_service_status_host_data_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
                 "host_data battery=yes percent=88 charging=1 weather=rain temp_x10=213 activity=yes steps=6400 minutes=32 location=yes lat=31\\.2304 lon=121\\.474 accuracy_m=8 accelerometer=yes accel_x=0\\.1 gyroscope=no gyro_x=0 heart_rate=yes bpm=72 ambient_light=no lux=0")
+        set_tests_properties(jellyframe_win32_service_status_host_data_frame_script PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
         add_test(
             NAME jellyframe_win32_scroll_probe_frame_script
             COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_probe
-                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_probe/capture_wheel_scroll.jfcapture
+                    --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_probe
+                    --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_probe/capture_wheel_scroll.jfcapture
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_scroll_probe_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
                 "scroll_blits full=[1-9][0-9]* fast=4")
+        set_tests_properties(jellyframe_win32_scroll_probe_frame_script PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
         add_test(
             NAME jellyframe_win32_scroll_container_frame_script
             COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe
-                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe/capture_scroll_container.jfcapture
+                    --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_container_probe
+                    --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_container_probe/capture_scroll_container.jfcapture
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_scroll_container_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
                 "scroll_containers scrolls=3 strip_blits=0 full_repaints=0 dirty_repaints=3")
+        set_tests_properties(jellyframe_win32_scroll_container_frame_script PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
         add_test(
             NAME jellyframe_win32_scroll_container_touch_frame_script
             COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe
-                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe/capture_touch_scroll_container.jfcapture
+                    --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_container_probe
+                    --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_container_probe/capture_touch_scroll_container.jfcapture
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_scroll_container_touch_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
                 "scroll_containers scrolls=9 strip_blits=0 full_repaints=0 dirty_repaints=9 inertia=6")
+        set_tests_properties(jellyframe_win32_scroll_container_touch_frame_script PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
         add_test(
             NAME jellyframe_win32_scroll_container_drag_no_inertia_frame_script
             COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe
-                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe/capture_touch_drag_no_inertia.jfcapture
+                    --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_container_probe
+                    --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_container_probe/capture_touch_drag_no_inertia.jfcapture
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_scroll_container_drag_no_inertia_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
                 "scroll_containers scrolls=2 strip_blits=0 full_repaints=0 dirty_repaints=2 inertia=0")
+        set_tests_properties(jellyframe_win32_scroll_container_drag_no_inertia_frame_script PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
         add_test(
             NAME jellyframe_win32_scroll_container_drag_inertia_frame_script
             COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe
-                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe/capture_touch_drag_inertia.jfcapture
+                    --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_container_probe
+                    --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_container_probe/capture_touch_drag_inertia.jfcapture
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_scroll_container_drag_inertia_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
                 "scroll_containers scrolls=11 strip_blits=0 full_repaints=0 dirty_repaints=11 inertia=8")
+        set_tests_properties(jellyframe_win32_scroll_container_drag_inertia_frame_script PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
         add_test(
             NAME jellyframe_win32_scroll_container_drag_edge_stop_frame_script
             COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe
-                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_container_probe/capture_touch_drag_edge_stop.jfcapture
+                    --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_container_probe
+                    --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_container_probe/capture_touch_drag_edge_stop.jfcapture
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_scroll_container_drag_edge_stop_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
                 "scroll_containers scrolls=6 strip_blits=0 full_repaints=0 dirty_repaints=6 inertia=4")
+        set_tests_properties(jellyframe_win32_scroll_container_drag_edge_stop_frame_script PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
         add_test(
             NAME jellyframe_win32_scroll_container_strip_blit_frame_script
             COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                    --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_blit_probe
-                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_scroll_blit_probe/capture_scroll_blit.jfcapture
+                    --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_blit_probe
+                    --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_scroll_blit_probe/capture_scroll_blit.jfcapture
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_scroll_container_strip_blit_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
                 "scroll_containers scrolls=3 strip_blits=3 full_repaints=0 dirty_repaints=3")
+        set_tests_properties(jellyframe_win32_scroll_container_strip_blit_frame_script PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
         add_test(
             NAME jellyframe_win32_component_recipes_scroll_frame_script
             COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                    --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_component_recipes
-                    --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_component_recipes/capture_scroll_recipes.jfcapture
+                    --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_component_recipes
+                    --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_component_recipes/capture_scroll_recipes.jfcapture
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         set_tests_properties(jellyframe_win32_component_recipes_scroll_frame_script PROPERTIES
             PASS_REGULAR_EXPRESSION
                 "scroll_containers scrolls=4 strip_blits=0 full_repaints=0 dirty_repaints=4")
+        set_tests_properties(jellyframe_win32_component_recipes_scroll_frame_script PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
         add_test(
             NAME jellyframe_win32_package_image_fixture
@@ -1159,7 +1225,11 @@ if(JELLYFRAME_BUILD_TESTS)
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/package_image_fixture_tests.py
                     $<TARGET_FILE:jellyframe_desktop_shell>
                     $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                    ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/watch_weather
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_win32_package_image_fixture PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages
+            ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
 
         add_test(
             NAME jellyframe_win32_font_policy_report
@@ -1167,7 +1237,12 @@ if(JELLYFRAME_BUILD_TESTS)
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/font_policy_report_tests.py
                     $<TARGET_FILE:jellyframe_desktop_shell>
                     $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                    ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_font_policy
+                    ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_font_size_warning
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(jellyframe_win32_font_policy_report PROPERTIES
+            FIXTURES_REQUIRED jellyframe_candidate_app_packages
+            ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
 
         add_test(
             NAME jellyframe_win32_canonical_app_font_ink
@@ -1197,124 +1272,139 @@ if(JELLYFRAME_BUILD_TESTS)
                 add_test(
                     NAME jellyframe_win32_canvas_smoke_frame_script
                     COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                            --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_smoke
-                            --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_smoke/capture_canvas_smoke.jfcapture
+                            --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_canvas_smoke
+                            --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_canvas_smoke/capture_canvas_smoke.jfcapture
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
                 set_tests_properties(jellyframe_win32_canvas_smoke_frame_script PROPERTIES
+                    FIXTURES_REQUIRED jellyframe_candidate_app_packages
                     PASS_REGULAR_EXPRESSION
                         "layer_tree layers=2 display_commands=15")
 
                 add_test(
                     NAME jellyframe_win32_canvas_gauges_frame_script
                     COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                            --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_gauges
-                            --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_gauges/capture_canvas_gauges.jfcapture
+                            --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_canvas_gauges
+                            --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_canvas_gauges/capture_canvas_gauges.jfcapture
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+                set_tests_properties(jellyframe_win32_canvas_gauges_frame_script PROPERTIES
+                    FIXTURES_REQUIRED jellyframe_candidate_app_packages)
             endif()
 
             add_test(
                 NAME jellyframe_win32_route_tabs_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_route_tabs
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_route_tabs/capture_route_tabs.jfcapture
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_route_tabs
+                        --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_route_tabs/capture_route_tabs.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_route_tabs_frame_script PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION
                     "frame_update idle=0 repaint=[1-9][0-9]* rebuild=1 first_paint=1")
 
             add_test(
                 NAME jellyframe_win32_motion_lab_low_power_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab/capture_low_power_static.jfcapture
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_motion_lab
+                        --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_motion_lab/capture_low_power_static.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_motion_lab_low_power_frame_script PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION
                     "frame_policy_samples=30 input=30 timers=30 animation=14 present=30")
 
             add_test(
                 NAME jellyframe_win32_opacity_layer_reuse_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_opacity_layer_reuse
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_opacity_layer_reuse/capture_opacity_layer_reuse.jfcapture
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_opacity_layer_reuse
+                        --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_opacity_layer_reuse/capture_opacity_layer_reuse.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_opacity_layer_reuse_frame_script PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION "animation_layer_reuse opacity=[1-9]")
 
             add_test(
                 NAME jellyframe_win32_motion_lab_soak_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_motion_lab
+                        --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_motion_lab_soak_frame_script PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION
                     "frame_policy_samples=90 input=90 timers=90 animation=90 present=90")
 
             add_test(
                 NAME jellyframe_win32_watch_face_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_watch_face
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_watch_face/capture_watch_face_30fps.jfcapture
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_watch_face
+                        --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_watch_face/capture_watch_face_30fps.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_watch_face_frame_script PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
             add_test(
                 NAME jellyframe_win32_wearable_launcher_capture
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_wearable_launcher
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_wearable_launcher
                         --capture ${CMAKE_BINARY_DIR}/test_outputs/wearable_launcher.bmp
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_wearable_launcher_capture PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION "JellyFrame Desktop Shell capture"
                 FAIL_REGULAR_EXPRESSION "\\[warning\\]|\\[error\\]")
 
             add_test(
                 NAME jellyframe_win32_band_system_shell_capture
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/system/band_system_shell
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/system/band_system_shell
                         --capture ${CMAKE_BINARY_DIR}/test_outputs/band_system_shell.bmp
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_band_system_shell_capture PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION "JellyFrame Desktop Shell capture"
                 FAIL_REGULAR_EXPRESSION "\\[warning\\]|\\[error\\]")
 
             add_test(
                 NAME jellyframe_win32_weather_interaction_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/watch_weather
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/watch_weather/capture_weather_interaction.jfcapture
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/watch_weather
+                        --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/watch_weather/capture_weather_interaction.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_weather_interaction_frame_script PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION
                     "host_completion_kinds network=1 storage=0 image=3 audio=0 location=0 other=0")
 
             add_test(
                 NAME jellyframe_win32_motion_lab_dirty_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_motion_lab
+                        --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_motion_lab_dirty_frame_script PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION
                     "dirty_local=[1-9][0-9]* full=[1-9][0-9]* clean=0")
 
             add_test(
                 NAME jellyframe_win32_motion_lab_dirty_flags_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_motion_lab
+                        --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_motion_lab_dirty_flags_frame_script PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION
                     "frame_dirty_flags none=0 tree=0 .* paint=0 overlay=0 render_or_layout=[1-9][0-9]*")
 
             add_test(
                 NAME jellyframe_win32_motion_lab_text_reuse_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_motion_lab
+                        --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_motion_lab_text_reuse_frame_script PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION
                     "frame_update idle=0 repaint=[1-9][0-9]* rebuild=[1-9][0-9]* first_paint=1 .* style_stable=[1-9][0-9]*")
 
@@ -1322,11 +1412,12 @@ if(JELLYFRAME_BUILD_TESTS)
                 NAME jellyframe_win32_script_watchdog_recovery
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
                         --registry-store ${CMAKE_BINARY_DIR}/test_outputs/watchdog_registry
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_watchdog_smoke
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_watchdog_smoke/capture_watchdog.jfcapture
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_watchdog_smoke
+                        --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_watchdog_smoke/capture_watchdog.jfcapture
                         --capture-montage ${CMAKE_BINARY_DIR}/test_outputs/watchdog_recovery.bmp
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_script_watchdog_recovery PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION
                     "script_watchdog_recovery reason=script-watchdog")
 
@@ -1334,22 +1425,24 @@ if(JELLYFRAME_BUILD_TESTS)
                 NAME jellyframe_win32_budget_recovery
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
                         --registry-store ${CMAKE_BINARY_DIR}/test_outputs/budget_registry
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_budget_spam
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_budget_spam
                         --app-runtime-jobs 4
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_budget_spam/capture_budget_recovery.jfcapture
+                        --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_budget_spam/capture_budget_recovery.jfcapture
                         --capture-montage ${CMAKE_BINARY_DIR}/test_outputs/budget_recovery.bmp
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_budget_recovery PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION
                     "budget_recovery_teardown reason=budget-exceeded")
 
             add_test(
                 NAME jellyframe_win32_service_spam_frame_script
                 COMMAND $<TARGET_FILE:jellyframe_desktop_shell>
-                        --app ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_service_spam
-                        --frame-script ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/apps/jelly_service_spam/capture_service_spam.jfcapture
+                        --app ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_service_spam
+                        --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/fixtures/jelly_service_spam/capture_service_spam.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_service_spam_frame_script PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION
                     "host_completion_kinds network=16 storage=0 image=0 audio=0 location=2 other=0"
                 FAIL_REGULAR_EXPRESSION

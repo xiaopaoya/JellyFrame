@@ -62,7 +62,7 @@ inline void signed_packet_v2() {
             LayerNode root; root.type = LayerType::Root; root.bounds = text.rect;
             root.display_list.push_back(text);
             SoftwareCompositor::Options core_options; core_options.text_system = &fonts.catalog->text_system();
-            SoftwareCompositor core({}, {}, core_options);
+            SoftwareCompositor core({}, core_options);
             const Color background{255, 255, 255, 255};
             const auto expected = core.render(root, 64, 64, background);
             assert(std::any_of(expected.pixels.begin(), expected.pixels.end(),
@@ -143,7 +143,7 @@ inline void rendering() {
         ScriptTaskAppFrame unsupported;
         assert(make_script_task_group_frame(root, root.bounds, cropped_options, unsupported) == Status::Accepted);
         ScriptTaskFrameRendererOptions cropped_render; cropped_render.text_catalog = catalog; cropped_render.image_provider = images;
-        ScriptTaskFrameRenderer cropped({}, ImagePainter{image, nullptr, true}, cropped_render);
+        ScriptTaskFrameRenderer cropped(ImagePainter{image, nullptr, true}, cropped_render);
         FrameBuffer target(64,64,{1,2,3,4}); const auto previous = target;
         assert(!cropped.render_into(unsupported, target, {}) && same_pixels(target, previous));
         root.children[0]->display_list.erase(root.children[0]->display_list.begin(), root.children[0]->display_list.begin() + 3);
@@ -153,7 +153,7 @@ inline void rendering() {
     VectorDiagnosticSink core_diagnostics;
     SoftwareCompositor::Options core_options; core_options.text_system = &catalog->text_system();
     core_options.diagnostics = &core_diagnostics;
-    SoftwareCompositor core({}, painter, core_options);
+    SoftwareCompositor core(painter, core_options);
     const Color background{249, 247, 241, 255}; const auto expected = core.render(root, 64, 64, background);
     assert(core_diagnostics.empty());
     ScriptTaskAppFrameCodecOptions options; options.version = 9; options.image_provider_id = images->id(); options.max_commands = 16;
@@ -164,7 +164,7 @@ inline void rendering() {
     assert(encode_script_task_app_frame(captured, options, bytes) == Status::Accepted);
     assert(decode_script_task_app_frame(bytes, options, decoded) == Status::Accepted);
     ScriptTaskFrameRendererOptions render_options; render_options.text_catalog = catalog; render_options.image_provider = images;
-    ScriptTaskFrameRenderer renderer({}, painter, render_options);
+    ScriptTaskFrameRenderer renderer(painter, render_options);
     ScriptTaskFrameRenderStatus status;
     const auto actual = renderer.render(decoded, background, &status);
     assert(status == ScriptTaskFrameRenderStatus::Accepted && same_pixels(expected, actual));
@@ -183,18 +183,18 @@ inline void rendering() {
     changed = decoded; changed.groups[1].transform.translate_x++;
     assert(plan_script_task_group_damage(renderer, decoded, changed).kind == ScriptTaskFrameDamageKind::Full);
     FrameBuffer sentinel(64, 64, {1, 2, 3, 4}); const auto unchanged = sentinel;
-    ScriptTaskFrameRenderer no_catalog({}, painter);
+    ScriptTaskFrameRenderer no_catalog(painter);
     assert(!no_catalog.render_into(decoded, sentinel, background, nullptr, 0, nullptr, &status));
     assert(same_pixels(sentinel, unchanged));
     runtime_test_fonts::Fonts unrelated;
-    render_options.text_catalog = unrelated.catalog; ScriptTaskFrameRenderer wrong({}, painter, render_options);
+    render_options.text_catalog = unrelated.catalog; ScriptTaskFrameRenderer wrong(painter, render_options);
     assert(!wrong.render_into(decoded, sentinel, background) && same_pixels(sentinel, unchanged));
     changed = decoded; changed.display_list.back().text[32 + 8] = 0x7f; // Valid packet, nonexistent glyph.
     assert(!renderer.render_into(changed, sentinel, background) && same_pixels(sentinel, unchanged));
     changed = decoded; changed.display_list[decoded.display_list.size() - 2].image_paint().image_handle = 999;
     assert(!renderer.render_into(changed, sentinel, background) && same_pixels(sentinel, unchanged));
     render_options.text_catalog = catalog; render_options.image_provider = images; render_options.max_temporary_pixels = 1;
-    ScriptTaskFrameRenderer tiny({}, painter, render_options);
+    ScriptTaskFrameRenderer tiny(painter, render_options);
     assert(!tiny.render_into(decoded, sentinel, background) && same_pixels(sentinel, unchanged));
     // A sealed accepted envelope owns the exact session catalog after producer
     // handles and source tree disappear. A different session cannot take it.
@@ -205,7 +205,7 @@ inline void rendering() {
     assert(take_script_task_app_frame(supervisor, session, options, accepted) == ScriptTaskAppFrameTakeStatus::Accepted);
     fonts.catalog.reset(); catalog.reset(); root.children.clear();
     render_options.text_catalog.reset();
-    FrameBuffer replay(64,64,background); ScriptTaskFrameRenderer bound({}, painter);
+    FrameBuffer replay(64,64,background); ScriptTaskFrameRenderer bound(painter);
     assert(bound.render_into(accepted, replay, background) && same_pixels(replay, expected));
     ScriptTaskSupervisor no_images({{2,24},{1,0},{1,8192,8192},0,0});
     const auto unbound_session = no_images.begin(82, accepted.text_catalog());
@@ -217,12 +217,12 @@ inline void rendering() {
     assert(take_script_task_app_frame(supervisor, session, options, accepted) == ScriptTaskAppFrameTakeStatus::ImageProviderRejected);
     assert(accepted.sequence() == sequence);
     auto wrong_options = render_options; wrong_options.text_catalog = accepted.text_catalog(); wrong_options.image_provider = wrong_images;
-    ScriptTaskFrameRenderer wrong_owner({}, painter, wrong_options);
+    ScriptTaskFrameRenderer wrong_owner(painter, wrong_options);
     assert(!wrong_owner.render_into(captured, sentinel, background) && same_pixels(sentinel, unchanged));
     auto reset_source = std::make_shared<OwnedImages>(); RuntimeImageProvider::Handle reset_owner;
     assert(RuntimeImageProvider::create(reset_source, reset_owner) == RuntimeImageProviderStatus::Ready);
     bad = captured; bad.image_provider_id = reset_owner->id();
-    wrong_options.image_provider = reset_owner; ScriptTaskFrameRenderer reset_renderer({}, painter, wrong_options);
+    wrong_options.image_provider = reset_owner; ScriptTaskFrameRenderer reset_renderer(painter, wrong_options);
     ++reset_source->epoch; // Deliberate sequential contract violation, detected before paint.
     assert(!reset_renderer.render_into(bad, sentinel, background) && same_pixels(sentinel, unchanged));
     supervisor.begin_teardown(session); supervisor.complete_teardown(session);

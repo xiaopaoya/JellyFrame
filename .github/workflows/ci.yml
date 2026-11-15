@@ -395,15 +395,15 @@ jobs:
             profile_id: render-core-minimal-no-forms-advanced
           - profile: core63-select-popup-full
             profile_id: render-core-default
-            core_commit: 89acc36adbb3897ab63c2e49b7568bc6bb4a32fa
-            source_hash: e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67
-            source_count: 163
+            core_commit: 18dc34ebe015c35fe508169ea24a69d1d6571771
+            source_hash: 8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186
+            source_count: 159
             cropped: false
           - profile: core63-select-popup-cropped
             profile_id: render-core-minimal-no-forms-advanced
-            core_commit: 89acc36adbb3897ab63c2e49b7568bc6bb4a32fa
-            source_hash: e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67
-            source_count: 163
+            core_commit: 18dc34ebe015c35fe508169ea24a69d1d6571771
+            source_hash: 8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186
+            source_count: 159
             cropped: true
 
     steps:
@@ -414,7 +414,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: xiaopaoya/JellyFrame-Render-Core
-          ref: ${{ matrix.core_commit || 'master' }}
+          ref: ${{ matrix.core_commit || '18dc34ebe015c35fe508169ea24a69d1d6571771' }}
           path: third_party/render-core-source
 
       - name: Checkout JerryScript
@@ -545,7 +545,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: xiaopaoya/JellyFrame-Render-Core
-          ref: f7aee11cfd6c58b89ecc4922a598a2fada97c48b
+          ref: 18dc34ebe015c35fe508169ea24a69d1d6571771
           path: third_party/render-core-source
 
       - name: Checkout JerryScript
@@ -591,8 +591,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Core ABI4 install failed' }
           $manifest = Get-Content "$build\generated\jellyframe_render_core_source_manifest.json" -Raw | ConvertFrom-Json
           $profile = Get-Content "$build\generated\jellyframe_render_core_profile.json" -Raw | ConvertFrom-Json
-          if ($manifest.sourceHash -ne 'f7c17009b7660a84ef6a492367637187dff6915c4af3418c769902b3b7eb2559' -or
-              $manifest.sourceFileCount -ne 145) {
+          if ($manifest.sourceHash -ne '8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186' -or
+              $manifest.sourceFileCount -ne 159) {
             throw 'Pinned R3 Core source identity mismatch'
           }
           if ($profile.engineAbi -ne 4 -or $profile.profileId -ne '${{ matrix.profile_id }}') {
@@ -643,6 +643,7 @@ jobs:
             jellyframe_esp32s3_frame_admission_0_0_tests jellyframe_esp32s3_frame_admission_0_1_tests `
             jellyframe_esp32s3_frame_admission_1_0_tests jellyframe_esp32s3_frame_admission_1_1_tests `
             jellyframe_esp32s3_band_navigation_tests `
+            jellyframe_esp32s3_image_metadata_tests `
             jellyframe_desktop_shell
           if ($LASTEXITCODE -ne 0) { throw 'Installed resource host build failed' }
           ctest --test-dir $build -C Release -R '^(jellyframe_esp32s3_.*tests|jellyframe_browser_callback_failure)$' --output-on-failure
@@ -658,9 +659,9 @@ jobs:
         include:
           - profile: full
             profile_id: render-core-default
-            core_commit: a0067eebde0ffe677e6e38acdd4c75da8bc78b50
-            source_hash: 369973a9b051cdff8af56f5bd11a94cd17c75de6940473d2fa6dcee8b171c33c
-            source_count: 139
+            core_commit: 18dc34ebe015c35fe508169ea24a69d1d6571771
+            source_hash: 8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186
+            source_count: 159
             require_natural: 'OFF'
             qualify_natural_inline: 'OFF'
             qualify_generated_inline: 'OFF'
@@ -669,9 +670,9 @@ jobs:
             cropped: false
           - profile: cropped
             profile_id: render-core-minimal-no-forms-advanced
-            core_commit: a0067eebde0ffe677e6e38acdd4c75da8bc78b50
-            source_hash: 369973a9b051cdff8af56f5bd11a94cd17c75de6940473d2fa6dcee8b171c33c
-            source_count: 139
+            core_commit: 18dc34ebe015c35fe508169ea24a69d1d6571771
+            source_hash: 8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186
+            source_count: 159
             require_natural: 'OFF'
             qualify_natural_inline: 'OFF'
             qualify_generated_inline: 'OFF'
@@ -680,9 +681,9 @@ jobs:
             cropped: true
           - profile: natural-full
             profile_id: render-core-default
-            core_commit: ed15aa50a38c32fe25198212e32d4d30c05aa9e1
-            source_hash: 313c7ab5659208d2e7831e32de2b5cd48707c3103bd6d0bdb1a108129d3659e2
-            source_count: 163
+            core_commit: 18dc34ebe015c35fe508169ea24a69d1d6571771
+            source_hash: 8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186
+            source_count: 159
             require_natural: 'ON'
             qualify_natural_inline: 'ON'
             qualify_generated_inline: 'OFF'
@@ -691,9 +692,9 @@ jobs:
             cropped: false
           - profile: natural-cropped
             profile_id: render-core-minimal-no-forms-advanced
-            core_commit: ed15aa50a38c32fe25198212e32d4d30c05aa9e1
-            source_hash: 313c7ab5659208d2e7831e32de2b5cd48707c3103bd6d0bdb1a108129d3659e2
-            source_count: 163
+            core_commit: 18dc34ebe015c35fe508169ea24a69d1d6571771
+            source_hash: 8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186
+            source_count: 159
             require_natural: 'ON'
             qualify_natural_inline: 'ON'
             qualify_generated_inline: 'OFF'
@@ -702,9 +703,9 @@ jobs:
             cropped: true
           - profile: generated-full
             profile_id: render-core-default
-            core_commit: b0bfd834b60f7429a69a68d89b4541be89519f1a
-            source_hash: aa908e3852afd4a06ed6df6b26a5cc759cfefcd7d39c02270d1304aa633d18c4
-            source_count: 165
+            core_commit: 18dc34ebe015c35fe508169ea24a69d1d6571771
+            source_hash: 8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186
+            source_count: 159
             require_natural: 'ON'
             qualify_natural_inline: 'ON'
             qualify_generated_inline: 'ON'
@@ -713,9 +714,9 @@ jobs:
             cropped: false
           - profile: generated-cropped
             profile_id: render-core-minimal-no-forms-advanced
-            core_commit: b0bfd834b60f7429a69a68d89b4541be89519f1a
-            source_hash: aa908e3852afd4a06ed6df6b26a5cc759cfefcd7d39c02270d1304aa633d18c4
-            source_count: 165
+            core_commit: 18dc34ebe015c35fe508169ea24a69d1d6571771
+            source_hash: 8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186
+            source_count: 159
             require_natural: 'ON'
             qualify_natural_inline: 'ON'
             qualify_generated_inline: 'ON'
@@ -724,9 +725,9 @@ jobs:
             cropped: true
           - profile: core63-select-popup-full
             profile_id: render-core-default
-            core_commit: 89acc36adbb3897ab63c2e49b7568bc6bb4a32fa
-            source_hash: e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67
-            source_count: 163
+            core_commit: 18dc34ebe015c35fe508169ea24a69d1d6571771
+            source_hash: 8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186
+            source_count: 159
             require_natural: 'OFF'
             qualify_natural_inline: 'OFF'
             qualify_generated_inline: 'OFF'
@@ -736,9 +737,9 @@ jobs:
             cropped: false
           - profile: core63-select-popup-cropped
             profile_id: render-core-minimal-no-forms-advanced
-            core_commit: 89acc36adbb3897ab63c2e49b7568bc6bb4a32fa
-            source_hash: e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67
-            source_count: 163
+            core_commit: 18dc34ebe015c35fe508169ea24a69d1d6571771
+            source_hash: 8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186
+            source_count: 159
             require_natural: 'OFF'
             qualify_natural_inline: 'OFF'
             qualify_generated_inline: 'OFF'
@@ -1055,15 +1056,15 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: xiaopaoya/JellyFrame-Render-Core
-          ref: 38148e7388edc791e303b9b324f45d5df3d7b63e
+          ref: 18dc34ebe015c35fe508169ea24a69d1d6571771
           path: third_party/render-core-source
 
       - name: Verify merged Core source identity
         shell: pwsh
         run: |
           $coreRevision = (git -C third_party\render-core-source rev-parse HEAD).Trim()
-          if ($coreRevision -ne '38148e7388edc791e303b9b324f45d5df3d7b63e') {
-            throw "Expected qualified Core master at 38148e7388edc791e303b9b324f45d5df3d7b63e, got $coreRevision"
+          if ($coreRevision -ne '18dc34ebe015c35fe508169ea24a69d1d6571771') {
+            throw "Expected qualified Core callback-retirement candidate at 18dc34ebe015c35fe508169ea24a69d1d6571771, got $coreRevision"
           }
           $coreAbi4 = Select-String -Path third_party\render-core-source\cmake\render_core_version.cmake `
             -Pattern 'set\(JELLYFRAME_RENDER_CORE_ENGINE_ABI "4"' -Quiet
@@ -1112,8 +1113,8 @@ jobs:
           }
           if ($provenance.provider -ne 'source-override' -or $provenance.engineAbi -ne 4 -or
               $provenance.lockEnforced -ne $false -or
-              $provenance.sourceHash -ne 'caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1' -or
-              $provenance.sourceFileCount -ne 163 -or
+              $provenance.sourceHash -ne '8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186' -or
+              $provenance.sourceFileCount -ne 159 -or
               $provenance.lockedVersion -ne '0.8.0' -or $provenance.lockedEngineAbi -ne 3 -or
               $provenance.lockedSourceHash -ne 'fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795') {
             throw "Unexpected Core source-override provenance: $($provenance | ConvertTo-Json -Compress)"

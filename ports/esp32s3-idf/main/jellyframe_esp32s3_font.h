@@ -33,7 +33,9 @@ const LegacyBitmapFontStats& legacy_bitmap_font_stats();
 
 jellyframe::TextMeasureProvider make_legacy_bitmap_text_measure_provider();
 
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
 jellyframe::TextPainter make_legacy_bitmap_text_painter();
+#endif
 
 bool legacy_app_font_measure_callback(const std::string& text,
                                       int font_size,
@@ -67,6 +69,7 @@ inline jellyframe::TextMeasureProvider legacy_bitmap_text_measure_provider() {
 #endif
 }
 
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
 inline jellyframe::TextPainter legacy_bitmap_text_painter() {
 #if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
     return make_legacy_bitmap_text_painter();
@@ -74,5 +77,6 @@ inline jellyframe::TextPainter legacy_bitmap_text_painter() {
     return {};
 #endif
 }
+#endif
 
 } // namespace jellyframe_esp32s3

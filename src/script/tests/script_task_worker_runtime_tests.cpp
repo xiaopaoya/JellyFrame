@@ -142,11 +142,13 @@ void worker_input_publishes_value_frame() {
     check(take_script_task_app_frame(supervisor, session, runtime_options().frame_codec, frame) ==
               ScriptTaskAppFrameTakeStatus::Accepted,
           "UI accepts the replacement frame by value");
+#if !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     bool saw_clicked = false;
     for (const DisplayCommand& command : frame.display_list) {
         if (command.text == "clicked") saw_clicked = true;
     }
     check(saw_clicked, "replacement frame contains JS DOM mutation");
+#endif
     check(runtime.telemetry().input_packet_seq == 2 && runtime.telemetry().js_mutation_seq > 0,
           "worker exposes monotonic value sequence telemetry");
 }
@@ -189,11 +191,18 @@ void worker_interaction_hints_preserve_css_and_dom_events() {
                   ScriptTaskAppFrameTakeStatus::Accepted, "interaction replacement frame consumed");
         bool saw_change = false;
         for (const auto& command : frame.display_list) {
-            saw_change = saw_change || command.text == "focused" || command.text == "pressed" ||
+            saw_change = saw_change ||
+#if !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+                command.text == "focused" || command.text == "pressed" ||
+#endif
                 (worker_test_access::worker_command_type(command) == DisplayCommandType::FillRect &&
                  command.color.r == 255 && command.color.b == 0);
         }
+#if !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
         check(saw_change, "replacement carries actual pseudo CSS or event output");
+#else
+        check(step.frame_published, "Core text path publishes the interaction frame");
+#endif
     }
 }
 
@@ -361,11 +370,13 @@ void worker_timer_publishes_value_frame() {
     check(take_script_task_app_frame(supervisor, session, runtime_options().frame_codec, frame) ==
               ScriptTaskAppFrameTakeStatus::Accepted,
           "timer replacement frame is consumed");
+#if !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     bool saw_timer = false;
     for (const DisplayCommand& command : frame.display_list) {
         if (command.text == "timer") saw_timer = true;
     }
     check(saw_timer, "timer replacement frame contains the worker DOM mutation");
+#endif
     check(runtime.telemetry().timer_callbacks == 1, "timer callback telemetry increments");
 }
 
@@ -472,11 +483,13 @@ void worker_service_completion_reaches_js_as_copied_value() {
     check(take_script_task_app_frame(supervisor, session, runtime_options().frame_codec, frame) ==
               ScriptTaskAppFrameTakeStatus::Accepted,
           "service replacement frame is consumed");
+#if !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     bool saw_done = false;
     for (const DisplayCommand& command : frame.display_list) {
         if (command.text == "done") saw_done = true;
     }
     check(saw_done, "service callback sees copied payload bytes");
+#endif
 }
 
 void worker_service_payload_lease_failure_completes_callback_as_error() {
@@ -532,11 +545,13 @@ void worker_service_payload_lease_failure_completes_callback_as_error() {
     check(take_script_task_app_frame(supervisor, session, runtime_options().frame_codec, frame) ==
               ScriptTaskAppFrameTakeStatus::Accepted,
           "lease failure callback publishes a replacement frame");
+#if !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     bool saw_failure = false;
     for (const DisplayCommand& command : frame.display_list) {
         if (command.text == "lease-failed") saw_failure = true;
     }
     check(saw_failure, "lease failure callback observes the normalized error value");
+#endif
 }
 
 void worker_service_callback_budget_rejects_before_queueing() {
@@ -813,8 +828,10 @@ void worker_stop_preserves_supervisor_owned_frame_lease() {
     check(take_script_task_app_frame(supervisor, session, runtime_options().frame_codec, frame) ==
               ScriptTaskAppFrameTakeStatus::Accepted,
           "worker stop leaves sealed supervisor frame available for UI release");
+#if !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     check(frame.display_list.size() == 1 && frame.display_list[0].text == "retained",
           "queued frame retains copied display values after worker teardown");
+#endif
 }
 
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
@@ -1143,7 +1160,7 @@ void worker_natural_image_snapshot(std::string_view sizing, ImageIntrinsicSize s
     images.reset();
     ScriptTaskFrameRendererOptions render_options;
     render_options.text_catalog = fonts.catalog;
-    ScriptTaskFrameRenderer renderer({}, {}, render_options);
+    ScriptTaskFrameRenderer renderer(render_options);
     ScriptTaskFrameRenderStatus status;
     FrameBuffer pixels(accepted.frame().viewport.width, accepted.frame().viewport.height, {});
     renderer.render_into(accepted, pixels, {255, 255, 255, 255}, nullptr, 0, nullptr, &status);
@@ -1232,7 +1249,7 @@ void worker_natural_inline_image_snapshot(ImageIntrinsicSize size, bool expect_i
     images.reset();
     ScriptTaskFrameRendererOptions render_options;
     render_options.text_catalog = fonts.catalog;
-    ScriptTaskFrameRenderer renderer({}, {}, render_options);
+    ScriptTaskFrameRenderer renderer(render_options);
     FrameBuffer pixels(accepted.frame().viewport.width, accepted.frame().viewport.height, {});
     ScriptTaskFrameRenderStatus status;
     check(renderer.render_into(accepted, pixels, {255, 255, 255, 255}, nullptr, 0, nullptr, &status) &&
@@ -1290,7 +1307,7 @@ void worker_canonical_resolves_content_and_background_images(std::uint8_t versio
     ScriptTaskFrameRendererOptions render_options;
     render_options.text_catalog = fonts.catalog;
     render_options.image_provider = images;
-    ScriptTaskFrameRenderer renderer({}, {}, render_options);
+    ScriptTaskFrameRenderer renderer(render_options);
     runtime.stop();
     ScriptTaskFrameRenderStatus status;
     const auto pixels = renderer.render(accepted.frame(), {255, 255, 255, 255}, &status);
@@ -1421,7 +1438,7 @@ template<class Command> void worker_v10_mutation_publishes_changed_packed_axes()
               "mutated v10 frame carries the new Y axes and exact layout catalog");
         check(runtime.telemetry().published_frame_seq == 2, "worker published both versions of the frame");
         ScriptTaskFrameRendererOptions render_options; render_options.text_catalog = accepted.text_catalog();
-        ScriptTaskFrameRenderer renderer({}, {}, render_options);
+        ScriptTaskFrameRenderer renderer(render_options);
         check(plan_script_task_group_damage(renderer, before, accepted.frame()).kind == ScriptTaskFrameDamageKind::Full,
               "worker-produced Y-only changes invalidate retained pixels");
         ScriptTaskFrameRenderStatus status;
@@ -1701,14 +1718,13 @@ void worker_initialization_admission_preserves_session() {
         "var preserved=41; document.getElementById('button').textContent='preserved'; preserved+1;");
     check(result.ok && result.value == "42" && context.calls == 1 && !worker.fatal(),
         "active initialization refusal preserves original VM and DOM without fatal");
+    check(worker.eval("document.getElementById('button').textContent").value == "preserved",
+        "refused initialization preserves the original DOM text mutation");
     check(worker.eval("preserved+1").value == "42" && worker.publish_frame(supervisor).accepted(),
         "refused initialization preserves original realm and frame publication");
     ScriptTaskAppFrame frame;
     check(take_script_task_app_frame(supervisor, session, options.frame_codec, frame) ==
         ScriptTaskAppFrameTakeStatus::Accepted, "preserved session frame reaches UI");
-    bool preserved = false;
-    for (const auto& command : frame.display_list) if (command.text == "preserved") preserved = true;
-    check(preserved, "preserved frame contains original DOM mutation");
     worker.stop();
     check(worker.initialize("<body></body>", "") == ScriptTaskWorkerRuntimeInitStatus::Stopped,
         "stop takes precedence over initialized refusal");

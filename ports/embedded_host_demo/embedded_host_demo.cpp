@@ -131,7 +131,11 @@ Pipeline build_pipeline(const TextSystem& text_system, const HostBudgets& budget
     pipeline.render_tree = render_tree_builder.build(*pipeline.document);
     auto options = layout_engine_options_from_budgets(budgets);
     options.text_system = &text_system;
-    LayoutEngine layout_engine(*pipeline.resolver, {}, options);
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    LayoutEngine layout_engine(*pipeline.resolver, options);
+#else
+    LayoutEngine layout_engine(*pipeline.resolver, TextMeasureProvider{}, options);
+#endif
     pipeline.layout_tree = layout_engine.layout(*pipeline.render_tree, kViewportWidth);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     layer_options.text_system = &text_system;
@@ -143,7 +147,11 @@ Pipeline build_pipeline(const TextSystem& text_system, const HostBudgets& budget
 FrameBuffer render_to_rgba(const LayerNode& layer_tree, const TextSystem& text_system, const HostBudgets& budgets) {
     auto options = software_compositor_options_from_budgets(budgets);
     options.text_system = &text_system;
-    SoftwareCompositor compositor({}, options);
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    SoftwareCompositor compositor(ImagePainter{}, options);
+#else
+    SoftwareCompositor compositor(TextPainter{}, ImagePainter{}, options);
+#endif
     return compositor.render(layer_tree, kViewportWidth, kViewportHeight, Color{0, 0, 0, 255});
 }
 

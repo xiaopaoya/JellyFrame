@@ -106,11 +106,14 @@ private:
 // group values and delegates composition to the selected Core compositor.
 class ScriptTaskFrameRenderer final {
 public:
-    explicit ScriptTaskFrameRenderer(TextPainter text_painter = {},
-                                     ScriptTaskFrameRendererOptions options = {});
+    explicit ScriptTaskFrameRenderer(ScriptTaskFrameRendererOptions options = {});
+    ScriptTaskFrameRenderer(ImagePainter image_painter,
+                            ScriptTaskFrameRendererOptions options = {});
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     ScriptTaskFrameRenderer(TextPainter text_painter,
                             ImagePainter image_painter,
                             ScriptTaskFrameRendererOptions options = {});
+#endif
 
     FrameBuffer render(const ScriptTaskAppFrame& frame,
                        Color background,
@@ -145,7 +148,9 @@ private:
 
     SoftwareRasterizer rasterizer_;
     ScriptTaskFrameRendererOptions options_;
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     TextPainter text_painter_;
+#endif
     ImagePainter image_painter_;
 };
 
