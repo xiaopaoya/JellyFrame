@@ -53,6 +53,13 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
             "Render Core source checkout is missing its CMake boundary: ${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}")
     endif()
     include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_build.cmake")
+    if(JELLYFRAME_BUILD_RENDER_CORE_TESTS AND
+       EXISTS "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/src/style_resolver_test_hooks.cpp")
+        target_sources(jellyframe_render_core PRIVATE
+            "${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/src/style_resolver_test_hooks.cpp")
+        target_compile_definitions(jellyframe_render_core PRIVATE
+            JELLYFRAME_RENDER_CORE_TEST_HOOKS=1)
+    endif()
 else()
     # Core package headers intentionally replace the bundled src/render_core
     # headers during an ABI migration. Keep imported includes in normal search
