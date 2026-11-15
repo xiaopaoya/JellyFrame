@@ -871,8 +871,11 @@ python tools/jellyframe_cli.py font `
   --target round-300 `
   --report build/watch_weather_report.json `
   --used-chars build/watch_weather_used_chars.txt `
-  --bdf path/to/ui.bdf `
-  --output-binary build/watch_weather_font.jffont
+  --font-source path/to/licensed-static-font.otf `
+  --core-font-tool path/to/pinned-core/tools/prepare_font_resource.py `
+  --characters path/to/explicit-ascii-and-nonascii-coverage.txt `
+  --font-size 16 --coverage-bits 4 `
+  --font-output build/watch_weather_font.jffont2
 ```
 
 The package report records manifest service intent in `serviceIntent`. This

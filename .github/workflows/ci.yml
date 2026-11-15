@@ -1121,11 +1121,11 @@ jobs:
           python tests/tool_regression/incremental_repaint_equivalence_tests.py
           build/abi4-same-thread/Release/jellyframe_desktop_shell.exe .
           --core-version 0.9.0-dev --include-core-text --case text-overflow-ellipsis
-        - name: Verify canonical default and app font visible output
-          shell: pwsh
-          run: >-
-            ctest --test-dir build/abi4-same-thread -C Release
-            -R '^jellyframe_win32_canonical_app_font_ink$' --output-on-failure
+      - name: Verify canonical default and app font visible output
+        shell: pwsh
+        run: >-
+          ctest --test-dir build/abi4-same-thread -C Release
+          -R '^jellyframe_win32_canonical_app_font_ink$' --output-on-failure
       - name: Exercise ordinary ABI4 desktop app entry
         shell: pwsh
         run: >-
