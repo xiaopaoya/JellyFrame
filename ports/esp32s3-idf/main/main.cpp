@@ -5,6 +5,10 @@
 #include "jellyframe_esp32s3_ui_task.h"
 #include "boards/waveshare_touch_lcd_boards.h"
 
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+#include "app_runtime/app_font_set.h"
+#include "app_runtime/core_system_font_catalog.h"
+#endif
 #include "render_core/bitmap_font.h"
 #include "render_core/budget.h"
 #include "render_core/css_parser.h"
@@ -91,7 +95,7 @@ std::size_t external_script_count(const std::vector<DocumentScript>& scripts) {
     return total;
 }
 
-#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
+#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED || CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
 Node* find_by_id(Node& root, const std::string& id) {
     std::vector<Node*> stack;
     stack.push_back(&root);
@@ -113,6 +117,15 @@ std::uint32_t rect_area(Rect rect) {
         return 0;
     }
     return static_cast<std::uint32_t>(rect.width) * static_cast<std::uint32_t>(rect.height);
+}
+
+std::size_t prepared_text_line_count(const LayoutBox& root) {
+    std::size_t count = root.text_layout_cache.prepared_text
+        ? root.text_layout_cache.prepared_lines.size() : 0;
+    for (const auto& child : root.children) {
+        if (child) count += prepared_text_line_count(*child);
+    }
+    return count;
 }
 #endif
 
@@ -455,7 +468,7 @@ void run_p3_display_smoke(const FrameBuffer& frame_buffer, int width, int height
              packed_probe.last_dirty.height);
 }
 
-#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
+#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED || CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
 void seed_p5_input_smoke(jellyframe_esp32s3::BoardInputQueue& queue) {
     using jellyframe_esp32s3::BoardInputEvent;
     using jellyframe_esp32s3::BoardInputKind;
@@ -482,7 +495,7 @@ void seed_p5_input_smoke(jellyframe_esp32s3::BoardInputQueue& queue) {
 #endif
 
 void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
-#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
+#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED || CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
     constexpr char kSmokeHtml[] =
         "<body><main class='app'>"
         "<h1>STATUS \xe4\xb8\xad</h1>"
@@ -497,21 +510,57 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
         "button { height: 28px; background: #2563eb; color: #ffffff; border: 1px solid #dbeafe; }"
         "input { height: 24px; background: #ffffff; color: #111827; border: 1px solid #94a3b8; }";
 
-    const TextMeasureProvider text_measure =
-        jellyframe_esp32s3::make_legacy_bitmap_text_measure_provider();
-    const TextPainter text_painter = jellyframe_esp32s3::make_legacy_bitmap_text_painter();
+    TextMeasureProvider text_measure{};
+    TextPainter text_painter{};
+    const TextSystem* text_system = nullptr;
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+    AppFontSet core_text_fonts{0};
+    if (!core_text_fonts.attach_core_system_font_catalog_view(
+            kNotoSansScSystemFontCatalog, kNotoSansScSystemFontCatalogSize)) {
+        ESP_LOGE(tag, "p4_p5_p6_ui_smoke failed: Core font catalog rejected");
+        return;
+    }
+    text_system = core_text_fonts.core_text_system();
+#elif JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
+    text_measure = jellyframe_esp32s3::make_legacy_bitmap_text_measure_provider();
+    text_painter = jellyframe_esp32s3::make_legacy_bitmap_text_painter();
+#endif
 
     TextMetrics ascii_metrics{};
     TextMetrics cjk_metrics{};
     TextMetrics bold_metrics{};
-    const bool ascii_ok = text_measure.measure != nullptr &&
-        text_measure.measure("STATUS", 16, 400, &ascii_metrics, text_measure.context);
-    const bool cjk_ok = text_measure.measure != nullptr &&
-        text_measure.measure("\xe4\xb8\xad\xe6\x96\x87", 20, 500, &cjk_metrics, text_measure.context);
-    const bool bold_ok = text_measure.measure != nullptr &&
-        text_measure.measure("BOLD", 24, 700, &bold_metrics, text_measure.context);
-    const auto& font_stats = jellyframe_esp32s3::legacy_bitmap_font_stats();
-
+    bool ascii_ok = false;
+    bool cjk_ok = false;
+    bool bold_ok = false;
+    if (text_system != nullptr) {
+        TextRunMetrics ascii_run{};
+        TextRunMetrics cjk_run{};
+        TextRunMetrics bold_run{};
+        TextFontRequest ascii_request{};
+        TextFontRequest cjk_request{};
+        TextFontRequest bold_request{};
+        ascii_request.size_q1000 = 16000;
+        cjk_request.size_q1000 = 20000;
+        cjk_request.weight = 500;
+        bold_request.size_q1000 = 24000;
+        bold_request.weight = 700;
+        ascii_ok = text_system->measure("STATUS", ascii_request, ascii_run) == TextSystemStatus::Ok;
+        cjk_ok = text_system->measure("\xe4\xb8\xad\xe6\x96\x87", cjk_request, cjk_run) == TextSystemStatus::Ok;
+        bold_ok = text_system->measure("BOLD", bold_request, bold_run) == TextSystemStatus::Ok;
+        ascii_metrics.width = ascii_run.advance;
+        ascii_metrics.line_height = ascii_run.natural_height;
+        cjk_metrics.width = cjk_run.advance;
+        cjk_metrics.line_height = cjk_run.natural_height;
+        bold_metrics.width = bold_run.advance;
+        bold_metrics.line_height = bold_run.natural_height;
+    } else {
+        ascii_ok = text_measure.measure != nullptr &&
+            text_measure.measure("STATUS", 16, 400, &ascii_metrics, text_measure.context);
+        cjk_ok = text_measure.measure != nullptr &&
+            text_measure.measure("\xe4\xb8\xad\xe6\x96\x87", 20, 500, &cjk_metrics, text_measure.context);
+        bold_ok = text_measure.measure != nullptr &&
+            text_measure.measure("BOLD", 24, 700, &bold_metrics, text_measure.context);
+    }
     HtmlParser html_parser;
     CssParser css_parser;
     auto document = html_parser.parse(kSmokeHtml, html_parser_options_from_budgets(budgets));
@@ -528,14 +577,18 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     RenderTreeBuilder render_tree_builder(resolver, render_options);
     MonotonicArena render_arena;
     auto render_tree = render_tree_builder.build(*document, render_arena);
-    LayoutEngine layout_engine(resolver, text_measure, layout_engine_options_from_budgets(budgets));
+    LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
+    layout_options.text_system = text_system;
+    LayoutEngine layout_engine(resolver, text_measure, layout_options);
     MonotonicArena layout_arena;
     auto layout_tree = layout_engine.layout(*render_tree, width, layout_arena);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     layer_options.text_measure = text_measure;
+    layer_options.text_system = text_system;
     LayerTreeBuilder layer_tree_builder(layer_options);
     MonotonicArena layer_arena;
     auto layer_tree = layer_tree_builder.build(*layout_tree, layer_arena);
+    const std::size_t prepared_text_lines = prepared_text_line_count(*layout_tree);
 
     Node* checkbox = find_by_id(*document, "check");
     Node* input = find_by_id(*document, "name");
@@ -551,7 +604,9 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     const auto dispatch_stats =
         jellyframe_esp32s3::dispatch_input_events(input_queue, input_controller, 8);
 
-    SoftwareCompositor compositor(text_painter, software_compositor_options_from_budgets(budgets));
+    SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
+    compositor_options.text_system = text_system;
+    SoftwareCompositor compositor(text_painter, compositor_options);
     FrameBuffer frame_buffer(width, height, kBackground);
     const Rect full_dirty{0, 0, width, height};
     compositor.render_into(*layer_tree, frame_buffer, kBackground, &full_dirty, 1);
@@ -578,17 +633,16 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     const bool dirty_present_ok = present_frame(frame_buffer, frame_sink, &dirty_rect, 1);
 
     ESP_LOGI(tag,
-             "p4_p5_p6_ui_smoke font_family=\"%s\" coverage=%s faces=%u coverage_chars=%u glyphs=%u bitmap_bytes=%u bits_per_pixel=%u font_ascii_ok=%d font_cjk_ok=%d font_bold_ok=%d ascii=%dx%d cjk=%dx%d bold=%dx%d first_present=%d dirty_present=%d dispatched=%u queue_left=%u dropped=%u pointer=%u wheel=%u focus=%u text=%u activate=%u checkbox=%d checkbox_clicks=%d input_value=%s dirty_area=%u dirty_flushes=%u dirty_bytes=%u",
-             font_stats.family,
-             font_stats.coverage,
-             static_cast<unsigned>(font_stats.face_count),
-             static_cast<unsigned>(font_stats.coverage_count),
-             static_cast<unsigned>(font_stats.glyph_count),
-             static_cast<unsigned>(font_stats.bitmap_bytes),
-             static_cast<unsigned>(font_stats.bits_per_pixel),
+             "p4_p5_p6_ui_smoke text_backend=%s font_ascii_ok=%d font_cjk_ok=%d font_bold_ok=%d prepared_lines=%u ascii=%dx%d cjk=%dx%d bold=%dx%d first_present=%d dirty_present=%d dispatched=%u queue_left=%u dropped=%u pointer=%u wheel=%u focus=%u text=%u activate=%u checkbox=%d checkbox_clicks=%d input_value=%s dirty_area=%u dirty_flushes=%u dirty_bytes=%u",
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+             "core",
+#else
+             "legacy-bitmap",
+#endif
              ascii_ok ? 1 : 0,
              cjk_ok ? 1 : 0,
              bold_ok ? 1 : 0,
+             static_cast<unsigned>(prepared_text_lines),
              ascii_metrics.width,
              ascii_metrics.line_height,
              cjk_metrics.width,
@@ -611,6 +665,12 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
              static_cast<unsigned>(rect_area(dirty_rect)),
              static_cast<unsigned>(panel.flush_count - flush_count_before_dirty),
              static_cast<unsigned>(panel.flushed_bytes - flush_bytes_before_dirty));
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+    if (!ascii_ok || !cjk_ok || !bold_ok || prepared_text_lines == 0 ||
+        !first_present_ok || !dirty_present_ok) {
+        ESP_LOGE(tag, "p4_p5_p6_ui_smoke CoreText acceptance failed");
+    }
+#endif
 #else
     (void)width;
     (void)height;

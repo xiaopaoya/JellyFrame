@@ -650,20 +650,15 @@ are packed into a temporary tight buffer.
 
 ## Text And Input Smoke Hooks
 
-`build/generated_noto_sans_sc_font/jellyframe_esp32s3_noto_sans_sc_font.cpp`
-is the offline-generated Noto Sans SC bitmap pack used by the port build. It
-contains Regular/Medium/Bold at 16/20/24 px, ASCII, common symbols and GB2312
-level-1 coverage: 9 faces, 4,541 covered characters, 40,869 glyphs and
-3,262,475 bitmap bytes. The generator is
-`tools/generate_noto_sans_sc_font_pack.py`; Pillow and the source font files
-are needed only when regenerating the pack. The tiny `main/generated` fixture
-remains available for early debug fallback, but the normal AppFont callbacks
-use Noto. The pack is 1bpp. Its Noto Sans SC 2.002/OFL source and reproduction
-record live under `font/`; product acceptance still requires a normal-distance
-1bpp/2bpp visual selection. The current 2bpp candidate leaves only 7.21% of
-the 8 MB app partition free, while 4bpp does not fit that layout.
+The legacy profile generates `generated_noto_sans_sc_font/` in the build tree:
+27 Noto Sans SC Regular/Medium/Bold bitmap faces, 43,479 glyphs and 3,321,156
+bytes at 1bpp. The generator is `tools/generate_noto_sans_sc_font_pack.py`;
+Pillow and source font files are needed only when regenerating it. CoreText
+profiles omit this generated C++ package and use the Core-owned JFFONT2 catalog
+under `font/`. The Noto Sans SC 2.002/OFL provenance and asset hashes are in
+`font/SOURCE.md`.
 
-Run the physical smoke with an isolated configuration:
+Run the legacy physical smoke with an isolated configuration:
 
 ```powershell
 idf.py -B build-ws147-typography-acceptance-v2 `
@@ -672,7 +667,20 @@ idf.py -B build-ws147-typography-acceptance-v2 `
 ```
 
 The decisive line is `p4_p5_p6_ui_smoke`; it reports ASCII, CJK and Bold
-measurement success plus first/dirty present status.
+measurement success plus first/dirty present status. The CoreText variant uses
+the same workload and validates that layout produces prepared text lines and
+the painterless compositor presents both full and dirty rectangles:
+
+```powershell
+idf.py -B build-ws147-core-text-smoke `
+  -D "SDKCONFIG=build-ws147-core-text-smoke/sdkconfig" `
+  -D "SDKCONFIG_DEFAULTS=sdkconfig.ws147_typography_acceptance.defaults;sdkconfig.ws147_core_text_smoke.defaults" build
+```
+
+Its log must say `text_backend="core"`, all three font measurements must pass,
+`prepared_lines` must be nonzero, and both presents must succeed. This profile
+is a benchmark/smoke image; it does not replace the named band-shell hardware
+acceptance profile.
 
 The ESP32-S3 port can bind a board-owned bounded BMP image adapter for
 uncompressed 24/32-bit BMP resources. It does not bind audio or video
