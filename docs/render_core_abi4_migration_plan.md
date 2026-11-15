@@ -2,7 +2,7 @@
 
 > Last updated: 2026-11-15; Applies to: 0.6.0-dev. Core development contract: 0.9.0-dev / ABI4.
 
-> **Latest checkpoint (2026-11-15):** Runtime PR #111 merged as `fa5176a0`; Runtime #99-#111 are merged. #111 promotes the WS147 band-shell CoreText profile and merges the Win32 ABI4 text-property/incremental-versus-full repaint matrix (293 frames, 27 flows). The accepted `mainline1` hardware observation is already recorded and must not be repeated. Core PR #65 merged as `1d5c746d` (source commit `d327eee4`): generated pseudo labels and list markers now use Core TextSystem preparation when shared-inline declines, or report refusal without emitting legacy Text commands; unbound legacy behavior remains available. Core #65 CI passed all four jobs. Runtime `fa5176a0` was then configured and built against the exact Core #65 source identity `52ae4354efdae95d4dbfdfb6a2ef1ad8fbbfb99029bdd922105ac2447302f62d` (163 files); after adding the Core test-hook source to the Runtime in-tree test integration, Release build and CTest passed 60/60. This is host source-override evidence, not a signed package lock or device acceptance. Runtime still locks signed Core 0.8.0 / ABI3; ABI4 is not signed or released. `mainline2` and installed-worker popup remain separate named device profiles; no new hardware observation is implied here.
+> **Latest checkpoint (2026-11-15):** Runtime PR #111 merged as `fa5176a0`; Runtime #99-#111 are merged. #111 promotes the WS147 band-shell CoreText profile and merges the Win32 ABI4 text-property/incremental-versus-full repaint matrix (293 frames, 27 flows). The accepted `mainline1` hardware observation is already recorded and must not be repeated. Core PR #65 merged as `1d5c746d` (source commit `d327eee4`): generated pseudo labels and list markers now use Core TextSystem preparation when shared-inline declines, or report refusal without emitting legacy Text commands; unbound legacy behavior remains available. Core #65 CI passed all four jobs. Runtime `fa5176a0` was then configured and built against the exact Core #65 source identity `52ae4354efdae95d4dbfdfb6a2ef1ad8fbbfb99029bdd922105ac2447302f62d` (163 files); after adding the Core test-hook source to the Runtime in-tree test integration, Release build and CTest passed 60/60. The user has separately accepted `Core 63 Select Popup` on named profile `0.6.2-abi4-installed-core63-device1`: labels, all four options, selected result and touch worked; JFDP accepted the first frame with zero render/present failures. These are source-override/separate-profile evidence, not a signed package lock. Runtime still locks signed Core 0.8.0 / ABI3; ABI4 is not signed or released. `mainline2` remains a separate pending profile.
 
 This is the current execution plan. Earlier checkpoint narratives are preserved
 in Git history and their linked PRs; they are not additional open tasks. The
@@ -17,7 +17,7 @@ actual call sites and the exact native device candidate.
 | Core mainline | PR #65 (`1d5c746d`, source `d327eee4`) follows Core #63 and routes generated pseudo labels/list markers through Core TextSystem or explicit refusal. All four CI jobs passed. | Retire remaining provider/painter/range/family/additive callback surfaces after inventorying non-generated consumers and fixtures. |
 | Runtime mainline | PR #111, merge `fa5176a0`; #99-#111 are merged. WS147 CoreText-default profile and Win32 CoreText property/repaint matrix are included. Runtime Release build plus CTest 60/60 pass with the exact Core #65 source override. | Finish consumer/fixture inventory and callback API retirement; ABI4 release gates remain. |
 | Embedded host | PR #100 binds one TextSystem/JFFONT2 fixture to layout, layers and paint. Locked ABI3 and source ABI4 full/cropped tests pass. | No remaining provider callback in this example. |
-| Installed worker | PR #101 makes canonical v10/painterless CoreText independent of BMP. PR #107 tests Core #63 popup input, prepared packets, visible row pixels, selection and close through the canonical v10 worker on the exact source identity. PR #109 adds a full-feature WS147 profile and select-popup app, with IDF build, packaging and provider regressions passing. Core #65 generated pseudo-content is included in the Runtime source-override build/CTest. | Capture user-visible popup rendering/touch on the dedicated profile when scheduled; inventory any remaining callback-dependent widget text. |
+| Installed worker | PR #101 makes canonical v10/painterless CoreText independent of BMP. PR #107 tests Core #63 popup input, prepared packets, visible row pixels, selection and close through the canonical v10 worker on the exact source identity. PR #109 adds a full-feature WS147 profile and select-popup app, with IDF build, packaging and provider regressions passing. Core #65 generated pseudo-content is included in the Runtime source-override build/CTest. The user accepted title, four options, selected result and touch on `0.6.2-abi4-installed-core63-device1`; first frame accepted, render/present failures zero. | Popup named-profile visual acceptance passed; retire the remaining provider/painter paths. |
 | Native WS147 | `0.6.2-abi4-mainline2` built from Runtime #103/Core #62; app BIN 7,614,704 B, 773,904 B free in the 8 MiB app partition, 16 MiB factory/package hashes verified. A distinct `mainline1` image passed Home/Activity/Weather/back observation on 2026-11-15. | Flash/observe the exact `mainline2` artifact; `mainline1` evidence does not qualify it or installed worker/BMP, which are disabled in these profiles. |
 | ABI5 and shaping | Separate optional candidates; ABI5 tracked reuse has correctness/package evidence but no qualified performance gain. | Not enabled in Runtime and not an ABI4 release prerequisite. |
 
@@ -123,6 +123,11 @@ only for this exact native image. It does not qualify the separate `mainline2`
 artifact, installed worker/BMP, or the P4/P5/P6 benchmark smoke. The previous
 missing-small-card-text report remains relevant to those other identities.
 Installed worker/BMP tests require their own named image and resource profile.
+The installed-worker popup profile `0.6.2-abi4-installed-core63-device1` passed
+user observation on 2026-11-15: title, OPTION label, selector, ALPHA/BRAVO/
+CHARLIE/DELTA, `SELECTED: CHARLIE`, and touch all worked; JFDP accepted the
+first frame with zero render/present failures. This result applies only to
+that named profile and artifact.
 The `mainline2` device acceptance remains pending; no device acceptance can be
 inferred from a build or positive assumption.
 
@@ -162,3 +167,38 @@ gates. Optional ABI5 reuse and production shaping remain separate.
 6. Track `mainline2` WS147 and installed-worker popup as separate named images
    when useful; the accepted `mainline1` observation is complete and must not be
    repeated.
+
+### Callback API retirement slices (2026-11-15 audit)
+
+Review of Core `1d5c746d` and Runtime PR #112 (head `8e833b35`, merge
+`59f61c40`) confirms this is not a declaration-only cleanup: provider identity
+participates in layout-cache validity, LayerTree can still emit callback-based
+`Text` commands, and SoftwareRasterizer can still paint them through
+`TextPainter` or its built-in bitmap fallback. Do not remove the public
+declarations before these ordered slices are complete:
+
+| Slice | Main file boundary | Required result |
+| --- | --- | --- |
+| 1. Layout / intrinsic / repaint | Core `layout.h/.cpp`, `intrinsic_source_query*`, `text_layout_reuse*`, `text_repaint*`, `style_repaint*` | Text measurement, wrapping, grid intrinsic sizing and text-dirty reuse use only the bound TextSystem/Core cache identity. Missing catalog, glyph or budget must refuse explicitly. Remove provider/context identity from caches. |
+| 2. LayerTree producers | Core `layer_tree.h/.cpp` and prepared-text/shared-inline producers | Stop reading `LayerTreeBuilderOptions::text_measure` and emitting ordinary callback-based `Text`; supported text becomes PreparedText, and other cases refuse transactionally without host or bitmap fallback. |
+| 3. Raster consumer | Core `software_renderer.h/.cpp` | Remove public TextPainter constructors, state and dispatch. Keep Core TextSystem painting for PreparedText. Legacy Text commands must refuse deterministically without target writes. |
+| 4. Runtime consumers | `tools/native/win32_browser.cpp`, ESP32 retained UI/installed worker/explicit typography fixtures, P4/P5/P6 smoke, ScriptTaskFrameRenderer/Canvas/benchmarks | Remove GDI as a text measurement/paint backend; products and workers register Core font resources. Decide and implement the fate of legacy acceptance fixtures so callback code is no longer a required build path. |
+| 5. API / consumer sweep | Core public headers, tests/benchmarks/package consumers, Runtime installed-package consumers and porting docs | Delete `TextMeasureProvider`, `TextPainter`, range/family/additive hooks and implementation branches. Rewrite callback-specific tests and `c5_flex_grid_consumer` / `wrapped_row_flex_consumer`; rerun full/cropped, feature-disabled and installed-package gates. |
+
+Already migrated and not to be counted again: AppFontSet is JFFONT2-only;
+Canvas2D and the embedded host use Core TextSystem; the installed worker has a
+bounded painterless v10 path, but it refuses general legacy Text commands and
+does not establish full migration. WS147 `mainline1` hardware acceptance is
+complete and must not be repeated; it does not qualify `mainline2` or separate
+worker/BMP named profiles.
+
+Test migration notes: Core `shared_inline_tests.cpp::generated_text_fallback_and_invalidation`
+already covers #65 generated text preparation/refusal; `text_system_tests.cpp::core_prepared_text_ellipsis`
+covers whole-owner refusal when generated text conflicts with ellipsis. The
+callback-only `text_provider_tests.cpp` should be rewritten as TextSystem
+measurement/wrapping coverage or removed. Runtime's full/cropped
+`canonical-abi4-installed-consumers` is the main installed-consumer gate, but
+must include the exact Core #65 source identity. Convert
+`c5_flex_grid_consumer` and `wrapped_row_flex_consumer`, and retain the R3
+full/cropped, Node identity on/off and no-RTTI matrix. The 16 feature-profile
+matrix currently configures/checks manifests; it is not 16 full build runs.
