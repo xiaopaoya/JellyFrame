@@ -393,14 +393,14 @@ jobs:
             profile_id: render-core-minimal-no-forms-advanced
           - profile: current-mainline-full
             profile_id: render-core-default
-            core_commit: 34ae4b8877e8ba11a2f424791efebc4b1dbba3ba
-            source_hash: bbfa81de99ca687d036ef151f87b3e7bac1a29cd8f2c9e1c8c45547b7c1f4552
+            core_commit: 3152300a2858305d5732a5b13299362185ef1570
+            source_hash: c11045754fa28b9bf3e5e0e9a8720dc202efd7dd9c66c159c058f5edee7dd69b
             source_count: 163
             cropped: false
           - profile: current-mainline-cropped
             profile_id: render-core-minimal-no-forms-advanced
-            core_commit: 34ae4b8877e8ba11a2f424791efebc4b1dbba3ba
-            source_hash: bbfa81de99ca687d036ef151f87b3e7bac1a29cd8f2c9e1c8c45547b7c1f4552
+            core_commit: 3152300a2858305d5732a5b13299362185ef1570
+            source_hash: c11045754fa28b9bf3e5e0e9a8720dc202efd7dd9c66c159c058f5edee7dd69b
             source_count: 163
             cropped: true
 
@@ -1024,19 +1024,19 @@ jobs:
           cmake --build build\abi3-default --config Release --target jellyframe_desktop_shell --parallel
           if ($LASTEXITCODE -ne 0) { throw 'Runtime ABI3 desktop shell failed to build' }
 
-      - name: Checkout merged Core natural image API
+      - name: Checkout merged Core text and image APIs
         uses: actions/checkout@v5
         with:
           repository: xiaopaoya/JellyFrame-Render-Core
-          ref: 34ae4b8877e8ba11a2f424791efebc4b1dbba3ba
+          ref: 3152300a2858305d5732a5b13299362185ef1570
           path: third_party/render-core-source
 
       - name: Verify merged Core source identity
         shell: pwsh
         run: |
           $coreRevision = (git -C third_party\render-core-source rev-parse HEAD).Trim()
-          if ($coreRevision -ne '34ae4b8877e8ba11a2f424791efebc4b1dbba3ba') {
-            throw "Expected qualified Core master at 34ae4b8877e8ba11a2f424791efebc4b1dbba3ba, got $coreRevision"
+          if ($coreRevision -ne '3152300a2858305d5732a5b13299362185ef1570') {
+            throw "Expected qualified Core master at 3152300a2858305d5732a5b13299362185ef1570, got $coreRevision"
           }
           $coreAbi4 = Select-String -Path third_party\render-core-source\cmake\render_core_version.cmake `
             -Pattern 'set\(JELLYFRAME_RENDER_CORE_ENGINE_ABI "4"' -Quiet
@@ -1085,7 +1085,7 @@ jobs:
           }
           if ($provenance.provider -ne 'source-override' -or $provenance.engineAbi -ne 4 -or
               $provenance.lockEnforced -ne $false -or
-              $provenance.sourceHash -ne 'bbfa81de99ca687d036ef151f87b3e7bac1a29cd8f2c9e1c8c45547b7c1f4552' -or
+              $provenance.sourceHash -ne 'c11045754fa28b9bf3e5e0e9a8720dc202efd7dd9c66c159c058f5edee7dd69b' -or
               $provenance.sourceFileCount -ne 163 -or
               $provenance.lockedVersion -ne '0.8.0' -or $provenance.lockedEngineAbi -ne 3 -or
               $provenance.lockedSourceHash -ne 'fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795') {
@@ -1113,6 +1113,12 @@ jobs:
           ctest --test-dir build/abi4-same-thread -C Release
           -R "^(jellyframe_script_tests|jellyframe_app_runtime_tests|jellyframe_win32_incremental_repaint_equivalence|jellyframe_embedded_host_core_text)$"
           --output-on-failure
+      - name: Verify visible Core ellipsis and incremental repaint
+        shell: pwsh
+        run: >-
+          python tests/tool_regression/incremental_repaint_equivalence_tests.py
+          build/abi4-same-thread/Release/jellyframe_desktop_shell.exe .
+          --core-version 0.9.0-dev --include-core-text --case text-overflow-ellipsis
       - name: Exercise ordinary ABI4 desktop app entry
         shell: pwsh
         run: >-

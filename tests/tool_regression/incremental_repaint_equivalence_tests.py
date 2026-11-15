@@ -174,6 +174,47 @@ def make_text_property_case(
     )
 
 
+def make_text_ellipsis_case(root: Path, core_version: str) -> CaptureCase:
+    app = root / "text-overflow-ellipsis"
+    app.mkdir()
+    # One direct text owner: changes always assign a complete immutable source,
+    # never a host-truncated prefix. Narrow/wide/narrow exercises cutoff reuse;
+    # the second source then exercises invalidation at the same narrow width.
+    (app / "index.html").write_text(
+        "<!doctype html><meta charset='utf-8'><style>"
+        "body{margin:0;background:#fff;color:#000}"
+        "#label{display:block;width:90px;height:40px;margin:0;padding:0;"
+        "font-family:sans-serif;font-size:20px;line-height:28px;"
+        "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+        "#toggle{display:block;width:100px;height:24px;margin:0}"
+        "</style><body><p id='label'>CORE TEXT ELLIPSIS SOURCE</p>"
+        "<button id='toggle'>Toggle</button><script>"
+        "var label=document.getElementById('label');"
+        "var source='CORE TEXT ELLIPSIS SOURCE', alternate='WIDE LABEL OTHER SOURCE', step=0;"
+        "document.getElementById('toggle').addEventListener('click',function(){"
+        "step++;label.style.width=step===1?'280px':'90px';"
+        "label.textContent=step===3?alternate:source;"
+        "if(label.textContent!==(step===3?alternate:source))throw Error('source changed');"
+        "});</script></body>", encoding="utf-8",
+    )
+    (app / "jellyframe.app.json").write_text(json.dumps({
+        "id": "org.jellyframe.tests.text-overflow-ellipsis", "name": "Text Ellipsis",
+        "role": "app", "versionName": "1.0.0", "versionCode": 1, "entry": "/index.html",
+        "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": core_version, "script": "classic"},
+        "viewport": {"designWidth": 300, "designHeight": 100}, "fonts": [],
+    }), encoding="utf-8")
+    (app / "repaint.jfcapture").write_text(
+        "frames 5\nstep-ms 33\nstart-ms 1000\n" +
+        "".join(f"event {frame} click-id toggle\n" for frame in range(1, 5)),
+        encoding="utf-8",
+    )
+    return CaptureCase(
+        name="text-overflow-ellipsis", app=str(app), frame_count=5,
+        frame_script="repaint.jfcapture", use_app_fonts=True,
+        require_pixel_mutation=True, require_text_presence=True, text_region=(0, 0, 290, 40),
+    )
+
+
 def adapt_sample_case(case: CaptureCase, repo: Path, root: Path, core_version: str) -> CaptureCase:
     source = Path(case.app)
     if source.is_absolute():
@@ -325,6 +366,8 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+    if selected_case == "text-overflow-ellipsis":
+        include_core_text = True
     shell = Path(args[0]).resolve()
     repo = Path(args[1]).resolve()
     with tempfile.TemporaryDirectory(prefix="jellyframe-repaint-") as temporary:
@@ -343,6 +386,8 @@ def main() -> int:
             make_band_shell_case(repo, root, core_version),
             make_band_shell_case(repo, root, core_version, exercise_route=True),
         )
+        if selected_case == "text-overflow-ellipsis":
+            cases += (make_text_ellipsis_case(root, core_version),)
         if selected_case is not None:
             cases = tuple(case for case in cases if case.name == selected_case)
             if not cases:
@@ -353,6 +398,8 @@ def main() -> int:
             policies.append((True, "core"))
         for case in cases:
             for use_app_fonts, policy in policies:
+                if case.use_app_fonts and not use_app_fonts:
+                    continue
                 backend_case = replace(
                     case,
                     name=f"{case.name}-{policy}",
@@ -469,6 +516,31 @@ def main() -> int:
                             f"{backend_case.name}: incremental repaint diverged from full repaint at frame {index}: "
                             f"{incremental_frame.name}"
                         )
+                if case.name == "text-overflow-ellipsis":
+                    # Same full source/width with clip-only must paint different
+                    # pixels. Ink and incremental equality alone could otherwise
+                    # pass while silently ignoring text-overflow:ellipsis.
+                    html_path = Path(case.app) / "index.html"
+                    original = html_path.read_text(encoding="utf-8")
+                    html_path.write_text(
+                        original.replace("text-overflow:ellipsis", "text-overflow:clip"),
+                        encoding="utf-8",
+                    )
+                    clip_output = root / backend_case.name / "clip-reference"
+                    try:
+                        run_capture(shell, repo, backend_case, clip_output, True)
+                    finally:
+                        html_path.write_text(original, encoding="utf-8")
+                    clip_frames = sorted(clip_output.glob("frame_*.bmp"))
+                    if len(clip_frames) != backend_case.frame_count:
+                        raise RuntimeError("ellipsis clip reference has missing frames")
+                    for index in (0, 2, 3, 4):
+                        if bmp_region_pixels(full_frames[index], backend_case.text_region) == \
+                                bmp_region_pixels(clip_frames[index], backend_case.text_region):
+                            raise RuntimeError(
+                                f"{backend_case.name}: narrow frame {index} matches clip-only; "
+                                "ellipsis marker/cutoff was not visibly applied"
+                            )
                 total_frames += backend_case.frame_count
                 run_count += 1
 
