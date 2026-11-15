@@ -414,7 +414,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: xiaopaoya/JellyFrame-Render-Core
-          ref: ${{ matrix.core_commit || 'master' }}
+          ref: ${{ matrix.core_commit || '18dc34ebe015c35fe508169ea24a69d1d6571771' }}
           path: third_party/render-core-source
 
       - name: Checkout JerryScript

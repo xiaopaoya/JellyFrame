@@ -36,21 +36,23 @@ if(REQUIRE_NATURAL_IMAGE_API)
     message(FATAL_ERROR "This qualification requires the Core natural-image layout API")
   endif()
 endif()
-option(REQUIRE_SHARED_INLINE_API "Require canonical prepared-text v2 in this qualification" OFF)
+option(REQUIRE_SHARED_INLINE_API "Require a Runtime-compatible canonical prepared-text packet API" OFF)
 if(REQUIRE_SHARED_INLINE_API)
   include(CheckCXXSourceCompiles)
   set(CMAKE_REQUIRED_LIBRARIES JellyFrame::jellyframe_render_core)
   unset(QUALIFIED_CORE_HAS_SHARED_INLINE_API CACHE)
   check_cxx_source_compiles("
     #include <render_core/prepared_text.h>
-    #if !defined(JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION) || JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION != 2
-    #error Canonical prepared-text v2 is required
+    #if !defined(JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION) || \
+        (JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION != 2 && \
+         JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION != 3)
+    #error A Runtime-compatible canonical prepared-text packet API is required
     #endif
     int main() { return 0; }
   " QUALIFIED_CORE_HAS_SHARED_INLINE_API)
   unset(CMAKE_REQUIRED_LIBRARIES)
   if(NOT QUALIFIED_CORE_HAS_SHARED_INLINE_API)
-    message(FATAL_ERROR "This qualification requires canonical prepared-text v2")
+    message(FATAL_ERROR "This qualification requires canonical prepared-text v2 or v3")
   endif()
 endif()
 option(QUALIFY_NATURAL_INLINE_IMAGES "Run Core-mainline inline natural-image worker qualification" OFF)
@@ -68,8 +70,8 @@ if(QUALIFY_CORE_SELECT_POPUP_TEXT AND NOT BUILD_V10_WORKER)
   message(FATAL_ERROR "Core select popup qualification requires the worker")
 endif()
 if(QUALIFY_CORE_SELECT_POPUP_TEXT AND
-   NOT EXPECTED_CORE_SOURCE_HASH STREQUAL "e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67")
-  message(FATAL_ERROR "Core select popup qualification requires the pinned Core #63 source identity")
+   NOT EXPECTED_CORE_SOURCE_HASH STREQUAL "8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186")
+  message(FATAL_ERROR "Core select popup qualification requires the pinned Core #63/#66 candidate identity")
 endif()
 get_filename_component(runtime_repo_root "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(runtime_source "${CMAKE_CURRENT_BINARY_DIR}/runtime-source")

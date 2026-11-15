@@ -12,7 +12,8 @@
 #include "render_core/software_renderer.h"
 #include "render_core/style.h"
 
-#if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+#if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME) && \
+    defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
 #include "app_runtime/app_font_set.h"
 #include "app_runtime/core_system_font_catalog.h"
 #endif
@@ -697,7 +698,8 @@ int main(int argc, char** argv) {
         const BrowserOptions options = parse_options(argc, argv);
         const HostBudgets budgets = desktop_validation_budgets();
         VectorDiagnosticSink diagnostics;
-#if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+#if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME) && \
+    defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         AppFontSet fonts;
         if (!fonts.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog,
                                                         kNotoSansScSystemFontCatalogSize)) {
