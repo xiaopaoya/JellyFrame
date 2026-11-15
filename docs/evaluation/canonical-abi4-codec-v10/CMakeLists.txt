@@ -63,6 +63,14 @@ if(QUALIFY_GENERATED_INLINE_TEXT AND
    (NOT BUILD_V10_WORKER OR NOT REQUIRE_SHARED_INLINE_API))
   message(FATAL_ERROR "Generated inline text qualification requires the worker and shared-inline API")
 endif()
+option(QUALIFY_CORE_SELECT_POPUP_TEXT "Run Core-prepared select popup worker qualification" OFF)
+if(QUALIFY_CORE_SELECT_POPUP_TEXT AND NOT BUILD_V10_WORKER)
+  message(FATAL_ERROR "Core select popup qualification requires the worker")
+endif()
+if(QUALIFY_CORE_SELECT_POPUP_TEXT AND
+   NOT EXPECTED_CORE_SOURCE_HASH STREQUAL "e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67")
+  message(FATAL_ERROR "Core select popup qualification requires the pinned Core #63 source identity")
+endif()
 get_filename_component(runtime_repo_root "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(runtime_source "${CMAKE_CURRENT_BINARY_DIR}/runtime-source")
 # No bundled render_core headers are copied into this consumer tree. Register
@@ -142,6 +150,10 @@ if(BUILD_V10_WORKER)
   if(QUALIFY_GENERATED_INLINE_TEXT)
     target_compile_definitions(installed_runtime_canonical_v10_worker
       PRIVATE JELLYFRAME_TEST_GENERATED_INLINE_TEXT=1)
+  endif()
+  if(QUALIFY_CORE_SELECT_POPUP_TEXT)
+    target_compile_definitions(installed_runtime_canonical_v10_worker
+      PRIVATE JELLYFRAME_TEST_CORE_SELECT_POPUP_TEXT=1)
   endif()
   target_link_libraries(installed_runtime_canonical_v10_worker PRIVATE runtime_v10_script)
   v10_test(installed_stylesheet_resources

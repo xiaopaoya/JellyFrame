@@ -2,7 +2,7 @@
 
 > 最后更新：2026-11-15；适用版本：0.6.0-dev。Core 开发契约：0.9.0-dev / ABI4。
 
-> **最新检查点（2026-11-15）：**Runtime PR #99–#105 已合并；#99–#103 与 #105 均通过 19 项 CI。PR #103（`d6fcaff4`）将应用字体统一为 JFFONT2，移除旧 AppFontSet/AppHost 回调路径，并在 current-mainline 与常规 ABI4 lane 中固定验证 Core #62（`38148e73`，source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`）。PR #105（`81d99750`）拆分 ESP32 构建边界：选择 CoreText 时不再生成/编译旧 Noto C++ 位图字体包；CoreText 关闭或显式选择旧 painter 验收 fixture 时仍保留旧路径。CoreText P4/P5/P6 benchmark smoke 与 benchmark Kconfig 配置已用 Runtime `8b59afd6`、Core follow-up `89acc36a` 和 IDF 5.3.1 构建通过：CoreText 已启用、旧字体宏为 0、map 中无旧字体符号，BIN 为 3,503,280 字节（SHA-256 `29634ea9860508ff46f1ad6c1d7d65e0d16b8296f18a2c6e13771f85dc8e5535`）。这只是构建证据，尚未在实机运行 smoke。CoreText 仍为 opt-in，非 retained/Win32 产品默认仍待迁移。Runtime 仍锁定签名 Core 0.8.0 / ABI3；ABI4 尚未签名发布。`0.6.2-abi4-mainline2` 已构建并核验身份，但尚未验收。另一份 `mainline1` 镜像已于 2026-11-15 通过 Home/Activity/Weather/返回实机观察；完整身份和适用范围见下文。
+> **最新检查点（2026-11-15）：**Runtime PR #99–#106 已合并；#99–#103、#105–#106 均通过 19 项 CI。PR #103（`d6fcaff4`）将应用字体统一为 JFFONT2，移除旧 AppFontSet/AppHost 回调路径，并验证 Core #62。Core PR #63（merge `8aceb6d8`，source commit `89acc36a`，source identity `e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67`，163 个实现输入）让开放 select popup 行使用 Core `PreparedText`；当前 Runtime 分支加入 worker 触控、可见像素、选择结果回归并固定该源码身份。PR #105（`81d99750`）拆分 ESP32 构建边界：选择 CoreText 时不再生成/编译旧 Noto C++ 位图字体包；CoreText 关闭或显式选择旧 painter 验收 fixture 时仍保留旧路径。CoreText P4/P5/P6 benchmark smoke 与 benchmark Kconfig 配置已用 Runtime `8b59afd6`、Core follow-up `89acc36a` 和 IDF 5.3.1 构建通过：CoreText 已启用、旧字体宏为 0、map 中无旧字体符号，BIN 为 3,503,280 字节（SHA-256 `29634ea9860508ff46f1ad6c1d7d65e0d16b8296f18a2c6e13771f85dc8e5535`）。这只是构建证据，尚未在实机运行 smoke。CoreText 仍为 opt-in，非 retained/Win32 产品默认仍待迁移。Runtime 仍锁定签名 Core 0.8.0 / ABI3；ABI4 尚未签名发布。`mainline1` 已通过原生页面观察，单独的 `mainline2` 仍待验收。
 
 本文件是当前执行计划。旧检查点保存在 Git 历史和对应 PR 中，不再作为额外待办。
 [文本消费者退役清单](render_core_text_consumer_retirement.md)记录实际调用方与原生设备候选的完整身份。
@@ -12,10 +12,10 @@
 | 边界 | 当前状态 | 剩余门槛 |
 | --- | --- | --- |
 | 已发布依赖 | Runtime 生产锁仍为签名 Core v0.8.0 / ABI3。 | 最终 ABI4 契约发布后，更新精确依赖锁。 |
-| Core 主线 | PR #62，`38148e73`，CI 4/4（run `43673424532`），0.9.0-dev / ABI4；source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`，163 个实现输入。 | 剩余消费者、属性迁移和回调退役。 |
-| Runtime 主线 | PR #103，`d6fcaff4`，CI 19/19（run `43675905306`）；#99–#103、#105 均已合并，涵盖 ABI4 身份/消费者资格、embedded host、installed worker、省略号重绘资格、JFFONT2-only 应用字体及 CoreText 旧字体包隔离。 | generated BitmapFont/默认消费者、完整回调退役和发布门槛仍未完成。 |
+| Core 主线 | PR #63（`8aceb6d8`）含 source commit `89acc36a`，CI 已通过；0.9.0-dev / ABI4，source identity `e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67`，163 个实现输入。开放 select popup 行现使用 Core `PreparedText`。 | Runtime 消费者资格、generated-content 与回调退役。 |
+| Runtime 主线 | PR #103，`d6fcaff4`，CI 19/19（run `43675905306`）；#99–#103、#105–#106 均已合并，涵盖 ABI4 身份/消费者资格、embedded host、installed worker、省略号重绘资格、JFFONT2-only 应用字体、CoreText 旧字体包隔离和 mainline1 实机记录。 | 本分支正在补 Core #63 popup 消费回归与精确 CI 源码 pin；generated BitmapFont/默认消费者、完整回调退役和发布门槛仍未完成。 |
 | Embedded host | #100 为 layout/layers/paint 绑定同一个 TextSystem/JFFONT2；锁定 ABI3 和 source ABI4 full/cropped 测试通过。 | 该示例不再依赖文本 provider 回调。 |
-| Installed worker | 已合并 #101，让无 painter 的 canonical v10/CoreText 独立于 BMP 工作。 | 实机验收仍是下游门槛。 |
+| Installed worker | 已合并 #101，让无 painter 的 canonical v10/CoreText 独立于 BMP 工作。本分支用 canonical v9/v10 触控、prepared packet、可见行像素及选项提交测试 Core #63 popup。 | Core #63 消费者 CI 与精确设备/profile 验收仍是后续门槛。 |
 | 原生 WS147 | `0.6.2-abi4-mainline2` 已基于 Runtime #103/Core #62 构建；app BIN 7,614,704 B，8 MiB app 分区余 773,904 B，16 MiB factory/包哈希已核验。另一份 `mainline1` 于 2026-11-15 通过页面观察。 | 仍需验收精确的 `mainline2` 产物；`mainline1` 不能替代该镜像或 installed worker/BMP 的测试。 |
 | ABI5 与 shaping | 独立可选候选；ABI5 tracked reuse 有正确性与包测试，尚无合格性能收益。 | 未启用到 Runtime，也不阻塞 ABI4 发布。 |
 
@@ -62,7 +62,7 @@ CoreText OFF 的 legacy 路径保持显式选择。
 
 ### C. Core 文本 API 收敛
 
-Core #61 已在四项 CI 全部通过（run `43670844631`）后合并为 `3152300a`。有界 owner-side ellipsis 的 MSVC full 测试 33/33、已安装 full/cropped 文本消费者各 1/1 通过；cropped 唯一 shared-inline 阴影断言失败在未修改基线同样复现。Runtime #102 已合入该精确源码 pin、五帧真实字体增量/全量省略号测试和 clip-only 可见对照。Core #62 为闭合原生控件 label/select arrow 提供 Core 度量与事务式 prepared packet，已在 CI 4/4 后合并为 `38148e73`，尚未发布；打开的 select popup 与 generated-content 所有权另行推进。更广属性/默认采用仍独立推进。该实现必须保留源文本布局/固有尺寸，在最终几何
+Core #61 已在四项 CI 全部通过（run `43670844631`）后合并为 `3152300a`。有界 owner-side ellipsis 的 MSVC full 测试 33/33、已安装 full/cropped 文本消费者各 1/1 通过；cropped 唯一 shared-inline 阴影断言失败在未修改基线同样复现。Runtime #102 已合入该精确源码 pin、五帧真实字体增量/全量省略号测试和 clip-only 可见对照。Core #62 为闭合原生控件 label/select arrow 提供 Core 度量与事务式 prepared packet，已合并为 `38148e73`。Core #63（`89acc36a`）在发布 popup overlay 前准备所有可见选项；缺字或预算拒绝时整个 overlay 都会拒绝。本 Runtime 分支用触控、prepared packet、B 行像素和选中/关闭回归验证该消费者。generated-content 所有权和更广属性/默认采用仍独立推进。实现必须保留源文本布局/固有尺寸，在最终几何
 确定后按 owner 裁剪，使用 Q1000/spacing 和输出预算，并对不支持的完整上下文拒绝，
 不回退宿主。混合 owner 需要整段截断所有权，不能各叶节点独立截断。
 
@@ -115,7 +115,7 @@ Installed worker/BMP 必须使用独立命名镜像和资源配置。
 ## 紧接着的工作
 
 1. 已合并：Runtime #99–#103；五个 PR 均通过 19/19 CI。#103 关闭旧 AppFontSet/JFFONT0/1 资源路径，并固定验证 Core #62。
-2. 迁移 generated C++ BitmapFont 默认资源及剩余 native/non-retained、Win32 GDI 消费者；将 Core popup 提交 `89acc36a` 经 PR/CI 验证后，再闭合 generated-content 所有权及支持属性资格。
+2. Core #63 Runtime popup 消费 PR 通过 CI 后合并；随后迁移 generated C++ BitmapFont 默认资源及剩余 native/non-retained、Win32 GDI 消费者，并闭合 generated-content 所有权及支持属性资格。
 3. 转换剩余依赖回调的测试/fixture，然后在单次协调的预发布变更中删除公开 provider/range/family/additive API 及实现分支。
 4. 消费者、full/cropped、禁用特性与源码归档门槛通过后，签名发布 ABI4 并更新 Runtime 精确生产依赖锁。
 5. 用户方便时单独执行已预留的 `mainline2` WS147 实机验收；`mainline1` 观察已记录，但不能替代精确产物或主机/API 发布门槛。

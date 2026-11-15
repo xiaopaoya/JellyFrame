@@ -2,8 +2,8 @@
 
 > Last updated: 2026-11-15; Applies to: 0.6.0-dev. Core contract: 0.9.0-dev / ABI4.
 
-Current source audit: 2026-11-15. Runtime base `d6fcaff4` (PR103), Core
-`38148e73` (PR62), 0.9.0-dev / ABI4. This is a consumer migration checklist,
+Current source audit: 2026-11-15. Runtime mainline `feec2e29` (PR106), Core
+`8aceb6d8` (PR63), 0.9.0-dev / ABI4. This is a consumer migration checklist,
 not a declaration that legacy callback APIs have been removed.
 
 ## Production consumers
@@ -11,7 +11,7 @@ not a declaration that legacy callback APIs have been removed.
 | Consumer | Actual selection and resources | Remaining change |
 | --- | --- | --- |
 | ESP32 retained UI (`jellyframe_esp32s3_ui_task.cpp`) | Default providers use generated C++ Noto `BitmapFont` faces. The named CoreText profile binds the shared JFFONT2 catalog and clears the providers. | Migrate the generated default resource contract, then remove callback construction and port-owned measurement/scaling. |
-| ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects supported canonical v10 and a painterless renderer, independently of BMP. Owned text catalog/snapshot survives accepted-frame replay. CoreText OFF retains the explicit legacy painter path. | Qualify the bounded path on device; migrate remaining callback-dependent generated/widget text before retiring the legacy path. |
+| ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects supported canonical v10 and a painterless renderer, independently of BMP. Owned text catalog/snapshot survives accepted-frame replay. CoreText OFF retains the explicit legacy painter path. Core #63 uses the same Core catalog for open select popup rows. | Runtime follow-up branch pins Core #63 and tests canonical v9/v10 popup packets, B-row pixels, selection and close; qualify that path in CI and on device, then migrate remaining callback-dependent generated/widget text. |
 | ESP32 non-retained entry (`main.cpp`) | Builds generated-BitmapFont providers and painter independently of retained UI. | Migrate or explicitly retire this entry configuration too. |
 | Desktop default (`tools/native/win32_browser.cpp`) | GDI measurement/painting using the OS font; Core catalog is opt-in. | Close CoreText property parity, then adopt the catalog default. |
 | Desktop application fonts (`src/app_runtime/app_font_set.cpp`) | Complete in Runtime #103: JFFONT2-only, callback loaders/accessors and browser precedence removed; tools/samples/import UI use canonical resources. | No remaining AppFontSet migration; generated C++ port defaults remain separate. |
