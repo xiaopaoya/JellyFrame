@@ -614,26 +614,62 @@ void bench_xml_http_request_mock(std::size_t capacity) {
     }
 }
 
+// Canonical two-glyph replacement for the original tiny A/U+4E2D workload.
+// Prepared from tracked ports/esp32s3-idf/font/source/noto-sans-sc-2.002/
+// NotoSansSC-Regular.otf (SIL OFL1.1), source SHA256
+// a2b93e6c2db05d6bbbf6f27d413ec73269735b7b679019c8a5aa9670ff0ffbf2.
+// Core prepare_font_resource.py at f8dc4bc982eead08d9feb715881a4c50072ce4a7:
+// --characters [UTF-8 A/U+4E2D] --size 8 --bits 1. Original hmtx/hhea metrics;
+// Pillow12.3.0/fontTools4.60.1/FreeType2.14.3 BASIC raster, 224 bytes.
+// Resource SHA256 dda9d62efaf517364ae5f53c6dfeab64a094753b25e07e9d5d796a4d5e372483.
+constexpr std::uint8_t kTinyCanonicalFont[] = {
+    0x4a, 0x46, 0x46, 0x4f, 0x4e, 0x54, 0x32, 0x00, 0x02, 0x00, 0x80, 0x00, 0x28, 0x00, 0x01, 0x00,
+    0xe0, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0xd0, 0x00, 0x00, 0x00,
+    0x10, 0x00, 0x00, 0x00, 0xe8, 0x03, 0x08, 0x00, 0x90, 0x01, 0x01, 0x00, 0x88, 0x04, 0x00, 0x00,
+    0x20, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xa2, 0xb9, 0x3e, 0x6c, 0x2d, 0xb0, 0x5d, 0x6b, 0xbb, 0xf6, 0xf2, 0x7d, 0x41, 0x3e, 0xc7, 0x32,
+    0x69, 0x73, 0x5b, 0x7b, 0x67, 0x90, 0x19, 0xc8, 0xa5, 0xaa, 0x96, 0x70, 0xff, 0x0f, 0xfb, 0xf2,
+    0x86, 0x33, 0xfe, 0x76, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x41, 0x00, 0x00, 0x00, 0x22, 0x00, 0x00, 0x00, 0x5f, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xfa, 0xff, 0xff, 0xff, 0x05, 0x00, 0x06, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2d, 0x4e, 0x00, 0x00, 0x28, 0x22, 0x00, 0x00,
+    0xe8, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf8, 0xff, 0xff, 0xff, 0x08, 0x00, 0x0a, 0x00,
+    0x01, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x20, 0x00, 0x50, 0x70, 0x00, 0x88, 0x00, 0x00, 0x7e, 0x00, 0x00, 0x7e, 0x00, 0x00, 0x00, 0x00,
+};
+
 void bench_font_fallback_measure(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 128, 1});
-    host.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog, kNotoSansScSystemFontCatalogSize);
+    host.launch("org.example.fonts", AppRole::App);
+    if (!host.load_current_core_font(kTinyCanonicalFont, sizeof(kTinyCanonicalFont)).loaded()) std::abort();
+    TextFontRequest request; request.size_q1000 = 8000;
     TextRunMetrics metrics;
     for (std::size_t i = 0; i < capacity; ++i)
-        if (host.fonts().core_text_system()->measure("AB", {}, metrics) != TextSystemStatus::Ok) std::abort();
+        if (host.fonts().core_text_system()->measure("A\xe4\xb8\xad", request, metrics) != TextSystemStatus::Ok ||
+            metrics.glyph_count != 2 || metrics.advance <= 0) std::abort();
 }
 
 void bench_font_family_measure(std::size_t capacity) {
-    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 128, 1});
+    AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 128, 2});
     host.launch("org.example.font-family", AppRole::App);
-    host.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog, kNotoSansScSystemFontCatalogSize);
-    const auto& face = kNotoSansScSystemFontCatalog[0];
-    if (!host.attach_current_core_font_view(face.data, face.size, "Jelly Tiny").loaded()) std::abort();
+    // A default0 registration is mandatory; both registrations own the same
+    // tiny source bytes rather than admitting the whole shared Noto catalog.
+    if (!host.load_current_core_font(kTinyCanonicalFont, sizeof(kTinyCanonicalFont)).loaded() ||
+        !host.load_current_core_font(kTinyCanonicalFont, sizeof(kTinyCanonicalFont), "Jelly Tiny").loaded()) std::abort();
     std::uint32_t family;
     if (!host.fonts().core_text_system()->resolve_family_hash(normalized_font_family_hash("Jelly Tiny"), family)) std::abort();
-    TextFontRequest request; request.families = &family; request.family_count = 1;
+    TextFontRequest request; request.families = &family; request.family_count = 1; request.size_q1000 = 8000;
     TextRunMetrics metrics;
     for (std::size_t i = 0; i < capacity; ++i)
-        if (host.fonts().core_text_system()->measure("AB", request, metrics) != TextSystemStatus::Ok) std::abort();
+        if (host.fonts().core_text_system()->measure("A\xe4\xb8\xad", request, metrics) != TextSystemStatus::Ok ||
+            metrics.glyph_count != 2 || metrics.advance <= 0) std::abort();
+}
+
+void bench_system_font_catalog_cold_admission() {
+    AppFontSet fonts(0);
+    if (!fonts.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog,
+        kNotoSansScSystemFontCatalogSize) || !fonts.core_text_system()) std::abort();
 }
 
 void bench_load_telemetry(std::size_t capacity) {
@@ -843,6 +879,9 @@ int run_app_runtime_bench(int argc, char** argv) {
     print_result("app_runtime_font_family_measure", iterations, average_microseconds(iterations, [&] {
         bench_font_family_measure(capacity);
     }));
+    const int catalog_iterations = std::min(iterations, 8);
+    print_result("app_runtime_system_font_catalog_cold_admission", catalog_iterations,
+        average_microseconds(catalog_iterations, [] { bench_system_font_catalog_cold_admission(); }));
     print_result("app_runtime_load_telemetry", iterations, average_microseconds(iterations, [&] {
         bench_load_telemetry(capacity);
     }));

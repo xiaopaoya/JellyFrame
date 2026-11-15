@@ -1,6 +1,6 @@
 # 嵌入式优化说明
 
-> 最后更新：2026-08-28；适用版本：0.6.0-dev
+> 最后更新：2026-11-15；适用版本：0.6.0-dev
 
 
 目前尚未明确目标 CPU、内存布局、显示控制器和指令集，所以当前优化集中在小型可穿戴设备通用的重要约束上。
@@ -155,6 +155,10 @@ python project_tools\benchmark_guard.py --build-dir build\desktop-release\Releas
 这个 guard 检查少量 render-core 和 app-runtime 微基准：style/custom-property resolution、
 full pipeline、dirty-rect replay、scroll-blit planning、Canvas 2D path/gradient 路径、
 font-family measurement，以及 app-runtime queue/system-event helper。
+
+字体测量案例使用两个字形（A 和 中）的规范 JFFONT2 子集，包含小目录准入及重复测量。
+完整共享系统目录的冷准入另行报告，并限制采样次数。不能将小 fixture 换成完整目录后仍
+沿用相同门槛：那会改变被测工作量。这两类主机数据均不能直接估算设备每帧文字成本。
 
 这些阈值故意留得很宽，只用于捕捉灾难性退化，例如某个每帧队列路径意外重新变成线性搬移。
 它不是设备性能承诺。Port 作者仍应在 port 文档中维护真实 panel、DMA 和内存基线。
