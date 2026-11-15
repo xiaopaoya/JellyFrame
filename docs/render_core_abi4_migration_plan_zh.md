@@ -2,7 +2,7 @@
 
 > 最后更新：2026-11-15；适用版本：0.6.0-dev。Core 开发契约：0.9.0-dev / ABI4。
 
-> **最新检查点（2026-11-15）：**Runtime PR #99–#103 已合并，每个 PR 的 19 项 CI 全部通过。PR #103（`d6fcaff4`）将应用字体统一为 JFFONT2，移除旧 AppFontSet/AppHost 回调路径，并在 current-mainline 与常规 ABI4 lane 中固定验证 Core #62（`38148e73`，source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`）。Runtime commit `66be335c` 已将 ESP32 构建边界拆开：选择 CoreText 时不再生成/编译旧 Noto C++ 位图字体包；CoreText 关闭或显式选择旧 painter 验收 fixture 时仍保留旧路径。CoreText P4/P5/P6 benchmark smoke 与 benchmark Kconfig 配置已用 Runtime `8b59afd6`、Core follow-up `89acc36a` 和 IDF 5.3.1 构建通过：CoreText 已启用、旧字体宏为 0、map 中无旧字体符号，BIN 为 3,503,280 字节（SHA-256 `29634ea9860508ff46f1ad6c1d7d65e0d16b8296f18a2c6e13771f85dc8e5535`）。这只是构建证据，尚未在实机运行 smoke。CoreText 仍为 opt-in，非 retained/Win32 产品默认仍待迁移。Runtime 仍锁定签名 Core 0.8.0 / ABI3；ABI4 尚未签名发布。最新 `0.6.2-abi4-mainline2` 已由 Runtime #103/Core #62 构建并核验 BIN、factory 与包身份，尚未刷写，等待实机验收。
+> **最新检查点（2026-11-15）：**Runtime PR #99–#105 已合并；#99–#103 与 #105 均通过 19 项 CI。PR #103（`d6fcaff4`）将应用字体统一为 JFFONT2，移除旧 AppFontSet/AppHost 回调路径，并在 current-mainline 与常规 ABI4 lane 中固定验证 Core #62（`38148e73`，source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`）。PR #105（`81d99750`）拆分 ESP32 构建边界：选择 CoreText 时不再生成/编译旧 Noto C++ 位图字体包；CoreText 关闭或显式选择旧 painter 验收 fixture 时仍保留旧路径。CoreText P4/P5/P6 benchmark smoke 与 benchmark Kconfig 配置已用 Runtime `8b59afd6`、Core follow-up `89acc36a` 和 IDF 5.3.1 构建通过：CoreText 已启用、旧字体宏为 0、map 中无旧字体符号，BIN 为 3,503,280 字节（SHA-256 `29634ea9860508ff46f1ad6c1d7d65e0d16b8296f18a2c6e13771f85dc8e5535`）。这只是构建证据，尚未在实机运行 smoke。CoreText 仍为 opt-in，非 retained/Win32 产品默认仍待迁移。Runtime 仍锁定签名 Core 0.8.0 / ABI3；ABI4 尚未签名发布。`0.6.2-abi4-mainline2` 已构建并核验身份，但尚未验收。另一份 `mainline1` 镜像已于 2026-11-15 通过 Home/Activity/Weather/返回实机观察；完整身份和适用范围见下文。
 
 本文件是当前执行计划。旧检查点保存在 Git 历史和对应 PR 中，不再作为额外待办。
 [文本消费者退役清单](render_core_text_consumer_retirement.md)记录实际调用方与原生设备候选的完整身份。
@@ -13,10 +13,10 @@
 | --- | --- | --- |
 | 已发布依赖 | Runtime 生产锁仍为签名 Core v0.8.0 / ABI3。 | 最终 ABI4 契约发布后，更新精确依赖锁。 |
 | Core 主线 | PR #62，`38148e73`，CI 4/4（run `43673424532`），0.9.0-dev / ABI4；source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`，163 个实现输入。 | 剩余消费者、属性迁移和回调退役。 |
-| Runtime 主线 | PR #103，`d6fcaff4`，CI 19/19（run `43675905306`）；#99–#103 均已合并，涵盖 ABI4 身份/消费者资格、embedded host、installed worker、省略号重绘资格及 JFFONT2-only 应用字体。 | generated BitmapFont/默认消费者、完整回调退役和发布门槛仍未完成。 |
+| Runtime 主线 | PR #103，`d6fcaff4`，CI 19/19（run `43675905306`）；#99–#103、#105 均已合并，涵盖 ABI4 身份/消费者资格、embedded host、installed worker、省略号重绘资格、JFFONT2-only 应用字体及 CoreText 旧字体包隔离。 | generated BitmapFont/默认消费者、完整回调退役和发布门槛仍未完成。 |
 | Embedded host | #100 为 layout/layers/paint 绑定同一个 TextSystem/JFFONT2；锁定 ABI3 和 source ABI4 full/cropped 测试通过。 | 该示例不再依赖文本 provider 回调。 |
 | Installed worker | 已合并 #101，让无 painter 的 canonical v10/CoreText 独立于 BMP 工作。 | 实机验收仍是下游门槛。 |
-| 原生 WS147 | `0.6.2-abi4-mainline2` 已基于 Runtime #103/Core #62 构建；app BIN 7,614,704 B，8 MiB app 分区余 773,904 B，16 MiB factory/包哈希已核验。 | 在该准确产物上测试 Home/Activity/Weather/返回；当前 native profile 不覆盖 installed worker/BMP。 |
+| 原生 WS147 | `0.6.2-abi4-mainline2` 已基于 Runtime #103/Core #62 构建；app BIN 7,614,704 B，8 MiB app 分区余 773,904 B，16 MiB factory/包哈希已核验。另一份 `mainline1` 于 2026-11-15 通过页面观察。 | 仍需验收精确的 `mainline2` 产物；`mainline1` 不能替代该镜像或 installed worker/BMP 的测试。 |
 | ABI5 与 shaping | 独立可选候选；ABI5 tracked reuse 有正确性与包测试，尚无合格性能收益。 | 未启用到 Runtime，也不阻塞 ABI4 发布。 |
 
 实验源码声明的是 0.6.2 / ABI9。版本号或合并 PR 数量都不能证明迁移完成；
@@ -88,9 +88,14 @@ Core `34ae4b88`，使用干净的 IDF5.3.1 及递归固定的子模块。入口�
 CoreText ON，BMP/installed scripting OFF；BIN、包/ZIP 和 factory app 段逐字节一致。
 设备身份使用启动 app version 和 ELF SHA，完整 hash 见消费者清单。
 
-该镜像上的 Home/Activity/Weather/返回、八行预报文本、清晰度和裁剪仍待实测。
-最近的小卡片缺字反馈不能由桌面路由测试或身份不明的旧镜像关闭。
-Installed worker/BMP 必须使用独立命名镜像和资源配置；构建通过或积极假设都不等于实机通过。
+单独测试的 `mainline1` 身份为 Runtime `75a435c5`、Core `34ae4b88`，BIN SHA-256
+`AFB9F47E015FF5EB06AD441EBC322F50B04D6149CFA3E70B8C96675EF46C696E`，ELF SHA-256
+`B462F78731662B53A21DEAEE1F86E4E0995F37D2F964BEDDA3D27B284FA522910`。启动日志确认
+`/band_shell.html`、CoreText 240 MHz、触控检测和首帧呈现成功。用户确认首页文字完整清晰，
+Activity 与 Weather 文字显示正常，Weather 下方四个小卡片均有文字，页面返回正常。该结果只
+关闭此 native 镜像上的观察项，不覆盖独立的 `mainline2`、installed worker/BMP 或 P4/P5/P6
+benchmark smoke。此前的小卡片缺字反馈仍适用于其他未测身份。`mainline2` 实机验收仍待完成；
+Installed worker/BMP 必须使用独立命名镜像和资源配置。
 
 ## 依赖顺序
 
@@ -113,4 +118,4 @@ Installed worker/BMP 必须使用独立命名镜像和资源配置；构建通�
 2. 迁移 generated C++ BitmapFont 默认资源及剩余 native/non-retained、Win32 GDI 消费者；将 Core popup 提交 `89acc36a` 经 PR/CI 验证后，再闭合 generated-content 所有权及支持属性资格。
 3. 转换剩余依赖回调的测试/fixture，然后在单次协调的预发布变更中删除公开 provider/range/family/additive API 及实现分支。
 4. 消费者、full/cropped、禁用特性与源码归档门槛通过后，签名发布 ABI4 并更新 Runtime 精确生产依赖锁。
-5. 用户方便时单独执行已预留的 `mainline2` WS147 实机验收；它不替代主机/API 发布门槛。
+5. 用户方便时单独执行已预留的 `mainline2` WS147 实机验收；`mainline1` 观察已记录，但不能替代精确产物或主机/API 发布门槛。

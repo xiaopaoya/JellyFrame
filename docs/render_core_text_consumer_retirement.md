@@ -124,10 +124,20 @@ device-manifest regression suites pass 5/5 and 4/4.
 Provider ZIP: `jellyframe-ws147-developer-0.6.2-abi4-mainline2-provider-0.1.1-dev.zip`,
 6,777,675 bytes, SHA-256 `2984eef0e036622f9dfad9bb1e1350056bd9b1dc670ee06a0b5deeb40a5540a5c`.
 
-Hardware acceptance is pending; the image has not been flashed. Validate Home,
-Activity, Weather's eight forecast labels and return navigation on this exact
-image. The earlier `mainline1` package at Runtime #99/Core #60 remains historical
-evidence only.
+This exact `mainline2` image remains unflashed and unaccepted. A separate
+`0.6.2-abi4-mainline1` image was tested on WS147 on 2026-11-15:
+
+- Runtime `75a435c5`, Core `34ae4b88`.
+- BIN SHA-256 `AFB9F47E015FF5EB06AD441EBC322F50B04D6149CFA3E70B8C96675EF46C696E`.
+- ELF SHA-256 `B462F78731662B53A21DEAEE1F86E4E0995F37D2F964BEDA3D27B284FA522910`.
+- The boot log confirmed `/band_shell.html`, CoreText at 240 MHz, touch detection
+  and successful first present. The user confirmed complete Home text, visible
+  Activity and Weather text, visible text in all four Weather small cards, and
+  successful return navigation.
+
+This observation closes only the tested native image. It does not qualify the
+separate `mainline2` candidate, installed worker/BMP delivery, or the P4/P5/P6
+benchmark smoke. Keep those as separate named acceptance gates.
 
 Core ABI4 is still unreleased. Runtime production remains signed Core0.8/ABI3.
 ABI5 tracked-style reuse and shaping are separate unqualified candidates.
