@@ -427,13 +427,17 @@ void ui_entry(void* raw) {
         state->runtime_resources->bind_ui_resources(renderer_options);
     }
 #endif
+#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+    const jellyframe::ScriptTaskFrameRenderer renderer({}, renderer_options);
+#else
     const jellyframe::ScriptTaskFrameRenderer renderer(make_production_text_painter(), renderer_options);
+#endif
     jellyframe::SoftwareRasterizerScratch scratch;
     std::uint32_t input_sequence = 1;
     while (!state->stop.load()) {
 #if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
         jellyframe::ScriptTaskAcceptedAppFrame frame;
-        const auto take_status = jellyframe::take_script_task_app_frame(
+        const auto take_status = take_installed_core_text_frame(
             *state->protocol, state->script_session, frame_codec_options(), frame);
         const std::uint32_t packet_sequence = frame.sequence();
 #else
@@ -445,8 +449,13 @@ void ui_entry(void* raw) {
         if (take_status == jellyframe::ScriptTaskAppFrameTakeStatus::Accepted) {
             const jellyframe::Rect full{0, 0, width, height};
             jellyframe::ScriptTaskFrameRenderStatus render_status;
+#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+            const bool rendered = render_installed_core_text_frame(renderer, frame, framebuffer,
+                {248, 250, 252, 255}, &full, 1, &scratch, &render_status);
+#else
             const bool rendered = renderer.render_into(frame, framebuffer, {248, 250, 252, 255},
                                                        &full, 1, &scratch, &render_status);
+#endif
             state->render_status.store(static_cast<std::uint8_t>(render_status));
             const bool presented = rendered && jellyframe::present_frame(framebuffer, sink, &full, 1);
             if (presented) {
@@ -585,6 +594,10 @@ bool start_installed_bundle_script_task(std::string app_id,
                                         jellyframe::AppRuntimeHost& host,
                                         InstalledBundleScriptSession*& session) {
     session = nullptr;
+#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+    // No legacy fallback when the selected Core cannot replay canonical v10.
+    if (!jellyframe::script_task_app_frame_codec_supports_version(10)) return false;
+#endif
     const boards::BoardProfile& profile = boards::selected_board_profile();
     if (app_id.empty() || app_instance_id == 0 || entry_path.empty() || entry_document.empty() ||
         profile.display.width <= 0 || profile.display.height <= 0 || !resources.rebuild_views()) {

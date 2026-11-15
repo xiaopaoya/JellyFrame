@@ -5,7 +5,7 @@
 #include "app_runtime/runtime_font_catalog.h"
 #include "app_runtime/runtime_image_provider.h"
 #include "app_runtime/app_font_set.h"
-#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
 #include "jellyframe_esp32s3_image.h"
 #endif
 
@@ -38,7 +38,7 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
                                     const jellyframe::CoreFontResourceView* core_fonts,
                                     std::size_t core_font_count,
                                     std::shared_ptr<const void> core_font_owner,
-                                    BmpImageAdapter::Clock clock,
+                                    std::int64_t (*clock)(),
                                     InstalledAppResources::Handle& output);
 #endif
 #endif

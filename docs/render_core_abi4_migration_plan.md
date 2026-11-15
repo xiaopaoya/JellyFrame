@@ -1,102 +1,131 @@
 # Render Core ABI4 Integration Plan
 
-> **IRAM status (2026-11-14): resolved as a reporting/interpretation issue, not an open capacity blocker.** Runtime PR #98 merged as `92f6b62d` after all 19 CI checks passed. The often repeated `16,383 / 16,384 bytes` figure is the dedicated static-IRAM linker category only; the corresponding D/IRAM data window retains about 270 KB. Do not reopen this as a one-byte total-IRAM shortage unless a new build provides contrary linker-window evidence.
+> Last updated: 2026-11-15; Applies to: 0.6.0-dev. Core development contract: 0.9.0-dev / ABI4.
 
-> **Current migration status (2026-11-15):** Runtime PR #99 merged as `75a435c5` after all 19 PR jobs passed; the post-merge master run `43665260637` also passed 19/19. Core PR #60 is merged as `34ae4b88`, source identity `bbfa81de…f4552` / 163 inputs. A new native WS147 candidate `0.6.2-abi4-mainline1` uses this exact pair and clean IDF v5.3.1 with recursively pinned submodules. Build/package integrity checks passed; hardware acceptance remains pending. Candidate details and the remaining production callback inventory are in [text consumer retirement](render_core_text_consumer_retirement.md). Signed production remains Core0.8/ABI3; ABI4 is not released.
-
-> Last updated: 2026-11-15; Applies to: 0.6.0-dev. Scope: integrate the reviewed experimental capabilities into the governed Core/Runtime path and retire the host-owned text compatibility surface.
+This is the current execution plan. Earlier checkpoint narratives are preserved
+in Git history and their linked PRs; they are not additional open tasks. The
+[consumer retirement inventory](render_core_text_consumer_retirement.md) records
+actual call sites and the exact native device candidate.
 
 ## Current checkpoint
 
-- Runtime PR #71 is merged as `50170381`. It qualifies Core `b0bfd834` / ABI 4 in full and cropped installed-consumer lanes. The post-merge Runtime workflow [43462107068](https://github.com/xiaopaoya/JellyFrame/actions/runs/43462107068) passed.
-- Runtime PR #88 merged as `e33fc03c` after all 19 PR checks passed. Its current-mainline full/cropped installed-consumer lanes pin Core PR #58 merge `be876270` / ABI4 / 163 inputs / source identity `c804cdf023750de7feaf6c73ac841285e18b53b8468ffac6d99d2946615f27d8`; local MSVC Release consumers passed 4/4 in each profile. Post-merge master workflow [43556575072](https://github.com/xiaopaoya/JellyFrame/actions/runs/43556575072) passed. Runtime production defaults and the signed ABI3 dependency are unchanged.
-- Runtime PR #89 merged as `dfa68d44` after all CI checks passed. It pins the Windows ABI4 source-override lane to current Core `be876270` and runs the positive incremental/full repaint matrix there; its post-merge master workflow [43563218601](https://github.com/xiaopaoya/JellyFrame/actions/runs/43563218601) passed. Runtime PR #90 merged as `ae9379d3`; it reports the selected GDI/AppFontSet/CoreText backend and tests explicit routing while preserving the existing GDI default. Its post-merge workflow [43562778631](https://github.com/xiaopaoya/JellyFrame/actions/runs/43562778631) passed.
-- Runtime PR #91 merged as `d0be03d5` after all 19 CI checks passed; its post-merge master workflow [43564714754](https://github.com/xiaopaoya/JellyFrame/actions/runs/43564714754) passed. It adds static and routed host fixtures from the launcher's own HTML/CSS, with per-label 7px visible-pixel checks and incremental/full frame equivalence. The host route shim matches the active-view class transition but does not execute the ESP32 native listener, so it validates Core layout/repaint state rather than device route dispatch.
-- Runtime PR #92 merged as `1a35bd75` after all PR checks passed. The porting and architecture guides now name Core `TextSystem` as the canonical new-port text path and classify host measurement/paint providers as migration compatibility. This is a documentation contract; it does not remove the still-used provider APIs or change production defaults.
-- Runtime PR #97 merged as `d28a5c2f` after CI run [43577992624](https://github.com/xiaopaoya/JellyFrame/actions/runs/43577992624) passed all 19 jobs. It reads validated BMP intrinsic dimensions from the same immutable bundle used by the ESP32 image resolver, preserves the metadata-to-pixel cache handle for paint, and refuses missing, invalid, over-96px or over-budget resources. Core API-specific metadata tests run only when the installed Core exposes natural-image layout, and the ABI4 CI job builds/runs the test against Core `be876270`. Local ESP-IDF v5.3.1 CoreText-off/on images passed at 5,445,568 B (35% app free) and 7,614,192 B (9% free). No image was flashed; physical sizing acceptance remains open.
-- A historical pre-PR60 WS147 CoreText ABI4 build exists at `D:\CodexTemp\abi4-ws147-coretext-master-build-20261114-fresh`, built from Runtime `d28a5c2f` and Core `0.9.0-dev` / ABI4 / 163 inputs / source identity `c804cdf023750de7feaf6c73ac841285e18b53b8468ffac6d99d2946615f27d8`. BIN: 7,606,768 B, SHA-256 `1EC3888E3927D87A699EA1027EBC7074B26473BBF4120E085DD77D61A493483D`; same-build 16 MiB factory image SHA-256 `760944F4065B552AF275C31DBAA5B4821B6B7FDB0BDCAA0815D7CF06387B8E85`. The ABI4 Developer Image package records Core `0.9.0-dev` / ABI 4 and both image hashes. It leaves 9% of the 8 MiB app partition free. Nothing has been flashed or hardware-accepted.
-- Developer Image build provenance is now bound to the exact ESP-IDF `app_bin` by SHA-256; it records Core source identity/count, IDF version and revision, toolchain, target, selected build profiles, and effective `sdkconfig` hash. The regenerated archive at `D:\CodexTemp\abi4-ws147-coretext-master-build-20261114-fresh\provider-release-provenance-fixed\jellyframe-ws147-developer-0.6.2-ws147.abi4.1-provider-0.1.1-dev-provider-0.1.1-dev.zip` contains a 7,606,768-byte BIN whose SHA-256 matches the manifest; this establishes artifact identity, not device acceptance.
-- The launcher Weather repaint regression now checks all eight forecast text rows independently. On the exact local Core `0.9.0-dev` / ABI4 desktop shell, `launcher-weather-route` passed 18 deterministic legacy/CoreText captures across incremental and forced-full repaint. Core's real generated Noto resources also pass direct 7/8px measure/prepare/raster tests. These host gates narrow the old missing-label report but do not qualify a board image.
-- Core PR #60 is merged as `34ae4b88`; it adds bounded prepared-text `letter-spacing` and JFTP v3 explicit glyph positions while preserving v1/v2 decode behavior. Its four PR CI checks passed; source identity is `bbfa81de99ca687d036ef151f87b3e7bac1a29cd8f2c9e1c8c45547b7c1f4552` across 163 inputs. Runtime PR #99 now pins its ABI4 full/cropped and source-override lanes to this exact Core identity.
-- Core PR #54 is merged as `de9733d2`. It fixes a bounded offline shaping prototype and records a deterministic data-encoding spike. The post-merge Core workflow [43462040656](https://github.com/xiaopaoya/JellyFrame-Render-Core/actions/runs/43462040656) passed. It adds no Core package implementation inputs and does not add runtime shaping support.
-- Core PR #55 is merged as `64c1cb42`; it removes the unused `HostTextAdapter` wrapper/header while retaining provider interfaces that still have production consumers. Core CI passed. Runtime workflow [43472234209](https://github.com/xiaopaoya/JellyFrame/actions/runs/43472234209) then checked out exactly `64c1cb42` in both full and cropped ABI4 lanes; both installed-consumer suites passed and reported source identity `213ff3196864f2d7da9152bf246c29bda9849da50daff272baf551a7f9179cc5` across 163 implementation inputs. The earlier `b0bfd834` identity remains only the pre-cleanup baseline.
-- Core PR #56 merged as `d9cdb239`, with ABI4 source identity `c1af69d7…23a2036f` across 163 inputs. Runtime PR #81 (`e410e4c9`) added full/cropped installed-consumer lanes pinned to that identity; both passed in workflow [43522375005](https://github.com/xiaopaoya/JellyFrame/actions/runs/43522375005). After Core PR #57, Runtime PR #85's post-merge workflow [43542749129](https://github.com/xiaopaoya/JellyFrame/actions/runs/43542749129) also passed, but its logs still checked out `d9cdb239`; it did not qualify the new Core master. The subsequent pin to Core `9e19766c` / ABI4 / 163 inputs / source identity `0e5000a6…d4e1366c` is retained in history; Core PR #58 supersedes it for current-mainline qualification.
-- Runtime PR #83 is merged as `eb68fe43` after all 19 CI checks passed. It removes the document-wide mutation generation from Core text-cache validity because unrelated paint-only image changes invalidated every text cache. Text/source, resolved style and geometry, viewport, and TextSystem identity/generation remain the cache keys. The full/cropped ABI4 lanes still qualify Core `d9cdb239` / ABI4 / 163 inputs / source identity `c1af69d7…23a2036f`.
-- Runtime PR #72 is merged as `5c45c65a`; its bilingual task table separates ABI4 qualification, production adoption, callback retirement, and device acceptance. Its CI passed.
-- Runtime PR #73 is merged as `2c253566`; it adds a checksum-verified, offline bootstrap for the signed Core `0.8.0` / ABI3 archive. Runtime CI passed, including 67 local CTests before PR creation. The bootstrap makes the current production lock reproducible; it does not switch Runtime to ABI4 or establish a default font catalog.
-- Runtime PR #75 merged as `6302dd1d`; its CI passed across ABI4 installed consumers, v10 and R3 matrices, Windows, standalone Core, and ASan/UBSan. It adds the shared Noto Sans SC 16 px Regular/Medium/Bold Core catalog, transactional owned/borrowed catalog attachment, provenance tooling, and generated-catalog weight/lifetime tests.
-- B2 Runtime PR #76 merged as `2e89b0de`; all CI passed. It stages Core text behind an explicit `--use-app-fonts` validation path, preserving GDI default and legacy JFFONT rendering until compatibility gates pass. B1 Runtime PR #77 merged as `af594be4`; all CI passed, and its full/cropped Core-source host profiles each passed 6/6 focused CTests across installed ownership, four CoreText/BMP combinations, and App Runtime. The named WS147 profile builds with ESP-IDF v5.3.1 at 7,395,718 bytes (12% of the 8 MiB app partition free); the same-code band-shell baseline is 5,230,594 bytes (38% free), a 2,165,124-byte increase. Both use 16,383/16,384 bytes of IRAM, so near-full IRAM use predates this profile. No WS147 serial device was present for physical acceptance.
-- Runtime production remains pinned to signed Core `0.8.0` / ABI 3. ABI4 has no signed release and is not yet a production dependency. Core master after PR #58 is `be876270` (ABI4, 163 implementation inputs, source manifest `c804cdf023750de7feaf6c73ac841285e18b53b8468ffac6d99d2946615f27d8`); PR #88 has qualified the matching full/cropped installed consumers. Earlier workflow `43542749129` and the `9e19766c` qualification pin are historical.
-- The route-switch regression was first traced to `valid_text_layout_cache`: ancestor dirty flags remain set until present, so the layer builder rejected text prepared by the current layout. Core PR #56 stores the document mutation generation to recognize text prepared in the current layout transaction and covers a `display:none` home/Activity route regression. Runtime PR #83 (`eb68fe43`) separately fixed its paint-only image mutation path and passed 240-frame incremental/full comparisons. A new Core-installed desktop probe then found that standalone Core still invalidated static prepared text after an unrelated input-value mutation. Core PR #57 (`9e19766c`) removes the document-wide generation from that cache validity check and adds a regression; the installed source manifest is `0e5000a685842df82b16ff1a6aa0d3a09844e07e9850deff939912d4e1366c3c` across 163 inputs. Runtime PR #85 (`7c0c9197`) strengthens the positive Core repaint gate so a layout refusal cannot make two blank captures pass as equivalent. Core PR #57 CI passed; full Release CTest was 33/33, standalone installed consumer 1/1, and the paired Runtime desktop gate matched 240 frames across 12 flows. Cropped CTest was 31/32; its sole shared-inline assertion failure reproduced on unmodified `d9cdb239` with the same profile.
-- The latest physical feedback is confirmed by a device photo: the user navigated from the launcher to its Weather view (`BACK / WEATHER / NOW`); the large weather card and bottom air-quality tip have text, while all four forecast cards show only their yellow icon and no hour/temperature labels. This is the `band_shell.html` system-shell route, not the independent `samples/apps/packages/watch_weather` app. The flashed ELF/backend/profile for this observation is not yet confirmed, so the failure remains unassigned. Runtime PR #91's host route shim does not execute the ESP32 native listener; the current Runtime worktree adds a separate CTest around the exact shared native route helper and real launcher HTML, proving event mapping and DOM state only. The exact local Core `0.9.0-dev` / ABI4 shell passes the strengthened route gate with all eight 7px rows visibly present, and direct real-font Core 7/8px measure/prepare/raster tests pass. The ABI4 device image is built and provenance-bound but not flashed; use it to distinguish remaining device layout/paint behavior from firmware identity. The older blurry/clipped home-clock report remains separate.
-- Latest board feedback still reports missing forecast-card text in the launcher Weather route; the flashed ELF/backend/profile for that observation has not been tied to a verified manifest. Keep it as an unresolved device-side acceptance issue. The fixed Core `0.9.0-dev` / ABI4 host shell passes the strengthened route gate with all eight 7px rows visible, and direct real-font 7/8px measure/prepare/raster tests pass, but these host gates do not exercise the ESP32 native listener. The board image must be provenance-verified before concluding whether the remaining fault is native routing, rendering, or firmware identity.
-- The 34px bold numeric face and 50px clock/weather line boxes landed in Runtime PR #80 (`dbe4ca05`); all 17 CI checks passed. The staged ABI3 image's desktop/browser captures showed complete large glyphs, and its board boot log reported the expected board, `/band_shell.html`, loaded font pack, and `first_present_ok=1`. Later user reports of a blurry/clipped clock and missing page text must not be considered resolved by that earlier image; the current ABI4 device image has not yet been hardware accepted.
-- Desktop PR #79 (`45c6677d`) adds a `letter-spacing` repaint-equivalence case. Runtime PR #83 fixes Runtime paint-only image invalidation; Core PR #57 removes unrelated global-generation invalidation; Runtime PR #85 adds positive visible-text assertions and deterministic input-mutation coverage. Their host CI results do not establish WS147 firmware identity or acceptance.
-- Production defaults remain unchanged: WS147 uses callback/v6 unless its named CoreText profile is selected; Desktop defaults to GDI. `TextMeasureProvider` and `TextPainter` remain public because production consumers still use them; only the unused `HostTextAdapter` wrapper was removed. PR #92 documents Core `TextSystem` as canonical for new ports and providers as migration compatibility. The fresh ABI4 build/package is recorded above and remains unflashed; device qualification is open. IRAM accounting is resolved by PR #98 as stated at the top of this plan.
-- The fresh ABI4 Developer Image has source/build provenance, but no ABI4 image has been flashed or accepted on WS147. The previously flashed CoreText image used a staged ABI3 dependency profile and does not satisfy ABI4 device qualification.
-- Core PRs #38–47 have since merged additional shared-inline decoration, mixed-font ownership, preserved-whitespace, generated-text, and list-marker slices. These are delivered bounded capabilities; their documented unsupported shaping, general Unicode, positive blur, and folded-layer boundaries remain separate scope and are not implied to be browser-complete.
-- The accepted F6 text-style fast path is present on Core master. Its paired host measurement recorded a 17.939% reduction on a text-heavy fixture (95% CI 17.267%–18.610%); the all-element control interval crossed zero. Treat this as workload-specific evidence, not an MCU or whole-app guarantee. Do not re-port the old candidate branch.
+| Boundary | Current state | Remaining gate |
+| --- | --- | --- |
+| Released dependency | Signed Core v0.8.0 / ABI3 remains Runtime's production lock. | Publish the reviewed final ABI4 contract, then update the exact lock. |
+| Core mainline | PR #60, `34ae4b88`, 0.9.0-dev / ABI4; source identity `bbfa81de99ca687d036ef151f87b3e7bac1a29cd8f2c9e1c8c45547b7c1f4552`, 163 implementation inputs. | Remaining consumer/property migration and callback retirement. |
+| Runtime mainline | PR #100, `36edc545`, after CI 19/19 (run `43667442247`). PR #99 and its post-merge CI also passed 19/19. | Default adoption is separate from successful source-override qualification. |
+| Embedded host | PR #100 binds one TextSystem/JFFONT2 fixture to layout, layers and paint. Locked ABI3 and source ABI4 full/cropped tests pass. | No remaining provider callback in this example. |
+| Installed worker | Current proposed change makes canonical v10/painterless CoreText independent of BMP. | Review/CI/merge; exact device acceptance remains downstream. |
+| Native WS147 | Exact `0.6.2-abi4-mainline1` built and package-verified, not flashed. | Observe this exact artifact on Home/Activity/Weather/back. |
+| ABI5 and shaping | Separate optional candidates; ABI5 tracked reuse has correctness/package evidence but no qualified performance gain. | Not enabled in Runtime and not an ABI4 release prerequisite. |
+
+The experimental source declares 0.6.2 / ABI9. Neither that number nor a count
+of merged PRs proves complete migration: capabilities must have governed Core
+contracts, Runtime consumers, resource delivery and applicable tests.
 
 ## Parallel workstreams
 
 ### A. Resource delivery and catalog defaults
 
-The clean-checkout, checksum-verified bootstrap for the current signed Core package is complete in Runtime PR #73. Runtime PR #75 merged the shared default resource set: Noto Sans SC 16 px Regular/Medium/Bold, 4-bit coverage, 4,539 codepoints per face, under OFL 1.1. The shared API supports owned copies and stable borrowed views. Desktop and WS147 consumers are merged in PRs #76 and #77. The font catalog totals 2,159,771 bytes. With IDF v5.3.1, the named Core-text profile links to 7,395,718 bytes with 12% app-partition margin, versus 5,230,594 bytes and 38% margin for the same-code band-shell baseline. Both profiles use 16,383/16,384 bytes of IRAM, so the near-full IRAM result is pre-existing. Keep app resources owned by Runtime while Core owns font selection, metrics, shaping, and glyph preparation.
+Completed: signed-package offline bootstrap (PR #73), shared Noto Sans SC
+JFFONT2 catalog and ownership API (#75), explicit desktop/device catalog paths
+(#76/#77), backend/source identity reporting and route/repaint gates (#79-99).
+Core PR #60 adds bounded letter spacing and JFTP v3 positions, retaining v1/v2
+decoding. Core selection, metrics, preparation and rasterization are canonical;
+ports register immutable resources rather than implementing text policy.
 
-**Exit evidence:** fresh checkout builds without user-local artifacts; full/cropped/feature-disabled profiles pass; package identity and generated provenance match; resource and memory budgets are documented and tested.
+Remaining: replace generated C++ BitmapFont default resources and legacy
+serialized JFFONT app-font precedence with the reviewed Core-owned contract.
+Preserve deterministic family/weight selection, font-byte lifetime, missing-font
+refusal and resource budgets. Do not add more host text callbacks.
 
-### B. Runtime consumer migration (parallel subtracks after A's resource contract)
+### B. Runtime consumer migration
 
-- **B1 Native UI and installed worker (PR #77 merged):** switches retained UI and installed-worker resources to the shared catalog and defines a named `sdkconfig.ws147_core_text.defaults` profile while leaving production Kconfig defaults unchanged. The normal ESP32 path still constructs `TextMeasureProvider`/`TextPainter` callbacks; the CoreText profile opts out of those callbacks. Full/cropped host combinations, PR CI, and an IDF v5.3.1 build passed. Physical acceptance of the ABI3 staged profile and the separate ABI4 candidate remains required.
-- **B2 Desktop (PR #76 staged; qualification PRs #79/#89/#90 merged):** the explicit Core-catalog validation path and JFFONT2 supplements are available, while GDI remains the default and legacy JFFONT remains supported. PR #89 runs the positive incremental/full repaint matrix in the Windows ABI4 source-override lane; PR #90 reports and tests backend selection. Core PR #60 merged as `34ae4b88`, adding bounded prepared-text `letter-spacing` and JFTP v3 explicit glyph positions while preserving v1/v2 decoding. Core Release CTest (33/33), real-font coverage, and the exact-Core Runtime repaint gate (six deterministic frames across legacy/CoreText flows) pass. Runtime PR #99 pins the exact Core source identity and merged as `75a435c5` after CI 19/19; post-merge CI also passed 19/19. Ellipsis remains unsupported without per-node fallback. Legacy AppFontSet callbacks remain required while JFFONT resources are supported.
+| Consumer | Progress | Exit evidence |
+| --- | --- | --- |
+| Embedded host | Complete in #100. | Visible ink, click/checkbox/select and RGB565 flush; ABI3 and ABI4 full/cropped. |
+| ESP32 installed worker | Proposed painterless canonical v10 path; owned catalog/snapshot survives replay; BMP is optional. | Host full/cropped and locked ABI3 matrix, real IDF builds, CI, later exact device profile. |
+| ESP32 retained native/default | Named CoreText profile is merged; default still uses generated BitmapFont providers. | Migrate default resource contract and qualify supported properties/routes. |
+| ESP32 non-retained main entry | Separate provider factories remain. | Migrate or explicitly retire the entry, not only retained UI. |
+| Win32 default | Explicit CoreText catalog mode is merged; GDI remains default. | Bounded ellipsis/property parity, repaint gates and catalog default adoption. |
+| AppFontSet | JFFONT2 is Core-owned; legacy JFFONT still selects callbacks first. | Migrate pre-release app-font format/fixtures and remove callback accessors. |
 
-**Exit evidence:** built-in catalog text uses CoreText by default after the property-parity gate; any retained callback path is limited to explicitly documented legacy JFFONT compatibility; installed-package and source-override captures agree; app-font and malformed-resource refusal tests pass.
+Canvas2D already uses TextSystem and is not an outstanding callback consumer.
+The installed-worker change refuses ordinary callback-dependent `Text` commands
+before framebuffer writes; that is a bounded admission policy, not proof that
+all formerly supported generated/widget text contexts have migrated.
+
+Current host evidence for the proposed worker change: full and four-family
+cropped Core PR60 each pass 7/7 resource/admission/text tests. Both BMP variants
+prove visible prepared text, JavaScript mutation, replay after teardown and
+atomic refusal. Locked installed ABI3 passes four admission tests; the two
+canonical tests intentionally skip. The CoreText-OFF legacy path is explicit.
 
 ### C. Core-owned text API consolidation
 
-After B's consumers use the owned catalog, route the remaining Core layout, intrinsic sizing, layer construction, repaint/reuse and rasterization paths through `TextSystem`/owned text services directly. Canvas2D already uses TextSystem and is not a remaining callback consumer. Remove callback-identity cache contracts and migrate callback-based tests, fixtures, archive tests, and public porting docs. The current production consumers are ESP32 native/generated-BitmapFont and installed-worker painter callbacks, Win32 GDI default measurement/painting, the desktop AppFontSet legacy JFFONT path, and the embedded-host sample (migrated in the current change). `HostTextAdapter` was removed separately in PR #55 because repository-wide inventory found no production caller; this does not retire the underlying `TextMeasureProvider`, `TextPainter`, range/family/additive hooks, or their fallback implementations. Remove those remaining interfaces only in a coordinated pre-release API change after all consumers migrate.
+Bounded Core ellipsis is being implemented/reviewed separately. It must preserve
+source layout/intrinsic dimensions, apply owner clipping after final geometry,
+account for Q1000/spacing and output budgets, and refuse unsupported complete
+contexts without host fallback. Mixed owners need whole-paragraph cutoff
+ownership; truncating every leaf independently is not acceptable.
 
-**Exit evidence:** repository-wide production search finds no callback path outside intentionally retained legacy compatibility; the full Core suite, source archive, installed full/cropped consumers, and disabled-feature profiles pass after callback API removal; public guides describe only the owned-font contract. Device qualification is downstream and is not a prerequisite for this API-removal change.
+After every production consumer migrates, remove `TextMeasureProvider`,
+`TextPainter`, range/family/additive hooks and callback branches in layout,
+intrinsics, cache/repaint, layer emission and rasterization. Convert dependent
+tests, benchmarks, package consumers and porting guides in the same coordinated
+pre-release change. Only the unused HostTextAdapter wrapper has been removed.
+
+Exit: no production callback consumer remains; full Core, source archive,
+installed full/cropped consumers and disabled-feature gates pass. Hardware
+qualification is a downstream adoption gate, not a reason to retain dead host APIs.
 
 ### D. Release and production lock
 
-Cut a signed deterministic Core release only from the final reviewed API/resource contract. Verify the source archive checksum, manifest, feature profile, standalone build/install/tests, then update Runtime's exact version/ABI/source lock and published-artifact CI. Retain the ABI3 lane as rollback/migration evidence; do not claim ABI3/ABI4 binary interchangeability.
+ABI4 is **not released**. Cut a signed deterministic Core release from the final
+reviewed API/resource contract; verify tag, archive checksum, source manifest,
+profile and standalone install/consumers. Update Runtime's exact version, ABI,
+source/archive lock and installed-artifact CI, together with compatibility docs.
+Keep ABI3 as rollback evidence; do not imply binary interchangeability.
 
-**Exit evidence:** signed tag and archive; Runtime installed-package plus matching source-override tests on the same revision; CI and EN/ZH compatibility/release documents agree.
+### E. Device admission
 
-### E. Device OS admission (downstream)
+The native candidate at `D:/CodexTemp/abi4-mainline-20261115` pins Runtime
+`75a435c5`, Core `34ae4b88` and clean IDF5.3.1 with recursively fixed submodules.
+It uses `/band_shell.html`, CoreText ON, BMP/installed scripting OFF. Its BIN,
+package/ZIP and factory segment are identical. Use boot app version plus ELF
+SHA for board identity; see the inventory for full hashes.
 
-Bind the final Runtime/Core provenance and selected feature families to a named WS147 profile and firmware manifest. Run physical installed-app, text/image, input, lifecycle/recovery, memory, concurrency, and performance acceptance on that exact image. Existing ABI1/ABI3 image evidence cannot qualify ABI4.
-
-**Exit evidence:** reproducible image manifest and raw device logs identify the exact Core release/profile/source hash; all applicable port gates pass. This is required for device adoption, but can proceed after the host-owned migration is merged and released.
+Home/Activity/Weather/back, all eight forecast text rows, legibility and clipping
+remain pending on this exact image. The latest missing-forecast-text observation
+is not closed by desktop route tests or by an unidentified older board image.
+Installed worker/BMP tests require their own named image and resource profile.
+No device acceptance can be inferred from a build or positive assumption.
 
 ## Dependency order
 
 ```text
-A1 bootstrap complete; A2 catalog/API merged (#75)
-       |------------------|
-       v                  v
-B1 native UI/worker     B2 desktop
-       \                  /
-        \                /
-         v              v
-       C remove callback APIs
-                 |
-                 v
-       D signed release + Runtime lock
-                 |
-                 v
-       E named device profile + hardware acceptance
+catalog/resource contract -> native + worker + desktop consumers
+                                     |
+                            callback API retirement
+                                     |
+                          signed ABI4 + exact Runtime lock
+                                     |
+                    named device profile + hardware acceptance
 ```
 
-Core API inventory and test migration can be audited in parallel with A and B, but public API removal must wait until every production consumer has moved. Shaping lookup encoding remains a separate experiment: its current byte counts are not firmware cost or runtime qualification and are not a prerequisite for integrating already-qualified ABI4 capabilities.
+Host implementation/review, installed-package qualification and device build
+preparation can proceed in parallel. Default adoption follows property/resource
+gates. Optional ABI5 reuse and production shaping remain separate.
 
 ## Immediate next actions
 
-1. **Complete:** PRs #54, #55, #71, #72, and #73 are merged. Runtime's signed ABI3 source bootstrap is reproducible; Core's unused wrapper is gone.
-2. **Complete:** Runtime full/cropped ABI4 qualification now covers Core `64c1cb42` and source identity `213ff3196864f2d7da9152bf246c29bda9849da50daff272baf551a7f9179cc5` (163 inputs), via workflow `43472234209`.
-3. **Complete:** PR #75 merged the reviewed A2 shared catalog/API after all CI checks passed.
-4. **Host cache repair is merged; physical acceptance is unresolved:** Runtime PR #83, Core PR #57, and Runtime PR #85 are merged with CI passing. A device photo confirms that launcher Weather's large card and air-quality tip have text but its four forecast cards show only icons; this is distinct from `watch_weather`. Runtime PR #91's route shim does not execute the ESP32 listener; a new host CTest now uses the same native route helper as ESP32 and verifies event mapping plus forecast DOM preservation. The exact local Core `0.9.0-dev` / ABI4 shell passes the strengthened launcher route gate with all eight 7px rows visible, and Core's real-font 7/8px measure/prepare/raster tests pass. The fresh ABI4 image package now binds build provenance to the exact BIN. No ABI4 image has been flashed; physical route, state, text legibility and presentation remain to be checked on the exact image. The older blurry/clipped home-clock report remains separate.
-5. **Core text host gate:** Core PR #60 and Runtime PR #99 are merged; PR and post-merge Runtime CI pass 19/19. Prepared CoreText still refuses ellipsis at layout admission; implement it in Core without new host callbacks before changing the desktop default. The remaining consumer inventory distinguishes generated BitmapFont adapters from legacy serialized JFFONT; see the linked retirement note.
-6. **Next work:** (a) visually qualify the exact `mainline1` native candidate on Home/Activity/Weather/back before closing the Weather small-card issue; (b) migrate remaining production callback consumers and implement bounded Core-owned ellipsis; (c) remove the obsolete callback API only after the consumer/resource contracts pass. The current embedded-host change removes one actual consumer without changing device defaults. ABI5 tracked-style reuse and production shaping remain independent candidates.
-7. After host consumers and callback-dependent tests/fixtures migrate, remove the Core callback APIs in a coordinated pre-release change, then cut the signed ABI4 release and update Runtime lock/default adoption. Named ABI4 firmware provenance and physical WS147 acceptance follow as a downstream device-adoption gate; they do not block host-side API removal. ABI4 full/cropped CI proves installed-consumer compatibility only, not a signed release or hardware acceptance.
+1. Finish independent review and CI for painterless installed CoreText with BMP
+   OFF/ON, preserving the exact ABI3 legacy path and refusal/lifetime tests.
+2. Finish the bounded Core ellipsis slice, real-font/repaint/package checks and
+   CI; then qualify its exact Core identity in Runtime before desktop adoption.
+3. Migrate native/default and AppFontSet resources; convert remaining callback
+   users/tests and remove the obsolete public API together.
+4. Publish signed ABI4 and switch the exact Runtime lock only after those gates.
+5. Run the reserved native board acceptance when the user is available; retain
+   device failures separately from host/package completion and prepare installed
+   device admission on a capacity-qualified profile.
