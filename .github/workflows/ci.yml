@@ -1097,7 +1097,7 @@ jobs:
           -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
           -DJELLYFRAME_BUILD_EXAMPLES=ON
           -DJELLYFRAME_BUILD_TESTS=ON
-          -DJELLYFRAME_BUILD_BENCHMARKS=OFF
+          -DJELLYFRAME_BUILD_BENCHMARKS=ON
           -DJELLYFRAME_BUILD_SCRIPTING=ON
           -DJELLYFRAME_ENABLE_R3_SCRIPT_EVENTS=OFF
           -DJELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=OFF
@@ -1126,6 +1126,7 @@ jobs:
           cmake --build build/abi4-same-thread --config Release
           --target jellyframe_desktop_shell jellyframe_script_tests jellyframe_app_runtime_tests
           jellyframe_esp32s3_image_metadata_tests jellyframe_embedded_host_demo
+          jellyframe_pseudo_browser jellyframe_virtual_bench
           --parallel
 
       - name: Run ABI4 image metadata test
@@ -1141,6 +1142,11 @@ jobs:
           ctest --test-dir build/abi4-same-thread -C Release
           -R "^(jellyframe_script_tests|jellyframe_app_runtime_tests|jellyframe_win32_incremental_repaint_equivalence|jellyframe_embedded_host_core_text)$"
           --output-on-failure
+      - name: Run ABI4 virtual benchmark smoke
+        shell: pwsh
+        run: >-
+          ctest --test-dir build/abi4-same-thread -C Release
+          -R '^jellyframe_virtual_board_bench_smoke$' --output-on-failure
       - name: Verify visible Core ellipsis and incremental repaint
         shell: pwsh
         run: >-

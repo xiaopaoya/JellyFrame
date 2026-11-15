@@ -2,7 +2,7 @@
 
 > Last updated: 2026-11-16; Applies to: 0.6.0-dev. Core development contract: 0.9.0-dev / ABI4.
 
-> **Latest checkpoint (2026-11-16):** Runtime PR #111 (`fa5176a0`) and Core PR #65 (`1d5c746d`, source `d327eee4`) are merged; Runtime #99-#111 are merged. The isolated Core ABI4 callback-retirement candidate at source identity `8328dbf1...02d1186` / 159 files passes full/cropped Release CTest 33/33 and 32/32. Runtime Release CTest passes 113/113 against that exact source override after restoring callback-free paint-style layout reuse; route-tabs remains at one rebuild, and motion-lab reports stable-layout reuse. The deterministic Core source archive passes 3/3 on a clean snapshot. Installed consumers pass: full/cropped TextSystem 1/1 each, C5 1/1, wrapped-row 1/1, natural-image 1/1. Core #63 popup acceptance passed on `installed-core63-device1` (Runtime `f609a1d4`, Core source `e842b2e6`, BIN SHA-256 `8DBA1F73...E2A6A0F`): all options were visible and choosing CHARLIE updated the result. The board was then restored to the previously accepted `mainline1` image (BIN SHA-256 `AFB9F47E...46C696E`, write verification passed). Runtime production still locks signed Core 0.8.0 / ABI3; ABI4 is not signed or released.
+> **Latest checkpoint (2026-11-16):** Runtime PR #114 merged as `a197ceb4`; CI run `43758728864` succeeded across all checks. Core PR #66 merged as `079de28a`; post-merge CI run `43759873775` succeeded. Runtime production still locks signed Core 0.8.0 / ABI3; ABI4 is not signed or released. Core #63 popup acceptance passed on `installed-core63-device1` (Runtime `f609a1d4`, Core source `e842b2e6`, BIN SHA-256 `8DBA1F73...E2A6A0F`): all options were visible and choosing CHARLIE updated the result. That device image predates Core #66 and proves popup behavior only, not the identity of a post-merge ABI4 firmware.
 
 This is the current execution plan. Earlier checkpoint narratives are preserved
 in Git history and their linked PRs; they are not additional open tasks. The
@@ -13,12 +13,12 @@ actual call sites and the exact native device candidate.
 
 | Boundary | Current state | Remaining gate |
 | --- | --- | --- |
-| Released dependency | Signed Core v0.8.0 / ABI3 remains Runtime's production lock. | Publish the reviewed final ABI4 contract, then update the exact lock. |
-| Core mainline | PR #65 (`1d5c746d`, source `d327eee4`) follows Core #63 and routes generated pseudo labels/list markers through Core TextSystem or explicit refusal. All four CI jobs passed. Callback retirement is proposed in Core PR #66; its isolated source candidate and consumer gates are documented below. | Core PR #66 review and CI, then merge before locking its exact release source. |
-| Runtime mainline | PR #111, merge `fa5176a0`; #99-#111 are merged. Runtime PR #114 removes callback consumers, migrates Win32 default rendering to Core TextSystem, and retains a Core-computed-style-only layout reuse path. Full Runtime Release CTest is 113/113 against the exact source override. | Runtime PR #114 CI and review; after Core #66 is released, update the signed ABI4 production lock. |
+| Released dependency | Signed Core v0.8.0 / ABI3 remains Runtime's production lock. | Publish and qualify the signed ABI4 package, then update the exact lock. |
+| Core mainline | PR #66 is merged as `079de28a`; post-merge CI run `43759873775` passed. Legacy text measure/paint callbacks are retired from Core. | Produce a deterministic signed ABI4 candidate from the merged source; verify archive, manifest/profile and installed consumers. |
+| Runtime mainline | PR #114 is merged as `a197ceb4`; CI run `43758728864` passed. Production consumers use Core TextSystem; Win32 keeps callback-free reuse after Core compares computed layout styles. | Pin the qualified ABI4 package and run both ABI3 compatibility and ABI4 package matrices. |
 | Embedded host | PR #100 binds one TextSystem/JFFONT2 fixture to layout, layers and paint. Locked ABI3 and source ABI4 full/cropped tests pass. | No remaining provider callback in this example. |
-| Installed worker | PR #101 makes canonical v10/painterless CoreText independent of BMP. PR #107 tests popup input, prepared packets, visible row pixels, selection and close on host; the exact full-feature WS147 image `installed-core63-device1` also passed user-visible popup acceptance. | No remaining popup observation for this image; any later worker/profile changes need their own named-image acceptance. |
-| Native WS147 | `mainline1` Home/Activity/Weather acceptance remains valid and the board was restored to it after popup testing. The separate `mainline2` artifact remains unflashed. | Test `mainline2` only when that exact image is selected for qualification; no need to repeat `mainline1`. |
+| Installed worker | PRs #101/#107/#114 are merged. The user accepted popup options, selection and touch on `installed-core63-device1`, built before Core #66 merged. | Rebuild and accept a named worker image after the signed ABI4 package is pinned. |
+| Native WS147 | `mainline1` Home/Activity/Weather acceptance remains valid; the board was restored to it after popup testing. | Build and accept a new image tied to the post-release Runtime/Core identities; do not repeat the old `mainline1` test. |
 | ABI5 and shaping | Separate optional candidates; ABI5 tracked reuse has correctness/package evidence but no qualified performance gain. | Not enabled in Runtime and not an ABI4 release prerequisite. |
 
 The experimental source declares 0.6.2 / ABI9. Neither that number nor a count
@@ -57,19 +57,17 @@ missing-font refusal and resource budgets. Do not add more host text callbacks.
 | --- | --- | --- |
 | Embedded host | Complete in #100. | Visible ink, click/checkbox/select and RGB565 flush; ABI3 and ABI4 full/cropped. |
 | ESP32 installed worker | Merged #101 painterless canonical v10 path; owned catalog/snapshot survives replay; BMP is optional. | Host full/cropped and locked ABI3 matrix, real IDF builds, CI, later exact device profile. |
-| ESP32 retained native/default | Runtime #111 enables CoreText in the WS147 band-shell defaults; profile regression and exact Core #63 ESP-IDF build passed. The isolated ABI4 candidate moves production `LayoutEngine`/`LayerTreeBuilder` calls to the options-only API; ESP-IDF 5.3.1 band-shell/CoreText and script-app/CoreText-off builds pass. ABI3 provider references remain behind ABI<4 guards. | Rebuild the complete Runtime source override against the finished Core candidate and qualify named device images only after the API slice is reviewable. The accepted `mainline1` image is not repeated. |
+| ESP32 retained native/default | Runtime #114 is merged with Core-owned text consumers; ABI3 compatibility references stay behind ABI guards. The previously accepted `mainline1` image predates #114/#66. | Build and accept a named image after the signed ABI4 package is pinned. |
 | ESP32 P4/P5/P6 smoke | The independent provider factory in `main.cpp` is used only by a benchmark/smoke fixture; CoreText profile now has separate CoreText smoke build evidence. | Keep the old fixture explicitly legacy-only and give CoreText equivalent ASCII/CJK/weight and widget coverage; this is not a product-default consumer. |
-| Win32 default | Explicit CoreText catalog mode is merged; GDI remains default. PR #110 makes CoreText text mutation bypass reuse validation that depends on legacy provider metrics. PR #111 merges the ABI4 property/repaint matrix: 293 frames across 27 flows. The current isolated Runtime candidate still has GDI callback consumers in `tools/native/win32_browser.cpp` and native compare tools. | Migrate the Win32 default and compare fixtures to CoreText or compile legacy GDI paths only for ABI3 before deleting the callback API. |
+| Win32 default | PR #114 moves the default path to Core TextSystem, while preserving a Core-computed-style-only layout reuse path. GDI compatibility remains on ABI3. The #111 matrix covers 293 frames across 27 flows. | Run the release package matrix on the pinned ABI4 package; no ABI4 GDI callback migration remains. |
 | AppFontSet | Complete in #103: JFFONT2-only catalog, callback accessors/browser precedence removed, samples and tools converted. | No remaining AppFontSet work; generated C++ BitmapFont defaults are tracked separately. |
 
-Canvas2D already uses TextSystem and is not an outstanding callback consumer.
-The installed-worker change refuses ordinary callback-dependent `Text` commands
-before framebuffer writes; that is a bounded admission policy. Core #65 closes
-the generated pseudo-content/list-marker fallback by preparing through the
-registered TextSystem or refusing without publishing legacy Text commands.
-Runtime must qualify the exact Core #65 source where those producers are
-reachable, then inventory other callback-dependent Core consumers and
-test/fixture-only uses before the coordinated API retirement.
+Canvas2D already uses TextSystem. Runtime #114 removes the remaining production
+host measure/paint consumers and qualifies generated pseudo-content paths
+against Core-owned preparation or explicit refusal. Core #66 retires the legacy
+callback APIs; the merged Runtime/Core pair has passed its PR and post-merge CI.
+The remaining gates concern packaging and release qualification, not callback
+consumer migration.
 
 Host evidence for merged #101: full and four-family
 cropped Core PR60 each pass 7/7 resource/admission/text tests. Both BMP variants
@@ -85,30 +83,21 @@ account for Q1000/spacing and output budgets, and refuse unsupported complete
 contexts without host fallback. Mixed owners need whole-paragraph cutoff
 ownership; truncating every leaf independently is not acceptable.
 
-An isolated Core ABI4 worktree is implementing the coordinated removal. It has
-removed the LayoutEngine provider constructor/cache identity, LayerTreeBuilder
-provider option and fallback `Text` emission, SoftwareCompositor painter input,
-and provider-driven layout-reuse/repaint APIs. Prepared Core text remains the
-only text layout/paint path; unsupported or unbound text is refused explicitly.
-Core unit fixtures and ESP32 installed-worker/canonical-renderer callers have
-been converted. The ESP32 ABI4 and ABI3 build boundary is explicit, and two
-WS147 IDF 5.3.1 configurations pass.
+Core #66 has merged the coordinated removal of provider constructors/cache
+identity, fallback Text emission, compositor painter input, provider-driven
+layout reuse/repaint APIs, public measure/range helpers and bitmap callback
+helpers. Prepared Core text is the supported text path; unsupported or unbound
+text is explicitly refused. Runtime #114 removes the corresponding production
+consumers. The weather small-card prepared-text cache regression is covered by
+Core tests and the Runtime `watch_weather` checks. ABI4 is now at the package
+release gate: sign only after source-archive, installed full/cropped consumers,
+supported-tool build coverage and disabled-feature gates pass on the exact
+merged Core source.
 
-The slice is not ready for review: public `TextMeasureProvider` wrapping/range
-APIs and bitmap-font callback helpers remain in Core, provider unit tests still
-exercise the obsolete contract, Runtime Win32/GDI consumers remain, and package
-consumer/full Runtime CTest gates are not yet clean. Core Release CTest now passes
-33/33 against the current source. The weather small-card omission was traced to
-the layer builder rejecting a valid prepared-text cache when its final text box
-expanded from its natural width to the unchanged available width. Cache reuse
-now accepts that constrained expansion and reapplies per-line start/center/end
-alignment. The regression is covered by Core tests and `watch_weather` checks.
-Do not sign ABI4 until the entire consumer/API inventory, source archive,
-installed full/cropped consumers, and disabled-feature gates pass.
-
-Exit: no production callback consumer remains; full Core, source archive,
-installed full/cropped consumers and disabled-feature gates pass. Hardware
-qualification is a downstream adoption gate, not a reason to retain dead host APIs.
+Exit: no production callback consumer remains. Source-level full/cropped
+consumers and Core CI passed on the merged source identity. The signed release
+archive, downloaded-package Runtime matrix and disabled-feature release gates
+remain. Hardware qualification is a downstream adoption gate.
 
 ### D. Release and production lock
 
@@ -138,19 +127,18 @@ only for this exact native image. It does not qualify the separate `mainline2`
 artifact, installed worker/BMP, or the P4/P5/P6 benchmark smoke. The previous
 missing-small-card-text report remains relevant to those other identities.
 Installed worker/BMP tests require their own named image and resource profile.
-The `mainline2` device acceptance remains pending; no device acceptance can be
-inferred from a build or positive assumption.
+This pre-merge `mainline2` artifact is not the qualification target for the
+upcoming ABI4 package. Build and accept a new image after the production lock is
+updated; no device acceptance can be inferred from a build or positive assumption.
 
 ## Dependency order
 
 ```text
-catalog/resource contract -> native + worker + desktop consumers
-                                     |
-                            callback API retirement
-                                     |
-                          signed ABI4 + exact Runtime lock
-                                     |
-                    named device profile + hardware acceptance
+merged Core/Runtime ABI4 source -> signed release archive
+                                           |
+                                  exact Runtime package lock
+                                           |
+                            named device builds and acceptance
 ```
 
 Host implementation/review, installed-package qualification and device build
@@ -170,10 +158,8 @@ gates. Optional ABI5 reuse and production shaping remain separate.
 4. Completed on source identity `8328dbf1...02d1186` / 159 files: Core full/
    cropped CTest, archive 3/3, installed full/cropped TextSystem, C5, wrapped-
    row and natural-image consumers, and Runtime CTest 113/113.
-5. Core PR #66 and Runtime PR #114 are open. Review their coordinated API diff,
-   build/package manifests and source identity; wait for both CI runs before
-   merging.
-6. Sign and publish ABI4 only after review and CI pass; then update Runtime's
-   exact production lock to that release.
-7. Keep `mainline1` acceptance closed. `mainline2` and later worker profiles
-   remain separate named-image tests only if selected for qualification.
+5. Completed: Core #66 and Runtime #114 merged; both post-merge CI runs passed.
+6. Coverage audit completed; the ABI4 CI change explicitly builds `jellyframe_pseudo_browser` and `jellyframe_virtual_bench` and runs the benchmark smoke. Local ABI4 build and both focused tests pass; PR CI remains pending.
+7. Produce and sign the versioned Core archive, verify checksum/source manifest/profile, then run Runtime consumers against the downloaded full/cropped ABI4 package.
+8. Pin the qualified ABI4 release in Runtime and run the ABI3 locked-package compatibility matrix alongside the ABI4 release-package matrix.
+9. Build named WS147 native and installed-worker images from the locked production state, record BIN/ELF/package identities, and run their separate device acceptance checks.
