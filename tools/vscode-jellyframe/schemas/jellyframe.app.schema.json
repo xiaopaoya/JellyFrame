@@ -147,7 +147,7 @@
             ]
           },
           "family": {
-            "description": "Runtime font-family label for this .jffont or .jffont2 resource. JFFONT2 is consumed by Core TextSystem.",
+            "description": "Runtime font-family label for this canonical .jffont2 resource. Core TextSystem owns selection and metrics.",
             "type": "string",
             "minLength": 1
           },

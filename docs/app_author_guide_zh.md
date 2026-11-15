@@ -1,6 +1,6 @@
 # App 作者手册
 
-> 最后更新：2026-09-19；适用版本：0.6.0-dev；当前开发线：0.6.0
+> 最后更新：2026-11-15；适用版本：0.6.0-dev；当前开发线：0.6.0
 
 这是一份给 JellyFrame app 作者的短契约。JellyFrame 不是迷你浏览器，而是一个 Web 形状的嵌入式
 UI runtime：HTML 负责结构，CSS 使用文档化的小屏样式子集，JavaScript 负责有界本地交互，manifest
@@ -147,7 +147,7 @@ unsupported value、overflow、clipping、deferred API 等。JellyFrame 自己�
 - DOM event、click/pointer/touch alias、focus、基础表单状态、timer 和有界 `requestAnimationFrame`。
 - manifest 与 host target 同时允许时的 XHR GET、极小 `localStorage`、Audio V0 和 geolocation V0。
 - Win32 壳中的包内 BMP 图片，以及产品 PNG/JPEG/WebP decoder 可接入的 host image codec adapter 边界。
-- App `.jffont` 补充字体和默认字体子集预检。
+- App `.jffont2` 补充字体和默认字体子集预检。
 
 依赖细节前，请查完整能力矩阵：
 [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md)。
@@ -178,22 +178,25 @@ Manifest 不是样板文件，而是 app 契约的一部分。
 - 声明 capability 只是请求，不是保证。所选 target profile 和产品宿主也必须提供同一服务。
 - 用 `targets[id].gate` 表达发布门槛。app 宣称支持的设备用 `reject`；仍在试验或可选的设备用 `warn`。
 - 预算要真实。没有测量就提高预算，通常只是把失败挪到设备上。
-- CSS 使用自定义 `font-family` 时，要么添加匹配 family 的 `.jffont` manifest 条目，要么使用
+- CSS 使用自定义 `font-family` 时，要么添加匹配 family 的 `.jffont2` manifest 条目，要么使用
   `system-ui` / `sans-serif`。
 
 ## 打包缺失字体
 
-运行 `package`、`preview` 或源码包 `install` 时，可以让工具把有授权的 BDF 字体按 App 实际字符裁剪并自动放入安装包。先在 manifest `fonts[]` 声明目标 `.jffont` 的 `id`、`source`、`profile`、`family`、`sizes`、`weights`，以及完整的 `license.name` / `license.source`；源目录中可以暂时没有该 `.jffont`。然后运行：
+先在 Core 指定的 Python 环境中，用 pinned `prepare_font_resource.py`
+从授权静态 OTF/TTF 生成 `.jffont2`，在 manifest `fonts[]` 声明 family、profile、
+已验证的 sizes/weights 和授权元数据。
 
 ```powershell
-python tools\jellyframe_cli.py package `
-  --root path\to\app `
-  --report build\app.report.json `
-  --output-bundle build\app.jfapp `
-  --font-source-bdf path\to\licensed-font.bdf
+python <pinned-core>/tools/prepare_font_resource.py `
+  --font licensed-static-font.otf --characters used_chars.txt `
+  --size 16 --bits 4 --output ui.jffont2 --report ui.font.json
 ```
 
-工具会使用扫描出的 `*.used_chars.txt` 生成临时 `.jffont`，复验 glyph、字体预算和 manifest，再把它写到 bundle 中声明的 `fonts[].source`。源 manifest 和 App 目录不会被改写。存在多个缺失字体时增加 `--font-resource-id <id>`；需要保留生成文件时再指定 `--font-output`。工具不会自动下载字体，也不会打包未声明授权信息的系统字体。
+将资源放到声明路径，或在 package 命令中传
+`--import-font-resource /fonts/ui.jffont2=PATH`。Runtime 的
+`font --font-source ... --core-font-tool ... --characters UTF8 --font-output ...` 使用同一个生成器。
+BDF 序列化自动生成已移除；工具不会下载或默默重分发系统字体。
 
 ## 小屏布局 recipes
 
@@ -267,7 +270,7 @@ body {
 | `visual-scroll-needed` | 页面比 viewport 高。 | 判断是否需要滚动。需要就使用明确 `overflow-y: auto` 区域并在 target gate 允许滚动。 |
 | `visual-scroll-container` | 内部滚动区域裁切了内容。报告通常包含 `node`、`path`、`boxHeight`、`contentHeight` 和 `overflowY`。 | 确认报告中的容器可被触摸/滚轮/按键滚动，并把固定导航放在滚动容器外。 |
 | `visual-nested-scroll-container` | 内外滚动区域都裁切了纵向内容。 | 每个 route 保持一个主纵向滚动区域；把内部内容并入外层列表，或改为不溢出的固定高度控件。 |
-| `font-family-unmatched` | CSS 自定义字体没有对应 manifest 字体。 | 使用 `system-ui`，或声明匹配 family 的 `.jffont`。 |
+| `font-family-unmatched` | CSS 自定义字体没有对应 manifest 字体。 | 使用 `system-ui`，或声明匹配 family 的 `.jffont2`。 |
 | `font-size-not-declared` / `font-size-unavailable` / `font-size-unresolved` | CSS 请求的字号未在 manifest 声明、打包的位图字体无法精确渲染该字号，或字号无法静态核验。 | 使用报告中的可渲染字号，或打包具有对应原生行高的字体；发布前解析动态字号并重新检查排版。 |
 | `font-missing-glyphs` | target 字体不覆盖 app 文本。 | 用生成的 `*.used_chars.txt` 制作并声明 app 字体补充包。 |
 | `style-property-unsupported` | CSS 属性不在支持子集。 | 换成文档化属性，或用 Canvas/资源图表达效果。 |
@@ -275,7 +278,7 @@ body {
 | `css-rule-limit` / `css-declaration-limit` | CSS parser 跳过了后续 rule、selector 项、keyframe 或 declaration。 | 合并重复规则，移除未使用变体，拆分过大的规则；提高 parser budget 前先测量 style 成本。 |
 | `layout-box-limit` / `layout-depth-limit` / `render-object-limit` | 可见层级的一部分在 layout 或 rendering 前被跳过。 | 减少可见嵌套和重复控件；优先虚拟化列表，而不是盲目提高结构性 budget。 |
 | `layer-limit` / `display-command-limit` | layer 或 paint command 生成到达上限，可能降低保真度或省略绘制。 | 减少重叠、clip、shadow、gradient 与重复装饰；composited motion 保持在少量元素上。 |
-| `resource-budget-exceeded` / `font-budget-exceeded` | 总 package resource 或 runtime font supplement 超过配置 budget。 | 压缩/移除资源，subset `.jffont` glyph 和未使用的 weight；提高上限前先测量 flash/RAM。 |
+| `resource-budget-exceeded` / `font-budget-exceeded` | 总 package resource 或 runtime font supplement 超过配置 budget。 | 压缩/移除资源，subset `.jffont2` glyph 和未使用的 weight；提高上限前先测量 flash/RAM。 |
 | `css-animation-layout-property` | 关键帧改变了尺寸、位置、间距或其他 layout 属性。 | 在固定尺寸图层上动画 `transform` 或 `opacity`；真正的布局改变应做成离散 app state。 |
 | `css-animation-timing-function-unsupported` | 样式表使用了参数化或阶梯式 easing。 | 使用 `linear`、`ease`、`ease-in`、`ease-out` 或 `ease-in-out`。 |
 | `css-animation-keyframe-property-unsupported` | 关键帧目标属性不在低成本动画子集内。 | 关键帧只使用 `opacity`、`transform`、`color`、`background` 或 `background-color`。 |

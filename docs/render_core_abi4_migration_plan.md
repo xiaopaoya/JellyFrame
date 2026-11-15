@@ -12,8 +12,8 @@ actual call sites and the exact native device candidate.
 | Boundary | Current state | Remaining gate |
 | --- | --- | --- |
 | Released dependency | Signed Core v0.8.0 / ABI3 remains Runtime's production lock. | Publish the reviewed final ABI4 contract, then update the exact lock. |
-| Core mainline | PR #61, `3152300a`, 0.9.0-dev / ABI4; source identity `c11045754fa28b9bf3e5e0e9a8720dc202efd7dd9c66c159c058f5edee7dd69b`, 163 implementation inputs. | Remaining consumer/property migration and callback retirement. |
-| Runtime mainline | PR #101, `8262edf7`, after CI 19/19 (run `43670532408`); #100 migrated the embedded host. | Default adoption is separate from successful source-override qualification. |
+| Core mainline | PR #62, `38148e73`, CI 4/4 (run `43673424532`), 0.9.0-dev / ABI4; source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`, 163 implementation inputs. | Remaining consumer/property migration and callback retirement. |
+| Runtime mainline | PR #102, `2f87d52e`, after CI 19/19 (run `43671336751`); exact Core #61 pin and positive ellipsis repaint gate are merged. | Default adoption is separate from successful source-override qualification. |
 | Embedded host | PR #100 binds one TextSystem/JFFONT2 fixture to layout, layers and paint. Locked ABI3 and source ABI4 full/cropped tests pass. | No remaining provider callback in this example. |
 | Installed worker | PR #101 makes canonical v10/painterless CoreText independent of BMP. | Exact device acceptance remains downstream. |
 | Native WS147 | Exact `0.6.2-abi4-mainline1` built and package-verified, not flashed. | Observe this exact artifact on Home/Activity/Weather/back. |
@@ -34,8 +34,9 @@ Core PR #60 adds bounded letter spacing and JFTP v3 positions, retaining v1/v2
 decoding. Core selection, metrics, preparation and rasterization are canonical;
 ports register immutable resources rather than implementing text policy.
 
-Remaining: replace generated C++ BitmapFont default resources and legacy
-serialized JFFONT app-font precedence with the reviewed Core-owned contract.
+Remaining: replace generated C++ BitmapFont default resources. The current
+app-font change removes serialized JFFONT0/1 and AppFontSet callback precedence;
+manifest/import resources are canonical JFFONT2 with offline Core preparation.
 Preserve deterministic family/weight selection, font-byte lifetime, missing-font
 refusal and resource budgets. Do not add more host text callbacks.
 
@@ -48,7 +49,7 @@ refusal and resource budgets. Do not add more host text callbacks.
 | ESP32 retained native/default | Named CoreText profile is merged; default still uses generated BitmapFont providers. | Migrate default resource contract and qualify supported properties/routes. |
 | ESP32 non-retained main entry | Separate provider factories remain. | Migrate or explicitly retire the entry, not only retained UI. |
 | Win32 default | Explicit CoreText catalog mode is merged; GDI remains default. | Bounded ellipsis/property parity, repaint gates and catalog default adoption. |
-| AppFontSet | JFFONT2 is Core-owned; legacy JFFONT still selects callbacks first. | Migrate pre-release app-font format/fixtures and remove callback accessors. |
+| AppFontSet | Current change accepts JFFONT2 only, removes callback accessors and browser precedence, and converts samples/tools. | Full/cropped/locked-ABI3 consumer gates and named-font visible-output qualification; PR/CI. |
 
 Canvas2D already uses TextSystem and is not an outstanding callback consumer.
 The installed-worker change refuses ordinary callback-dependent `Text` commands
@@ -63,7 +64,7 @@ canonical tests intentionally skip. The CoreText-OFF legacy path is explicit.
 
 ### C. Core-owned text API consolidation
 
-Core PR #61 merged as `3152300a` after all four CI jobs passed (run `43670844631`). It implements bounded owner-side paint ellipsis; full MSVC tests pass 33/33 and installed full/cropped text consumers pass 1/1 each. The cropped suite's sole shared-inline shadow assertion reproduces unchanged on its base. The current Runtime qualification change pins this exact source and adds five real-font incremental/full ellipsis frames, including a visible clip-only control. Broader property/default qualification remains separate. It must preserve
+Core PR #61 merged as `3152300a` after all four CI jobs passed (run `43670844631`). It implements bounded owner-side paint ellipsis; full MSVC tests pass 33/33 and installed full/cropped text consumers pass 1/1 each. The cropped suite's sole shared-inline shadow assertion reproduces unchanged on its base. Runtime #102 has merged its exact source pin and five real-font incremental/full ellipsis frames, including a visible clip-only control. Core #62 prepares closed native control labels/select arrows transactionally with Core metrics and packets; it merged as `38148e73` after CI 4/4, and is not yet a release. Open select popups and generated-content ownership remain separate. Broader property/default qualification remains separate. It must preserve
 source layout/intrinsic dimensions, apply owner clipping after final geometry,
 account for Q1000/spacing and output budgets, and refuse unsupported complete
 contexts without host fallback. Mixed owners need whole-paragraph cutoff
@@ -119,12 +120,12 @@ gates. Optional ABI5 reuse and production shaping remain separate.
 
 ## Immediate next actions
 
-1. Complete Runtime qualification of merged Core #61 with exact full/cropped
-   package/source identity and the positive real-font ellipsis repaint gate.
-2. Extend remaining property/resource consumers before default adoption; #101
-   worker and #61 bounded ellipsis implementation are merged, not open work.
-3. Migrate native/default and AppFontSet resources; convert remaining callback
-   users/tests and remove the obsolete public API together.
+1. Review/CI/merge the current Runtime JFFONT2-only app-font/tool change.
+   Core #62 is merged; current CI pins its exact commit/source identity.
+2. Extend open-popup/generated-text consumers and native/desktop defaults before
+   adoption. #101 worker, #61 ellipsis and #102 qualification are already merged.
+3. Convert remaining callback users/tests and remove the obsolete public API
+   together after their resource/default migrations.
 4. Publish signed ABI4 and switch the exact Runtime lock only after those gates.
 5. Run the reserved native board acceptance when the user is available; retain
    device failures separately from host/package completion and prepare installed

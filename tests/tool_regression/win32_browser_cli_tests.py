@@ -399,6 +399,10 @@ def main() -> int:
                 "valid Core app-font supplement must not emit a refusal diagnostic")
         require(valid_capture.is_file() and valid_capture.stat().st_size > 54,
                 "Core catalog text capture must produce visual output")
+        pixels = valid_capture.read_bytes()
+        offset = int.from_bytes(pixels[10:14], "little")
+        require(any(pixels[i:i+3] != b"\xff\xff\xff" for i in range(offset, len(pixels)-3, 4)),
+                "named canonical supplement capture must contain glyph ink")
         malformed_app = root / "malformed-app"
         malformed_capture = root / "malformed.bmp"
         write_font_capture_app(malformed_app, b"JFFONT2\0broken", select_family=False)
@@ -1160,10 +1164,10 @@ def main() -> int:
             fonts=[{
                 "family": "Jelly Probe",
                 "id": "probe",
-                "license": {"name": "Probe License", "source": "sources/probe.bdf"},
+                "license": {"name": "Probe License", "source": "sources/probe.otf"},
                 "profile": "app-subset-cn",
                 "sizes": [16],
-                "source": "/fonts/probe.jffont",
+                "source": "/fonts/probe.jffont2",
                 "weights": [400],
             }],
         )

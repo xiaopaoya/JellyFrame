@@ -20,33 +20,49 @@
   "budgets": {
     "maxResourceBytes": 16384,
     "maxAppFonts": 2,
-    "maxAppFontBytes": 1024,
+    "maxAppFontBytes": 8192,
     "maxAppFontGlyphs": 12
   },
   "fonts": [
     {
       "id": "tiny-cn",
-      "source": "/fonts/tiny_cn.jffont",
+      "source": "/fonts/tiny_cn.jffont2",
       "profile": "app-subset-cn",
       "family": "Jelly Tiny CN",
       "license": {
-        "name": "JellyFrame sample font",
-        "source": "src/render_core/samples/fonts/bitmap/tiny.bdf"
+        "name": "SIL Open Font License 1.1",
+        "source": "ports/esp32s3-idf/font/source/noto-sans-sc-2.002/NotoSansSC-Regular.otf",
+        "url": "https://openfontlicense.org/"
       },
-      "sizes": [8, 12, 18, 36],
-      "weights": [400, 700]
+      "sizes": [
+        8,
+        12,
+        18,
+        36
+      ],
+      "weights": [
+        400
+      ]
     },
     {
       "id": "tiny-symbols",
-      "source": "/fonts/tiny_symbols.jffont",
+      "source": "/fonts/tiny_symbols.jffont2",
       "profile": "tiny-plus-symbols",
       "family": "Jelly Tiny Symbols",
       "license": {
-        "name": "JellyFrame sample font",
-        "source": "src/render_core/samples/fonts/bitmap/tiny.bdf"
+        "name": "SIL Open Font License 1.1",
+        "source": "ports/esp32s3-idf/font/source/noto-sans-sc-2.002/NotoSansSC-Regular.otf",
+        "url": "https://openfontlicense.org/"
       },
-      "sizes": [8, 12, 18, 36],
-      "weights": [400, 700]
+      "sizes": [
+        8,
+        12,
+        18,
+        36
+      ],
+      "weights": [
+        400
+      ]
     }
   ],
   "targets": {
@@ -59,7 +75,7 @@
       "output": "jfapp",
       "budgets": {
         "maxAppFonts": 2,
-        "maxAppFontBytes": 1024,
+        "maxAppFontBytes": 8192,
         "maxAppFontGlyphs": 12
       }
     }

@@ -1,28 +1,18 @@
-# Jelly Font Policy
+# Canonical app font sample
 
-> Last updated: 2026-09-09; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
+> Last updated: 2026-11-15; Applies to: 0.6.0-dev
 
-Small package used to validate the app font policy path:
+The licensed Noto Sans SC 2.002 Regular subsets in `fonts/*.jffont2` are generated
+by Core `tools/prepare_font_resource.py`, using Pillow 12.3.0 and fontTools 4.60.1.
+The tracked OTF is `ports/esp32s3-idf/font/source/noto-sans-sc-2.002/NotoSansSC-Regular.otf`.
+Coverage text and resource reports are in development-only `fonts/.source/`; `fonts/LICENSE.txt`
+contains the SIL Open Font License. Reports retain original font metrics, glyph IDs
+and source SHA-256. The 16px raster strike supports Core scalar scaling, including
+12px: the historical integer-only bitmap size warning is retired.
 
-- CSS declares two package families: `Jelly Tiny CN` and `Jelly Tiny Symbols`.
-- `jellyframe.app.json` declares both families and points to package-local
-  `.jffont` supplements.
-- Manifest `sizes`/`weights` list the CSS sizes and weights this package
-  validates; the app-font backend uses integer bitmap scaling rather than full
-  browser font matching.
-- `jellyframe_cli.py check` reports both families as manifest runtime fonts,
-  validates glyph coverage before install and intentionally warns about the
-  missing `あ` probe.
-- Win32 can validate the runtime text path with `--use-app-fonts`:
+Prepare fonts before packaging. Legacy `.jffont`/JFFONT0-v0/v1 and BDF serialized
+font generation are retired; BDF-generated C++ BitmapFont headers are separate.
 
-```powershell
-.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_font_policy --use-app-fonts
-```
-
-The font is deliberately tiny and only exists for deterministic package/tool
-tests. Product apps should generate their own `.jffont` subsets from licensed
-bitmap fonts.
-
-## Visual role
-
-Uses the wearable palette. Native host support and the acceptance limitations below still apply.
+Resource coverage does not expand TextSystem scalar admission. The policy sample
+explicitly refuses its intentional missing Kana probe; named
+Chinese glyph visibility is verified independently by pixel tests.

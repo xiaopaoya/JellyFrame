@@ -1,4 +1,5 @@
 #include "app_runtime/app_host.h"
+#include "app_runtime/core_system_font_catalog.h"
 #include "app_runtime/app_compute_jobs.h"
 #include "app_runtime/app_device_services.h"
 #include "app_runtime/app_budget.h"
@@ -613,47 +614,26 @@ void bench_xml_http_request_mock(std::size_t capacity) {
     }
 }
 
-const std::vector<std::uint8_t>& tiny_jffont_bytes() {
-    static const std::vector<std::uint8_t> bytes = {
-        'J', 'F', 'F', 'O', 'N', 'T', '0', 0,
-        0x20, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
-        0x08, 0x08, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00,
-        0x40, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x00, 0x00,
-        0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x07, 0x00, 0x00, 0x00, 0x05, 0x07, 0x06, 0x01,
-        0x2d, 0x4e, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00,
-        0x08, 0x00, 0x00, 0x00, 0x08, 0x08, 0x08, 0x01,
-        0x20, 0x50, 0x88, 0xf8, 0x88, 0x88, 0x88,
-        0x10, 0x10, 0xfe, 0x92, 0x92, 0xfe, 0x10, 0x10,
-    };
-    return bytes;
-}
-
 void bench_font_fallback_measure(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 128, 1});
-    host.launch("org.example.fonts", AppRole::App);
-    const std::vector<std::uint8_t>& bytes = tiny_jffont_bytes();
-    host.load_current_jffont(bytes.data(), bytes.size());
-    TextMeasureProvider provider = host.fonts().measure_provider();
-    TextMetrics metrics;
-    for (std::size_t i = 0; i < capacity; ++i) {
-        provider.measure("A\xe4\xb8\xad", 8, 400, &metrics, provider.context);
-    }
+    host.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog, kNotoSansScSystemFontCatalogSize);
+    TextRunMetrics metrics;
+    for (std::size_t i = 0; i < capacity; ++i)
+        if (host.fonts().core_text_system()->measure("AB", {}, metrics) != TextSystemStatus::Ok) std::abort();
 }
 
 void bench_font_family_measure(std::size_t capacity) {
     AppRuntimeHost host(AppRuntimeHostOptions{capacity, 8, capacity, capacity * 128, 1});
     host.launch("org.example.font-family", AppRole::App);
-    const std::vector<std::uint8_t>& bytes = tiny_jffont_bytes();
-    host.load_current_jffont(bytes.data(), bytes.size(), "Jelly Tiny");
-    TextMeasureProvider provider = host.fonts().measure_provider();
-    const std::uint32_t family = normalized_font_family_hash("Jelly Tiny");
-    for (std::size_t i = 0; i < capacity; ++i) {
-        const TextMetrics metrics = measure_text(provider, "A\xe4\xb8\xad", 8, 400, family);
-        if (metrics.width <= 0) {
-            std::abort();
-        }
-    }
+    host.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog, kNotoSansScSystemFontCatalogSize);
+    const auto& face = kNotoSansScSystemFontCatalog[0];
+    if (!host.attach_current_core_font_view(face.data, face.size, "Jelly Tiny").loaded()) std::abort();
+    std::uint32_t family;
+    if (!host.fonts().core_text_system()->resolve_family_hash(normalized_font_family_hash("Jelly Tiny"), family)) std::abort();
+    TextFontRequest request; request.families = &family; request.family_count = 1;
+    TextRunMetrics metrics;
+    for (std::size_t i = 0; i < capacity; ++i)
+        if (host.fonts().core_text_system()->measure("AB", request, metrics) != TextSystemStatus::Ok) std::abort();
 }
 
 void bench_load_telemetry(std::size_t capacity) {

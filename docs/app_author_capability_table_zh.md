@@ -1,6 +1,6 @@
 # App 作者能力速查表
 
-> 最后更新：2026-08-30；适用版本：0.6.0-dev；当前开发线：0.6.0
+> 最后更新：2026-11-15；适用版本：0.6.0-dev；当前开发线：0.6.0
 
 这份表给 app 作者快速判断“能不能用”。完整边界仍以
 [developer_capability_matrix_zh.md](developer_capability_matrix_zh.md) 为准。
@@ -10,7 +10,7 @@
 | 能力 | 状态 | 建议 |
 | --- | --- | --- |
 | 普通结构标签 | 可用 | 使用 `div`、`section`、`header`、`main`、`footer`、`ul`、`li`、`p`、`span`。未知标签会当普通元素处理。 |
-| 文本 | 可用 | UTF-8 会保留；真实中文字形取决于系统字体或 app `.jffont` 补充含。 |
+| 文本 | 可用 | UTF-8 会保留；真实中文字形取决于系统字体或 app `.jffont2` 补充含。 |
 | 表单控件 | Form V0 加 `forms.advanced` popup 子集 | 可用 `button`、`input`、`select`、`textarea`、`progress`、`meter`。`required`、文本 `minlength`/`maxlength`、checkbox/radio 必填状态和 required select 可配合本地 `submit` 使用。启用 `forms.advanced` profile 后，单选 `select` 点击会打开由核心渲染的选项浮层；选择选项会派发 `input` 与 `change`。该浮层受当前 viewport 限制，尚无 popup 滚动、`multiple`、原生 picker、浏览器校验气泡或页面导航。 |
 | 确认对话框 | 有界 modal 子集 | 使用一个 `<dialog>` 配合 `showModal()` 和 `close(returnValue)`。Win32 壳会把 Escape 转为可取消的 `cancel`，再触发 `close`；打开期间 focus/hit test 限制在 dialog 内。不支持嵌套 dialog、backdrop/light-dismiss、`show()`、`requestClose()` 或浏览器 top layer。 |
 | 图片 | 子集 | 使用 package-local `<img src="/assets/icon.bmp">` 或一个 CSS `background-image: url("/assets/image.bmp")`。静态图标 SVG 可通过 `package --rasterize-svg` 在打包期编译成 BMP，生成包中的 HTML/CSS 引用会自动改写。`border-radius` 会以抗锯齿角裁切这两类图片。单张 CSS 背景保留 `background-color` fallback，并支持 `background-size: cover`/`contain`/`100% 100%`、简单 `background-position` 与 `background-repeat: no-repeat`；不支持远程/data URL、多图层或平铺。Win32 验收内置 BMP；PNG/JPEG/WebP 需要 target/host codec adapter。 |
@@ -69,8 +69,8 @@
 | Package-local 资源 | 可用 | 使用 `/assets/a.bmp` 或相对路径。禁止 scheme、`//host`、逃出 app root。静态 SVG 图标源仅会在传入 `--rasterize-svg` 时作为打包期输入，不会以 SVG 形式进入目标端。 |
 | `.jfapp` 安装包 | 可用 V0 | 用 CLI `package --output-bundle` 生成。 |
 | 字符扫描 | 默认 | `check`/`package`/`preview`/`install` 默认输出 `*.used_chars.txt` 和 `fontSubset` 计划。 |
-| `.jffont` | 可用 | 可由授权 BDF 生成；生成后仍要显式写入 manifest `fonts[]`。 |
-| 字体抗锯齿 | 可选 | `.jffont` V1 支持 2bpp/4bpp coverage，换取更多字体字节和绘制成本。 |
+| `.jffont2` | 可用 | 使用 pinned Core 工具从授权静态 OTF/TTF 离线准备，并在 manifest `fonts[]` 声明。 |
+| 字体抗锯齿 | 可选 | JFFONT2 保存显式灰度 coverage；系统目录使用 4bpp，画质/字节由离线 profile 决定。 |
 
 ## 最小发布检查
 

@@ -1,6 +1,6 @@
 # Tool Regression Tests
 
-> Last updated: 2026-08-09; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
+> Last updated: 2026-11-15; Applies to: 0.6.0-dev; compatibility baseline: 0.5.0
 
 This directory contains lightweight regression tests for developer tooling.
 They focus on package/check behavior that should stay stable independently from
@@ -30,11 +30,9 @@ CLI package preflight over the weather sample, verifies `imageDiagnostics`, then
 captures the same package through the Win32 shell and inspects the BMP pixels so
 package-local images cannot regress into invisible placeholders.
 
-`font_policy_report_tests.py` validates the app-font path. It checks that the
-font policy sample reports two usable `.jffont` runtime families, keeps the
-intentional missing-glyph warning stable and captures the sample through Win32
-with `--use-app-fonts`. It also packages `jelly_font_size_warning` and locks the
-single `font-size-unavailable` warning used by the extension install prompt.
+`font_policy_report_tests.py` validates two canonical JFFONT2 families, the
+intentional missing-glyph diagnostic, Core continuous-size policy and actual
+`--use-app-fonts` captures. Legacy integer-size warnings do not apply to these assets.
 
 `win32_browser_cli_tests.py` checks CLI/help/error contracts for the interactive
 Win32 shell, including registry install/update/rollback/enable/disable command mode, the

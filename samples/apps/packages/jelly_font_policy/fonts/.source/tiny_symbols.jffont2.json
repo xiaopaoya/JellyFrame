@@ -1,0 +1,52 @@
+{
+  "format": "JFFONT2",
+  "profile": "scalar-bitmap-v1",
+  "sourceSha256": "a2b93e6c2db05d6bbbf6f27d413ec73269735b7b679019c8a5aa9670ff0ffbf2",
+  "resourceSha256": "0748de4a0821b58f804edf763617aa12cdffdb04fb324d7f3512346de4c17cac",
+  "resourceBytes": 295,
+  "unitsPerEm": 1000,
+  "rasterPixelSize": 16,
+  "weight": 400,
+  "coverageBits": 4,
+  "metricsSource": "hhea",
+  "ascent": 1160,
+  "descent": 288,
+  "lineGap": 0,
+  "advanceSource": "original hmtx units, not hinted/rounded Pillow string width",
+  "raster": {
+    "pillow": "12.3.0",
+    "fontTools": "4.60.1",
+    "freeType": "2.14.3",
+    "layout": "BASIC",
+    "anchor": "ls"
+  },
+  "glyphs": [
+    {
+      "codepoint": 12289,
+      "glyphId": 1130,
+      "advance": 1000,
+      "bearingX": 0,
+      "bearingY": -3,
+      "width": 6,
+      "height": 5
+    },
+    {
+      "codepoint": 12290,
+      "glyphId": 1131,
+      "advance": 1000,
+      "bearingX": 0,
+      "bearingY": -4,
+      "width": 6,
+      "height": 6
+    },
+    {
+      "codepoint": 65281,
+      "glyphId": 30436,
+      "advance": 1000,
+      "bearingX": 3,
+      "bearingY": -13,
+      "width": 2,
+      "height": 14
+    }
+  ]
+}

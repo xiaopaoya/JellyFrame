@@ -15,7 +15,7 @@
   "command.listBuilds": "JellyFrame：列出桌面构建",
   "command.setupDesktopBuild": "JellyFrame：创建兼容桌面构建",
   "command.package": "JellyFrame：生成资源包",
-  "command.packageMissingFonts": "JellyFrame：生成并导入缺失字体",
+  "command.packageMissingFonts": "JellyFrame：导入缺失字体",
   "command.newFromTemplate": "JellyFrame：从模板新建 App",
   "command.visualEditor": "JellyFrame：打开可视化编辑器",
   "command.showReport": "JellyFrame：显示最近报告",

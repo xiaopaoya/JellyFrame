@@ -1,0 +1,133 @@
+{
+  "format": "JFFONT2",
+  "profile": "scalar-bitmap-v1",
+  "sourceSha256": "a2b93e6c2db05d6bbbf6f27d413ec73269735b7b679019c8a5aa9670ff0ffbf2",
+  "resourceSha256": "d099b613feffab6a747f1dcc6a7d04c6c396bdd74a063d63825f533f1b69d34d",
+  "resourceBytes": 1160,
+  "unitsPerEm": 1000,
+  "rasterPixelSize": 16,
+  "weight": 400,
+  "coverageBits": 4,
+  "metricsSource": "hhea",
+  "ascent": 1160,
+  "descent": 288,
+  "lineGap": 0,
+  "advanceSource": "original hmtx units, not hinted/rounded Pillow string width",
+  "raster": {
+    "pillow": "12.3.0",
+    "fontTools": "4.60.1",
+    "freeType": "2.14.3",
+    "layout": "BASIC",
+    "anchor": "ls"
+  },
+  "glyphs": [
+    {
+      "codepoint": 32,
+      "glyphId": 1,
+      "advance": 224,
+      "bearingX": 0,
+      "bearingY": 0,
+      "width": 0,
+      "height": 0
+    },
+    {
+      "codepoint": 49,
+      "glyphId": 18,
+      "advance": 555,
+      "bearingX": 1,
+      "bearingY": -12,
+      "width": 7,
+      "height": 12
+    },
+    {
+      "codepoint": 50,
+      "glyphId": 19,
+      "advance": 555,
+      "bearingX": 0,
+      "bearingY": -12,
+      "width": 9,
+      "height": 12
+    },
+    {
+      "codepoint": 82,
+      "glyphId": 51,
+      "advance": 636,
+      "bearingX": 1,
+      "bearingY": -12,
+      "width": 9,
+      "height": 12
+    },
+    {
+      "codepoint": 100,
+      "glyphId": 69,
+      "advance": 620,
+      "bearingX": 0,
+      "bearingY": -13,
+      "width": 9,
+      "height": 13
+    },
+    {
+      "codepoint": 101,
+      "glyphId": 70,
+      "advance": 554,
+      "bearingX": 0,
+      "bearingY": -9,
+      "width": 9,
+      "height": 9
+    },
+    {
+      "codepoint": 112,
+      "glyphId": 81,
+      "advance": 620,
+      "bearingX": 1,
+      "bearingY": -9,
+      "width": 9,
+      "height": 13
+    },
+    {
+      "codepoint": 113,
+      "glyphId": 82,
+      "advance": 620,
+      "bearingX": 0,
+      "bearingY": -9,
+      "width": 9,
+      "height": 13
+    },
+    {
+      "codepoint": 115,
+      "glyphId": 84,
+      "advance": 468,
+      "bearingX": 0,
+      "bearingY": -9,
+      "width": 7,
+      "height": 9
+    },
+    {
+      "codepoint": 116,
+      "glyphId": 85,
+      "advance": 377,
+      "bearingX": 0,
+      "bearingY": -12,
+      "width": 6,
+      "height": 12
+    },
+    {
+      "codepoint": 117,
+      "glyphId": 86,
+      "advance": 607,
+      "bearingX": 1,
+      "bearingY": -9,
+      "width": 8,
+      "height": 9
+    },
+    {
+      "codepoint": 120,
+      "glyphId": 89,
+      "advance": 498,
+      "bearingX": 0,
+      "bearingY": -9,
+      "width": 8,
+      "height": 9
+    }
+  ]
+}

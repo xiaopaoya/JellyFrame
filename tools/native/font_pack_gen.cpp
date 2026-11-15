@@ -1,4 +1,4 @@
-﻿#include <algorithm>
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <fstream>
@@ -17,7 +17,6 @@ struct Options {
     std::string bdf_path;
     std::string chars_path;
     std::string output_path;
-    std::string output_binary_path;
     std::string symbol = "jellyframe_embedded_font";
     bool allow_missing = false;
     int coverage_bits = 1;
@@ -80,8 +79,7 @@ Options parse_options(int argc, char** argv) {
             options.chars_path = require_value("--chars");
         } else if (arg == "--output") {
             options.output_path = require_value("--output");
-        } else if (arg == "--output-binary") {
-            options.output_binary_path = require_value("--output-binary");
+
         } else if (arg == "--name") {
             options.symbol = sanitize_symbol(require_value("--name"));
         } else if (arg == "--coverage-bits") {
@@ -93,9 +91,9 @@ Options parse_options(int argc, char** argv) {
         }
     }
     if (options.bdf_path.empty() || options.chars_path.empty() ||
-        (options.output_path.empty() && options.output_binary_path.empty())) {
+        options.output_path.empty()) {
         throw std::runtime_error("usage: jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt "
-                                 "[--output font_pack.h] [--output-binary font.jffont] "
+                                 "--output font_pack.h "
                                  "[--name symbol] [--coverage-bits 1|2|4] [--allow-missing]");
     }
     if (!(options.coverage_bits == 1 || options.coverage_bits == 2 || options.coverage_bits == 4)) {
@@ -262,18 +260,6 @@ std::uint8_t checked_u8(int value, const char* field) {
     return static_cast<std::uint8_t>(value);
 }
 
-void append_u16(std::vector<std::uint8_t>& output, std::uint16_t value) {
-    output.push_back(static_cast<std::uint8_t>(value & 0xffU));
-    output.push_back(static_cast<std::uint8_t>((value >> 8U) & 0xffU));
-}
-
-void append_u32(std::vector<std::uint8_t>& output, std::uint32_t value) {
-    output.push_back(static_cast<std::uint8_t>(value & 0xffU));
-    output.push_back(static_cast<std::uint8_t>((value >> 8U) & 0xffU));
-    output.push_back(static_cast<std::uint8_t>((value >> 16U) & 0xffU));
-    output.push_back(static_cast<std::uint8_t>((value >> 24U) & 0xffU));
-}
-
 void validate_glyph_for_pack(const Glyph& glyph) {
     checked_u8(glyph.width, "width");
     checked_u8(glyph.height, "height");
@@ -416,67 +402,13 @@ void write_font_header(const Options& options,
     output << "} // namespace jellyframe_generated\n";
 }
 
-void write_font_binary(const Options& options,
-                       const BdfFont& font,
-                       const std::vector<std::uint32_t>& selected) {
-    constexpr std::uint16_t header_size = 32;
-    const std::uint16_t version = options.coverage_bits == 1 ? 0 : 1;
-    constexpr std::uint32_t glyph_entry_size = 16;
-    const std::uint32_t glyph_count = static_cast<std::uint32_t>(selected.size());
-    const std::uint32_t glyph_table_offset = header_size;
-    const std::uint32_t row_data_offset = glyph_table_offset + glyph_count * glyph_entry_size;
-    const std::uint32_t row_data_size = static_cast<std::uint32_t>(
-        selected_row_bytes(font, selected, options.coverage_bits));
-
-    std::vector<std::uint8_t> data;
-    data.reserve(static_cast<std::size_t>(row_data_offset) + row_data_size);
-    const char magic[8] = {'J', 'F', 'F', 'O', 'N', 'T', '0', '\0'};
-    data.insert(data.end(), magic, magic + 8);
-    append_u16(data, header_size);
-    append_u16(data, version);
-    append_u32(data, glyph_count);
-    data.push_back(checked_u8(std::max(1, font.line_height), "line_height"));
-    data.push_back(checked_u8(std::max(1, font.fallback_advance), "fallback_advance"));
-    append_u16(data, static_cast<std::uint16_t>(options.coverage_bits == 1 ? 0 : options.coverage_bits));
-    append_u32(data, glyph_table_offset);
-    append_u32(data, row_data_offset);
-    append_u32(data, row_data_size);
-
-    std::uint32_t row_offset = 0;
-    for (std::uint32_t codepoint : selected) {
-        const Glyph& glyph = font.glyphs.at(codepoint);
-        validate_glyph_for_pack(glyph);
-        int output_bytes_per_row = 0;
-        const std::vector<std::uint8_t> rows = glyph_rows_for_output(glyph, options.coverage_bits, &output_bytes_per_row);
-        append_u32(data, codepoint);
-        append_u32(data, row_offset);
-        append_u32(data, static_cast<std::uint32_t>(rows.size()));
-        data.push_back(static_cast<std::uint8_t>(glyph.width));
-        data.push_back(static_cast<std::uint8_t>(glyph.height));
-        data.push_back(static_cast<std::uint8_t>(glyph.advance));
-        data.push_back(static_cast<std::uint8_t>(output_bytes_per_row));
-        row_offset += static_cast<std::uint32_t>(rows.size());
-    }
-    for (std::uint32_t codepoint : selected) {
-        int output_bytes_per_row = 0;
-        const std::vector<std::uint8_t> rows =
-            glyph_rows_for_output(font.glyphs.at(codepoint), options.coverage_bits, &output_bytes_per_row);
-        data.insert(data.end(), rows.begin(), rows.end());
-    }
-
-    std::ofstream output(options.output_binary_path, std::ios::binary);
-    if (!output) {
-        throw std::runtime_error("cannot write " + options.output_binary_path);
-    }
-    output.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
-}
 
 } // namespace
 
 int main(int argc, char** argv) {
     if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
         std::cout << "usage: jellyframe_font_pack_gen --bdf font.bdf --chars used_chars.txt "
-                     "[--output font_pack.h] [--output-binary font.jffont] "
+                     "--output font_pack.h "
                      "[--name symbol] [--coverage-bits 1|2|4] [--allow-missing]\n";
         return 0;
     }
@@ -503,9 +435,6 @@ int main(int argc, char** argv) {
         }
         if (!options.output_path.empty()) {
             write_font_header(options, font, selected);
-        }
-        if (!options.output_binary_path.empty()) {
-            write_font_binary(options, font, selected);
         }
         print_summary(font, requested, selected, options.coverage_bits);
         if (!missing.empty()) {

@@ -15,7 +15,7 @@
   "command.listBuilds": "JellyFrame: List Desktop Builds",
   "command.setupDesktopBuild": "JellyFrame: Create Compatible Desktop Build",
   "command.package": "JellyFrame: Generate Resource Package",
-  "command.packageMissingFonts": "JellyFrame: Generate and Import Missing Fonts",
+  "command.packageMissingFonts": "JellyFrame: Import Prepared Missing Fonts",
   "command.newFromTemplate": "JellyFrame: New App From Template",
   "command.visualEditor": "JellyFrame: Open Visual Editor",
   "command.showReport": "JellyFrame: Show Last Report",

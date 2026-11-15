@@ -169,6 +169,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Provider connection tests failed' }
           node tests\tool_regression\vscode_author_environment_tests.js
           if ($LASTEXITCODE -ne 0) { throw 'Author environment tests failed' }
+          node tests\tool_regression\vscode_font_import_tests.js
+          if ($LASTEXITCODE -ne 0) { throw 'Prepared font import tests failed' }
           node tests\tool_regression\vscode_startup_feedback_tests.js
           if ($LASTEXITCODE -ne 0) { throw 'Startup feedback tests failed' }
           node tests\tool_regression\vscode_render_trace_viewer_tests.js
@@ -393,14 +395,14 @@ jobs:
             profile_id: render-core-minimal-no-forms-advanced
           - profile: current-mainline-full
             profile_id: render-core-default
-            core_commit: 3152300a2858305d5732a5b13299362185ef1570
-            source_hash: c11045754fa28b9bf3e5e0e9a8720dc202efd7dd9c66c159c058f5edee7dd69b
+            core_commit: 38148e7388edc791e303b9b324f45d5df3d7b63e
+            source_hash: caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1
             source_count: 163
             cropped: false
           - profile: current-mainline-cropped
             profile_id: render-core-minimal-no-forms-advanced
-            core_commit: 3152300a2858305d5732a5b13299362185ef1570
-            source_hash: c11045754fa28b9bf3e5e0e9a8720dc202efd7dd9c66c159c058f5edee7dd69b
+            core_commit: 38148e7388edc791e303b9b324f45d5df3d7b63e
+            source_hash: caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1
             source_count: 163
             cropped: true
 
@@ -1028,15 +1030,15 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: xiaopaoya/JellyFrame-Render-Core
-          ref: 3152300a2858305d5732a5b13299362185ef1570
+          ref: 38148e7388edc791e303b9b324f45d5df3d7b63e
           path: third_party/render-core-source
 
       - name: Verify merged Core source identity
         shell: pwsh
         run: |
           $coreRevision = (git -C third_party\render-core-source rev-parse HEAD).Trim()
-          if ($coreRevision -ne '3152300a2858305d5732a5b13299362185ef1570') {
-            throw "Expected qualified Core master at 3152300a2858305d5732a5b13299362185ef1570, got $coreRevision"
+          if ($coreRevision -ne '38148e7388edc791e303b9b324f45d5df3d7b63e') {
+            throw "Expected qualified Core master at 38148e7388edc791e303b9b324f45d5df3d7b63e, got $coreRevision"
           }
           $coreAbi4 = Select-String -Path third_party\render-core-source\cmake\render_core_version.cmake `
             -Pattern 'set\(JELLYFRAME_RENDER_CORE_ENGINE_ABI "4"' -Quiet
@@ -1085,7 +1087,7 @@ jobs:
           }
           if ($provenance.provider -ne 'source-override' -or $provenance.engineAbi -ne 4 -or
               $provenance.lockEnforced -ne $false -or
-              $provenance.sourceHash -ne 'c11045754fa28b9bf3e5e0e9a8720dc202efd7dd9c66c159c058f5edee7dd69b' -or
+              $provenance.sourceHash -ne 'caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1' -or
               $provenance.sourceFileCount -ne 163 -or
               $provenance.lockedVersion -ne '0.8.0' -or $provenance.lockedEngineAbi -ne 3 -or
               $provenance.lockedSourceHash -ne 'fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795') {
@@ -1119,6 +1121,11 @@ jobs:
           python tests/tool_regression/incremental_repaint_equivalence_tests.py
           build/abi4-same-thread/Release/jellyframe_desktop_shell.exe .
           --core-version 0.9.0-dev --include-core-text --case text-overflow-ellipsis
+        - name: Verify canonical default and app font visible output
+          shell: pwsh
+          run: >-
+            ctest --test-dir build/abi4-same-thread -C Release
+            -R '^jellyframe_win32_canonical_app_font_ink$' --output-on-failure
       - name: Exercise ordinary ABI4 desktop app entry
         shell: pwsh
         run: >-

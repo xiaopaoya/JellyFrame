@@ -2136,12 +2136,12 @@ async function selectMissingFontImport(root, options = {}) {
   if (!options.required) {
     const action = await vscode.window.showQuickPick([
       {
-        label: chinese ? "选择 BDF 并自动导入" : "Choose BDF and import automatically",
+        label: chinese ? "导入已准备的 JFFONT2" : "Import prepared JFFONT2",
         description: chinese ? `${missing.length} 个 manifest 字体资源缺失` : `${missing.length} manifest font resource(s) are missing`,
-        value: "generate"
+        value: "import"
       },
       {
-        label: chinese ? "继续但不生成字体" : "Continue without generating fonts",
+        label: chinese ? "继续但不导入字体" : "Continue without importing fonts",
         description: chinese ? "报告仍会保留缺失字体诊断" : "The report will retain missing-font diagnostics",
         value: "skip"
       }
@@ -2168,7 +2168,7 @@ async function selectMissingFontImport(root, options = {}) {
         ? "" : (chinese ? " · 缺少授权元数据" : " · missing license metadata")}`,
       font
     })), {
-      placeHolder: chinese ? "选择本次生成的缺失字体" : "Select the missing font to generate",
+      placeHolder: chinese ? "选择本次导入的缺失字体" : "Select the missing font to import",
       ignoreFocusOut: true
     });
     if (!selected) {
@@ -2194,10 +2194,10 @@ async function selectMissingFontImport(root, options = {}) {
       : "The missing font entry has no valid id; fix jellyframe.app.json first.");
     return undefined;
   }
-  if (typeof target.source !== "string" || !/\.jffont2?$/i.test(target.source)) {
+  if (typeof target.source !== "string" || !/\.jffont2$/i.test(target.source)) {
     vscode.window.showErrorMessage(chinese
-      ? `字体 ${target.id || target.source} 的 source 必须是 .jffont 或 .jffont2 路径。`
-      : `Font ${target.id || target.source} must declare a .jffont or .jffont2 source path.`);
+      ? `字体 ${target.id || target.source} 的 source 必须是 .jffont2 路径。`
+      : `Font ${target.id || target.source} must declare a .jffont2 source path.`);
     return undefined;
   }
 
@@ -2206,16 +2206,15 @@ async function selectMissingFontImport(root, options = {}) {
     canSelectFiles: true,
     canSelectFolders: false,
     canSelectMany: false,
-    filters: { "Bitmap Distribution Format": ["bdf"] },
-    openLabel: chinese ? "选择已授权 BDF" : "Select licensed BDF"
+    filters: { "Core prepared font": ["jffont2"] },
+    openLabel: chinese ? "选择已授权 JFFONT2" : "Select licensed JFFONT2"
   });
-  const bdf = selected && selected[0] ? selected[0].fsPath : undefined;
-  if (!bdf) {
+  const resource = selected && selected[0] ? selected[0].fsPath : undefined;
+  if (!resource) {
     return undefined;
   }
   return [
-    "--font-source-bdf", bdf,
-    "--font-resource-id", target.id
+    "--import-font-resource", `${target.source}=${resource}`
   ];
 }
 
@@ -2253,7 +2252,7 @@ async function packageMissingFonts(context, resourceUri) {
     "--font-budget", fontBudget,
     ...fontArgs
   ], {
-    commandName: isChinese() ? "生成并导入缺失字体" : "Generate and import missing fonts",
+    commandName: isChinese() ? "导入缺失字体" : "Import prepared missing fonts",
     packageRoot: root,
     reportPath: report
   });
@@ -4197,7 +4196,7 @@ class JellyFrameStatusProvider {
       visualEditorUnavailable: "可视化编辑不可用",
       visualEditorCompatibility: "支持可视化模型或标准 blank 起始 App；任意现有 HTML/CSS 不会自动还原。",
       packageResources: "生成资源包",
-      packageMissingFonts: "生成并导入缺失字体",
+      packageMissingFonts: "导入缺失字体",
       openReport: "打开最近报告",
       openCapture: "打开截图或回放文件",
       openRenderTrace: "打开渲染性能 Trace",
@@ -4228,7 +4227,7 @@ class JellyFrameStatusProvider {
         create: "从官方模板创建一个新的 App 包。",
         visualEditor: "用受 JellyFrame 特性约束的拖放画布编辑当前 App，并生成可读源码。",
         packageResources: "生成供固件或 App Runtime 使用的资源包。",
-        packageMissingFonts: `选择已授权 BDF，为 ${missingFontCount} 个缺失 manifest 字体资源生成 subset 并写入 .jfapp。`,
+        packageMissingFonts: `选择已离线准备的授权 JFFONT2，导入缺失的 manifest 字体资源并写入 .jfapp。`,
         installDeviceProvider: "选择官方 Device Provider，下载并校验板卡专属包、Developer Image 和恢复资源。",
         configureDeviceProvider: "选择 provider 可执行文件，并自动识别同一交付包中的 Developer Image manifest。",
         discoverDevice: "通过已配置的 Provider 列出可连接设备。",
@@ -4305,7 +4304,7 @@ class JellyFrameStatusProvider {
       visualEditorUnavailable: "Visual editor unavailable",
       visualEditorCompatibility: "Visual models and the standard blank starter are supported; arbitrary HTML/CSS is not round-tripped.",
       packageResources: "Generate resource package",
-      packageMissingFonts: "Generate and import missing fonts",
+      packageMissingFonts: "Import prepared missing fonts",
       openReport: "Open latest report",
       openCapture: "Open capture or playback file",
       openRenderTrace: "Open Render Performance Trace",
@@ -4336,7 +4335,7 @@ class JellyFrameStatusProvider {
         create: "Create a new App package from an official template.",
         visualEditor: "Edit the current App on a JellyFrame-constrained drag-and-drop canvas and generate readable source.",
         packageResources: "Generate a resource package for firmware or App Runtime use.",
-        packageMissingFonts: `Choose a licensed BDF, generate a subset for ${missingFontCount} missing manifest font resource(s), and write it into a .jfapp.`,
+        packageMissingFonts: `Choose a licensed, offline-prepared JFFONT2 resource for ${missingFontCount} missing manifest font resource(s), and import it into a .jfapp.`,
         installDeviceProvider: "Choose an official Device Provider; download and verify its board package, Developer Image and recovery resources.",
         configureDeviceProvider: "Choose the provider executable and detect a matching Developer Image manifest in the same delivery package.",
         discoverDevice: "List connectable devices through the configured Provider.",

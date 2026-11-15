@@ -1,6 +1,6 @@
 # 工具回归测试
 
-> 最后更新：2026-08-09；适用版本：0.6.0-dev；兼容基线：0.5.0
+> 最后更新：2026-11-15；适用版本：0.6.0-dev；兼容基线：0.5.0
 
 这里保存开发工具层的轻量回归测试，主要锁住 package/check 这类不属于
 render-core 或 app-runtime C++ 单元测试的行为。
@@ -25,9 +25,8 @@ render-core 或 app-runtime C++ 单元测试的行为。
 预检并验证 `imageDiagnostics`，再通过 Win32 壳捕获同一个 package，读取 BMP 像素，确保
 包内图片不会退化成不可见占位。
 
-`font_policy_report_tests.py` 验证 app 字体路径：检查字体策略样例报告两个可用 `.jffont`
-runtime family，保持故意缺字 warning 稳定，并用 Win32 `--use-app-fonts` 捕获样例；它还会打包
-`jelly_font_size_warning`，锁定插件安装提示所依赖的唯一 `font-size-unavailable` warning。
+`font_policy_report_tests.py` 验证两个规范 JFFONT2 family、故意缺字诊断、
+Core 连续字号策略，以及 `--use-app-fonts` 实际截图。旧整数倍字号警告不再适用于规范资源。
 
 `win32_browser_cli_tests.py` 检查交互式 Win32 壳的 CLI/help/error 契约，包括 registry
 安装/更新/回滚/启用/禁用命令模式、授权 file-broker smoke 命令和坏 app 系统存活 smoke。

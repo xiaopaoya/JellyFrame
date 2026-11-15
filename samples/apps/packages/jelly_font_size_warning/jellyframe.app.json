@@ -25,21 +25,26 @@
     "maxCssRules": 32,
     "maxDisplayCommands": 64,
     "maxAppFonts": 1,
-    "maxAppFontBytes": 1024,
-    "maxAppFontGlyphs": 8
+    "maxAppFontBytes": 8192,
+    "maxAppFontGlyphs": 32
   },
   "fonts": [
     {
       "id": "size-probe",
-      "source": "/fonts/size_probe.jffont",
+      "source": "/fonts/size_probe.jffont2",
       "profile": "tiny",
       "family": "Jelly Size Probe",
       "license": {
-        "name": "JellyFrame sample font",
-        "source": "src/render_core/samples/fonts/bitmap/tiny.bdf"
+        "name": "SIL Open Font License 1.1",
+        "source": "ports/esp32s3-idf/font/source/noto-sans-sc-2.002/NotoSansSC-Regular.otf",
+        "url": "https://openfontlicense.org/"
       },
-      "sizes": [12],
-      "weights": [400]
+      "sizes": [
+        12
+      ],
+      "weights": [
+        400
+      ]
     }
   ],
   "targets": {

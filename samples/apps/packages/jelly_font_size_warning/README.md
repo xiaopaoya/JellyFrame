@@ -1,32 +1,18 @@
-# Font Size Install Warning Probe
+# Canonical app font sample
 
-> Last updated: 2026-09-17; Applies to: 0.6.0-dev; Render Core baseline: 0.6.2
+> Last updated: 2026-11-15; Applies to: 0.6.0-dev
 
-This acceptance package exists only to trigger the VS Code extension's pre-install font-size warning deterministically.
+The licensed Noto Sans SC 2.002 Regular subsets in `fonts/*.jffont2` are generated
+by Core `tools/prepare_font_resource.py`, using Pillow 12.3.0 and fontTools 4.60.1.
+The tracked OTF is `ports/esp32s3-idf/font/source/noto-sans-sc-2.002/NotoSansSC-Regular.otf`.
+Coverage text and resource reports are in development-only `fonts/.source/`; `fonts/LICENSE.txt`
+contains the SIL Open Font License. Reports retain original font metrics, glyph IDs
+and source SHA-256. The 16px raster strike supports Core scalar scaling, including
+12px: the historical integer-only bitmap size warning is retired.
 
-- Its packaged `.jffont` has an `8px` native line height.
-- The current app-font runtime supports integer scales from `1x` through `8x`, so the exact sizes are
-  `8/16/24/32/40/48/56/64px`.
-- The manifest declares and CSS requests `12px`. Runtime therefore selects `16px`, and packaging must emit exactly one
-  `font-size-unavailable` warning.
-- The package declares unique `172x320`, `300x300`, and `320x240` targets so the extension can match common test devices.
+Prepare fonts before packaging. Legacy `.jffont`/JFFONT0-v0/v1 and BDF serialized
+font generation are retired; BDF-generated C++ BitmapFont headers are separate.
 
-## Extension test
-
-1. Open this directory in VS Code, or select the App in the JellyFrame sidebar.
-2. Connect and select a device.
-3. Run **Package and Deploy Current App**.
-4. After accepting the ordinary deployment confirmation, a second modal warning must report the affected `12px` size.
-5. **View report** must stop installation and open the report. Run again and choose **Install anyway** to continue to device installation.
-
-The report can be verified without a device:
-
-```powershell
-python tools\package_app.py `
-  --root samples\apps\packages\jelly_font_size_warning `
-  --target rect-172x320 `
-  --report build\font-size-warning.report.json `
-  --output-bundle build\font-size-warning.jfapp
-```
-
-`warnings[0].code` must be `font-size-unavailable`, with `sizes` equal to `[12]`.
+Resource coverage does not expand TextSystem scalar admission. The policy sample
+explicitly refuses its intentional missing Kana probe; named
+Chinese glyph visibility is verified independently by pixel tests.
