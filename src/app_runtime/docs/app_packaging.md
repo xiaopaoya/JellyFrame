@@ -153,7 +153,7 @@ my_app/
     icon.png
     images/
   fonts/
-    ui.bdf
+    ui.jffont2
   i18n/
     en-US.json
     zh-CN.json
@@ -211,7 +211,7 @@ pre-release apps remain supported.
   "fonts": [
     {
       "id": "ui",
-      "source": "fonts/ui.bdf",
+      "source": "fonts/ui.jffont2",
       "profile": "app-subset-cn",
       "sizes": [16, 20],
       "weights": [400, 700]
@@ -659,7 +659,7 @@ well.
 
 Package reports also include `fontDiagnostics`. This is a tooling estimate, not
 a runtime font loader: it scans package text resources for codepoints, applies
-the selected target `fontProfile`, parses manifest-declared `.jffont2` V0 glyph
+the selected target `fontProfile`, parses manifest-declared canonical `.jffont2` glyph
 tables and reports remaining missing non-ASCII glyphs as warnings. `.ttf`,
 `.otf`, `.woff`, `.bdf` and other font files may be packaged for documentation
 or future tooling, but they are not runtime-loadable font supplements yet and

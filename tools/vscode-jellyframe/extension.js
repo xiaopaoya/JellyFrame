@@ -1594,8 +1594,8 @@ async function deployDeviceApp(context, resourceUri) {
     const openReport = isChinese() ? "查看报告" : "View report";
     const selectedAction = await vscode.window.showWarningMessage(
       isChinese()
-        ? `App 字号声明不完整，或字体包无法精确提供所用字号${affected.length ? `（${affected.join("、")}）` : ""}。设备可能使用整数缩放，排版可能变化。`
-        : `App font-size metadata is incomplete, or the font package cannot provide the exact sizes${affected.length ? ` (${affected.join(", ")})` : ""}. The device may use integer scaling, which can change layout.`,
+        ? `App 字号声明不完整，或字体包无法精确提供所用字号${affected.length ? `（${affected.join("、")}）` : ""}。请核验所选 Core 档案的标量字号投影、栅格质量和排版。`
+        : `App font-size metadata is incomplete, or the font package cannot provide the exact sizes${affected.length ? ` (${affected.join(", ")})` : ""}. Verify scalar size projection, raster quality and layout with the selected Core profile.`,
       { modal: true }, openReport, continueInstall);
     if (selectedAction === openReport) {
       await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(report));

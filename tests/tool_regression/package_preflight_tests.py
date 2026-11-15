@@ -2356,6 +2356,25 @@ class PackagePreflightTests(unittest.TestCase):
                 4096,
             )
 
+    def test_manifest_font_schema_requires_canonical_suffix(self):
+        paths = ("tools/schemas/jellyframe.app.schema.json",
+                 "tools/vscode-jellyframe/schemas/jellyframe.app.schema.json")
+        constraints = []
+        for name in paths:
+            schema = json.loads((REPO_ROOT / name).read_text(encoding="utf8"))
+            source = schema["properties"]["fonts"]["items"]["properties"]["source"]
+            pattern = next(rule["pattern"] for rule in source["allOf"] if "pattern" in rule)
+            constraints.append(pattern)
+            for value in ("fonts/ui.jffont2", "fonts/UI.JFFONT2", "/fonts/ui.JfFoNt2"):
+                self.assertIsNotNone(re.search(pattern, value))
+            for value in ("fonts/ui.bdf", "fonts/ui.ttf", "fonts/ui.jffont", "fonts/ui.jffont2.bak"):
+                self.assertIsNone(re.search(pattern, value))
+        self.assertEqual(*constraints)
+        manifest = package_app.read_manifest(REPO_ROOT / "samples/apps/packages/jelly_font_policy")
+        self.assertTrue(package_app.validate_manifest(manifest))
+        manifest["fonts"][0]["source"] = "fonts/ui.bdf"
+        with self.assertRaises(SystemExit): package_app.validate_manifest(manifest)
+
     def test_sample_font_provenance_and_package_exclusion(self):
         source = REPO_ROOT / "ports/esp32s3-idf/font/source/noto-sans-sc-2.002/NotoSansSC-Regular.otf"
         source_hash = hashlib.sha256(source.read_bytes()).hexdigest()

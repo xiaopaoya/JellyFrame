@@ -106,7 +106,7 @@ my_app/
     icon.png
     images/
   fonts/
-    ui.bdf
+    ui.jffont2
   i18n/
     en-US.json
     zh-CN.json
@@ -157,7 +157,7 @@ my_app/
   "fonts": [
     {
       "id": "ui",
-      "source": "fonts/ui.bdf",
+      "source": "fonts/ui.jffont2",
       "profile": "app-subset-cn",
       "sizes": [16, 20],
       "weights": [400, 700]
@@ -545,7 +545,7 @@ CI 或发布打包希望 warning 也失败时，传入 `--strict`。
 
 Package report 还包含 `fontDiagnostics`。这是工具层估算，不是运行时字体加载器：它会扫描
 package 文本资源中出现的 codepoints，套用目标 `fontProfile`，解析 manifest 声明的 `.jffont2`
-V0 glyph table，并把剩余缺失的非 ASCII glyph 作为 warning 报告。`.ttf`、`.otf`、`.woff`、
+规范 glyph table，并把剩余缺失的非 ASCII glyph 作为 warning 报告。`.ttf`、`.otf`、`.woff`、
 `.bdf` 等字体文件可以作为文档或未来工具资源被打包，但当前不是 runtime-loadable font
 supplement；如果写进 manifest `fonts`，会被报告为不支持的字体资源格式。
 

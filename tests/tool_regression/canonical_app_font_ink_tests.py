@@ -25,6 +25,7 @@ def main():
     repo = Path(__file__).resolve().parents[2]
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
+        ink_counts = []
         for named in (False, True):
             app = root / ('named' if named else 'default')
             app.mkdir()
@@ -33,7 +34,10 @@ def main():
                 (app / 'face.jffont2').write_bytes((repo / 'samples/apps/packages/jelly_font_policy/fonts/tiny_cn.jffont2').read_bytes())
                 fonts = [{'family': 'Probe', 'source': '/face.jffont2'}]
             family = 'Probe' if named else 'system-ui'
-            (app / 'index.html').write_text('<style>body{margin:0;background:#fff;color:#000}p{margin:0;font-size:16px;font-family:' + family + '}</style><p>中小</p>', encoding='utf8')
+            # The system catalog has a real bold face, while the named subset
+            # contains only regular. At weight700 Core must select named400
+            # before default700; equal output would conceal a family fallback.
+            (app / 'index.html').write_text('<style>body{margin:0;background:#fff;color:#000}p{margin:0;font-size:16px;font-weight:700;font-family:' + family + '}</style><p>中小</p>', encoding='utf8')
             (app / 'jellyframe.app.json').write_text(json.dumps({
                 'id': 'org.example.canonical.ink', 'entry': '/index.html',
                 'runtime': {'minJellyFrame': '0.6.0', 'minRenderCore': sys.argv[2], 'script': 'none'},
@@ -45,6 +49,8 @@ def main():
             assert 'text_backend=core-text' in result.stdout and 'diagnostics: 0' in result.stdout
             assert ink(output) > 0
             print(f'{family}: canonical glyph ink={ink(output)}')
+            ink_counts.append(ink(output))
+        assert ink_counts[0] != ink_counts[1], 'named regular ink must differ from default bold; do not hide catalog fallback'
 
 
 if __name__ == '__main__':
