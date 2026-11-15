@@ -81,10 +81,6 @@ public:
     std::uint32_t allocate_current_handle(HostServiceHandleKind kind,
                                           std::uint32_t bytes = 0,
                                           void* payload = nullptr);
-    AppFontLoadResult load_current_jffont(const std::uint8_t* data, std::size_t size);
-    AppFontLoadResult load_current_jffont(const std::uint8_t* data, std::size_t size, std::string_view family);
-    AppFontLoadResult attach_current_jffont_view(const std::uint8_t* data, std::size_t size);
-    AppFontLoadResult attach_current_jffont_view(const std::uint8_t* data, std::size_t size, std::string_view family);
     AppFontLoadResult load_current_core_font(const std::uint8_t* data,
                                              std::size_t size,
                                              std::string_view family = {});

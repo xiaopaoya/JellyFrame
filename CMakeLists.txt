@@ -1164,6 +1164,14 @@ if(JELLYFRAME_BUILD_TESTS)
                     $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
+        add_test(
+            NAME jellyframe_win32_canonical_app_font_ink
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/canonical_app_font_ink_tests.py
+                    $<TARGET_FILE:jellyframe_desktop_shell>
+                    "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
         set(_jellyframe_incremental_repaint_options)
         list(APPEND _jellyframe_incremental_repaint_options
              --core-version "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")

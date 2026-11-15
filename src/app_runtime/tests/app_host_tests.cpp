@@ -82,27 +82,12 @@ std::vector<std::uint8_t> tiny_core_font_bytes() {
     return bytes;
 }
 
-const BitmapFont& tiny_system_font() {
-    static const std::uint8_t glyph_a_rows[] = {
-        0x40,
-        0xa0,
-        0xe0,
-        0xa0,
-        0xa0,
-    };
-    static const BitmapFontGlyph glyphs[] = {
-        BitmapFontGlyph{0x41, 3, 5, 4, 1, glyph_a_rows},
-    };
-    static const BitmapFont font{glyphs, 1, 8, 4};
-    return font;
-}
-
 void current_instance_submission_and_handles_are_scoped() {
     AppRuntimeHost host = make_host();
     assert(!host.submit_current(HostServiceJobKind::NetworkFetch).accepted);
     assert(host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 16) == 0);
-    const std::vector<std::uint8_t>& bytes = tiny_jffont_bytes();
-    assert(host.load_current_jffont(bytes.data(), bytes.size()).status == AppFontLoadStatus::EmptyInstance);
+    const auto bytes = tiny_core_font_bytes();
+    assert(host.load_current_core_font(bytes.data(), bytes.size()).status == AppFontLoadStatus::EmptyInstance);
 
     const AppInstance app = host.launch("org.example.app", AppRole::App);
     const auto submitted = host.submit_current(HostServiceJobKind::NetworkFetch, 0, 3, 1000);
@@ -145,122 +130,55 @@ void launch_cleans_previous_instance_state() {
 }
 
 void app_fonts_follow_active_instance_lifecycle() {
-    AppRuntimeHost host = make_host();
-    const AppInstance first = host.launch("org.example.first", AppRole::App);
-    const std::vector<std::uint8_t>& bytes = tiny_jffont_bytes();
-    const AppFontLoadResult loaded = host.load_current_jffont(bytes.data(), bytes.size());
-    assert(loaded.loaded());
+    auto host = make_host();
+    const auto app = host.launch("org.example.fonts", AppRole::App);
+    auto bytes = tiny_core_font_bytes();
+    assert(host.load_current_core_font(bytes.data(), bytes.size()).loaded());
+    bytes.clear(); bytes.shrink_to_fit(); // copied resource owns its bytes
+    TextRunMetrics metrics;
+    assert(host.fonts().core_text_system()->measure("AB", {}, metrics) == TextSystemStatus::Ok);
+    assert(metrics.advance > 0 && host.fonts().app_instance_id() == app.id);
+    const auto legacy = tiny_jffont_bytes();
+    assert(host.load_current_core_font(legacy.data(), legacy.size()).status == AppFontLoadStatus::InvalidFont);
+    auto legacy1 = legacy; legacy1[6] = '1';
+    assert(host.attach_current_core_font_view(legacy1.data(), legacy1.size()).status == AppFontLoadStatus::InvalidFont);
     assert(host.fonts().size() == 1);
-    assert(host.fonts().app_instance_id() == first.id);
-
-    TextMetrics metrics;
-    TextMeasureProvider provider = host.fonts().measure_provider();
-    assert(provider.measure("A\xe4\xb8\xad", 8, 400, &metrics, provider.context));
-    assert(metrics.width == 14);
-    assert(metrics.line_height == 8);
-
-    FrameBuffer frame(32, 16, Color{255, 255, 255, 255});
-    TextPainter painter = host.fonts().painter();
-    assert(painter.writes_only_within_rect);
-    assert(painter.paint(frame,
-                         Rect{0, 0, 32, 16},
-                         Color{0, 0, 0, 255},
-                         "A",
-                         8,
-                         400,
-                         TextCommandAlign::Start,
-                         true,
-                         painter.context));
-    assert(count_non_background_pixels(frame, Color{255, 255, 255, 255}) > 0);
-
-    const AppInstance second = host.launch("org.example.second", AppRole::App);
-    assert(second.id == first.id + 1);
-    assert(host.fonts().empty());
-    assert(host.load_current_jffont(bytes.data(), bytes.size()).loaded());
-
-    const AppTeardownResult teardown = host.exit_current();
-    assert(teardown.app_instance_id == second.id);
-    assert(teardown.released_font_resources == 1);
-    assert(host.fonts().empty());
+    assert(host.exit_current().released_font_resources == 1);
+    assert(host.fonts().empty() && !host.fonts().core_text_system());
 }
 
-void app_font_set_uses_system_font_before_app_supplement() {
-    AppRuntimeHost host = make_host();
-    host.launch("org.example.fonts", AppRole::App);
-    host.fonts().set_system_font(&tiny_system_font());
-    assert(host.load_current_jffont(tiny_jffont_bytes().data(), tiny_jffont_bytes().size()).loaded());
-
-    TextMetrics metrics;
-    TextMeasureProvider provider = host.fonts().measure_provider();
-    assert(provider.measure("A\xe4\xb8\xad", 8, 400, &metrics, provider.context));
-    assert(metrics.width == 12);
-    assert(metrics.line_height == 8);
-
-    FrameBuffer frame(24, 16, Color{255, 255, 255, 255});
-    TextPainter painter = host.fonts().painter();
-    assert(painter.writes_only_within_rect);
-    assert(painter.paint(frame,
-                         Rect{0, 0, 24, 16},
-                         Color{0, 0, 0, 255},
-                         "A\xe4\xb8\xad",
-                         8,
-                         400,
-                         TextCommandAlign::Start,
-                         true,
-                         painter.context));
-    assert(count_non_background_pixels(frame, Color{255, 255, 255, 255}) > 0);
-}
-
-void app_font_set_selects_named_app_family_before_system_font() {
-    AppRuntimeHost host = make_host();
-    host.launch("org.example.named-fonts", AppRole::App);
-    host.fonts().set_system_font(&tiny_system_font());
-    assert(host.load_current_jffont(tiny_jffont_bytes().data(),
-                                    tiny_jffont_bytes().size(),
-                                    "Jelly Tiny").loaded());
-
-    const std::uint32_t jelly_tiny = normalized_font_family_hash("jelly tiny");
-    TextMeasureProvider provider = host.fonts().measure_provider();
-    TextMetrics metrics = measure_text(provider, "A", 8, 400, jelly_tiny);
-    assert(metrics.width == 6);
-    metrics = measure_text(provider, "A", 18, 400, jelly_tiny);
-    assert(metrics.width == 12);
-    assert(metrics.line_height == 16);
-    metrics = measure_text(provider, "A", 8, 400);
-    assert(metrics.width == 4);
-
-    FrameBuffer frame(16, 12, Color{255, 255, 255, 255});
-    TextPainter painter = host.fonts().painter();
-    assert(painter.paint_family(frame,
-                                Rect{0, 0, 16, 12},
-                                Color{0, 0, 0, 255},
-                                "A",
-                                8,
-                                400,
-                                jelly_tiny,
-                                TextCommandAlign::Start,
-                                true,
-                                painter.context));
-    assert(count_non_background_pixels(frame, Color{255, 255, 255, 255}) > 0);
-}
-
-void app_font_set_can_attach_borrowed_jffont_view() {
-    AppRuntimeHost host = make_host();
-    host.launch("org.example.borrowed-fonts", AppRole::App);
-    const std::vector<std::uint8_t>& bytes = tiny_jffont_bytes();
-    const AppFontLoadResult loaded = host.attach_current_jffont_view(bytes.data(), bytes.size());
-    assert(loaded.loaded());
-    assert(host.fonts().size() == 1);
-
-    TextMetrics metrics;
-    TextMeasureProvider provider = host.fonts().measure_provider();
-    assert(provider.measure("\xe4\xb8\xad", 8, 400, &metrics, provider.context));
-    assert(metrics.width == 8);
-    assert(metrics.line_height == 8);
-
-    const AppTeardownResult teardown = host.exit_current();
-    assert(teardown.released_font_resources == 1);
-    assert(host.fonts().empty());
+void app_font_set_admission_is_transactional() {
+    AppFontSet fonts(1);
+    auto bytes = tiny_core_font_bytes();
+    assert(fonts.load_core_font(1, bytes.data(), bytes.size()).loaded());
+    const auto generation = fonts.core_text_system()->generation();
+    const auto legacy = tiny_jffont_bytes();
+    assert(!fonts.load_core_font(2, legacy.data(), legacy.size()).loaded());
+    // A named-only catalog has no default family and must not erase instance 1.
+    assert(!fonts.load_core_font(2, bytes.data(), bytes.size(), "Named").loaded());
+    assert(fonts.app_instance_id() == 1 && fonts.size() == 1);
+    assert(fonts.core_text_system()->generation() == generation);
+    assert(fonts.load_core_font(1, bytes.data(), bytes.size()).status == AppFontLoadStatus::CapacityExceeded);
+    assert(fonts.load_core_font(0, bytes.data(), bytes.size()).status == AppFontLoadStatus::EmptyInstance);
+    assert(fonts.load_core_font(2, bytes.data(), bytes.size()).loaded());
+    assert(fonts.app_instance_id() == 2 && fonts.clear_app_instance(1) == 0);
+    assert(fonts.clear_app_instance(2) == 1 && !fonts.core_text_system());
+    // Borrowed views retain no hidden fallback; owner lives until detach.
+    assert(fonts.attach_core_font_view(3, bytes.data(), bytes.size()).loaded());
+    TextRunMetrics metrics;
+    assert(fonts.core_text_system()->measure("AB", {}, metrics) == TextSystemStatus::Ok);
+    fonts.clear();
+    bytes.clear();
+    assert(!fonts.core_text_system());
+    auto system = tiny_core_font_bytes();
+    assert(fonts.set_core_system_font(system.data(), system.size()));
+    system.clear(); system.shrink_to_fit();
+    auto app = tiny_core_font_bytes();
+    assert(fonts.attach_core_font_view(4, app.data(), app.size(), "Named").loaded());
+    assert(fonts.clear_app_instance(4) == 1);
+    app.clear(); app.shrink_to_fit();
+    assert(fonts.core_text_system() &&
+        fonts.core_text_system()->measure("AB", {}, metrics) == TextSystemStatus::Ok);
 }
 
 void core_font_catalog_tracks_app_lifetime_and_family_identity() {
@@ -431,7 +349,7 @@ void crash_current_tears_down_active_instance_state() {
     assert(host.pop_worker_request(worker_request));
     const std::uint32_t handle = host.allocate_current_handle(HostServiceHandleKind::FetchResponse, 64);
     assert(handle != 0);
-    assert(host.load_current_jffont(tiny_jffont_bytes().data(), tiny_jffont_bytes().size()).loaded());
+    assert(host.load_current_core_font(tiny_core_font_bytes().data(), tiny_core_font_bytes().size()).loaded());
     assert(host.push_completion(HostServiceCompletion{request.job_id,
                                                       HostServiceJobKind::NetworkFetch,
                                                       HostServiceStatus::Completed,
@@ -613,7 +531,8 @@ void budget_snapshot_reports_runtime_usage_and_caps() {
                                                       handle,
                                                       0,
                                                       128}));
-    assert(host.attach_current_jffont_view(tiny_jffont_bytes().data(), tiny_jffont_bytes().size()).loaded());
+    const auto borrowed_font = tiny_core_font_bytes();
+    assert(host.attach_current_core_font_view(borrowed_font.data(), borrowed_font.size()).loaded());
 
     AppSystemEventQueue system_events(3, 2);
     AppSystemStateSnapshot snapshot;
@@ -921,9 +840,7 @@ int main() {
     current_instance_submission_and_handles_are_scoped();
     launch_cleans_previous_instance_state();
     app_fonts_follow_active_instance_lifecycle();
-    app_font_set_uses_system_font_before_app_supplement();
-    app_font_set_selects_named_app_family_before_system_font();
-    app_font_set_can_attach_borrowed_jffont_view();
+    app_font_set_admission_is_transactional();
     core_system_font_catalog_selects_weights_and_rolls_back_invalid_updates();
     core_system_font_catalog_owns_copies_and_borrows_views();
     generated_noto_catalog_binds_and_selects_all_weights_and_display_strike();

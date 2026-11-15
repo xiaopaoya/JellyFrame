@@ -1,24 +1,17 @@
-# Jelly Font Policy
+# 规范应用字体样例
 
-> 最后更新：2026-09-09；适用版本：0.6.0-dev；Render Core 基线：0.6.2
+> Last updated: 2026-11-15; Applies to: 0.6.0-dev
 
-这个小 package 用来验收 app 字体策略路径：
+`fonts/*.jffont2` 来自已授权的 Noto Sans SC 2.002 Regular，使用 Core
+`tools/prepare_font_resource.py`、Pillow 12.3.0 和 fontTools 4.60.1 生成。
+原始字体位于 `ports/esp32s3-idf/font/source/noto-sans-sc-2.002/NotoSansSC-Regular.otf`。
+覆盖字符和生成报告保存在仅供开发使用的 `fonts/.source/`，不会打包；
+`fonts/LICENSE.txt` 保留 SIL Open Font License。报告记录原始字体度量、字形 ID、
+源文件和资源的 SHA-256。16px 栅格档支持 Core 标量缩放，包括 12px；
+历史上仅支持整数倍缩放的尺寸警告已退役。
 
-- CSS 声明两个包内 family：`Jelly Tiny CN` 和 `Jelly Tiny Symbols`。
-- `jellyframe.app.json` 声明两个 family，并指向包内 `.jffont` 补充包。
-- Manifest `sizes` / `weights` 声明本包验收过的 CSS 字号和字重；app-font backend
-  使用整数倍 bitmap 缩放，不做完整浏览器字体匹配。
-- `jellyframe_cli.py check` 会把两个 family 报告为 manifest runtime font，在安装前验证 glyph 覆盖，
-  并故意对缺失的 `あ` 探针给出 warning。
-- Win32 可用 `--use-app-fonts` 验证 runtime 文本路径：
+先生成字体，再打包或导入。旧 `.jffont` / JFFONT0-v0/v1 和 BDF 二进制字体生成已退役；
+BDF 生成 C++ BitmapFont 头文件仍是独立产品。
 
-```powershell
-.\build\desktop-scripting-release\Release\jellyframe_desktop_shell.exe --app samples\apps\packages\jelly_font_policy --use-app-fonts
-```
-
-这里的字体故意很小，只用于确定性的 package/tool 测试。产品 app 应从有授权的 bitmap font 生成自己的
-`.jffont` 子集。
-
-## 视觉用途
-
-采用可穿戴配色；以下宿主能力和验收限制仍然适用。
+字体资源包含字形不代表当前 TextSystem 接受对应字符。字体策略样例中
+故意缺失的假名探针会明确拒绝，不能作为可见字形通过的证据；中文命名字体通过独立像素测试验证。

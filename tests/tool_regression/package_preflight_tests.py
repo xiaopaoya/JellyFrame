@@ -2179,7 +2179,7 @@ class PackagePreflightTests(unittest.TestCase):
 
             usage = package_app.collect_font_family_usage(resources, [{
                 "id": "tiny",
-                "source": "/fonts/tiny.jffont",
+                "source": "/fonts/tiny.jffont2",
                 "family": "Jelly Tiny",
             }])
 
@@ -2202,13 +2202,13 @@ class PackagePreflightTests(unittest.TestCase):
             "fonts": [
                 {
                     "id": "missing-axis",
-                    "source": "/fonts/missing.jffont",
+                    "source": "/fonts/missing.jffont2",
                     "profile": "tiny",
                     "license": {"name": "Example", "source": "example.bdf"},
                 },
                 {
                     "id": "bad-axis",
-                    "source": "/fonts/bad.jffont",
+                    "source": "/fonts/bad.jffont2",
                     "profile": "tiny",
                     "license": {"name": "Example", "source": "example.bdf"},
                     "sizes": [0, 12],
@@ -2255,7 +2255,7 @@ class PackagePreflightTests(unittest.TestCase):
         }])
 
     def test_font_diagnostics_report_declared_and_used_unavailable_sizes(self):
-        sample_font = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy" / "fonts" / "tiny_cn.jffont"
+        sample_font = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy" / "fonts" / "tiny_cn.jffont2"
         with tempfile.TemporaryDirectory(prefix="jellyframe-font-size-diagnostics-") as directory:
             root = Path(directory)
             css = root / "app.css"
@@ -2273,7 +2273,7 @@ class PackagePreflightTests(unittest.TestCase):
                     "size": css.stat().st_size,
                 },
                 {
-                    "path": "/fonts/tiny.jffont",
+                    "path": "/fonts/tiny.jffont2",
                     "kind": "jellyframe::HostResourceKind::Font",
                     "file": sample_font,
                     "size": sample_font.stat().st_size,
@@ -2283,7 +2283,7 @@ class PackagePreflightTests(unittest.TestCase):
                 {
                     "fonts": [{
                         "id": "tiny",
-                        "source": "/fonts/tiny.jffont",
+                        "source": "/fonts/tiny.jffont2",
                         "profile": "tiny",
                         "family": "Jelly Tiny",
                         "license": {"name": "Test font", "source": "tiny.bdf"},
@@ -2297,14 +2297,13 @@ class PackagePreflightTests(unittest.TestCase):
             )
 
         font = diagnostics["manifestFonts"][0]
-        self.assertEqual(font["nativeSize"], 8)
-        self.assertEqual(font["renderableSizes"], [8, 16, 24, 32, 40, 48, 56, 64])
+        self.assertEqual(font["nativeSize"], 16)
+        self.assertEqual(font["renderableSizes"], [])
         self.assertEqual(font["usedSizes"], [12, 16, 24])
         self.assertEqual(font["undeclaredUsedSizes"], [24])
-        self.assertEqual(font["declaredUnavailableSizes"], [12])
-        self.assertEqual(font["unavailableUsedSizes"], [12])
-        size_warning = next(warning for warning in warnings if warning["code"] == "font-size-unavailable")
-        self.assertEqual(size_warning["sizes"], [12])
+        self.assertEqual(font["declaredUnavailableSizes"], [])
+        self.assertEqual(font["unavailableUsedSizes"], [])
+        self.assertFalse(any(w["code"] == "font-size-unavailable" for w in warnings))
 
         declaration_warning = next(warning for warning in warnings if warning["code"] == "font-size-not-declared")
         self.assertEqual(declaration_warning["sizes"], [24])
@@ -2314,7 +2313,7 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(unresolved_warning["value"], "var(--label-size)")
 
     def test_external_jffont_overlay_is_packaged_at_declared_manifest_source(self):
-        sample_font = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy" / "fonts" / "tiny_cn.jffont"
+        sample_font = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy" / "fonts" / "tiny_cn.jffont2"
         with tempfile.TemporaryDirectory(prefix="jellyframe-font-overlay-") as directory:
             root = Path(directory)
             sample_root = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy"
@@ -2322,7 +2321,7 @@ class PackagePreflightTests(unittest.TestCase):
             manifest["id"] = "org.example.font-overlay"
             manifest["fonts"] = [{
                 "id": "generated-cn",
-                "source": "/fonts/generated_cn.jffont",
+                "source": "/fonts/generated_cn.jffont2",
                 "profile": "app-subset-cn",
                 "family": "Generated CN",
                 "license": {"name": "Test font", "source": "test-font.bdf"},
@@ -2330,60 +2329,109 @@ class PackagePreflightTests(unittest.TestCase):
                 "weights": [400],
             }]
             resources, imports = package_app.apply_imported_font_resources(
-                [], manifest, [f"/fonts/generated_cn.jffont={sample_font}"], 4096)
+                [], manifest, [f"/fonts/generated_cn.jffont2={sample_font}"], 4096)
             bundle_path = root / "font-overlay.jfapp"
             package_app.write_jfapp_bundle(bundle_path, manifest, resources)
             parsed = app_registry.parse_jfapp(bundle_path.read_bytes())
 
             self.assertEqual(len(imports), 1)
-            self.assertEqual(resources[0]["path"], "/fonts/generated_cn.jffont")
+            self.assertEqual(resources[0]["path"], "/fonts/generated_cn.jffont2")
             self.assertEqual(resources[0]["kind"], "jellyframe::HostResourceKind::Font")
-            self.assertFalse((root / "fonts" / "generated_cn.jffont").exists())
-            self.assertEqual(parsed["summary"]["fonts"][0]["source"], "/fonts/generated_cn.jffont")
+            self.assertFalse((root / "fonts" / "generated_cn.jffont2").exists())
+            self.assertEqual(parsed["summary"]["fonts"][0]["source"], "/fonts/generated_cn.jffont2")
             self.assertEqual(parsed["resourceCount"], 1)
-            self.assertIn(b"/fonts/generated_cn.jffont", bundle_path.read_bytes())
+            self.assertIn(b"/fonts/generated_cn.jffont2", bundle_path.read_bytes())
 
     def test_external_jffont_overlay_rejects_undeclared_or_occupied_paths(self):
-        sample_font = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy" / "fonts" / "tiny_cn.jffont"
-        manifest = {"fonts": [{"source": "/fonts/declared.jffont"}]}
+        sample_font = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy" / "fonts" / "tiny_cn.jffont2"
+        manifest = {"fonts": [{"source": "/fonts/declared.jffont2"}]}
         with self.assertRaises(SystemExit):
             package_app.apply_imported_font_resources(
-                [], manifest, [f"/fonts/other.jffont={sample_font}"], 4096)
+                [], manifest, [f"/fonts/other.jffont2={sample_font}"], 4096)
         with self.assertRaises(SystemExit):
             package_app.apply_imported_font_resources(
-                [{"path": "/fonts/declared.jffont"}],
+                [{"path": "/fonts/declared.jffont2"}],
                 manifest,
-                [f"/fonts/declared.jffont={sample_font}"],
+                [f"/fonts/declared.jffont2={sample_font}"],
                 4096,
             )
 
-    def test_generated_font_target_requires_unique_licensed_missing_manifest_entry(self):
-        with tempfile.TemporaryDirectory(prefix="jellyframe-font-target-") as directory:
-            root = Path(directory)
-            manifest_path = root / "jellyframe.app.json"
-            manifest_path.write_text(json.dumps({
-                "fonts": [{
-                    "id": "generated-cn",
-                    "source": "/fonts/generated_cn.jffont",
-                    "profile": "app-subset-cn",
-                    "license": {"name": "Test font", "source": "test-font.bdf"},
-                }],
-            }), encoding="utf-8")
-            args = SimpleNamespace(
-                root=root,
-                font_source_bdf=Path("test-font.bdf"),
-                font_resource_id=None,
-                font_output=None,
-            )
+    def test_manifest_font_schema_requires_canonical_suffix(self):
+        paths = ("tools/schemas/jellyframe.app.schema.json",
+                 "tools/vscode-jellyframe/schemas/jellyframe.app.schema.json")
+        constraints = []
+        for name in paths:
+            schema = json.loads((REPO_ROOT / name).read_text(encoding="utf8"))
+            source = schema["properties"]["fonts"]["items"]["properties"]["source"]
+            pattern = next(rule["pattern"] for rule in source["allOf"] if "pattern" in rule)
+            constraints.append(pattern)
+            for value in ("fonts/ui.jffont2", "fonts/UI.JFFONT2", "/fonts/ui.JfFoNt2"):
+                self.assertIsNotNone(re.search(pattern, value))
+            for value in ("fonts/ui.bdf", "fonts/ui.ttf", "fonts/ui.jffont", "fonts/ui.jffont2.bak"):
+                self.assertIsNone(re.search(pattern, value))
+        self.assertEqual(*constraints)
+        manifest = package_app.read_manifest(REPO_ROOT / "samples/apps/packages/jelly_font_policy")
+        self.assertTrue(package_app.validate_manifest(manifest))
+        manifest["fonts"][0]["source"] = "fonts/ui.bdf"
+        with self.assertRaises(SystemExit): package_app.validate_manifest(manifest)
 
-            target = jellyframe_cli.select_generated_font_target(args)
-            staged = jellyframe_cli.staged_generated_font_path(args, target)
+    def test_sample_font_provenance_and_package_exclusion(self):
+        source = REPO_ROOT / "ports/esp32s3-idf/font/source/noto-sans-sc-2.002/NotoSansSC-Regular.otf"
+        source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+        for app in ("jelly_font_policy", "jelly_font_size_warning"):
+            root = REPO_ROOT / "samples/apps/packages" / app
+            resources = package_app.discover_resources(root, 16384)
+            self.assertFalse(any("/.source/" in r["path"] for r in resources))
+            for font in (root / "fonts").glob("*.jffont2"):
+                report = json.loads((font.parent / ".source" / (font.name + ".json")).read_text())
+                self.assertEqual(report["sourceSha256"], source_hash)
+                self.assertEqual(report["resourceSha256"], hashlib.sha256(font.read_bytes()).hexdigest())
+                self.assertEqual(report["raster"]["pillow"], "12.3.0")
+                self.assertEqual(report["raster"]["fontTools"], "4.60.1")
+                self.assertTrue(package_app.parse_jffont(font.read_bytes())["ok"])
 
-            self.assertEqual(target["id"], "generated-cn")
-            self.assertEqual(staged.name, "generated_cn.jffont")
-            self.assertFalse((root / "fonts" / "generated_cn.jffont").exists())
-            for path in args._temporary_paths:
-                package_app.shutil.rmtree(path, ignore_errors=True)
+    def test_canonical_font_cli_preserves_explicit_coverage_and_tool(self):
+        from unittest.mock import patch
+        args = SimpleNamespace(font_source=Path("original.otf"), bdf=None, output_header=None,
+            core_font_tool=Path("pinned/prepare_font_resource.py"), font_output=Path("font.jffont2"),
+            characters=Path("ascii-and-han.txt"), used_chars=Path("scan.txt"), report=Path("report.json"), font_size=18, coverage_bits=4)
+        with patch.object(jellyframe_cli, "cmd_validate", return_value=0), \
+             patch.object(jellyframe_cli, "run_font_resource_check", return_value=0), \
+             patch.object(jellyframe_cli, "run_command", return_value=0) as run:
+            self.assertEqual(jellyframe_cli.cmd_font(args), 0)
+            command = run.call_args.args[0]
+            self.assertEqual(Path(command[1]), Path("pinned/prepare_font_resource.py"))
+            self.assertEqual(command[command.index("--characters")+1], "ascii-and-han.txt")
+            self.assertEqual(command[command.index("--font")+1], "original.otf")
+        original = args.used_chars
+        args.used_chars = args.font_source
+        with patch.object(jellyframe_cli, "cmd_validate") as validate:
+            with self.assertRaises(SystemExit): jellyframe_cli.cmd_font(args)
+            validate.assert_not_called()
+        args.used_chars = original
+        args.characters = None
+        with self.assertRaises(SystemExit): jellyframe_cli.cmd_font(args)
+
+    def test_retired_font_formats_are_rejected(self):
+        legacy = b"JFFONT0\0" + bytes(24)
+        self.assertEqual(package_app.parse_jffont(legacy)["error"],
+                         "retired-jffont0-v0-v1-use-canonical-jffont2")
+        with self.assertRaises(SystemExit): package_app.validate_manifest([])
+        manifest = package_app.read_manifest(REPO_ROOT / "samples/apps/packages/jelly_font_policy")
+        manifest["fonts"][0]["source"] = "/font.jffont"
+        with self.assertRaises(SystemExit): package_app.validate_manifest(manifest)
+        self.assertFalse(hasattr(jellyframe_cli, "select_generated_font_target"))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "hidden.jffont2"
+            path.write_bytes(legacy)
+            with self.assertRaises(SystemExit):
+                package_app.build_resource_entry(Path(directory), path, "/hidden.jffont2", 4096)
+            manifest = {"fonts": [{"source": "/hidden.jffont2"}]}
+            with self.assertRaises(SystemExit):
+                package_app.apply_imported_font_resources([], manifest, [f"/hidden.jffont2={path}"], 4096)
+            with self.assertRaises(SystemExit):
+                package_app.collect_font_diagnostics(manifest,
+                    [{"path": "/hidden.jffont2", "file": path, "size": len(legacy), "kind": "jellyframe::HostResourceKind::Font"}], {}, {})
 
     def test_package_background_image_diagnostics_match_the_bounded_css_subset(self):
         with tempfile.TemporaryDirectory(prefix="jellyframe-background-image-") as directory:

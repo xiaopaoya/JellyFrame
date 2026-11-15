@@ -1,6 +1,6 @@
 # Embedded Optimization Notes
 
-> Last updated: 2026-08-28; Applies to: 0.6.0-dev
+> Last updated: 2026-11-15; Applies to: 0.6.0-dev
 
 
 The exact target CPU, memory map, display controller and instruction set are not
@@ -211,6 +211,13 @@ This guard checks a small set of render-core and app-runtime microbenchmarks:
 style/custom-property resolution, full pipeline, dirty-rect replay, scroll-blit
 planning, Canvas 2D path/gradient paths, font-family measurement and
 app-runtime queue/system-event helpers.
+
+The font measurement cases use a two-glyph canonical JFFONT2 subset (A and 中),
+including small-catalog admission and repeated measurements. The full shared
+system catalog's cold admission is a separate reported case with bounded
+iterations. Do not replace the small fixture with the complete catalog while
+retaining the same threshold: that changes the measured workload. Neither case
+alone estimates a device's per-frame text cost.
 
 The thresholds are deliberately broad. They are meant to catch catastrophic
 regressions such as accidentally making a per-frame queue path linear again.

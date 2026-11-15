@@ -1,6 +1,6 @@
 # Host Abstraction Draft
 
-> Last updated: 2026-07-13; Applies to: 0.5.0
+> Last updated: 2026-11-15; Applies to: 0.5.0
 
 
 JellyFrame's core should stay independent from filesystems, network stacks,
@@ -220,17 +220,16 @@ Legacy consumers currently provide:
 - generated bitmap font packs for `tiny`, app-specific, `cn-standard` or market-specific profiles;
 - bitmap/JFFONT measurement and painting callbacks;
 - Win32 GDI measurement and painting;
-- AppFontSet callbacks for older app-specific bitmap fonts.
+- AppFontSet now registers JFFONT2 data only; its callback path is removed.
 
 Keep these only for existing consumers until their Core catalog migration and
 parity tests are complete. Do not add a new vendor text backend to a port.
 
-Do not let the render core read or parse arbitrary font files by itself. The
-current production path is compile-time bitmap font packs; future high-priority
-`.jfapp` dynamic font supplements should still enter through a controlled font
-resource provider and the same host text backend. Measurement and painting must
-come from the same glyph metrics to avoid clipping and mismatched wrapping. See
-`src/render_core/docs/text_backend.md`.
+Prepare app fonts offline from licensed static OTF/TTF as canonical Core
+JFFONT2. Ports provide immutable resources and lifetime; Core interprets source
+metrics, selects weights, prepares and paints glyphs. Devices do not load
+arbitrary original font files. Generated BitmapFont/GDI default consumers
+remain migration work, not the interface for new ports.
 
 ## Input Backend
 

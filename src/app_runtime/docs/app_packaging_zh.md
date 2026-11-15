@@ -1,6 +1,6 @@
 # App Packaging
 
-> 最后更新：2026-11-04；适用版本：0.6.0-dev
+> 最后更新：2026-11-15；适用版本：0.6.0-dev
 
 JellyFrame app packaging 会把 web-like 源文件转成确定性的、适合固件集成的 app 资源。
 这里不应照搬手机或手表应用商店的安装包；JellyFrame 更适合保留小型类 Web 的开发体验，
@@ -106,7 +106,7 @@ my_app/
     icon.png
     images/
   fonts/
-    ui.bdf
+    ui.jffont2
   i18n/
     en-US.json
     zh-CN.json
@@ -157,7 +157,7 @@ my_app/
   "fonts": [
     {
       "id": "ui",
-      "source": "fonts/ui.bdf",
+      "source": "fonts/ui.jffont2",
       "profile": "app-subset-cn",
       "sizes": [16, 20],
       "weights": [400, 700]
@@ -206,20 +206,17 @@ Canvas 2D 的标准能力名是 `graphics.canvas2d`。它用于声明 app 需要
   和 pattern fill 仍延后。gradient 文本目前会退化为一个采样色，以便 Canvas 继续复用宿主
   text backend。
 
-`fonts` 是 JellyFrame 预制位图字体路径的部署/runtime 声明，不是完整 CSS `@font-face`
-实现。打包器会把 `.jffont`、`.jffont2`、`.bdf`、`.ttf`、`.otf`、`.woff` 等文件作为普通 `Font`
-资源写入资源表或 `.jfapp`。`.jffont` V0/V1 与 Core-owned JFFONT2 均可由 runtime 解析并随 app instance
-持有。Win32 `--use-app-fonts` 在 JFFONT2 catalog 含 family-0 字体时使用 Core TextSystem；否则仍可走旧 bitmap backend。`AppFontSet` 提供 bitmap fallback chain：generic/未指定 family 的文本先尝试系统字体
-profile，再用 app `.jffont` supplement 补缺字；CSS `font-family` 的首个自定义 family 若匹配
-manifest `fonts[].family`，则优先尝试对应 app 字体。Win32 壳可用 `--use-app-fonts`
-显式切到这条验收路径。
+`fonts` 是 canonical JFFONT2 应用字体的部署声明，不是 CSS `@font-face`。
+Manifest 和导入只接受 `.jffont2`；旧 JFFONT0/1 必须从授权原始字体重新生成。
+AppFontSet 只管理资源寿命和目录，Core TextSystem 统一选择、度量、准备与绘制。
+命名 family 需要真实的 default-family0 资源；`--use-app-fonts` 不会悄悄回退 GDI。
 
 manifest 中的每个 font 条目可以写：
 
 ```json
 {
   "id": "ui-cn",
-  "source": "fonts/ui-cn.jffont",
+  "source": "fonts/ui-cn.jffont2",
   "profile": "app-subset-cn",
   "family": "Jelly UI CN",
   "license": {
@@ -232,28 +229,11 @@ manifest 中的每个 font 条目可以写：
 }
 ```
 
-`family` 同时用于 package diagnostics 和 runtime app-font 选择。`system-ui`、`sans-serif`
-等 generic family 会报告为 generic fallback；未匹配的首选自定义 family 会产生
-`font-family-unmatched`。runtime 匹配刻意很小：只规范化 CSS family list 中首个自定义 family，
-并与 manifest `.jffont` family 匹配；不实现完整浏览器 cascade、`@font-face`、stretch/style/features
-和完整字体匹配。app-font backend 使用便宜的整数倍字号策略：根据 CSS `font-size` 除以字体
-line height 选择 1x/2x/3x... 缩放，并设置上限避免异常字号失控；`font-weight >= 600`
-沿用合成粗体描边。`sizes`、`weights` 用来声明这个 package font 已验收的 CSS 字号和字重。
-工具仍会检查这些数组是否存在且合法，
-发布前可报告 `font-axis-metadata-missing` 或 `font-axis-metadata-invalid`。`license.name` 和 `license.source`
-是推荐字段；缺失时 pack/check 会给出 `font-license-missing` 或 `font-license-incomplete`，
-便于发布前确认字体来源。
-`budgets.maxAppFonts`、`budgets.maxAppFontBytes`、`budgets.maxAppFontGlyphs` 会限制可用
-runtime `.jffont` 数量、总字节和总 glyph 数；超过时会报告 `font-budget-exceeded`。这些检查只发生在工具层，
-不会增加 MCU 渲染热路径成本。
-
-`samples/apps/packages/jelly_font_policy` 是这条路径的验收样例：它在 CSS 和 manifest 元数据中分别声明
-`Jelly Tiny CN` 与 `Jelly Tiny Symbols` family，包含由仓库 BDF fixture 生成的极小 `.jffont`
-supplement，验收整数倍字号缩放，并故意保留一个缺字探针，方便验证工具 warning 是否稳定。
-
-当前稳定生产路径仍是：打包/检查阶段收集 used chars，离线从授权字体生成 bitmap glyph 数据，
-再把生成的 `BitmapFont` 编译进 port/firmware 或作为 `.jffont` supplement 随 `.jfapp`
-安装，并通过 `TextMeasureProvider`/`TextPainter` 或 `AppFontSet` 注入。
+`family` 由 Core 规范化并匹配 manifest 目录。Core 按真实字重和原始度量选择、缩放，
+不再使用整数倍字号或合成粗体。`sizes`/`weights` 记录应用验收的轴，不能改写字体来源元数据。
+授权、缺字、目录和字体数量/字节/glyph 预算仍在打包时检查；预检不保证像素结果或完整 shaping。
+样例 `jelly_font_policy` 使用授权 Noto JFFONT2，并保留明确缺字探针。
+详见 [core_font_catalog.md](core_font_catalog.md)。
 
 CLI 的 `check`、`package`、`preview` 和源码包 `install` 默认使用 `--font-subset auto`。
 这会运行字体预检、输出 `report.used_chars.txt`，并在 JSON report 中写入：
@@ -269,24 +249,10 @@ CLI 的 `check`、`package`、`preview` 和源码包 `install` 默认使用 `--f
 }
 ```
 
-如果已有授权 BDF bitmap font，先在 manifest `fonts[]` 中声明目标 `.jffont`、family、profile、
-axis 和授权信息；即使源目录中还没有该文件，CLI 也可以在同一次预检中生成并打包它：
-
-```powershell
-python tools\jellyframe_cli.py package `
-  --root samples\apps\packages\jelly_font_policy `
-  --target round-300 `
-  --report build\font_policy.report.json `
-  --output-bundle build\font_policy.jfapp `
-  --font-source-bdf src\render_core\samples\fonts\bitmap\tiny.bdf `
-  --font-coverage-bits 2 `
-  --font-allow-missing
-```
-
-生成的 `.jffont` 通过临时 package overlay 写入 bundle 的 `fonts[].source`，不会修改源码包。
-多个声明字体同时缺失时用 `--font-resource-id` 选择；需要保留独立生成文件时使用
-`--font-output`。字体来源和授权仍必须由 app 作者显式确认，工具不会下载字体或默默发布
-未声明授权信息的系统/第三方字体。
+先使用 pinned Core 的 `prepare_font_resource.py` 从授权静态 OTF/TTF 生成 JFFONT2，
+再放到 manifest 路径，或通过 `--import-font-resource /fonts/ui.jffont2=PATH` 导入。
+CLI `font --font-source ... --core-font-tool ... --characters UTF8 --font-output ...` 可调用同一个工具。
+需要使用 Core 指定的 Python 依赖环境。打包不再接受 BDF 自动生成参数。
 
 内置 target presets 位于 `tools/presets/targets`。可以这样列出：
 
@@ -475,72 +441,16 @@ V0 明确不做压缩、加密、动态 native code、远程资源、依赖包�
 manifest summary 是 packer 生成的紧凑 JSON，桌面工具和调试壳可读取；真正的嵌入式安装器可以
 只解析需要的固定字段或使用打包报告/registry 生成的摘要。
 
-## `.jffont` V0/V1 Binary Font Supplement
+## JFFONT2 应用字体资源
 
-`.jffont` 是面向 `.jfapp` 动态字体补充的第一版二进制容器。它不是 TTF/OTF/WOFF
-加载器，也不要求 MCU 端运行矢量字体 rasterizer；它保存的是已离线裁剪和 rasterize 的 bitmap glyph。
-V0 保存紧凑的 1bpp glyph rows。V1 保持同一个固定表结构，并增加显式 2bpp/4bpp coverage rows，
-用于字体级抗锯齿。当前工具可以生成该文件，render core 已提供只读内存 view 解析器，app runtime 也有按
-`app_instance_id` 绑定的 `AppFontSet` 用于持有 `.jffont` bytes 并在 app 退出/切换时释放。
-第一版 bitmap fallback chain 已实现：系统字体优先，然后 app supplement 补缺。CSS/runtime 激活语义和
-产品级 text backend 选择仍在主线 C 中继续实现。
-
-文件布局：
-
-```text
-header
-glyph index[]
-bitmap rows blob
-```
-
-header 固定 32 字节，小端：
-
-```c
-char     magic[8];          // "JFFONT0\0"
-uint16_t header_size;       // 32
-uint16_t format_version;    // 0 为 1bpp，1 为 coverage glyph
-uint32_t glyph_count;
-uint8_t  line_height;
-uint8_t  fallback_advance;
-uint16_t flags;             // V0: 0，V1: 低 8 位为 coverage bits 1/2/4
-uint32_t glyph_table_offset;
-uint32_t row_data_offset;
-uint32_t row_data_size;
-```
-
-每个 glyph index 条目固定 16 字节，并按 Unicode codepoint 升序排列：
-
-```c
-uint32_t codepoint;
-uint32_t row_offset;        // offset into bitmap rows blob
-uint32_t row_size;
-uint8_t  width;
-uint8_t  height;
-uint8_t  advance;
-uint8_t  bytes_per_row;
-```
-
-这基本复用 `BitmapFontGlyph`/`BitmapFont` 的数据模型，但去掉了 C++ 指针和编译期符号。
-`BitmapFontResource` 可以把 `.jffont` bytes 解析成只读 view，并复用现有二分 codepoint lookup
-和 bitmap painter。Coverage glyph 是显式的画质/存储取舍：2bpp 大致让 row data 翻倍，
-4bpp 大致让 row data 变为四倍；绘制时会对每个覆盖 glyph 像素多做一次小型 alpha coverage blend。
-使用 V0/1bpp 字体的 app 不支付这部分成本。当前生成器从 BDF bitmap 邻近像素近似生成 coverage，
-它不是运行时矢量 rasterizer，也不承诺浏览器级 subpixel typography。低层 view 要求调用方保证
-`.jffont` bytes 在 view 生命周期内保持有效；
-`AppFontSet::load_jffont` 会为当前 app instance 持有一份 bytes 拷贝，适合桌面/source-package
-安全路径；`AppFontSet::attach_jffont_view` 和 `AppRuntimeHost::attach_current_jffont_view`
-可直接挂载稳定的 flash/mmapped 或 `.jfapp` bundle payload，不复制字体 bytes。Win32 壳对可安装
-`.jfapp` bundle 使用该 view 路径，对源目录仍回退到复制路径。
-当前 `jellyframe_font_pack_gen` 支持同时生成固件静态 header 和 `.jffont`：
+应用字体只接受 Core 规范的 JFFONT2。资源保留原始 hhea/hmtx 度量、真实字重、
+源文件身份与离线灰度字形。Core 完成统一选择、Q1000 缩放与绘制；移植者提供不可变资源，
+无需提供文本测量或绘制回调。旧 JFFONT0/1 序列化加载和写入已移除，不能靠重命名迁移。
 
 ```powershell
-jellyframe_font_pack_gen `
-  --bdf app_font.bdf `
-  --chars used_chars.txt `
-  --output app_font.h `
-  --output-binary app_font.jffont `
-  --coverage-bits 4 `
-  --name app_font
+python <pinned-core>/tools/prepare_font_resource.py `
+  --font licensed-static-font.otf --characters used_chars.txt `
+  --size 16 --bits 4 --output ui.jffont2 --report ui.font.json
 ```
 
 ## 打包流水线
@@ -634,8 +544,8 @@ CLI 会把 render-core 伪浏览器输出合并进指定 JSON report 的 `pipeli
 CI 或发布打包希望 warning 也失败时，传入 `--strict`。
 
 Package report 还包含 `fontDiagnostics`。这是工具层估算，不是运行时字体加载器：它会扫描
-package 文本资源中出现的 codepoints，套用目标 `fontProfile`，解析 manifest 声明的 `.jffont`
-V0 glyph table，并把剩余缺失的非 ASCII glyph 作为 warning 报告。`.ttf`、`.otf`、`.woff`、
+package 文本资源中出现的 codepoints，套用目标 `fontProfile`，解析 manifest 声明的 `.jffont2`
+规范 glyph table，并把剩余缺失的非 ASCII glyph 作为 warning 报告。`.ttf`、`.otf`、`.woff`、
 `.bdf` 等字体文件可以作为文档或未来工具资源被打包，但当前不是 runtime-loadable font
 supplement；如果写进 manifest `fonts`，会被报告为不支持的字体资源格式。
 
@@ -665,7 +575,7 @@ Windows 上做人类 app 开发时，应优先使用交互式 Win32 browser 壳�
 .\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture build\watch_weather.bmp --app build\watch_weather.jfapp
 ```
 
-如果需要验收 manifest `fonts` 中声明的 `.jffont` 是否真的可被当前包使用，给 Win32 壳加上
+如果需要验收 manifest `fonts` 中声明的 `.jffont2` 是否真的可被当前包使用，给 Win32 壳加上
 `--use-app-fonts`。默认路径仍使用 GDI 文本，方便桌面调试和截图审查。
 
 ```powershell
@@ -820,7 +730,7 @@ python tools/jellyframe_cli.py font `
   --name watch_weather_font
 ```
 
-也可以生成 `.jffont`，作为 `.jfapp` 动态字体补充资源的二进制输入：
+也可以生成 `.jffont2`，作为 `.jfapp` 动态字体补充资源的二进制输入：
 
 ```powershell
 python tools/jellyframe_cli.py font `
@@ -828,8 +738,11 @@ python tools/jellyframe_cli.py font `
   --target round-300 `
   --report build/watch_weather_report.json `
   --used-chars build/watch_weather_used_chars.txt `
-  --bdf path/to/ui.bdf `
-  --output-binary build/watch_weather_font.jffont
+  --font-source path/to/licensed-static-font.otf `
+  --core-font-tool path/to/pinned-core/tools/prepare_font_resource.py `
+  --characters path/to/explicit-ascii-and-nonascii-coverage.txt `
+  --font-size 16 --coverage-bits 4 `
+  --font-output build/watch_weather_font.jffont2
 ```
 
 package report 会在 `serviceIntent` 中记录 manifest service intent。这个稳定摘要包含

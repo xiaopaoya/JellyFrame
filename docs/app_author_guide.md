@@ -1,6 +1,6 @@
 # App Author Guide
 
-> Last updated: 2026-08-25; Applies to: 0.6.0-dev; active development line: 0.6.0
+> Last updated: 2026-11-15; Applies to: 0.6.0-dev; active development line: 0.6.0
 
 This is the short contract for people writing JellyFrame apps. JellyFrame is
 not a mini browser. It is a Web-shaped embedded UI runtime: HTML gives
@@ -150,7 +150,7 @@ Stable authoring pieces today:
   manifest and host target allow them.
 - Package-local BMP images in the Win32 shell, plus a host image codec adapter
   boundary for product PNG/JPEG/WebP decoders.
-- App `.jffont` supplements and default font subset preflight.
+- App `.jffont2` supplements and default font subset preflight.
 
 Check the full matrix before relying on details:
 [developer_capability_matrix.md](developer_capability_matrix.md).
@@ -187,22 +187,26 @@ The manifest is part of the app, not boilerplate.
   claims to support, and `warn` for experimental or optional targets.
 - Keep budgets realistic. Raising budgets without measuring just moves the
   failure to the device.
-- If CSS uses a custom `font-family`, add a matching `.jffont` manifest entry or
+- If CSS uses a custom `font-family`, add a matching `.jffont2` manifest entry or
   use `system-ui`/`sans-serif`.
 
 ## Packaging Missing Fonts
 
-During `package`, `preview`, or a source-package `install`, the tool can subset a licensed BDF font to the App's actual characters and include it automatically. First declare the target `.jffont` in manifest `fonts[]`, including `id`, `source`, `profile`, `family`, `sizes`, `weights`, and complete `license.name` / `license.source` metadata. The declared `.jffont` may still be absent from the source directory. Then run:
+Prepare licensed static OTF/TTF assets with the pinned Core tool in its
+Python environment, then declare `.jffont2` in manifest `fonts[]` with family,
+profile, validated sizes/weights and license metadata.
 
 ```powershell
-python tools\jellyframe_cli.py package `
-  --root path\to\app `
-  --report build\app.report.json `
-  --output-bundle build\app.jfapp `
-  --font-source-bdf path\to\licensed-font.bdf
+python <pinned-core>/tools/prepare_font_resource.py `
+  --font licensed-static-font.otf --characters used_chars.txt `
+  --size 16 --bits 4 --output ui.jffont2 --report ui.font.json
 ```
 
-The tool generates a temporary `.jffont` from the scanned `*.used_chars.txt`, revalidates glyph coverage, font budgets and the manifest, and writes it to the declared `fonts[].source` inside the bundle. It does not modify the source manifest or App directory. Add `--font-resource-id <id>` when multiple declared fonts are missing, and use `--font-output` only when a persistent generated artifact is also needed. The tool does not download fonts or redistribute system fonts without declared license metadata.
+Place the asset at its declared source or use
+`--import-font-resource /fonts/ui.jffont2=PATH` with the package command.
+Runtime `font --font-source ... --core-font-tool ... --characters UTF8 --font-output ...`
+also invokes the canonical preparer. BDF serialized auto-generation is removed.
+The tool never downloads or silently redistributes system fonts.
 
 ## Small-Screen Layout Recipes
 
@@ -278,15 +282,15 @@ For fuller button, card, scroll-list and fixed bottom-nav recipes, see
 | `visual-scroll-needed` | Page is taller than the viewport. | Decide whether scrolling is intended. If yes, use an explicit `overflow-y: auto` area and allow it in the target gate. |
 | `visual-scroll-container` | An internal scroll area clips content. Reports usually include `node`, `path`, `boxHeight`, `contentHeight` and `overflowY`. | Verify the reported container is reachable by touch/wheel/key input and keep fixed navigation outside it. |
 | `visual-nested-scroll-container` | An inner and outer scroll area both clip vertical content. | Keep one primary vertical scroll area per route. Move the inner content into the outer list, or make the inner region fixed-height without overflow. |
-| `font-family-unmatched` | CSS names a custom font not declared in manifest. | Use `system-ui` or declare a matching `.jffont` family. |
-| `font-size-not-declared` / `font-size-unavailable` / `font-size-unresolved` | CSS requests a size absent from manifest metadata, not exactly renderable by the packaged bitmap face, or not statically verifiable. | Use a reported renderable size or package a face with the requested native line height. Resolve dynamic sizes before release and recheck layout. |
+| `font-family-unmatched` | CSS names a custom font not declared in manifest. | Use `system-ui` or declare a matching `.jffont2` family. |
+| `font-size-not-declared` / `font-size-unavailable` / `font-size-unresolved` | CSS requests a size absent from app-validated manifest metadata or not statically verifiable for the selected Core profile. | Declare intended sizes and verify canonical scalar projection, raster quality and layout. Resolve dynamic sizes before release. |
 | `font-missing-glyphs` | Target fonts do not cover all text. | Use the generated `*.used_chars.txt` to build and declare an app font supplement. |
 | `style-property-unsupported` | CSS property is not in the subset. | Replace it with a documented property or use Canvas/resource art. |
 | `html-node-limit` / `html-depth-limit` / `html-attribute-limit` | Parsed markup exceeded a bounded DOM budget, so later nodes, descendants or attributes were dropped. | Flatten wrapper-heavy markup, virtualize long lists, and keep state in a small number of attributes. Raise a DOM budget only with device-memory evidence. |
 | `css-rule-limit` / `css-declaration-limit` | The CSS parser skipped later rules, selector items, keyframes or declarations. | Merge repeated rules, remove unused variants, split oversized rules and measure style cost before raising parser budgets. |
 | `layout-box-limit` / `layout-depth-limit` / `render-object-limit` | Part of the visible hierarchy was skipped before layout or rendering. | Reduce visible nesting and repeated controls; virtualize lists rather than raising structural budgets blindly. |
 | `layer-limit` / `display-command-limit` | Layer or paint-command generation was capped, which can reduce fidelity or omit paint. | Reduce overlap, clips, shadows, gradients and repeated decoration; keep composited motion to a small number of elements. |
-| `resource-budget-exceeded` / `font-budget-exceeded` | Total package resources or runtime font supplements exceed their configured budget. | Compress/remove assets, subset `.jffont` glyphs and unused weights, then raise limits only after flash/RAM measurement. |
+| `resource-budget-exceeded` / `font-budget-exceeded` | Total package resources or runtime font supplements exceed their configured budget. | Compress/remove assets, subset `.jffont2` glyphs and unused weights, then raise limits only after flash/RAM measurement. |
 | `css-animation-layout-property` | A keyframe changes size, position, spacing or another layout property. | Animate `transform` or `opacity` on a fixed-size layer; make actual layout changes discrete app states. |
 | `css-animation-timing-function-unsupported` | A stylesheet uses parameterized or step easing. | Use `linear`, `ease`, `ease-in`, `ease-out` or `ease-in-out`. |
 | `css-animation-keyframe-property-unsupported` | A keyframe targets a property outside the low-cost animation subset. | Limit keyframes to `opacity`, `transform`, `color`, `background` or `background-color`. |

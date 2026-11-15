@@ -135,7 +135,10 @@
             "minLength": 1
           },
           "source": {
-            "$ref": "#/$defs/relativePath"
+            "allOf": [
+              { "$ref": "#/$defs/relativePath" },
+              { "pattern": "\\.[jJ][fF][fF][oO][nN][tT]2$" }
+            ]
           },
           "profile": {
             "enum": [
@@ -147,7 +150,7 @@
             ]
           },
           "family": {
-            "description": "Runtime font-family label for this .jffont or .jffont2 resource. JFFONT2 is consumed by Core TextSystem.",
+            "description": "Runtime font-family label for this canonical .jffont2 resource. Core TextSystem owns selection and metrics.",
             "type": "string",
             "minLength": 1
           },
@@ -171,7 +174,7 @@
             }
           },
           "sizes": {
-            "description": "CSS pixel sizes used for diagnostics. JFFONT uses integer scaling from its native bitmap height; JFFONT2 uses Core metrics and supports scaled sizes.",
+            "description": "App-validated CSS pixel sizes used for diagnostics. Canonical JFFONT2 retains original source metrics and supports Core scalar size projection.",
             "type": "array",
             "items": {
               "type": "integer",

@@ -220,69 +220,9 @@ def package_command(args: argparse.Namespace, validate_only: bool) -> list[str]:
     if getattr(args, "rasterize_svg", False):
         command.append("--rasterize-svg")
         command.extend(["--svg-raster-size", str(args.svg_raster_size)])
-    for font_import in getattr(args, "_font_resource_imports", []):
-        command.extend([
-            "--import-font-resource",
-            f"{font_import['source']}={font_import['file']}",
-        ])
+    for value in getattr(args, "import_font_resource", []):
+        command.extend(["--import-font-resource", value])
     return command
-
-
-def missing_manifest_font_targets(root: Path) -> list[dict]:
-    manifest_path = root / "jellyframe.app.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
-    missing = []
-    for font in manifest.get("fonts", []):
-        if not isinstance(font, dict):
-            continue
-        source = font.get("source", "")
-        if not isinstance(source, str) or not source:
-            continue
-        local = root / Path(*source.lstrip("/").replace("\\", "/").split("/"))
-        if not local.is_file():
-            missing.append(font)
-    return missing
-
-
-def select_generated_font_target(args: argparse.Namespace) -> dict | None:
-    if not getattr(args, "font_source_bdf", None):
-        return None
-    candidates = missing_manifest_font_targets(args.root)
-    requested_id = getattr(args, "font_resource_id", None)
-    if requested_id:
-        candidates = [font for font in candidates if font.get("id") == requested_id]
-        if not candidates:
-            raise SystemExit(
-                f"--font-resource-id does not identify a missing manifest font: {requested_id}")
-    if not candidates:
-        if getattr(args, "font_output", None):
-            return None
-        raise SystemExit(
-            "--font-source-bdf requires one missing manifest fonts[] entry when --font-output is omitted")
-    if len(candidates) != 1:
-        ids = ", ".join(str(font.get("id", "<unnamed>")) for font in candidates)
-        raise SystemExit(
-            "font generation target is ambiguous; use --font-resource-id to select one of: " + ids)
-    target = candidates[0]
-    source = str(target.get("source", ""))
-    if not source.lower().endswith(".jffont"):
-        raise SystemExit(f"generated manifest font source must end in .jffont: {source}")
-    license_info = target.get("license", {})
-    if not isinstance(license_info, dict) or not license_info.get("name") or not license_info.get("source"):
-        raise SystemExit(
-            f"manifest font {target.get('id', source)} requires license.name and license.source before automatic packaging")
-    return target
-
-
-def staged_generated_font_path(args: argparse.Namespace, target: dict | None) -> Path | None:
-    output = getattr(args, "font_output", None)
-    if output is not None or target is None:
-        return output
-    directory = Path(tempfile.mkdtemp(prefix="jellyframe-font-import-"))
-    if not hasattr(args, "_temporary_paths"):
-        args._temporary_paths = []
-    args._temporary_paths.append(directory)
-    return directory / Path(str(target["source"])).name
 
 
 def cmd_validate(args: argparse.Namespace, *, run_programmatic: bool = True) -> int:
@@ -747,7 +687,7 @@ ADVICE_BY_CODE = {
     },
     "font-budget-exceeded": {
         "title": "Runtime font supplement exceeds its budget",
-        "explanation": "The declared .jffont count, bytes or glyphs exceed the app font limit.",
+        "explanation": "The declared .jffont2 count, bytes or glyphs exceed the app font limit.",
         "action": "Generate a smaller character subset, remove unused weights/sizes, or increase font budgets only after measuring app-font RAM and flash use.",
     },
     "visual-horizontal-overflow": {
@@ -955,13 +895,13 @@ ADVICE_BY_CODE = {
     },
     "font-family-unmatched": {
         "title": "CSS font-family is not a manifest runtime font",
-        "explanation": "A custom primary font-family was used in CSS but no manifest .jffont family matches it.",
-        "action": "Use system-ui/sans-serif for the system font, or add a .jffont entry with a matching family in jellyframe.app.json.",
+        "explanation": "A custom primary font-family was used in CSS but no manifest .jffont2 family matches it.",
+        "action": "Use system-ui/sans-serif for the system font, or add a .jffont2 entry with a matching family in jellyframe.app.json.",
     },
     "font-missing-glyphs": {
         "title": "Target fonts do not cover all app text",
         "explanation": "Some source characters are not covered by the target font profile or app font supplements.",
-        "action": "Declare a licensed .jffont supplement in manifest fonts[], then pass its BDF source with --font-source-bdf so package/install can generate and import the used glyphs.",
+        "action": "Declare a licensed .jffont2 supplement in manifest fonts[], prepare it from OTF using font --font-source --core-font-tool --characters --font-output, then package/import it.",
     },
     "missing-font-resource": {
         "title": "Declared font resource is not packaged",
@@ -970,8 +910,8 @@ ADVICE_BY_CODE = {
     },
     "unsupported-font-resource-format": {
         "title": "Font resource format is not runtime-loadable",
-        "explanation": "Runtime app fonts must use JellyFrame .jffont resources.",
-        "action": "Convert the source bitmap font to .jffont with the font pack generator, then declare the .jffont file in the manifest.",
+        "explanation": "Runtime app fonts must use JellyFrame .jffont2 resources.",
+        "action": "Prepare the source OTF as .jffont2 with the pinned Core font preparer, then declare the .jffont2 file in the manifest.",
     },
     "image-codec-target-unsupported": {
         "title": "Target does not declare this image codec",
@@ -1082,17 +1022,17 @@ ADVICE_BY_CODE = {
     "font-size-not-declared": {
         "title": "CSS font size is not declared by the app font",
         "explanation": "A statically identifiable custom font-family uses a pixel size absent from the matching manifest fonts[].sizes list.",
-        "action": "Add the size only after validating an exact face for it, or change the CSS to a size supported by the packaged font.",
+        "action": "Declare the intended CSS size and verify its Core scalar projection and raster quality.",
     },
     "font-size-unavailable": {
         "title": "Packaged bitmap font will substitute the requested size",
-        "explanation": "The .jffont resource contains one native bitmap size and the current runtime can only apply integer scaling from that size.",
-        "action": "Use one of the reported renderableSizes, or package a font face whose native lineHeight matches the requested size. Verify layout again because fallback changes text metrics.",
+        "explanation": "Canonical .jffont2 resources retain source metrics and support scalar size projection; verify the selected Core profile.",
+        "action": "Regenerate canonical .jffont2 from the original font and verify scalar size projection with the selected Core profile.",
     },
     "font-size-unresolved": {
         "title": "Custom font size could not be verified statically",
         "explanation": "The package uses a dynamic or unsupported font-size expression for a manifest-declared custom font, so preflight cannot prove the exact runtime size.",
-        "action": "Use a static px size for release validation, or inspect the package report and verify every resolved runtime value against the font's renderableSizes.",
+        "action": "Use a static px size for release validation, or inspect the package report and verify every resolved runtime value against the selected Core scalar size profile.",
     },
     "font-license-missing": {
         "title": "Font license metadata is missing",
@@ -1105,19 +1045,19 @@ ADVICE_BY_CODE = {
         "action": "Fill in the missing license fields, or remove the app font until its redistribution terms are clear.",
     },
     "invalid-jffont-resource": {
-        "title": ".jffont resource is invalid",
+        "title": ".jffont2 resource is invalid",
         "explanation": "The declared runtime font supplement could not be parsed as a JellyFrame bitmap font resource.",
-        "action": "Regenerate it with jellyframe_font_pack_gen and verify the manifest points at the generated .jffont file.",
+        "action": "Regenerate it with the pinned Core OTF font preparer and verify the manifest points at the generated .jffont2 file.",
     },
     "app-font-resource-missing": {
         "title": "App font resource is missing",
         "explanation": "A manifest-declared app font could not be loaded from the package at runtime.",
-        "action": "Fix fonts[].source, rebuild the package, and confirm the .jffont resource appears in the font diagnostics.",
+        "action": "Fix fonts[].source, rebuild the package, and confirm the .jffont2 resource appears in the font diagnostics.",
     },
     "app-font-resource-invalid": {
         "title": "App font resource is invalid",
-        "explanation": "A manifest-declared font exists but could not be parsed as a runtime .jffont supplement.",
-        "action": "Regenerate the .jffont resource and keep fonts[].sizes, weights and license metadata in sync with the generated file.",
+        "explanation": "A manifest-declared font exists but could not be parsed as a runtime .jffont2 supplement.",
+        "action": "Regenerate the .jffont2 resource and keep fonts[].sizes, weights and license metadata in sync with the generated file.",
     },
     "animation-keyframe-property-unsupported": {
         "title": "Animation targets an unsupported property",
@@ -1182,12 +1122,12 @@ ADVICE_BY_CODE = {
     "paint-non-ascii-fallback": {
         "title": "Text used the non-ASCII fallback path",
         "explanation": "Visible text contains characters outside the current fast bitmap/system font coverage.",
-        "action": "Generate and declare a .jffont supplement for the used characters, then rerun package font diagnostics.",
+        "action": "Generate and declare a .jffont2 supplement for the used characters, then rerun package font diagnostics.",
     },
     "paint-text-backend-failed": {
         "title": "Text backend could not paint a run",
         "explanation": "The configured text painter rejected or failed one text run.",
-        "action": "Check font coverage, font size, backend availability and app .jffont declarations before testing on device.",
+        "action": "Check font coverage, font size, backend availability and app .jffont2 declarations before testing on device.",
     },
     "image-decode-request": {
         "title": "Image decode request was queued",
@@ -1633,8 +1573,8 @@ def enrich_font_advice(advice: list[dict],
             if missing_count:
                 sample_text = ", ".join(missing_sample) if missing_sample else "the reported non-ASCII characters"
                 entry["action"] = (
-                    f"Declare a licensed .jffont supplement covering {sample_text} ({missing_count} missing "
-                    "non-ASCII codepoint(s)), then pass --font-source-bdf so package/install can generate, "
+                    f"Declare a licensed .jffont2 supplement covering {sample_text} ({missing_count} missing "
+                    "non-ASCII codepoint(s)), then prepare canonical .jffont2 with the Core OTF tool and package it; "
                     "validate and import it."
                 )
 
@@ -1664,7 +1604,7 @@ def enrich_font_advice(advice: list[dict],
             families = ", ".join(item["family"] for item in matching or unmatched if item["family"])
             if families:
                 entry["action"] = (
-                    f"Declare a manifest .jffont family matching {families}, or change this CSS rule to "
+                    f"Declare a manifest .jffont2 family matching {families}, or change this CSS rule to "
                     "system-ui/sans-serif before relying on it across targets."
                 )
 
@@ -2776,12 +2716,6 @@ def run_package_preflight(args: argparse.Namespace, include_pipeline: bool) -> i
         font_result = run_font_resource_check(args)
         if font_result != 0:
             return font_result
-        if getattr(args, "_generated_manifest_font", False):
-            subset_report = getattr(args, "_font_subset_report", {})
-            validate_result = cmd_validate(args, run_programmatic=False)
-            if validate_result != 0:
-                return validate_result
-            merge_font_subset_report(args.report, subset_report)
     return enforce_diagnostics_policy(args) if include_pipeline else 0
 
 
@@ -3000,76 +2934,11 @@ def run_font_resource_check(args: argparse.Namespace) -> int:
     if result != 0:
         return result
 
-    font_source_bdf = getattr(args, "font_source_bdf", None)
-    generated_target = select_generated_font_target(args)
-    generated_font = staged_generated_font_path(args, generated_target)
-    generated = False
-    if generated_font and font_subset_mode == "off":
-        raise SystemExit("--font-output requires --font-subset auto or a used-chars path")
-    if generated_font and not font_source_bdf:
-        raise SystemExit("--font-output requires --font-source-bdf")
-    if font_source_bdf:
-        if font_subset_mode == "off":
-            raise SystemExit("--font-source-bdf requires --font-subset auto or a used-chars path")
-        if not generated_font:
-            raise SystemExit("--font-source-bdf requires --font-output")
-        if not emit_used_chars:
-            raise SystemExit("font subset generation requires a used-chars output path")
-        font_pack_gen = tool_path(args.build_dir, "jellyframe_font_pack_gen")
-        ensure_tool(font_pack_gen)
-        generated_font.parent.mkdir(parents=True, exist_ok=True)
-        font_command = [
-            str(font_pack_gen),
-            "--bdf",
-            str(font_source_bdf),
-            "--chars",
-            str(emit_used_chars),
-            "--output-binary",
-            str(generated_font),
-            "--coverage-bits",
-            str(getattr(args, "font_coverage_bits", 1)),
-        ]
-        if getattr(args, "font_allow_missing", False):
-            font_command.append("--allow-missing")
-        result = run_command(font_command)
-        if result != 0:
-            return result
-        generated = True
-
-        if generated_target is not None:
-            args._generated_manifest_font = True
-            source = str(generated_target["source"])
-            local_source = args.root / Path(*source.lstrip("/").replace("\\", "/").split("/"))
-            if generated_font.resolve() != local_source.resolve():
-                imports = getattr(args, "_font_resource_imports", [])
-                imports = [entry for entry in imports if entry.get("source") != source]
-                imports.append({
-                    "id": str(generated_target.get("id", "")),
-                    "source": source,
-                    "file": generated_font.resolve(),
-                })
-                args._font_resource_imports = imports
-
     subset_report = {
         "mode": font_subset_mode,
         "usedChars": str(emit_used_chars) if emit_used_chars else "",
-        "sourceBdf": str(font_source_bdf) if font_source_bdf else "",
-        "generatedFont": str(generated_font) if generated_font else "",
-        "generated": generated,
-        "packageImportReady": bool(generated and generated_target is not None),
-        "packagedByCommand": bool(
-            generated and generated_target is not None
-            and getattr(args, "command", "") in {"package", "preview", "install"}),
-        "manifestFontId": str(generated_target.get("id", "")) if generated_target else "",
-        "manifestSource": str(generated_target.get("source", "")) if generated_target else "",
-        "coverageBits": int(getattr(args, "font_coverage_bits", 1)),
-        "note": (
-            "Generated .jffont was imported into the package at its declared manifest fonts[] source."
-            if generated and generated_target is not None else
-            "Generated .jffont is not attached to a missing manifest fonts[] entry."
-            if generated else
-            "Use --font-source-bdf and --font-output to generate a .jffont supplement from the scanned used chars."
-        ),
+        "generated": False,
+        "note": "Prepare canonical .jffont2 with font --font-source --core-font-tool --characters --font-output, then package/import it.",
     }
     args._font_subset_report = subset_report
     merge_font_subset_report(args.report, subset_report)
@@ -3092,14 +2961,6 @@ def cmd_check(args: argparse.Namespace) -> int:
         font_result = run_font_resource_check(args)
         if font_result != 0:
             return font_result
-        if getattr(args, "_generated_manifest_font", False):
-            subset_report = getattr(args, "_font_subset_report", {})
-            validate_result = cmd_validate(args, run_programmatic=False)
-            if validate_result != 0:
-                return validate_result
-            merge_font_subset_report(args.report, subset_report)
-            merge_pipeline_report(args.report, getattr(args, "_pipeline_report", {}))
-            merge_responsive_profiles(args.report, getattr(args, "_responsive_profiles", []))
     if getattr(args, "frame_script", None):
         scripted_result = run_programmatic_validation(args, args.root, args.report)
         if scripted_result != 0:
@@ -3123,16 +2984,38 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 
 def cmd_font(args: argparse.Namespace) -> int:
+    if args.font_source:
+        immutable = [p.resolve() for p in (args.font_source, args.characters, args.core_font_tool) if p]
+        outputs = [p.resolve() for p in (args.used_chars, args.report, args.font_output) if p]
+        if args.font_output:
+            outputs.append(Path(str(args.font_output) + ".json").resolve())
+        if len(outputs) != len(set(outputs)) or any(p in immutable for p in outputs):
+            raise SystemExit("font output/report/scan paths must not alias each other or immutable font/coverage/tool inputs")
+    if args.font_source:
+        if args.bdf or args.output_header or not args.core_font_tool or not args.font_output or not args.characters:
+            raise SystemExit("--font-source requires --core-font-tool, --font-output and --characters (explicit UTF-8 ASCII/non-ASCII coverage), separately from BDF C++ headers")
+        if args.font_output.suffix.lower() != ".jffont2":
+            raise SystemExit("canonical app font output must end in .jffont2")
     validate_result = cmd_validate(args)
     if validate_result != 0:
         return validate_result
     args.used_chars.parent.mkdir(parents=True, exist_ok=True)
     args.emit_used_chars = args.used_chars
     check_result = run_font_resource_check(args)
-    if check_result != 0 or not args.bdf:
+    if check_result != 0:
         return check_result
-    if not args.output_header and not args.output_binary:
-        raise SystemExit("--output-header or --output-binary is required when --bdf is provided")
+    if args.font_source:
+        args.font_output.parent.mkdir(parents=True, exist_ok=True)
+        return run_command([sys.executable, str(args.core_font_tool), "--font", str(args.font_source),
+            "--characters", str(args.characters or args.used_chars), "--size", str(args.font_size),
+            "--bits", str(args.coverage_bits), "--output", str(args.font_output),
+            "--report", str(args.font_output) + ".json"])
+    if not args.bdf:
+        if args.font_output or args.core_font_tool:
+            raise SystemExit("--font-output/--core-font-tool require --font-source")
+        return check_result
+    if not args.output_header:
+        raise SystemExit("--output-header is required when --bdf is provided")
     font_pack_gen = tool_path(args.build_dir, "jellyframe_font_pack_gen")
     ensure_tool(font_pack_gen)
     font_command = [
@@ -3147,9 +3030,6 @@ def cmd_font(args: argparse.Namespace) -> int:
     if args.output_header:
         args.output_header.parent.mkdir(parents=True, exist_ok=True)
         font_command.extend(["--output", str(args.output_header)])
-    if args.output_binary:
-        args.output_binary.parent.mkdir(parents=True, exist_ok=True)
-        font_command.extend(["--output-binary", str(args.output_binary)])
     font_command.extend(["--coverage-bits", str(args.coverage_bits)])
     if args.allow_missing:
         font_command.append("--allow-missing")
@@ -4057,6 +3937,8 @@ def add_common_package_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--port-telemetry", type=Path,
                         help="Optional real-device port telemetry JSON or 'port_telemetry key=value' log.")
 
+    parser.add_argument("--import-font-resource", action="append", default=[], metavar="APP_PATH=HOST_PATH", help="Import prepared canonical .jffont2 at a declared manifest font source.")
+
 
 def add_font_preflight_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no-font-check", action="store_true",
@@ -4069,16 +3951,6 @@ def add_font_preflight_args(parser: argparse.ArgumentParser) -> None:
                         help="Optional output file for used non-ASCII characters.")
     parser.add_argument("--font-subset", default="auto",
                         help="Font subset plan: auto, off, or an explicit used-chars output path. Defaults to auto.")
-    parser.add_argument("--font-source-bdf", type=Path,
-                        help="Optional BDF source used to generate a .jffont supplement during preflight.")
-    parser.add_argument("--font-output", type=Path,
-                        help="Optional generated .jffont output path. When omitted, a missing manifest font is staged and packaged without modifying the source tree.")
-    parser.add_argument("--font-resource-id",
-                        help="Manifest fonts[].id to fill when more than one declared font resource is missing.")
-    parser.add_argument("--font-coverage-bits", type=int, default=1, choices=[1, 2, 4],
-                        help="Coverage depth for generated .jffont supplements.")
-    parser.add_argument("--font-allow-missing", action="store_true",
-                        help="Allow missing BDF glyphs while generating a .jffont supplement.")
 
 
 def add_responsive_args(parser: argparse.ArgumentParser) -> None:
@@ -4141,18 +4013,22 @@ def main() -> int:
 
     font = subparsers.add_parser("font", help="Collect package characters and optionally generate bitmap font packs.")
     add_common_package_args(font)
-    font.add_argument("--used-chars", required=True, type=Path, help="Output file for used non-ASCII characters.")
+    font.add_argument("--used-chars", required=True, type=Path, help="Output file for scanned characters.")
+    font.add_argument("--characters", type=Path, help="Required explicit UTF-8 ASCII/non-ASCII coverage for canonical generation; scanned used-chars is supplementary non-ASCII only.")
     font.add_argument("--font-budget", default="16x16", help="Glyph size such as 16x16 for font budget estimates.")
     font.add_argument("--font-coverage", type=Path, help="Optional embedded font coverage text file.")
     font.add_argument("--bdf", type=Path, help="Optional BDF source font for bitmap pack generation.")
     font.add_argument("--output-header", type=Path, help="Generated C++ BitmapFont header path.")
-    font.add_argument("--output-binary", type=Path, help="Generated .jffont bitmap font supplement path.")
+    font.add_argument("--font-source", type=Path, help="Static OTF/TTF source for canonical app font preparation.")
+    font.add_argument("--core-font-tool", type=Path, help="Pinned Core tools/prepare_font_resource.py path.")
+    font.add_argument("--font-size", type=int, default=16, help="Canonical raster pixel size.")
+    font.add_argument("--font-output", type=Path, help="Canonical .jffont2 output; prepare before package/import.")
     font.add_argument("--name", default="jellyframe_embedded_font", help="Generated C++ font symbol name.")
     font.add_argument("--coverage-bits",
                       type=int,
                       default=1,
-                      choices=[1, 2, 4],
-                      help="Glyph coverage depth for generated bitmap fonts: 1, 2 or 4 bits per pixel.")
+                      choices=[1, 2, 4, 8],
+                      help="Canonical coverage: 1, 2, 4 or 8 bits; BDF C++ headers accept 1, 2 or 4.")
     font.add_argument("--allow-missing", action="store_true", help="Allow missing BDF glyphs when generating font packs.")
     font.set_defaults(func=cmd_font)
 

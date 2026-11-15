@@ -2590,14 +2590,12 @@ bool draw_text_with_gdi(FrameBuffer& target,
 }
 
 BrowserTextBackend make_browser_text_backend(const BrowserOptions& options, AppRuntimeHost* runtime) {
-    if (options.use_app_fonts && runtime != nullptr) {
-        if (runtime->fonts().primary_font() != nullptr) {
-            return BrowserTextBackend{runtime->fonts().measure_provider(),
-                                      runtime->fonts().painter(), nullptr, false, true};
-        }
+    if (options.use_app_fonts) {
+        if (runtime == nullptr) throw std::runtime_error("Core font backend requires an active Runtime");
         if (const TextSystem* text_system = runtime->fonts().core_text_system()) {
             return BrowserTextBackend{{}, {}, text_system, true};
         }
+        throw std::runtime_error("Core font catalog is not ready; text startup refused");
     }
     return BrowserTextBackend{
         TextMeasureProvider{measure_text_with_gdi, nullptr},
@@ -3700,15 +3698,10 @@ void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifes
         const std::string& source = manifest.font_sources[index];
         const std::string_view family =
             index < manifest.font_families.size() ? std::string_view(manifest.font_families[index]) : std::string_view{};
-        const auto is_core_font = [](const std::uint8_t* data, std::size_t size) {
-            return data != nullptr && size >= 8 && std::memcmp(data, "JFFONT2\0", 8) == 0;
-        };
         jellyframe_example::PackageResourceView view;
         if (jellyframe_example::load_package_resource_view(source, manifest.entry, view, &package_context) &&
             view.stable) {
-            const AppFontLoadResult result = is_core_font(view.data, view.size)
-                ? app_runtime->attach_current_core_font_view(view.data, view.size, family)
-                : app_runtime->attach_current_jffont_view(view.data, view.size, family);
+            const AppFontLoadResult result = app_runtime->attach_current_core_font_view(view.data, view.size, family);
             if (result.loaded()) {
                 continue;
             }
@@ -3732,9 +3725,7 @@ void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifes
             continue;
         }
         const auto* data = reinterpret_cast<const std::uint8_t*>(bytes.data());
-        const AppFontLoadResult result = is_core_font(data, bytes.size())
-            ? app_runtime->load_current_core_font(data, bytes.size(), family)
-            : app_runtime->load_current_jffont(data, bytes.size(), family);
+        const AppFontLoadResult result = app_runtime->load_current_core_font(data, bytes.size(), family);
         if (!result.loaded()) {
             report_diagnostic(diagnostics,
                               DiagnosticStage::Package,

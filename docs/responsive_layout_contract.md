@@ -1,6 +1,6 @@
 # Responsive Layout Contract
 
-> Last updated: 2026-08-30; Applies to: 0.6.0-dev
+> Last updated: 2026-11-15; Applies to: 0.6.0-dev
 >
 > Status: implementation baseline for Render Core 0.6.x. This document is a
 > behavioral contract, not a claim of browser compatibility.
@@ -104,7 +104,7 @@ Hyphenation, balanced wrapping, complex shaping and automatic browser font
 substitution are not guaranteed.
 
 Every visible target needs a font report. A missing requested face or weight
-must be resolved by packaging a matching `.jffont` resource or by changing the
+must be resolved by packaging a matching `.jffont2` resource or by changing the
 design; it must not be treated as evidence that desktop and device layout are
 equivalent.
 

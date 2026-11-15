@@ -36,21 +36,21 @@ def assert_font_report(report_path: Path) -> None:
     fonts = {font["id"]: font for font in diagnostics["manifestFonts"]}
     assert fonts["tiny-cn"]["status"] == "usable"
     assert fonts["tiny-cn"]["sizes"] == [8, 12, 18, 36]
-    assert fonts["tiny-cn"]["weights"] == [400, 700]
+    assert fonts["tiny-cn"]["weights"] == [400]
     assert fonts["tiny-cn"]["usedGlyphCount"] == 2
-    assert fonts["tiny-cn"]["nativeSize"] == 8
-    assert fonts["tiny-cn"]["renderableSizes"] == [8, 16, 24, 32, 40, 48, 56, 64]
+    assert fonts["tiny-cn"]["nativeSize"] == 16
+    assert fonts["tiny-cn"]["renderableSizes"] == []
     assert fonts["tiny-cn"]["usedSizes"] == [12]
-    assert fonts["tiny-cn"]["declaredUnavailableSizes"] == [12, 18, 36]
-    assert fonts["tiny-cn"]["unavailableUsedSizes"] == [12]
+    assert fonts["tiny-cn"]["declaredUnavailableSizes"] == []
+    assert fonts["tiny-cn"]["unavailableUsedSizes"] == []
     assert fonts["tiny-symbols"]["status"] == "usable"
     assert fonts["tiny-symbols"]["sizes"] == [8, 12, 18, 36]
-    assert fonts["tiny-symbols"]["weights"] == [400, 700]
+    assert fonts["tiny-symbols"]["weights"] == [400]
     assert fonts["tiny-symbols"]["usedGlyphCount"] == 3
-    assert fonts["tiny-symbols"]["nativeSize"] == 8
+    assert fonts["tiny-symbols"]["nativeSize"] == 16
     assert fonts["tiny-symbols"]["usedSizes"] == [18]
-    assert fonts["tiny-symbols"]["declaredUnavailableSizes"] == [12, 18, 36]
-    assert fonts["tiny-symbols"]["unavailableUsedSizes"] == [18]
+    assert fonts["tiny-symbols"]["declaredUnavailableSizes"] == []
+    assert fonts["tiny-symbols"]["unavailableUsedSizes"] == []
 
     size_usage = diagnostics["fontSizeUsage"]
     assert size_usage["usedSizes"] == [12, 13, 14, 18, 28]
@@ -66,8 +66,6 @@ def assert_font_report(report_path: Path) -> None:
 
     warnings = report.get("warnings", [])
     assert [warning["code"] for warning in warnings] == [
-        "font-size-unavailable",
-        "font-size-unavailable",
         "font-missing-glyphs",
     ]
 
@@ -82,16 +80,12 @@ def assert_font_report(report_path: Path) -> None:
 def assert_font_size_warning_report(report_path: Path) -> None:
     report = json.loads(report_path.read_text(encoding="utf-8-sig"))
     warnings = report.get("warnings", [])
-    assert [warning["code"] for warning in warnings] == ["font-size-unavailable"]
-    assert warnings[0]["sizes"] == [12]
-    assert warnings[0]["nativeSize"] == 8
-    assert warnings[0]["renderableSizes"] == [8, 16, 24, 32, 40, 48, 56, 64]
-
+    assert not any(w["code"] == "font-size-unavailable" for w in warnings)
     font = report["fontDiagnostics"]["manifestFonts"][0]
-    assert font["id"] == "size-probe"
+    assert font["id"] == "size-probe" and font["scalable"]
     assert font["usedSizes"] == [12]
-    assert font["declaredUnavailableSizes"] == [12]
-    assert font["unavailableUsedSizes"] == [12]
+    assert font["declaredUnavailableSizes"] == []
+    assert font["unavailableUsedSizes"] == []
 
 
 def main() -> int:
@@ -133,9 +127,10 @@ def main() -> int:
         ], capture=True)
         output = result.stdout or ""
         print(output, end="")
-        assert "diagnostics: 0" in output
+        assert "diagnostics: 1" in output
+        assert output.count("layout-core-text-refused") == 1  # intentional Kana remains outside scalar admission
         assert "app_fonts=on" in output
-        assert "text_backend=app-font-set" in output
+        assert "text_backend=core-text" in output
         assert capture.is_file() and capture.stat().st_size > 54
 
         warning_report = output_dir / "font_size_warning.report.json"

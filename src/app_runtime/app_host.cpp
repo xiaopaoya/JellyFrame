@@ -103,26 +103,6 @@ std::uint32_t AppRuntimeHost::allocate_current_handle(HostServiceHandleKind kind
     return handles_.allocate(kind, app_instance_id, bytes, payload);
 }
 
-AppFontLoadResult AppRuntimeHost::load_current_jffont(const std::uint8_t* data, std::size_t size) {
-    return fonts_.load_jffont(lifecycle_.current_app_instance_id(), data, size);
-}
-
-AppFontLoadResult AppRuntimeHost::load_current_jffont(const std::uint8_t* data,
-                                                      std::size_t size,
-                                                      std::string_view family) {
-    return fonts_.load_jffont(lifecycle_.current_app_instance_id(), data, size, family);
-}
-
-AppFontLoadResult AppRuntimeHost::attach_current_jffont_view(const std::uint8_t* data, std::size_t size) {
-    return fonts_.attach_jffont_view(lifecycle_.current_app_instance_id(), data, size);
-}
-
-AppFontLoadResult AppRuntimeHost::attach_current_jffont_view(const std::uint8_t* data,
-                                                            std::size_t size,
-                                                            std::string_view family) {
-    return fonts_.attach_jffont_view(lifecycle_.current_app_instance_id(), data, size, family);
-}
-
 AppFontLoadResult AppRuntimeHost::load_current_core_font(const std::uint8_t* data,
                                                          std::size_t size,
                                                          std::string_view family) {

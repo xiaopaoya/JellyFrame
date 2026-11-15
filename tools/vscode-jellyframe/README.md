@@ -2,7 +2,7 @@
 
 # JellyFrame Tools for VS Code
 
-> Last updated: 2026-09-20; Applies to: 0.6.0-dev; extension version: 0.4.67; compatibility baseline: 0.5.0
+> Last updated: 2026-11-15; Applies to: 0.6.0-dev; extension version: 0.4.67; compatibility baseline: 0.5.0
 
 JellyFrame Tools is a VS Code extension for app authors. It brings package
 checks, previews, desktop debugging and packaging into the editor, with a
@@ -193,16 +193,15 @@ also offers optional `.jfcapture` programmed playback, merging the static
 pipeline diagnostics with a multi-page interaction path. Use Preview or desktop
 debugging for the actual image and interactive behavior.
 
-When manifest `fonts[]` declares a `.jffont` that is absent from the source App,
-Check App Rendering, Generate Resource Package, Preview App, and Package and
-Deploy App offer to generate and import it from a licensed BDF. The extension
-selects the target font when several declarations are missing, accepts only a
-`.bdf` file, and forwards `--font-source-bdf` / `--font-resource-id` to the
-shared CLI path. The separate `Generate and Import Missing Fonts` command emits
-an installable `.jfapp` and report without modifying the source manifest or App
-directory. Missing `license.name` / `license.source` stops the operation and
-offers to open the manifest; the extension does not download or silently bundle
-system fonts.
+When manifest `fonts[]` declares a missing `.jffont2`, checking, packaging,
+preview and deployment can import an already prepared licensed resource. The
+extension selects `.jffont2` only and forwards
+`--import-font-resource APP_PATH=HOST_PATH`; BDF auto-generation is removed.
+Choose the target when several declarations are missing. Missing license
+metadata stops the operation and offers to open the manifest. Import Prepared
+Missing Fonts emits a `.jfapp` without modifying the source App or manifest.
+See the Runtime font catalog guide for canonical offline preparation; the
+extension does not download or silently distribute system fonts.
 
 The `JellyFrame` Activity Bar uses one level of top-level sections. Each App action, build status and device status appears directly below its section, avoiding misleading multi-level indentation in VS Code's native tree control.
 Check & Preview, Interactive Debugging and Create & Package separate the authoring

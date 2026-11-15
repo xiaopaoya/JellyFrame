@@ -2,8 +2,8 @@
 
 > Last updated: 2026-11-15; Applies to: 0.6.0-dev. Core contract: 0.9.0-dev / ABI4.
 
-Current source audit: 2026-11-15. Runtime base `8262edf7` (PR101), Core
-`3152300a` (PR61), 0.9.0-dev / ABI4. This is a consumer migration checklist,
+Current source audit: 2026-11-15. Runtime base `2f87d52e` (PR102), Core
+`38148e73` (PR62), 0.9.0-dev / ABI4. This is a consumer migration checklist,
 not a declaration that legacy callback APIs have been removed.
 
 ## Production consumers
@@ -14,7 +14,7 @@ not a declaration that legacy callback APIs have been removed.
 | ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects supported canonical v10 and a painterless renderer, independently of BMP. Owned text catalog/snapshot survives accepted-frame replay. CoreText OFF retains the explicit legacy painter path. | Qualify the bounded path on device; migrate remaining callback-dependent generated/widget text before retiring the legacy path. |
 | ESP32 non-retained entry (`main.cpp`) | Builds generated-BitmapFont providers and painter independently of retained UI. | Migrate or explicitly retire this entry configuration too. |
 | Desktop default (`tools/native/win32_browser.cpp`) | GDI measurement/painting using the OS font; Core catalog is opt-in. | Close CoreText property parity, then adopt the catalog default. |
-| Desktop application fonts (`src/app_runtime/app_font_set.cpp`) | Legacy serialized JFFONT loads BitmapFont and selects AppFontSet callbacks before CoreText. JFFONT2 uses TextSystem. | Define and migrate the pre-release app-font resource contract and fixtures, then delete legacy callback accessors/selection. |
+| Desktop application fonts (`src/app_runtime/app_font_set.cpp`) | Current change makes AppFontSet JFFONT2-only, removes callback loaders/accessors and browser precedence; tools/samples/import UI use canonical resources. | Complete PR/CI and positive named/default output gates; generated port defaults remain separate. |
 | Embedded host example | This change binds one TextSystem to layout, layers and compositor using a complete tiny JFFONT2 fixture. | No remaining measurement/painter callback in this example. Device-default changes are separate. |
 
 Core still contains callback/default layout, wrapping, ellipsis, repaint/reuse,
@@ -22,9 +22,12 @@ layer-cache identity and compositor branches. Remove them together only after
 the production consumers above migrate. Tests, benchmarks and ESP32 acceptance
 fixtures also need conversion, but are not product-default consumers.
 Canvas2D text already uses TextSystem; it is not a remaining callback branch.
-Ordinary generated pseudo-content and native form text still have legacy `Text`
-emission paths in Core. The painterless installed profile rejects such commands
-before writes; this is not a claim that those contexts have already migrated.
+Ordinary generated pseudo-content and open native select popup text still have
+legacy `Text` emission paths in Core. Core #62 migrates closed form-control
+labels/select arrows through transactional PreparedText; its full tests pass
+33/33, cropped focused and installed consumers pass, and it merged after CI 4/4 (run `43673424532`).
+The painterless installed profile rejects ordinary Text commands before writes;
+this is not a claim that all generated/widget contexts have migrated.
 
 The embedded-host example passed MSVC Release execution with the locked
 installed Core0.8/ABI3 package and source-overridden Core PR60 in full/cropped
@@ -82,7 +85,7 @@ property parity. See Core's current TextSystem reference for exact admission.
 
 Full MSVC CTest passes 33/33; the cropped suite is 31/32 with its only failure
 reproduced on untouched base. Installed full/cropped text consumers each pass
-1/1; real Noto visible output passes. Runtime's proposed exact-Core pin adds five
+1/1; real Noto visible output passes. Runtime #102's merged exact-Core pin adds five
 deterministic real-font frames across width/source changes: visible ink, restored
 pixels, incremental/full equality, no refusal, and narrow frames different from
 clip-only references. Source identity:

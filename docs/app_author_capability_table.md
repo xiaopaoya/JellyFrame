@@ -1,6 +1,6 @@
 # App Author Capability Table
 
-> Last updated: 2026-08-30; Applies to: 0.6.0-dev; active development line: 0.6.0
+> Last updated: 2026-11-15; Applies to: 0.6.0-dev; active development line: 0.6.0
 
 This is the quick "can I use it?" table for app authors. The full contract
 remains [developer_capability_matrix.md](developer_capability_matrix.md).
@@ -10,7 +10,7 @@ remains [developer_capability_matrix.md](developer_capability_matrix.md).
 | Feature | Status | Guidance |
 | --- | --- | --- |
 | Basic structure | Available | Use `div`, `section`, `header`, `main`, `footer`, `ul`, `li`, `p` and `span`. Unknown tags become ordinary elements. |
-| Text | Available | UTF-8 text is preserved; real CJK glyph quality depends on system fonts or app `.jffont` supplements. |
+| Text | Available | UTF-8 text is preserved; real CJK glyph quality depends on system fonts or app `.jffont2` supplements. |
 | Form controls | Form V0 plus `forms.advanced` popup subset | Use `button`, `input`, `select`, `textarea`, `progress` and `meter`. `required`, text `minlength`/`maxlength`, checkbox/radio required state and required selects work with local `submit`. With the `forms.advanced` profile, a single-select click opens a core-rendered option overlay; selecting an option dispatches `input` and `change`. It is capped by the viewport and has no popup scrolling, `multiple`, native picker, browser validation bubble or browser navigation. |
 | Confirmation dialog | Bounded modal subset | Use one `<dialog>` with `showModal()` and `close(returnValue)`. In the Win32 shell, Escape becomes a cancellable `cancel` and then `close`; focus and hit testing stay inside the dialog while it is open. No nested dialogs, backdrop/light-dismiss, `show()`, `requestClose()` or browser top-layer behavior. |
 | Images | Subset | Use package-local `<img src="/assets/icon.bmp">` or one CSS `background-image: url("/assets/image.bmp")`. A static icon SVG may be compiled to BMP with `package --rasterize-svg`; its HTML/CSS reference is rewritten in the generated package. `border-radius` clips either image form with antialiased corners. One CSS background keeps `background-color` as a fallback and supports `background-size: cover`/`contain`/`100% 100%`, the simple `background-position` subset and `background-repeat: no-repeat`; remote/data URLs, multiple layers and tiling are absent. Win32 validates BMP; PNG/JPEG/WebP need a target/host codec adapter. |
@@ -70,8 +70,8 @@ subset, not complete browser behavior.
 | Package-local resources | Available | Use `/assets/a.bmp` or relative paths. Schemes, `//host` and app-root escapes are rejected. Static SVG icon sources are package-time inputs only when `--rasterize-svg` is passed; they do not reach the target as SVG. |
 | `.jfapp` bundle | V0 available | Generate with CLI `package --output-bundle`. |
 | Character scan | Default | `check`/`package`/`preview`/`install` emit `*.used_chars.txt` and a `fontSubset` plan by default. |
-| `.jffont` | Available | Can be generated from a licensed BDF; still declare it explicitly in manifest `fonts[]`. |
-| Font antialiasing | Optional | `.jffont` V1 supports 2bpp/4bpp coverage at higher byte and paint cost. |
+| `.jffont2` | Available | Prepare licensed static OTF/TTF offline with the pinned Core tool; declare resources in manifest `fonts[]`. |
+| Font antialiasing | Optional | JFFONT2 stores explicit grayscale coverage; the system catalog uses 4bpp, with quality/bytes selected offline. |
 
 ## Minimum Release Check
 

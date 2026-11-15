@@ -1,6 +1,6 @@
 # App Packaging
 
-> Last updated: 2026-11-04; Applies to: 0.6.0-dev
+> Last updated: 2026-11-15; Applies to: 0.6.0-dev
 
 JellyFrame app packaging turns web-like source files into deterministic,
 firmware-friendly app resources. The goal is not to copy a phone/watch app store
@@ -153,7 +153,7 @@ my_app/
     icon.png
     images/
   fonts/
-    ui.bdf
+    ui.jffont2
   i18n/
     en-US.json
     zh-CN.json
@@ -211,7 +211,7 @@ pre-release apps remain supported.
   "fonts": [
     {
       "id": "ui",
-      "source": "fonts/ui.bdf",
+      "source": "fonts/ui.jffont2",
       "profile": "app-subset-cn",
       "sizes": [16, 20],
       "weights": [400, 700]
@@ -269,24 +269,19 @@ Runtime support is optional and bounded: pixels are allocated only after
   fills remain deferred. Gradient text is currently approximated to one sampled
   text color so Canvas can keep using the host text backend.
 
-`fonts` is a deployment/runtime declaration for JellyFrame prepared bitmap
-fonts, not a full CSS `@font-face` implementation. The packer records `.jffont`,
-`.jffont2`, `.bdf`, `.ttf`, `.otf`, `.woff` and related files as ordinary `Font`
-resources in resource tables or `.jfapp` bundles. `.jffont` V0/V1 and Core-owned
-JFFONT2 can be parsed by runtime code and held per app instance. Win32
-`--use-app-fonts` selects Core TextSystem for JFFONT2 catalogs with a family-0
-face; otherwise the legacy bitmap backend remains available. `AppFontSet`
-provides a bitmap fallback chain: generic/no-family text tries the system font profile first and app
-`.jffont` supplements fill missing glyphs; a CSS `font-family` whose first
-custom family matches manifest `fonts[].family` tries that app font first. The
-Win32 shell can explicitly switch to this validation path with `--use-app-fonts`.
+`fonts` declares canonical JFFONT2 app resources, not CSS `@font-face`.
+Manifest sources and imports accept `.jffont2` only; regenerate legacy
+JFFONT0/1 from licensed original font sources. AppFontSet manages resource
+lifetime/catalog registration; Core TextSystem selects, measures, prepares
+and paints. Named families require a real default-family0 face. Explicit
+`--use-app-fonts` never silently substitutes GDI.
 
 Each manifest font entry may declare:
 
 ```json
 {
   "id": "ui-cn",
-  "source": "fonts/ui-cn.jffont",
+  "source": "fonts/ui-cn.jffont2",
   "profile": "app-subset-cn",
   "family": "Jelly UI CN",
   "license": {
@@ -299,40 +294,14 @@ Each manifest font entry may declare:
 }
 ```
 
-`family` is used by package diagnostics and by runtime app-font selection.
-Generic families such as `system-ui` and `sans-serif` are reported as generic
-fallback, while an unmatched primary custom family produces
-`font-family-unmatched`. Runtime matching is intentionally small: only the first
-custom family in the CSS list is normalized and matched against manifest
-`.jffont` families; full browser cascade, `@font-face`, stretch/style/features
-and full font matching are not implemented. The app-font backend uses a cheap
-integer-size policy: bitmap glyphs draw at 1x/2x/3x... according to CSS
-`font-size` divided by the font line height, with a cap for pathological sizes;
-`font-weight >= 600` uses the existing synthetic bold stroke. `sizes` and
-`weights` declare the CSS sizes and weights the app has validated for that
-package font. Tooling still checks that these arrays are present and valid,
-reporting `font-axis-metadata-missing` or
-`font-axis-metadata-invalid` before release. `license.name` and
-`license.source` are recommended for redistributed font supplements. Missing
-metadata produces `font-license-missing` or `font-license-incomplete`
-diagnostics. `budgets.maxAppFonts`,
-`budgets.maxAppFontBytes` and `budgets.maxAppFontGlyphs` cap usable runtime
-`.jffont` count, bytes and glyphs; exceeding them produces
-`font-budget-exceeded`. These checks run only in tooling and add no MCU render
-hot-path cost.
-
-The `samples/apps/packages/jelly_font_policy` package is the acceptance sample
-for this path: it declares separate `Jelly Tiny CN` and `Jelly Tiny Symbols`
-families in CSS and manifest metadata, includes tiny `.jffont` supplements
-generated from the repository BDF fixture, validates integer scaled sizes and
-intentionally keeps one missing glyph probe so tooling warnings remain easy to
-verify.
-
-The stable production path is still: collect used characters during
-package/check, generate bitmap glyph data offline from a licensed font, compile
-the generated `BitmapFont` into the port/firmware or install it as a `.jffont`
-supplement inside `.jfapp`, then inject it through `TextMeasureProvider`/
-`TextPainter` or `AppFontSet`.
+`family` is normalized by Core and matched to the declared catalog. Core
+uses actual source weights and original metrics; integer-only scaling and
+synthetic bold are retired. `sizes`/`weights` describe app-validated axes,
+not overrides for font source metadata. License, missing glyph, catalog and
+font count/bytes/glyph budgets remain packaging checks; preflight alone
+does not prove pixels or full shaping. `jelly_font_policy` uses licensed
+Noto JFFONT2 resources and an intentional missing-glyph probe. See
+[core_font_catalog.md](core_font_catalog.md).
 
 CLI `check`, `package`, `preview` and source-package `install` default to
 `--font-subset auto`. That runs font preflight, emits `report.used_chars.txt`
@@ -349,28 +318,12 @@ and records the plan in the JSON report:
 }
 ```
 
-When a licensed BDF bitmap font is available, first declare the target
-`.jffont`, family, profile, axes and license metadata in manifest `fonts[]`.
-Even when that file is absent from the source tree, the same preflight can
-generate and package it:
-
-```powershell
-python tools\jellyframe_cli.py package `
-  --root samples\apps\packages\jelly_font_policy `
-  --target round-300 `
-  --report build\font_policy.report.json `
-  --output-bundle build\font_policy.jfapp `
-  --font-source-bdf src\render_core\samples\fonts\bitmap\tiny.bdf `
-  --font-coverage-bits 2 `
-  --font-allow-missing
-```
-
-The generated `.jffont` is written to the bundle's declared `fonts[].source`
-through a temporary package overlay, without modifying the source package. Use
-`--font-resource-id` when several declared fonts are missing, or `--font-output`
-when a persistent generated artifact is also required. The app author still
-owns font source and redistribution decisions; the tool does not download fonts
-or silently ship system/third-party font data without license metadata.
+First prepare JFFONT2 from a licensed static OTF/TTF using the pinned Core
+`prepare_font_resource.py`, then place it at the manifest path or import
+it with `--import-font-resource /fonts/ui.jffont2=PATH`. Runtime
+`font --font-source ... --core-font-tool ... --characters UTF8 --font-output ...` invokes
+that same tool in the pinned Python environment. BDF auto-generation
+arguments during packaging are removed.
 
 Built-in target presets live under `tools/presets/targets`. List them with:
 
@@ -586,80 +539,19 @@ summary is compact JSON generated by the packer for desktop tools and debug
 shells; embedded installers may parse only the required fixed fields or consume
 a registry summary generated from the package report.
 
-## `.jffont` V0/V1 Binary Font Supplement
+## JFFONT2 App Font Resources
 
-`.jffont` is the first binary container for dynamic `.jfapp` font supplements.
-It is not a TTF/OTF/WOFF loader and it does not require MCU-side vector font
-rasterization; it stores bitmap glyphs that were subset and rasterized offline.
-V0 stores compact 1bpp glyph rows. V1 keeps the same fixed table shape and adds
-explicit 2bpp/4bpp coverage rows for font-level antialiasing. The tool can
-generate this file now, render core
-provides a read-only memory view parser and app runtime provides `AppFontSet`,
-which binds `.jffont` bytes to `app_instance_id` and releases them on app
-exit/switch. The first bitmap fallback chain is implemented: system font first,
-then app supplements. CSS/runtime activation semantics and product text-backend
-selection remain Track C work.
-
-File layout:
-
-```text
-header
-glyph index[]
-bitmap rows blob
-```
-
-The header is a fixed 32-byte little-endian record:
-
-```c
-char     magic[8];          // "JFFONT0\0"
-uint16_t header_size;       // 32
-uint16_t format_version;    // 0 for 1bpp, 1 for coverage glyphs
-uint32_t glyph_count;
-uint8_t  line_height;
-uint8_t  fallback_advance;
-uint16_t flags;             // V0: 0, V1: coverage bits 1/2/4 in low byte
-uint32_t glyph_table_offset;
-uint32_t row_data_offset;
-uint32_t row_data_size;
-```
-
-Each glyph index entry is a fixed 16-byte record, sorted by Unicode codepoint:
-
-```c
-uint32_t codepoint;
-uint32_t row_offset;        // offset into bitmap rows blob
-uint32_t row_size;
-uint8_t  width;
-uint8_t  height;
-uint8_t  advance;
-uint8_t  bytes_per_row;
-```
-
-This reuses the `BitmapFontGlyph`/`BitmapFont` data model but removes C++
-pointers and compile-time symbols. `BitmapFontResource` can parse `.jffont`
-bytes into a read-only view and keep using the existing binary codepoint lookup
-and bitmap painter. Coverage glyphs are an explicit quality/storage tradeoff:
-2bpp roughly doubles row data, 4bpp roughly quadruples row data, and drawing does
-a small alpha-coverage blend per covered glyph pixel. Apps that use V0/1bpp
-fonts do not pay this cost. The current generator derives coverage from BDF
-bitmap neighbors; it is not a runtime vector rasterizer and does not promise
-subpixel browser typography. The low-level view requires the caller to keep the
-`.jffont` bytes alive for the view lifetime. `AppFontSet::load_jffont` owns a
-bytes copy for safe desktop/source-package paths; `AppFontSet::attach_jffont_view`
-and `AppRuntimeHost::attach_current_jffont_view` attach a stable flash/mmapped
-or `.jfapp` bundle payload without copying. The Win32 shell uses that view path
-for installable `.jfapp` bundles and falls back to the copying path for source
-directories. `jellyframe_font_pack_gen` can now emit the firmware static header
-and the `.jffont` supplement in one run:
+App resources accept canonical Core JFFONT2 only. Resources preserve
+original hhea/hmtx metrics, actual weight, source identity and offline
+grayscale glyphs. Core performs selection, Q1000 scaling and painting;
+ports register immutable data rather than supplying text callbacks.
+Serialized JFFONT0/1 readers/writers in this app path are removed;
+renaming a file cannot migrate it.
 
 ```powershell
-jellyframe_font_pack_gen `
-  --bdf app_font.bdf `
-  --chars used_chars.txt `
-  --output app_font.h `
-  --output-binary app_font.jffont `
-  --coverage-bits 4 `
-  --name app_font
+python <pinned-core>/tools/prepare_font_resource.py `
+  --font licensed-static-font.otf --characters used_chars.txt `
+  --size 16 --bits 4 --output ui.jffont2 --report ui.font.json
 ```
 
 ## Packaging Pipeline
@@ -767,7 +659,7 @@ well.
 
 Package reports also include `fontDiagnostics`. This is a tooling estimate, not
 a runtime font loader: it scans package text resources for codepoints, applies
-the selected target `fontProfile`, parses manifest-declared `.jffont` V0 glyph
+the selected target `fontProfile`, parses manifest-declared canonical `.jffont2` glyph
 tables and reports remaining missing non-ASCII glyphs as warnings. `.ttf`,
 `.otf`, `.woff`, `.bdf` and other font files may be packaged for documentation
 or future tooling, but they are not runtime-loadable font supplements yet and
@@ -803,7 +695,7 @@ renders like the source directory:
 .\build\desktop-release\Release\jellyframe_desktop_shell.exe --capture build\watch_weather.bmp --app build\watch_weather.jfapp
 ```
 
-To validate that a `.jffont` declared in manifest `fonts` is usable by the
+To validate that a `.jffont2` declared in manifest `fonts` is usable by the
 current package, add `--use-app-fonts` to the Win32 shell. The default path
 still uses GDI text for comfortable desktop debugging and screenshot review.
 
@@ -970,7 +862,7 @@ python tools/jellyframe_cli.py font `
   --name watch_weather_font
 ```
 
-You can also emit `.jffont`, which is the binary input for `.jfapp` dynamic
+You can also emit `.jffont2`, which is the binary input for `.jfapp` dynamic
 font supplements:
 
 ```powershell
@@ -979,8 +871,11 @@ python tools/jellyframe_cli.py font `
   --target round-300 `
   --report build/watch_weather_report.json `
   --used-chars build/watch_weather_used_chars.txt `
-  --bdf path/to/ui.bdf `
-  --output-binary build/watch_weather_font.jffont
+  --font-source path/to/licensed-static-font.otf `
+  --core-font-tool path/to/pinned-core/tools/prepare_font_resource.py `
+  --characters path/to/explicit-ascii-and-nonascii-coverage.txt `
+  --font-size 16 --coverage-bits 4 `
+  --font-output build/watch_weather_font.jffont2
 ```
 
 The package report records manifest service intent in `serviceIntent`. This

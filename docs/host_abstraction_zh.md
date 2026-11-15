@@ -1,6 +1,6 @@
 # 宿主抽象草案
 
-> 最后更新：2026-07-13；适用版本：0.5.0
+> 最后更新：2026-11-15；适用版本：0.5.0
 
 
 JellyFrame 核心应继续独立于文件系统、网络栈、窗口系统、显示控制器、timer、输入硬件和字体 API。
@@ -177,13 +177,13 @@ ESP32-S3 推荐路径是：JellyFrame software `FrameBuffer` -> `embedded_frameb
 - 面向 `tiny`、app-specific、`cn-standard` 或按市场划分 profile 的生成式 bitmap font pack；
 - bitmap/JFFONT 测量与绘制 callback；
 - Win32 GDI 测量与绘制；
-- 旧应用位图字体使用的 AppFontSet callback。
+- AppFontSet 已只注册 JFFONT2 数据，应用字体回调已删除。
 
 这些接口仅在对应消费者完成 Core 字体目录迁移和一致性测试前保留。新 port 不应再增加厂商文本后端。
 
-不要让 render core 自己读取或解析任意字体文件。当前生产路径是编译期 bitmap font pack；后续高优先级的
-`.jfapp` 包内动态字体补充也应通过受控 font resource provider 和同一个宿主文本后端接入。测量和绘制
-必须来自同一套 glyph metrics，避免裁切和换行不一致。参见 `src/render_core/docs/text_backend_zh.md`。
+应用字体先从授权静态 OTF/TTF 离线准备为 Core JFFONT2，移植者仅提供不可变资源及寿命。
+Core 统一解释源度量、选择字重并准备和绘制字形，不在设备端任意加载原始字体文件。
+旧的生成式 BitmapFont/GDI 默认路径仍待迁移，但不是新 port 的接口范本。
 
 ## 输入后端
 

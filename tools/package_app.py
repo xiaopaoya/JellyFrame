@@ -26,9 +26,6 @@ JFAPP_HEADER_SIZE = struct.calcsize(JFAPP_HEADER_FORMAT)
 JFAPP_ENTRY_FORMAT = "<IIHHIIII"
 JFAPP_ENTRY_SIZE = struct.calcsize(JFAPP_ENTRY_FORMAT)
 JFAPP_ALIGNMENT = 4
-JFFONT_MAGIC = b"JFFONT0\0"
-JFFONT_HEADER_SIZE = 32
-JFFONT_GLYPH_ENTRY_SIZE = 16
 JFFONT2_MAGIC = b"JFFONT2\0"
 JFFONT2_HEADER_SIZE = 128
 JFFONT2_GLYPH_ENTRY_SIZE = 40
@@ -627,6 +624,8 @@ def validate_manifest(manifest: dict) -> dict:
                 fail(f"manifest fonts[{index}].id is required")
             if not isinstance(source, str) or not source:
                 fail(f"manifest fonts[{index}].source is required")
+            if not source.lower().endswith(".jffont2"):
+                fail("manifest fonts[].source must use canonical .jffont2; legacy .jffont and raw source fonts are retired")
             if not isinstance(profile, str) or not profile:
                 fail(f"manifest fonts[{index}].profile is required")
             family = font.get("family", "")
@@ -1975,6 +1974,8 @@ def build_resource_entry(root: Path, path: Path, app_path: str, max_resource_byt
     except ValueError:
         fail(f"resource path escapes app root: {app_path}")
     data = path.read_bytes()
+    if path.suffix.lower() == ".jffont" or data[:8] == b"JFFONT0\0":
+        fail(f"retired serialized font cannot be packaged: {app_path}; prepare canonical .jffont2 from original OTF")
     if max_resource_bytes > 0 and len(data) > max_resource_bytes:
         fail(f"resource exceeds maxResourceBytes: {app_path} ({len(data)} bytes)")
     return {
@@ -2343,6 +2344,8 @@ def apply_imported_font_resources(resources: list[dict],
                                   max_resource_bytes: int) -> tuple[list[dict], list[dict]]:
     if not imports:
         return resources, []
+    if any(not str(f.get("source", "")).lower().endswith(".jffont2") for f in manifest.get("fonts", []) if isinstance(f, dict)):
+        fail("manifest fonts[].source must use canonical .jffont2; legacy .jffont is retired")
     declared_sources = {
         font.get("source", "")
         for font in manifest.get("fonts", [])
@@ -2363,14 +2366,14 @@ def apply_imported_font_resources(resources: list[dict],
         if host_path.is_symlink():
             fail(f"imported font must not be a symlink: {host_path}")
         host_path = host_path.resolve()
-        if host_path.suffix.lower() not in {".jffont", ".jffont2"}:
-            fail(f"imported font must use the .jffont or .jffont2 runtime format: {host_path}")
+        if host_path.suffix.lower() != ".jffont2":
+            fail(f"imported font must use canonical .jffont2; legacy .jffont is retired: {host_path}")
         if not host_path.is_file():
             fail(f"imported font does not exist: {host_path}")
         data = host_path.read_bytes()
         parsed = parse_jffont(data)
         if not parsed.get("ok"):
-            fail(f"imported font is not a valid .jffont/.jffont2 resource: {host_path} ({parsed.get('error', 'invalid')})")
+            fail(f"imported font is not a valid canonical .jffont2 resource: {host_path} ({parsed.get('error', 'invalid')})")
         if max_resource_bytes > 0 and len(data) > max_resource_bytes:
             fail(f"imported font exceeds maxResourceBytes: {app_path} ({len(data)} bytes)")
         resource = {
@@ -2563,68 +2566,9 @@ def profile_covers_codepoint(profile: str, codepoint: int) -> bool:
 
 
 def parse_jffont(data: bytes) -> dict:
-    if data[:8] == JFFONT2_MAGIC:
-        return parse_jffont2(data)
-    if len(data) < JFFONT_HEADER_SIZE:
-        return {"ok": False, "error": "short-header"}
-    if data[:8] != JFFONT_MAGIC:
-        return {"ok": False, "error": "bad-magic"}
-    header_size, version = struct.unpack_from("<HH", data, 8)
-    glyph_count = struct.unpack_from("<I", data, 12)[0]
-    line_height = data[16]
-    fallback_advance = data[17]
-    flags = struct.unpack_from("<H", data, 18)[0]
-    glyph_table_offset, row_data_offset, row_data_size = struct.unpack_from("<III", data, 20)
-    if header_size != JFFONT_HEADER_SIZE or version not in {0, 1}:
-        return {"ok": False, "error": "unsupported-header"}
-    if line_height == 0 or fallback_advance == 0:
-        return {"ok": False, "error": "invalid-metrics"}
-    if (version == 0 and flags != 0) or (version == 1 and (flags & 0xff00) != 0):
-        return {"ok": False, "error": "unsupported-header"}
-    coverage_bits = 1 if version == 0 else flags & 0xff
-    if coverage_bits not in {1, 2, 4}:
-        return {"ok": False, "error": "unsupported-coverage-bits"}
-    glyph_table_size = glyph_count * JFFONT_GLYPH_ENTRY_SIZE
-    if glyph_table_offset > len(data) or glyph_table_size > len(data) - glyph_table_offset:
-        return {"ok": False, "error": "glyph-table-out-of-range"}
-    if row_data_offset > len(data) or row_data_size > len(data) - row_data_offset:
-        return {"ok": False, "error": "row-data-out-of-range"}
-
-    glyphs = set()
-    previous = 0
-    for index in range(glyph_count):
-        offset = glyph_table_offset + index * JFFONT_GLYPH_ENTRY_SIZE
-        codepoint, row_offset, row_size = struct.unpack_from("<III", data, offset)
-        width = data[offset + 12]
-        height = data[offset + 13]
-        advance = data[offset + 14]
-        bytes_per_row = data[offset + 15]
-        minimum_bytes_per_row = (width * coverage_bits + 7) // 8
-        minimum_row_size = height * bytes_per_row
-        if (
-            codepoint == 0 or
-            (index > 0 and codepoint <= previous) or
-            width == 0 or
-            height == 0 or
-            advance == 0 or
-            bytes_per_row < minimum_bytes_per_row or
-            row_size < minimum_row_size or
-            row_offset > row_data_size or
-            row_size > row_data_size - row_offset
-        ):
-            return {"ok": False, "error": "invalid-glyph-entry", "glyphIndex": index}
-        glyphs.add(codepoint)
-        previous = codepoint
-
-    return {
-        "ok": True,
-        "format": f"jffont-v{version}",
-        "coverageBits": coverage_bits,
-        "glyphCount": glyph_count,
-        "lineHeight": line_height,
-        "fallbackAdvance": fallback_advance,
-        "glyphs": glyphs,
-    }
+    if data[:8] == b"JFFONT0\0":
+        return {"ok": False, "error": "retired-jffont0-v0-v1-use-canonical-jffont2"}
+    return parse_jffont2(data)
 
 
 def parse_jffont2(data: bytes) -> dict:
@@ -2759,7 +2703,7 @@ def collect_font_diagnostics(manifest: dict,
             continue
 
         suffix = resource["file"].suffix.lower() if resource is not None else ""
-        if suffix not in {".jffont", ".jffont2"}:
+        if suffix != ".jffont2":
             font_entry["status"] = "packaged-unsupported-runtime-format"
             font_entry["format"] = suffix[1:] if suffix else "unknown"
             warnings.append({
@@ -2773,14 +2717,16 @@ def collect_font_diagnostics(manifest: dict,
 
         total_runtime_font_bytes += resource["size"]
         parsed = parse_jffont(resource["file"].read_bytes())
+        if parsed.get("error") == "retired-jffont0-v0-v1-use-canonical-jffont2":
+            fail(f"retired JFFONT0/v0/v1 serialized font is not packageable: {source}; prepare canonical .jffont2 from original OTF")
         if not parsed.get("ok"):
             font_entry["status"] = "invalid"
-            font_entry["format"] = "jffont-v0/v1" if suffix == ".jffont" else "jffont2"
+            font_entry["format"] = "jffont2"
             font_entry["error"] = parsed.get("error", "invalid")
             warnings.append({
                 "level": "warning",
                 "code": "invalid-jffont-resource",
-                "message": f"manifest font source is not a valid .jffont resource: {source}",
+                "message": f"manifest font source is not a valid canonical .jffont2 resource: {source}",
                 "source": "jellyframe.app.json",
             })
             manifest_fonts.append(font_entry)
@@ -2890,7 +2836,7 @@ def collect_font_diagnostics(manifest: dict,
         warnings.append({
             "level": "warning",
             "code": "font-missing-glyphs",
-            "message": f"source text uses codepoints not covered by target profile or app .jffont supplements: {sample}",
+            "message": f"source text uses codepoints not covered by target profile or app .jffont2 supplements: {sample}",
             "source": "jellyframe.app.json",
         })
 
@@ -2921,7 +2867,7 @@ def collect_font_diagnostics(manifest: dict,
 
     diagnostics = {
         "targetFontProfile": target_profile,
-        "coverageModel": "target-profile-estimate-plus-jffont-glyph-table",
+        "coverageModel": "target-profile-estimate-plus-jffont2-glyph-table",
         "runtimeFontBudget": {
             "maxAppFonts": max_app_fonts,
             "maxAppFontBytes": max_app_font_bytes,
@@ -3190,7 +3136,7 @@ def main() -> int:
     parser.add_argument("--svg-raster-size", type=int, default=32,
                         help="Maximum generated SVG BMP dimension in pixels (1..256, default: 32).")
     parser.add_argument("--import-font-resource", action="append", default=[], metavar="APP_PATH=HOST_PATH",
-                        help="Package an external .jffont at a path already declared in manifest fonts[].")
+                        help="Package an external canonical .jffont2 at a path already declared in manifest fonts[].")
     args = parser.parse_args()
     if args.rasterize_svg and not 1 <= args.svg_raster_size <= 256:
         fail("--svg-raster-size must be between 1 and 256")
