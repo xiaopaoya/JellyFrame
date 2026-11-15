@@ -1,8 +1,8 @@
 # Render Core ABI4 集成计划
 
-> 最后更新：2026-11-16；适用版本：0.6.0-dev。Core 发布候选：0.9.0 / ABI4。
+> 最后更新：2026-11-16；适用版本：0.6.0-dev。Core 已发布版本：0.9.0 / ABI4。
 
-> **最新检查点（2026-11-16）：**Runtime PR #99–#113 已合并；#111 将 WS147 band-shell CoreText profile 设为默认，并合入 Win32 ABI4 属性与增量/全量重绘矩阵（293 帧、27 组流程）。`mainline1` 实机验收已记录，不重复。Core PR #67 已以 `16a83211ec0992f8e25ec0fc977eb6fd158716e3` 合入，ABI4 契约完成，Core CI 与干净 Release CTest 通过。Core 0.9.0 ABI4 源码归档已生成，SHA-256 核验为 `8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628`；签名 tag 与 GitHub Release 仍等待 GPG 鉴权。Runtime 锁更新候选分支基于 master `2e116182`，更新锁、app manifest/模板、provenance CI 和 ABI4 installed consumers；full/cropped 本地 CTest 各 22/22 通过，package/profile 回归也通过。用户另已在 `0.6.2-abi4-installed-core63-device1` 上通过 `Core 63 Select Popup` 实机验收，标题、四个选项、结果与触控正常；JFDP 首帧接受且 render/present 失败为 0。实机记录不能替代签名包集成。Runtime master 在候选 PR 通过 CI 并合入前，仍锁定签名 Core 0.8.0 / ABI3。`mainline2` 仍是另一独立待验收 profile。
+> **最新检查点（2026-11-16）：**Runtime PR #99–#113 已合并；#111 将 WS147 band-shell CoreText profile 设为默认，并合入 Win32 ABI4 属性与增量/全量重绘矩阵（293 帧、27 组流程）。`mainline1` 实机验收已记录，不重复。Core PR #67 已以 `16a83211ec0992f8e25ec0fc977eb6fd158716e3` 合入，ABI4 契约完成，Core CI 与干净 Release CTest 通过。Core v0.9.0 / ABI4 的签名 tag 与 GitHub Release 已发布；归档及 `.sha256` sidecar 均已上传，归档 SHA-256 `8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628` 与 GitHub asset digest 一致。Runtime 锁更新候选分支 `codex/core-0.9.0-abi4-lock-20261116` 基于 master `2e116182`，已有锁、app manifest/模板、provenance CI 和 ABI4 installed consumers 改动；full/cropped 本地 CTest 各 22/22 通过，package/profile 回归也通过。补充审计发现三个 ESP32 探针生成器仍输出 Core 0.7.0，候选中已改为 0.9.0 并验证生成包。用户已在 `0.6.2-abi4-installed-core63-device1` 上通过 `Core 63 Select Popup` 实机验收，标题、四个选项、结果与触控正常；JFDP 首帧接受且 render/present 失败为 0。Runtime master 在候选 PR 通过 CI 并合入前仍锁定签名 Core 0.8.0 / ABI3。`mainline2` 仍是另一独立待验收 profile。
 
 本文件是当前执行计划。旧检查点保存在 Git 历史和对应 PR 中，不再作为额外待办。
 [文本消费者退役清单](render_core_text_consumer_retirement.md)记录实际调用方与原生设备候选的完整身份。
@@ -11,9 +11,9 @@
 
 | 边界 | 当前状态 | 剩余门槛 |
 | --- | --- | --- |
-| 已发布依赖 | Runtime master 仍锁定签名 Core v0.8.0 / ABI3；ABI4 v0.9.0 候选归档已在本地验哈希。 | 完成 GPG 签名和 GitHub Release，再开启 Runtime 锁更新 PR；仅在 CI 通过后合并。 |
-| Core 主线 | Core PR #67（`16a83211ec0992f8e25ec0fc977eb6fd158716e3`）已合并，ABI4 契约完成，Core CI 与干净 Release 检查通过。 | 完成 v0.9.0 签名发布。 |
-| Runtime 主线 | PR #99–#113 已合并。新候选分支更新精确 package lock、app manifests/模板、provenance CI 和 ABI4 installed consumers；full/cropped 本地 CTest 各 22/22 通过。 | 发布 Core 包，开启并验证 Runtime PR，再于 CI 通过后合并。 |
+| 已发布依赖 | Core v0.9.0 / ABI4 签名 tag 与 Release 已发布；归档和 SHA-256 sidecar 均已上传，远端归档 digest 与本地一致。 | Runtime 锁更新 PR 通过 full/cropped、ABI3 source-override 与其余 CI 后合并。 |
+| Core 主线 | Core PR #67（`16a83211ec0992f8e25ec0fc977eb6fd158716e3`）已合并，ABI4 契约完成，Core CI 与干净 Release 检查通过；v0.9.0 签名发布及归档资产核验完成。 | 无；后续由 Runtime 锁更新 PR 消费已发布包。 |
+| Runtime 主线 | PR #99–#113 已合并。候选分支 `codex/core-0.9.0-abi4-lock-20261116` 更新精确 package lock、app manifests/模板、provenance CI、ABI4 installed consumers 和三个 ESP32 探针 manifest；full/cropped 本地 CTest 各 22/22 通过。 | 推送并开启 PR；CI 通过后合并，届时 Runtime master 才切换至 ABI4。 |
 | Embedded host | #100 为 layout/layers/paint 绑定同一个 TextSystem/JFFONT2；锁定 ABI3 和 source ABI4 full/cropped 测试通过。 | 该示例不再依赖文本 provider 回调。 |
 | Installed worker | 已合并 #101，让无 painter 的 canonical v10/CoreText 独立于 BMP 工作。#107 覆盖 Core #63 popup 输入、prepared packet、行像素、选择与关闭；#109 增加 full-feature WS147 profile。Core #65 generated pseudo-content 已纳入 Runtime source-override build/CTest。用户已在 `0.6.2-abi4-installed-core63-device1` 上确认标题、四个选项、选择结果与触控正常；JFDP 首帧已接受且 render/present 失败为 0。 | popup named profile 的用户可见验收通过；仍需退役其余 provider/painter 路径。 |
 | 原生 WS147 | `0.6.2-abi4-mainline2` 已基于 Runtime #103/Core #62 构建；app BIN 7,614,704 B，8 MiB app 分区余 773,904 B，16 MiB factory/包哈希已核验。另一份 `mainline1` 于 2026-11-15 通过页面观察。 | 仍需验收精确的 `mainline2` 产物；`mainline1` 不能替代该镜像或 installed worker/BMP 的测试。 |
@@ -78,10 +78,10 @@ additive 接口，以及 layout、intrinsic、cache/repaint、layer emission 和
 
 ### D. 发布和生产锁
 
-ABI4 **尚未发布**。从最终审查通过的 API/资源契约生成确定性签名发布，核验 tag、
-归档 checksum、source manifest、profile 和独立安装消费者，再更新 Runtime 的精确
-版本、ABI、源码/归档锁、已发布产物 CI 和兼容性文档。ABI3 作为回退证据保留，
-不能声称 ABI3/ABI4 二进制互换。
+Core v0.9.0 / ABI4 已从最终审查通过的源码发布并签名；tag、归档 checksum、source
+manifest、profile 和 Release 资产均已核验。Runtime 精确版本、ABI、源码/归档锁及
+已发布产物 CI 已在候选分支更新，等待 PR CI 后合并。ABI3 作为回退证据保留，不能
+声称 ABI3/ABI4 二进制互换。
 
 ### E. 设备准入
 

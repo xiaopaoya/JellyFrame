@@ -1,8 +1,8 @@
 # Render Core ABI4 Integration Plan
 
-> Last updated: 2026-11-16; Applies to: 0.6.0-dev. Core release candidate: 0.9.0 / ABI4.
+> Last updated: 2026-11-16; Applies to: 0.6.0-dev. Core released version: 0.9.0 / ABI4.
 
-> **Latest checkpoint (2026-11-16):** Runtime PRs #99–#113 are merged; Runtime #111 promotes the WS147 band-shell CoreText profile and the Win32 ABI4 text-property/incremental-versus-full repaint matrix (293 frames, 27 flows). The accepted `mainline1` hardware observation is already recorded and must not be repeated. Core PR #67 merged as `16a83211ec0992f8e25ec0fc977eb6fd158716e3`, completing the reviewed ABI4 contract; Core CI and clean Release CTest passed. The 0.9.0 ABI4 source archive has been generated and its SHA-256 verified as `8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628`; signed tag and GitHub Release remain pending GPG authentication. The Runtime lock update is prepared on a branch from master `2e116182`; full and cropped local builds each pass CTest 22/22, including installed Core ABI4 consumer coverage, and package/profile regressions pass. The user has separately accepted `Core 63 Select Popup` on named profile `0.6.2-abi4-installed-core63-device1`: labels, all four options, selected result and touch worked; JFDP accepted the first frame with zero render/present failures. These device observations do not replace signed-package integration. Runtime master remains on signed Core 0.8.0 / ABI3 until the candidate lock PR passes CI and merges. `mainline2` remains a separate pending profile.
+> **Latest checkpoint (2026-11-16):** Runtime PRs #99–#113 are merged; Runtime #111 promotes the WS147 band-shell CoreText profile and the Win32 ABI4 text-property/incremental-versus-full repaint matrix (293 frames, 27 flows). The accepted `mainline1` hardware observation is already recorded and must not be repeated. Core PR #67 merged as `16a83211ec0992f8e25ec0fc977eb6fd158716e3`, completing the reviewed ABI4 contract; Core CI and clean Release CTest passed. Core v0.9.0 / ABI4 is now published with a signed tag and GitHub Release. The archive and `.sha256` sidecar are uploaded; GitHub's archive asset digest matches `8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628`. The Runtime lock update is prepared on `codex/core-0.9.0-abi4-lock-20261116` from master `2e116182`; full and cropped local builds each pass CTest 22/22, including installed Core ABI4 consumer coverage, and package/profile regressions pass. A follow-up audit found three ESP32 probe generators still emitted Core 0.7.0; the candidate now updates them to 0.9.0 and fixture generation confirms the manifests. The user has separately accepted `Core 63 Select Popup` on named profile `0.6.2-abi4-installed-core63-device1`: labels, all four options, selected result and touch worked; JFDP accepted the first frame with zero render/present failures. Runtime master remains on signed Core 0.8.0 / ABI3 until the candidate lock PR passes CI and merges. `mainline2` remains a separate pending profile.
 
 This is the current execution plan. Earlier checkpoint narratives are preserved
 in Git history and their linked PRs; they are not additional open tasks. The
@@ -13,9 +13,9 @@ actual call sites and the exact native device candidate.
 
 | Boundary | Current state | Remaining gate |
 | --- | --- | --- |
-| Released dependency | Runtime master still locks signed Core v0.8.0 / ABI3; signed ABI4 v0.9.0 candidate archive is hash-verified locally. | Complete GPG signing and GitHub Release, then open the Runtime lock PR and merge only after CI passes. |
-| Core mainline | Core PR #67 (`16a83211ec0992f8e25ec0fc977eb6fd158716e3`) is merged; ABI4 contract and clean Release gates passed. | Finish signed v0.9.0 publication. |
-| Runtime mainline | PRs #99–#113 are merged. A new candidate branch updates the exact package lock, app manifests/templates, provenance CI and ABI4 installed consumers; full/cropped local CTest each pass 22/22. | Publish Core package, open/validate the Runtime PR, then merge after CI. |
+| Released dependency | Core v0.9.0 / ABI4 signed tag and Release are published; archive and `.sha256` sidecar are uploaded, and the remote archive digest matches the local hash. | Merge the Runtime lock PR after full/cropped, ABI3 source-override and remaining CI pass. |
+| Core mainline | Core PR #67 (`16a83211ec0992f8e25ec0fc977eb6fd158716e3`) is merged; ABI4 contract and clean Release gates passed; signed v0.9.0 publication and archive asset verification are complete. | None; Runtime lock PR will consume the released package. |
+| Runtime mainline | PRs #99–#113 are merged. Candidate `codex/core-0.9.0-abi4-lock-20261116` updates the exact package lock, app manifests/templates, provenance CI, ABI4 installed consumers and three ESP32 probe manifests; full/cropped local CTest each pass 22/22. | Push and open the PR; merge after CI passes, then Runtime master switches to ABI4. |
 | Embedded host | PR #100 binds one TextSystem/JFFONT2 fixture to layout, layers and paint. Locked ABI3 and source ABI4 full/cropped tests pass. | No remaining provider callback in this example. |
 | Installed worker | PR #101 makes canonical v10/painterless CoreText independent of BMP. PR #107 tests Core #63 popup input, prepared packets, visible row pixels, selection and close through the canonical v10 worker on the exact source identity. PR #109 adds a full-feature WS147 profile and select-popup app, with IDF build, packaging and provider regressions passing. Core #65 generated pseudo-content is included in the Runtime source-override build/CTest. The user accepted title, four options, selected result and touch on `0.6.2-abi4-installed-core63-device1`; first frame accepted, render/present failures zero. | Popup named-profile visual acceptance passed; retire the remaining provider/painter paths. |
 | Native WS147 | `0.6.2-abi4-mainline2` built from Runtime #103/Core #62; app BIN 7,614,704 B, 773,904 B free in the 8 MiB app partition, 16 MiB factory/package hashes verified. A distinct `mainline1` image passed Home/Activity/Weather/back observation on 2026-11-15. | Flash/observe the exact `mainline2` artifact; `mainline1` evidence does not qualify it or installed worker/BMP, which are disabled in these profiles. |
@@ -97,11 +97,11 @@ qualification is a downstream adoption gate, not a reason to retain dead host AP
 
 ### D. Release and production lock
 
-ABI4 is **not released**. Cut a signed deterministic Core release from the final
-reviewed API/resource contract; verify tag, archive checksum, source manifest,
-profile and standalone install/consumers. Update Runtime's exact version, ABI,
-source/archive lock and installed-artifact CI, together with compatibility docs.
-Keep ABI3 as rollback evidence; do not imply binary interchangeability.
+Core v0.9.0 / ABI4 has been released from the final reviewed source and signed.
+The tag, archive checksum, source manifest, profile and Release assets are
+verified. Runtime's exact version, ABI, source/archive lock and installed-artifact
+CI are updated on the candidate branch, pending PR CI and merge. Keep ABI3 as
+rollback evidence; do not imply binary interchangeability.
 
 ### E. Device admission
 
@@ -161,9 +161,9 @@ gates. Optional ABI5 reuse and production shaping remain separate.
    whether the Win32 GDI default changes. Convert remaining
    callback-dependent tests/fixtures, then remove provider/range/family/additive
    APIs and implementation branches in one coordinated pre-release change.
-5. After final API review, full/cropped, feature-disabled, installed-consumer
-   and archive gates pass, sign and publish ABI4 and update Runtime's exact
-   production dependency lock.
+5. Core v0.9.0 / ABI4 is signed and published; its archive and checksum sidecar
+   are verified. Push the Runtime lock candidate, open the PR, and merge only
+   after full/cropped, ABI3 source-override and remaining CI gates pass.
 6. Track `mainline2` WS147 and installed-worker popup as separate named images
    when useful; the accepted `mainline1` observation is complete and must not be
    repeated.
