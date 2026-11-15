@@ -2,7 +2,9 @@
 
 > **IRAM 状态（2026-11-14）：已确认是报告口径/解读问题，不是未解决的容量 blocker。** Runtime PR #98 已通过全部 19 项 CI 并以 `92f6b62d` 合并。反复出现的 `16,383 / 16,384 bytes` 仅指专用静态 IRAM 链接器分类；对应的 D/IRAM 数据窗口仍约有 270 KB 余量。除非新构建提供相反的链接器窗口证据，否则不要再将其作为“总 IRAM 只剩 1 byte”重新排查。
 
-> 最后更新：2026-11-14；适用版本：0.6.0-dev。范围：将经审查的实验能力纳入受治理的 Core/Runtime 路径，并退役由宿主负责文本度量与绘制的兼容接口。
+> 最后更新：2026-11-15；适用版本：0.6.0-dev。范围：将经审查的实验能力纳入受治理的 Core/Runtime 路径，并退役由宿主负责文本度量与绘制的兼容接口。
+
+> **当前迁移状态（2026-11-15）：**Runtime PR #99 已在 19 项 PR CI 全部通过后以 `75a435c5` 合并，合并后的 master run `43665260637` 也通过 19/19。Core PR #60 为 `34ae4b88`，source identity `bbfa81de…f4552` / 163 个输入。新的原生 WS147 候选 `0.6.2-abi4-mainline1` 固定该组合，使用干净的 IDF v5.3.1 和递归固定的子模块；构建及包完整性验证通过，实机验收仍待进行。候选身份和剩余生产回调清单见[文本消费者退役](render_core_text_consumer_retirement.md)。签名生产依赖仍为 Core0.8/ABI3，ABI4 尚未发布。
 
 ## 当前检查点
 
@@ -12,7 +14,7 @@
 - Runtime PR #91 已合并为 `d0be03d5`，19 项 CI 全部通过；合并后的 master workflow [43564714754](https://github.com/xiaopaoya/JellyFrame/actions/runs/43564714754) 已通过。它从 launcher 自带 HTML/CSS 构建静态和路由态 host fixture，对 7px 标签做逐项可见像素断言并比较增量/全量帧。路由 shim 模拟 active-view class 转换，但没有执行 ESP32 native listener，因此只验证 Core layout/repaint 状态，不验证设备路由派发。
 - Runtime PR #92 已合并为 `1a35bd75`，PR 检查全部通过。移植与架构指南现在将 Core `TextSystem` 定为新 port 的规范文本路径，并将宿主测量/绘制 provider 标记为迁移兼容接口。这是文档契约；provider 仍有生产调用方，尚未删除，生产默认值也未切换。
 - Runtime PR #97 已合并为 `d28a5c2f`，CI workflow [43577992624](https://github.com/xiaopaoya/JellyFrame/actions/runs/43577992624) 的 19 项检查全部通过。它从 ESP32 image resolver 使用的同一不可变资源包读取并校验 BMP 固有尺寸，保持 metadata 转像素缓存后的同一 handle 用于绘制，并拒绝缺失、非法、超过 96px 或超资源预算的输入。仅当 Core 暴露 natural-image layout API 时才注册对应 metadata 测试；ABI4 CI job 使用 Core `be876270` 实际构建并运行该测试。ESP-IDF v5.3.1 CoreText 关闭/开启构建分别通过，镜像大小 5,445,568 B（app 余量 35%）和 7,614,192 B（余量 9%）。尚未刷写，固有尺寸实机验收仍未完成。
-- 新的 WS147 CoreText ABI4 构建位于 `D:\CodexTemp\abi4-ws147-coretext-master-build-20261114-fresh`，使用 Runtime `d28a5c2f` 与 Core `0.9.0-dev` / ABI4 / 163 个输入 / source identity `c804cdf023750de7feaf6c73ac841285e18b53b8468ffac6d99d2946615f27d8`。BIN 为 7,606,768 B，SHA-256 `1EC3888E3927D87A699EA1027EBC7074B26473BBF4120E085DD77D61A493483D`；同一次构建生成的 16 MiB factory image SHA-256 `760944F4065B552AF275C31DBAA5B4821B6B7FDB0BDCAA0815D7CF06387B8E85`。ABI4 Developer Image package 已记录 Core `0.9.0-dev` / ABI 4 及两个镜像 hash，8 MiB app 分区余量 9%。均未刷写或实机验收。
+- 历史 PR #60 之前的 WS147 CoreText ABI4 构建位于 `D:\CodexTemp\abi4-ws147-coretext-master-build-20261114-fresh`，使用 Runtime `d28a5c2f` 与 Core `0.9.0-dev` / ABI4 / 163 个输入 / source identity `c804cdf023750de7feaf6c73ac841285e18b53b8468ffac6d99d2946615f27d8`。BIN 为 7,606,768 B，SHA-256 `1EC3888E3927D87A699EA1027EBC7074B26473BBF4120E085DD77D61A493483D`；同一次构建生成的 16 MiB factory image SHA-256 `760944F4065B552AF275C31DBAA5B4821B6B7FDB0BDCAA0815D7CF06387B8E85`。ABI4 Developer Image package 已记录 Core `0.9.0-dev` / ABI 4 及两个镜像 hash，8 MiB app 分区余量 9%。均未刷写或实机验收。
 - Developer Image provenance 现在通过 SHA-256 绑定 ESP-IDF `app_bin`，记录 Core 源码 identity/输入数、IDF 版本与 revision、toolchain、target、启用的构建 profile 及生效后的 `sdkconfig` hash。重新生成的 archive 位于 `D:\CodexTemp\abi4-ws147-coretext-master-build-20261114-fresh\provider-release-provenance-fixed\jellyframe-ws147-developer-0.6.2-ws147.abi4.1-provider-0.1.1-dev-provider-0.1.1-dev.zip`，其中 7,606,768 字节 BIN 的 SHA-256 与 manifest 一致；这证明 artifact identity，不代表设备验收。
 - launcher Weather 重绘回归现在逐项检查 8 行预报文字。在固定 Core `0.9.0-dev` / ABI4 的本地桌面 shell 上，`launcher-weather-route` 的 legacy/CoreText 两条路径共 18 次增量/全量确定性捕获全部通过。Core 真实生成的 Noto 资源也通过直接 7/8px 测量、准备与光栅测试。这些主机门槛缩小了旧缺字反馈的排查范围，但不构成设备资格。
 - Core PR #60 已以 `34ae4b88` 合并，加入 bounded prepared-text `letter-spacing` 与 JFTP v3 显式 glyph 位置，同时保持 v1/v2 解码；PR 的四项 CI 全部通过。163 个输入的 source identity 为 `bbfa81de99ca687d036ef151f87b3e7bac1a29cd8f2c9e1c8c45547b7c1f4552`。Runtime PR #99 已将 ABI4 full/cropped 和 source-override lane 固定到该 Core 身份。
@@ -45,13 +47,13 @@ Runtime PR #73 已建立当前签名 Core package 的干净 checkout 与 checksu
 ### B. Runtime 消费者迁移（资源契约固定后并行）
 
 - **B1 原生 UI 与已安装应用 worker（PR #77 已合并）：**将保留式 UI 和已安装 worker 资源接入共享字体目录，并新增命名 `sdkconfig.ws147_core_text.defaults` profile，生产 Kconfig 默认值保持不变。WS147 常规路径仍创建 `TextMeasureProvider`/`TextPainter` 回调；CoreText profile 才会绕过它们。full/cropped 主机组合、PR CI 与 IDF v5.3.1 构建均通过。ABI3 staged profile 与单独 ABI4 候选都仍需实机验收。
-- **B2 桌面（PR #76 分阶段；资格 PR #79/#89/#90 已合并）：**已提供显式 Core catalog 验证路径和 JFFONT2 补充字体，同时保留 GDI 默认与旧 JFFONT。PR #89 已在 Windows ABI4 source-override lane 运行带正向断言的增量/全量重绘矩阵；PR #90 增加后端选择诊断与路由测试。Core PR #60 已以 `34ae4b88` 合并，加入 bounded prepared-text `letter-spacing` 与 JFTP v3 显式字形位置，同时保持 v1/v2 解码。Core Release CTest（33/33）、真实字体覆盖及 exact-Core Runtime 重绘 gate（legacy/CoreText 共六个确定性帧）通过。Runtime PR #99 已固定该 Core identity，但首轮 CI 在四个 v9 consumer 与两个 R3 route-test lane 失败；本机修复已分别通过 4/4 与 1/1，仍须完整 PR CI 通过后合并。ellipsis 仍不支持且暂无逐节点 fallback；旧 JFFONT 仍需要 AppFontSet 回调。
+- **B2 桌面（PR #76 分阶段；资格 PR #79/#89/#90 已合并）：**已提供显式 Core catalog 验证路径和 JFFONT2 补充字体，同时保留 GDI 默认与旧 JFFONT。PR #89 已在 Windows ABI4 source-override lane 运行带正向断言的增量/全量重绘矩阵；PR #90 增加后端选择诊断与路由测试。Core PR #60 已以 `34ae4b88` 合并，加入 bounded prepared-text `letter-spacing` 与 JFTP v3 显式字形位置，同时保持 v1/v2 解码。Core Release CTest（33/33）、真实字体覆盖及 exact-Core Runtime 重绘 gate（legacy/CoreText 共六个确定性帧）通过。Runtime PR #99 已固定该 Core identity，以 `75a435c5` 合并；PR 和合并后 CI 均通过 19/19。ellipsis 仍不支持且暂无逐节点 fallback；旧 JFFONT 仍需要 AppFontSet 回调。
 
 **退出证据：**完成属性兼容门槛后，内置 catalog 默认使用 CoreText；回调路径仅保留给明确记录的旧 JFFONT 兼容；已安装 package 与 source override 的图像一致；应用字体和损坏资源拒绝测试通过。
 
 ### C. Core 自有文本 API 收敛
 
-待 B 的消费者转用 Core 持有的字体目录后，让 Core layout、intrinsic sizing、layer 构建、repaint/reuse、rasterizer 和 Canvas2D 直接使用 `TextSystem`/拥有所有权的文本服务。移除依赖回调身份的缓存契约，并迁移回调测试、fixtures、source archive 测试和移植文档。已核实的生产调用方包括 ESP32 UI/已安装应用 JFFONT 回调、Win32 默认 GDI 度量/绘制、桌面旧 JFFONT 的 AppFontSet，以及 embedded-host sample。PR #55 已单独移除 `HostTextAdapter`：全仓清单没有找到它的生产调用方。这不代表底层 `TextMeasureProvider`、`TextPainter`、range/family/additive hooks 或 fallback 实现已退役；剩余接口须等所有消费者迁移后，在首次正式 ABI4 release 前协调移除。
+待 B 的消费者转用 Core 持有的字体目录后，让 其余 Core layout、intrinsic sizing、layer 构建、repaint/reuse 与 rasterizer 直接使用 `TextSystem`/拥有所有权的文本服务。移除依赖回调身份的缓存契约，并迁移回调测试、fixtures、source archive 测试和移植文档。已核实的生产调用方包括 ESP32 原生/generated-BitmapFont 与已安装 worker painter 回调、Win32 默认 GDI 度量/绘制、桌面旧 JFFONT 的 AppFontSet，以及 embedded-host sample（本轮已迁移）；Canvas2D 已使用 TextSystem，不是剩余回调消费者。PR #55 已单独移除 `HostTextAdapter`：全仓清单没有找到它的生产调用方。这不代表底层 `TextMeasureProvider`、`TextPainter`、range/family/additive hooks 或 fallback 实现已退役；剩余接口须等所有消费者迁移后，在首次正式 ABI4 release 前协调移除。
 
 **退出证据：**仓库范围生产路径搜索不再发现有意保留的旧兼容以外的回调路径；删除回调 API 后 Core 全套、source archive、full/cropped 已安装消费者和禁用特性 profile 均通过；公开移植指南只描述 Core 自有字体契约。实机资格是后续准入门槛，不是 API 删除的前置条件。
 
@@ -94,6 +96,6 @@ A/B 期间可以并行审计 Core API 和迁移测试，但必须等所有生产
 2. **已完成：**Runtime full/cropped ABI4 资格验证现已覆盖 Core `64c1cb42` 和 source identity `213ff3196864f2d7da9152bf246c29bda9849da50daff272baf551a7f9179cc5`（163 个实现输入），workflow 为 `43472234209`。
 3. **已完成：**PR #75 的共享字体目录/API 在全部 CI 通过后合并。
 4. **主机门槛通过，板级症状仍未归因：**Runtime PR #83、Core PR #57、Runtime PR #85 已合并且 CI 通过。设备照片确认 launcher Weather 大卡和空气质量提示有字，四个 forecast 小卡只有图标；这与 `watch_weather` 示例不同。PR #91 的 host route shim 没有执行 ESP32 native listener；新增 CTest 使用与 ESP32 相同的 native route helper，验证事件映射和 forecast DOM 文本保留。固定 Core `0.9.0-dev` / ABI4 的本地 shell 已逐项确认 8 行 7px 小卡文字可见；Core 真实 Noto 资源的 7/8px 测量、准备和光栅测试也通过。ABI4 Developer Image manifest 已将构建 provenance 与实际 app BIN 绑定；镜像仍未刷写或实机验收。旧首页时钟模糊/裁切是独立问题。
-5. **Core 文本主机门槛：**Core PR #60 已合并，exact-Core Runtime letter-spacing 可见输出/重绘 gate 通过。Runtime PR #99 已固定合并后的 Core identity，但首轮 CI 在四个 v9 consumer 与两个 R3 route-test lane 失败；本机修复已分别通过 4/4 与 1/1，仍须完整 PR CI 通过后合并。ellipsis 正确行为或经过测试的逐节点 fallback 完成前，桌面继续默认使用 GDI。
-6. **近期并行工作：**(a) 修复并通过 Runtime PR #99，再用 Core identity `bbfa81de…f4552` 重建 provenance-bound WS147 镜像，验证包内 BIN 与准确的 IDF `app_bin` 一致后安排实机验收；(b) 处理 ellipsis 或实现有测试保障的逐节点 fallback，并盘点/迁移 callback 消费者；(c) 准确镜像完成板上观察前，保留 Weather 小卡缺字问题为未解决。当前使用 Core identity `c804cdf0…f27d8` 的旧 ABI4 包不是最终验收候选。
+5. **Core 文本主机门槛：**Core PR #60 与 Runtime PR #99 已合并，Runtime PR 与合并后 CI 均通过 19/19。CoreText 仍在布局准入时拒绝 ellipsis；桌面默认切换前须在 Core 内实现有界省略行为，不新增宿主回调。剩余消费者清单已区分 generated BitmapFont 适配器和旧序列化 JFFONT，见文本消费者退役文档。
+6. **近期工作：**(a) 验收准确的 `mainline1` 原生候选，检查 Home/Activity/Weather/返回，再决定是否关闭 Weather 小卡缺字问题；(b) 继续迁移生产回调消费者并实现有界 Core 自有 ellipsis；(c) 消费者和资源契约通过后再删除旧 API。本轮 embedded-host 改动移除一个实际消费者，不切换设备默认。ABI5 样式复用与生产 shaping 保持独立候选。
 7. 主机消费者及测试迁移完成后，再协调删除 callback API、最终 Core ABI4 release/archive、Runtime package-lock/default adoption。命名 ABI4 设备 provenance 和实机验收是其后的 device-adoption gate，不阻塞主机侧 API 删除。ABI4 full/cropped CI 只证明 installed-consumer 兼容性，不等于签名发布或实机验收。
