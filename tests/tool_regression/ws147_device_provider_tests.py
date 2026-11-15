@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -167,6 +168,49 @@ class Ws147DeviceProviderTests(unittest.TestCase):
         config = provider.ProviderConfig("fixture-live-cancel", "COM19", 115200, Path("manifest.json"), {})
         with self.assertRaisesRegex(provider.ProviderError, "selector does not identify"):
             provider.run_physical(args, config)
+
+    def test_install_prepares_local_cancel_session_before_remote_begin(self) -> None:
+        spec = importlib.util.spec_from_file_location("ws147_device_provider_install_order", PROVIDER)
+        assert spec is not None and spec.loader is not None
+        provider = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = provider
+        spec.loader.exec_module(provider)
+
+        requests: list[int] = []
+
+        class RecordingWire:
+            def __init__(self, _config: object) -> None:
+                pass
+
+            def open(self) -> None:
+                pass
+
+            def request(self, message_type: int, *_args: object, **_kwargs: object) -> bytes:
+                requests.append(message_type)
+                return b"stub"
+
+            def close(self) -> None:
+                pass
+
+        with tempfile.TemporaryDirectory(prefix="jellyframe-install-session-order-") as directory:
+            bundle = Path(directory) / "candidate.jfapp"
+            bundle.write_bytes(b"test bundle")
+            endpoint = "fixture-install-session-order"
+            args = argparse.Namespace(operation="install", selector=endpoint, request_id="install-order",
+                                      bundle=bundle, allow_downgrade=False)
+            config = provider.ProviderConfig(endpoint, "COM19", 115200, Path("manifest.json"), {})
+            with (
+                mock.patch.object(provider, "Wire", RecordingWire),
+                mock.patch.object(provider, "decode_capabilities", return_value={}),
+                mock.patch.object(provider, "decode_identity", return_value={}),
+                mock.patch.object(provider, "device_from_capabilities", return_value=provider.fixture_device()),
+                mock.patch.object(provider, "read_bundle_identity", return_value="org.jellyframe.fixture"),
+                mock.patch.object(provider, "LiveInstallSession", side_effect=OSError("local temp unavailable")),
+            ):
+                with self.assertRaisesRegex(OSError, "local temp unavailable"):
+                    provider.run_physical(args, config)
+
+        self.assertNotIn(provider.INSTALL_BEGIN, requests)
 
     def test_identity_and_typed_logs_decoders_reject_unbounded_shapes(self) -> None:
         spec = importlib.util.spec_from_file_location("ws147_device_provider_typed", PROVIDER)
