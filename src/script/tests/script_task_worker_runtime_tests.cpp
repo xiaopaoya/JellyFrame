@@ -818,6 +818,117 @@ void worker_stop_preserves_supervisor_owned_frame_lease() {
 }
 
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+void worker_core_text_select_popup_prepares_and_selects_visible_options(std::uint8_t version) {
+#if !JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
+    (void)version;
+    return;
+#else
+    auto supervisor = make_supervisor();
+    runtime_test_fonts::Fonts fonts;
+    auto options = runtime_options_v3();
+    options.frame_codec.version = version;
+    options.frame_codec.max_groups = 32;
+    options.text_catalog = fonts.catalog;
+    const auto session = supervisor.begin(296, fonts.catalog);
+    ScriptTaskWorkerRuntime runtime(session, options);
+    check(runtime.initialize(supervisor,
+        "<body><select id='choice'><option value='a'>A</option><option value='b'>B</option></select></body>",
+        "*{margin:0;padding:0;border:0} body{height:100px} select{display:block;width:120px;height:24px;"
+        "font-family:sans-serif;font-size:16px;line-height:20px;color:#000;background:#fff}") ==
+        ScriptTaskWorkerRuntimeInitStatus::Accepted,
+        "Core text popup worker initializes");
+    const auto observer = runtime.eval_with_supervisor(supervisor,
+        "var changes=0; var choice=document.getElementById('choice');"
+        "choice.addEventListener('change', function(){changes++}); 'ready'");
+    check(observer.ok,
+          "Core text popup change observer installs");
+
+    ScriptTaskAcceptedAppFrame frame;
+    const auto take_frame = [&] {
+        check(take_script_task_app_frame(supervisor, session, options.frame_codec, frame) ==
+                  ScriptTaskAppFrameTakeStatus::Accepted,
+              "Core text popup worker frame is accepted");
+    };
+    check(runtime.publish_frame(supervisor).accepted(), "Core text popup initial frame publishes");
+    take_frame();
+
+    std::uint32_t input_sequence = 1;
+    const auto send_input = [&](ScriptTaskInputKind kind, int x, int y) {
+        check(post_script_task_input(supervisor, session, input_sequence++,
+                  {kind, x, y, 0, 0, kind == ScriptTaskInputKind::PointerMove ? -1 : 0,
+                   kind == ScriptTaskInputKind::PointerUp ? 0 : 1, 0, 0, {}},
+                  options.input_codec).accepted(),
+              "Core text popup pointer input posts");
+        const auto step = runtime.process_one(supervisor);
+        check(step.input_accepted && !step.fatal, "Core text popup pointer input is accepted");
+        if (step.frame_published) take_frame();
+    };
+    send_input(ScriptTaskInputKind::PointerDown, 4, 12);
+    send_input(ScriptTaskInputKind::PointerUp, 4, 12);
+
+    Rect option_b_rect{};
+    bool found_option_b = false;
+    for (const auto& command : frame.frame().display_list) {
+        if (worker_test_access::worker_command_type(command) == DisplayCommandType::Text &&
+            command.text == "B") {
+            check(false, "Core text popup does not emit legacy option Text");
+        }
+        if (worker_test_access::worker_command_type(command) != DisplayCommandType::PreparedText) continue;
+        PreparedTextView view;
+        check(decode_prepared_text(command.text, view), "popup prepared text packet decodes");
+        for (std::size_t i = 0; i < view.size(); ++i) {
+            PreparedTextGlyph glyph;
+            check(view.read(i, glyph), "popup prepared glyph reads");
+            if (glyph.source_codepoint == 'B') {
+                option_b_rect = command.rect;
+                found_option_b = true;
+            }
+        }
+    }
+    check(found_option_b && option_b_rect.width > 0 && option_b_rect.height > 0,
+          "every visible Core text popup option is prepared");
+
+    ScriptTaskFrameRenderer renderer;
+    FrameBuffer pixels(options.viewport.width, options.viewport.height, {255, 255, 255, 255});
+    check(renderer.render_into(frame, pixels, {255, 255, 255, 255}),
+          "Core text popup prepared frame renders");
+    bool option_b_has_ink = false;
+    for (int y = std::max(0, option_b_rect.y);
+         y < std::min(pixels.height, option_b_rect.y + option_b_rect.height); ++y) {
+        for (int x = std::max(0, option_b_rect.x);
+             x < std::min(pixels.width, option_b_rect.x + option_b_rect.width); ++x) {
+            const Color pixel = pixels.pixel(x, y);
+            option_b_has_ink = option_b_has_ink || pixel.r < 240 || pixel.g < 240 || pixel.b < 240;
+        }
+    }
+    check(option_b_has_ink, "Core text popup option B paints visible pixels in its row");
+
+    const int option_b_x = option_b_rect.x + option_b_rect.width / 2;
+    const int option_b_y = option_b_rect.y + option_b_rect.height / 2;
+    send_input(ScriptTaskInputKind::PointerDown, option_b_x, option_b_y);
+    send_input(ScriptTaskInputKind::PointerUp, option_b_x, option_b_y);
+    const auto change_count = runtime.eval_with_supervisor(supervisor, "changes");
+    check(change_count.ok && change_count.value == "1",
+          "clicking prepared popup option B dispatches one change event");
+
+    std::size_t selected_b_glyphs = 0;
+    bool popup_still_has_option_a = false;
+    for (const auto& command : frame.frame().display_list) {
+        if (worker_test_access::worker_command_type(command) != DisplayCommandType::PreparedText) continue;
+        PreparedTextView view;
+        check(decode_prepared_text(command.text, view), "selected popup label packet decodes");
+        for (std::size_t i = 0; i < view.size(); ++i) {
+            PreparedTextGlyph glyph;
+            check(view.read(i, glyph), "selected popup label glyph reads");
+            selected_b_glyphs += glyph.source_codepoint == 'B' ? 1U : 0U;
+            popup_still_has_option_a = popup_still_has_option_a || glyph.source_codepoint == 'A';
+        }
+    }
+    check(selected_b_glyphs == 1 && !popup_still_has_option_a,
+          "selecting option B closes the popup and emits only its selected Core text label");
+#endif
+}
+
 #if JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION >= 2
 void worker_shared_inline_paragraph(std::uint8_t version) {
     FrameBuffer reference;
@@ -1655,6 +1766,7 @@ int script_task_worker_runtime_tests_main() {
             worker_canonical_rejects_invalid_config_and_catalog_mismatch_before_vm(version);
             worker_canonical_uses_catalog_for_layout_and_publishes_group_frame(version);
             worker_canonical_resolves_content_and_background_images(version);
+            worker_core_text_select_popup_prepares_and_selects_visible_options(version);
 #if JELLYFRAME_RENDER_CORE_PREPARED_TEXT_PACKET_VERSION >= 2
             worker_shared_inline_paragraph(version);
 #endif

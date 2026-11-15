@@ -393,16 +393,16 @@ jobs:
             profile_id: render-core-default
           - profile: cropped
             profile_id: render-core-minimal-no-forms-advanced
-          - profile: current-mainline-full
+          - profile: core63-select-popup-full
             profile_id: render-core-default
-            core_commit: 38148e7388edc791e303b9b324f45d5df3d7b63e
-            source_hash: caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1
+            core_commit: 89acc36adbb3897ab63c2e49b7568bc6bb4a32fa
+            source_hash: e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67
             source_count: 163
             cropped: false
-          - profile: current-mainline-cropped
+          - profile: core63-select-popup-cropped
             profile_id: render-core-minimal-no-forms-advanced
-            core_commit: 38148e7388edc791e303b9b324f45d5df3d7b63e
-            source_hash: caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1
+            core_commit: 89acc36adbb3897ab63c2e49b7568bc6bb4a32fa
+            source_hash: e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67
             source_count: 163
             cropped: true
 
