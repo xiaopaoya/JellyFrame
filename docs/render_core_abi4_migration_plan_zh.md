@@ -1,8 +1,8 @@
 # Render Core ABI4 集成计划
 
-> 最后更新：2026-11-15；适用版本：0.6.0-dev。Core 开发契约：0.9.0-dev / ABI4。
+> 最后更新：2026-11-16；适用版本：0.6.0-dev。Core 发布候选：0.9.0 / ABI4。
 
-> **最新检查点（2026-11-15）：**Runtime PR #111 已以 `fa5176a0` 合并；#99–#111 均已合并。#111 合入 WS147 band-shell CoreText 默认 profile，以及 Win32 ABI4 属性和增量/全量重绘矩阵（293 帧、27 组流程）。`mainline1` 实机观察已经完成，不再重复。Core PR #65 已以 `1d5c746d` 合并（source `d327eee4`）：shared-inline 未接管时，generated pseudo label/list marker 现由 Core TextSystem 准备，或明确拒绝且不再发出旧 Text 命令；未绑定 TextSystem 的 legacy 路径仍保留。Core #65 四项 CI 全通过。Runtime `fa5176a0` 随后以 Core #65 精确源码 identity `52ae4354efdae95d4dbfdfb6a2ef1ad8fbbfb99029bdd922105ac2447302f62d`（163 个文件）进行 source override 集成；Runtime in-tree 测试配置补入 Core test hook 后，Release build 和 CTest 60/60 通过。用户另已在 `0.6.2-abi4-installed-core63-device1` 上通过 `Core 63 Select Popup` 实机验收；该 named profile 的标题、选项、选择结果及触控正常，首帧接受且无 render/present 失败。这些是 source-override/独立 profile 证据，不等于签名包锁定。Runtime 仍锁定签名 Core 0.8.0 / ABI3；ABI4 尚未签名发布。`mainline2` 仍是另一独立待验收 profile。
+> **最新检查点（2026-11-16）：**Runtime PR #99–#113 已合并；#111 将 WS147 band-shell CoreText profile 设为默认，并合入 Win32 ABI4 属性与增量/全量重绘矩阵（293 帧、27 组流程）。`mainline1` 实机验收已记录，不重复。Core PR #67 已以 `16a83211ec0992f8e25ec0fc977eb6fd158716e3` 合入，ABI4 契约完成，Core CI 与干净 Release CTest 通过。Core 0.9.0 ABI4 源码归档已生成，SHA-256 核验为 `8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628`；签名 tag 与 GitHub Release 仍等待 GPG 鉴权。Runtime 锁更新候选分支基于 master `2e116182`，更新锁、app manifest/模板、provenance CI 和 ABI4 installed consumers；full/cropped 本地 CTest 各 22/22 通过，package/profile 回归也通过。用户另已在 `0.6.2-abi4-installed-core63-device1` 上通过 `Core 63 Select Popup` 实机验收，标题、四个选项、结果与触控正常；JFDP 首帧接受且 render/present 失败为 0。实机记录不能替代签名包集成。Runtime master 在候选 PR 通过 CI 并合入前，仍锁定签名 Core 0.8.0 / ABI3。`mainline2` 仍是另一独立待验收 profile。
 
 本文件是当前执行计划。旧检查点保存在 Git 历史和对应 PR 中，不再作为额外待办。
 [文本消费者退役清单](render_core_text_consumer_retirement.md)记录实际调用方与原生设备候选的完整身份。
@@ -11,9 +11,9 @@
 
 | 边界 | 当前状态 | 剩余门槛 |
 | --- | --- | --- |
-| 已发布依赖 | Runtime 生产锁仍为签名 Core v0.8.0 / ABI3。 | 最终 ABI4 契约发布后，更新精确依赖锁。 |
-| Core 主线 | PR #65（merge `1d5c746d`，source `d327eee4`）在 #63 后补齐 generated pseudo label/list marker 的 Core TextSystem 准备或明确拒绝；四项 CI 全通过。 | 盘点并退役其余 provider/painter/range/family/additive 回调接口及 fixture。 |
-| Runtime 主线 | PR #111，merge `fa5176a0`；#99–#111 均已合并，包含 WS147 CoreText 默认 profile 与 Win32 属性/重绘矩阵。精确 Core #65 source override 的 Release build 与 CTest 60/60 通过。 | 完成消费者/fixture 清点和回调 API 退役；ABI4 发布门槛仍未完成。 |
+| 已发布依赖 | Runtime master 仍锁定签名 Core v0.8.0 / ABI3；ABI4 v0.9.0 候选归档已在本地验哈希。 | 完成 GPG 签名和 GitHub Release，再开启 Runtime 锁更新 PR；仅在 CI 通过后合并。 |
+| Core 主线 | Core PR #67（`16a83211ec0992f8e25ec0fc977eb6fd158716e3`）已合并，ABI4 契约完成，Core CI 与干净 Release 检查通过。 | 完成 v0.9.0 签名发布。 |
+| Runtime 主线 | PR #99–#113 已合并。新候选分支更新精确 package lock、app manifests/模板、provenance CI 和 ABI4 installed consumers；full/cropped 本地 CTest 各 22/22 通过。 | 发布 Core 包，开启并验证 Runtime PR，再于 CI 通过后合并。 |
 | Embedded host | #100 为 layout/layers/paint 绑定同一个 TextSystem/JFFONT2；锁定 ABI3 和 source ABI4 full/cropped 测试通过。 | 该示例不再依赖文本 provider 回调。 |
 | Installed worker | 已合并 #101，让无 painter 的 canonical v10/CoreText 独立于 BMP 工作。#107 覆盖 Core #63 popup 输入、prepared packet、行像素、选择与关闭；#109 增加 full-feature WS147 profile。Core #65 generated pseudo-content 已纳入 Runtime source-override build/CTest。用户已在 `0.6.2-abi4-installed-core63-device1` 上确认标题、四个选项、选择结果与触控正常；JFDP 首帧已接受且 render/present 失败为 0。 | popup named profile 的用户可见验收通过；仍需退役其余 provider/painter 路径。 |
 | 原生 WS147 | `0.6.2-abi4-mainline2` 已基于 Runtime #103/Core #62 构建；app BIN 7,614,704 B，8 MiB app 分区余 773,904 B，16 MiB factory/包哈希已核验。另一份 `mainline1` 于 2026-11-15 通过页面观察。 | 仍需验收精确的 `mainline2` 产物；`mainline1` 不能替代该镜像或 installed worker/BMP 的测试。 |

@@ -1,6 +1,6 @@
 # 变更记录
 
-> 最后更新：2026-11-04；适用版本：0.6.0-dev
+> 最后更新：2026-11-16；适用版本：0.6.0-dev
 
 JellyFrame Engine 的重要变更记录在这里。
 
@@ -28,12 +28,13 @@ JellyFrame Engine 的重要变更记录在这里。
 - VS Code 扩展现在可在 `.jfcapture` 回放时生成 bounded Render Trace，并通过逐帧面板查看
   桌面壳阶段耗时、脏区指标和可用的绘制命令归因；面板明确标注该数据不代表实机 FPS。
 
-- Runtime package 模式现已锁定带签名的 Render Core `0.8.0` release（ABI `3`、source
-  identity `fa5914ce...3f84cd795`），并在 package-consumer CI 中校验其确定性 archive。
-  默认源码内 provider 仍为 Core `0.6.2` / ABI `1`；app manifest 与作者模板现跟随 package lock。
+- ABI4 集成分支将 Runtime package lock 推进到 Render Core `0.9.0`（ABI `4`，source
+  identity `d7873ce8c0b25e1012fb151811c9d502533bad00c5c439f82f1ad6628303d0d4`），并增加
+  full/cropped installed-package consumer CI。当前 Core archive checksum 已固定；签名 release
+  发布且锁更新 PR 通过 CI 后，Runtime master 才切换依赖。
 
-- ESP32-S3 第一方 app manifest、模板与 App Packaging 指南示例现在统一跟随锁定的
-  Render Core `0.8.0` package 线；新增回归会依据当前 Runtime/Core 版本检查这些作者侧输入。
+- ABI4 集成分支中的第一方 app manifest、模板与 App Packaging 指南示例统一跟随锁定的
+  Render Core `0.9.0` package 线；新增回归会依据当前 Runtime/Core 版本检查这些作者侧输入。
 
 - CSS custom property 展开现在具有有界的解析值预算
   (`StyleResolverOptions::max_resolved_value_bytes`，默认 16 KiB)，重复的 `var()` 引用不会再生成无界的中间字符串。

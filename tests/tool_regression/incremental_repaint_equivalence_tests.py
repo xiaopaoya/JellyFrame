@@ -415,7 +415,7 @@ def bmp_region_has_visible_pixels(path: Path, region: tuple[int, int, int, int])
 
 def main() -> int:
     include_core_text = False
-    core_version = "0.8.0"
+    core_version = "0.9.0"
     selected_case: str | None = None
     args: list[str] = []
     index = 1

@@ -253,7 +253,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.profile",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["graphics.canvas2d"],
@@ -275,14 +275,14 @@ class PackagePreflightTests(unittest.TestCase):
                 "id": "org.test.historical-runtime",
                 "entry": "/index.html",
                 "version": {"name": "0.1.0", "code": 1},
-                "runtime": {"minJellyFrame": "0.5.0", "minRenderCore": "0.8.0", "script": "none"},
+                "runtime": {"minJellyFrame": "0.5.0", "minRenderCore": "0.9.0", "script": "none"},
                 "viewport": {"designWidth": 10, "designHeight": 10},
                 "budgets": {"maxResourceBytes": 1024},
                 "targets": {"test": {"viewport": {"width": 10, "height": 10}, "output": "jfapp"}},
             })
 
     def test_manifest_rejects_a_historical_pre_release_render_core_line(self):
-        with self.assertRaisesRegex(SystemExit, "must target the active pre-1.0 Render Core line 0.8.0"):
+        with self.assertRaisesRegex(SystemExit, "must target the active pre-1.0 Render Core line 0.9.0"):
             package_app.validate_manifest({
                 "format": "jellyframe.app",
                 "formatVersion": 0,
@@ -290,7 +290,7 @@ class PackagePreflightTests(unittest.TestCase):
                 "entry": "/index.html",
                 "version": {"name": "0.1.0", "code": 1},
                 "runtime": {
-                    "minJellyFrame": "0.6.0", "minRenderCore": "0.5.0", "script": "none"
+                    "minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"
                 },
                 "viewport": {"designWidth": 10, "designHeight": 10},
                 "budgets": {"maxResourceBytes": 1024},
@@ -304,7 +304,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.profile",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["graphics.canvas2d"],
@@ -326,7 +326,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.modern-paint",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["css.modern-paint"],
@@ -1098,7 +1098,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.services",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "permissions": ["network"],
@@ -1237,7 +1237,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.file.manager",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "capabilities": ["file.read", "file.write", "file.manage"],
@@ -1257,7 +1257,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.strict",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
@@ -1285,7 +1285,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.strict",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
@@ -2196,7 +2196,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.fonts",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "none"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "fonts": [
