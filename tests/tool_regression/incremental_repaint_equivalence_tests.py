@@ -27,6 +27,7 @@ class CaptureCase:
     require_pixel_mutation: bool = False
     require_text_presence: bool = False
     text_region: tuple[int, int, int, int] | None = None
+    expected_ink_behavior: str | None = None
     require_forecast_presence: bool = False
     forecast_frame_indices: tuple[int, ...] = ()
 
@@ -171,6 +172,48 @@ def make_text_property_case(
         require_pixel_mutation=True,
         require_text_presence=True,
         text_region=(0, 0, 220, 48),
+        expected_ink_behavior={
+            "fontSize": "height-grows",
+            "fontWeight": "dark-area-grows",
+            "textAlign": "moves-right",
+            "letterSpacing": "width-grows",
+        }.get(property_name),
+    )
+
+
+def make_text_content_case(root: Path, core_version: str) -> CaptureCase:
+    app = root / "text-content-width"
+    app.mkdir()
+    (app / "index.html").write_text(
+        "<!doctype html><meta charset='utf-8'><style>"
+        "body{margin:0;background:#fff;color:#000}"
+        "#label{display:block;width:220px;height:48px;margin:0;padding:0;"
+        "font-family:sans-serif;font-size:20px;font-weight:400;line-height:28px;"
+        "white-space:nowrap;overflow:hidden;text-align:start;color:#000;background:#fff;border:0}"
+        "#toggle{display:block;width:100px;height:24px;margin:0}"
+        "</style><body><p id='label'>A</p><button id='toggle'>Toggle</button>"
+        "<script>var label=document.getElementById('label'),shortText='A',longText='CORE TEXT';"
+        "document.getElementById('toggle').addEventListener('click',function(){"
+        "label.textContent=label.textContent===shortText?longText:shortText;"
+        "});</script></body>",
+        encoding="utf-8",
+    )
+    (app / "jellyframe.app.json").write_text(json.dumps({
+        "id": "org.jellyframe.tests.text-content-width", "name": "Text Content Width",
+        "role": "app", "versionName": "1.0.0", "versionCode": 1, "entry": "/index.html",
+        "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": core_version, "script": "classic"},
+        "viewport": {"designWidth": 240, "designHeight": 100}, "fonts": [],
+    }), encoding="utf-8")
+    (app / "repaint.jfcapture").write_text(
+        "frames 3\nstep-ms 33\nstart-ms 1000\nevent 1 click-id toggle\n"
+        "event 2 click-id toggle\n",
+        encoding="utf-8",
+    )
+    return CaptureCase(
+        name="text-content-width", app=str(app), frame_count=3,
+        frame_script="repaint.jfcapture", use_app_fonts=True,
+        require_pixel_mutation=True, require_text_presence=True,
+        text_region=(0, 0, 220, 48), expected_ink_behavior="width-grows",
     )
 
 
@@ -324,6 +367,36 @@ def bmp_region_has_ink(path: Path, region: tuple[int, int, int, int]) -> bool:
     return any(pixels[offset:offset + 3] != b"\xff\xff\xff" for offset in range(0, len(pixels), 3))
 
 
+def bmp_region_ink_bounds(
+    path: Path, region: tuple[int, int, int, int], threshold: int = 765
+) -> tuple[int, int, int, int] | None:
+    pixels = bmp_region_pixels(path, region)
+    width = region[2] - region[0]
+    left = width
+    top = region[3] - region[1]
+    right = bottom = -1
+    for offset in range(0, len(pixels), 3):
+        if sum(pixels[offset:offset + 3]) < threshold:
+            pixel = offset // 3
+            x = pixel % width
+            y = pixel // width
+            left = min(left, x)
+            top = min(top, y)
+            right = max(right, x)
+            bottom = max(bottom, y)
+    if right < left or bottom < top:
+        return None
+    return (region[0] + left, region[1] + top, region[0] + right + 1, region[1] + bottom + 1)
+
+
+def bmp_region_dark_pixel_count(path: Path, region: tuple[int, int, int, int]) -> int:
+    pixels = bmp_region_pixels(path, region)
+    return sum(
+        sum(pixels[offset:offset + 3]) < 384
+        for offset in range(0, len(pixels), 3)
+    )
+
+
 def bmp_region_light_pixel_count(path: Path, region: tuple[int, int, int, int]) -> int:
     pixels = bmp_region_pixels(path, region)
     return sum(
@@ -381,7 +454,11 @@ def main() -> int:
             make_text_property_case(root, "lineHeight", "28px", "40px", core_version),
             make_text_property_case(root, "letterSpacing", "0px", "2px", core_version),
         )
-        cases = tuple(adapt_sample_case(case, repo, root, core_version) for case in CASES) + text_property_cases
+        cases = (
+            tuple(adapt_sample_case(case, repo, root, core_version) for case in CASES)
+            + text_property_cases
+            + (make_text_content_case(root, core_version),)
+        )
         cases += (
             make_band_shell_case(repo, root, core_version),
             make_band_shell_case(repo, root, core_version, exercise_route=True),
@@ -447,6 +524,44 @@ def main() -> int:
                         raise RuntimeError(
                             f"{backend_case.name}: restoring the style did not restore text-region pixels"
                         )
+                    if backend_case.expected_ink_behavior is not None:
+                        initial_bounds = bmp_region_ink_bounds(
+                            incremental_frames[0], backend_case.text_region
+                        )
+                        changed_bounds = bmp_region_ink_bounds(
+                            incremental_frames[1], backend_case.text_region
+                        )
+                        if initial_bounds is None or changed_bounds is None:
+                            raise RuntimeError(
+                                f"{backend_case.name}: expected visible glyph bounds before and after mutation "
+                                f"(initial={initial_bounds}, changed={changed_bounds}, "
+                                f"ink={bmp_region_has_ink(incremental_frames[0], backend_case.text_region)}, "
+                                f"{bmp_region_pixels(incremental_frames[0], backend_case.text_region)[:12]!r})"
+                            )
+                        behavior = backend_case.expected_ink_behavior
+                        if behavior == "width-grows" and \
+                                changed_bounds[2] - changed_bounds[0] <= initial_bounds[2] - initial_bounds[0]:
+                            raise RuntimeError(
+                                f"{backend_case.name}: text width did not grow: "
+                                f"{initial_bounds} -> {changed_bounds}"
+                            )
+                        if behavior == "height-grows" and \
+                                changed_bounds[3] - changed_bounds[1] <= initial_bounds[3] - initial_bounds[1]:
+                            raise RuntimeError(
+                                f"{backend_case.name}: text height did not grow: "
+                                f"{initial_bounds} -> {changed_bounds}"
+                            )
+                        if behavior == "moves-right" and changed_bounds[0] <= initial_bounds[0]:
+                            raise RuntimeError(
+                                f"{backend_case.name}: end alignment did not move glyphs right: "
+                                f"{initial_bounds} -> {changed_bounds}"
+                            )
+                        if behavior == "dark-area-grows" and \
+                                bmp_region_dark_pixel_count(incremental_frames[1], backend_case.text_region) <= \
+                                bmp_region_dark_pixel_count(incremental_frames[0], backend_case.text_region):
+                            raise RuntimeError(
+                                f"{backend_case.name}: bold weight did not increase dark glyph coverage"
+                            )
                     if full_region[0] == full_region[1]:
                         raise RuntimeError(
                             f"{backend_case.name}: full repaint did not show changed text-region pixels"

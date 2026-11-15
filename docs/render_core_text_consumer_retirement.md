@@ -2,7 +2,7 @@
 
 > Last updated: 2026-11-15; Applies to: 0.6.0-dev. Core contract: 0.9.0-dev / ABI4.
 
-Current source audit: 2026-11-15. Runtime mainline `9ebaf806` (PR107), Core
+Current source audit: 2026-11-15. Runtime mainline `1d9071a0` (PR110), Core
 `8aceb6d8` (PR63), 0.9.0-dev / ABI4. This is a consumer migration checklist,
 not a declaration that legacy callback APIs have been removed.
 
@@ -10,14 +10,17 @@ not a declaration that legacy callback APIs have been removed.
 
 | Consumer | Actual selection and resources | Remaining change |
 | --- | --- | --- |
-| ESP32 retained UI (`jellyframe_esp32s3_ui_task.cpp`) | Default providers use generated C++ Noto `BitmapFont` faces. The named CoreText profile binds the shared JFFONT2 catalog and clears the providers. | Migrate the generated default resource contract, then remove callback construction and port-owned measurement/scaling. |
+| ESP32 retained UI (`jellyframe_esp32s3_ui_task.cpp`) | Named CoreText profile binds the shared JFFONT2 catalog and clears providers. The current unmerged WS147 band-shell defaults select this profile; the exact Core #63 ESP-IDF build and profile guard pass. The explicit legacy typography profile still exercises generated C++ Noto faces. | Review/merge the WS147 default change; keep legacy only as an explicit acceptance profile, then qualify visible routes/properties before removing callback construction and port-owned measurement/scaling. |
 | ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects supported canonical v10 and a painterless renderer, independently of BMP. Owned text catalog/snapshot survives accepted-frame replay. CoreText OFF retains the explicit legacy painter path. Core #63 uses the same Core catalog for open select popup rows. Runtime #107 tests the exact Core source through canonical v10 worker input, prepared packets, B-row pixels, selection and close. Runtime #109 adds a full-feature WS147 installed-worker profile and select-popup app; CI passed 21/21 and the IDF image/package/provider regressions passed. | Capture user-visible popup appearance/touch on the dedicated profile when available, then migrate remaining callback-dependent generated/widget text. |
-| ESP32 P4/P5/P6 smoke (`main.cpp`) | The separate generated-BitmapFont provider factory is called only by this benchmark/smoke fixture, not by a product runtime route. The CoreText smoke now runs before benchmark framebuffer admission; CoreText is explicitly enabled by the dedicated smoke defaults. | Keep legacy coverage on its legacy profile and qualify the matching CoreText ASCII/CJK/weight/widget smoke on IDF 5.3.1. Do not track this as a separate product consumer. |
-| Desktop default (`tools/native/win32_browser.cpp`) | GDI measurement/painting using the OS font; Core catalog is opt-in. | Close CoreText property parity, then adopt the catalog default. |
+| ESP32 P4/P5/P6 smoke (`main.cpp`) | The separate generated-BitmapFont provider factory is called only by this benchmark/smoke fixture, not by a product runtime route. The CoreText smoke runs before benchmark framebuffer admission. PR #110 built it with IDF 5.3.1 and exact Core #63 identity `e842b2e6...af1adb67`; the map excludes the legacy Noto C++ pack. | Keep legacy coverage on its explicit legacy profile. The CoreText smoke is build-qualified; physical execution is optional diagnostics, not a product-consumer migration gate. |
+| Desktop default (`tools/native/win32_browser.cpp`) | GDI measurement/painting using the OS font; Core catalog is opt-in. PR #110 disables text-dirty layout reuse in CoreText because the reuse validator only accepts legacy provider metrics; text mutation rebuilds layout instead. The current unmerged ABI4 matrix covers alignment and text property mutation; 293 incremental/full repaint frames across 27 flows pass against Core #63. | Review/merge the matrix, close remaining supported-property gaps, then decide whether to adopt the catalog default. |
 | Desktop application fonts (`src/app_runtime/app_font_set.cpp`) | Complete in Runtime #103: JFFONT2-only, callback loaders/accessors and browser precedence removed; tools/samples/import UI use canonical resources. | No remaining AppFontSet migration; generated C++ port defaults remain separate. |
 | Embedded host example | This change binds one TextSystem to layout, layers and compositor using a complete tiny JFFONT2 fixture. | No remaining measurement/painter callback in this example. Device-default changes are separate. |
 
-Core still contains callback/default layout, wrapping, ellipsis, repaint/reuse,
+Core #63 generated-content/list-marker paths can still emit legacy `push_text()`
+when shared-inline handling is inapplicable or resource admission fails. Before
+callback retirement, move those cases to Core TextSystem preparation or reject
+them explicitly, and test both outcomes. Core still contains callback/default layout, wrapping, ellipsis, repaint/reuse,
 layer-cache identity and compositor branches. Remove them together only after
 the production consumers above migrate. Tests, benchmarks and ESP32 acceptance
 fixtures also need conversion, but are not product-default consumers.
@@ -28,7 +31,7 @@ transactional PreparedText; its full tests pass 33/33, cropped focused and
 installed consumers pass, and it merged after CI 4/4 (run `43673424532`). Core
 follow-up `89acc36a` migrates visible open-select popup rows to Core-prepared
 packets, refuses the complete overlay if any visible row cannot be prepared,
-and never falls back to host callbacks. Runtime PR #107 and #109 are merged;
+and never falls back to host callbacks. Runtime PRs #107-#110 are merged;
 the dedicated Core #63 full/cropped worker lanes pass in CI. Full Core CTest
 passes 33/33. Cropped CTest is 31/32 because the existing shared-inline shadow
 assertion fails identically on the pre-change base. Runtime #109 adds the
