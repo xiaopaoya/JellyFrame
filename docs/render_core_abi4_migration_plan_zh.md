@@ -2,6 +2,8 @@
 
 > 最后更新：2026-11-15；适用版本：0.6.0-dev。Core 开发契约：0.9.0-dev / ABI4。
 
+> **最新检查点（2026-11-15）：**Runtime PR #99–#103 已合并，每个 PR 的 19 项 CI 全部通过。PR #103（`d6fcaff4`）将应用字体统一为 JFFONT2，移除旧 AppFontSet/AppHost 回调路径，并在 current-mainline 与常规 ABI4 lane 中固定验证 Core #62（`38148e73`，source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`）。Runtime 仍锁定签名 Core 0.8.0 / ABI3；ABI4 尚未签名发布。generated C++ BitmapFont 默认资源及其他 native/desktop 回调消费者仍待迁移。最新 `0.6.2-abi4-mainline2` 已由 Runtime #103/Core #62 构建并核验 BIN、factory 与包身份，尚未刷写，等待实机验收。
+
 本文件是当前执行计划。旧检查点保存在 Git 历史和对应 PR 中，不再作为额外待办。
 [文本消费者退役清单](render_core_text_consumer_retirement.md)记录实际调用方与原生设备候选的完整身份。
 
@@ -11,10 +13,10 @@
 | --- | --- | --- |
 | 已发布依赖 | Runtime 生产锁仍为签名 Core v0.8.0 / ABI3。 | 最终 ABI4 契约发布后，更新精确依赖锁。 |
 | Core 主线 | PR #62，`38148e73`，CI 4/4（run `43673424532`），0.9.0-dev / ABI4；source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e1`，163 个实现输入。 | 剩余消费者、属性迁移和回调退役。 |
-| Runtime 主线 | PR #102，`2f87d52e`，CI 19/19，run `43671336751`；已合入 Core #61 精确 pin 和正向 ellipsis 重绘测试。 | source override 资格验证不等于生产默认采用。 |
+| Runtime 主线 | PR #103，`d6fcaff4`，CI 19/19（run `43675905306`）；#99–#103 均已合并，涵盖 ABI4 身份/消费者资格、embedded host、installed worker、省略号重绘资格及 JFFONT2-only 应用字体。 | generated BitmapFont/默认消费者、完整回调退役和发布门槛仍未完成。 |
 | Embedded host | #100 为 layout/layers/paint 绑定同一个 TextSystem/JFFONT2；锁定 ABI3 和 source ABI4 full/cropped 测试通过。 | 该示例不再依赖文本 provider 回调。 |
 | Installed worker | 已合并 #101，让无 painter 的 canonical v10/CoreText 独立于 BMP 工作。 | 实机验收仍是下游门槛。 |
-| 原生 WS147 | 精确候选 `0.6.2-abi4-mainline1` 已构建并核验包，尚未刷写。 | 在该产物上观察 Home/Activity/Weather/返回。 |
+| 原生 WS147 | `0.6.2-abi4-mainline2` 已基于 Runtime #103/Core #62 构建；app BIN 7,614,704 B，8 MiB app 分区余 773,904 B，16 MiB factory/包哈希已核验。 | 在该准确产物上测试 Home/Activity/Weather/返回；当前 native profile 不覆盖 installed worker/BMP。 |
 | ABI5 与 shaping | 独立可选候选；ABI5 tracked reuse 有正确性与包测试，尚无合格性能收益。 | 未启用到 Runtime，也不阻塞 ABI4 发布。 |
 
 实验源码声明的是 0.6.2 / ABI9。版本号或合并 PR 数量都不能证明迁移完成；
@@ -29,9 +31,9 @@
 （#79–99）。Core #60 提供有界 letter-spacing 和 JFTP v3 显式位置，仍能解码 v1/v2。
 规范路径由 Core 负责选择、度量、准备和栅格化，移植者只注册不可变字体资源。
 
-剩余：迁移 generated C++ BitmapFont 默认资源。当前应用字体变更删除 JFFONT0/1 序列化路径
-和 AppFontSet 回调优先级，manifest/import 统一 JFFONT2 并使用 Core 离线生成器。
-保持确定的 family/weight 选择、字体字节寿命、缺字拒绝和资源预算，
+已由 Runtime #103 完成：删除 JFFONT0/1 序列化路径与 AppFontSet 回调优先级，
+manifest/import 统一为 JFFONT2 并使用 Core 离线生成器。剩余：迁移 generated C++
+BitmapFont 默认资源。保持确定的 family/weight 选择、字体字节寿命、缺字拒绝和资源预算，
 不增加新的宿主文本回调。
 
 ### B. Runtime 消费者迁移
@@ -40,10 +42,10 @@
 | --- | --- | --- |
 | Embedded host | #100 完成。 | 可见文字、click/checkbox/select、RGB565 flush；ABI3 与 ABI4 full/cropped。 |
 | ESP32 installed worker | 已合并 #101：无 painter 的 canonical v10；目录/快照覆盖重放寿命，BMP 可选。 | 主机 full/cropped、锁定 ABI3、真实 IDF 构建、CI，随后精确设备 profile 验收。 |
-| ESP32 retained native/default | 命名 CoreText profile 已合并，默认仍使用 generated BitmapFont provider。 | 迁移默认资源契约并验收所支持属性和页面路由。 |
+| ESP32 retained native/default | 命名 CoreText profile 已合并，默认仍使用 generated BitmapFont provider。 | 将 generated 默认资源迁移到 Core 所有的资源契约，并验收所支持属性和页面路由。 |
 | ESP32 非 retained main 入口 | 仍有独立的 provider 工厂。 | 同步迁移或明确退役该入口，不能只改 retained UI。 |
 | Win32 默认路径 | 显式 CoreText 目录模式已合并，默认仍为 GDI。 | 有界 ellipsis/属性兼容、重绘验证及目录默认采用。 |
-| AppFontSet | 当前变更只接受 JFFONT2，删除回调接口与浏览器优先级，已转换样例和工具。 | full/cropped/锁定 ABI3、命名字体可见输出、PR/CI。 |
+| AppFontSet | #103 已完成：目录仅接受 JFFONT2，移除回调访问器/浏览器优先级，并转换样例和工具。 | AppFontSet 无剩余工作；generated C++ BitmapFont 默认资源另行跟踪。 |
 
 Canvas2D 已使用 TextSystem，不是剩余回调消费者。Installed worker 候选在写帧缓冲前
 拒绝依赖回调的普通 `Text` 命令；这是有界准入规则，不代表旧路径支持的全部
@@ -103,9 +105,8 @@ Installed worker/BMP 必须使用独立命名镜像和资源配置；构建通�
 
 ## 紧接着的工作
 
-1. 审查、CI 并合入当前 Runtime JFFONT2-only 应用字体/工具变更；Core #62 已合并，当前 CI pin 已刷新到其精确 commit/source identity。
-2. 继续 popup/generated text 消费者及 native/desktop 默认资源迁移；#101 worker、#61 ellipsis 和 #102 资格验证均已合并。
-3. 转换剩余回调调用方和测试，在资源/默认消费者迁移后集中删除旧 API。
-4. 上述门槛通过后签名发布 ABI4，并切换 Runtime 精确依赖锁。
-5. 用户方便时执行已预留的原生板测；设备问题单独跟踪，并在容量合格的 profile 上
-   准备 installed 应用设备验收。
+1. 已合并：Runtime #99–#103；五个 PR 均通过 19/19 CI。#103 关闭旧 AppFontSet/JFFONT0/1 资源路径，并固定验证 Core #62。
+2. 迁移 generated C++ BitmapFont 默认资源及剩余 native/non-retained、Win32 GDI 消费者；闭合 popup/generated-content 所有权，并在不增加宿主回调的前提下完成支持属性资格。
+3. 转换剩余依赖回调的测试/fixture，然后在单次协调的预发布变更中删除公开 provider/range/family/additive API 及实现分支。
+4. 消费者、full/cropped、禁用特性与源码归档门槛通过后，签名发布 ABI4 并更新 Runtime 精确生产依赖锁。
+5. 用户方便时单独执行已预留的 `mainline2` WS147 实机验收；它不替代主机/API 发布门槛。
