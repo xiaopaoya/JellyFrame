@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import os
 from pathlib import Path
 
 
@@ -22,6 +23,11 @@ def active_runtime_release_version() -> str:
 
 
 def active_render_core_release_version() -> str:
+    candidate_version = os.environ.get("JELLYFRAME_TEST_RENDER_CORE_VERSION")
+    if candidate_version is not None:
+        if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.]+)?", candidate_version):
+            raise RuntimeError("JELLYFRAME_TEST_RENDER_CORE_VERSION is invalid")
+        return candidate_version
     lock_file = Path(__file__).resolve().parent.parent / "cmake" / "jellyframe_dependency_lock.cmake"
     match = RENDER_CORE_LOCK_PATTERN.search(lock_file.read_text(encoding="utf-8"))
     if match is None:

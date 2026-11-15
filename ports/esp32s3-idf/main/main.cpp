@@ -49,6 +49,19 @@ constexpr const char* tag = "JellyFrame";
 constexpr Color kBackground{248, 250, 252, 255};
 constexpr std::string_view kAppBaseUrl = "/p2_smoke.html";
 
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
+LayoutEngine make_layout_engine(StyleResolver& resolver,
+                                const LayoutEngineOptions& options,
+                                const TextMeasureProvider& text_measure) {
+    return LayoutEngine(resolver, text_measure, options);
+}
+#else
+LayoutEngine make_layout_engine(StyleResolver& resolver,
+                                const LayoutEngineOptions& options) {
+    return LayoutEngine(resolver, options);
+}
+#endif
+
 std::string make_card_html(int count) {
     std::ostringstream html;
     html << "<!doctype html><html><head>"
@@ -495,7 +508,9 @@ void seed_p5_input_smoke(jellyframe_esp32s3::BoardInputQueue& queue) {
 #endif
 
 void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
-#if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED || CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM || \
+    (JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED && \
+     (!defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4))
     constexpr char kSmokeHtml[] =
         "<body><main class='app'>"
         "<h1 class='ascii'>STATUS</h1>"
@@ -514,8 +529,9 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
         "button { height: 28px; background: #2563eb; color: #ffffff; border: 1px solid #dbeafe; }"
         "input { height: 24px; background: #ffffff; color: #111827; border: 1px solid #94a3b8; }";
 
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
     TextMeasureProvider text_measure{};
-    TextPainter text_painter{};
+#endif
     const TextSystem* text_system = nullptr;
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
     AppFontSet core_text_fonts{0};
@@ -525,9 +541,9 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
         return;
     }
     text_system = core_text_fonts.core_text_system();
-#elif JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
+#elif JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED && \
+    (!defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4)
     text_measure = jellyframe_esp32s3::make_legacy_bitmap_text_measure_provider();
-    text_painter = jellyframe_esp32s3::make_legacy_bitmap_text_painter();
 #endif
 
     TextMetrics ascii_metrics{};
@@ -557,7 +573,9 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
         cjk_metrics.line_height = cjk_run.natural_height;
         bold_metrics.width = bold_run.advance;
         bold_metrics.line_height = bold_run.natural_height;
-    } else {
+    }
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
+    else {
         ascii_ok = text_measure.measure != nullptr &&
             text_measure.measure("STATUS", 16, 400, &ascii_metrics, text_measure.context);
         cjk_ok = text_measure.measure != nullptr &&
@@ -565,6 +583,7 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
         bold_ok = text_measure.measure != nullptr &&
             text_measure.measure("BOLD", 24, 700, &bold_metrics, text_measure.context);
     }
+#endif
     HtmlParser html_parser;
     CssParser css_parser;
     auto document = html_parser.parse(kSmokeHtml, html_parser_options_from_budgets(budgets));
@@ -583,11 +602,17 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     auto render_tree = render_tree_builder.build(*document, render_arena);
     LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
     layout_options.text_system = text_system;
-    LayoutEngine layout_engine(resolver, text_measure, layout_options);
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
+    LayoutEngine layout_engine = make_layout_engine(resolver, layout_options, text_measure);
+#else
+    LayoutEngine layout_engine = make_layout_engine(resolver, layout_options);
+#endif
     MonotonicArena layout_arena;
     auto layout_tree = layout_engine.layout(*render_tree, width, layout_arena);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
     layer_options.text_measure = text_measure;
+#endif
     layer_options.text_system = text_system;
     LayerTreeBuilder layer_tree_builder(layer_options);
     MonotonicArena layer_arena;
@@ -610,7 +635,7 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
 
     SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
     compositor_options.text_system = text_system;
-    SoftwareCompositor compositor(text_painter, compositor_options);
+    SoftwareCompositor compositor({}, compositor_options);
     FrameBuffer frame_buffer(width, height, kBackground);
     const Rect full_dirty{0, 0, width, height};
     compositor.render_into(*layer_tree, frame_buffer, kBackground, &full_dirty, 1);
@@ -787,13 +812,21 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     auto render_tree = builder.build(*document, render_tree_arena);
 
     print_result("layout", iterations, average_microseconds(clock, iterations, [&] {
-        LayoutEngine layout_engine(resolver, {}, layout_options);
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
+        LayoutEngine layout_engine = make_layout_engine(resolver, layout_options, {});
+#else
+        LayoutEngine layout_engine = make_layout_engine(resolver, layout_options);
+#endif
         MonotonicArena layout_arena;
         auto layout_tree = layout_engine.layout(*render_tree, viewport_width, layout_arena);
         (void)layout_tree;
     }));
 
-    LayoutEngine layout_engine(resolver, {}, layout_options);
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
+    LayoutEngine layout_engine = make_layout_engine(resolver, layout_options, {});
+#else
+    LayoutEngine layout_engine = make_layout_engine(resolver, layout_options);
+#endif
     MonotonicArena layout_arena;
     auto layout_tree = layout_engine.layout(*render_tree, viewport_width, layout_arena);
 
@@ -875,7 +908,11 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
             RenderTreeBuilder local_builder(local_resolver, render_options);
             MonotonicArena local_render_tree_arena;
             auto local_render_tree = local_builder.build(*local_document, local_render_tree_arena);
-            LayoutEngine local_layout(local_resolver, {}, layout_options);
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
+            LayoutEngine local_layout = make_layout_engine(local_resolver, layout_options, {});
+#else
+            LayoutEngine local_layout = make_layout_engine(local_resolver, layout_options);
+#endif
             MonotonicArena local_layout_arena;
             auto local_layout_tree = local_layout.layout(*local_render_tree, viewport_width, local_layout_arena);
             LayerTreeBuilder local_layer_tree_builder(layer_options);

@@ -1,6 +1,7 @@
 import json
 import re
 import hashlib
+import os
 import struct
 import subprocess
 import sys
@@ -17,6 +18,9 @@ JFAPP_MAGIC = b"JFAPPV0\0"
 JFAPP_HEADER_SIZE = struct.calcsize(JFAPP_HEADER_FORMAT)
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATIC_SVG_ICON_APP = REPO_ROOT / "tests" / "fixtures" / "apps" / "jelly_svg_icon"
+FIXTURES_ROOT = REPO_ROOT / "tests" / "fixtures" / "apps"
+PACKAGES_ROOT = REPO_ROOT / "samples" / "apps" / "packages"
+SYSTEM_APPS_ROOT = REPO_ROOT / "samples" / "apps" / "system"
 LOCKED_CORE_VERSION = re.search(
     r'^set\(JELLYFRAME_RENDER_CORE_LOCKED_VERSION "([0-9]+\.[0-9]+\.[0-9]+)"',
     (REPO_ROOT / "cmake" / "jellyframe_dependency_lock.cmake").read_text(encoding="utf-8"),
@@ -25,6 +29,8 @@ LOCKED_CORE_VERSION = re.search(
 if LOCKED_CORE_VERSION is None:
     raise RuntimeError("Render Core dependency lock is missing its version")
 LOCKED_CORE_VERSION = LOCKED_CORE_VERSION.group(1)
+LOCKED_CORE_VERSION = os.environ.get("JELLYFRAME_TEST_RENDER_CORE_VERSION", LOCKED_CORE_VERSION)
+CORE_ABI = 3
 
 
 def run_case(exe: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -35,6 +41,13 @@ def run_case(exe: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
+
+
+def align_test_app_core_version(app_root: Path) -> None:
+    manifest_path = app_root / "jellyframe.app.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["runtime"]["minRenderCore"] = LOCKED_CORE_VERSION
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
 def run_vscode_debug_case(exe: Path, app: Path, frame_dir: Path) -> tuple[int, list[tuple[int, Path]]]:
@@ -211,7 +224,7 @@ def write_jfapp(
             "versionCode": version_code,
             "entry": entry,
             "minJellyFrame": "0.6.0",
-            "minRenderCore": "0.8.0",
+            "minRenderCore": LOCKED_CORE_VERSION,
             "script": "classic",
             "viewport": {"designWidth": 172, "designHeight": 320},
             "budgets": {"maxResourceBytes": 65536},
@@ -311,7 +324,7 @@ def write_font_capture_app(
             "versionName": "1.0.0",
             "versionCode": 1,
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": LOCKED_CORE_VERSION, "script": "none"},
             "viewport": {"designWidth": 240, "designHeight": 100},
             "fonts": fonts,
         }),
@@ -320,12 +333,37 @@ def write_font_capture_app(
 
 
 def main() -> int:
-    if len(sys.argv) not in (2, 3) or (len(sys.argv) == 3 and sys.argv[2] != "--scripting"):
-        print("usage: win32_browser_cli_tests.py PATH_TO_EXE [--scripting]")
+    global LOCKED_CORE_VERSION, STATIC_SVG_ICON_APP, FIXTURES_ROOT, PACKAGES_ROOT, SYSTEM_APPS_ROOT, CORE_ABI
+    if len(sys.argv) < 2:
+        print("usage: win32_browser_cli_tests.py PATH_TO_EXE [--scripting] [--core-version VERSION] [--core-abi ABI] [--candidate-apps-root DIR]")
         return 2
-
     exe = Path(sys.argv[1])
-    scripting_enabled = len(sys.argv) == 3
+    scripting_enabled = "--scripting" in sys.argv[2:]
+    index = 2
+    while index < len(sys.argv):
+        argument = sys.argv[index]
+        if argument in ("--core-version", "--core-abi", "--candidate-apps-root") and index + 1 < len(sys.argv):
+            value = sys.argv[index + 1]
+            if argument == "--core-version":
+                LOCKED_CORE_VERSION = value
+            elif argument == "--core-abi":
+                CORE_ABI = int(value)
+            else:
+                apps_root = Path(value)
+                FIXTURES_ROOT = apps_root / "fixtures"
+                PACKAGES_ROOT = apps_root / "packages"
+                SYSTEM_APPS_ROOT = apps_root / "system"
+                STATIC_SVG_ICON_APP = FIXTURES_ROOT / "jelly_svg_icon"
+            index += 2
+            continue
+        if argument == "--scripting":
+            index += 1
+            continue
+        else:
+            print(f"unknown argument: {argument}")
+            return 2
+    if scripting_enabled and "--scripting" not in sys.argv[2:]:
+        return 2
     require(exe.exists(), f"missing executable: {exe}")
 
     no_argument_result = run_case(exe, [])
@@ -359,8 +397,8 @@ def main() -> int:
     require("--app-runtime-jobs" in help_result.stdout, "--help must document app runtime queue override")
     require("--authorized-file-smoke" in help_result.stdout, "--help must document authorized file broker smoke")
     require("--system-survival-smoke" in help_result.stdout, "--help must document system survival smoke")
-    require("Opt into app/Core catalog text for validation" in help_result.stdout,
-            "help must explain the opt-in app/Core text validation path")
+    require("--use-app-fonts" in help_result.stdout,
+            "help must document app/Core catalog text selection")
     require("--vscode-debug" in help_result.stdout, "--help must document isolated VS Code debug mode")
     require("--vscode-frame-dir" in help_result.stdout, "--help must document VS Code frame output")
     require("--render-trace" in help_result.stdout, "--help must document bounded render trace output")
@@ -375,8 +413,9 @@ def main() -> int:
                 "app without font supplements must render with the desktop compatibility default: " + default_result.stdout)
         require("app_fonts=off" in default_result.stdout,
                 "desktop must preserve the compatibility text backend unless app/Core text is requested")
-        require("text_backend=gdi" in default_result.stdout,
-                "desktop default capture must report GDI as the selected text backend")
+        expected_default_backend = "core-text" if CORE_ABI >= 4 else "gdi"
+        require(f"text_backend={expected_default_backend}" in default_result.stdout,
+                f"desktop ABI{CORE_ABI} default capture must report {expected_default_backend}")
         default_pixels = re.search(r"non_background_pixels=(\d+)", default_result.stdout)
         require(default_pixels is not None and int(default_pixels.group(1)) > 0,
                 "Core system default must paint visible glyph pixels")
@@ -492,7 +531,7 @@ def main() -> int:
                 "versionCode": 1,
                 "entry": "/index.html",
                 "runtime": {
-                    "minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "classic"
+                    "minJellyFrame": "0.6.0", "minRenderCore": LOCKED_CORE_VERSION, "script": "classic"
                 },
                 "viewport": {"designWidth": 160, "designHeight": 60},
             }),
@@ -664,7 +703,7 @@ def main() -> int:
                 "versionCode": 1,
                 "entry": "/index.html",
                 "runtime": {
-                    "minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"
+                    "minJellyFrame": "0.6.0", "minRenderCore": LOCKED_CORE_VERSION, "script": "none"
                 },
                 "viewport": {"designWidth": 160, "designHeight": 60},
             }),
@@ -768,7 +807,7 @@ def main() -> int:
         root_scroll_trace = root / "vscode-root-scroll-trace.jsonl"
         root_scroll_exit, _ = run_vscode_trace_case(
             exe,
-            REPO_ROOT / "tests" / "fixtures" / "apps" / "jelly_scroll_probe",
+            FIXTURES_ROOT / "jelly_scroll_probe",
             root / "vscode-root-scroll-frames",
             root_scroll_trace,
             ("wheel 150 150 -120",),
@@ -790,7 +829,7 @@ def main() -> int:
         container_scroll_trace = root / "vscode-container-scroll-trace.jsonl"
         container_scroll_exit, _ = run_vscode_trace_case(
             exe,
-            REPO_ROOT / "tests" / "fixtures" / "apps" / "jelly_scroll_container_probe",
+            FIXTURES_ROOT / "jelly_scroll_container_probe",
             root / "vscode-container-scroll-frames",
             container_scroll_trace,
             ("wheel 150 142 -120",),
@@ -827,7 +866,7 @@ def main() -> int:
                 "versionCode": 1,
                 "entry": "/index.html",
                 "runtime": {
-                    "minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"
+                    "minJellyFrame": "0.6.0", "minRenderCore": LOCKED_CORE_VERSION, "script": "none"
                 },
                 "viewport": {"designWidth": 160, "designHeight": 100},
             }),
@@ -869,6 +908,7 @@ def main() -> int:
         app = root / "app"
         capture = root / "background.bmp"
         shutil.copytree(Path("tools/templates/apps/weather"), app)
+        align_test_app_core_version(app)
         (app / "index.html").write_text(
             "<link rel='stylesheet' href='styles/app.css'><body><main class='cover'></main></body>",
             encoding="utf-8",
@@ -900,7 +940,7 @@ def main() -> int:
                     "versionCode": 1,
                     "entry": "/index.html",
                     "runtime": {
-                        "minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "none"
+                        "minJellyFrame": "0.6.0", "minRenderCore": LOCKED_CORE_VERSION, "script": "none"
                     },
                     "viewport": {"designWidth": 172, "designHeight": 320},
                 }
@@ -948,6 +988,7 @@ def main() -> int:
         outside = root / "outside.css"
         capture = root / "capture.bmp"
         shutil.copytree(Path("tools/templates/apps/weather"), app)
+        align_test_app_core_version(app)
         outside.write_text("body { background: #ff0000; }", encoding="utf-8")
         linked = app / "styles" / "outside.css"
         try:
@@ -997,9 +1038,9 @@ def main() -> int:
         exe,
         [
             "--app",
-            "samples/apps/packages/jelly_service_status",
+            str(PACKAGES_ROOT / "jelly_service_status"),
             "--frame-script",
-            "samples/apps/packages/jelly_service_status/capture_system_events.jfcapture",
+            str(PACKAGES_ROOT / "jelly_service_status" / "capture_system_events.jfcapture"),
         ],
     )
     require(service_status_result.returncode == 0, "service status frame script must pass")
@@ -1251,7 +1292,7 @@ def main() -> int:
             exe,
             [
                 "--registry-store", str(store),
-                "--launcher-app", "samples/apps/system/sample_launcher",
+                "--launcher-app", str(SYSTEM_APPS_ROOT / "sample_launcher"),
                 "--capture-frames", str(frames),
                 "--frame-count", "2",
                 "--frame-event", "1:click-id:launcher-remove-keep-data-0",
@@ -1268,7 +1309,7 @@ def main() -> int:
             exe,
             [
                 "--registry-store", str(store),
-                "--launcher-app", "samples/apps/system/sample_launcher",
+                "--launcher-app", str(SYSTEM_APPS_ROOT / "sample_launcher"),
                 "--capture-frames", str(frames),
                 "--frame-count", "3",
                 "--frame-event", "1:click-id:launcher-remove-keep-data-0",
@@ -1284,7 +1325,7 @@ def main() -> int:
             exe,
             [
                 "--registry-store", str(store),
-                "--launcher-app", "samples/apps/system/sample_launcher",
+                "--launcher-app", str(SYSTEM_APPS_ROOT / "sample_launcher"),
                 "--capture-frames", str(frames),
                 "--frame-count", "3",
                 "--frame-event", "1:click-id:launcher-remove-keep-data-0",
@@ -1379,16 +1420,16 @@ def main() -> int:
                 exe,
                 [
                     "--app",
-                    "tests/fixtures/apps/jelly_dialog_modal",
+                    str(FIXTURES_ROOT / "jelly_dialog_modal"),
                     "--frame-script",
-                    "tests/fixtures/apps/jelly_dialog_modal/capture_modal_escape.jfcapture",
+                    str(FIXTURES_ROOT / "jelly_dialog_modal" / "capture_modal_escape.jfcapture"),
                     "--capture-frames",
                     str(captures),
                 ],
             )
             require(dialog_result.returncode == 0, "dialog frame-script fixture must pass")
             require("diagnostics: 0" in dialog_result.stdout,
-                    "dialog frame-script fixture must not emit diagnostics")
+                    "dialog frame-script fixture must not emit diagnostics: " + dialog_result.stdout)
             open_pixel = read_bmp_rgb(captures / "frame_001.bmp", 16, 70)
             closed_pixel = read_bmp_rgb(captures / "frame_002.bmp", 16, 70)
             require(open_pixel[0] > 180 and open_pixel[1] < 130,
@@ -1398,7 +1439,7 @@ def main() -> int:
 
         with tempfile.TemporaryDirectory(prefix="jellyframe-watchdog-app-") as directory:
             store = Path(directory) / "store"
-            package_root = Path("tests/fixtures/apps/jelly_watchdog_smoke")
+            package_root = FIXTURES_ROOT / "jelly_watchdog_smoke"
             bundle = Path(directory) / "watchdog.jfapp"
             package_report = Path(directory) / "watchdog.report.json"
             montage = Path(directory) / "watchdog.bmp"

@@ -823,7 +823,7 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
         }, this};
     }
 #endif
-    LayoutEngine layout_engine(*style_resolver_, {}, layout_options);
+    LayoutEngine layout_engine(*style_resolver_, layout_options);
     LayoutBoxPtr layout_tree = layout_engine.layout(*render_tree, options_.viewport.width, options_.viewport.height);
     if (!layout_tree) return false;
     // Text layout caches were just rebuilt from this DOM snapshot. Core's layer

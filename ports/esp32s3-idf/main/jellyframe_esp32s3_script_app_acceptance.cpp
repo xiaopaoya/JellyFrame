@@ -2,7 +2,8 @@
 #include "sdkconfig.h"
 
 #if defined(CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE) && \
-    CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE
+    CONFIG_JELLYFRAME_ESP32S3_RUN_SCRIPT_APP_ACCEPTANCE && \
+    (!defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4)
 
 #include "boards/waveshare_touch_lcd_boards.h"
 #include "jellyframe_esp32s3_font.h"

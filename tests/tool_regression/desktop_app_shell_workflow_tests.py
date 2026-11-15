@@ -35,7 +35,8 @@ def run_case(exe: Path, args: list[str], log_path: Path) -> subprocess.Completed
     return result
 
 
-def write_source_package(root: Path, version_code: int, version_name: str, body_label: str) -> None:
+def write_source_package(root: Path, version_code: int, version_name: str, body_label: str,
+                         core_version: str) -> None:
     root.mkdir(parents=True, exist_ok=True)
     manifest = {
         "format": "jellyframe.app",
@@ -44,7 +45,7 @@ def write_source_package(root: Path, version_code: int, version_name: str, body_
         "name": APP_NAME,
         "version": {"name": version_name, "code": version_code},
         "entry": "/index.html",
-        "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.8.0", "script": "classic"},
+        "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": core_version, "script": "classic"},
         "viewport": {"designWidth": 300, "designHeight": 300, "shape": "round"},
         "budgets": {
             "maxResourceBytes": 65536,
@@ -153,7 +154,8 @@ def record_step(steps: list[dict], name: str, result: subprocess.CompletedProces
     steps.append(step)
 
 
-def run_primary_workflow(exe: Path, root: Path, steps: list[dict]) -> None:
+def run_primary_workflow(exe: Path, root: Path, steps: list[dict], core_version: str,
+                         launcher_app: Path) -> None:
     packages = root / "packages"
     logs = root / "logs"
     captures = root / "captures"
@@ -168,8 +170,8 @@ def run_primary_workflow(exe: Path, root: Path, steps: list[dict]) -> None:
     v1_candidate = packages / "workflow-v1.install.json"
     v2_candidate = packages / "workflow-v2.install.json"
 
-    write_source_package(v1_source, 1, "1.0.0", "Version 1")
-    write_source_package(v2_source, 2, "2.0.0", "Version 2")
+    write_source_package(v1_source, 1, "1.0.0", "Version 1", core_version)
+    write_source_package(v2_source, 2, "2.0.0", "Version 2", core_version)
     package_bundle(v1_source, v1_bundle, packages / "workflow-v1.package.report.json")
     package_bundle(v2_source, v2_bundle, packages / "workflow-v2.package.report.json")
     write_install_candidate(v1_candidate, v1_bundle)
@@ -204,7 +206,7 @@ def run_primary_workflow(exe: Path, root: Path, steps: list[dict]) -> None:
     launcher_capture = captures / "launcher-v2.ppm"
     launcher_v2 = run_case(
         exe,
-        ["--registry-store", str(store), "--launcher-app", str(LAUNCHER_APP), "--capture", str(launcher_capture)],
+        ["--registry-store", str(store), "--launcher-app", str(launcher_app), "--capture", str(launcher_capture)],
         logs / "launcher-v2.log",
     )
     require(launcher_v2.returncode == 0, f"launcher capture after update must pass: {launcher_v2.stdout}")
@@ -252,7 +254,8 @@ def run_primary_workflow(exe: Path, root: Path, steps: list[dict]) -> None:
     record_step(steps, "launch-rollback", launch_rollback, capture=launch_rollback_capture.name)
 
 
-def run_launcher_keep_data_flow(exe: Path, root: Path, bundle: Path, steps: list[dict]) -> None:
+def run_launcher_keep_data_flow(exe: Path, root: Path, bundle: Path, steps: list[dict],
+                                launcher_app: Path) -> None:
     store = root / "store"
     logs = root / "logs"
     captures = root / "captures"
@@ -269,7 +272,7 @@ def run_launcher_keep_data_flow(exe: Path, root: Path, bundle: Path, steps: list
             "--registry-store",
             str(store),
             "--launcher-app",
-            str(LAUNCHER_APP),
+            str(launcher_app),
             "--capture-frames",
             str(captures),
             "--frame-count",
@@ -321,24 +324,26 @@ def write_report(path: Path, steps: list[dict]) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) not in (2, 4) or (len(sys.argv) == 4 and sys.argv[2] != "--output-dir"):
-        print("usage: desktop_app_shell_workflow_tests.py PATH_TO_EXE [--output-dir DIR]")
+    if len(sys.argv) != 8 or sys.argv[2] != "--output-dir" or sys.argv[4] != "--core-version" or sys.argv[6] != "--launcher-app":
+        print("usage: desktop_app_shell_workflow_tests.py PATH_TO_EXE --output-dir DIR --core-version VERSION --launcher-app DIR")
         return 2
     exe = Path(sys.argv[1])
     require(exe.is_file(), f"missing executable: {exe}")
-    output_dir = Path(sys.argv[3]) if len(sys.argv) == 4 else None
+    output_dir = Path(sys.argv[3])
+    core_version = sys.argv[5]
+    launcher_app = Path(sys.argv[7])
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-app-shell-workflow-") as directory:
         root = Path(directory)
-        evidence_root = output_dir if output_dir is not None else root / "evidence"
-        if output_dir is not None:
-            shutil.rmtree(output_dir, ignore_errors=True)
-            output_dir.mkdir(parents=True, exist_ok=True)
+        evidence_root = output_dir
+        shutil.rmtree(output_dir, ignore_errors=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
         steps: list[dict] = []
         try:
-            run_primary_workflow(exe, evidence_root / "primary", steps)
+            run_primary_workflow(exe, evidence_root / "primary", steps, core_version, launcher_app)
             primary_bundle = evidence_root / "primary" / "packages" / "workflow-v1.jfapp"
-            run_launcher_keep_data_flow(exe, evidence_root / "launcher_keep_data", primary_bundle, steps)
+            run_launcher_keep_data_flow(exe, evidence_root / "launcher_keep_data", primary_bundle, steps,
+                                        launcher_app)
             run_remove_delete_data_flow(exe, evidence_root / "remove_delete_data", primary_bundle, steps)
             write_report(evidence_root / "desktop_app_shell_workflow.report.json", steps)
         except Exception as error:  # pragma: no cover - direct script failure path

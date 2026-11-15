@@ -39,6 +39,8 @@ const char* command_name(DisplayCommandType type) {
         return "box_shadow";
     case DisplayCommandType::Text:
         return "text";
+    case DisplayCommandType::PreparedText:
+        return "prepared_text";
     case DisplayCommandType::Image:
         return "image";
     }
@@ -46,14 +48,16 @@ const char* command_name(DisplayCommandType type) {
 }
 
 void print_command(const DisplayCommand& command, std::size_t index) {
-    std::cout << "  [" << index << "] " << command_name(command.type)
+    std::cout << "  [" << index << "] " << command_name(command.type())
               << " x=" << command.rect.x
               << " y=" << command.rect.y
               << " w=" << command.rect.width
               << " h=" << command.rect.height;
-    if (!command.text.empty()) {
-        std::cout << " font_weight=" << command.font_weight
+    if (command.type() == DisplayCommandType::Text && !command.text.empty()) {
+        std::cout << " font_weight=" << command.text_paint().font_weight
                   << " text=\"" << command.text << "\"";
+    } else if (command.type() == DisplayCommandType::PreparedText) {
+        std::cout << " packet_bytes=" << command.text.size();
     }
     std::cout << '\n';
 }

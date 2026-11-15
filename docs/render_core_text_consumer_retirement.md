@@ -1,15 +1,17 @@
 # Core-owned text consumer retirement
 
-> Last updated: 2026-11-15; Applies to: 0.6.0-dev. Core contract: 0.9.0-dev / ABI4.
+> Last updated: 2026-11-16; Applies to: 0.6.0-dev. Core contract: 0.9.0-dev / ABI4.
 
 Current source audit: 2026-11-15. Runtime mainline `fa5176a0` (PR111), Core
 `1d5c746d` (PR65), 0.9.0-dev / ABI4. This is a consumer migration checklist,
 not a declaration that legacy callback APIs have been removed.
 
-Runtime's in-tree source-override integration was built against Core identity
-`52ae4354efdae95d4dbfdfb6a2ef1ad8fbbfb99029bdd922105ac2447302f62d` (163
-files); Release build and CTest passed 60/60. The Runtime test configuration
-now links Core's style-resolver test hooks when that source is present.
+The isolated ABI4 retirement candidate has no Runtime host text-measure or
+paint consumers. Runtime Release CTest passes 113/113 against the exact Core
+source override, including Core style-reuse tests, route-tabs, motion-lab and
+incremental/full pixel equivalence. Core full/cropped Release CTest passes
+33/33 and 32/32. Final source-archive and installed-package consumer gates are
+still pending on a clean exact-candidate snapshot.
 
 ## Production consumers
 
@@ -18,7 +20,7 @@ now links Core's style-resolver test hooks when that source is present.
 | ESP32 retained UI (`jellyframe_esp32s3_ui_task.cpp`) | Runtime #111 enables the named CoreText WS147 band-shell profile; it binds the shared JFFONT2 catalog and clears providers. The exact Core #63 ESP-IDF build and profile guard pass. The explicit legacy typography profile still exercises generated C++ Noto faces. | Keep legacy only as an explicit acceptance profile; qualify any new named device image before removing callback construction and port-owned measurement/scaling. |
 | ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects supported canonical v10 and a painterless renderer, independently of BMP. Owned text catalog/snapshot survives accepted-frame replay. CoreText OFF retains the explicit legacy painter path. Runtime #107 tests Core #63 popup input, prepared packets, B-row pixels, selection and close; #109 adds a full-feature WS147 installed-worker profile. Core #65 routes generated pseudo labels/list markers through TextSystem or explicit refusal. User accepted title/options/selection/touch on `0.6.2-abi4-installed-core63-device1`; JFDP accepted the first frame and reported zero render/present failures. | Keep this device observation scoped to its named profile; remove the remaining legacy painter path and qualify other profiles independently. |
 | ESP32 P4/P5/P6 smoke (`main.cpp`) | The separate generated-BitmapFont provider factory is called only by this benchmark/smoke fixture, not by a product runtime route. The CoreText smoke runs before benchmark framebuffer admission. PR #110 built it with IDF 5.3.1 and exact Core #63 identity `e842b2e6...af1adb67`; the map excludes the legacy Noto C++ pack. | Keep legacy coverage on its explicit legacy profile. The CoreText smoke is build-qualified; physical execution is optional diagnostics, not a product-consumer migration gate. |
-| Desktop default (`tools/native/win32_browser.cpp`) | GDI measurement/painting using the OS font; Core catalog is opt-in. PR #110 disables text-dirty layout reuse in CoreText because the reuse validator only accepts legacy provider metrics; text mutation rebuilds layout instead. PR #111 merges the ABI4 property matrix; 293 incremental/full repaint frames across 27 flows pass against Core #63. | Decide whether to adopt the catalog default after the callback API/fixture migration; GDI remains an explicit path. |
+| Desktop default (`tools/native/win32_browser.cpp`) | The ABI4 candidate selects Core TextSystem by default and compiles GDI only on ABI3. Text content changes still rebuild without host metrics. Paint-only style changes can reuse layout after Core compares the old/new computed layout fields and render-tree shape; shared-inline caches and DOM tree/text dirtiness are conservatively rejected. Runtime CTest confirms route-tabs `rebuild=1`, motion-lab `style_stable>0`, and incremental/full pixel equivalence. | No remaining Win32 callback migration; retain ABI3 GDI only behind its compatibility build boundary. |
 | Desktop application fonts (`src/app_runtime/app_font_set.cpp`) | Complete in Runtime #103: JFFONT2-only, callback loaders/accessors and browser precedence removed; tools/samples/import UI use canonical resources. | No remaining AppFontSet migration; generated C++ port defaults remain separate. |
 | Embedded host example | This change binds one TextSystem to layout, layers and compositor using a complete tiny JFFONT2 fixture. | No remaining measurement/painter callback in this example. Device-default changes are separate. |
 
@@ -40,9 +42,14 @@ and never falls back to host callbacks. Runtime PRs #107-#111 are merged;
 the dedicated Core #63 full/cropped worker lanes pass in CI. Full Core CTest
 passes 33/33. Cropped CTest is 31/32 because the existing shared-inline shadow
 assertion fails identically on the pre-change base. Runtime #109 adds the
-WS147 full-feature profile and select-popup app, but this is separate from the
-previously accepted native `mainline1` image; record the exact device image
-before claiming popup visual acceptance. The painterless installed profile
+WS147 full-feature profile and select-popup app. The exact
+`0.6.2-abi4-installed-core63-device1` image passed user-visible popup
+acceptance on 2026-11-16: all four options were visible and selecting CHARLIE
+updated the result. Its identity is Runtime `f609a1d45fef39db5f22cbc9ad5c5d98c3468dc7`,
+Core source `e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67`,
+and BIN SHA-256 `8dba1f73835e35697ef13c7d63159c966b8ab487dab752d8f3b20ee7a2ad6a0f`.
+After acceptance, the board was restored to the already accepted native
+`mainline1` image; this does not add new evidence for that image. The painterless installed profile
 rejects ordinary callback-dependent Text commands before writes. Core #65
 closes the generated pseudo-content/list-marker fallback; any other generated
 or widget context still needs an explicit inventory and consumer test.

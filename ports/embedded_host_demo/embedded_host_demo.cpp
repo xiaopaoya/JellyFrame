@@ -131,7 +131,7 @@ Pipeline build_pipeline(const TextSystem& text_system, const HostBudgets& budget
     pipeline.render_tree = render_tree_builder.build(*pipeline.document);
     auto options = layout_engine_options_from_budgets(budgets);
     options.text_system = &text_system;
-    LayoutEngine layout_engine(*pipeline.resolver, {}, options);
+    LayoutEngine layout_engine(*pipeline.resolver, options);
     pipeline.layout_tree = layout_engine.layout(*pipeline.render_tree, kViewportWidth);
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     layer_options.text_system = &text_system;
@@ -143,7 +143,7 @@ Pipeline build_pipeline(const TextSystem& text_system, const HostBudgets& budget
 FrameBuffer render_to_rgba(const LayerNode& layer_tree, const TextSystem& text_system, const HostBudgets& budgets) {
     auto options = software_compositor_options_from_budgets(budgets);
     options.text_system = &text_system;
-    SoftwareCompositor compositor({}, options);
+    SoftwareCompositor compositor(ImagePainter{}, options);
     return compositor.render(layer_tree, kViewportWidth, kViewportHeight, Color{0, 0, 0, 255});
 }
 

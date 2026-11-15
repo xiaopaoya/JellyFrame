@@ -106,10 +106,8 @@ private:
 // group values and delegates composition to the selected Core compositor.
 class ScriptTaskFrameRenderer final {
 public:
-    explicit ScriptTaskFrameRenderer(TextPainter text_painter = {},
-                                     ScriptTaskFrameRendererOptions options = {});
-    ScriptTaskFrameRenderer(TextPainter text_painter,
-                            ImagePainter image_painter,
+    explicit ScriptTaskFrameRenderer(ScriptTaskFrameRendererOptions options = {});
+    ScriptTaskFrameRenderer(ImagePainter image_painter,
                             ScriptTaskFrameRendererOptions options = {});
 
     FrameBuffer render(const ScriptTaskAppFrame& frame,
@@ -145,7 +143,6 @@ private:
 
     SoftwareRasterizer rasterizer_;
     ScriptTaskFrameRendererOptions options_;
-    TextPainter text_painter_;
     ImagePainter image_painter_;
 };
 

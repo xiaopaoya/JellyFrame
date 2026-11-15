@@ -48,11 +48,11 @@ int main() {
     DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
 
     for (const DisplayCommand& command : display_list) {
-        if (command.type == DisplayCommandType::FillRect) {
+        if (command.type() == DisplayCommandType::FillRect) {
             std::cout << "fill_rect ";
-        } else if (command.type == DisplayCommandType::LinearGradient) {
+        } else if (command.type() == DisplayCommandType::LinearGradient) {
             std::cout << "gradient  ";
-        } else if (command.type == DisplayCommandType::StrokeRect) {
+        } else if (command.type() == DisplayCommandType::StrokeRect) {
             std::cout << "stroke    ";
         } else {
             std::cout << "text      ";
@@ -63,8 +63,10 @@ int main() {
                   << " h=" << command.rect.height
                   << " color=";
         print_color(command.color);
-        if (!command.text.empty()) {
+        if (command.type() == DisplayCommandType::Text && !command.text.empty()) {
             std::cout << " value=\"" << command.text << "\"";
+        } else if (command.type() == DisplayCommandType::PreparedText) {
+            std::cout << " prepared_packet_bytes=" << command.text.size();
         }
         std::cout << '\n';
     }

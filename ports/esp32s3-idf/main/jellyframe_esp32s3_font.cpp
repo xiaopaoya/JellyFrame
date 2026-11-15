@@ -220,9 +220,11 @@ jellyframe::TextMeasureProvider make_legacy_bitmap_text_measure_provider() {
                                            nullptr};
 }
 
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
 jellyframe::TextPainter make_legacy_bitmap_text_painter() {
     return jellyframe::TextPainter{legacy_paint_callback, nullptr};
 }
+#endif
 
 bool legacy_app_font_measure_callback(const std::string& text,
                                       int font_size,

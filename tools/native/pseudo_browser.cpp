@@ -12,6 +12,11 @@
 #include "render_core/software_renderer.h"
 #include "render_core/style.h"
 
+#if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+#include "app_runtime/app_font_set.h"
+#include "app_runtime/core_system_font_catalog.h"
+#endif
+
 #include "example_css_io.h"
 
 #include <algorithm>
@@ -161,7 +166,26 @@ void accumulate_layout_bounds(const LayoutBox& box, LayoutBounds& bounds) {
 
 void accumulate_display_bounds(const DisplayList& display_list, LayoutBounds& bounds) {
     for (const DisplayCommand& command : display_list) {
-        const Rect& rect = command.rect;
+        Rect rect = command.rect;
+        if (command.type() == DisplayCommandType::LinearGradient ||
+            command.type() == DisplayCommandType::RadialGradient ||
+            command.type() == DisplayCommandType::ConicGradient) {
+            const BackgroundPaintClip clip = command.basic_paint().background_paint_clip;
+            if (clip.width > 0 && clip.height > 0) {
+                const std::int64_t clip_left = static_cast<std::int64_t>(rect.x) + clip.dx;
+                const std::int64_t clip_top = static_cast<std::int64_t>(rect.y) + clip.dy;
+                const std::int64_t left = std::max<std::int64_t>(rect.x, clip_left);
+                const std::int64_t top = std::max<std::int64_t>(rect.y, clip_top);
+                const std::int64_t right = std::min<std::int64_t>(
+                    static_cast<std::int64_t>(rect.x) + rect.width, clip_left + clip.width);
+                const std::int64_t bottom = std::min<std::int64_t>(
+                    static_cast<std::int64_t>(rect.y) + rect.height, clip_top + clip.height);
+                rect = right > left && bottom > top
+                    ? Rect{static_cast<int>(left), static_cast<int>(top),
+                           static_cast<int>(right - left), static_cast<int>(bottom - top)}
+                    : Rect{};
+            }
+        }
         if (rect.width <= 0 || rect.height <= 0) {
             continue;
         }
@@ -667,6 +691,17 @@ int main(int argc, char** argv) {
         const BrowserOptions options = parse_options(argc, argv);
         const HostBudgets budgets = desktop_validation_budgets();
         VectorDiagnosticSink diagnostics;
+#if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+        AppFontSet fonts;
+        if (!fonts.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog,
+                                                        kNotoSansScSystemFontCatalogSize)) {
+            throw std::runtime_error("Core system font catalog is invalid");
+        }
+        const TextSystem* text_system = fonts.core_text_system();
+        if (text_system == nullptr) throw std::runtime_error("Core TextSystem initialization failed");
+#else
+        const TextSystem* text_system = nullptr;
+#endif
 
         HtmlParser html_parser;
         HtmlParserOptions html_options = html_parser_options_from_budgets(budgets);
@@ -713,13 +748,15 @@ int main(int argc, char** argv) {
 
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
         layout_options.diagnostics = &diagnostics;
-        LayoutEngine layout_engine(resolver, {}, layout_options);
+        layout_options.text_system = text_system;
+        LayoutEngine layout_engine(resolver, layout_options);
         stage_start = Clock::now();
         auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
         timings.layout_us = elapsed_us(stage_start, Clock::now());
 
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
         layer_options.diagnostics = &diagnostics;
+        layer_options.text_system = text_system;
         LayerTreeBuilder layer_tree_builder(layer_options);
         stage_start = Clock::now();
         auto layer_tree = layer_tree_builder.build(*layout_tree);
@@ -730,7 +767,8 @@ int main(int argc, char** argv) {
 
         SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
         compositor_options.diagnostics = &diagnostics;
-        SoftwareCompositor compositor({}, compositor_options);
+        compositor_options.text_system = text_system;
+        SoftwareCompositor compositor(ImagePainter{}, compositor_options);
         const Color background = page_background_color(*document, resolver);
         stage_start = Clock::now();
         FrameBuffer frame_buffer = compositor.render(*layer_tree, options.viewport_width, options.viewport_height, background);

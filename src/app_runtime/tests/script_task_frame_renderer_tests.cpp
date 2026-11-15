@@ -654,22 +654,6 @@ void retained_replay_rejects_unbounded_host_painters() {
     assert(bounds.x == 1 && bounds.y == 2 && bounds.width == 12 && bounds.height == 8);
 }
 
-bool bounded_marker_text_painter(FrameBuffer& target,
-                                 Rect rect,
-                                 Color color,
-                                 const std::string& text,
-                                 int,
-                                 int,
-                                 TextCommandAlign,
-                                 bool,
-                                 void*) {
-    if (rect.width <= 0 || rect.height <= 0 || text.empty() || !target.contains(rect.x, rect.y)) {
-        return false;
-    }
-    target.pixel(rect.x, rect.y) = color;
-    return true;
-}
-
 ScriptTaskAppFrame text_replay_frame() {
     ScriptTaskAppFrame frame;
     frame.viewport = {0, 0, 24, 12};
@@ -687,35 +671,17 @@ ScriptTaskAppFrame text_replay_frame() {
     return frame;
 }
 
-void retained_replay_accepts_explicitly_bounded_text_painter() {
-    TextPainter bounded{bounded_marker_text_painter, nullptr, nullptr, true};
-    ScriptTaskFrameRenderer renderer(bounded);
-    ScriptTaskFrameRetainedReplayOptions options;
-    options.enabled = true;
-    options.max_retained_pixels = 24 * 12;
-    options.max_replay_pixels = 24 * 12;
-    ScriptTaskFrameRetainedReplay replay(options);
-    const Color background{255, 255, 255, 255};
-    ScriptTaskAppFrame previous = text_replay_frame();
-    const FrameBuffer previous_image = renderer.render(previous, background);
-    assert(replay.observe_presented(previous, previous_image, background, 2));
-
-    ScriptTaskAppFrame current = previous;
-    current.display_list[1].text = "2";
-    FrameBuffer actual;
-    ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::FullFrameDisabled;
-    assert(replay.render_into(renderer, current, actual, background, 2, &status));
-    assert(status == ScriptTaskFrameRetainedReplayStatus::Replayed);
-    assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
-
-    ScriptTaskFrameRenderer unbounded_renderer(TextPainter{bounded_marker_text_painter, nullptr});
-    ScriptTaskFrameRetainedReplay unbounded_replay(options);
-    const FrameBuffer unbounded_previous = unbounded_renderer.render(previous, background);
-    assert(unbounded_replay.observe_presented(previous, unbounded_previous, background, 2));
-    assert(unbounded_replay.render_into(unbounded_renderer, current, actual, background, 2, &status));
-    assert(status == ScriptTaskFrameRetainedReplayStatus::FullFrameIneligible);
-    assert(unbounded_replay.statistics().ineligible_by_reason[
-               static_cast<std::size_t>(ScriptTaskFrameRetainedReplayFallbackReason::UnsupportedVisualBounds)] == 1);
+void abi4_renderer_refuses_legacy_text_without_writing() {
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
+    ScriptTaskFrameRenderer renderer;
+    auto frame = text_replay_frame();
+    FrameBuffer target(frame.viewport.width, frame.viewport.height, {1, 2, 3, 4});
+    const auto before = target;
+    ScriptTaskFrameRenderStatus status = ScriptTaskFrameRenderStatus::Accepted;
+    assert(!renderer.render_into(frame, target, {255, 255, 255, 255}, nullptr, 0, nullptr, &status));
+    assert(status == ScriptTaskFrameRenderStatus::InvalidFrame);
+    assert(equal_framebuffer_pixels(target, before));
+#endif
 }
 
 bool bounded_marker_image_painter(FrameBuffer& target,
@@ -748,7 +714,7 @@ template<class Painter> Painter make_bounded_marker_image_painter() {
 
 void retained_replay_accepts_explicitly_bounded_image_painter() {
     auto bounded = make_bounded_marker_image_painter<ImagePainter>();
-    ScriptTaskFrameRenderer renderer({}, bounded);
+    ScriptTaskFrameRenderer renderer(bounded);
     ScriptTaskFrameRetainedReplayOptions options;
     options.enabled = true;
     options.max_retained_pixels = 24 * 12;
@@ -811,56 +777,6 @@ void value_frame_renderer_rejects_unsupported_sampling_without_writing() {
         assert(status == ScriptTaskFrameRenderStatus::UnsupportedSamplingFeature);
         assert(equal_framebuffer_pixels(target, before));
     }
-}
-
-bool lying_text_painter(FrameBuffer& target,
-                         Rect rect,
-                         Color color,
-                         const std::string& text,
-                         int,
-                         int,
-                         TextCommandAlign,
-                         bool,
-                         void*) {
-    if (text.empty()) {
-        return true;
-    }
-    // One-pixel replay-region expansion protects legitimate antialiasing
-    // fringes. Write beyond that allowance to exercise the canonical guard.
-    const int x = rect.x - 2;
-    if (!target.contains(x, rect.y)) {
-        return false;
-    }
-    target.pixel(x, rect.y) = color;
-    return true;
-}
-
-void retained_replay_recovers_from_false_bounded_painter_claim() {
-    TextPainter lying{lying_text_painter, nullptr, nullptr, true};
-    ScriptTaskFrameRenderer renderer(lying);
-    ScriptTaskFrameRetainedReplayOptions options;
-    options.enabled = true;
-    options.max_retained_pixels = 24 * 12;
-    options.max_replay_pixels = 24 * 12;
-    ScriptTaskFrameRetainedReplay replay(options);
-    const Color background{255, 255, 255, 255};
-    ScriptTaskAppFrame previous = text_replay_frame();
-    const FrameBuffer previous_image = renderer.render(previous, background);
-    assert(replay.observe_presented(previous, previous_image, background, 4));
-
-    ScriptTaskAppFrame current = previous;
-    current.display_list[1].text.clear();
-    FrameBuffer actual;
-    ScriptTaskFrameRetainedReplayStatus status = ScriptTaskFrameRetainedReplayStatus::Replayed;
-    assert(replay.render_into(renderer, current, actual, background, 4, &status));
-    assert(status == ScriptTaskFrameRetainedReplayStatus::PixelMismatchFallback);
-    assert(equal_framebuffer_pixels(actual, renderer.render(current, background)));
-    assert(replay.statistics().candidates == 1 && replay.statistics().replays == 0 &&
-           replay.statistics().pixel_mismatch_fallbacks == 1 &&
-           replay.statistics().pixel_mismatch_pixels == 1 &&
-           replay.statistics().has_first_pixel_mismatch &&
-           replay.statistics().first_pixel_mismatch_x == 5 &&
-           replay.statistics().first_pixel_mismatch_y == 4);
 }
 
 ScriptTaskAppFrame retained_replay_stress_frame() {
@@ -1323,18 +1239,18 @@ void v6_groups_match_compositor_across_nested_effects_and_dirty_tiles() {
                 ScriptTaskFrameRendererOptions limited_options;
                 limited_options.max_temporary_pixels = limit;
                 auto limited_frame = frame;
-                const auto limited_image = ScriptTaskFrameRenderer({}, limited_options).render(limited_frame, background);
+                const auto limited_image = ScriptTaskFrameRenderer(limited_options).render(limited_frame, background);
                 // Budget branches depend on full reference surfaces, not damage tiles.
                 FrameBuffer limited_tiled(48, 48, background);
                 for (int y = 0; y < 48; y += 8) {
                     const Rect dirty{0, y, 48, 8};
-                    assert(ScriptTaskFrameRenderer({}, limited_options).render_into(limited_frame,
+                    assert(ScriptTaskFrameRenderer(limited_options).render_into(limited_frame,
                         limited_tiled, background, &dirty, 1));
                 }
                 assert(equal_framebuffer_pixels(limited_image, limited_tiled));
             }
             ScriptTaskFrameRendererOptions depth_limit; depth_limit.max_group_depth = 2;
-            assert(!ScriptTaskFrameRenderer({}, depth_limit).render_into(frame, sentinel, background));
+            assert(!ScriptTaskFrameRenderer(depth_limit).render_into(frame, sentinel, background));
             for (const auto pixel : sentinel.pixels) assert(pixel.r == 11 && pixel.a == 44);
         }
     }
@@ -1411,7 +1327,7 @@ void v6_fractional_image_painter_is_checked_before_group_publication() {
     FrameBuffer target(32,32,{44,55,66,77});const auto before=target;
     auto missing=painter;missing.paint_fractional_clipped=nullptr;
     ScriptTaskFrameRenderStatus status;
-    assert(!ScriptTaskFrameRenderer({},missing).render_into(frame,target,background,nullptr,0,nullptr,&status));
+    assert(!ScriptTaskFrameRenderer(missing).render_into(frame,target,background,nullptr,0,nullptr,&status));
     assert(status==ScriptTaskFrameRenderStatus::UnsupportedSamplingFeature);
     assert(equal_framebuffer_pixels(target,before));
 #endif
@@ -1421,10 +1337,8 @@ void v6_fractional_image_painter_is_checked_before_group_publication() {
 
 void v6_damage_matches_full_frames_and_falls_back_at_contract_boundaries() {
 #if JELLYFRAME_SCRIPT_TASK_GROUP_API
-    TextPainter text{bounded_marker_text_painter, nullptr, nullptr, true};
-    text.supports_tiled_replay = true;
     ImagePainter image{bounded_marker_image_painter, nullptr, true};
-    ScriptTaskFrameRenderer renderer(text, image);
+    ScriptTaskFrameRenderer renderer(image);
     LayerNode root; root.type = LayerType::Root; root.bounds = {0, 0, 96, 80};
     DisplayCommand background; background.rect = root.bounds; background.color = {13, 17, 29, 255};
     root.display_list.push_back(background);
@@ -1495,7 +1409,7 @@ void v6_damage_matches_full_frames_and_falls_back_at_contract_boundaries() {
     assert(plan_script_task_group_damage(renderer, previous, changed).kind == ScriptTaskFrameDamageKind::Full);
     changed = previous; changed.viewport.width++;
     assert(plan_script_task_group_damage(renderer, previous, changed).kind == ScriptTaskFrameDamageKind::Full);
-    assert(plan_script_task_group_damage(ScriptTaskFrameRenderer({}, image), previous, previous).kind ==
+    assert(plan_script_task_group_damage(ScriptTaskFrameRenderer(image), previous, previous).kind ==
         ScriptTaskFrameDamageKind::Full);
 #endif
 }
@@ -1560,11 +1474,10 @@ int script_task_frame_renderer_tests_main() {
     retained_replay_rebuilds_stable_underlap_and_verifies_pixels();
     retained_replay_uses_conservative_fallbacks_and_commit_boundary();
     retained_replay_rejects_unbounded_host_painters();
-    retained_replay_accepts_explicitly_bounded_text_painter();
+    abi4_renderer_refuses_legacy_text_without_writing();
     retained_replay_accepts_explicitly_bounded_image_painter();
     retained_replay_matches_canonical_output_for_background_clip_mutation();
     value_frame_renderer_rejects_unsupported_sampling_without_writing();
-    retained_replay_recovers_from_false_bounded_painter_claim();
     retained_replay_matches_canonical_output_across_local_mutations();
     retained_replay_matches_canonical_output_across_nested_clip_mutations();
     retained_replay_falls_back_for_contract_boundary_changes();
