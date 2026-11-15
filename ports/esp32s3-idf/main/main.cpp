@@ -498,7 +498,9 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
 #if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED || CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
     constexpr char kSmokeHtml[] =
         "<body><main class='app'>"
-        "<h1>STATUS \xe4\xb8\xad</h1>"
+        "<h1 class='ascii'>STATUS</h1>"
+        "<p class='cjk'>\xe4\xb8\xad\xe6\x96\x87</p>"
+        "<strong class='weight'>BOLD</strong>"
         "<button id='ok'>OK</button>"
         "<input id='name'>"
         "<input id='check' type='checkbox'>"
@@ -506,7 +508,9 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     constexpr char kSmokeCss[] =
         "body { margin: 0; padding: 6px; background: #111827; color: #f8fafc; }"
         ".app { display: grid; gap: 6px; }"
-        "h1 { margin: 0; font-size: 14px; color: #facc15; }"
+        "h1.ascii { margin: 0; font-size: 16px; font-weight: 400; color: #facc15; }"
+        "p.cjk { margin: 0; font-size: 20px; font-weight: 500; }"
+        ".weight { font-size: 24px; font-weight: 700; }"
         "button { height: 28px; background: #2563eb; color: #ffffff; border: 1px solid #dbeafe; }"
         "input { height: 24px; background: #ffffff; color: #111827; border: 1px solid #94a3b8; }";
 
@@ -812,6 +816,7 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     bool rendered_frame = false;
     double render_frame_us = 0.0;
     double present_rgb565_us = 0.0;
+    run_p4_p5_p6_ui_smoke(viewport_width, viewport_height, budgets);
     if (framebuffer_size_fits_budget(viewport_width, viewport_height, budgets) &&
         enough_framebuffer_memory(viewport_width, viewport_height)) {
         SoftwareCompositor compositor({}, software_compositor_options_from_budgets(budgets));
@@ -822,7 +827,6 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
         rendered_frame = true;
         print_result("render_frame", iterations, render_frame_us);
         run_p3_display_smoke(frame_buffer, viewport_width, viewport_height);
-        run_p4_p5_p6_ui_smoke(viewport_width, viewport_height, budgets);
 
 #if CONFIG_JELLYFRAME_BENCH_PRESENT_RGB565
         std::unique_ptr<std::uint16_t[]> rgb565(new (std::nothrow) std::uint16_t[

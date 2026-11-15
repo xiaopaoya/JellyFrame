@@ -2,7 +2,7 @@
 
 > 最后更新：2026-11-15；适用版本：0.6.0-dev。Core 开发契约：0.9.0-dev / ABI4。
 
-> **最新检查点（2026-11-15）：**Runtime PR #99–#107 已合并。PR #107（`9ebaf806`）通过 21/21 项 CI，新增固定 Core #63 源码的 canonical v9/v10 popup 消费回归，覆盖 worker 输入、prepared packet、可见行像素、选项选择和弹层关闭；专用 Core #63 v10 worker full/cropped lane 均通过。Core PR #63（merge `8aceb6d8`，source commit `89acc36a`，source identity `e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67`，163 个实现输入）让开放 select popup 行使用 Core `PreparedText`。PR #103（`d6fcaff4`）将应用字体统一为 JFFONT2，移除旧 AppFontSet/AppHost 回调路径，并验证 Core #62。PR #105（`81d99750`）拆分 ESP32 构建边界：选择 CoreText 时不再生成/编译旧 Noto C++ 位图字体包；CoreText 关闭或显式选择旧 painter 验收 fixture 时仍保留旧路径。CoreText P4/P5/P6 benchmark smoke 与 benchmark Kconfig 配置已用 Runtime `8b59afd6`、Core follow-up `89acc36a` 和 IDF 5.3.1 构建通过：CoreText 已启用、旧字体宏为 0、map 中无旧字体符号，BIN 为 3,503,280 字节（SHA-256 `29634ea9860508ff46f1ad6c1d7d65e0d16b8296f18a2c6e13771f85dc8e5535`）。这只是构建证据，尚未在实机运行 smoke。CoreText 仍为 opt-in，非 retained/Win32 产品默认仍待迁移。Runtime 仍锁定签名 Core 0.8.0 / ABI3；ABI4 尚未签名发布。`mainline1` 已通过原生页面观察，单独的 `mainline2` 仍待验收。
+> **最新检查点（2026-11-15）：**Runtime PR #99–#109 已合并。PR #107（`9ebaf806`）通过 21/21 项 CI，新增固定 Core #63 源码的 canonical v9/v10 popup 消费回归，覆盖 worker 输入、prepared packet、可见行像素、选项选择和弹层关闭；PR #109（merge `725184c3`）再次通过 21/21 项 CI，增加 WS147 installed-worker 验收配置和 select-popup app，并修正 provider 在发送 `INSTALL_BEGIN` 前准备本地取消会话，避免临时目录不可用时设备留下活动事务。专用 Core #63 v10 worker full/cropped lane 均通过。Core PR #63（merge `8aceb6d8`，source commit `89acc36a`，source identity `e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67`，163 个实现输入）让开放 select popup 行使用 Core `PreparedText`。PR #103（`d6fcaff4`）将应用字体统一为 JFFONT2，移除旧 AppFontSet/AppHost 回调路径，并验证 Core #62。PR #105（`81d99750`）拆分 ESP32 构建边界：选择 CoreText 时不再生成/编译旧 Noto C++ 位图字体包；CoreText 关闭或显式选择旧 painter 验收 fixture 时仍保留旧路径。CoreText P4/P5/P6 smoke 最近补上独立于 benchmark framebuffer 准入的执行路径，并增加 ASCII/CJK/400/500/700 覆盖；IDF 5.3.1、Core identity `e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67`（163 inputs）构建通过，CoreText=y，旧 Noto C++ 字体符号未进入 map，BIN 3,503,456 B（SHA-256 `150a148ce548e97b95f7b7a7c95c7ec4f07a5b51e7f9fb715cdc218aa8c22aae`）。这是新 smoke 镜像的构建证据，尚未刷板运行；不替代页面验收。CoreText 仍为 opt-in，ESP32 retained UI 和 Win32 产品默认仍待迁移。Runtime 仍锁定签名 Core 0.8.0 / ABI3；ABI4 尚未签名发布。`mainline1` 原生页面观察已完成；不重复安排。`mainline2` 和独立 installed-worker popup profile 是不同镜像，验收状态分别跟踪。
 
 本文件是当前执行计划。旧检查点保存在 Git 历史和对应 PR 中，不再作为额外待办。
 [文本消费者退役清单](render_core_text_consumer_retirement.md)记录实际调用方与原生设备候选的完整身份。
@@ -13,9 +13,9 @@
 | --- | --- | --- |
 | 已发布依赖 | Runtime 生产锁仍为签名 Core v0.8.0 / ABI3。 | 最终 ABI4 契约发布后，更新精确依赖锁。 |
 | Core 主线 | PR #63（`8aceb6d8`）含 source commit `89acc36a`，CI 已通过；0.9.0-dev / ABI4，source identity `e842b2e62fd51777cbc6dd6a6a9fea3b9ea68938ce4a6e434eb7c2baaf1adb67`，163 个实现输入。开放 select popup 行现使用 Core `PreparedText`。 | Runtime 消费者资格、generated-content 与回调退役。 |
-| Runtime 主线 | PR #107，`9ebaf806`，CI 21/21；#99–#107 均已合并，涵盖 ABI4 身份/消费者资格、embedded host、installed worker、省略号重绘资格、JFFONT2-only 应用字体、CoreText 旧字体包隔离、mainline1 实机记录及 Core #63 popup worker 资格。 | generated BitmapFont/默认消费者、完整回调退役和发布门槛仍未完成。 |
+| Runtime 主线 | PR #109，merge `725184c3`，CI 21/21；#99–#109 均已合并，涵盖 ABI4 身份/消费者资格、embedded host、installed worker、省略号重绘资格、JFFONT2-only 应用字体、CoreText 旧字体包隔离、mainline1 实机记录、Core #63 popup worker 资格及专用设备 profile。 | generated BitmapFont/默认消费者、完整回调退役和发布门槛仍未完成。 |
 | Embedded host | #100 为 layout/layers/paint 绑定同一个 TextSystem/JFFONT2；锁定 ABI3 和 source ABI4 full/cropped 测试通过。 | 该示例不再依赖文本 provider 回调。 |
-| Installed worker | 已合并 #101，让无 painter 的 canonical v10/CoreText 独立于 BMP 工作。#107 用 canonical v10 worker、精确 Core #63 源码和 prepared packet 覆盖 popup 输入、行像素、选择与关闭。 | 仍需在设备上验收精确 Core #63 worker profile，并迁移剩余依赖回调的 generated/widget 文本。 |
+| Installed worker | 已合并 #101，让无 painter 的 canonical v10/CoreText 独立于 BMP 工作。#107 用 canonical v10 worker、精确 Core #63 源码和 prepared packet 覆盖 popup 输入、行像素、选择与关闭；#109 增加 full-feature WS147 profile 与 select-popup app，并通过 IDF 构建、打包及 provider 回归。 | 独立 popup profile 尚缺人工画面/触控观察；还需迁移剩余依赖回调的 generated/widget 文本。 |
 | 原生 WS147 | `0.6.2-abi4-mainline2` 已基于 Runtime #103/Core #62 构建；app BIN 7,614,704 B，8 MiB app 分区余 773,904 B，16 MiB factory/包哈希已核验。另一份 `mainline1` 于 2026-11-15 通过页面观察。 | 仍需验收精确的 `mainline2` 产物；`mainline1` 不能替代该镜像或 installed worker/BMP 的测试。 |
 | ABI5 与 shaping | 独立可选候选；ABI5 tracked reuse 有正确性与包测试，尚无合格性能收益。 | 未启用到 Runtime，也不阻塞 ABI4 发布。 |
 
@@ -47,7 +47,7 @@ CoreText band-shell 和 P4/P5/P6 smoke 的 map 中没有旧字体符号，legacy
 | Embedded host | #100 完成。 | 可见文字、click/checkbox/select、RGB565 flush；ABI3 与 ABI4 full/cropped。 |
 | ESP32 installed worker | 已合并 #101：无 painter 的 canonical v10；目录/快照覆盖重放寿命，BMP 可选。 | 主机 full/cropped、锁定 ABI3、真实 IDF 构建、CI，随后精确设备 profile 验收。 |
 | ESP32 retained native/default | 命名 CoreText profile 已合并；Runtime commit `66be335c` 在 CoreText 构建中排除 generated C++ 字体包。CoreText 仍为 opt-in，legacy 仍是默认配置。 | 资格通过后将 CoreText 设为默认，再移除或隔离剩余旧消费者，并验收支持属性和页面路由。 |
-| ESP32 非 retained main 入口 | 仍有独立的 provider 工厂。 | 同步迁移或明确退役该入口，不能只改 retained UI。 |
+| ESP32 P4/P5/P6 smoke | `main.cpp` 中独立 provider 仅被 benchmark/smoke fixture 使用；CoreText profile 现在已有单独 CoreText smoke 构建证据。 | 保留旧 fixture 为显式 legacy-only，并让 CoreText smoke 覆盖同等 ASCII/CJK/字重和控件场景；它不是产品默认消费者。 |
 | Win32 默认路径 | 显式 CoreText 目录模式已合并，默认仍为 GDI。 | 有界 ellipsis/属性兼容、重绘验证及目录默认采用。 |
 | AppFontSet | #103 已完成：目录仅接受 JFFONT2，移除回调访问器/浏览器优先级，并转换样例和工具。 | AppFontSet 无剩余工作；generated C++ BitmapFont 默认资源另行跟踪。 |
 
@@ -114,8 +114,8 @@ Installed worker/BMP 必须使用独立命名镜像和资源配置。
 
 ## 紧接着的工作
 
-1. 已合并：Runtime #99–#107。Runtime #107 通过 21/21 CI；#103 关闭旧 AppFontSet/JFFONT0/1 资源路径，并固定验证 Core #62。
-2. 迁移 generated C++ BitmapFont 默认资源及剩余 native/non-retained、Win32 GDI 消费者，并闭合 generated-content 所有权及支持属性资格。
+1. 已合并：Runtime #99–#109。Runtime #109 通过 21/21 CI；#103 关闭旧 AppFontSet/JFFONT0/1 资源路径，#107/#109 固定验证 Core #63 popup worker 主机路径并增加专用 WS147 验收配置。
+2. 迁移 ESP32 retained UI 的 generated C++ BitmapFont 默认资源及 Win32 GDI 默认消费者，并闭合 Core generated-content 所有权及支持属性资格；P4/P5/P6 provider 属于 smoke fixture，不是独立产品消费者。
 3. 转换剩余依赖回调的测试/fixture，然后在单次协调的预发布变更中删除公开 provider/range/family/additive API 及实现分支。
 4. 消费者、full/cropped、禁用特性与源码归档门槛通过后，签名发布 ABI4 并更新 Runtime 精确生产依赖锁。
-5. 用户方便时单独执行已预留的 `mainline2` WS147 实机验收；`mainline1` 观察已记录，但不能替代精确产物或主机/API 发布门槛。
+5. 硬件可用时分别跟踪 `mainline2` 与 installed-worker popup 专用镜像；`mainline1` 观察已记录，不重复测试，也不能替代主机/API 发布门槛。

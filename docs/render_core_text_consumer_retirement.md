@@ -11,8 +11,8 @@ not a declaration that legacy callback APIs have been removed.
 | Consumer | Actual selection and resources | Remaining change |
 | --- | --- | --- |
 | ESP32 retained UI (`jellyframe_esp32s3_ui_task.cpp`) | Default providers use generated C++ Noto `BitmapFont` faces. The named CoreText profile binds the shared JFFONT2 catalog and clears the providers. | Migrate the generated default resource contract, then remove callback construction and port-owned measurement/scaling. |
-| ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects supported canonical v10 and a painterless renderer, independently of BMP. Owned text catalog/snapshot survives accepted-frame replay. CoreText OFF retains the explicit legacy painter path. Core #63 uses the same Core catalog for open select popup rows. Runtime #107 tests the exact Core source through canonical v10 worker input, prepared packets, B-row pixels, selection and close. | Qualify that path on device, then migrate remaining callback-dependent generated/widget text. |
-| ESP32 non-retained entry (`main.cpp`) | Builds generated-BitmapFont providers and painter independently of retained UI. | Migrate or explicitly retire this entry configuration too. |
+| ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects supported canonical v10 and a painterless renderer, independently of BMP. Owned text catalog/snapshot survives accepted-frame replay. CoreText OFF retains the explicit legacy painter path. Core #63 uses the same Core catalog for open select popup rows. Runtime #107 tests the exact Core source through canonical v10 worker input, prepared packets, B-row pixels, selection and close. Runtime #109 adds a full-feature WS147 installed-worker profile and select-popup app; CI passed 21/21 and the IDF image/package/provider regressions passed. | Capture user-visible popup appearance/touch on the dedicated profile when available, then migrate remaining callback-dependent generated/widget text. |
+| ESP32 P4/P5/P6 smoke (`main.cpp`) | The separate generated-BitmapFont provider factory is called only by this benchmark/smoke fixture, not by a product runtime route. The CoreText smoke now runs before benchmark framebuffer admission; CoreText is explicitly enabled by the dedicated smoke defaults. | Keep legacy coverage on its legacy profile and qualify the matching CoreText ASCII/CJK/weight/widget smoke on IDF 5.3.1. Do not track this as a separate product consumer. |
 | Desktop default (`tools/native/win32_browser.cpp`) | GDI measurement/painting using the OS font; Core catalog is opt-in. | Close CoreText property parity, then adopt the catalog default. |
 | Desktop application fonts (`src/app_runtime/app_font_set.cpp`) | Complete in Runtime #103: JFFONT2-only, callback loaders/accessors and browser precedence removed; tools/samples/import UI use canonical resources. | No remaining AppFontSet migration; generated C++ port defaults remain separate. |
 | Embedded host example | This change binds one TextSystem to layout, layers and compositor using a complete tiny JFFONT2 fixture. | No remaining measurement/painter callback in this example. Device-default changes are separate. |
@@ -28,12 +28,15 @@ transactional PreparedText; its full tests pass 33/33, cropped focused and
 installed consumers pass, and it merged after CI 4/4 (run `43673424532`). Core
 follow-up `89acc36a` migrates visible open-select popup rows to Core-prepared
 packets, refuses the complete overlay if any visible row cannot be prepared,
-and never falls back to host callbacks. Full CTest passes 33/33. Cropped CTest
-is 31/32 because the existing shared-inline shadow assertion fails identically
-on the pre-change base. The follow-up is committed locally but still needs
-PR/CI qualification. The painterless installed profile rejects ordinary Text
-commands before writes; generated pseudo-content and other generated/widget
-contexts remain open.
+and never falls back to host callbacks. Runtime PR #107 and #109 are merged;
+the dedicated Core #63 full/cropped worker lanes pass in CI. Full Core CTest
+passes 33/33. Cropped CTest is 31/32 because the existing shared-inline shadow
+assertion fails identically on the pre-change base. Runtime #109 adds the
+WS147 full-feature profile and select-popup app, but this is separate from the
+previously accepted native `mainline1` image; record the exact device image
+before claiming popup visual acceptance. The painterless installed profile
+rejects ordinary Text commands before writes; generated pseudo-content and
+other generated/widget contexts remain open.
 
 The embedded-host example passed MSVC Release execution with the locked
 installed Core0.8/ABI3 package and source-overridden Core PR60 in full/cropped
