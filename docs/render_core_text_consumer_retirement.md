@@ -1,5 +1,7 @@
 # Core-owned text consumer retirement
 
+> Last updated: 2026-11-15; Applies to: Runtime 0.6.0-dev / Core 0.9.0-dev ABI4.
+
 Current source audit: 2026-11-15. Runtime base `75a435c5` (PR99), Core
 `34ae4b88` (PR60), 0.9.0-dev / ABI4. This is a consumer migration checklist,
 not a declaration that legacy callback APIs have been removed.
