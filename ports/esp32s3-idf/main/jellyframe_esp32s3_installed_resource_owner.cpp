@@ -33,6 +33,7 @@ void InstalledAppResources::bind_ui_resources(
 namespace jellyframe_esp32s3 {
 namespace {
 
+#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
 class InstalledSnapshotImageSource final : public jellyframe::RuntimeImageProviderSource {
 public:
     InstalledSnapshotImageSource(std::shared_ptr<const InstalledResourceSnapshot> snapshot,
@@ -99,6 +100,7 @@ private:
     mutable std::array<std::uint32_t, 16> handles_{};
     mutable std::size_t handle_count_ = 0;
 };
+#endif
 
 } // namespace
 
@@ -108,9 +110,17 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
                                     const jellyframe::CoreFontResourceView* core_fonts,
                                     std::size_t core_font_count,
                                     std::shared_ptr<const void> core_font_owner,
-                                    BmpImageAdapter::Clock clock,
+                                    std::int64_t (*clock)(),
                                     InstalledAppResources::Handle& output) {
+#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     if (!clock) return false;
+#else
+    (void)clock;
+    (void)entry_path;
+    // A text-only profile must refuse referenced image resources, not drop them.
+    for (const auto& entry : snapshot.entries)
+        if (entry.kind == jellyframe::HostResourceKind::Image) return false;
+#endif
     if (snapshot.entries.size() > kInstalledResourceSnapshotMaxEntries) return false;
     std::size_t snapshot_bytes = 0;
     for (const auto& entry : snapshot.entries) {
@@ -160,11 +170,13 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
         if (RuntimeFontCatalog::create(registrations.data(), registrations.size(), candidate->text_catalog) != RuntimeFontStatus::Ready)
             return false;
 
+#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
         auto source = std::make_shared<InstalledSnapshotImageSource>(
             candidate->snapshot, budgets, entry_path, clock);
         if (!source->preflight()) return false;
         if (RuntimeImageProvider::create(std::move(source), candidate->image_provider) !=
                 RuntimeImageProviderStatus::Ready) return false;
+#endif
         output = std::move(candidate);
         return true;
     } catch (const std::bad_alloc&) {

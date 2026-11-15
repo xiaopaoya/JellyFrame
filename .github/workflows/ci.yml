@@ -491,6 +491,29 @@ jobs:
           ctest --test-dir build/canonical-v9-consumers-${{ matrix.profile }} -C Release --output-on-failure
           if ($LASTEXITCODE -ne 0) { throw 'Canonical ABI4 installed consumer tests failed' }
 
+      - name: Verify painterless installed CoreText with and without BMP
+        shell: pwsh
+        run: |
+          $build = 'build/installed-core-text-${{ matrix.profile }}'
+          $args = @('-S', '.', '-B', $build,
+            '-DJELLYFRAME_RENDER_CORE_SOURCE_DIR=third_party/render-core-source',
+            '-DJELLYFRAME_BUILD_EXAMPLES=OFF', '-DJELLYFRAME_BUILD_BENCHMARKS=OFF',
+            '-DJELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS=OFF', '-DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF',
+            '-DJELLYFRAME_BUILD_TESTS=ON', '-DJELLYFRAME_BUILD_SCRIPTING=ON',
+            '-DJELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON',
+            "-DJERRYSCRIPT_ROOT=$env:GITHUB_WORKSPACE/third_party/jerryscript")
+          if ('${{ matrix.profile }}' -eq 'cropped' -or '${{ matrix.cropped }}' -eq 'true') {
+            $args += @('-DJELLYFRAME_ENABLE_CANVAS2D=OFF', '-DJELLYFRAME_ENABLE_MODERN_PAINT=OFF',
+              '-DJELLYFRAME_ENABLE_FLEX_GRID=OFF', '-DJELLYFRAME_ENABLE_ADVANCED_FORMS=OFF')
+          }
+          cmake @args
+          if ($LASTEXITCODE -ne 0) { throw 'Installed CoreText configure failed' }
+          cmake --build $build --config Release --parallel --target `
+            jellyframe_esp32s3_installed_core_text_0_tests jellyframe_esp32s3_installed_core_text_1_tests
+          if ($LASTEXITCODE -ne 0) { throw 'Installed CoreText build failed' }
+          ctest --test-dir $build -C Release -R '^jellyframe_esp32s3_installed_core_text_[01]_tests$' --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw 'Installed CoreText tests failed' }
+
   r3-installed-event-owners:
     name: R3 Event and Owner Installed Consumers (${{ matrix.profile }}, Node ${{ matrix.node_identity }})
     if: github.event_name != 'workflow_dispatch'
@@ -613,6 +636,7 @@ jobs:
             -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE/third_party/jerryscript"
           if ($LASTEXITCODE -ne 0) { throw 'Installed resource host configure failed' }
           cmake --build $build --config Release --parallel --target `
+            jellyframe_esp32s3_installed_core_text_0_tests jellyframe_esp32s3_installed_core_text_1_tests `
             jellyframe_esp32s3_installed_resource_owner_tests jellyframe_esp32s3_resource_reference_tests `
             jellyframe_esp32s3_frame_admission_0_0_tests jellyframe_esp32s3_frame_admission_0_1_tests `
             jellyframe_esp32s3_frame_admission_1_0_tests jellyframe_esp32s3_frame_admission_1_1_tests `

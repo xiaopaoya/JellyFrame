@@ -422,6 +422,27 @@ if(JELLYFRAME_BUILD_TESTS)
             CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER=1
             "JELLYFRAME_CORE_SYSTEM_FONT_FIXTURE=\"${CMAKE_CURRENT_SOURCE_DIR}/ports/esp32s3-idf/font/core-system-noto-regular-16.jffont2\"")
     endif()
+    if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME AND JELLYFRAME_BUILD_SCRIPTING)
+        foreach(_bmp 0 1)
+            set(_text_target jellyframe_esp32s3_installed_core_text_${_bmp}_tests)
+            add_executable(${_text_target}
+                ports/esp32s3-idf/tests/installed_core_text_tests.cpp
+                ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp
+                ports/esp32s3-idf/main/jellyframe_esp32s3_installed_resource_owner.cpp)
+            if(_bmp AND JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE)
+                target_sources(${_text_target} PRIVATE ports/esp32s3-idf/main/jellyframe_esp32s3_image.cpp)
+            endif()
+            target_link_libraries(${_text_target} PRIVATE jellyframe_script_task_runtime jellyframe_script)
+            target_include_directories(${_text_target} PRIVATE ports/esp32s3-idf/main)
+            target_compile_definitions(${_text_target} PRIVATE
+                CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM=1
+                CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER=${_bmp})
+            jellyframe_enable_test_asserts(${_text_target})
+            jellyframe_stage_sanitizer_runtime(${_text_target})
+            add_test(NAME ${_text_target} COMMAND ${_text_target})
+            set_tests_properties(${_text_target} PROPERTIES SKIP_RETURN_CODE 77)
+        endforeach()
+    endif()
     if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         foreach(_core_text 0 1)
             foreach(_bmp 0 1)
