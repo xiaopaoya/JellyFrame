@@ -24,7 +24,7 @@ package.
 | Consumer | Actual selection and resources | Remaining change |
 | --- | --- | --- |
 | ESP32 retained UI (`jellyframe_esp32s3_ui_task.cpp`) | Runtime #114 moves production text to Core TextSystem; ABI3 compatibility remains behind ABI guards. The PR #117 production-lock image is built, flashed and serial-boot verified; the user accepted Home text/cards, Activity title/body/back, Weather hero/four small labels, and one visible button touch response for the exact BIN identity below. | No remaining acceptance item for the listed observations on this native image. Other image identities and untested flows remain separate. |
-| ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects canonical v10 and a painterless renderer independently of BMP; owned catalog/snapshot survives accepted-frame replay. The PR #117 production-lock image is built but not flashed or accepted. Earlier popup acceptance on `0.6.2-abi4-installed-core63-device1` applies only to that image. | Flash and qualify the manifest-identified worker image. |
+| ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects canonical v10 and a painterless renderer independently of BMP; owned catalog/snapshot survives accepted-frame replay. The PR #117 build `pr116-inst1` is a device-image lifecycle acceptance profile, not an app that renders immediately at boot. It was flashed and booted, but no bundle was installed/launched; the observed black screen/backlight-off state is expected while the lifecycle endpoint is idle. It does not qualify worker rendering. Earlier popup acceptance on `0.6.2-abi4-installed-core63-device1` applies only to that image. | Use a JFDP provider matching the ABI4 production lock to install and launch a test bundle, then qualify its visible worker output and touch flow. |
 | ESP32 P4/P5/P6 smoke (`main.cpp`) | The separate generated-BitmapFont provider factory is called only by this benchmark/smoke fixture, not by a product runtime route. The CoreText smoke runs before benchmark framebuffer admission. PR #110 built it with IDF 5.3.1 and exact Core #63 identity `e842b2e6...af1adb67`; the map excludes the legacy Noto C++ pack. | Keep legacy coverage on its explicit legacy profile. The CoreText smoke is build-qualified; physical execution is optional diagnostics, not a product-consumer migration gate. |
 | Desktop default (`tools/native/win32_browser.cpp`) | The ABI4 candidate selects Core TextSystem by default and compiles GDI only on ABI3. Text content changes still rebuild without host metrics. Paint-only style changes can reuse layout after Core compares the old/new computed layout fields and render-tree shape; shared-inline caches and DOM tree/text dirtiness are conservatively rejected. Runtime CTest confirms route-tabs `rebuild=1`, motion-lab `style_stable>0`, and incremental/full pixel equivalence. | No remaining Win32 callback migration; retain ABI3 GDI only behind its compatibility build boundary. |
 | Desktop application fonts (`src/app_runtime/app_font_set.cpp`) | Complete in Runtime #103: JFFONT2-only, callback loaders/accessors and browser precedence removed; tools/samples/import UI use canonical resources. | No remaining AppFontSet migration; generated C++ port defaults remain separate. |
@@ -138,16 +138,21 @@ tree at `673f23a2`; Render Core is signed v0.9.0 / ABI4, commit
   title/body and back navigation, the Weather large card and all four small
   labels, plus one visible button touch response. This acceptance is limited to
   this exact BIN identity and these observed flows.
-- Installed-worker image `0.6.2-abi4-pr116-inst1`: app BIN 4,427,488 bytes,
+- Device-image lifecycle acceptance image `0.6.2-abi4-pr116-inst1`: app BIN 4,427,488 bytes,
   SHA-256 `511C6A48AD1BCA5A80D1653CA71435CACABD92E2362A22EAF542C08F660252EB`;
   ELF SHA-256 `2F34A22DA88CDF5213A67954DACEE410312470F5D4DEF0B9841E08F30B97DBF6`.
-  The 8 MiB app partition has 3,961,120 bytes free. This image is built but has
-  not been flashed or accepted.
+  The 8 MiB app partition has 3,961,120 bytes free. It was flashed to COM19 at
+  `0x10000` and esptool verified the data. The serial log confirmed the image
+  version and matching ELF. This profile enables `RUN_DEVICE_IMAGE_LIFECYCLE_ACCEPTANCE`
+  and disables `RUN_BAND_SHELL_UI_TASK`; no bundle was installed/launched, so the
+  user-observed black screen/backlight-off state is expected and does not qualify
+  text rendering. The accepted native1 image was restored afterward; the user
+  confirms the board currently runs normally.
 
 The manifest records `deviceAcceptance.flashed=false` and
-`physicalDeviceTested=false` at build time. A later native serial log supersedes
-that state for the native image only; it does not update installed-worker
-acceptance. IDF v5.3.1 was reported `dirty` because the shared checkout had 97
+`physicalDeviceTested=false` at build time. Later flash/boot observations above
+supersede those fields for the lifecycle image only; they do not qualify a
+launched installed app. IDF v5.3.1 was reported `dirty` because the shared checkout had 97
 modified paths, although the isolated source files matched the pinned IDF tree.
 The build manifest itself does not record the later human screen/touch acceptance above.
 
@@ -162,7 +167,7 @@ A separate historical `0.6.2-abi4-mainline1` image was tested on WS147 on 2026-1
   successful return navigation.
 
 This observation closes only the tested historical native image. It does not
-qualify the post-PR #117 installed-worker image, BMP delivery, or the P4/P5/P6
+qualify an installed app on the post-PR #117 lifecycle image, BMP delivery, or the P4/P5/P6
 benchmark smoke. Keep those as separate named acceptance gates. The new native
 image acceptance above is also limited to its recorded flows and exact BIN.
 

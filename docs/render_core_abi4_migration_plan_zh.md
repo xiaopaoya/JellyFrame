@@ -4,7 +4,7 @@
 
 > **最新检查点（2026-11-16）：**Runtime PR #99–#117 已合并。PR #116（`f2169d652e4e4c16a84935cd955f4524ace14db0`）将生产依赖锁定到签名发布的 Render Core v0.9.0 / ABI4；PR #117（`673f23a2778894287e292473980903fbe8e7cff3`）修复 ABI4 WS147 移植构建边界，当前 Runtime master 为 `673f23a2`。Core v0.9.0 / ABI4 已签名发布，归档及 sidecar digest 已核验。PR #116/#117 CI 均通过。
 
-PR #117 合并树上的 WS147 ABI4 native 与 installed-worker 镜像均已构建。native BIN SHA-256 为 `A87BBFDC95F6467A065A0A5A5B436E7CD1730D22C838BEE9D44590E40D148039`，ELF SHA-256 前缀为 `68642F8BE62C6060`；串口启动日志确认首帧呈现成功（`first_present_ok=1`，580.297 ms）。用户已验收该 native 镜像：Home 文字/卡片、Activity 标题/正文及返回、Weather 大卡片与四个小卡片标签均正常，并确认一个可见按钮触控响应。installed-worker 已构建，尚未刷写或验收。构建清单记录 `deviceAcceptance.flashed=false`；该值是构建时状态，后续 native 串口与人工验收记录只更新 native 的刷写/启动/观察状态，不改变 installed-worker 状态。构建使用的共享 ESP-IDF checkout 标记为 v5.3.1-dirty（97 个修改路径）；清单注明隔离源码文件匹配固定的 IDF tree。
+PR #117 合并树上的 WS147 ABI4 native 与 device-image lifecycle acceptance 镜像均已构建。native BIN SHA-256 为 `A87BBFDC95F6467A065A0A5A5B436E7CD1730D22C838BEE9D44590E40D148039`，ELF SHA-256 前缀为 `68642F8BE62C6060`；串口启动日志确认首帧呈现成功（`first_present_ok=1`，580.297 ms）。用户已验收该 native 镜像：Home 文字/卡片、Activity 标题/正文及返回、Weather 大卡片与四个小卡片标签均正常，并确认一个可见按钮触控响应。另一镜像 `0.6.2-abi4-pr116-inst1` 已刷入并启动，BIN SHA-256 为 `511C6A48AD1BCA5A80D1653CA71435CACABD92E2362A22EAF542C08F660252EB`，ELF 前缀 `2F34A22D`；用户观察到黑屏且背光未亮。复核该镜像 sdkconfig 后确认它启用的是 `RUN_DEVICE_IMAGE_LIFECYCLE_ACCEPTANCE`、关闭 band-shell UI，且本轮没有经 JFDP 安装并启动应用，因此该固件待命时没有可见 UI 是预期行为。这不是 worker/CoreText 渲染验收，也不能据此判定显示故障。native1 已重新刷回并通过 esptool 校验，用户确认板上当前固件正常。构建使用的共享 ESP-IDF checkout 标记为 v5.3.1-dirty（97 个修改路径）；清单注明隔离源码文件匹配固定的 IDF tree。
 
 本文件是当前执行计划。旧检查点保存在 Git 历史和对应 PR 中，不再作为额外待办。
 [文本消费者退役清单](render_core_text_consumer_retirement.md)记录实际调用方与原生设备候选的完整身份。
@@ -17,7 +17,7 @@ PR #117 合并树上的 WS147 ABI4 native 与 installed-worker 镜像均已构�
 | Core 主线 | Core PR #67（`16a83211ec0992f8e25ec0fc977eb6fd158716e3`）及 ABI4 发布门槛已完成。 | 无。 |
 | Runtime 主线 | PR #99–#117 已合并；#116 锁定精确发布包并更新 manifest/模板、provenance、ABI4 安装消费者和三个 ESP32 探针；#117 完成 ABI4 WS147 编译修复。PR CI 已通过。 | 无代码集成门槛；转入按镜像身份完成设备验收。 |
 | Embedded host | #100 为 layout/layers/paint 绑定同一个 TextSystem/JFFONT2；锁定 ABI3 和 source ABI4 full/cropped 测试通过。 | 该示例不再依赖文本 provider 回调。 |
-| Installed worker | #101/#107/#109/#114/#116/#117 已合并；旧 Core #63 profile 的 popup 用户验收仍仅适用于该镜像。PR #117 后的 worker 镜像已构建，身份见构建清单。 | 对该新镜像执行刷写及 profile 验收；尚未刷写/验收。 |
+| Installed worker | #101/#107/#109/#114/#116/#117 已合并；旧 Core #63 profile 的 popup 用户验收仍仅适用于该镜像。PR #117 后构建的 `pr116-inst1` 实为 lifecycle acceptance 固件；已刷写启动，但没有安装/启动应用，黑屏属于该待命配置的预期行为。 | 需要匹配 ABI4 的 JFDP provider 与测试 bundle，完成发现、安装、启动，再验收实际 installed-worker 画面与触控；当前无可见渲染验收。 |
 | 原生 WS147 | #117 后的 ABI4 native 镜像已构建、刷写、串口启动并通过指定画面/触控人工验收；BIN SHA-256 `A87BBFDC95F6467A065A0A5A5B436E7CD1730D22C838BEE9D44590E40D148039`，ELF SHA-256 前缀 `68642F8BE62C6060`。 | 无；验收仅覆盖该精确镜像及记录的观察项。 |
 | ABI5 与 shaping | 独立可选候选；ABI5 tracked reuse 有正确性与包测试，尚无合格性能收益。 | 未启用到 Runtime，也不阻塞 ABI4 发布。 |
 
@@ -46,7 +46,7 @@ CoreText band-shell 和 P4/P5/P6 smoke 的 map 中没有旧字体符号，legacy
 | 消费者 | 进展 | 完成证据 |
 | --- | --- | --- |
 | Embedded host | #100 完成。 | 可见文字、click/checkbox/select、RGB565 flush；ABI3 与 ABI4 full/cropped。 |
-| ESP32 installed worker | 已合并 #101：无 painter 的 canonical v10；目录/快照覆盖重放寿命，BMP 可选。 | PR #117 后的锁定 ABI4 worker 镜像已构建；尚待刷写和设备 profile 验收。 |
+| ESP32 installed worker | 已合并 #101：无 painter 的 canonical v10；目录/快照覆盖重放寿命，BMP 可选。`pr116-inst1` 构建并实机启动的是 lifecycle acceptance profile，不会在未通过 JFDP 安装/启动应用时显示内容；用户观察到黑屏与该配置一致。 | 找到或构建匹配 ABI4 锁的 JFDP provider，部署并启动一个可识别的 `.jfapp`，随后按应用身份验收画面、文本和触控。 |
 | ESP32 retained native/default | Runtime #114 将生产文本消费者迁至 Core-owned TextSystem；ABI3 兼容代码仍由 ABI 条件隔离。 | PR #117 后的锁定 ABI4 native 镜像已完成构建、刷写、启动和所记录的 Home/Activity/Weather/按钮触控验收。 |
 | ESP32 P4/P5/P6 smoke | `main.cpp` 中独立 provider 仅被 benchmark/smoke fixture 使用；CoreText profile 现在已有单独 CoreText smoke 构建证据。 | 保留旧 fixture 为显式 legacy-only，并让 CoreText smoke 覆盖同等 ASCII/CJK/字重和控件场景；它不是产品默认消费者。 |
 | Win32 默认路径 | #114 已将默认路径切换至 Core TextSystem，并保留经 Core 比较计算样式后的无回调布局复用；GDI 兼容实现只用于 ABI3。#111 的属性/重绘矩阵覆盖 293 帧、27 组流程，#116 的已发布包 CI 与 ABI3 兼容 lane 均通过。 | 无 ABI4 回调迁移或发布矩阵门槛。 |
@@ -93,8 +93,7 @@ CoreText ON、installed scripting OFF；BIN SHA-256
 3,522,112 字节，8 MiB 分区余量 4,866,496 字节。串口启动日志报告 `first_present_ok=1`
 （580.297 ms）。用户确认 Home 文字/卡片、Activity 标题和正文及返回、Weather 大卡片和四个小卡片标签正常，并确认一个可见按钮有触控响应；该观察绑定到此精确 BIN 身份。
 
-该构建清单的 `deviceAcceptance.flashed=false` 记录的是构建时状态；后续 native 串口记录
-仅更新 native 镜像的刷写/启动状态，不代表 installed-worker 已刷写。IDF v5.3.1 checkout
+该构建清单的 `deviceAcceptance.flashed=false` 与 `physicalDeviceTested=false` 记录的是构建时状态；后续刷写/启动观察见下方。它们不代表已验收已安装应用的渲染。IDF v5.3.1 checkout
 被报告为 dirty（共享 checkout 有 97 个修改路径），但隔离源码文件与固定 IDF tree 匹配。
 
 历史设备测试 `mainline1` 身份为 Runtime `75a435c5`、Core `34ae4b88`，BIN SHA-256
@@ -128,4 +127,4 @@ Activity 与 Weather 文字显示正常，Weather 下方四个小卡片均有文
 5. 已完成：Core #66/#67 与 Runtime #114/#115 合并，相关合并后 CI 均通过。
 6. 已完成：Core v0.9.0 / ABI4 已签名发布；归档和 sidecar digest 已核验。Runtime full/cropped 本地 CTest 各 22/22。
 7. 已完成：Runtime #116 锁定 Core v0.9.0 / ABI4 并通过发布包、ABI3 兼容和 Windows CI；Runtime #117 修复 ABI4 WS147 编译边界并合并至 master `673f23a2`。
-8. 已完成构建：生产锁定 native 与 installed-worker 镜像及 BIN/ELF 身份记录见构建清单。native 已刷写、串口启动并通过记录的 Home/Activity/Weather/按钮触控验收；worker 尚未刷写/验收。旧 popup 和 `mainline1` 观察仅适用于其原镜像。
+8. 已完成构建和 native 验收：身份见构建清单。native 已刷写、串口启动并通过记录的 Home/Activity/Weather/按钮触控验收。`pr116-inst1` 已刷写启动，但它是 lifecycle acceptance profile；未安装/启动应用时的黑屏不构成 worker 渲染测试。下一步是用匹配 ABI4 的 JFDP provider 安装并启动测试 bundle，再验收实际页面。旧 popup 和 `mainline1` 观察仅适用于其原镜像。
