@@ -1252,20 +1252,22 @@ if(JELLYFRAME_BUILD_TESTS)
                     "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-        set(_jellyframe_incremental_repaint_options)
-        list(APPEND _jellyframe_incremental_repaint_options
-             --core-version "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
-        if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
-            list(APPEND _jellyframe_incremental_repaint_options --include-core-text)
+        if(JELLYFRAME_BUILD_SCRIPTING)
+            set(_jellyframe_incremental_repaint_options)
+            list(APPEND _jellyframe_incremental_repaint_options
+                 --core-version "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
+            if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
+                list(APPEND _jellyframe_incremental_repaint_options --include-core-text)
+            endif()
+            add_test(
+                NAME jellyframe_win32_incremental_repaint_equivalence
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/incremental_repaint_equivalence_tests.py
+                        $<TARGET_FILE:jellyframe_desktop_shell>
+                        ${CMAKE_CURRENT_SOURCE_DIR}
+                        ${_jellyframe_incremental_repaint_options}
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
         endif()
-        add_test(
-            NAME jellyframe_win32_incremental_repaint_equivalence
-            COMMAND ${Python3_EXECUTABLE}
-                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/incremental_repaint_equivalence_tests.py
-                    $<TARGET_FILE:jellyframe_desktop_shell>
-                    ${CMAKE_CURRENT_SOURCE_DIR}
-                    ${_jellyframe_incremental_repaint_options}
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
         if(JELLYFRAME_BUILD_SCRIPTING)
             if(JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED)
