@@ -1,6 +1,6 @@
 # WS147 Device Provider
 
-> Last updated: 2026-08-27; Applies to: 0.6.0-dev
+> Last updated: 2026-11-16; Applies to: 0.6.0-dev
 
 `jellyframe-device.cmd` is the explicitly configured WS147 Device OS provider.
 It is a host-side adapter for JFDP/1 over the board's native USB Serial/JTAG
@@ -21,38 +21,44 @@ currently `jellyframe-device@0.1.1-dev`.
 python ports\esp32s3-idf\tools\device_provider\package_ws147_device_provider.py `
   --firmware <firmware.bin> `
   --factory-image <factory-16mb.bin> `
-  --source-revision <40-lowercase-hex> `
-  --image-version 0.6.2-ws147.1 `
+  --build-manifest <build-manifest.json> `
+  --render-core-profile <jellyframe_render_core_profile.json> `
+  --build-profile installedWorker `
   --build-dir <esp-idf-build-directory> `
   --output <release-directory>
 ```
 
+The full build manifest and generated Core profile are required. Select the
+manifest profile explicitly with `--build-profile` (for example, `native` or
+`installedWorker`). The packager takes the image version and firmware SHA-256
+from that profile's `imageVersion`, `bin.path` and `bin.sha256`, and takes the
+Runtime source revision and Core version/ABI from the build manifest. It verifies
+the supplied firmware against both the recorded digest and referenced binary.
+Core version/ABI must match the generated profile, whose feature-family set is
+copied into the Developer Image manifest. Unsupported JFDP feature families,
+missing evidence and identity mismatches are rejected. Identity fields cannot
+be overridden on the command line.
+
+The optional `--build-dir` adds ESP-IDF provenance checks: it validates the
+generated Core source manifest/provenance/profile, ESP-IDF
+`project_description.json`, `CMakeCache.txt`, and `sdkconfig`; confirms Core
+identity/version/ABI/features and ESP target; and hashes the `app_bin` named by
+the project description. It records Core source identity/count, IDF version,
+the separate `git_revision`, versioned compiler, target, selected WS147 defaults
+and sdkconfig SHA-256 under `buildProvenance`. Manifest source identity/count, IDF
+version and versioned compiler evidence must agree with this build directory.
+Compiler evidence uses the `esp-<version>_<date>` toolchain identifier. The final
+Developer Image manifest passes the same strict parser bundled with the provider
+before any release output is written.
+
+`runtimeVersion` matches the lifecycle firmware's JFDP runtime contract (`0.6.0-dev`);
+`imageVersion` records the selected firmware build version separately.
+
 The factory image input must be an offset-zero, complete 16 MiB image created
-from the same firmware build. The packager writes both firmware and factory
-SHA-256 values into the immutable Developer Image manifest. When using
-`--build-manifest`, that manifest must provide
-`sources.renderCore.packageVersion` and
-`sources.renderCore.engineAbi` (the earlier `actualSourceIdentities.renderCore`
-layout is also accepted). The preferred `--build-dir` mode reads the generated
-Core source manifest/provenance/profile, ESP-IDF `project_description.json`,
-`CMakeCache.txt`, and `sdkconfig`; it cross-checks Core identity/version/ABI
-and ESP target, hashes the `app_bin` named by `project_description.json`, and
-rejects a supplied firmware file whose hash differs. It records the Core source
-identity/count, IDF version from the IDF tree's `tools/cmake/version.cmake`,
-the separate `git_revision` value, versioned compiler toolchain, target,
-selected WS147 defaults plus Core profile, and sdkconfig SHA-256 into
-`buildProvenance`. Missing files, invalid metadata, or inconsistent identities
-are rejected. `--build-manifest` remains
-available for external build systems: it records only the optional provenance
-fields actually provided (`sourceHash`/`sourceIdentity`,
-`sourceFileCount`/`sourceInputCount`, `idfVersion`/`espIdfVersion`,
-`toolchain`/`toolchainId`, and `buildProfile`/`profileId`) and rejects invalid
-values. It does not infer omitted fields. For a controlled build without build
-metadata,
-pass `--render-core-version` and `--render-core-abi` together. Supplying neither
-retains the historical `0.6.2` / ABI 1 default for existing release commands;
-neither that default nor explicit Core metadata claims source/build provenance.
-Explicit values that disagree with supplied build metadata are rejected.
+from the same firmware build. The build manifest attests the selected app
+firmware, not the factory image; verify and retain factory-image provenance
+separately. The packager records both firmware and factory SHA-256 values in
+the immutable Developer Image manifest.
 
 ## Installation
 

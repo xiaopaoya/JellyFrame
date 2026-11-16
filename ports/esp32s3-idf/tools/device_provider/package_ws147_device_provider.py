@@ -9,6 +9,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import zipfile
 from pathlib import Path
@@ -17,13 +18,14 @@ from provider_version import PROVIDER_VERSION
 
 
 ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(ROOT / "tools"))
+from device_image_manifest import DeviceImageManifestError, parse_device_image_manifest  # noqa: E402
+
 PROVIDER_SOURCE = Path(__file__).resolve().parent
-FEATURE_FAMILIES = [
+PROVIDER_FEATURE_FAMILIES = {
     "core.document", "core.paint", "css.flex-grid", "css.modern-paint",
     "forms.advanced", "graphics.canvas2d",
-]
-DEFAULT_RENDER_CORE_VERSION = "0.6.2"
-DEFAULT_RENDER_CORE_ABI = 1
+}
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$")
 
 
@@ -44,49 +46,98 @@ def copy(source: Path, destination: Path) -> None:
     shutil.copy2(source, destination)
 
 
-def _render_core_from_build_manifest(path: Path) -> tuple[str, int, dict[str, object]]:
+def _identity_from_build_evidence(build_manifest_path: Path, profile_path: Path, firmware: Path,
+                                  build_profile: str) -> tuple[str, str, str, int, list[str], dict[str, object]]:
     try:
-        document = json.loads(path.read_text(encoding="utf-8"))
+        document = json.loads(build_manifest_path.read_text(encoding="utf-8"))
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise SystemExit("build manifest must be valid UTF-8 JSON") from error
-    core = None
-    for section in ("sources", "actualSourceIdentities"):
-        section_value = document.get(section) if isinstance(document, dict) else None
-        if isinstance(section_value, dict) and isinstance(section_value.get("renderCore"), dict):
-            core = section_value["renderCore"]
-            break
-    if core is None:
-        raise SystemExit("build manifest must contain sources.renderCore metadata")
-    version = core.get("packageVersion")
-    abi = core.get("engineAbi")
-    if (not isinstance(version, str) or VERSION_PATTERN.fullmatch(version) is None or
-            not isinstance(abi, int) or isinstance(abi, bool) or abi <= 0):
-        raise SystemExit("build manifest has invalid Render Core packageVersion/engineAbi")
+        raise SystemExit("build manifest and Core profile must be valid UTF-8 JSON") from error
+
+    try:
+        schema_version = document["schemaVersion"]
+        target = document["target"]
+        board = document["board"]
+        revision = document["runtime"]["buildCommit"]
+        selected_profile = document["profiles"][build_profile]
+        image_version = selected_profile["imageVersion"]
+        binary = selected_profile["bin"]
+        expected_firmware_hash = binary["sha256"]
+        version = document["renderCore"]["version"]
+        abi = document["renderCore"]["engineAbi"]
+        profile_schema = profile["schemaVersion"]
+        profile_version = profile["packageVersion"]
+        profile_abi = profile["engineAbi"]
+        profile_features = profile["features"]
+    except (KeyError, TypeError, AttributeError) as error:
+        raise SystemExit(f"build manifest or Core profile is missing required identity fields for {build_profile}") from error
+
+    if type(schema_version) is not int or schema_version != 1 or target != "esp32s3" or board != "Waveshare ESP32-S3-Touch-LCD-1.47":
+        raise SystemExit("build manifest must describe the WS147 ESP32-S3 target")
+    if type(profile_schema) is not int or profile_schema != 1:
+        raise SystemExit("generated Render Core profile has an unsupported schema version")
+    if not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise SystemExit("build manifest runtime.buildCommit must be 40 lowercase hexadecimal characters")
+    if not isinstance(image_version, str) or VERSION_PATTERN.fullmatch(image_version) is None:
+        raise SystemExit(f"build manifest profile {build_profile}.imageVersion is invalid")
+    if not isinstance(version, str) or VERSION_PATTERN.fullmatch(version) is None:
+        raise SystemExit("build manifest has an invalid Render Core version")
+    if not isinstance(abi, int) or isinstance(abi, bool) or abi <= 0:
+        raise SystemExit("build manifest has an invalid Render Core engineAbi")
+    if (not isinstance(profile_abi, int) or isinstance(profile_abi, bool) or
+            profile_version != version or profile_abi != abi):
+        raise SystemExit("generated Render Core profile identity does not match the build manifest")
+    if (not isinstance(profile_features, list) or not profile_features or
+            any(not isinstance(item, str) for item in profile_features) or
+            len(set(profile_features)) != len(profile_features)):
+        raise SystemExit("generated Render Core profile features must be a non-empty unique string array")
+    unsupported = set(profile_features) - PROVIDER_FEATURE_FAMILIES
+    if unsupported:
+        raise SystemExit("generated Render Core profile contains feature families the JFDP provider cannot encode: " +
+                         ", ".join(sorted(unsupported)))
+    if (not isinstance(expected_firmware_hash, str) or
+            re.fullmatch(r"[0-9a-fA-F]{64}", expected_firmware_hash) is None):
+        raise SystemExit(f"build manifest profile {build_profile}.bin.sha256 is invalid")
+    expected_firmware_hash = expected_firmware_hash.lower()
+    if not isinstance(binary.get("path"), str) or not binary["path"]:
+        raise SystemExit(f"build manifest profile {build_profile}.bin.path must be non-empty")
+    binary_path = Path(binary["path"])
+    if binary_path.is_absolute():
+        raise SystemExit(f"build manifest profile {build_profile}.bin.path must be relative")
+    evidence_root = build_manifest_path.parent.resolve()
+    evidenced_firmware = (evidence_root / binary_path).resolve()
+    if not evidenced_firmware.is_relative_to(evidence_root):
+        raise SystemExit(f"build manifest profile {build_profile}.bin.path escapes the evidence directory")
+    if not evidenced_firmware.is_file() or sha256(evidenced_firmware) != expected_firmware_hash:
+        raise SystemExit("build manifest firmware path does not match its recorded SHA-256")
+    if sha256(firmware) != expected_firmware_hash:
+        raise SystemExit(f"firmware does not match the {build_profile} binary in the build manifest")
+
     provenance: dict[str, object] = {}
-    identity = core.get("sourceIdentity", core.get("sourceHash"))
-    input_count = core.get("sourceInputCount", core.get("sourceFileCount"))
+    core = document["renderCore"]
+    identity = core.get("sourceHashSha256")
+    input_count = core.get("sourceFileCount")
     if identity is not None:
         if not isinstance(identity, str) or re.fullmatch(r"[0-9a-f]{64}", identity) is None:
-            raise SystemExit("build manifest has invalid Render Core source identity")
+            raise SystemExit("build manifest has invalid Render Core sourceHashSha256")
         provenance["renderCoreSourceIdentity"] = identity
     if input_count is not None:
         if not isinstance(input_count, int) or isinstance(input_count, bool) or input_count <= 0:
             raise SystemExit("build manifest has invalid Render Core source input count")
         provenance["renderCoreSourceInputCount"] = input_count
-    for field, aliases in {
-        "idfVersion": ("idfVersion", "espIdfVersion"),
-        "toolchain": ("toolchain", "toolchainId"),
-        "buildProfile": ("buildProfile", "profileId"),
-    }.items():
-        value = next((document[name] for name in aliases if isinstance(document, dict) and name in document), None)
+    for field, section, key in (
+        ("idfVersion", "espIdf", "version"),
+        ("toolchain", "toolchain", "xtensaCompiler"),
+    ):
+        value = document.get(section, {}).get(key) if isinstance(document.get(section), dict) else None
         if value is not None:
             if not isinstance(value, str) or not value.strip():
                 raise SystemExit(f"build manifest has invalid {field}")
             provenance[field] = value
-    return version, abi, provenance
+    return revision, image_version, version, abi, profile_features, provenance
 
 
-def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, dict[str, object]]:
+def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, list[str], dict[str, object]]:
     generated = build_dir / "esp-idf" / "jellyframe_render_core" / "generated"
     port_path = generated / "jellyframe_render_core_port_provenance.txt"
     source_path = generated / "jellyframe_render_core_source_manifest.json"
@@ -122,6 +173,7 @@ def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, di
         core_version = core_profile["packageVersion"]
         core_abi = core_profile["engineAbi"]
         core_profile_id = core_profile["profileId"]
+        core_features = core_profile["features"]
         idf_revision = description["git_revision"]
         idf_path = Path(description["idf_path"])
         app_bin = description["app_bin"]
@@ -137,6 +189,11 @@ def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, di
             Path(description["build_dir"]).resolve() != build_dir.resolve() or
             target != idf_cache_target or target != sdkconfig_target):
         raise SystemExit("ESP-IDF build provenance identities disagree")
+    if (not isinstance(core_features, list) or not core_features or
+            any(not isinstance(item, str) for item in core_features) or
+            len(set(core_features)) != len(core_features) or
+            set(core_features) - PROVIDER_FEATURE_FAMILIES):
+        raise SystemExit("ESP-IDF generated Core profile has invalid or unsupported feature families")
     if (not isinstance(identity, str) or re.fullmatch(r"[0-9a-f]{64}", identity) is None or
             count <= 0 or abi <= 0 or not isinstance(idf_revision, str) or not idf_revision or
             not isinstance(compiler, str) or not compiler):
@@ -190,87 +247,79 @@ def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, di
         "buildProfile": ",".join(named_profiles) + ";" + core_profile_id,
         "sdkconfigSha256": sha256(sdkconfig_path),
     }
-    return version, abi, provenance
-
-
-def resolve_render_core(args: argparse.Namespace) -> tuple[str, int, dict[str, object]]:
-    explicit = args.render_core_version is not None or args.render_core_abi is not None
-    if explicit and (args.render_core_version is None or args.render_core_abi is None):
-        raise SystemExit("--render-core-version and --render-core-abi must be supplied together")
-    if explicit:
-        version = args.render_core_version
-        abi = args.render_core_abi
-        if VERSION_PATTERN.fullmatch(version) is None or abi <= 0:
-            raise SystemExit("explicit Render Core version/ABI is invalid")
-        selected = (version, abi)
-    else:
-        selected = (DEFAULT_RENDER_CORE_VERSION, DEFAULT_RENDER_CORE_ABI)
-    provenance: dict[str, object] = {}
-
-    if args.build_manifest is not None:
-        from_manifest = _render_core_from_build_manifest(args.build_manifest.resolve())
-        if explicit and selected != from_manifest[:2]:
-            raise SystemExit("explicit Render Core metadata conflicts with build manifest")
-        selected = from_manifest[:2]
-        provenance = from_manifest[2]
-    return selected[0], selected[1], provenance
+    return version, abi, core_features, provenance
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--firmware", required=True, type=Path)
     parser.add_argument("--factory-image", required=True, type=Path)
-    parser.add_argument("--source-revision", required=True)
-    parser.add_argument("--image-version", required=True)
-    parser.add_argument("--build-manifest", type=Path,
-                        help="firmware build manifest with sources.renderCore packageVersion/engineAbi and optional provenance fields")
+    parser.add_argument("--build-manifest", required=True, type=Path,
+                        help="build manifest with installedWorker firmware, image/source, and Render Core identity")
+    parser.add_argument("--render-core-profile", required=True, type=Path,
+                        help="generated jellyframe_render_core_profile.json from this build")
+    parser.add_argument("--build-profile", required=True,
+                        help="named profile in the build manifest, such as native or installedWorker")
     parser.add_argument("--build-dir", type=Path,
-                        help="ESP-IDF build directory containing generated Core provenance, project_description.json, CMakeCache.txt and sdkconfig")
-    parser.add_argument("--render-core-version")
-    parser.add_argument("--render-core-abi", type=int)
+                        help="optional ESP-IDF build directory for additional provenance cross-checks")
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
-
-    if args.build_manifest is not None and args.build_dir is not None:
-        raise SystemExit("--build-manifest and --build-dir are mutually exclusive")
 
     firmware = args.firmware.resolve()
     factory = args.factory_image.resolve()
     if not firmware.is_file() or not factory.is_file():
         raise SystemExit("firmware and factory image must exist")
-    if len(args.source_revision) != 40 or any(char not in "0123456789abcdef" for char in args.source_revision):
-        raise SystemExit("source revision must be 40 lowercase hexadecimal characters")
     if factory.stat().st_size != 16 * 1024 * 1024:
         raise SystemExit("factory image must be a complete 16 MiB flash image")
+    (source_revision, image_version, render_core_version, render_core_abi,
+     feature_families, build_provenance) = _identity_from_build_evidence(
+        args.build_manifest.resolve(), args.render_core_profile.resolve(), firmware, args.build_profile)
     if args.build_dir is not None:
-        render_core_version, render_core_abi, build_provenance = _idf_build_provenance(
+        idf_version, idf_abi, idf_features, idf_provenance = _idf_build_provenance(
             args.build_dir.resolve(), firmware)
-        explicit = (args.render_core_version, args.render_core_abi)
-        if any(value is not None for value in explicit) and explicit != (render_core_version, render_core_abi):
-            raise SystemExit("explicit Render Core metadata conflicts with ESP-IDF build directory")
-    else:
-        render_core_version, render_core_abi, build_provenance = resolve_render_core(args)
+        if ((render_core_version, render_core_abi) != (idf_version, idf_abi) or
+                set(feature_families) != set(idf_features)):
+            raise SystemExit("build manifest and supplied Core profile conflict with ESP-IDF build directory")
+        idf_revision = idf_provenance.get("idfRevision")
+        if re.fullmatch(r"[0-9a-f]{40}", str(idf_revision)) and idf_revision != source_revision:
+            raise SystemExit("build manifest source revision conflicts with ESP-IDF build directory")
+        for field in ("renderCoreSourceIdentity", "renderCoreSourceInputCount"):
+            if field in build_provenance and build_provenance[field] != idf_provenance[field]:
+                raise SystemExit("build manifest Core source identity conflicts with ESP-IDF build directory")
+        if "idfVersion" in build_provenance:
+            recorded_idf = str(build_provenance["idfVersion"]).removeprefix("v").removesuffix("-dirty")
+            if recorded_idf != idf_provenance["idfVersion"]:
+                raise SystemExit("build manifest IDF version conflicts with ESP-IDF build directory")
+        if "toolchain" in build_provenance:
+            recorded_toolchain = re.search(r"esp-[0-9.]+_[0-9]+", str(build_provenance["toolchain"]))
+            if recorded_toolchain is None or recorded_toolchain.group() != idf_provenance["toolchain"]:
+                raise SystemExit("build manifest versioned toolchain conflicts with ESP-IDF build directory")
+        build_provenance.update(idf_provenance)
 
     output = args.output.resolve()
-    archive_name = f"jellyframe-ws147-developer-{args.image_version}-provider-{PROVIDER_VERSION}"
+    archive_name = f"jellyframe-ws147-developer-{image_version}-provider-{PROVIDER_VERSION}"
     release = output / archive_name
     if release.exists():
         raise SystemExit(f"output already exists: {release}")
 
     manifest = {
         "format": "jellyframe.device-image", "formatVersion": 0,
-        "imageId": "org.jellyframe.ws147.developer", "imageVersion": args.image_version,
+        "imageId": "org.jellyframe.ws147.developer", "imageVersion": image_version,
         "runtimeVersion": "0.6.0-dev",
         "renderCore": {"version": render_core_version, "abi": render_core_abi},
-        "source": {"revision": args.source_revision, "firmwareSha256": sha256(firmware)},
+        "source": {"revision": source_revision, "firmwareSha256": sha256(firmware)},
         "board": {"id": "ws147", "display": {"width": 172, "height": 320, "shape": "rect"}},
-        "profile": {"id": "rect-172x320", "featureFamilies": FEATURE_FAMILIES},
+        "profile": {"id": "rect-172x320", "featureFamilies": feature_families},
         "transport": {"protocol": "JFDP/1", "kind": "usb-serial-jtag"},
         "storage": {"maxBundleBytes": 327680},
         "recovery": {"procedureId": "ws147-usb-recovery-v1", "factoryImageSha256": sha256(factory)},
     }
     if build_provenance:
         manifest["buildProvenance"] = build_provenance
+    try:
+        parse_device_image_manifest(json.dumps(manifest))
+    except DeviceImageManifestError as error:
+        raise SystemExit(f"invalid Developer Image manifest: {error}") from error
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-provider-release-") as temporary:
         staging = Path(temporary) / archive_name

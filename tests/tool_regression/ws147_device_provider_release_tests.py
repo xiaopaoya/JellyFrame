@@ -27,6 +27,57 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def write_build_evidence(root: Path, firmware: Path, *, revision: str, image_version: str,
+                         core_version: str, core_abi: int,
+                         families: list[str] | None = None,
+                         profiles: dict[str, dict] | None = None) -> tuple[Path, Path]:
+    core_families = families or [
+        "core.document", "core.paint", "forms.advanced", "css.flex-grid",
+        "css.modern-paint", "graphics.canvas2d",
+    ]
+    evidence_dir = root / "build-evidence"
+    evidence_dir.mkdir(exist_ok=True)
+    evidenced_firmware = evidence_dir / "firmware.bin"
+    evidenced_firmware.write_bytes(firmware.read_bytes())
+    worker_profile = {
+        "imageVersion": image_version,
+        "features": ["device-image-lifecycle-acceptance", "script-task-runtime"],
+        "bin": {"path": "firmware.bin", "sha256": sha256(evidenced_firmware)},
+    }
+    build_profiles = {"installedWorker": worker_profile}
+    if profiles:
+        build_profiles.update(profiles)
+    build_manifest = evidence_dir / "build-manifest.json"
+    build_manifest.write_text(json.dumps({
+        "schemaVersion": 1,
+        "target": "esp32s3",
+        "board": "Waveshare ESP32-S3-Touch-LCD-1.47",
+        "runtime": {"buildCommit": revision},
+        "renderCore": {
+            "version": core_version, "engineAbi": core_abi,
+            "sourceHashSha256": "a" * 64, "sourceFileCount": 163,
+        },
+        "espIdf": {"version": "5.3.1"},
+        "toolchain": {"xtensaCompiler": "GNU 13.2.0 (esp-13.2.0_20240530)"},
+        "profiles": build_profiles,
+    }), encoding="utf-8")
+    core_profile = evidence_dir / "jellyframe_render_core_profile.json"
+    core_profile.write_text(json.dumps({
+        "schemaVersion": 1,
+        "packageVersion": core_version,
+        "engineAbi": core_abi,
+        "profileId": "render-core-default",
+        "features": core_families,
+    }), encoding="utf-8")
+    return build_manifest, core_profile
+
+
+def identity_args(build_manifest: Path, core_profile: Path,
+                  build_profile: str = "installedWorker") -> list[str]:
+    return ["--build-manifest", str(build_manifest), "--render-core-profile", str(core_profile),
+            "--build-profile", build_profile]
+
+
 class Ws147DeviceProviderReleaseTests(unittest.TestCase):
     def test_release_is_self_contained_reproducible_and_fully_hashed(self) -> None:
         with tempfile.TemporaryDirectory(prefix="jellyframe-ws147-release-") as directory:
@@ -40,12 +91,14 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
 
             revision = "a" * 40
             version = "0.6.2-ws147.test"
+            build_manifest, core_profile = write_build_evidence(
+                root, firmware, revision=revision, image_version=version,
+                core_version="0.6.2", core_abi=1)
             completed = subprocess.run([
                 sys.executable, str(PACKAGER),
                 "--firmware", str(firmware),
                 "--factory-image", str(factory),
-                "--source-revision", revision,
-                "--image-version", version,
+                *identity_args(build_manifest, core_profile),
                 "--output", str(output),
             ], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr.decode("utf-8", errors="replace"))
@@ -102,22 +155,16 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             firmware.write_bytes(b"ABI4 fixture firmware\n")
             with factory.open("wb") as stream:
                 stream.truncate(16 * 1024 * 1024)
-            build_manifest.write_text(json.dumps({
-                "sources": {"renderCore": {
-                    "packageVersion": "0.9.0-dev", "engineAbi": 4,
-                    "sourceHash": "e" * 64, "sourceFileCount": 163,
-                }},
-                "idfVersion": "5.3.1",
-                "toolchain": "xtensa-esp-elf 13.2.0",
-                "buildProfile": "ws147-core-text",
-            }), encoding="utf-8")
+            revision = "b" * 40
+            version = "0.6.2-ws147.abi4-test"
+            build_manifest, core_profile = write_build_evidence(
+                root, firmware, revision=revision, image_version=version,
+                core_version="0.9.0-dev", core_abi=4)
             completed = subprocess.run([
                 sys.executable, str(PACKAGER),
                 "--firmware", str(firmware),
                 "--factory-image", str(factory),
-                "--source-revision", "b" * 40,
-                "--image-version", "0.6.2-ws147.abi4-test",
-                "--build-manifest", str(build_manifest),
+                *identity_args(build_manifest, core_profile),
                 "--output", str(root / "release"),
             ], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr.decode("utf-8", errors="replace"))
@@ -125,79 +172,112 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             manifest = device_image_manifest.parse_device_image_manifest(
                 (release / "developer-image" / "ws147-developer-image.manifest.json").read_bytes())
             self.assertEqual(manifest["renderCore"], {"version": "0.9.0-dev", "abi": 4})
+            self.assertEqual(manifest["imageVersion"], version)
+            self.assertEqual(manifest["source"]["revision"], revision)
+            self.assertEqual(manifest["source"]["firmwareSha256"], sha256(firmware))
+            self.assertEqual(manifest["profile"]["featureFamilies"], json.loads(
+                core_profile.read_text(encoding="utf-8"))["features"])
             self.assertEqual(manifest["buildProvenance"], {
-                "renderCoreSourceIdentity": "e" * 64,
+                "renderCoreSourceIdentity": "a" * 64,
                 "renderCoreSourceInputCount": 163,
                 "idfVersion": "5.3.1",
-                "toolchain": "xtensa-esp-elf 13.2.0",
-                "buildProfile": "ws147-core-text",
+                "toolchain": "GNU 13.2.0 (esp-13.2.0_20240530)",
             })
 
-    def test_explicit_abi4_metadata_is_supported_and_conflicts_are_rejected(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="jellyframe-ws147-explicit-abi4-") as directory:
+    def test_build_profile_selects_the_matching_manifest_identity(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="jellyframe-ws147-build-profile-") as directory:
             root = Path(directory)
             firmware = root / "firmware.bin"
             factory = root / "factory-16mb.bin"
             firmware.write_bytes(b"ABI4 fixture firmware\n")
             with factory.open("wb") as stream:
                 stream.truncate(16 * 1024 * 1024)
-            common = [
-                sys.executable, str(PACKAGER), "--firmware", str(firmware),
-                "--factory-image", str(factory), "--source-revision", "c" * 40,
-                "--image-version", "0.6.2-ws147.abi4-explicit",
-                "--render-core-version", "0.9.0-dev", "--render-core-abi", "4",
-            ]
-            completed = subprocess.run([*common, "--output", str(root / "explicit")], cwd=ROOT,
-                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-            self.assertEqual(completed.returncode, 0, completed.stderr.decode("utf-8", errors="replace"))
-            release = Path(json.loads(completed.stdout)["release"])
+            native_bin = root / "build-evidence" / "native.bin"
+            native_bin.parent.mkdir()
+            native_bin.write_bytes(b"native profile firmware\n")
+            native_features = ["band-shell-ui", "core-text"]
+            build_manifest, core_profile = write_build_evidence(
+                root, firmware, revision="c" * 40, image_version="0.6.2-ws147.worker",
+                core_version="0.9.0-dev", core_abi=4,
+                profiles={"native": {
+                    "imageVersion": "0.6.2-ws147.native",
+                    "features": native_features,
+                    "bin": {"path": "native.bin", "sha256": sha256(native_bin)},
+                }})
+            selected = subprocess.run([
+                sys.executable, str(PACKAGER), "--firmware", str(native_bin),
+                "--factory-image", str(factory), *identity_args(build_manifest, core_profile, "native"),
+                "--output", str(root / "native-release"),
+            ], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            self.assertEqual(selected.returncode, 0, selected.stderr.decode("utf-8", errors="replace"))
+            release = Path(json.loads(selected.stdout)["release"])
             manifest = device_image_manifest.parse_device_image_manifest(
                 (release / "developer-image" / "ws147-developer-image.manifest.json").read_bytes())
+            self.assertEqual(manifest["imageVersion"], "0.6.2-ws147.native")
             self.assertEqual(manifest["renderCore"], {"version": "0.9.0-dev", "abi": 4})
+            self.assertEqual(manifest["source"]["firmwareSha256"], sha256(native_bin))
 
-            build_manifest = root / "build-manifest.json"
-            build_manifest.write_text(json.dumps({
-                "sources": {"renderCore": {"packageVersion": "0.9.0-dev", "engineAbi": 4}}
+            unsupported_profile = root / "unsupported-core-profile.json"
+            unsupported_profile.write_text(json.dumps({
+                "schemaVersion": 1, "packageVersion": "0.9.0-dev", "engineAbi": 4,
+                "features": ["core.document", "core.paint", "css.unencodable"],
             }), encoding="utf-8")
-            conflict = subprocess.run([
-                *common, "--render-core-version", "0.6.2", "--render-core-abi", "1",
-                "--build-manifest", str(build_manifest), "--output", str(root / "conflict"),
+            rejected = subprocess.run([
+                sys.executable, str(PACKAGER), "--firmware", str(native_bin),
+                "--factory-image", str(factory), *identity_args(build_manifest, unsupported_profile, "native"),
+                "--output", str(root / "unsupported"),
             ], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-            self.assertNotEqual(conflict.returncode, 0)
-            self.assertIn(b"conflicts with build manifest", conflict.stderr)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn(b"cannot encode", rejected.stderr)
 
-            partial = subprocess.run([
-                sys.executable, str(PACKAGER), "--firmware", str(firmware),
-                "--factory-image", str(factory), "--source-revision", "d" * 40,
-                "--image-version", "0.6.2-ws147.partial", "--render-core-abi", "4",
-                "--output", str(root / "partial"),
-            ], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-            self.assertNotEqual(partial.returncode, 0)
-            self.assertIn(b"must be supplied together", partial.stderr)
-
-    def test_build_manifest_without_optional_provenance_does_not_claim_it(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="jellyframe-ws147-provenance-optional-") as directory:
+    def test_incomplete_build_manifest_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="jellyframe-ws147-incomplete-evidence-") as directory:
             root = Path(directory)
             firmware = root / "firmware.bin"
             factory = root / "factory-16mb.bin"
             build_manifest = root / "build-manifest.json"
+            core_profile = root / "jellyframe_render_core_profile.json"
             firmware.write_bytes(b"firmware\n")
             with factory.open("wb") as stream:
                 stream.truncate(16 * 1024 * 1024)
             build_manifest.write_text(json.dumps({
                 "sources": {"renderCore": {"packageVersion": "0.9.0-dev", "engineAbi": 4}}
             }), encoding="utf-8")
+            core_profile.write_text(json.dumps({
+                "schemaVersion": 1, "packageVersion": "0.9.0-dev", "engineAbi": 4,
+                "features": ["core.document", "core.paint"],
+            }), encoding="utf-8")
             completed = subprocess.run([
                 sys.executable, str(PACKAGER), "--firmware", str(firmware),
-                "--factory-image", str(factory), "--source-revision", "f" * 40,
-                "--image-version", "0.6.2-ws147.partial-provenance",
-                "--build-manifest", str(build_manifest), "--output", str(root / "release"),
+                "--factory-image", str(factory), *identity_args(build_manifest, core_profile),
+                "--output", str(root / "release"),
             ], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-            self.assertEqual(completed.returncode, 0, completed.stderr.decode("utf-8", errors="replace"))
-            release = Path(json.loads(completed.stdout)["release"])
-            manifest = device_image_manifest.parse_device_image_manifest(
-                (release / "developer-image" / "ws147-developer-image.manifest.json").read_bytes())
-            self.assertNotIn("buildProvenance", manifest)
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn(b"missing required identity fields", completed.stderr)
+
+    def test_invalid_output_provenance_is_rejected_before_writing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="jellyframe-ws147-invalid-provenance-") as directory:
+            root = Path(directory)
+            firmware = root / "firmware.bin"
+            factory = root / "factory.bin"
+            firmware.write_bytes(b"firmware")
+            with factory.open("wb") as stream:
+                stream.truncate(16 * 1024 * 1024)
+            build_manifest, profile = write_build_evidence(
+                root, firmware, revision="a" * 40, image_version="0.6.2-test",
+                core_version="0.9.0", core_abi=4)
+            document = json.loads(build_manifest.read_text(encoding="utf-8"))
+            document["toolchain"]["xtensaCompiler"] = "x" * 257
+            build_manifest.write_text(json.dumps(document), encoding="utf-8")
+            output = root / "output"
+            completed = subprocess.run([
+                sys.executable, str(PACKAGER), "--firmware", str(firmware),
+                "--factory-image", str(factory), *identity_args(build_manifest, profile),
+                "--output", str(output),
+            ], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn(b"invalid Developer Image manifest", completed.stderr)
+            self.assertFalse(output.exists())
 
     def test_build_dir_imports_and_cross_checks_idf_provenance(self) -> None:
         with tempfile.TemporaryDirectory(prefix="jellyframe-ws147-build-dir-") as directory:
@@ -217,11 +297,17 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             (generated / "jellyframe_render_core_source_manifest.json").write_text(json.dumps({
                 "sourceHash": identity, "sourceFileCount": 163, "files": [],
             }), encoding="utf-8")
-            (generated / "jellyframe_render_core_profile.json").write_text(json.dumps({
-                "packageVersion": "0.9.0-dev", "engineAbi": 4, "profileId": "render-core-default",
+            core_features = [
+                "core.document", "core.paint", "forms.advanced", "css.flex-grid",
+                "css.modern-paint", "graphics.canvas2d",
+            ]
+            generated_profile = generated / "jellyframe_render_core_profile.json"
+            generated_profile.write_text(json.dumps({
+                "schemaVersion": 1, "packageVersion": "0.9.0-dev", "engineAbi": 4,
+                "profileId": "render-core-default", "features": core_features,
             }), encoding="utf-8")
             (build / "project_description.json").write_text(json.dumps({
-                "build_dir": str(build), "git_revision": "deadbeef", "target": "esp32s3",
+                "build_dir": str(build), "git_revision": "a" * 40, "target": "esp32s3",
                 "idf_path": str(root / "idf"), "app_bin": "jellyframe_esp32s3_bench.bin",
                 "c_compiler": r"C:\Espressif\tools\xtensa-esp-elf\esp-13.2.0_20240530\bin\xtensa-esp32s3-elf-gcc.exe",
             }), encoding="utf-8")
@@ -237,10 +323,13 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 encoding="utf-8")
             sdkconfig = build / "sdkconfig"
             sdkconfig.write_text('CONFIG_IDF_TARGET="esp32s3"\n', encoding="utf-8")
+            build_manifest, _ = write_build_evidence(
+                root, firmware, revision="a" * 40, image_version="0.6.2-ws147.build-dir-test",
+                core_version="0.9.0-dev", core_abi=4, families=core_features)
             common = [
                 sys.executable, str(PACKAGER), "--firmware", str(firmware),
-                "--factory-image", str(factory), "--source-revision", "a" * 40,
-                "--image-version", "0.6.2-ws147.build-dir-test", "--build-dir", str(build),
+                "--factory-image", str(factory), *identity_args(build_manifest, generated_profile),
+                "--build-dir", str(build),
             ]
             completed = subprocess.run([*common, "--output", str(root / "release")], cwd=ROOT,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -253,7 +342,7 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 "renderCoreSourceIdentity": identity,
                 "renderCoreSourceInputCount": 163,
                 "idfVersion": "5.3.1",
-                "idfRevision": "deadbeef",
+                "idfRevision": "a" * 40,
                 "toolchain": "esp-13.2.0_20240530",
                 "target": "esp32s3",
                 "buildProfile": "ws147_core_text;render-core-default",
@@ -266,12 +355,37 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             mismatched_firmware.write_bytes(b"different firmware\n")
             rejected_firmware = subprocess.run([
                 sys.executable, str(PACKAGER), "--firmware", str(mismatched_firmware),
-                "--factory-image", str(factory), "--source-revision", "a" * 40,
-                "--image-version", "0.6.2-ws147.mismatched-build-bin", "--build-dir", str(build),
+                "--factory-image", str(factory), *identity_args(build_manifest, generated_profile),
+                "--build-dir", str(build),
                 "--output", str(root / "mismatched-firmware-release"),
             ], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
             self.assertNotEqual(rejected_firmware.returncode, 0)
-            self.assertIn(b"does not match the app BIN", rejected_firmware.stderr)
+            self.assertIn(b"does not match the installedWorker binary", rejected_firmware.stderr)
+
+            evidence = json.loads(build_manifest.read_text(encoding="utf-8"))
+            for section, key, value, diagnostic in (
+                ("espIdf", "version", "v5.4.0", b"IDF version conflicts"),
+                ("toolchain", "xtensaCompiler", "esp-14.2.0_20260101", b"versioned toolchain conflicts"),
+            ):
+                with self.subTest(section=section):
+                    original = evidence[section][key]
+                    evidence[section][key] = value
+                    build_manifest.write_text(json.dumps(evidence), encoding="utf-8")
+                    conflict = subprocess.run([*common, "--output", str(root / "provenance-conflict")], cwd=ROOT,
+                                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                    self.assertNotEqual(conflict.returncode, 0)
+                    self.assertIn(diagnostic, conflict.stderr)
+                    self.assertFalse((root / "provenance-conflict").exists())
+                    evidence[section][key] = original
+            evidence["renderCore"]["sourceHashSha256"] = "c" * 64
+            build_manifest.write_text(json.dumps(evidence), encoding="utf-8")
+            conflict = subprocess.run([*common, "--output", str(root / "source-conflict")], cwd=ROOT,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            self.assertNotEqual(conflict.returncode, 0)
+            self.assertIn(b"Core source identity conflicts", conflict.stderr)
+            self.assertFalse((root / "source-conflict").exists())
+            evidence["renderCore"]["sourceHashSha256"] = identity
+            build_manifest.write_text(json.dumps(evidence), encoding="utf-8")
 
             (generated / "jellyframe_render_core_source_manifest.json").write_text(json.dumps({
                 "sourceHash": "b" * 64, "sourceFileCount": 163, "files": [],
