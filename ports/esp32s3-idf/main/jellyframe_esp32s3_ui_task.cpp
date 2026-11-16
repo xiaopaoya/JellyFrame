@@ -35,7 +35,9 @@
 #include "render_core/software_renderer.h"
 #include "render_core/scroll_blit.h"
 #include "render_core/scroll_gesture.h"
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
 #include "render_core/text_repaint.h"
+#endif
 
 #include "esp_heap_caps.h"
 #include "esp_log.h"

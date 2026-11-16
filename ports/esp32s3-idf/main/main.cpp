@@ -546,9 +546,19 @@ void run_p4_p5_p6_ui_smoke(int width, int height, const HostBudgets& budgets) {
     text_measure = jellyframe_esp32s3::make_legacy_bitmap_text_measure_provider();
 #endif
 
+#if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
     TextMetrics ascii_metrics{};
     TextMetrics cjk_metrics{};
     TextMetrics bold_metrics{};
+#else
+    struct SmokeTextMetrics {
+        int width = 0;
+        int line_height = 0;
+    };
+    SmokeTextMetrics ascii_metrics{};
+    SmokeTextMetrics cjk_metrics{};
+    SmokeTextMetrics bold_metrics{};
+#endif
     bool ascii_ok = false;
     bool cjk_ok = false;
     bool bold_ok = false;

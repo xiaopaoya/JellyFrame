@@ -61,13 +61,11 @@ bool legacy_app_font_paint_callback(jellyframe::FrameBuffer& target,
                                     void* context);
 #endif
 
-inline jellyframe::TextMeasureProvider legacy_bitmap_text_measure_provider() {
 #if JELLYFRAME_ESP32S3_LEGACY_BITMAP_FONT_ENABLED
+inline jellyframe::TextMeasureProvider legacy_bitmap_text_measure_provider() {
     return make_legacy_bitmap_text_measure_provider();
-#else
-    return {};
-#endif
 }
+#endif
 
 #if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
 inline jellyframe::TextPainter legacy_bitmap_text_painter() {
