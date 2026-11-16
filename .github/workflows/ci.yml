@@ -1216,7 +1216,7 @@ jobs:
         run: |
           $profile = Get-Content build\abi4-same-thread\generated\jellyframe_render_core_profile.json -Raw | ConvertFrom-Json
           $provenance = Get-Content build\abi4-same-thread\generated\jellyframe_render_core_provenance.json -Raw | ConvertFrom-Json
-          if ($profile.engineAbi -ne 4 -or $profile.packageVersion -ne '0.9.0') {
+          if ($profile.engineAbi -ne 4 -or $profile.packageVersion -ne '0.9.0-dev') {
             throw "Unexpected Core profile: ABI $($profile.engineAbi), version $($profile.packageVersion)"
           }
           if ($provenance.provider -ne 'source-override' -or $provenance.engineAbi -ne 4 -or
