@@ -240,9 +240,9 @@ const RECIPE_REGISTRY = Object.freeze([
   } },
   { type: "segmented-control", group: "wearableGroup", label: "segmentedControl", help: "segmentedControlHelp", icon: "▤", template: {
     id: "segmented-control", type: "container", layout: "row", gap: 4, padding: 4, width: "100%", height: "42px", background: "#18212b", radius: 8, align: "stretch", justify: "start", children: [
-      { id: "segment-day", type: "button", text: "Day", width: "auto", height: "100%", background: "#20b486", color: "#071712", radius: 5, fontSize: 12, textAlign: "center", verticalAlign: "center" },
-      { id: "segment-week", type: "button", text: "Wk", width: "auto", height: "100%", background: "transparent", color: "#9aa9b8", radius: 5, fontSize: 12, textAlign: "center", verticalAlign: "center" },
-      { id: "segment-month", type: "button", text: "Mo", width: "auto", height: "100%", background: "transparent", color: "#9aa9b8", radius: 5, fontSize: 12, textAlign: "center", verticalAlign: "center" }
+      { id: "segment-day", type: "button", text: "Day", width: "auto", background: "#20b486", color: "#071712", radius: 5, fontSize: 12, textAlign: "center", verticalAlign: "center" },
+      { id: "segment-week", type: "button", text: "Wk", width: "auto", background: "transparent", color: "#9aa9b8", radius: 5, fontSize: 12, textAlign: "center", verticalAlign: "center" },
+      { id: "segment-month", type: "button", text: "Mo", width: "auto", background: "transparent", color: "#9aa9b8", radius: 5, fontSize: 12, textAlign: "center", verticalAlign: "center" }
     ]
   } },
   { type: "alarm-list", group: "wearableGroup", label: "alarmList", help: "alarmListHelp", icon: "◷", roundSafeInset: true, template: {
