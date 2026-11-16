@@ -153,10 +153,11 @@ def make_text_property_case(
         "var spaced=false;document.getElementById('toggle').addEventListener('click',function(){"
         "spaced=!spaced;label.setAttribute('class',spaced?'spaced':'');});"
         if letter_spacing_case else
-        f"var initial='{initial}', changed='{changed}';"
+        f"var initial='{initial}', changed='{changed}', isChanged=false;"
         f"label.style.{property_name}=initial;"
         f"document.getElementById('toggle').addEventListener('click',function(){{"
-        f"label.style.{property_name}=label.style.{property_name}===changed?initial:changed;"
+        "isChanged=!isChanged;"
+        f"label.style.{property_name}=isChanged?changed:initial;"
         "});"
     )
     (app / "index.html").write_text(
