@@ -2,7 +2,7 @@
 
 > 最后更新：2026-11-16；适用版本：0.6.0-dev。Core 已发布版本：0.9.0 / ABI4。
 
-> **最新检查点（2026-11-16）：**Runtime PR #99–#115 已合并。#111 将 WS147 band-shell CoreText profile 设为默认并加入 Win32 ABI4 属性/增量与全量重绘矩阵（293 帧、27 组流程）；#114 退役 Runtime 文本回调，#115 扩展 ABI4 桌面工具和 benchmark 构建覆盖。Core PR #67（`16a83211ec0992f8e25ec0fc977eb6fd158716e3`）完成 ABI4 契约。Core v0.9.0 / ABI4 已签名发布；归档与 `.sha256` sidecar 已上传，GitHub 归档 digest 与 `8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628` 一致。Runtime 候选 `codex/core-0.9.0-abi4-lock-20261116` 更新锁、manifest/模板、provenance 检查和 full/cropped 安装消费者，本地两种 profile 的 CTest 各 22/22；另修正三个仍生成 Core 0.7.0 的 ESP32 探针。PR #116 已开启；master 经 #115 前进后产生合并冲突，更新尚未完成，CI 也未启动。Core #63 弹层在命名 profile `0.6.2-abi4-installed-core63-device1` 上通过实机验收。Runtime master 在 #116 CI 通过并合并前仍锁定 Core 0.8.0 / ABI3。`mainline2` 是独立设备工作。
+> **最新检查点（2026-11-16）：**Runtime PR #99–#115 已合并。#111 将 WS147 band-shell CoreText profile 设为默认并加入 Win32 ABI4 属性/增量与全量重绘矩阵（293 帧、27 组流程）；#114 退役 Runtime 文本回调，#115 扩展 ABI4 桌面工具和 benchmark 构建覆盖。Core PR #67（`16a83211ec0992f8e25ec0fc977eb6fd158716e3`）完成 ABI4 契约。Core v0.9.0 / ABI4 已签名发布；归档与 `.sha256` sidecar 已上传，GitHub 归档 digest 与 `8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628` 一致。Runtime PR #116 已锁定发布包，更新 manifest/模板和三个 ESP32 探针生成器，并增加 provenance 与安装消费者覆盖。首轮合并后 CI 暴露两项测试接线问题：重绘用例依赖样式 getter 字符串比较，Standalone package CTest 注册了但没有构建 image metadata 测试目标。修复已进入 head `5c839ace`；精确 Core `18dc34e` source-override 重绘 CTest 本地通过 1/1，现有 full package-consumer 测试通过 23/23。CI run `43781188140` 正在运行。Core #63 弹层已在命名 profile `0.6.2-abi4-installed-core63-device1` 上通过实机验收。#116 通过并合并前，Runtime master 仍锁定 Core 0.8.0 / ABI3。`mainline2` 是独立设备工作。
 
 本文件是当前执行计划。旧检查点保存在 Git 历史和对应 PR 中，不再作为额外待办。
 [文本消费者退役清单](render_core_text_consumer_retirement.md)记录实际调用方与原生设备候选的完整身份。
@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | 已发布依赖 | Core v0.9.0 / ABI4 已签名发布；两个资产均上传，远端归档 digest 与本地一致。 | Runtime PR #116 通过 full/cropped、ABI3 source-override 和其余 CI 后合并。 |
 | Core 主线 | Core PR #67（`16a83211ec0992f8e25ec0fc977eb6fd158716e3`）及 ABI4 发布门槛已完成。 | 无；Runtime 由 #116 消费发布包。 |
-| Runtime 主线 | PR #99–#115 已合并。候选 #116 更新精确锁、app manifest/模板、provenance CI、ABI4 安装消费者和三个 ESP32 探针；本地 full/cropped CTest 各 22/22。 | 更新候选以解决最新 master 冲突并启动 PR CI；所有必需检查通过后合并。 |
+| Runtime 主线 | PR #99–#115 已合并。PR #116 已同步 master，锁定精确发布包并更新 manifest/模板、provenance、ABI4 安装消费者和三个 ESP32 探针。full/cropped package CTest 各 22/22；source-override 重绘测试本地 1/1。 | PR #116 的 CI run `43781188140` 必须通过 full/cropped、ABI3 source-override、Windows 和 standalone package 检查后合并。 |
 | Embedded host | #100 为 layout/layers/paint 绑定同一个 TextSystem/JFFONT2；锁定 ABI3 和 source ABI4 full/cropped 测试通过。 | 该示例不再依赖文本 provider 回调。 |
 | Installed worker | #101/#107/#109/#114 已合并；用户已验收 Core #63 popup 的标题、全部选项、选择结果和触控。 | #116 合并后，从生产锁构建独立 worker 镜像并绑定身份验收。 |
 | 原生 WS147 | `mainline1` 的首页/Activity/Weather 验收仍有效；弹层测试后已恢复该镜像。 | 对签名 ABI4 锁定后的新原生镜像做身份绑定验收；不重复测试旧 `mainline1`。 |
@@ -118,5 +118,5 @@ benchmark smoke。此前的小卡片缺字反馈仍适用于其他未测身份�
 4. 已在源码 identity `8328dbf1...02d1186` / 159 个文件上完成：Core full/cropped CTest、归档 3/3、full/cropped TextSystem 安装消费者、C5、wrapped-row、natural-image 消费者，以及 Runtime CTest 113/113。
 5. 已完成：Core #66/#67 与 Runtime #114/#115 合并，相关合并后 CI 均通过。
 6. 已完成：Core v0.9.0 / ABI4 已签名发布；归档和 sidecar digest 已核验。Runtime full/cropped 本地 CTest 各 22/22。
-7. 当前：更新 Runtime PR #116 以解决 master 新提交带来的冲突，并确认 PR CI 启动；仅在 full/cropped、ABI3 source-override 和其他必需 checks 全部通过后合并。
+7. 进行中：PR #116 head `5c839ace` 的 CI run `43781188140`；已修正重绘用例状态切换和 standalone image metadata 测试目标。所有必需检查通过后再合并。
 8. 合并锁更新后，从生产锁构建命名 WS147 native 与 installed-worker 镜像，记录 BIN/ELF/包身份并按具体 profile 验收。已通过的 popup 观察和旧 `mainline1` 观察只适用于其命名镜像。
