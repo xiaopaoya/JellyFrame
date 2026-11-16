@@ -15,9 +15,9 @@ PR #117 合并树上的 WS147 ABI4 native 与 device-image lifecycle acceptance 
 | --- | --- | --- |
 | 已发布依赖 | Core v0.9.0 / ABI4 已签名发布；两个资产均上传，远端归档 digest 与本地一致。 | 无。 |
 | Core 主线 | Core PR #67（`16a83211ec0992f8e25ec0fc977eb6fd158716e3`）及 ABI4 发布门槛已完成。 | 无。 |
-| Runtime 主线 | #116 生产锁、#117 WS147 编译修复、#120 provider provenance 校验均已合并；master `7dd34aea`，#120 检查 23/23。 | 集成门槛完成；当前 installed 应用人工观察待确认。 |
+| Runtime 主线 | #116 生产锁、#117 WS147 编译修复、#120 provider provenance 校验均已合并；master `7dd34aea`，#120 检查 23/23。 | 集成门槛完成；当前 generation200 应用画面及触控人工验收已通过。 |
 | Embedded host | #100 为 layout/layers/paint 绑定同一个 TextSystem/JFFONT2；锁定 ABI3 和 source ABI4 full/cropped 测试通过。 | 该示例不再依赖文本 provider 回调。 |
-| Installed worker | 精确 inst1 BIN 已在 COM19 重刷并通过 esptool hash 校验；JFDP 发现/info 确认 Core0.9.0/ABI4 和源码 d4ba0b84，generation200 安装 accepted、启动 ok，日志 render_status=0、accepted_seq=1、presents_failed=0。 | generation200 人工画面及触控确认待回复。 |
+| Installed worker | 精确 inst1 BIN 已在 COM19 重刷并通过 esptool hash 校验；JFDP 发现/info 确认 Core0.9.0/ABI4 和源码 d4ba0b84，generation200 安装 accepted、启动 ok，日志 render_status=0、accepted_seq=1、presents_failed=0。 | generation200 人工画面及触控确认于 2026-11-16 通过，覆盖本次三资源应用。 |
 | 原生 WS147 | #117 后的 ABI4 native 镜像已构建、刷写、串口启动并通过指定画面/触控人工验收；BIN SHA-256 `A87BBFDC95F6467A065A0A5A5B436E7CD1730D22C838BEE9D44590E40D148039`，ELF SHA-256 前缀 `68642F8BE62C6060`。 | 无；验收仅覆盖该精确镜像及记录的观察项。 |
 | ABI5 与 shaping | 独立可选候选；ABI5 tracked reuse 有正确性与包测试，尚无合格性能收益。 | 未启用到 Runtime，也不阻塞 ABI4 发布。 |
 
@@ -46,7 +46,7 @@ CoreText band-shell 和 P4/P5/P6 smoke 的 map 中没有旧字体符号，legacy
 | 消费者 | 进展 | 完成证据 |
 | --- | --- | --- |
 | Embedded host | #100 完成。 | 可见文字、click/checkbox/select、RGB565 flush；ABI3 与 ABI4 full/cropped。 |
-| ESP32 installed worker | 精确 inst1 BIN 已在 COM19 重刷并通过 esptool hash 校验；JFDP 发现/info 确认 Core0.9.0/ABI4 和源码 d4ba0b84，generation200 安装 accepted、启动 ok，日志 render_status=0、accepted_seq=1、presents_failed=0。 | generation200 人工画面及触控确认待回复。 |
+| ESP32 installed worker | 精确 inst1 BIN 已在 COM19 重刷并通过 esptool hash 校验；JFDP 发现/info 确认 Core0.9.0/ABI4 和源码 d4ba0b84，generation200 安装 accepted、启动 ok，日志 render_status=0、accepted_seq=1、presents_failed=0。 | generation200 人工画面及触控确认于 2026-11-16 通过，覆盖本次三资源应用。 |
 | ESP32 retained native/default | Runtime #114 将生产文本消费者迁至 Core-owned TextSystem；ABI3 兼容代码仍由 ABI 条件隔离。 | PR #117 后的锁定 ABI4 native 镜像已完成构建、刷写、启动和所记录的 Home/Activity/Weather/按钮触控验收。 |
 | ESP32 P4/P5/P6 smoke | `main.cpp` 中独立 provider 仅被 benchmark/smoke fixture 使用；CoreText profile 现在已有单独 CoreText smoke 构建证据。 | 保留旧 fixture 为显式 legacy-only，并让 CoreText smoke 覆盖同等 ASCII/CJK/字重和控件场景；它不是产品默认消费者。 |
 | Win32 默认路径 | #114 已将默认路径切换至 Core TextSystem，并保留经 Core 比较计算样式后的无回调布局复用；GDI 兼容实现只用于 ABI3。#111 的属性/重绘矩阵覆盖 293 帧、27 组流程，#116 的已发布包 CI 与 ABI3 兼容 lane 均通过。 | 无 ABI4 回调迁移或发布矩阵门槛。 |
@@ -107,9 +107,9 @@ Activity 与 Weather 文字显示正常，Weather 下方四个小卡片均有文
 
 ### 当前 installed 应用检查点（2026-11-16）
 
-当前 COM19 为 `0.6.2-abi4-pr116-inst1`，BIN SHA-256 `511c6a48ad1bca5a80d1653ca71435cacabd92e2362a22eaf542c08f660252eb`，已通过 esptool 刷写 hash 校验。typed JFDP info 确认 Core0.9.0/ABI4，Runtime source `d4ba0b846ca21a7d48d420651493133d8b1c209a`。应用 `org.jellyframe.fixture.installed-script-input` bundle 为2420字节，SHA-256 `949f9904ef9dadc38926b6c8d433d4340e6218de9f908a0b8a70103370f264bc`。registryGeneration200 安装 accepted、启动 ok；日志 `render_status=0`、`accepted_seq=1`、`presents_failed=0`。人工确认 Installed script / Ready: 0 / Tap 初始画面与点击变化仍待回复。
+当前 COM19 为 `0.6.2-abi4-pr116-inst1`，BIN SHA-256 `511c6a48ad1bca5a80d1653ca71435cacabd92e2362a22eaf542c08f660252eb`，已通过 esptool 刷写 hash 校验。typed JFDP info 确认 Core0.9.0/ABI4，Runtime source `d4ba0b846ca21a7d48d420651493133d8b1c209a`。应用 `org.jellyframe.fixture.installed-script-input` bundle 为2420字节，SHA-256 `949f9904ef9dadc38926b6c8d433d4340e6218de9f908a0b8a70103370f264bc`。registryGeneration200 安装 accepted、启动 ok；日志 `render_status=0`、`accepted_seq=1`、`presents_failed=0`。2026-11-16 人工确认 Installed script / Ready: 0 / Tap 初始画面、点击计数和按钮颜色变化均正常，本次画面及触控验收通过。
 
-本 fixture 有三个资源，没有 bitmap 图片。首次串口采集为空，当前身份与运行证据来自 typed JFDP info/logs；资源遥测为采样结果。旧待命黑屏发生在应用安装之前。构建清单中的 flashed=false/physicalDeviceTested=false 为构建时状态，后续刷写与本节运行记录按时间保留。PR #120 的 provider 发布/校验门槛已完成，后续工作为当前 generation200 人工观察。
+本 fixture 有三个资源，没有 bitmap 图片。首次串口采集为空，当前身份与运行证据来自 typed JFDP info/logs；资源遥测为采样结果。旧待命黑屏发生在应用安装之前。构建清单中的 flashed=false/physicalDeviceTested=false 为构建时状态，后续刷写与本节运行记录按时间保留。PR #120 的 provider 发布/校验门槛已完成，当前 generation200 人工画面和触控观察已通过；bitmap、弹层及更广泛生命周期/资源场景保留各自验证范围。
 
 ## 依赖顺序
 
@@ -133,4 +133,4 @@ Activity 与 Weather 文字显示正常，Weather 下方四个小卡片均有文
 5. 已完成：Core #66/#67 与 Runtime #114/#115 合并，相关合并后 CI 均通过。
 6. 已完成：Core v0.9.0 / ABI4 已签名发布；归档和 sidecar digest 已核验。Runtime full/cropped 本地 CTest 各 22/22。
 7. 已完成：Runtime #116 锁定 Core v0.9.0 / ABI4 并通过发布包、ABI3 兼容和 Windows CI；Runtime #117 修复 ABI4 WS147 编译边界并合并至 master `673f23a2`。
-8. 已完成构建和 native 指定观察项验收；inst1 已重刷校验，generation200 JFDP 安装 accepted、启动 ok，渲染遥测成功。待人工确认 generation200 的画面和触控。旧 popup 与 mainline1 观察保留各自镜像范围。
+8. 已完成构建和 native 指定观察项验收；inst1 已重刷校验，generation200 JFDP 安装 accepted、启动 ok，渲染遥测成功。generation200 的画面和触控已于 2026-11-16 获人工确认通过。旧 popup 与 mainline1 观察保留各自镜像范围。
