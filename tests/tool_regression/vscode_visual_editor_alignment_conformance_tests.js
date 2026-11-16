@@ -85,7 +85,8 @@ function nativeMetrics(model, name) {
   const result = spawnSync(shell, ["--app", root, "--capture-frames", path.join(root, "frames"), "--frame-count", "1", "--render-trace", trace], { encoding: "utf8", timeout: 20000 });
   assert.equal(result.status, 0, `${name}: ${result.error || result.stderr || result.stdout}`);
   const frame = fs.readFileSync(trace, "utf8").split(/\r?\n/).filter(Boolean).map(JSON.parse).find((record) => record.type === "frame");
-  const text = frame?.commandSpans?.find((command) => command.type === "Text");
+  const text = frame?.commandSpans?.find((command) =>
+    command.type === "Text" || command.type === "PreparedText");
   assert(text, `${name}: Native Runtime did not emit a text command`);
   return text.rect;
 }

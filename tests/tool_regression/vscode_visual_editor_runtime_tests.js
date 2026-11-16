@@ -46,7 +46,8 @@ for (const type of ["button", "text", "list"]) {
     }));
     const root = capture(`${type}-${verticalAlign}`, model);
     const frame = fs.readFileSync(path.join(root, "trace.jsonl"), "utf8").trim().split(/\r?\n/).map(JSON.parse).find((item) => item.type === "frame");
-    const text = frame.commandSpans.filter((item) => item.type === "Text");
+    const text = frame.commandSpans.filter((item) =>
+      item.type === "Text" || item.type === "PreparedText");
     assert.equal(text.length, 3);
     assert(text[0].rect.x < text[1].rect.x && text[1].rect.x < text[2].rect.x, `${type}: horizontal positions must follow alignment`);
     if (previousY !== undefined) assert(text[0].rect.y > previousY, `${type}: vertical alignment must change actual paint coordinates`);
