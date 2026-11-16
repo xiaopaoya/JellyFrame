@@ -217,12 +217,12 @@ const RECIPE_REGISTRY = Object.freeze([
   } },
   { type: "icon-text-row", group: "wearableGroup", label: "iconTextRow", help: "iconTextRowHelp", icon: "◉", template: {
     id: "icon-text-row", type: "container", layout: "row", gap: 8, padding: 8, width: "100%", height: "56px", background: "#18212b", radius: 8, align: "center", justify: "space-between", children: [
-      { id: "icon-text-row-symbol", type: "text", text: "◉", fontSize: 18, color: "#40d49a", align: "center", width: "24px", height: "24px", verticalAlign: "center" },
+      { id: "icon-text-row-symbol", type: "text", text: "", fontSize: 18, color: "#40d49a", align: "center", width: "24px", height: "24px", verticalAlign: "center", background: "transparent", radius: 12, borderWidth: 2, borderColor: "#40d49a" },
       { id: "icon-text-row-copy", type: "container", layout: "column", gap: 1, padding: 0, width: "auto", height: "auto", background: "transparent", radius: 0, align: "start", justify: "center", children: [
         { id: "icon-text-row-title", type: "text", text: "Activity", fontSize: 15, color: "#f4f7fb", weight: "bold", align: "left", width: "auto" },
         { id: "icon-text-row-subtitle", type: "text", text: "Ready to start", fontSize: 12, color: "#9aa9b8", align: "left", width: "auto" }
       ] },
-      { id: "icon-text-row-value", type: "text", text: "›", fontSize: 20, color: "#9aa9b8", align: "right", width: "20px", height: "24px", verticalAlign: "center" }
+      { id: "icon-text-row-value", type: "text", text: ">", fontSize: 20, color: "#9aa9b8", align: "right", width: "20px", height: "24px", verticalAlign: "center" }
     ]
   } },
   { type: "value-row", group: "wearableGroup", label: "valueRow", help: "valueRowHelp", icon: "=", template: {
