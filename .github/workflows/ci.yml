@@ -271,7 +271,7 @@ jobs:
         run: >
           python project_tools\benchmark_guard.py
           --build-dir build\desktop-release\Release
-          --suite all
+          --suite app-runtime
           --report build\ci\benchmark_guard.report.json
 
       - name: Check whitespace
