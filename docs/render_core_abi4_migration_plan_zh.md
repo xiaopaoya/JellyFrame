@@ -1,8 +1,8 @@
 # Render Core ABI4 集成计划
 
-> 最后更新：2026-11-16；适用版本：0.6.0-dev。Core 开发契约：0.9.0-dev / ABI4。
+> 最后更新：2026-11-16；适用版本：0.6.0-dev。Core 已发布版本：0.9.0 / ABI4。
 
-> **最新检查点（2026-11-16）：**Runtime PR #114 已合并为 `a197ceb4`，其 CI run `43758728864` 全部成功；Core PR #66 已合并为 `079de28a`，合并后主线 CI run `43759873775` 成功。#114 将生产消费者迁至 Core TextSystem，并保留 Core 计算样式的安全布局复用；#66 退役旧文本度量/绘制回调。Runtime 生产仍锁定签名 Core 0.8.0 / ABI3；ABI4 尚未签名发布。Core #63 popup 的 `installed-core63-device1` 实机验收通过（Runtime `f609a1d4`、Core source `e842b2e6`、BIN SHA-256 `8DBA1F73...E2A6A0F`）：选项均可见，选择 CHARLIE 后结果更新正确。该验收绑定的是 #66 合并前的设备镜像，只证明弹层行为，不代表合并后固件身份。
+> **最新检查点（2026-11-16）：**Runtime PR #99–#115 已合并。#111 将 WS147 band-shell CoreText profile 设为默认并加入 Win32 ABI4 属性/增量与全量重绘矩阵（293 帧、27 组流程）；#114 退役 Runtime 文本回调，#115 扩展 ABI4 桌面工具和 benchmark 构建覆盖。Core PR #67（`16a83211ec0992f8e25ec0fc977eb6fd158716e3`）完成 ABI4 契约。Core v0.9.0 / ABI4 已签名发布；归档与 `.sha256` sidecar 已上传，GitHub 归档 digest 与 `8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628` 一致。Runtime PR #116 已锁定发布包，更新 manifest/模板和三个 ESP32 探针生成器，并增加 provenance 与安装消费者覆盖。首轮合并后 CI 暴露两项测试接线问题：重绘用例依赖样式 getter 字符串比较，Standalone package CTest 注册了但没有构建 image metadata 测试目标。修复已进入 head `5c839ace`；精确 Core `18dc34e` source-override 重绘 CTest 本地通过 1/1，现有 full package-consumer 测试通过 23/23。CI run `43781188140` 正在运行。Core #63 弹层已在命名 profile `0.6.2-abi4-installed-core63-device1` 上通过实机验收。#116 通过并合并前，Runtime master 仍锁定 Core 0.8.0 / ABI3。`mainline2` 是独立设备工作。
 
 本文件是当前执行计划。旧检查点保存在 Git 历史和对应 PR 中，不再作为额外待办。
 [文本消费者退役清单](render_core_text_consumer_retirement.md)记录实际调用方与原生设备候选的完整身份。
@@ -11,11 +11,11 @@
 
 | 边界 | 当前状态 | 剩余门槛 |
 | --- | --- | --- |
-| 已发布依赖 | Runtime 生产锁仍为签名 Core v0.8.0 / ABI3。 | 发布 ABI4 签名包并完成独立安装消费者资格验证后，更新 Runtime 精确依赖锁。 |
-| Core 主线 | PR #66 已合并为 `079de28a`；合并后主线 CI `43759873775` 成功。核心文本回调 API 已退役。 | 从合并主线生成候选包，核验版本、ABI、source manifest、profile、归档与签名；完成干净归档和安装消费者验证。 |
-| Runtime 主线 | PR #114 已合并为 `a197ceb4`；CI `43758728864` 全部成功。默认消费者使用 Core TextSystem；Win32 保留 Core 比较计算样式后的无回调布局复用。 | ABI4 签名包可用后更新精确生产锁，并在 ABI3 锁定包与 ABI4 包上运行发布矩阵。 |
+| 已发布依赖 | Core v0.9.0 / ABI4 已签名发布；两个资产均上传，远端归档 digest 与本地一致。 | Runtime PR #116 通过 full/cropped、ABI3 source-override 和其余 CI 后合并。 |
+| Core 主线 | Core PR #67（`16a83211ec0992f8e25ec0fc977eb6fd158716e3`）及 ABI4 发布门槛已完成。 | 无；Runtime 由 #116 消费发布包。 |
+| Runtime 主线 | PR #99–#115 已合并。PR #116 已同步 master，锁定精确发布包并更新 manifest/模板、provenance、ABI4 安装消费者和三个 ESP32 探针。full/cropped package CTest 各 22/22；source-override 重绘测试本地 1/1。 | PR #116 的 CI run `43781188140` 必须通过 full/cropped、ABI3 source-override、Windows 和 standalone package 检查后合并。 |
 | Embedded host | #100 为 layout/layers/paint 绑定同一个 TextSystem/JFFONT2；锁定 ABI3 和 source ABI4 full/cropped 测试通过。 | 该示例不再依赖文本 provider 回调。 |
-| Installed worker | #101/#107 与 #114 已合并；`installed-core63-device1` 的用户验收确认选项、选择结果和触控正常，但使用的是 #66 合并前的 Core 镜像。 | ABI4 发布锁定后的 worker 固件须重新构建并绑定准确身份，再做一次设备资格验收。 |
+| Installed worker | #101/#107/#109/#114 已合并；用户已验收 Core #63 popup 的标题、全部选项、选择结果和触控。 | #116 合并后，从生产锁构建独立 worker 镜像并绑定身份验收。 |
 | 原生 WS147 | `mainline1` 的首页/Activity/Weather 验收仍有效；弹层测试后已恢复该镜像。 | 对签名 ABI4 锁定后的新原生镜像做身份绑定验收；不重复测试旧 `mainline1`。 |
 | ABI5 与 shaping | 独立可选候选；ABI5 tracked reuse 有正确性与包测试，尚无合格性能收益。 | 未启用到 Runtime，也不阻塞 ABI4 发布。 |
 
@@ -71,15 +71,15 @@ Core #66 已完成旧 provider API 和对应 Core 回调分支的集中退役。
 生产兼容路径仍允许使用原 ABI3 包；测试和移植文档中的历史引用应标记为 ABI3 或历史说明，
 不应重新引入 ABI4 别名。
 
-完成门槛：生产路径不存在回调消费者。合并源码上的 full/cropped 消费者和 Core CI 已通过；
-签名发布归档、下载后的 Runtime 包矩阵和关闭能力发布门禁仍待完成。实机是下游采用门槛。
+完成门槛：生产路径不存在回调消费者。合并源码上的 full/cropped 消费者和 Core CI 已通过，
+ABI4 已签名发布；Runtime 下载包矩阵和 ABI3 兼容 lane 是 PR #116 的剩余集成门槛。
 
 ### D. 发布和生产锁
 
-ABI4 **尚未发布**。从最终审查通过的 API/资源契约生成确定性签名发布，核验 tag、
-归档 checksum、source manifest、profile 和独立安装消费者，再更新 Runtime 的精确
-版本、ABI、源码/归档锁、已发布产物 CI 和兼容性文档。ABI3 作为回退证据保留，
-不能声称 ABI3/ABI4 二进制互换。
+Core v0.9.0 / ABI4 已从最终审查通过的源码发布并签名；tag、归档 checksum、source
+manifest、profile 和 Release 资产均已核验。Runtime 精确版本、ABI、源码/归档锁及
+已发布产物 CI 已在候选分支更新，等待 PR CI 后合并。ABI3 作为回退证据保留，不能
+声称 ABI3/ABI4 二进制互换。
 
 ### E. 设备准入
 
@@ -116,8 +116,7 @@ benchmark smoke。此前的小卡片缺字反馈仍适用于其他未测身份�
 2. 已由 Core #65 完成：generated pseudo label/list marker 使用 Core TextSystem 准备或明确拒绝；Core 四项 CI 全部通过。
 3. 已完成：Runtime 使用精确 Core #65 identity `52ae4354...7302f62d` 完成 Release build 与 CTest 60/60；source override 测试配置也已链接 Core test hook。这证明 host 集成，不代表签名包锁定或设备验收。
 4. 已在源码 identity `8328dbf1...02d1186` / 159 个文件上完成：Core full/cropped CTest、归档 3/3、full/cropped TextSystem 安装消费者、C5、wrapped-row、natural-image 消费者，以及 Runtime CTest 113/113。
-5. 已完成：Core #66 与 Runtime #114 合并，两个合并后 CI 均成功。
-6. 构建覆盖审计已完成：ABI4 CI 变更显式构建 `jellyframe_pseudo_browser` 与 `jellyframe_virtual_bench` 并运行 benchmark smoke；本地 ABI4 构建和两个聚焦测试已通过，PR CI 待运行。
-7. 从 Core 合并源码生成并签名版本化归档，核验 checksum/source manifest/profile，再让 Runtime 对下载后的 full/cropped ABI4 包运行消费者测试。
-8. Runtime 锁定资格合格的 ABI4 发布包，并运行 ABI3 锁定包兼容矩阵及 ABI4 发布包矩阵。
-9. 从锁定生产状态构建命名 WS147 native 与 installed-worker 镜像，记录 BIN/ELF/包身份并分别验收；旧 `mainline1` 和 `installed-core63-device1` 不能替代新镜像验收。
+5. 已完成：Core #66/#67 与 Runtime #114/#115 合并，相关合并后 CI 均通过。
+6. 已完成：Core v0.9.0 / ABI4 已签名发布；归档和 sidecar digest 已核验。Runtime full/cropped 本地 CTest 各 22/22。
+7. 进行中：PR #116 head `5c839ace` 的 CI run `43781188140`；已修正重绘用例状态切换和 standalone image metadata 测试目标。所有必需检查通过后再合并。
+8. 合并锁更新后，从生产锁构建命名 WS147 native 与 installed-worker 镜像，记录 BIN/ELF/包身份并按具体 profile 验收。已通过的 popup 观察和旧 `mainline1` 观察只适用于其命名镜像。

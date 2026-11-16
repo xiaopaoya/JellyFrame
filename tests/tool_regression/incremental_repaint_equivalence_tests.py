@@ -153,10 +153,11 @@ def make_text_property_case(
         "var spaced=false;document.getElementById('toggle').addEventListener('click',function(){"
         "spaced=!spaced;label.setAttribute('class',spaced?'spaced':'');});"
         if letter_spacing_case else
-        f"var initial='{initial}', changed='{changed}';"
+        f"var initial='{initial}', changed='{changed}', isChanged=false;"
         f"label.style.{property_name}=initial;"
         f"document.getElementById('toggle').addEventListener('click',function(){{"
-        f"label.style.{property_name}=label.style.{property_name}===changed?initial:changed;"
+        "isChanged=!isChanged;"
+        f"label.style.{property_name}=isChanged?changed:initial;"
         "});"
     )
     (app / "index.html").write_text(
@@ -436,7 +437,7 @@ def bmp_region_has_visible_pixels(path: Path, region: tuple[int, int, int, int])
 
 def main() -> int:
     include_core_text = False
-    core_version = "0.8.0"
+    core_version = "0.9.0"
     selected_case: str | None = None
     args: list[str] = []
     index = 1

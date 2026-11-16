@@ -1,8 +1,8 @@
 # Render Core ABI4 Integration Plan
 
-> Last updated: 2026-11-16; Applies to: 0.6.0-dev. Core development contract: 0.9.0-dev / ABI4.
+> Last updated: 2026-11-16; Applies to: 0.6.0-dev. Core released version: 0.9.0 / ABI4.
 
-> **Latest checkpoint (2026-11-16):** Runtime PR #114 merged as `a197ceb4`; CI run `43758728864` succeeded across all checks. Core PR #66 merged as `079de28a`; post-merge CI run `43759873775` succeeded. Runtime production still locks signed Core 0.8.0 / ABI3; ABI4 is not signed or released. Core #63 popup acceptance passed on `installed-core63-device1` (Runtime `f609a1d4`, Core source `e842b2e6`, BIN SHA-256 `8DBA1F73...E2A6A0F`): all options were visible and choosing CHARLIE updated the result. That device image predates Core #66 and proves popup behavior only, not the identity of a post-merge ABI4 firmware.
+> **Latest checkpoint (2026-11-16):** Runtime PRs #99–#115 are merged. #111 promotes the WS147 band-shell CoreText profile and adds the Win32 ABI4 property/incremental-versus-full repaint matrix (293 frames, 27 flows); #114 retires Runtime text callbacks, and #115 expands ABI4 desktop-tool/benchmark build coverage. Core PR #67 (`16a83211ec0992f8e25ec0fc977eb6fd158716e3`) completes the ABI4 contract. Core v0.9.0 / ABI4 is signed and published; the archive and `.sha256` sidecar are uploaded, and GitHub's archive digest matches `8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628`. Runtime PR #116 pins the release, updates manifests/templates and three ESP32 probe generators, and adds provenance plus installed-consumer coverage. The first post-merge CI run exposed two test wiring issues: the repaint fixture relied on style getter equality, and standalone package CTest had registered an image metadata test whose target was not built. Both fixes are in head `5c839ace`; the exact Core `18dc34e` source-override repaint CTest passes locally, and the existing full package-consumer suite passes 23/23. CI run `43781188140` is now running. Core #63 popup hardware acceptance passed on named profile `0.6.2-abi4-installed-core63-device1`. Runtime master remains on Core 0.8.0 / ABI3 until #116 CI passes and merges. `mainline2` remains separate device work.
 
 This is the current execution plan. Earlier checkpoint narratives are preserved
 in Git history and their linked PRs; they are not additional open tasks. The
@@ -13,11 +13,11 @@ actual call sites and the exact native device candidate.
 
 | Boundary | Current state | Remaining gate |
 | --- | --- | --- |
-| Released dependency | Signed Core v0.8.0 / ABI3 remains Runtime's production lock. | Publish and qualify the signed ABI4 package, then update the exact lock. |
-| Core mainline | PR #66 is merged as `079de28a`; post-merge CI run `43759873775` passed. Legacy text measure/paint callbacks are retired from Core. | Produce a deterministic signed ABI4 candidate from the merged source; verify archive, manifest/profile and installed consumers. |
-| Runtime mainline | PR #114 is merged as `a197ceb4`; CI run `43758728864` passed. Production consumers use Core TextSystem; Win32 keeps callback-free reuse after Core compares computed layout styles. | Pin the qualified ABI4 package and run both ABI3 compatibility and ABI4 package matrices. |
+| Released dependency | Core v0.9.0 / ABI4 is signed and published; both assets are uploaded and the remote archive digest matches the local hash. | Runtime lock PR #116 must pass full/cropped, ABI3 source-override and remaining CI. |
+| Core mainline | Core PR #67 (`16a83211ec0992f8e25ec0fc977eb6fd158716e3`) and ABI4 release gates are complete. | None; Runtime consumes the released package through #116. |
+| Runtime mainline | PRs #99–#115 are merged. PR #116 is synchronized with master and pins the exact release, manifests/templates, provenance, ABI4 installed consumers and three ESP32 probe manifests. Full/cropped package CTest passed 22/22 each; the source-override repaint test passed 1/1 locally. | CI run `43781188140` must pass the full/cropped, ABI3 source-override, Windows and standalone package checks before merge. |
 | Embedded host | PR #100 binds one TextSystem/JFFONT2 fixture to layout, layers and paint. Locked ABI3 and source ABI4 full/cropped tests pass. | No remaining provider callback in this example. |
-| Installed worker | PRs #101/#107/#114 are merged. The user accepted popup options, selection and touch on `installed-core63-device1`, built before Core #66 merged. | Rebuild and accept a named worker image after the signed ABI4 package is pinned. |
+| Installed worker | PRs #101/#107/#109/#114 are merged. The user accepted the Core #63 popup app: title, all options, selection result and touch work. | Build and accept the separate production-lock worker image after #116 merges. |
 | Native WS147 | `mainline1` Home/Activity/Weather acceptance remains valid; the board was restored to it after popup testing. | Build and accept a new image tied to the post-release Runtime/Core identities; do not repeat the old `mainline1` test. |
 | ABI5 and shaping | Separate optional candidates; ABI5 tracked reuse has correctness/package evidence but no qualified performance gain. | Not enabled in Runtime and not an ABI4 release prerequisite. |
 
@@ -89,23 +89,21 @@ layout reuse/repaint APIs, public measure/range helpers and bitmap callback
 helpers. Prepared Core text is the supported text path; unsupported or unbound
 text is explicitly refused. Runtime #114 removes the corresponding production
 consumers. The weather small-card prepared-text cache regression is covered by
-Core tests and the Runtime `watch_weather` checks. ABI4 is now at the package
-release gate: sign only after source-archive, installed full/cropped consumers,
-supported-tool build coverage and disabled-feature gates pass on the exact
-merged Core source.
+Core tests and the Runtime `watch_weather` checks. ABI4 package publication is
+complete; Runtime's downloaded-package full/cropped matrix and locked ABI3
+compatibility lane are now the remaining integration gates in PR #116.
 
-Exit: no production callback consumer remains. Source-level full/cropped
-consumers and Core CI passed on the merged source identity. The signed release
-archive, downloaded-package Runtime matrix and disabled-feature release gates
-remain. Hardware qualification is a downstream adoption gate.
+Exit: no production callback consumer remains. Core v0.9.0 is signed and
+published, and source-level full/cropped consumers and Core CI passed. Runtime's
+downloaded-package matrix and ABI3 compatibility lane remain in PR #116.
 
 ### D. Release and production lock
 
-ABI4 is **not released**. Cut a signed deterministic Core release from the final
-reviewed API/resource contract; verify tag, archive checksum, source manifest,
-profile and standalone install/consumers. Update Runtime's exact version, ABI,
-source/archive lock and installed-artifact CI, together with compatibility docs.
-Keep ABI3 as rollback evidence; do not imply binary interchangeability.
+Core v0.9.0 / ABI4 has been released from the final reviewed source and signed.
+The tag, archive checksum, source manifest, profile and Release assets are
+verified. Runtime's exact version, ABI, source/archive lock and installed-artifact
+CI are updated on the candidate branch, pending PR CI and merge. Keep ABI3 as
+rollback evidence; do not imply binary interchangeability.
 
 ### E. Device admission
 
@@ -155,11 +153,14 @@ gates. Optional ABI5 reuse and production shaping remain separate.
    identity `52ae4354...7302f62d`; the Core test hook is now included in the
    Runtime in-tree source-override test configuration. This qualifies host
    integration, not the signed package lock or any device image.
-4. Completed on source identity `8328dbf1...02d1186` / 159 files: Core full/
-   cropped CTest, archive 3/3, installed full/cropped TextSystem, C5, wrapped-
-   row and natural-image consumers, and Runtime CTest 113/113.
-5. Completed: Core #66 and Runtime #114 merged; both post-merge CI runs passed.
-6. Coverage audit completed; the ABI4 CI change explicitly builds `jellyframe_pseudo_browser` and `jellyframe_virtual_bench` and runs the benchmark smoke. Local ABI4 build and both focused tests pass; PR CI remains pending.
-7. Produce and sign the versioned Core archive, verify checksum/source manifest/profile, then run Runtime consumers against the downloaded full/cropped ABI4 package.
-8. Pin the qualified ABI4 release in Runtime and run the ABI3 locked-package compatibility matrix alongside the ABI4 release-package matrix.
-9. Build named WS147 native and installed-worker images from the locked production state, record BIN/ELF/package identities, and run their separate device acceptance checks.
+4. Completed: Core #66/#67 and Runtime #114/#115 retire the callback paths,
+   expand tool/benchmark coverage and pass their merged CI gates.
+5. Core v0.9.0 / ABI4 is signed and published; its archive and sidecar hashes
+   are verified. Runtime PR #116 pins the exact release and adds full/cropped
+   installed-consumer CI; local CTest passes 22/22 in each profile.
+6. In progress: CI run `43781188140` for PR #116 head `5c839ace` after fixing
+   the repaint fixture's toggle and building the standalone image metadata
+   target. Merge only after the full required check set passes.
+7. After the lock merges, build named WS147 native and installed-worker images
+   from the production lock, record BIN/ELF/package identities, and run hardware
+   acceptance for those exact profiles.

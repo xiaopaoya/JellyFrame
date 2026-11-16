@@ -76,7 +76,7 @@ function nativeMetrics(model, name) {
   fs.writeFileSync(path.join(root, "jellyframe.app.json"), JSON.stringify({
     format: "jellyframe.app", formatVersion: 0, id: "org.jellyframe.editor-alignment", name,
     version: { name: "0.1.0", code: 1 }, entry: "/index.html",
-    runtime: { minJellyFrame: "0.6.0", minRenderCore: "0.8.0", script: "none" },
+    runtime: { minJellyFrame: "0.6.0", minRenderCore: "0.9.0", script: "none" },
     viewport: { designWidth: 300, designHeight: 300, shape: "rect" }
   }));
   fs.writeFileSync(path.join(root, "index.html"), `<!doctype html><html><head><link rel="stylesheet" href="app.css"></head><body>${renderBody(model)}</body></html>`);
@@ -85,7 +85,8 @@ function nativeMetrics(model, name) {
   const result = spawnSync(shell, ["--app", root, "--capture-frames", path.join(root, "frames"), "--frame-count", "1", "--render-trace", trace], { encoding: "utf8", timeout: 20000 });
   assert.equal(result.status, 0, `${name}: ${result.error || result.stderr || result.stdout}`);
   const frame = fs.readFileSync(trace, "utf8").split(/\r?\n/).filter(Boolean).map(JSON.parse).find((record) => record.type === "frame");
-  const text = frame?.commandSpans?.find((command) => command.type === "Text");
+  const text = frame?.commandSpans?.find((command) =>
+    command.type === "Text" || command.type === "PreparedText");
   assert(text, `${name}: Native Runtime did not emit a text command`);
   return text.rect;
 }
