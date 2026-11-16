@@ -1,26 +1,30 @@
 # Core-owned text consumer retirement
 
-> Last updated: 2026-11-16; Applies to: 0.6.0-dev. Core contract: 0.9.0-dev / ABI4.
+> Last updated: 2026-11-16; Applies to: 0.6.0-dev. Core contract: 0.9.0 / ABI4.
 
 Current source audit: 2026-11-16. Runtime PR #114 merged as `a197ceb4`; Core PR
-#66 merged as `079de28a`, 0.9.0-dev / ABI4. Both post-merge CI runs passed.
-Runtime production remains locked to signed Core 0.8.0 / ABI3; ABI4 package
-publication and production locking are still pending.
+#66 merged as `079de28a`, 0.9.0-dev / ABI4. Runtime PR #116 merged as
+`f2169d652e4e4c16a84935cd955f4524ace14db0` and locks production to signed Core
+v0.9.0 / ABI4. Runtime PR #117 merged as `673f23a2778894287e292473980903fbe8e7cff3`,
+the current master commit. Both PR CI runs passed. ABI4 package publication and
+Runtime production locking are complete.
 
 The merged ABI4 Runtime has no production host text-measure or paint consumers.
 Runtime Release CTest passed 113/113 against the exact Core source override,
 including Core style-reuse tests, route-tabs, motion-lab and incremental/full
 pixel equivalence. Core full/cropped Release CTest passed 33/33 and 32/32 on the
 candidate. Core #66 CI, including Standalone Build and Archive, and Runtime
-#114 full/cropped source-installed consumers passed. The versioned signed
-release archive and Runtime tests against that published archive remain.
+#114 full/cropped source-installed consumers passed. Runtime #116 full/cropped
+released-package consumers, ABI3 compatibility, Windows and standalone package
+checks passed in CI. Core v0.9.0 is signed and Runtime locks that published
+package.
 
 ## Production consumers
 
 | Consumer | Actual selection and resources | Remaining change |
 | --- | --- | --- |
-| ESP32 retained UI (`jellyframe_esp32s3_ui_task.cpp`) | Runtime #114 moves production text to Core TextSystem; ABI3 compatibility remains behind ABI guards. The accepted `mainline1` image predates #114/#66. | Qualify a new named device image after pinning the signed ABI4 package. |
-| ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects canonical v10 and a painterless renderer independently of BMP; owned catalog/snapshot survives accepted-frame replay. The user accepted popup title/options/selection/touch on `0.6.2-abi4-installed-core63-device1`; that image predates Core #66. | Rebuild and qualify a worker image against the pinned signed ABI4 package. |
+| ESP32 retained UI (`jellyframe_esp32s3_ui_task.cpp`) | Runtime #114 moves production text to Core TextSystem; ABI3 compatibility remains behind ABI guards. The PR #117 production-lock image is built, flashed and serial-boot verified; the user accepted Home text/cards, Activity title/body/back, Weather hero/four small labels, and one visible button touch response for the exact BIN identity below. | No remaining acceptance item for the listed observations on this native image. Other image identities and untested flows remain separate. |
+| ESP32 installed worker (`jellyframe_esp32s3_installed_script_task.cpp`) | CoreText ON selects canonical v10 and a painterless renderer independently of BMP; owned catalog/snapshot survives accepted-frame replay. The PR #117 production-lock image is built but not flashed or accepted. Earlier popup acceptance on `0.6.2-abi4-installed-core63-device1` applies only to that image. | Flash and qualify the manifest-identified worker image. |
 | ESP32 P4/P5/P6 smoke (`main.cpp`) | The separate generated-BitmapFont provider factory is called only by this benchmark/smoke fixture, not by a product runtime route. The CoreText smoke runs before benchmark framebuffer admission. PR #110 built it with IDF 5.3.1 and exact Core #63 identity `e842b2e6...af1adb67`; the map excludes the legacy Noto C++ pack. | Keep legacy coverage on its explicit legacy profile. The CoreText smoke is build-qualified; physical execution is optional diagnostics, not a product-consumer migration gate. |
 | Desktop default (`tools/native/win32_browser.cpp`) | The ABI4 candidate selects Core TextSystem by default and compiles GDI only on ABI3. Text content changes still rebuild without host metrics. Paint-only style changes can reuse layout after Core compares the old/new computed layout fields and render-tree shape; shared-inline caches and DOM tree/text dirtiness are conservatively rejected. Runtime CTest confirms route-tabs `rebuild=1`, motion-lab `style_stable>0`, and incremental/full pixel equivalence. | No remaining Win32 callback migration; retain ABI3 GDI only behind its compatibility build boundary. |
 | Desktop application fonts (`src/app_runtime/app_font_set.cpp`) | Complete in Runtime #103: JFFONT2-only, callback loaders/accessors and browser precedence removed; tools/samples/import UI use canonical resources. | No remaining AppFontSet migration; generated C++ port defaults remain separate. |
@@ -68,9 +72,10 @@ JavaScript text mutation, replay after worker/resource/session teardown,
 snapshot retention until the final envelope releases, and atomic refusal of
 ordinary Text, malformed packets, foreign resource IDs and rendering budgets.
 Core PR60 full and cropped each pass 7/7 focused resource/admission/text tests.
-The locked installed Core0.8/ABI3 package passes four admission tests; the two
-canonical tests intentionally skip. CI builds and runs both text targets in
-full/cropped canonical ABI4 profiles and the R3 ownership lane.
+The historical locked Core 0.8/ABI3 package passed four admission tests; the
+two canonical tests intentionally skipped. Runtime #116 subsequently added
+released Core 0.9.0/ABI4 installed-consumer CI. CI builds and runs both text
+targets in full/cropped canonical ABI4 profiles and the R3 ownership lane.
 
 Real ESP-IDF5.3.1 compilation selects lifecycle + script worker + CoreText,
 explicit R3 events (the Xtensa build has no RTTI), 240 MHz, and immutable Core
@@ -89,8 +94,9 @@ log is `idf-bmp0-build.log`. Cropped BIN SHA-256 values:
 - BMP OFF: `cadd3d3e28d7c71baacd012e3bc6fefd157f8579a5f5e92f49164912f5bb4eab`.
 - BMP ON: `af743507278d5056ca963d24d448eec33b164d4da1220647a8ea310d2378cf7a`.
 
-These are build-only artifacts from this change, not flashed/accepted images.
-The native launcher candidate below is separate and remains byte-for-byte fixed.
+These are historical build-only artifacts, not flashed/accepted images. The
+post-PR #117 production-lock builds below supersede them for current image
+identity.
 
 ## Bounded CoreText ellipsis
 
@@ -115,35 +121,37 @@ pixels, incremental/full equality, no refusal, and narrow frames different from
 clip-only references. Source identity:
 `c11045754fa28b9bf3e5e0e9a8720dc202efd7dd9c66c159c058f5edee7dd69b`, 163 inputs.
 
-## Native WS147 candidate for hardware qualification
+## Post-PR #117 production-lock device builds
 
-- Local root: `D:\CodexTemp\abi4-current-mainline-20261115` (temporary storage).
-- Runtime `d6fcaff4b56a178f3bae6bbc4bf6721f931c2736` (PR103); Core
-  `38148e7388edc791e303b9b324f45d5df3d7b63e` (PR62).
-- Core source identity `caea681129a7201454fed709f1055a31886ef729779646853cc450e0c71a35e`, 163 inputs.
-- IDF v5.3.1 `c8fc5f643b7a7b0d3b182d3df610844e3dc9bd74`, with recursively
-  pinned SDK submodules; compiler `esp-13.2.0_20240530`.
-- Profile `ws147_core_text;render-core-default`, 240 MHz, `/band_shell.html`.
-  BMP adapter and installed script runtime are disabled in this native profile;
-  this candidate cannot qualify installed worker or natural-BMP delivery.
-- Candidate label `0.6.2-abi4-mainline2`; app BIN 7,614,704 bytes,
-  SHA-256 `95cc99f6161d44b5f8802399adbacb36289f5304826dd1e408878739cb346f4d`.
-  The 8 MiB app partition has 773,904 bytes free.
-- ELF SHA-256 `f95d87a9c540e69d57feaac572dfadb9b1979b7fc989d9273f11d3e62aca4481`;
-  build log version `tools-v0.4.72-216-gd6fcaff4`. Use the boot version plus ELF
-  hash for board identity because this native profile has no JFDP image-version
-  endpoint.
+The build manifest is `D:/CodexTemp/Runtime-pr116-ws147-build-20261116/build-manifest.json`.
+It records Runtime build commit `d4ba0b846ca21a7d48d420651493133d8b1c209a` and
+tree `2e0326369275400b03c75ee20740b91164fc2ea6`, matching the current master
+tree at `673f23a2`; Render Core is signed v0.9.0 / ABI4, commit
+`16a83211ec0992f8e25ec0fc977eb6fd158716e3`.
 
-The app segment at factory offset `0x10000` matches the BIN hash. The factory is
-16 MiB, SHA-256 `41bbd01594fd5072ad9e88db4e465674744e240dfdadff84893ac70a5a4d1920`;
-the offline Developer Image BIN matches the build BIN exactly. Package and
-device-manifest regression suites pass 5/5 and 4/4.
+- Native image `0.6.2-abi4-pr116-native1`: app BIN 3,522,112 bytes,
+  SHA-256 `A87BBFDC95F6467A065A0A5A5B436E7CD1730D22C838BEE9D44590E40D148039`;
+  ELF SHA-256 `68642F8BE62C606092F76DE1FDDE04D0E69D659DCC425C2A56DBAD27751B4F92`.
+  The 8 MiB app partition has 4,866,496 bytes free. The actual serial log reports
+  `/band_shell.html`, `first_present_ok=1` at 580.297 ms. This image has been
+  flashed and boot verified. The user confirmed Home text and cards, Activity
+  title/body and back navigation, the Weather large card and all four small
+  labels, plus one visible button touch response. This acceptance is limited to
+  this exact BIN identity and these observed flows.
+- Installed-worker image `0.6.2-abi4-pr116-inst1`: app BIN 4,427,488 bytes,
+  SHA-256 `511C6A48AD1BCA5A80D1653CA71435CACABD92E2362A22EAF542C08F660252EB`;
+  ELF SHA-256 `2F34A22DA88CDF5213A67954DACEE410312470F5D4DEF0B9841E08F30B97DBF6`.
+  The 8 MiB app partition has 3,961,120 bytes free. This image is built but has
+  not been flashed or accepted.
 
-Provider ZIP: `jellyframe-ws147-developer-0.6.2-abi4-mainline2-provider-0.1.1-dev.zip`,
-6,777,675 bytes, SHA-256 `2984eef0e036622f9dfad9bb1e1350056bd9b1dc670ee06a0b5deeb40a5540a5c`.
+The manifest records `deviceAcceptance.flashed=false` and
+`physicalDeviceTested=false` at build time. A later native serial log supersedes
+that state for the native image only; it does not update installed-worker
+acceptance. IDF v5.3.1 was reported `dirty` because the shared checkout had 97
+modified paths, although the isolated source files matched the pinned IDF tree.
+The build manifest itself does not record the later human screen/touch acceptance above.
 
-This exact `mainline2` image remains unflashed and unaccepted. A separate
-`0.6.2-abi4-mainline1` image was tested on WS147 on 2026-11-15:
+A separate historical `0.6.2-abi4-mainline1` image was tested on WS147 on 2026-11-15:
 
 - Runtime `75a435c5`, Core `34ae4b88`.
 - BIN SHA-256 `AFB9F47E015FF5EB06AD441EBC322F50B04D6149CFA3E70B8C96675EF46C696E`.
@@ -153,9 +161,9 @@ This exact `mainline2` image remains unflashed and unaccepted. A separate
   Activity and Weather text, visible text in all four Weather small cards, and
   successful return navigation.
 
-This observation closes only the tested native image. It does not qualify the
-separate `mainline2` candidate, installed worker/BMP delivery, or the P4/P5/P6
-benchmark smoke. Keep those as separate named acceptance gates.
+This observation closes only the tested historical native image. It does not
+qualify the post-PR #117 installed-worker image, BMP delivery, or the P4/P5/P6
+benchmark smoke. Keep those as separate named acceptance gates. The new native
+image acceptance above is also limited to its recorded flows and exact BIN.
 
-Core ABI4 is still unreleased. Runtime production remains signed Core 0.8.0/ABI3.
 ABI5 tracked-style reuse and shaping are separate unqualified candidates.
