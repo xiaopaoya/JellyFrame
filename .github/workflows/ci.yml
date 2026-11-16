@@ -1260,7 +1260,7 @@ jobs:
         run: >-
           python tests/tool_regression/incremental_repaint_equivalence_tests.py
           build/abi4-same-thread/Release/jellyframe_desktop_shell.exe .
-          --core-version 0.9.0 --include-core-text --case text-overflow-ellipsis
+          --core-version 0.9.0-dev --include-core-text --case text-overflow-ellipsis
       - name: Verify canonical default and app font visible output
         shell: pwsh
         run: >-
