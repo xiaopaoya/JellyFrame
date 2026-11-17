@@ -106,8 +106,15 @@ add_custom_command(OUTPUT "${fixtures}/package-evidence.json"
     DEPENDS ${fixture_inputs})
 add_custom_target(jfsg_shaped_fixtures DEPENDS "${fixtures}/package-evidence.json")
 add_dependencies(jfsg_shaped_pipeline_tests jfsg_shaped_fixtures)
-foreach(case pipeline reboot tamper capacity resource_budget binding_oom worker_init_oom worker_mutation_oom worker_input_oom worker_fatal_oom)
+add_executable(jfsg_allocation_fault_tests allocation_fault_tests.cpp allocation_fault.cpp)
+target_compile_features(jfsg_allocation_fault_tests PRIVATE cxx_std_17)
+target_compile_options(jfsg_allocation_fault_tests PRIVATE -UNDEBUG)
+add_test(NAME jfsg_allocation_ledger COMMAND jfsg_allocation_fault_tests)
+foreach(case pipeline reboot tamper capacity resource_budget binding_oom worker_init_oom worker_mutation_oom worker_input_oom worker_fatal_oom resource_cost)
     add_test(NAME jfsg_shaped_${case} COMMAND jfsg_shaped_pipeline_tests ${case} "${fixtures}")
 endforeach()
+add_test(NAME jfsg_vm_fatal_boundary COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vm_exhaustion_test.py" "$<TARGET_FILE:jfsg_shaped_pipeline_tests>" "${fixtures}")
+set_tests_properties(jfsg_vm_fatal_boundary PROPERTIES TIMEOUT 40)
 add_test(NAME jfsg_shaped_provider_transport COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/provider_transport_tests.py" "${fixtures}")

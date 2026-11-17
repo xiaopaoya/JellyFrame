@@ -14,6 +14,21 @@ static_assert(JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API == JFSG_EXPECT_CONTEXTUAL,
     "Qualification must execute the explicitly selected text route");
 
 namespace {
+bool measure_resources=false;
+template<class Operation> auto measured(const char* phase,Operation operation) {
+    if (!measure_resources) return operation();
+    allocation_fault::reset_peak();
+    const auto before=allocation_fault::usage();
+    const auto start=std::chrono::steady_clock::now();
+    auto result=operation();
+    const auto finish=std::chrono::steady_clock::now();
+    const auto after=allocation_fault::usage();
+    const auto nanoseconds=std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count();
+    std::printf("RESOURCE {\"phase\":\"%s\",\"nanoseconds\":%lld,\"liveBefore\":%zu,\"liveAfter\":%zu,\"peak\":%zu,\"requested\":%zu,\"allocations\":%zu}\n",
+        phase,static_cast<long long>(nanoseconds),before.live_bytes,after.live_bytes,
+        after.peak_bytes,after.total_bytes-before.total_bytes,after.allocations-before.allocations);
+    return result;
+}
 std::vector<std::uint8_t> installed_bytes(AppInstalledBundleBinding& binding, const char* path,
     std::size_t maximum=48*1024) {
     std::vector<std::uint8_t> bytes(maximum);
@@ -120,6 +135,7 @@ Rect compare_direct_core(const ScriptTaskAcceptedAppFrame& accepted,
 int main(int argc,char** argv) {
     CHECK(argc==3);
     const std::string mode=argv[1];
+    measure_resources=mode=="resource_cost";
     const std::filesystem::path fixture=argv[2];
     auto bytes=read(fixture/"full-shaped.jfsg");
     const auto package_bytes=bytes.size();
@@ -161,7 +177,7 @@ int main(int argc,char** argv) {
     auto binding=std::make_unique<AppInstalledBundleBinding>(*store);
     CHECK(binding->launch(host,app_id).launched());
     DeviceBundleInspectionWorkspace workspace;
-    auto selected=binding->select_active_text_pipeline(workspace,2*1024*1024);
+    auto selected=measured("binding",[&] { return binding->select_active_text_pipeline(workspace,2*1024*1024); });
     std::printf("selected pipeline status=%u\n",unsigned(selected.status));
     CHECK(selected.status==AppInstalledTextPipelineStatus::Ready);
     CHECK(selected.frame_version==kRuntimeShapedFrameVersion && selected.binding && selected.binding->valid());
@@ -359,13 +375,23 @@ int main(int argc,char** argv) {
         std::printf("fatal record allocation refusal/retry publishes exactly once\n");
     }
     auto worker=std::make_unique<ScriptTaskWorkerRuntime>(session,options);
-    const auto init=worker->initialize(supervisor,html,css);
+    const auto init=measured("initialize",[&] { return worker->initialize(supervisor,html,css); });
     std::printf("worker init status=%u\n",unsigned(init));
     CHECK(init==ScriptTaskWorkerRuntimeInitStatus::Accepted);
-    CHECK(worker->eval_with_supervisor(supervisor,js,"/app.js").ok);
+    if (mode=="vm_oom") {
+        // The pinned host port exits with Jerry fatal code10. A subprocess owns
+        // this test: VM arena exhaustion cannot unwind through C++ guards.
+        std::printf("VM_OOM_BEGIN initialized authenticated worker\n");
+        std::fflush(stdout);
+        worker->eval_with_supervisor(supervisor,
+            "var held=[];for(var i=0;i<100000;i++){var a=[];for(var j=0;j<128;j++)a.push(i+j);held.push(a);}");
+        std::fprintf(stderr,"VM arena unexpectedly returned to Runtime\n");
+        return 2;
+    }
+    CHECK(measured("script",[&] { return worker->eval_with_supervisor(supervisor,js,"/app.js"); }).ok);
     ScriptTaskAcceptedAppFrame initial,changed;
     const auto take=[&](ScriptTaskAcceptedAppFrame& accepted) {
-        CHECK(take_installed_core_text_frame(supervisor,session,options.frame_codec,accepted)==ScriptTaskAppFrameTakeStatus::Accepted);
+        CHECK(measured("take",[&] { return take_installed_core_text_frame(supervisor,session,options.frame_codec,accepted); })==ScriptTaskAppFrameTakeStatus::Accepted);
         CHECK(accepted.shaped_text_binding()==selected.binding && !accepted.frame().shaped_text.empty());
         for (const auto& command:accepted.frame().display_list) {
             const auto type=detail::command_type(command);
@@ -377,28 +403,31 @@ int main(int argc,char** argv) {
     };
     ScriptTaskFrameRenderer renderer;
     const auto render=[&](const ScriptTaskAcceptedAppFrame& accepted) {
+        return measured("paint_with_framebuffer",[&] {
         FrameBuffer pixels(172,320,{255,255,255,255});
         ScriptTaskFrameRenderStatus status;
         CHECK(render_installed_core_text_frame(renderer,accepted,pixels,{255,255,255,255},nullptr,0,nullptr,&status));
         CHECK(status==ScriptTaskFrameRenderStatus::Accepted);
         CHECK(std::any_of(pixels.pixels.begin(),pixels.pixels.end(),[](Color c){return c.r<100 && c.g<100;}));
         return pixels;
+        });
     };
-    CHECK(worker->publish_frame(supervisor).accepted());
+    CHECK(measured("publish",[&] { return worker->publish_frame(supervisor); }).accepted());
     take(initial);
     const auto original=render(initial);
     auto button=compare_direct_core(initial,selected.binding,html,css,original,options.shaped_layout);
     if (mode=="pipeline") image(fixture/"initial.ppm",original);
     std::uint32_t seq=0;
     changed=initial;
-    for (unsigned round=0;round<3;++round) {
+    for (unsigned round=0;round<(measure_resources?32u:3u);++round) {
         // DOM input uses the worker's ordinary hit tree, not optional external
         // target-key records. Use independently computed current Core geometry.
         CHECK(button.width>0 && button.height>0);
         for (auto kind:{ScriptTaskInputKind::PointerDown,ScriptTaskInputKind::PointerUp}) {
             CHECK(post_script_task_input(supervisor,session,++seq,
                 {kind,button.x+2,button.y+2,0,0,0,kind==ScriptTaskInputKind::PointerDown?1:0,0,0,{}},options.input_codec).accepted());
-            const auto step=worker->process_one(supervisor);
+            const auto step=measured(kind==ScriptTaskInputKind::PointerDown?"pointer_down":"pointer_up_update_publish",
+                [&] { return worker->process_one(supervisor); });
             CHECK(step.input_accepted && !step.fatal);
             if (kind==ScriptTaskInputKind::PointerUp) CHECK(step.frame_published);
         }
@@ -421,6 +450,7 @@ int main(int argc,char** argv) {
         if (mode=="pipeline" && round==0) image(fixture/"clicked.ppm",pixels);
     }
     const std::weak_ptr<const RuntimeShapedTextBinding> retained_owner=selected.binding;
+    const auto before_teardown=allocation_fault::usage();
     worker->stop();
     worker.reset();
     CHECK(supervisor.begin_teardown(session).session==session);
@@ -436,6 +466,11 @@ int main(int argc,char** argv) {
     CHECK(!retained_owner.expired());
     initial={};
     CHECK(retained_owner.expired());
+    if (measure_resources) {
+        const auto released=allocation_fault::usage();
+        std::printf("RESOURCE_LIFETIME {\"liveBeforeTeardown\":%zu,\"liveAfterFinalOwnerRelease\":%zu,\"bindingExpired\":true}\n",
+            before_teardown.live_bytes,released.live_bytes);
+    }
 }
 namespace jellyframe_esp32s3 {
 const ResourceBundle& generated_resource_bundle() { static const ResourceBundle empty{};return empty; }

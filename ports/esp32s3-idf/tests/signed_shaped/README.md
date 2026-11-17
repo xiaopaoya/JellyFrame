@@ -103,3 +103,32 @@ exact pipeline from fixture evidence and checks wrong ABI, partial capability,
 cross-route and capacity refusal before Begin. These are host mocked wire/NOR
 results with actual mbedTLS verification, not physical installation or VM/heap
 qualification. See [ABI9 execution evidence](../../../../docs/evaluation/2026-11-17-abi9-signed-resource-execution.md).
+
+## Requested C++ memory and fatal VM boundary
+
+The current suite passes20/20 per installed full/cropped and ABI4 compatibility
+configuration. Three added cases check the allocation ledger,32 pointer-driven
+updates with per-phase counters, and actual initialized-worker VM exhaustion
+in a bounded child process. The pinned host Jerry port exits with code10 on
+arena exhaustion; this is an expected fatal boundary, not worker recovery.
+ESP's actual port suspends the task instead. Do not longjmp through C++ owners.
+
+The ledger counts requested C++ new/new[] bytes and tracks frees across phase
+boundaries, including aligned/nothrow/sized forms. Its allocation-free prefix
+and atomic counters add overhead; counters exclude that prefix, malloc metadata,
+C allocations and VM arena. Process totals include test-only NOR, package and
+reference/framebuffer storage; they cannot be used as a target RAM budget.
+
+For repeated serial host observations:
+
+```powershell
+python ports/esp32s3-idf/tests/signed_shaped/measure_resource_cost.py `
+  --executable <installed-build>/jfsg_shaped_pipeline_tests.exe `
+  --fixtures <exact-fixtures-directory> --output <new-evidence-directory> --runs 5
+```
+
+Every measured update still checks independent Core packets and pixels. The
+report separates first/later phases and final retained replay, with bounded
+same-branch retained-byte deltas. Timings include instrumentation overhead and
+are not device latency or an exhaustive leak proof. See
+[resource costs and VM boundary](../../../../docs/evaluation/2026-11-17-abi9-resource-cost-vm-boundary.md).
