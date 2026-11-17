@@ -214,7 +214,7 @@ void core_font_catalog_tracks_app_lifetime_and_family_identity() {
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     assert(system->resolve_family_hash(family_hash,family_id) && family_id!=0);
 #else
-    family_id = 1; // Runtime registered the first named family with this ID.
+    family_id = family_hash; // ABI9 DOM requests use CSS hashes as family IDs.
 #endif
     TextFontRequest request;
     request.families=&family_id;
@@ -222,6 +222,9 @@ void core_font_catalog_tracks_app_lifetime_and_family_identity() {
     TextRunMetrics metrics;
     assert(system->measure("AB",request,metrics)==TextSystemStatus::Ok);
     assert(metrics.primary_resource_id!=0 && metrics.glyph_count==2 && metrics.advance>0);
+    TextRunMetrics system_metrics;
+    assert(system->measure("AB",TextFontRequest{},system_metrics)==TextSystemStatus::Ok);
+    assert(metrics.primary_resource_id!=system_metrics.primary_resource_id);
 
     const auto teardown=host.exit_current();
     assert(teardown.app_instance_id==app.id && teardown.released_font_resources==1);
