@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PROVIDER = ROOT / "ports" / "esp32s3-idf" / "tools" / "device_provider" / "jellyframe_device.py"
 sys.path.insert(0, str(ROOT / "tools"))
 from device_provider_contract import parse_provider_jsonl, parse_provider_result  # noqa: E402
+from jellyframe_versions import active_render_core_release_version  # noqa: E402
 
 
 def invoke(*arguments: str) -> subprocess.CompletedProcess[bytes]:
@@ -271,7 +272,7 @@ class Ws147DeviceProviderTests(unittest.TestCase):
             (root / "jellyframe.app.json").write_text(json.dumps({
                 "format": "jellyframe.app", "formatVersion": 0, "id": "org.example.installed",
                 "name": "Installed", "version": {"name": "1.0.0", "code": 1}, "entry": "/index.html",
-                "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "none"},
+                "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": active_render_core_release_version(), "script": "none"},
                 "viewport": {"designWidth": 172, "designHeight": 320, "shape": "rect"},
                 "budgets": {"maxResourceBytes": 1024, "maxDomNodes": 8, "maxCssRules": 4,
                             "maxDisplayCommands": 8, "maxTimers": 0, "maxEventListeners": 0},

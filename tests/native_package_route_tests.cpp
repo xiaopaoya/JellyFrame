@@ -29,6 +29,12 @@ int main(int argc, char** argv) {
     auto shaped = original;
     shaped.insert(shaped.rfind('}'), ",\"textPipeline\":null");
     rejects([&] { (void)parse_app_manifest_text(shaped); }, "does not support package-selected shaped textPipeline");
+    rejects([&] { (void)parse_app_manifest_text(shaped, false, true); }, "explicit jfsp2-block-v12");
+    auto contextual = original;
+    contextual.insert(contextual.rfind('}'), ",\"textPipeline\":{\"kind\":\"jfsp2-block-v12\"}");
+    assert(parse_app_manifest_text(contextual, false, true).contextual_text_pipeline ==
+           "{\"kind\":\"jfsp2-block-v12\"}");
+    rejects([&] { (void)parse_app_manifest_text(contextual); }, "does not support package-selected shaped textPipeline");
     // Current desktop scalar loader has no shaped worker connection. It must
     // refuse both loose source declarations and the mandatory container tag.
     std::array<unsigned char, kJfappHeaderSize> header{};

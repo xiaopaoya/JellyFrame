@@ -14,6 +14,13 @@
 #include "display_command_access.h"
 #include "native_budgets.h"
 #include "native_paint.h"
+#include "app_package.h"
+
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+#include "native_image.h"
+#include "app_runtime/app_frame_policy.h"
+#include "render_core/fractional_image_sampling.h"
+#endif
 
 #if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME) && \
     JELLYFRAME_NATIVE_CORE_TEXT_DEFAULT
@@ -46,6 +53,7 @@ struct BrowserOptions {
     std::string html_path;
     std::string css_path;
     std::string output_path;
+    std::string resource_root;
     std::string diagnostics_json_path;
     int viewport_width = 360;
     int viewport_height = 240;
@@ -57,6 +65,142 @@ struct ImageFrameSinkContext {
     std::string path;
     bool ok = false;
 };
+
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+// One synchronous owner spans metadata selection, layer resolution and paint.
+// All jobs finish before any borrowed metadata is exposed to Core.
+struct PseudoImages {
+    AppRuntimeHost runtime{AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4}};
+    ImageDecodeMock decoder{ImageDecodePolicy{true, 1024, 256, 256, 256 * 256 * 4, 4}};
+    AppImageSurfaceCache cache{AppImageSurfaceCacheOptions{8, 512 * 1024}};
+    jellyframe_example::PackageResourceContext resources;
+    const StyleResolver& resolver;
+    std::vector<std::string> sources;
+    DiagnosticSink* diagnostics;
+
+    PseudoImages(const BrowserOptions& options, const StyleResolver& styles, DiagnosticSink* sink)
+        : resolver(styles), diagnostics(sink) {
+        runtime.launch("org.jellyframe.pseudo.images", AppRole::App);
+        const auto html = std::filesystem::absolute(options.html_path);
+        resources.root = options.resource_root.empty() ? html.parent_path() :
+            std::filesystem::absolute(options.resource_root);
+        resources.base_url = "/" + std::filesystem::relative(html, resources.root).generic_string();
+        resources.max_input_bytes = kMaxInputBytes;
+        resources.diagnostics = sink;
+        const auto manifest_path = resources.root / "jellyframe.app.json";
+        if (std::filesystem::exists(manifest_path)) {
+            const auto manifest = jellyframe_example::parse_app_manifest_text(
+                jellyframe_example::read_text_file_limited(manifest_path, kMaxInputBytes), false, true);
+            if (!manifest.contextual_text_pipeline.empty())
+                throw std::runtime_error("pseudo browser requires the scalar text pipeline");
+        }
+    }
+
+    void prepare_source(const std::string& source) {
+        if (source.empty() || std::find(sources.begin(), sources.end(), source) != sources.end()) return;
+        if (sources.size() >= 8) throw std::runtime_error("pseudo image source budget exceeded");
+        sources.push_back(source);
+        std::string bytes;
+        ImageDecodeFixture fixture;
+        if (!jellyframe_example::load_package_resource(source, resources.base_url, bytes, &resources) ||
+            !native::decode_bmp_to_fixture(source, bytes, fixture, diagnostics) ||
+            !decoder.add_fixture(std::move(fixture)))
+            throw std::runtime_error("pseudo image backend unavailable: " + source);
+        std::uint32_t handle = 0;
+        cache.resolve_or_request(runtime, decoder, source, &handle);
+        AppFrameScratch scratch;
+        scratch.reserve_from_options(AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4});
+        for (std::size_t pass = 0; pass < 8 && decoder.complete_next(runtime); ++pass) {
+            runtime.pump_frame_completions(scratch);
+            for (const auto& completion : scratch.accepted_completions) cache.handle_completion(completion);
+        }
+        if (!cache.ready_handle(runtime, source, &handle) || !decoder.surface(handle) ||
+            cache.ready_byte_count() > 512 * 1024)
+            throw std::runtime_error("pseudo image decode refused: " + source);
+    }
+
+    void prepare(const RenderObject& object) {
+        if (object.node && object.node->type == NodeType::Element && object.node->tag_name == "img")
+            prepare_source(object.node->attribute("src"));
+        const auto resource_id = background_image_resource_id(object.style.background_overlay_packed);
+        if (resource_id) {
+            const auto* source = resolver.background_image_resource_url(resource_id);
+            if (source) prepare_source(*source);
+        }
+        for (const auto& child : object.children) prepare(*child);
+    }
+
+    static bool resolve(const Node& node, ImageResolveKind kind, std::uint16_t id,
+                        std::uint32_t& handle, void* raw) {
+        auto& self = *static_cast<PseudoImages*>(raw);
+        const auto* source = kind == ImageResolveKind::Background ?
+            self.resolver.background_image_resource_url(id) : &node.attribute("src");
+        return source && self.cache.ready_handle(self.runtime, *source, &handle);
+    }
+
+    static bool dimensions(std::uint32_t handle, int& width, int& height, void* raw) {
+        const auto* surface = static_cast<PseudoImages*>(raw)->decoder.surface(handle);
+        if (!surface || surface->width <= 0 || surface->height <= 0) return false;
+        width = surface->width;
+        height = surface->height;
+        return true;
+    }
+
+    static bool natural_size(const Node& node, int& width, int& height, void* raw) {
+        std::uint32_t handle = 0;
+        return resolve(node, ImageResolveKind::Content, 0, handle, raw) &&
+            dimensions(handle, width, height, raw);
+    }
+
+    static bool paint(FrameBuffer& target, const ImagePaintFractionalRequest& request, void* raw) {
+        const auto* surface = static_cast<PseudoImages*>(raw)->decoder.surface(request.image_handle);
+        if (!surface || surface->pixel_format != HostPixelFormat::Rgba8888 ||
+            surface->width <= 0 || surface->height <= 0 || surface->stride_pixels < surface->width ||
+            static_cast<std::size_t>(surface->stride_pixels) >
+                surface->pixels.size() / 4 / static_cast<std::size_t>(surface->height)) return false;
+        FractionalImageSamplingPlan plan;
+        if (!prepare_fractional_image_sampling(request, surface->width, surface->height, target, plan)) return false;
+        const auto read = [&](int x, int y) {
+            const auto index = (static_cast<std::size_t>(y) * surface->stride_pixels + x) * 4;
+            return Color{surface->pixels[index], surface->pixels[index + 1],
+                         surface->pixels[index + 2], surface->pixels[index + 3]};
+        };
+        for (int y = plan.clip.y; y < plan.clip.y + plan.clip.height; ++y) {
+            for (int x = plan.clip.x; x < plan.clip.x + plan.clip.width; ++x) {
+                const Color source = sample_fractional_image(plan, x, y, read);
+                Color& destination = target.pixel(x, y);
+                const int inverse = 255 - source.a;
+                const int alpha = source.a + (destination.a * inverse + 127) / 255;
+                if (!alpha) { destination = {0, 0, 0, 0}; continue; }
+                const auto blend = [&](int src, int dst) {
+                    return static_cast<std::uint8_t>((src * source.a +
+                        (dst * destination.a * inverse + 127) / 255 + alpha / 2) / alpha);
+                };
+                destination = {blend(source.r, destination.r), blend(source.g, destination.g),
+                               blend(source.b, destination.b), static_cast<std::uint8_t>(alpha)};
+            }
+        }
+        return true;
+    }
+
+    static bool paint_clipped(FrameBuffer& target, Rect rect, Rect clip, std::uint32_t handle,
+                              ObjectFit fit, ObjectPosition position, ImageRendering rendering, void* raw) {
+        const FractionalSampling sampling{{0, 1}, {0, 1}, {rect.width, 1}, {rect.height, 1}};
+        return paint(target, ImagePaintFractionalRequest{rect, rect, sampling, clip,
+                     handle, fit, position, rendering}, raw);
+    }
+
+    ImagePainter painter() {
+        ImagePainter result;
+        result.context = this;
+        result.writes_only_within_rect = true;
+        result.paint_clipped = paint_clipped;
+        result.supports_tiled_replay = true;
+        result.paint_fractional_clipped = paint;
+        return result;
+    }
+};
+#endif
 
 struct LayoutBounds {
     int left = 0;
@@ -651,13 +795,13 @@ void write_diagnostics_json(const std::string& path,
 BrowserOptions parse_options(int argc, char** argv) {
     if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
         std::cout << "usage: jellyframe_pseudo_browser page.html style.css output.ppm "
-                     "[viewport_width] [viewport_height] [--diagnostics-json report.json]\n";
+                     "[viewport_width] [viewport_height] [--diagnostics-json report.json] [--resource-root directory]\n";
         std::exit(0);
     }
     if (argc < 4) {
         throw std::runtime_error(
             "usage: jellyframe_pseudo_browser page.html style.css output.ppm "
-            "[viewport_width] [viewport_height] [--diagnostics-json report.json]");
+            "[viewport_width] [viewport_height] [--diagnostics-json report.json] [--resource-root directory]");
     }
 
     BrowserOptions options;
@@ -669,6 +813,11 @@ BrowserOptions parse_options(int argc, char** argv) {
     bool height_set = false;
     for (int i = 4; i < argc; ++i) {
         const std::string arg = argv[i];
+        if (arg == "--resource-root") {
+            if (i + 1 >= argc) throw std::runtime_error("--resource-root requires a directory");
+            options.resource_root = argv[++i];
+            continue;
+        }
         if (is_diagnostics_json_flag(arg)) {
             if (i + 1 >= argc) {
                 throw std::runtime_error("--diagnostics-json requires a file path");
@@ -731,11 +880,24 @@ int main(int argc, char** argv) {
             html_path.has_parent_path() ? html_path.parent_path() : std::filesystem::current_path();
         stylesheet_context.max_input_bytes = kMaxInputBytes;
         stylesheet_context.diagnostics = &diagnostics;
+        jellyframe_example::PackageResourceContext package_stylesheets;
+        if (!options.resource_root.empty()) {
+            package_stylesheets.root = std::filesystem::weakly_canonical(options.resource_root);
+            const auto relative = std::filesystem::weakly_canonical(html_path).lexically_relative(package_stylesheets.root);
+            if (relative.empty() || relative.is_absolute() ||
+                std::any_of(relative.begin(), relative.end(), [](const auto& part) { return part == ".."; }))
+                throw std::runtime_error("HTML entry is outside the package resource root");
+            package_stylesheets.base_url = "/" + relative.generic_string();
+            package_stylesheets.max_input_bytes = kMaxInputBytes;
+            package_stylesheets.diagnostics = &diagnostics;
+        }
         stage_start = Clock::now();
         const std::string css = combine_author_css(jellyframe_example::read_file_limited(options.css_path, kMaxInputBytes),
                                                    *document,
-                                                   jellyframe_example::load_linked_stylesheet,
-                                                   &stylesheet_context,
+                                                   options.resource_root.empty() ? jellyframe_example::load_linked_stylesheet :
+                                                       jellyframe_example::load_package_stylesheet,
+                                                   options.resource_root.empty() ? static_cast<void*>(&stylesheet_context) :
+                                                       static_cast<void*>(&package_stylesheets),
                                                    document_style_collection_options_from_budgets(budgets, &diagnostics));
 
         CssParser css_parser;
@@ -758,9 +920,18 @@ int main(int argc, char** argv) {
         auto render_tree = render_tree_builder.build(*document);
         timings.build_render_tree_us = elapsed_us(stage_start, Clock::now());
 
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+        PseudoImages images(options, resolver, &diagnostics);
+        images.prepare(*render_tree);
+        NaturalImageSizingOptions natural_images;
+        natural_images.provider = {PseudoImages::natural_size, &images};
+#endif
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
         layout_options.diagnostics = &diagnostics;
         layout_options.text_system = text_system;
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+        layout_options.natural_image_sizing = &natural_images;
+#endif
         TextSystemStatus text_status = TextSystemStatus::Ok;
 #if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
         layout_options.text_status = &text_status;
@@ -779,6 +950,9 @@ int main(int argc, char** argv) {
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
         layer_options.diagnostics = &diagnostics;
         layer_options.text_system = text_system;
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+        layer_options.image_resolver = {PseudoImages::resolve, &images, PseudoImages::dimensions};
+#endif
         LayerTreeBuilder layer_tree_builder(layer_options);
         stage_start = Clock::now();
         auto layer_tree = layer_tree_builder.build(*layout_tree);
@@ -794,7 +968,11 @@ int main(int argc, char** argv) {
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         SoftwareCompositor compositor(ImagePainter{}, compositor_options);
 #else
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+        SoftwareCompositor compositor(TextPainter{}, images.painter(), compositor_options);
+#else
         SoftwareCompositor compositor(TextPainter{}, ImagePainter{}, compositor_options);
+#endif
 #endif
         const Color background = page_background_color(*document, resolver);
         stage_start = Clock::now();

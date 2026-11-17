@@ -305,6 +305,9 @@ if(JELLYFRAME_BUILD_EXAMPLES)
     add_jellyframe_tool(jellyframe_layer_tree_dump tools/native/layer_tree_dump.cpp)
     add_jellyframe_tool(jellyframe_pipeline_dump tools/native/pipeline_dump.cpp)
     add_jellyframe_tool(jellyframe_pseudo_browser tools/native/pseudo_browser.cpp)
+    target_compile_definitions(jellyframe_pseudo_browser PRIVATE
+        JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION="${JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION}"
+        JELLYFRAME_RENDER_CORE_ACTIVE_PACKAGE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
     if(JELLYFRAME_BUILD_APP_RUNTIME)
         target_link_libraries(jellyframe_pseudo_browser PRIVATE jellyframe_app_runtime)
         target_compile_definitions(jellyframe_pseudo_browser PRIVATE JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME=1)
@@ -320,7 +323,7 @@ if(JELLYFRAME_BUILD_EXAMPLES)
             add_jellyframe_tool(jellyframe_desktop_shell tools/native/win32_browser.cpp)
         endif()
         if(JELLYFRAME_BUILD_APP_RUNTIME)
-        target_link_libraries(jellyframe_desktop_shell PRIVATE jellyframe_app_runtime gdi32 user32 winmm)
+        target_link_libraries(jellyframe_desktop_shell PRIVATE jellyframe_app_runtime gdi32 user32 winmm bcrypt)
         if(JELLYFRAME_BUILD_SCRIPTING)
             target_link_libraries(jellyframe_desktop_shell PRIVATE jellyframe_script)
         endif()
@@ -369,6 +372,36 @@ endif()
 
 if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
+    get_target_property(_native_core_definitions jellyframe_render_core INTERFACE_COMPILE_DEFINITIONS)
+    set(_native_core_probe_definitions)
+    foreach(_definition IN LISTS _native_core_definitions)
+        if(_definition MATCHES "^[A-Za-z_][A-Za-z0-9_]*(=.*)?$")
+            list(APPEND _native_core_probe_definitions "-D${_definition}")
+        endif()
+    endforeach()
+    if(WIN32 AND JELLYFRAME_BUILD_APP_RUNTIME AND JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 9)
+        add_executable(jellyframe_native_contextual_desktop_tests tests/native_contextual_desktop_tests.cpp)
+        target_link_libraries(jellyframe_native_contextual_desktop_tests PRIVATE jellyframe_app_runtime bcrypt)
+        target_include_directories(jellyframe_native_contextual_desktop_tests PRIVATE tools/native)
+        target_compile_definitions(jellyframe_native_contextual_desktop_tests PRIVATE
+            NOMINMAX JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION="${JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION}"
+            JELLYFRAME_RENDER_CORE_ACTIVE_PACKAGE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
+        if(JELLYFRAME_BUILD_SCRIPTING)
+            target_compile_definitions(jellyframe_native_contextual_desktop_tests PRIVATE JELLYFRAME_ENABLE_SCRIPTING=1)
+        endif()
+        jellyframe_enable_shaped_test_fixtures(jellyframe_native_contextual_desktop_tests)
+        jellyframe_enable_test_asserts(jellyframe_native_contextual_desktop_tests)
+        jellyframe_stage_sanitizer_runtime(jellyframe_native_contextual_desktop_tests)
+        if(TARGET jellyframe_desktop_shell)
+            add_dependencies(jellyframe_native_contextual_desktop_tests jellyframe_desktop_shell)
+            add_test(NAME jellyframe_native_contextual_desktop COMMAND jellyframe_native_contextual_desktop_tests
+                "${CMAKE_CURRENT_BINARY_DIR}/native-contextual-desktop-package" $<TARGET_FILE:jellyframe_desktop_shell>)
+        else()
+            add_test(NAME jellyframe_native_contextual_desktop COMMAND jellyframe_native_contextual_desktop_tests
+                "${CMAKE_CURRENT_BINARY_DIR}/native-contextual-desktop-package")
+        endif()
+        set_tests_properties(jellyframe_native_contextual_desktop PROPERTIES SKIP_RETURN_CODE 77)
+    endif()
     if(JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 9)
         add_jellyframe_tool(jellyframe_native_paint_admission_tests tests/native_paint_admission_tests.cpp)
         jellyframe_enable_test_asserts(jellyframe_native_paint_admission_tests)
@@ -413,6 +446,7 @@ if(JELLYFRAME_BUILD_TESTS)
     if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
         function(jellyframe_probe_installed_canonical_owner)
             include(CheckCXXSourceCompiles)
+            set(CMAKE_REQUIRED_DEFINITIONS ${_native_core_probe_definitions})
             set(CMAKE_REQUIRED_INCLUDES
                 ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
                 "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -501,12 +535,14 @@ if(JELLYFRAME_BUILD_TESTS)
     jellyframe_enable_test_asserts(jellyframe_esp32s3_resource_reference_tests)
     jellyframe_stage_sanitizer_runtime(jellyframe_esp32s3_resource_reference_tests)
     include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_DEFINITIONS ${_native_core_probe_definitions})
     set(CMAKE_REQUIRED_INCLUDES ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS})
     unset(JELLYFRAME_RENDER_CORE_NATURAL_IMAGE_API_AVAILABLE CACHE)
     check_cxx_source_compiles(
         "#include <render_core/layout.h>\n#if !defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) || JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION < 1\n#error natural image layout API is unavailable\n#endif\nint main() { return 0; }"
         JELLYFRAME_RENDER_CORE_NATURAL_IMAGE_API_AVAILABLE)
     unset(CMAKE_REQUIRED_INCLUDES)
+    unset(CMAKE_REQUIRED_DEFINITIONS)
     if(JELLYFRAME_RENDER_CORE_NATURAL_IMAGE_API_AVAILABLE)
         add_executable(jellyframe_esp32s3_image_metadata_tests
             ports/esp32s3-idf/tests/image_metadata_tests.cpp
@@ -921,6 +957,11 @@ if(JELLYFRAME_BUILD_TESTS)
             if(JELLYFRAME_BUILD_APP_RUNTIME AND JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 4)
                 set(JELLYFRAME_PSEUDO_TEXT_POLICY "core-text")
             endif()
+            set(_pseudo_image_preflight)
+            if(JELLYFRAME_BUILD_APP_RUNTIME AND JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 9 AND
+               "JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED=1" IN_LIST _native_core_definitions)
+                set(_pseudo_image_preflight --image-preflight)
+            endif()
             add_test(
                 NAME jellyframe_pipeline_visual_diagnostics_tests
                 COMMAND ${Python3_EXECUTABLE}
@@ -928,6 +969,7 @@ if(JELLYFRAME_BUILD_TESTS)
                         $<TARGET_FILE:jellyframe_pseudo_browser>
                         $<TARGET_FILE:jellyframe_pipeline_dump>
                         --text-policy "${JELLYFRAME_PSEUDO_TEXT_POLICY}"
+                        ${_pseudo_image_preflight}
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(

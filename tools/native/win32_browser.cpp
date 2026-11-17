@@ -53,6 +53,8 @@
 #include "display_command_access.h"
 #include "native_budgets.h"
 #include "native_paint.h"
+#include "native_contextual.h"
+#include "native_image.h"
 #if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
 #include "render_core/fractional_image_sampling.h"
 #endif
@@ -98,11 +100,7 @@ constexpr const char* kDefaultLauncherAppPath = "samples/apps/system/sample_laun
 constexpr const char* kLauncherStatusMarker = "<!-- JELLYFRAME_STATUS -->";
 constexpr const char* kLauncherConfirmationMarker = "<!-- JELLYFRAME_CONFIRMATION -->";
 constexpr const char* kLauncherAppListMarker = "<!-- JELLYFRAME_APP_LIST -->";
-constexpr int kMaxDebugPackageImageWidth = 256;
-constexpr int kMaxDebugPackageImageHeight = 256;
 constexpr const wchar_t* kWin32AudioAlias = L"jellyframe_audio_smoke";
-constexpr std::size_t kMaxDebugPackageImageDecodedBytes =
-    static_cast<std::size_t>(kMaxDebugPackageImageWidth) * kMaxDebugPackageImageHeight * 4U;
 constexpr std::size_t kMaxRenderTraceRecords = 600;
 constexpr std::size_t kMaxRenderTraceBytes = 4U * 1024U * 1024U;
 constexpr std::size_t kMaxRenderTraceLineBytes = 4096;
@@ -590,115 +588,7 @@ void add_debug_image_fixtures(ImageDecodeMock& images) {
     });
 }
 
-std::int32_t read_i32_le(const std::uint8_t* data) {
-    return static_cast<std::int32_t>(
-        static_cast<std::uint32_t>(data[0]) |
-        (static_cast<std::uint32_t>(data[1]) << 8U) |
-        (static_cast<std::uint32_t>(data[2]) << 16U) |
-        (static_cast<std::uint32_t>(data[3]) << 24U));
-}
-
-bool decode_bmp_to_fixture(const std::string& url,
-                           const std::string& bytes,
-                           ImageDecodeFixture& fixture,
-                           DiagnosticSink* diagnostics) {
-    const auto* data = reinterpret_cast<const std::uint8_t*>(bytes.data());
-    const std::size_t size = bytes.size();
-    if (size < 54 || data[0] != 'B' || data[1] != 'M') {
-        report_diagnostic(diagnostics,
-                          DiagnosticStage::Package,
-                          DiagnosticSeverity::Warning,
-                          "image-decode-unsupported",
-                          "Package image is not a supported BMP file",
-                          url);
-        return false;
-    }
-    const std::uint32_t pixel_offset = jellyframe_example::read_le32(data + 10);
-    const std::uint32_t dib_size = jellyframe_example::read_le32(data + 14);
-    if (dib_size < 40 || size < 14U + dib_size || pixel_offset >= size) {
-        report_diagnostic(diagnostics,
-                          DiagnosticStage::Package,
-                          DiagnosticSeverity::Warning,
-                          "image-decode-invalid",
-                          "BMP header is truncated or invalid",
-                          url);
-        return false;
-    }
-    const std::int32_t width = read_i32_le(data + 18);
-    const std::int32_t signed_height = read_i32_le(data + 22);
-    const std::uint16_t planes = jellyframe_example::read_le16(data + 26);
-    const std::uint16_t bits_per_pixel = jellyframe_example::read_le16(data + 28);
-    const std::uint32_t compression = jellyframe_example::read_le32(data + 30);
-    if (width <= 0 || signed_height == 0 || signed_height == std::numeric_limits<std::int32_t>::min() ||
-        planes != 1 || compression != 0 ||
-        (bits_per_pixel != 24 && bits_per_pixel != 32)) {
-        report_diagnostic(diagnostics,
-                          DiagnosticStage::Package,
-                          DiagnosticSeverity::Warning,
-                          "image-decode-unsupported",
-                          "Only uncompressed 24-bit and 32-bit BMP package images are supported in the Win32 debug shell",
-                          url);
-        return false;
-    }
-    const int height = std::abs(signed_height);
-    if (width > kMaxDebugPackageImageWidth || height > kMaxDebugPackageImageHeight) {
-        report_diagnostic(diagnostics,
-                          DiagnosticStage::Package,
-                          DiagnosticSeverity::Warning,
-                          "image-decode-budget",
-                          "Package BMP exceeds the Win32 debug shell image budget",
-                          url);
-        return false;
-    }
-    const std::size_t decoded_bytes = static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4U;
-    if (decoded_bytes > kMaxDebugPackageImageDecodedBytes) {
-        report_diagnostic(diagnostics,
-                          DiagnosticStage::Package,
-                          DiagnosticSeverity::Warning,
-                          "image-decode-budget",
-                          "Package BMP decoded bytes exceed the Win32 debug shell image budget",
-                          url);
-        return false;
-    }
-    const bool top_down = signed_height < 0;
-    const std::size_t bytes_per_pixel = bits_per_pixel / 8;
-    const std::size_t row_stride = ((static_cast<std::size_t>(width) * bits_per_pixel + 31U) / 32U) * 4U;
-    if (!jellyframe_example::byte_range_is_valid(size, pixel_offset, row_stride * static_cast<std::size_t>(height))) {
-        report_diagnostic(diagnostics,
-                          DiagnosticStage::Package,
-                          DiagnosticSeverity::Warning,
-                          "image-decode-invalid",
-                          "BMP pixel data is truncated",
-                          url);
-        return false;
-    }
-
-    std::vector<std::uint8_t> pixels;
-    pixels.resize(decoded_bytes);
-    for (int y = 0; y < height; ++y) {
-        const int source_y = top_down ? y : height - 1 - y;
-        const std::uint8_t* source_row = data + pixel_offset + static_cast<std::size_t>(source_y) * row_stride;
-        for (int x = 0; x < width; ++x) {
-            const std::uint8_t* source = source_row + static_cast<std::size_t>(x) * bytes_per_pixel;
-            const std::size_t output_index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
-                                             static_cast<std::size_t>(x)) * 4U;
-            pixels[output_index] = source[2];
-            pixels[output_index + 1] = source[1];
-            pixels[output_index + 2] = source[0];
-            pixels[output_index + 3] = bits_per_pixel == 32 ? source[3] : 255;
-        }
-    }
-
-    fixture = ImageDecodeFixture{
-        url,
-        width,
-        height,
-        width,
-        HostPixelFormat::Rgba8888,
-        std::move(pixels),
-    };
-    return true;
-}
+using native::decode_bmp_to_fixture;
 
 void collect_image_sources(const Node& node, std::vector<std::string>& sources) {
     if (node.type == NodeType::Element && node.tag_name == "img") {
@@ -1851,7 +1741,7 @@ bool resolve_audio_smoke_source(const BrowserOptions& options,
     if (!options.app_path.empty() && !source.empty() && source.front() == '/') {
         const std::string package_source = source;
         try {
-            const auto package = jellyframe_example::load_app_package(options.app_path, kMaxInputBytes);
+            const auto package = native::load_desktop_app_package(options.app_path, kMaxInputBytes);
             jellyframe_example::PackageResourceStats stats;
             jellyframe_example::PackageResourceContext context;
             context.root = package.root;
@@ -3816,7 +3706,7 @@ LoadedPage load_page(const BrowserOptions& options,
         return page;
     }
     if (!options.app_path.empty()) {
-        auto package = jellyframe_example::load_app_package(options.app_path, kMaxInputBytes);
+        auto package = native::load_desktop_app_package(options.app_path, kMaxInputBytes);
         page.package_mode = true;
         page.package_manifest = package.manifest;
         page.package_stats = {};
@@ -3828,7 +3718,8 @@ LoadedPage load_page(const BrowserOptions& options,
         page.package_context.bundle_bytes = std::move(package.bundle_bytes);
         page.package_context.bundle_entries = std::move(package.bundle_entries);
         page.package_context.bundle_payload_offset = package.bundle_payload_offset;
-        load_package_fonts_into_runtime(package.manifest, page.package_context, app_runtime, diagnostics);
+        if (package.manifest.contextual_text_pipeline.empty())
+            load_package_fonts_into_runtime(package.manifest, page.package_context, app_runtime, diagnostics);
         std::string html;
         if (!jellyframe_example::load_package_resource(package.manifest.entry,
                                                        package.manifest.entry,
@@ -3887,6 +3778,18 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
     }
     attach_desktop_system_font_catalog(app_runtime);
     LoadedPage page = load_page(options, budgets, &diagnostics, runtime);
+#if defined(_WIN32) && JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+    if (!page.package_manifest.contextual_text_pipeline.empty()) {
+        const auto selected = native::load_desktop_contextual_text(page.package_manifest, page.package_context);
+        StyleResolver resolver(std::move(page.stylesheet));
+        auto frame = native::build_desktop_contextual_frame(*page.document, resolver, selected,
+            options.viewport_width, options.viewport_height, render_tree_options_from_budgets(budgets),
+            layout_engine_options_from_budgets(budgets), layer_tree_options_from_budgets(budgets));
+        if (selected_text_backend) *selected_text_backend = "core-contextual-v12-local";
+        return native::paint_desktop_contextual_frame(frame, options.viewport_width, options.viewport_height,
+            page_background_color(*page.document, resolver), budgets.max_framebuffer_pixels);
+    }
+#endif
     BrowserTextBackend text_backend = make_browser_text_backend(options, runtime);
     if (selected_text_backend != nullptr) {
         *selected_text_backend = text_backend.name();
@@ -4728,8 +4631,11 @@ public:
                   << "  frame_step_ms=" << options_.frame_step_ms << '\n'
                   << "  viewport=" << viewport_width_ << "x" << viewport_height_ << '\n'
                   << "  text_policy="
-                  << (make_browser_text_backend(options_, &app_runtime_).core_text ? "core" : "legacy") << '\n'
-                  << "  text_backend=" << make_browser_text_backend(options_, &app_runtime_).name() << '\n'
+                  << (active_package_manifest_.contextual_text_pipeline.empty()
+                      ? (make_browser_text_backend(options_, &app_runtime_).core_text ? "core" : "legacy")
+                      : "contextual-v12") << '\n'
+                  << "  text_backend=" << (active_package_manifest_.contextual_text_pipeline.empty()
+                      ? make_browser_text_backend(options_, &app_runtime_).name() : "core-contextual-v12-local") << '\n'
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
                   << "  scripting=on\n"
 #else
@@ -4976,6 +4882,10 @@ private:
     LayerTreeOverrideScratch layer_override_scratch_;
     std::size_t opacity_layer_reuse_frames_ = 0;
     FrameBuffer frame_buffer_;
+#if defined(_WIN32) && JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+    native::DesktopContextualText contextual_text_;
+    native::DesktopContextualFrame contextual_frame_;
+#endif
     Color page_background_{255, 255, 255, 255};
     std::vector<std::uint32_t> blit_pixels_;
     DirtyRegionMode last_dirty_region_mode_ = DirtyRegionMode::Clean;
@@ -5726,7 +5636,7 @@ private:
         }
         if (!options_.app_path.empty()) {
             try {
-                const auto package = jellyframe_example::load_app_package(options_.app_path, kMaxInputBytes);
+                const auto package = native::load_desktop_app_package(options_.app_path, kMaxInputBytes);
                 jellyframe_example::PackageResourceStats stats;
                 jellyframe_example::PackageResourceContext context;
                 context.root = package.root;
@@ -5943,7 +5853,7 @@ private:
         try {
             const std::filesystem::path bundle_path =
                 jellyframe_example::find_installed_app_bundle_path(options_.registry_store_path, app_id);
-            auto package = jellyframe_example::load_app_package(bundle_path, kMaxInputBytes);
+            auto package = native::load_desktop_app_package(bundle_path, kMaxInputBytes);
             options_.app_path = bundle_path.string();
             options_.inline_html.clear();
             options_.inline_css.clear();
@@ -6286,6 +6196,9 @@ private:
             script_runtime_instance_id_ = 0;
 #endif
             LoadedPage page = load_page(options_, budgets_, &diagnostics_, &app_runtime_);
+#if defined(_WIN32) && JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+            contextual_text_ = native::load_desktop_contextual_text(page.package_manifest, page.package_context);
+#endif
             background_service_policy_ = page.package_mode
                 ? background_policy_from_manifest(page.package_manifest)
                 : AppBackgroundServicePolicy{};
@@ -6309,6 +6222,9 @@ private:
             layout_tree_.reset();
             layer_tree_.reset();
             input_.reset();
+#if defined(_WIN32) && JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+            contextual_frame_ = {};
+#endif
             animation_timeline_ = AnimationTimeline(AnimationTimelineOptions{budgets_.max_active_animations, &diagnostics_});
             style_overrides_.clear();
             previous_style_overrides_.clear();
@@ -6402,9 +6318,11 @@ private:
                 if (debug_audio_enabled_) {
                     script_runtime_->bind_audio_host(ScriptAudioHost{play_script_audio_callback, this});
                 }
-                const BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
-                bind_browser_text_backend(debug_canvas_, text_backend);
-                script_runtime_->bind_canvas_2d(debug_canvas_);
+                if (page.package_manifest.contextual_text_pipeline.empty()) {
+                    const BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
+                    bind_browser_text_backend(debug_canvas_, text_backend);
+                    script_runtime_->bind_canvas_2d(debug_canvas_);
+                }
                 script_runtime_->set_system_state(ScriptSystemState{
                     !debug_system_state_.screen_on || debug_system_state_.low_power_mode,
                     debug_system_state_.network_online,
@@ -6933,10 +6851,16 @@ private:
 
     void capture_script_layout_snapshot() {
 #if defined(JELLYFRAME_ENABLE_SCRIPTING)
+        const LayoutBox* completed_layout = layout_tree_.get();
+#if defined(_WIN32) && JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+        if (contextual_text_.binding) {
+            completed_layout = contextual_frame_.layout.tree();
+        }
+#endif
         if (script_runtime_ != nullptr &&
             script_runtime_instance_id_ == app_runtime_.current_app_instance_id() &&
-            layout_tree_ != nullptr) {
-            script_runtime_->capture_layout_snapshot(*layout_tree_, 0, -scroll_y_);
+            completed_layout != nullptr) {
+            script_runtime_->capture_layout_snapshot(*completed_layout, 0, -scroll_y_);
         }
 #endif
     }
@@ -7207,6 +7131,12 @@ private:
             collect_transition_candidate_styles(*render_tree_, previous_styles);
         }
         style_resolver_->set_interaction_state(hovered_node, active_node, focused_node);
+#if defined(_WIN32) && JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+        if (contextual_text_.binding) {
+            render_current_contextual(hovered_node, active_node, focused_node);
+            return;
+        }
+#endif
         const DomDirtyFlags dirty_flags = document_->dirty_flags;
 #if JELLYFRAME_NATIVE_NATURAL_IMAGE_LAYOUT
         // A ready-to-ready src change has no completion to invalidate geometry.
@@ -7639,6 +7569,43 @@ private:
             record_trace_span(FrameTraceStage::Present, present_started, std::chrono::steady_clock::now());
         }
     }
+
+#if defined(_WIN32) && JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+    void render_current_contextual(const Node* hovered, const Node* active, const Node* focused) {
+        auto next = native::build_desktop_contextual_frame(*document_, *style_resolver_, contextual_text_,
+            viewport_width_, viewport_height_, render_tree_options_from_budgets(budgets_),
+            layout_engine_options_from_budgets(budgets_), layer_tree_options_from_budgets(budgets_));
+        const int height = std::max(viewport_height_, next.layout.tree()->rect.height);
+        const Color background = page_background_color(*document_, *style_resolver_);
+        auto pixels = native::paint_desktop_contextual_frame(next, viewport_width_, height,
+            background, budgets_.max_framebuffer_pixels);
+        // Publish a completely painted snapshot. Previous capture and pixels
+        // survive layout, capture and late typed-paint refusal.
+        auto next_input = std::make_unique<InputController>(*next.input_layer,
+            input_invalidation_options_from_style(*style_resolver_), false);
+        next_input->set_interaction_state(hovered, active, focused);
+        input_.reset();
+        layer_tree_ = std::move(next.input_layer);
+        contextual_frame_ = std::move(next);
+        frame_buffer_ = std::move(pixels);
+        page_background_ = background;
+        input_ = std::move(next_input);
+        scroll_y_ = std::max(0, std::min(scroll_y_, max_scroll_y()));
+        capture_script_layout_snapshot();
+        DirtyRegionResult dirty;
+        dirty.mode = DirtyRegionMode::FullFrame;
+        dirty.rects.push_back(Rect{0, 0, viewport_width_, height});
+        record_dirty_region(dirty);
+        record_present_estimate_full_viewport();
+        FrameUpdatePlan plan;
+        plan.action = FrameUpdateAction::RebuildPipeline;
+        plan.reason = FrameUpdateReason::TreeDirty;
+        record_frame_update(plan, document_->dirty_flags);
+        update_blit_pixels();
+        publish_vscode_frame();
+        clear_dirty_flags(*document_);
+    }
+#endif
 
     void collect_transition_candidate_styles(const RenderObject& object,
                                              std::vector<std::pair<const Node*, Style>>& output) const {
@@ -9268,7 +9235,7 @@ int main(int argc, char** argv) {
 
     if (!options.app_path.empty()) {
         try {
-            const auto package = jellyframe_example::load_app_package(options.app_path, kMaxInputBytes);
+            const auto package = native::load_desktop_app_package(options.app_path, kMaxInputBytes);
             options.render_trace_app_id = package.manifest.id;
             options.viewport_width = options.viewport_width_set ? options.viewport_width : package.manifest.viewport_width;
             options.viewport_height = options.viewport_height_set ? options.viewport_height : package.manifest.viewport_height;

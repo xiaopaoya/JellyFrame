@@ -208,7 +208,9 @@ def check():
     manifest['textPipeline'] = None
     manifest_path.write_text(json.dumps(manifest))
     refused = run('contextual-refusal', [args.desktop, '--app', app, '--capture', root/'bad-route.ppm'], False)
-    require('does not support package-selected shaped textPipeline' in refused, 'Scalar native route accepted shaped declaration')
+    require(('requires an explicit jfsp2-block-v12 textPipeline' in refused or
+             'does not support package-selected shaped textPipeline' in refused),
+            'Null textPipeline did not produce a controlled route refusal')
     require(not (root/'bad-version.ppm').exists() and not (root/'bad-route.ppm').exists(), 'Refused package produced output')
 
     if args.core_abi >= 9:

@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import zlib
 from pathlib import Path
 from types import SimpleNamespace
@@ -151,6 +152,7 @@ class PackagePreflightTests(unittest.TestCase):
                 package_app.normalize_text_pipeline({**profile, key: value})
         with self.assertRaises(SystemExit): package_app.normalize_text_pipeline(None)
         manifest = package_app.read_manifest(REPO_ROOT / "samples/apps/packages/jelly_font_policy")
+        manifest["runtime"]["minRenderCore"] = package_app.active_render_core_release_version()
         manifest["textPipeline"] = profile
         manifest["runtime"]["script"] = "none"
         with self.assertRaises(SystemExit): package_app.validate_manifest(manifest)
@@ -188,6 +190,7 @@ class PackagePreflightTests(unittest.TestCase):
                    "sourceIdentity": "1" * 64, "profileIdentity": "2" * 64,
                    "glyphCount": 30900, "resourceId": 555, "rasterSize": 16, "weight": 400, "selection": 0}
         source = package_app.read_manifest(REPO_ROOT / "samples/apps/packages/jelly_font_policy")
+        source["runtime"]["minRenderCore"] = package_app.active_render_core_release_version()
         source["runtime"]["script"] = "classic"
         source["textPipeline"] = profile
         manifest = package_app.validate_manifest(source)
@@ -222,6 +225,7 @@ class PackagePreflightTests(unittest.TestCase):
 
     def test_shaped_cli_refuses_static_cpp_before_emitting_outputs(self):
         manifest = package_app.read_manifest(REPO_ROOT / "samples/apps/packages/jelly_font_policy")
+        manifest["runtime"]["minRenderCore"] = package_app.active_render_core_release_version()
         manifest["runtime"]["script"] = "classic"
         manifest["textPipeline"] = {
             "kind": "jfsp1-block-v11", "font": "/font.jffont2", "catalog": "/catalog",
@@ -245,7 +249,9 @@ class PackagePreflightTests(unittest.TestCase):
 
     def test_first_party_manifests_match_active_runtime_and_core_lines(self):
         runtime_version = package_app.active_runtime_release_version()
-        render_core_version = package_app.active_render_core_release_version()
+        with patch.dict("os.environ") as environment:
+            environment.pop("JELLYFRAME_TEST_RENDER_CORE_VERSION", None)
+            render_core_version = package_app.active_render_core_release_version()
         roots = [
             REPO_ROOT / "tools" / "templates" / "apps",
             REPO_ROOT / "samples" / "apps" / "packages",
@@ -262,7 +268,9 @@ class PackagePreflightTests(unittest.TestCase):
             self.assertEqual(manifest["runtime"]["minRenderCore"], render_core_version, str(path))
 
     def test_packaging_guide_example_matches_active_core_lock(self):
-        render_core_version = package_app.active_render_core_release_version()
+        with patch.dict("os.environ") as environment:
+            environment.pop("JELLYFRAME_TEST_RENDER_CORE_VERSION", None)
+            render_core_version = package_app.active_render_core_release_version()
         for path in (
             REPO_ROOT / "src" / "app_runtime" / "docs" / "app_packaging.md",
             REPO_ROOT / "src" / "app_runtime" / "docs" / "app_packaging_zh.md",
@@ -271,7 +279,9 @@ class PackagePreflightTests(unittest.TestCase):
             self.assertIn(f'"minRenderCore": "{render_core_version}"', content, str(path))
 
     def test_version_entrypoints_match_runtime_and_core_lock(self):
-        render_core_version = package_app.active_render_core_release_version()
+        with patch.dict("os.environ") as environment:
+            environment.pop("JELLYFRAME_TEST_RENDER_CORE_VERSION", None)
+            render_core_version = package_app.active_render_core_release_version()
         english = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         chinese = (REPO_ROOT / "README_zh.md").read_text(encoding="utf-8")
         self.assertIn(
@@ -319,6 +329,68 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertIn("--render-core-profile", command)
         self.assertIn(str(args.render_core_profile), command)
 
+    def test_svg_pipeline_staging_reuses_transformed_package(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-staging-test-") as directory:
+            root = Path(directory)
+            args = SimpleNamespace(root=root, report=root / "report.json", rasterize_svg=True,
+                                   svg_raster_size=32, debug_dir=None, output_cpp=root / "out.cpp",
+                                   output_bundle=root / "out.jfapp", namespace="test", include="test.h", target=None)
+            commands = []
+            def stage(command):
+                commands.append(command)
+                staged = Path(command[command.index("--debug-dir") + 1])
+                staged.mkdir()
+                (staged / "marker").write_text("transformed", encoding="utf-8")
+                return 0
+            with patch.object(jellyframe_cli, "run_command", side_effect=stage):
+                with jellyframe_cli.prepared_pipeline_package(args) as prepared:
+                    self.assertNotEqual(prepared, root)
+                    self.assertEqual(args._pipeline_root, prepared)
+                    with jellyframe_cli.prepared_pipeline_package(args) as reused:
+                        self.assertEqual(reused, prepared)
+                        self.assertEqual((reused / "marker").read_text(encoding="utf-8"), "transformed")
+                self.assertFalse(prepared.exists())
+            self.assertEqual(len(commands), 1)
+            self.assertIn("--rasterize-svg", commands[0])
+            self.assertNotIn("--output-cpp", commands[0])
+            self.assertNotIn("--output-bundle", commands[0])
+            self.assertEqual(args.root, root)
+            self.assertIsNone(args.debug_dir)
+            self.assertFalse(hasattr(args, "_pipeline_root"))
+
+    def test_pipeline_check_uses_transformed_entry_and_preview_viewport(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-pipeline-root-") as directory:
+            root = Path(directory)
+            prepared = root / "prepared"
+            prepared.mkdir()
+            (prepared / "jellyframe.app.json").write_text(json.dumps({"entry": "/pages/index.html"}),
+                                                       encoding="utf-8")
+            args = SimpleNamespace(root=root / "original", _pipeline_root=prepared, build_dir=root,
+                                   target="rect-test", width=64, height=48)
+            commands = []
+            def render(command):
+                commands.append(command)
+                Path(command[command.index("--diagnostics-json") + 1]).write_text(
+                    json.dumps({"pipeline": {"displayCommands": 2}}), encoding="utf-8")
+                return 0
+            with patch.object(jellyframe_cli, "ensure_tool"), patch.object(
+                    jellyframe_cli, "effective_target_config", return_value={"viewport": {"width": 320, "height": 240}}), patch.object(
+                    jellyframe_cli, "run_command", side_effect=render):
+                result, report = jellyframe_cli.run_pipeline_check(args)
+            self.assertEqual(result, 0)
+            self.assertEqual(report["pipeline"]["displayCommands"], 2)
+            self.assertEqual(Path(commands[0][1]), prepared / "pages" / "index.html")
+            self.assertEqual(commands[0][4:6], ["64", "48"])
+            self.assertEqual(Path(commands[0][commands[0].index("--resource-root") + 1]), prepared)
+
+    def test_svg_pipeline_staging_propagates_packaging_failure(self):
+        args = SimpleNamespace(root=Path("source"), report=Path("report.json"), rasterize_svg=True,
+                               svg_raster_size=32, debug_dir=None, namespace="test", include="test.h", target=None)
+        with patch.object(jellyframe_cli, "run_command", return_value=1):
+            with jellyframe_cli.prepared_pipeline_package(args) as prepared:
+                self.assertIsNone(prepared)
+        self.assertFalse(hasattr(args, "_pipeline_root"))
+
     def test_trial_clean_refuses_repository_root(self):
         with self.assertRaisesRegex(SystemExit, "must not be the repository root"):
             jellyframe_cli.prepare_trial_output(REPO_ROOT, clean=True)
@@ -361,7 +433,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.profile",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": package_app.active_render_core_release_version(), "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["graphics.canvas2d"],
@@ -383,14 +455,17 @@ class PackagePreflightTests(unittest.TestCase):
                 "id": "org.test.historical-runtime",
                 "entry": "/index.html",
                 "version": {"name": "0.1.0", "code": 1},
-                "runtime": {"minJellyFrame": "0.5.0", "minRenderCore": "0.9.0", "script": "none"},
+                "runtime": {"minJellyFrame": "0.5.0", "minRenderCore": package_app.active_render_core_release_version(), "script": "none"},
                 "viewport": {"designWidth": 10, "designHeight": 10},
                 "budgets": {"maxResourceBytes": 1024},
                 "targets": {"test": {"viewport": {"width": 10, "height": 10}, "output": "jfapp"}},
             })
 
     def test_manifest_rejects_a_historical_pre_release_render_core_line(self):
-        with self.assertRaisesRegex(SystemExit, "must target the active pre-1.0 Render Core line 0.9.0"):
+        with self.assertRaisesRegex(
+            SystemExit,
+            re.escape(f"must target the active pre-1.0 Render Core line {package_app.active_render_core_release_version()}"),
+        ):
             package_app.validate_manifest({
                 "format": "jellyframe.app",
                 "formatVersion": 0,
@@ -412,7 +487,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.profile",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": package_app.active_render_core_release_version(), "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["graphics.canvas2d"],
@@ -434,7 +509,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.test.modern-paint",
             "entry": "/index.html",
             "version": {"name": "0.1.0", "code": 1},
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": package_app.active_render_core_release_version(), "script": "none"},
             "viewport": {"designWidth": 10, "designHeight": 10},
             "budgets": {"maxResourceBytes": 1024},
             "requiresFeatures": ["css.modern-paint"],
@@ -1206,7 +1281,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.services",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": package_app.active_render_core_release_version(), "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "permissions": ["network"],
@@ -1345,7 +1420,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.file.manager",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": package_app.active_render_core_release_version(), "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "capabilities": ["file.read", "file.write", "file.manage"],
@@ -1365,7 +1440,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.strict",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": package_app.active_render_core_release_version(), "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
@@ -1393,7 +1468,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.strict",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "classic"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": package_app.active_render_core_release_version(), "script": "classic"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "targets": {"round-300": {"viewport": {"width": 300, "height": 300}, "output": "jfapp"}},
@@ -2304,7 +2379,7 @@ class PackagePreflightTests(unittest.TestCase):
             "id": "org.example.fonts",
             "version": {"name": "1.0.0", "code": 1},
             "entry": "/index.html",
-            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "none"},
+            "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": package_app.active_render_core_release_version(), "script": "none"},
             "viewport": {"designWidth": 300, "designHeight": 300},
             "budgets": {"maxResourceBytes": 4096},
             "fonts": [
@@ -2425,7 +2500,9 @@ class PackagePreflightTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="jellyframe-font-overlay-") as directory:
             root = Path(directory)
             sample_root = REPO_ROOT / "samples" / "apps" / "packages" / "jelly_font_policy"
-            manifest = package_app.validate_manifest(package_app.read_manifest(sample_root))
+            manifest = package_app.read_manifest(sample_root)
+            manifest["runtime"]["minRenderCore"] = package_app.active_render_core_release_version()
+            manifest = package_app.validate_manifest(manifest)
             manifest["id"] = "org.example.font-overlay"
             manifest["fonts"] = [{
                 "id": "generated-cn",
@@ -2479,6 +2556,7 @@ class PackagePreflightTests(unittest.TestCase):
                 self.assertIsNone(re.search(pattern, value))
         self.assertEqual(*constraints)
         manifest = package_app.read_manifest(REPO_ROOT / "samples/apps/packages/jelly_font_policy")
+        manifest["runtime"]["minRenderCore"] = package_app.active_render_core_release_version()
         self.assertTrue(package_app.validate_manifest(manifest))
         manifest["fonts"][0]["source"] = "fonts/ui.bdf"
         with self.assertRaises(SystemExit): package_app.validate_manifest(manifest)
@@ -2526,6 +2604,7 @@ class PackagePreflightTests(unittest.TestCase):
                          "retired-jffont0-v0-v1-use-canonical-jffont2")
         with self.assertRaises(SystemExit): package_app.validate_manifest([])
         manifest = package_app.read_manifest(REPO_ROOT / "samples/apps/packages/jelly_font_policy")
+        manifest["runtime"]["minRenderCore"] = package_app.active_render_core_release_version()
         manifest["fonts"][0]["source"] = "/font.jffont"
         with self.assertRaises(SystemExit): package_app.validate_manifest(manifest)
         self.assertFalse(hasattr(jellyframe_cli, "select_generated_font_target"))
