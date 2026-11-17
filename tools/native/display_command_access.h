@@ -13,6 +13,15 @@
 #define JELLYFRAME_NATIVE_CORE_TEXT_DEFAULT 0
 #endif
 
+// ABI4 exposes a value-owned sizing policy; ABI9 exposes a borrowed policy
+// with a bool/out-parameter callback. Both need image completion relayout.
+#if (defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1) || \
+    defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+#define JELLYFRAME_NATIVE_NATURAL_IMAGE_LAYOUT 1
+#else
+#define JELLYFRAME_NATIVE_NATURAL_IMAGE_LAYOUT 0
+#endif
+
 namespace jellyframe::native {
 
 inline DisplayCommandType display_command_type(const DisplayCommand& command) {

@@ -12,6 +12,8 @@
 #include "render_core/software_renderer.h"
 #include "render_core/style.h"
 #include "display_command_access.h"
+#include "native_budgets.h"
+#include "native_paint.h"
 
 #if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME) && \
     JELLYFRAME_NATIVE_CORE_TEXT_DEFAULT
@@ -104,6 +106,7 @@ HostBudgets desktop_validation_budgets() {
     HostBudgets budgets;
     budgets.max_resource_bytes = kMaxInputBytes;
     budgets.max_framebuffer_pixels = 1600 * 1600;
+    native::admit_desktop_core_layers(budgets);
     return budgets;
 }
 
@@ -795,7 +798,8 @@ int main(int argc, char** argv) {
 #endif
         const Color background = page_background_color(*document, resolver);
         stage_start = Clock::now();
-        FrameBuffer frame_buffer = compositor.render(*layer_tree, options.viewport_width, options.viewport_height, background);
+        FrameBuffer frame_buffer = native::paint_frame(compositor, *layer_tree, options.viewport_width,
+            options.viewport_height, background, budgets.max_framebuffer_pixels);
         timings.paint_us = elapsed_us(stage_start, Clock::now());
         if (frame_buffer.width <= 0 || frame_buffer.height <= 0) {
             throw std::runtime_error("framebuffer budget exceeded");

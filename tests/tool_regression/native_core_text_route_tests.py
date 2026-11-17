@@ -114,6 +114,92 @@ def check():
     run('hover-reference', [args.pseudo, html, css, root/'hovered.ppm', 172, 320])
     require(hovered == pixels(root/'hovered.ppm')[2], 'Hover frame differs from fresh Core render')
 
+    # Real package decoding must precede the immutable Core image proof, and
+    # fractional image commands need a painter; text-only pixels are not success.
+    image_results = {}
+    if args.core_abi >= 9:
+        html.write_text('<body>' + '<i></i>' * 600 + '</body>', encoding='utf-8')
+        css.write_text('body{margin:0}i{display:block;width:1px;height:1px;background:#000}', encoding='utf-8')
+        dense_diagnostics = root/'dense.json'
+        run('dense', [args.pseudo, html, css, root/'dense.ppm', 100, 100,
+                      '--diagnostics-json', dense_diagnostics])
+        dense = json.loads(dense_diagnostics.read_text())
+        require(dense['pipeline']['displayCommands'] >= 600,
+                'Dense admission must not silently truncate the original 600 nodes')
+        codes = {item['code'] for item in dense['diagnostics']}
+        require({'visual-display-command-density', 'visual-scroll-needed'} <= codes,
+                'Dense admission must retain density and overflow diagnostics')
+        width, height = 12, 8
+        stride = (width * 3 + 3) & ~3
+        bitmap = (bytes((0, 220, 50)) * width + bytes(stride - width * 3)) * height
+        header = struct.pack('<2sIHHI', b'BM', 54 + len(bitmap), 0, 0, 54)
+        header += struct.pack('<IiiHHIIiiII', 40, width, height, 1, 24, 0, len(bitmap), 0, 0, 0, 0)
+        (app/'tile.bmp').write_bytes(header + bitmap)
+        for mode, image_css, expected_pixels in (
+                ('explicit', 'img{width:24px;height:16px}', 384),
+                ('auto', 'img{width:24px;height:auto}', 384),
+                ('natural', '', 96)):
+            (app/'index.html').write_text(
+                '<style>body{margin:0;background:#fff;color:#000}div{font-size:16px}' + image_css +
+                '</style><div>A<img src="tile.bmp">B</div>', encoding='utf-8')
+            run('image-'+mode, [args.desktop, '--app', app, '--capture', root/('image-'+mode+'.ppm')])
+            _, _, rgb = pixels(root/('image-'+mode+'.ppm'))
+            green = sum(rgb[i:i+3] == bytes((50, 220, 0)) for i in range(0, len(rgb), 3))
+            require(green == expected_pixels, f'{mode} image absent or incorrectly sized: {green}')
+            image_results[mode] = green
+        require(pixels(root/'image-explicit.ppm') == pixels(root/'image-auto.ppm'),
+                'Natural aspect ratio differs from equivalent explicit image geometry')
+        (app/'index.html').write_text(
+            '<style>body{margin:0;background:#fff}div{width:10px;height:40px;overflow:hidden}'
+            'img{width:24px;height:16px}</style><div><img src="tile.bmp"></div>', encoding='utf-8')
+        run('image-clip', [args.desktop, '--app', app, '--capture', root/'image-clip.ppm'])
+        _, _, clipped_rgb = pixels(root/'image-clip.ppm')
+        require(sum(clipped_rgb[i:i+3] == bytes((50, 220, 0))
+                    for i in range(0, len(clipped_rgb), 3)) == 160,
+                'Fractional image painter did not respect the parent clip')
+        (app/'index.html').write_text(
+            '<style>body{margin:0;background:#fff;color:#000}div{font-size:16px}</style>'
+            '<div>A<img src="tile.bmp">B</div>', encoding='utf-8')
+        # Pointer capture exercises the separate interactive pipeline, not only
+        # the single-capture implementation.
+        image_frames = root/'image-frames'
+        run('image-frames', [args.desktop, '--app', app, '--capture-frames', image_frames,
+                            '--frame-count', 3, '--render-trace', root/'image-trace.jsonl'])
+        require(frame_rgb(image_frames/'frame_000.bmp') == pixels(root/'image-natural.ppm')[2] ==
+                frame_rgb(image_frames/'frame_002.bmp'), 'Interactive image capture is missing or unstable')
+        red_width, red_height = 6, 12
+        red_stride = (red_width * 3 + 3) & ~3
+        red_bitmap = (bytes((20, 30, 230)) * red_width + bytes(red_stride - red_width * 3)) * red_height
+        red_header = struct.pack('<2sIHHI', b'BM', 54 + len(red_bitmap), 0, 0, 54)
+        red_header += struct.pack('<IiiHHIIiiII', 40, red_width, red_height, 1, 24, 0,
+                                  len(red_bitmap), 0, 0, 0, 0)
+        (app/'other.bmp').write_bytes(red_header + red_bitmap)
+        (app/'index.html').write_text(
+            '<style>body{margin:0;background:#fff;color:#000}div{font-size:24px}'
+            'img{width:auto;height:16px}</style>'
+            '<div>A<img id="picture" src="tile.bmp">B<img src="other.bmp"></div>'
+            '<div id="next">NEXT</div><script>document.getElementById("next").addEventListener("click",'
+            'function(){document.getElementById("picture").setAttribute("src","other.bmp");});</script>',
+            encoding='utf-8')
+        replacement_frames = root/'replacement-frames'
+        run('image-replacement', [args.desktop, '--app', app, '--capture-frames', replacement_frames,
+            '--frame-count', 4, '--frame-event', '1:pointer-down:5:48', '--frame-event', '2:pointer-up:5:48',
+            '--render-trace', root/'replacement-trace.jsonl'])
+        initial = frame_rgb(replacement_frames/'frame_000.bmp')
+        replaced = frame_rgb(replacement_frames/'frame_002.bmp')
+        require(initial != replaced and replaced == frame_rgb(replacement_frames/'frame_003.bmp'),
+                'Image src replacement did not update or remain stable')
+        require(sum(initial[i:i+3] == bytes((50, 220, 0)) for i in range(0, len(initial), 3)) == 384,
+                'Initial image missing before replacement')
+        require(sum(replaced[i:i+3] == bytes((230, 30, 20)) for i in range(0, len(replaced), 3)) == 256,
+                'Ready-to-ready image replacement used stale source or geometry')
+        image_results['readyReplacement'] = True
+        (app/'index.html').write_text('<style>body{margin:0}img{width:24px;height:16px}</style>'
+                                    '<div>A<img src="missing.bmp">B</div>', encoding='utf-8')
+        refused = run('missing-image', [args.desktop, '--app', app, '--capture', root/'missing-image.ppm'], False)
+        require('layer tree refused' in refused and not (root/'missing-image.ppm').exists(),
+                'Missing required image must not publish a successful partial frame')
+
     manifest['runtime']['minRenderCore'] = '0.1.0' if args.core_version != '0.1.0' else '0.2.0'
     manifest_path.write_text(json.dumps(manifest))
     refused = run('version-refusal', [args.desktop, '--app', app, '--capture', root/'bad-version.ppm'], False)
@@ -135,6 +221,7 @@ def check():
     (root/'result.json').write_text(json.dumps(dict(defaultCoreText=True, exactPixels=True,
         mutationAndFreshRenderMatch=True, hoverAndFreshRenderMatch=True,
         strictVersionRefusal=True, shapedRouteRefused=True,
+        packageImagePixels=image_results,
         abi=args.core_abi, contextualDesktopQualified=False), indent=2)+'\n')
     print('Native Core text default, exact pixels, JS mutation, strict version and route refusal passed')
 
