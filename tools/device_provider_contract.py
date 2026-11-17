@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 from typing import Any
+from device_render_core_capabilities import KNOWN_FEATURE_FAMILIES, supported_text_pipelines
 
 
 FORMAT = "jellyframe.device-provider"
@@ -32,10 +33,7 @@ RESULT_CODES = frozenset({"ok", "accepted", "queued", "invalid-request", "busy",
 FEATURE_FAMILY_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{0,95}$")
 SOURCE_REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
 LOG_LEVELS = frozenset({"debug", "info", "warn", "error"})
-RENDER_CORE_FEATURE_FAMILIES = frozenset({
-    "core.document", "core.paint", "css.flex-grid", "css.modern-paint",
-    "forms.advanced", "graphics.canvas2d", "text.shaping",
-})
+RENDER_CORE_FEATURE_FAMILIES = KNOWN_FEATURE_FAMILIES
 APP_LIBRARY_STATES = frozenset({"installed", "disabled", "failed"})
 RECOVERY_REASONS = frozenset({"none", "registry-invalid", "staging-discarded", "app-load-failure", "app-runtime-failure", "app-budget-exceeded", "launcher-fallback"})
 
@@ -194,6 +192,10 @@ def _validate_identity(value: Any, name: str) -> dict[str, Any]:
             set(families) - RENDER_CORE_FEATURE_FAMILIES or
             not {"core.document", "core.paint"}.issubset(families)):
         raise ProviderContractError(f"{name}.featureFamilies is invalid")
+    try:
+        supported_text_pipelines(identity["renderCoreAbi"], families)
+    except ValueError as error:
+        raise ProviderContractError(f"{name}.featureFamilies conflicts with its ABI: {error}") from error
     return identity
 
 

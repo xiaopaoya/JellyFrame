@@ -229,7 +229,7 @@ void image_identity_and_app_logs_payloads_preserve_bounded_values() {
     copy_string_literal(identity.image_version, "0.1.0-dev");
     copy_string_literal(identity.render_core_version, "0.6.1");
     copy_string_literal(identity.source_revision, "0123456789abcdef0123456789abcdef01234567");
-    identity.render_core_abi = 1;
+    identity.render_core_abi = 4;
     identity.feature_family_bits = DeviceRenderCoreFeatureDocument |
                                    DeviceRenderCoreFeaturePaint |
                                    DeviceRenderCoreFeatureAdvancedForms |
@@ -247,6 +247,38 @@ void image_identity_and_app_logs_payloads_preserve_bounded_values() {
     assert(decoded_identity.source_revision_view() == identity.source_revision_view());
     assert(decoded_identity.render_core_abi == identity.render_core_abi);
     assert(decoded_identity.feature_family_bits == identity.feature_family_bits);
+    const std::uint32_t scalar_bits = DeviceRenderCoreFeatureDocument | DeviceRenderCoreFeaturePaint;
+    identity.render_core_abi = 9;
+    identity.feature_family_bits = scalar_bits | DeviceRenderCoreFeatureContextualJfsp2 |
+        DeviceRenderCoreFeatureContextualLayout | DeviceRenderCoreFeatureLengthMath |
+        DeviceRenderCoreFeatureCounters | DeviceRenderCoreFeatureBorders |
+        DeviceRenderCoreFeatureTables | DeviceRenderCoreFeaturePositionedSizing;
+    assert(encode_device_image_identity_payload(identity, encoded.data(), encoded.size(), encoded_size) == DeviceProtocolStatus::Ok);
+    assert(decode_device_image_identity_payload(encoded.data(), encoded_size, decoded_identity) == DeviceProtocolStatus::Ok);
+    assert(decoded_identity.render_core_abi == 9 && decoded_identity.feature_family_bits == identity.feature_family_bits);
+    // Mutate valid wire identities directly: decoding must enforce the same
+    // ABI/dependency boundary as the encoder, not only recognize bit numbers.
+    encoded[8] = 4;
+    assert(decode_device_image_identity_payload(encoded.data(), encoded_size, decoded_identity) == DeviceProtocolStatus::InvalidArgument);
+    encoded[8] = 9;
+    encoded[12] = static_cast<std::uint8_t>(scalar_bits);
+    encoded[13] = 1; // contextual layout without contextual JFSP2
+    assert(decode_device_image_identity_payload(encoded.data(), encoded_size, decoded_identity) == DeviceProtocolStatus::InvalidArgument);
+    encoded[12] = static_cast<std::uint8_t>(scalar_bits | DeviceRenderCoreFeatureTextShaping);
+    encoded[13] = 0;
+    assert(decode_device_image_identity_payload(encoded.data(), encoded_size, decoded_identity) == DeviceProtocolStatus::InvalidArgument);
+    encoded[12] = static_cast<std::uint8_t>(scalar_bits);
+    encoded[13] = 1 << 6; // still-unknown bit14
+    assert(decode_device_image_identity_payload(encoded.data(), encoded_size, decoded_identity) == DeviceProtocolStatus::InvalidArgument);
+    for (auto bits : {scalar_bits | DeviceRenderCoreFeatureContextualLayout,
+                      scalar_bits | DeviceRenderCoreFeatureTextShaping,
+                      scalar_bits | (1u << 14)}) {
+        identity.feature_family_bits = bits;
+        assert(encode_device_image_identity_payload(identity, encoded.data(), encoded.size(), encoded_size) == DeviceProtocolStatus::InvalidArgument);
+    }
+    identity.feature_family_bits = scalar_bits | DeviceRenderCoreFeatureContextualJfsp2;
+    identity.render_core_abi = 4;
+    assert(encode_device_image_identity_payload(identity, encoded.data(), encoded.size(), encoded_size) == DeviceProtocolStatus::InvalidArgument);
 
     DeviceAppLogsPayload logs;
     logs.dropped_records = 3;

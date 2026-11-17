@@ -10,6 +10,7 @@ from pathlib import Path
 import struct
 import unicodedata
 import zlib
+from device_render_core_capabilities import SHAPED_PIPELINES
 
 MAX_PACKAGE_BYTES = 4 * 1024 * 1024
 HEADER = struct.Struct('<8sHHIIIIIIIIIII')
@@ -136,7 +137,11 @@ def _bundle(raw):
     return summary, resources, version
 
 
-def inspect_install_bytes(raw, max_bytes, *, allow_shaped=False):
+def inspect_install_bytes(raw, max_bytes, *, supported_text_pipelines=()):
+    if (not isinstance(supported_text_pipelines, (tuple, list, set, frozenset)) or
+            any(not isinstance(kind, str) or kind not in SHAPED_PIPELINES
+                for kind in supported_text_pipelines)):
+        _reject('invalid supported text pipelines')
     if type(max_bytes) is not int or not 0 < max_bytes <= MAX_PACKAGE_BYTES:
         _reject('invalid target capacity')
     if not isinstance(raw, bytes) or not 0 < len(raw) <= max_bytes:
@@ -153,8 +158,9 @@ def inspect_install_bytes(raw, max_bytes, *, allow_shaped=False):
         manifest = raw[64:64 + manifest_size]
         bundle = raw[128 + manifest_size:]
     summary, resources, version = _bundle(bundle)
-    if version and (not signed or not allow_shaped):
-        _reject('shaped install requires signed envelope and matching text.shaping capability')
+    pipeline_kind = summary['textPipeline']['kind'] if version else None
+    if version and (not signed or pipeline_kind not in supported_text_pipelines):
+        _reject('shaped install requires signed envelope and matching text pipeline capability')
     if signed:
         cursor = 0
         def read(size):
@@ -179,10 +185,10 @@ def inspect_install_bytes(raw, max_bytes, *, allow_shaped=False):
         if cursor != len(manifest):
             _reject('trailing signed manifest bytes')
     return {'appId': summary['id'], 'formatVersion': version, 'signedEnvelope': signed,
-            'signatureVerified': False, 'bytes': len(raw)}
+            'signatureVerified': False, 'bytes': len(raw), 'textPipeline': pipeline_kind}
 
 
-def read_install_package(path, max_bytes, *, allow_shaped=False):
+def read_install_package(path, max_bytes, *, supported_text_pipelines=()):
     path = Path(path)
     if not path.is_absolute() or path.suffix.lower() not in ('.jfapp', '.jfsg'):
         _reject('install requires an absolute .jfapp or .jfsg path')
@@ -192,7 +198,7 @@ def read_install_package(path, max_bytes, *, allow_shaped=False):
         _reject('invalid target capacity')
     with path.open('rb') as source:
         raw = source.read(max_bytes + 1)
-    facts = inspect_install_bytes(raw, max_bytes, allow_shaped=allow_shaped)
+    facts = inspect_install_bytes(raw, max_bytes, supported_text_pipelines=supported_text_pipelines)
     if facts['signedEnvelope'] != (path.suffix.lower() == '.jfsg'):
         _reject('package extension does not match container')
     return raw, facts

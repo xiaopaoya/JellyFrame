@@ -39,24 +39,52 @@ provider = module('signed_transport_provider', PROVIDER_DIR / 'jellyframe_device
 packager = module('signed_transport_release', PROVIDER_DIR / 'package_ws147_device_provider.py')
 
 
-def signed(root, shaped=True, capacity_bytes=0):
-    raw = fixture(root, shaped, capacity_bytes=capacity_bytes)
+def signed(root, shaped=True, capacity_bytes=0, pipeline_kind='jfsp1-block-v11'):
+    raw = fixture(root, shaped, capacity_bytes=capacity_bytes, pipeline_kind=pipeline_kind)
     return raw, signer.sign_bundle(raw, ec.derive_private_key(1, ec.SECP256R1()), bytes(range(16)))
 
 
 @unittest.skipIf(ec is None, "optional cryptography package unavailable")
 class PackageInspectionTests(unittest.TestCase):
+    def test_contextual_and_legacy_routes_are_distinct(self):
+        with tempfile.TemporaryDirectory() as temp:
+            for kind in ('jfsp1-block-v11', 'jfsp2-block-v12'):
+                raw, envelope = signed(Path(temp), pipeline_kind=kind)
+                facts = inspection.inspect_install_bytes(envelope, len(envelope), supported_text_pipelines=(kind,))
+                self.assertEqual(facts['textPipeline'], kind)
+                other = 'jfsp1-block-v11' if kind.endswith('12') else 'jfsp2-block-v12'
+                for allowed in ((), (other,)):
+                    with self.assertRaisesRegex(ValueError, 'matching text pipeline'):
+                        inspection.inspect_install_bytes(envelope, len(envelope), supported_text_pipelines=allowed)
+                with self.assertRaises(ValueError):
+                    inspection.inspect_install_bytes(raw, len(raw), supported_text_pipelines=(kind,))
+
+    def test_matched_abi_and_feature_dependencies_select_one_route(self):
+        from device_render_core_capabilities import supported_text_pipelines
+        base = ['core.document', 'core.paint']
+        self.assertEqual(supported_text_pipelines(4, base + ['text.shaping']), ('jfsp1-block-v11',))
+        self.assertEqual(supported_text_pipelines(9, base + ['text.contextual-jfsp2', 'text.contextual-layout']), ('jfsp2-block-v12',))
+        self.assertEqual(supported_text_pipelines(9, base + ['text.contextual-jfsp2']), ())
+        for abi in (1,4,9):
+            self.assertEqual(supported_text_pipelines(abi, base), ())
+        for abi, features in ((9,['text.shaping']), (4,['text.contextual-jfsp2']),
+                              (9,['text.contextual-layout']), (9,['text.shaping','text.contextual-jfsp2']),
+                              (10,['text.contextual-jfsp2','text.contextual-layout'])):
+            with self.subTest(abi=abi,features=features), self.assertRaises(ValueError):
+                supported_text_pipelines(abi,base+features)
+
     def test_signed_both_formats_and_legacy_scalar(self):
         with tempfile.TemporaryDirectory() as temp:
             for shaped in (False, True):
                 raw, envelope = signed(Path(temp), shaped)
-                facts = inspection.inspect_install_bytes(envelope, len(envelope), allow_shaped=shaped)
+                facts = inspection.inspect_install_bytes(envelope, len(envelope), supported_text_pipelines=('jfsp1-block-v11',) if shaped else ())
                 self.assertEqual(facts, {'appId': 'org.jellyframe.signed-test', 'formatVersion': int(shaped),
-                                        'signedEnvelope': True, 'signatureVerified': False, 'bytes': len(envelope)})
+                                        'signedEnvelope': True, 'signatureVerified': False, 'bytes': len(envelope),
+                                        'textPipeline': 'jfsp1-block-v11' if shaped else None})
                 if shaped:
                     for data, permitted in ((raw, True), (envelope, False)):
                         with self.assertRaisesRegex(ValueError, 'shaped install requires'):
-                            inspection.inspect_install_bytes(data, len(data), allow_shaped=permitted)
+                            inspection.inspect_install_bytes(data, len(data), supported_text_pipelines=('jfsp1-block-v11',) if permitted else ())
                 else:
                     self.assertFalse(inspection.inspect_install_bytes(raw, len(raw))['signedEnvelope'])
 
@@ -65,15 +93,15 @@ class PackageInspectionTests(unittest.TestCase):
             _, encoded = signed(Path(temp))
             for cap in (0, True, len(encoded) - 1, inspection.MAX_PACKAGE_BYTES + 1):
                 with self.subTest(cap=cap), self.assertRaises(ValueError):
-                    inspection.inspect_install_bytes(encoded, cap, allow_shaped=True)
+                    inspection.inspect_install_bytes(encoded, cap, supported_text_pipelines=('jfsp1-block-v11',))
             for length in (0, 7, 63, 127, len(encoded) - 1):
                 with self.subTest(length=length), self.assertRaises(ValueError):
-                    inspection.inspect_install_bytes(encoded[:length], len(encoded), allow_shaped=True)
+                    inspection.inspect_install_bytes(encoded[:length], len(encoded), supported_text_pipelines=('jfsp1-block-v11',))
             for suffix, data in (('.jfapp', encoded), ('.jfsg', encoded[-100:]), ('.bin', encoded)):
                 path = Path(temp) / ('bad' + suffix)
                 path.write_bytes(data)
                 with self.assertRaises(ValueError):
-                    inspection.read_install_package(path, len(encoded), allow_shaped=True)
+                    inspection.read_install_package(path, len(encoded), supported_text_pipelines=('jfsp1-block-v11',))
 
     def test_manifest_header_digest_and_inner_corruption_refuse(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -83,11 +111,11 @@ class PackageInspectionTests(unittest.TestCase):
                 changed = bytearray(encoded)
                 changed[at] ^= 1
                 with self.subTest(at=at), self.assertRaises(ValueError):
-                    inspection.inspect_install_bytes(bytes(changed), len(changed), allow_shaped=True)
+                    inspection.inspect_install_bytes(bytes(changed), len(changed), supported_text_pipelines=('jfsp1-block-v11',))
             # A signature mutation is deliberately NOT authenticated on the host.
             changed = bytearray(encoded)
             changed[64 + size] ^= 1
-            self.assertFalse(inspection.inspect_install_bytes(bytes(changed), len(changed), allow_shaped=True)['signatureVerified'])
+            self.assertFalse(inspection.inspect_install_bytes(bytes(changed), len(changed), supported_text_pipelines=('jfsp1-block-v11',))['signatureVerified'])
 
     def test_recomputed_outer_crc_cannot_hide_resource_corruption(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -109,7 +137,7 @@ class PackageInspectionTests(unittest.TestCase):
             struct.pack_into('<I', changed, 48, 0)
             struct.pack_into('<I', changed, 48, zlib.crc32(changed) & 0xffffffff)
             with self.assertRaisesRegex(ValueError, 'missing or duplicate shaped resource'):
-                inspection.inspect_install_bytes(bytes(changed), len(changed), allow_shaped=True)
+                inspection.inspect_install_bytes(bytes(changed), len(changed), supported_text_pipelines=('jfsp1-block-v11',))
 
     def test_shaped_invalid_metadata_or_missing_resources_refuse(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -132,12 +160,13 @@ class PackageInspectionTests(unittest.TestCase):
                 inspection.HEADER.pack_into(changed, 0, *header)
                 struct.pack_into('<I', changed, 48, zlib.crc32(changed) & 0xffffffff)
                 with self.subTest(old=old), self.assertRaises(ValueError):
-                    inspection.inspect_install_bytes(bytes(changed), len(changed), allow_shaped=True)
+                    inspection.inspect_install_bytes(bytes(changed), len(changed), supported_text_pipelines=('jfsp1-block-v11',))
 
 
 @unittest.skipIf(ec is None, "optional cryptography package unavailable")
 class PhysicalTransportTests(unittest.TestCase):
-    def exercise(self, raw, root, *, cap=1044480, shaping=True, replace=False, fail_commit=False):
+    def exercise(self, raw, root, *, cap=1044480, shaping=True, replace=False, fail_commit=False,
+                 abi=4, features=None):
         path = root / 'install.jfsg'
         path.write_bytes(raw)
         calls, reconstructed = [], bytearray()
@@ -145,6 +174,8 @@ class PhysicalTransportTests(unittest.TestCase):
         device['capabilities']['maxBundleBytes'] = cap
         if shaping:
             device['capabilities']['featureFamilies'].append('text.shaping')
+        if features is not None:
+            device['capabilities']['featureFamilies'] = ['core.document','core.paint'] + features
         state = {'transaction': 0, 'expected': 0}
 
         class Wire:
@@ -172,7 +203,7 @@ class PhysicalTransportTests(unittest.TestCase):
         self_test = self
         session = mock.Mock(cancel_requested=threading.Event())
         args = argparse.Namespace(operation='install', selector='fixture', request_id='signed-install', bundle=path, allow_downgrade=False)
-        config = provider.ProviderConfig('fixture', 'COM19', 115200, root / 'manifest.json', {})
+        config = provider.ProviderConfig('fixture', 'COM19', 115200, root / 'manifest.json', {'renderCore': {'abi': abi}})
         with (mock.patch.object(provider, 'Wire', Wire),
               mock.patch.object(provider, 'decode_capabilities', return_value={}),
               mock.patch.object(provider, 'decode_identity', return_value={}),
@@ -214,16 +245,68 @@ class PhysicalTransportTests(unittest.TestCase):
             self.assertNotEqual(code, 0)
             self.assertEqual(events[-1]['resultCode'], 'integrity-failed')
 
+    def test_contextual_transport_and_cross_route_refusal_before_begin(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            _, raw = signed(root, pipeline_kind='jfsp2-block-v12')
+            contextual = ['text.contextual-jfsp2','text.contextual-layout']
+            (code, events), received, calls = self.exercise(raw,root,abi=9,features=contextual,replace=True)
+            self.assertEqual((code,received,calls[-1]),(0,raw,provider.INSTALL_COMMIT))
+            parse_provider_jsonl('\n'.join(json.dumps(e) for e in events))
+            for abi, features in ((4,['text.shaping']), (9,[]), (9,contextual[:1]),
+                                  (4,contextual), (9,['text.shaping']), (9,contextual[1:])):
+                with self.subTest(abi=abi,features=features), self.assertRaises(provider.ProviderError):
+                    self.exercise(raw,root,abi=abi,features=features)
+            _, legacy = signed(root)
+            with self.assertRaises(provider.ProviderError):
+                self.exercise(legacy,root,abi=9,features=contextual)
+
     def test_feature_wire_bit_and_unknown_bit(self):
         encoded = (bytes((1, 3, 3, 3, 5, 40, 0, 0)) + struct.pack('<II', 4, 3 | 64) +
                    b'imgprover0.9.0' + b'a' * 40)
         self.assertIn('text.shaping', provider.decode_identity(encoded)['featureFamilies'])
         changed = bytearray(encoded)
-        struct.pack_into('<I', changed, 12, 3 | 128)
+        struct.pack_into('<II', changed, 8, 9, 3 | 128 | 256)
+        self.assertEqual(provider.decode_identity(changed)['featureFamilies'],
+                         ['core.document','core.paint','text.contextual-jfsp2','text.contextual-layout'])
+        for abi,bits in ((4,3|128|256),(9,3|256),(9,3|64),(9,1)):
+            struct.pack_into('<II', changed,8,abi,bits)
+            with self.assertRaises(provider.ProviderError): provider.decode_identity(changed)
+        changed = bytearray(encoded)
+        struct.pack_into('<I', changed, 12, 3 | (1 << 14))
         with self.assertRaises(provider.ProviderError): provider.decode_identity(changed)
 
 
 class InstallCapacityTests(unittest.TestCase):
+    def test_author_sdk_tools_keep_shared_capability_dependency(self):
+        sys.path.insert(0,str(ROOT/'project_tools'))
+        try:
+            sdk = module('capability_sdk_packager', ROOT/'project_tools/package_app_author_sdk.py')
+        finally:
+            sys.path.pop(0)
+        self.assertIn('device_render_core_capabilities.py',sdk.AUTHOR_TOOL_FILES)
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            for name in sdk.AUTHOR_TOOL_FILES:
+                (root/name).write_bytes((ROOT/'tools'/name).read_bytes())
+            checked=subprocess.run([sys.executable,'-I','-c',
+                "import sys;sys.path.insert(0,sys.argv[1]);import device_provider_contract;"
+                "from device_render_core_capabilities import supported_text_pipelines;"
+                "assert supported_text_pipelines(9,['core.document','core.paint',"
+                "'text.contextual-jfsp2','text.contextual-layout'])==('jfsp2-block-v12',)",str(root)],
+                cwd=root,capture_output=True,text=True)
+            self.assertEqual(checked.returncode,0,checked.stderr)
+
+    def test_cpp_and_host_feature_wire_assignments_match(self):
+        import re
+        header=(ROOT/'src/device_runtime_contracts/device_runtime_protocol.h').read_text()
+        pairs=re.findall(r'DeviceRenderCoreFeature(\w+)\s*=\s*1u\s*<<\s*(\d+)',header)
+        expected_names=('Document','Paint','FlexGrid','ModernPaint','AdvancedForms','Canvas2d',
+                        'TextShaping','ContextualJfsp2','ContextualLayout','LengthMath',
+                        'Counters','Borders','Tables','PositionedSizing')
+        self.assertEqual(dict(pairs),{name:str(bit) for bit,name in enumerate(expected_names)})
+        self.assertEqual(set(provider.FEATURE_FAMILIES),{1<<bit for bit in range(len(expected_names))})
+
     def prepare(self, root, size=3 * 1024 * 1024, cap=1024):
         build = root / 'build'
         build.mkdir(exist_ok=True)

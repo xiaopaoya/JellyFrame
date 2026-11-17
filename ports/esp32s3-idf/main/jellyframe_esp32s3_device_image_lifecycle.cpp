@@ -5,6 +5,7 @@
 #endif
 #include "jellyframe_esp32s3_ui_task.h"
 #include "jellyframe_esp32s3_installed_frame_admission.h"
+#include "jellyframe_esp32s3_render_core_identity.h"
 
 #include "app_runtime/app_installed_bundle.h"
 #include "device_runtime_contracts/device_install_transaction.h"
@@ -710,22 +711,7 @@ private:
         std::memcpy(identity.source_revision.data(), JELLYFRAME_ESP32S3_SOURCE_REVISION,
                     sizeof(JELLYFRAME_ESP32S3_SOURCE_REVISION));
         identity.render_core_abi = JELLYFRAME_ESP32S3_RENDER_CORE_ABI;
-        identity.feature_family_bits = DeviceRenderCoreFeatureDocument | DeviceRenderCoreFeaturePaint;
-#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
-        identity.feature_family_bits |= DeviceRenderCoreFeatureFlexGrid;
-#endif
-#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
-        identity.feature_family_bits |= DeviceRenderCoreFeatureModernPaint;
-#endif
-#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-        identity.feature_family_bits |= DeviceRenderCoreFeatureAdvancedForms;
-#endif
-#if JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED
-        identity.feature_family_bits |= DeviceRenderCoreFeatureCanvas2d;
-#endif
-#if JELLYFRAME_RENDER_CORE_TEXT_SHAPING_ENABLED
-        identity.feature_family_bits |= DeviceRenderCoreFeatureTextShaping;
-#endif
+        identity.feature_family_bits = render_core_feature_family_bits();
         std::array<std::uint8_t, 384> payload{};
         std::size_t size = 0;
         if (encode_device_image_identity_payload(identity, payload.data(), payload.size(), size) == DeviceProtocolStatus::Ok) {

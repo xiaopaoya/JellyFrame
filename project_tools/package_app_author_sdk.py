@@ -18,6 +18,7 @@ AUTHOR_TOOL_FILES = (
     "device_image_manifest.py",
     "device_provider_client.py",
     "device_provider_contract.py",
+    "device_render_core_capabilities.py",
     "device_reference.py",
     "jellyframe_cli.py",
     "jellyframe_versions.py",

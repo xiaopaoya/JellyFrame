@@ -33,6 +33,7 @@ sys.path.insert(0, str(_bundled_lib if _bundled_lib.is_dir() else ROOT / "tools"
 
 from device_image_manifest import DeviceImageManifestError, parse_device_image_manifest
 from device_install_package import read_install_package
+from device_render_core_capabilities import FEATURE_FAMILIES, supported_text_pipelines
 
 
 PROVIDER = {"id": "jellyframe-device", "version": PROVIDER_VERSION}
@@ -61,15 +62,6 @@ APP_STATES = {0: "installed", 1: "disabled", 2: "failed"}
 RECOVERY_REASONS = {
     0: "none", 1: "registry-invalid", 2: "staging-discarded", 3: "app-load-failure",
     4: "app-runtime-failure", 5: "app-budget-exceeded", 6: "launcher-fallback",
-}
-FEATURE_FAMILIES = {
-    1 << 0: "core.document",
-    1 << 1: "core.paint",
-    1 << 2: "css.flex-grid",
-    1 << 3: "css.modern-paint",
-    1 << 4: "forms.advanced",
-    1 << 5: "graphics.canvas2d",
-    1 << 6: "text.shaping",
 }
 LOG_LEVELS = {0: "debug", 1: "info", 2: "warn", 3: "error"}
 SUPPORTED_OPERATIONS = (
@@ -333,8 +325,13 @@ def decode_identity(payload: bytes) -> dict[str, Any]:
             len(payload) != 16 + image_bytes + profile_bytes + version_bytes + core_bytes + revision_bytes):
         raise ProviderError("protocol-mismatch", "device image identity length is invalid")
     abi, feature_bits = struct.unpack_from("<II", payload, 8)
-    if not abi or feature_bits & ~sum(FEATURE_FAMILIES) or not feature_bits & 0x3:
+    if not abi or feature_bits & ~sum(FEATURE_FAMILIES) or feature_bits & 0x3 != 0x3:
         raise ProviderError("protocol-mismatch", "device image identity feature bits are invalid")
+    families = [name for bit, name in FEATURE_FAMILIES.items() if feature_bits & bit]
+    try:
+        supported_text_pipelines(abi, families)
+    except ValueError as error:
+        raise ProviderError("protocol-mismatch", str(error)) from error
     cursor = 16
     try:
         image_id = payload[cursor:cursor + image_bytes].decode("utf-8"); cursor += image_bytes
@@ -350,7 +347,7 @@ def decode_identity(payload: bytes) -> dict[str, Any]:
         raise ProviderError("protocol-mismatch", "device source revision is invalid")
     return {"imageId": image_id, "profileId": profile_id, "imageVersion": image_version,
             "renderCoreVersion": core_version, "sourceRevision": revision, "renderCoreAbi": abi,
-            "featureFamilies": [name for bit, name in FEATURE_FAMILIES.items() if feature_bits & bit]}
+            "featureFamilies": families}
 
 
 def logs_payload(app_id: str, limit: int) -> bytes:
@@ -657,9 +654,9 @@ def run_fixture(args: argparse.Namespace) -> tuple[int, list[dict[str, Any]]]:
     raise ProviderError("invalid-request", "unknown provider fixture")
 
 
-def read_target_package(bundle: Path, max_bytes: int, *, allow_shaped: bool = False) -> tuple[bytes, dict[str, Any]]:
+def read_target_package(bundle: Path, max_bytes: int, *, text_pipelines: tuple[str, ...] = ()) -> tuple[bytes, dict[str, Any]]:
     try:
-        return read_install_package(bundle, max_bytes, allow_shaped=allow_shaped)
+        return read_install_package(bundle, max_bytes, supported_text_pipelines=text_pipelines)
     except (OSError, ValueError, UnicodeError, KeyError, struct.error, RecursionError) as error:
         raise ProviderError("invalid-request", f"invalid install package: {error}") from error
 
@@ -742,8 +739,13 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
             return 0, events
         if args.operation == "install":
             target = device["capabilities"]
-            bundle, facts = read_target_package(args.bundle, target["maxBundleBytes"],
-                                                allow_shaped="text.shaping" in target["featureFamilies"])
+            # device_from_capabilities already attests ABI/families against
+            # this manifest; derive the exact route from that matched identity.
+            try:
+                pipelines = supported_text_pipelines(config.manifest["renderCore"]["abi"], target["featureFamilies"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise ProviderError("protocol-mismatch", "invalid matched text pipeline identity") from error
+            bundle, facts = read_target_package(args.bundle, target["maxBundleBytes"], text_pipelines=pipelines)
             app_id = facts["appId"]
             transaction = int(time.monotonic_ns() & 0xffffffff) or 1
             events: list[dict[str, Any]] = []

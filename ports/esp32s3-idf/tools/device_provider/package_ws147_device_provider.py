@@ -21,12 +21,10 @@ from provider_version import PROVIDER_VERSION
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "tools"))
 from device_image_manifest import DeviceImageManifestError, parse_device_image_manifest  # noqa: E402
+from device_render_core_capabilities import KNOWN_FEATURE_FAMILIES, supported_text_pipelines
 
 PROVIDER_SOURCE = Path(__file__).resolve().parent
-PROVIDER_FEATURE_FAMILIES = {
-    "core.document", "core.paint", "css.flex-grid", "css.modern-paint",
-    "forms.advanced", "graphics.canvas2d", "text.shaping",
-}
+PROVIDER_FEATURE_FAMILIES = KNOWN_FEATURE_FAMILIES
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$")
 
 
@@ -96,6 +94,10 @@ def _identity_from_build_evidence(build_manifest_path: Path, profile_path: Path,
     if unsupported:
         raise SystemExit("generated Render Core profile contains feature families the JFDP provider cannot encode: " +
                          ", ".join(sorted(unsupported)))
+    try:
+        supported_text_pipelines(abi, profile_features)
+    except ValueError as error:
+        raise SystemExit(f"generated Render Core profile has conflicting text capabilities: {error}") from error
     if (not isinstance(expected_firmware_hash, str) or
             re.fullmatch(r"[0-9a-fA-F]{64}", expected_firmware_hash) is None):
         raise SystemExit(f"build manifest profile {build_profile}.bin.sha256 is invalid")
@@ -195,6 +197,10 @@ def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, li
             len(set(core_features)) != len(core_features) or
             set(core_features) - PROVIDER_FEATURE_FAMILIES):
         raise SystemExit("ESP-IDF generated Core profile has invalid or unsupported feature families")
+    try:
+        supported_text_pipelines(abi, core_features)
+    except ValueError as error:
+        raise SystemExit(f"ESP-IDF Core text capabilities conflict: {error}") from error
     if (not isinstance(identity, str) or re.fullmatch(r"[0-9a-f]{64}", identity) is None or
             count <= 0 or abi <= 0 or not isinstance(idf_revision, str) or not idf_revision or
             not isinstance(compiler, str) or not compiler):
@@ -358,8 +364,8 @@ def main() -> int:
      feature_families, build_provenance) = _identity_from_build_evidence(
         args.build_manifest.resolve(), args.render_core_profile.resolve(), firmware, args.build_profile)
     max_bundle_bytes = 327680  # Historical scalar releases without build-dir evidence.
-    if "text.shaping" in feature_families and args.build_dir is None:
-        raise SystemExit("text.shaping provider release requires --build-dir capacity evidence")
+    if any(family.startswith('text.') for family in feature_families) and args.build_dir is None:
+        raise SystemExit("text pipeline provider release requires --build-dir capacity evidence")
     if args.build_dir is not None:
         idf_version, idf_abi, idf_features, idf_provenance = _idf_build_provenance(
             args.build_dir.resolve(), firmware)
@@ -419,7 +425,7 @@ def main() -> int:
         recovery.mkdir()
         for name in ("jellyframe_device.py", "jellyframe-device.cmd", "provider_version.py", "requirements.txt", "README.md"):
             copy(PROVIDER_SOURCE / name, provider / name)
-        for module in ("device_image_manifest.py", "device_install_package.py"):
+        for module in ("device_image_manifest.py", "device_install_package.py", "device_render_core_capabilities.py"):
             copy(ROOT / "tools" / module, provider / "lib" / module)
         config = {
             "endpointId": "ws147-developer-local", "port": "COMx", "baud": 115200,

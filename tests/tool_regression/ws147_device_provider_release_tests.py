@@ -114,6 +114,7 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 for path in release.rglob("*") if path.is_file()
             }
             self.assertIn("provider/lib/device_install_package.py", release_files)
+            self.assertIn("provider/lib/device_render_core_capabilities.py", release_files)
             self.assertNotIn("provider/jellyframe-device.config.json", release_files)
             self.assertFalse(any("__pycache__" in name or name.endswith(".pyc") for name in release_files))
 
@@ -282,6 +283,12 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             self.assertFalse(output.exists())
 
     def test_build_dir_imports_and_cross_checks_idf_provenance(self) -> None:
+        self._exercise_build_dir(4)
+
+    def test_contextual_build_dir_release_and_isolated_import(self) -> None:
+        self._exercise_build_dir(9)
+
+    def _exercise_build_dir(self, abi: int) -> None:
         with tempfile.TemporaryDirectory(prefix="jellyframe-ws147-build-dir-") as directory:
             root = Path(directory)
             build = root / "build"
@@ -294,7 +301,7 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 stream.truncate(16 * 1024 * 1024)
             identity = "a" * 64
             (generated / "jellyframe_render_core_port_provenance.txt").write_text(
-                f"package=0.9.0-dev\nabi=4\nprofile=render-core-default\nsource={identity}\nfiles=163\n",
+                f"package=0.9.0-dev\nabi={abi}\nprofile=render-core-default\nsource={identity}\nfiles=163\n",
                 encoding="utf-8")
             (generated / "jellyframe_render_core_source_manifest.json").write_text(json.dumps({
                 "sourceHash": identity, "sourceFileCount": 163, "files": [],
@@ -303,9 +310,13 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 "core.document", "core.paint", "forms.advanced", "css.flex-grid",
                 "css.modern-paint", "graphics.canvas2d", "text.shaping",
             ]
+            if abi == 9:
+                core_features.remove('text.shaping')
+                core_features += ['text.contextual-jfsp2','text.contextual-layout',
+                                  'css.length-math','css.counters','css.borders','css.tables','css.positioned-sizing']
             generated_profile = generated / "jellyframe_render_core_profile.json"
             generated_profile.write_text(json.dumps({
-                "schemaVersion": 1, "packageVersion": "0.9.0-dev", "engineAbi": 4,
+                "schemaVersion": 1, "packageVersion": "0.9.0-dev", "engineAbi": abi,
                 "profileId": "render-core-default", "features": core_features,
             }), encoding="utf-8")
             (build / "project_description.json").write_text(json.dumps({
@@ -343,7 +354,7 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 image.write(firmware.read_bytes())
             build_manifest, _ = write_build_evidence(
                 root, firmware, revision="a" * 40, image_version="0.6.2-ws147.build-dir-test",
-                core_version="0.9.0-dev", core_abi=4, families=core_features)
+                core_version="0.9.0-dev", core_abi=abi, families=core_features)
             common = [
                 sys.executable, str(PACKAGER), "--firmware", str(firmware),
                 "--factory-image", str(factory), *identity_args(build_manifest, generated_profile),
@@ -355,7 +366,8 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             release = Path(json.loads(completed.stdout)["release"])
             manifest_path = release / "developer-image" / "ws147-developer-image.manifest.json"
             manifest = device_image_manifest.parse_device_image_manifest(manifest_path.read_bytes())
-            self.assertEqual(manifest["renderCore"], {"version": "0.9.0-dev", "abi": 4})
+            self.assertEqual(manifest["renderCore"], {"version": "0.9.0-dev", "abi": abi})
+            self.assertEqual(manifest['profile']['featureFamilies'],core_features)
             self.assertEqual(manifest["buildProvenance"], {
                 "renderCoreSourceIdentity": identity,
                 "renderCoreSourceInputCount": 163,

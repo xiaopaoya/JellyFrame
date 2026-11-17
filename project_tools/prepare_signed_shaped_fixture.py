@@ -100,7 +100,7 @@ def build(core_fixtures, font, output, capacity, public_test_signature=False):
               'catalogRasterGids':records['rasterGids'], 'omittedOriginalAssets':[],
               'executionVerified':False}
     if signed and report['fits']:
-        report['hostInspection'] = inspect_install_bytes(signed, capacity, allow_shaped=True)
+        report['hostInspection'] = inspect_install_bytes(signed, capacity, supported_text_pipelines=('jfsp1-block-v11',))
     (output / 'package-evidence.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     if not report['fits']:
         raise ValueError(f"full resource package exceeds target capacity: {len(signed or package)} > {capacity}; report retained")

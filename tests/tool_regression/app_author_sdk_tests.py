@@ -35,6 +35,7 @@ def main() -> int:
             prefix = next(name.split("/", 1)[0] for name in names if name.endswith("/sdk-manifest.json"))
             expected = {
                 f"{prefix}/tools/jellyframe_cli.py",
+                f"{prefix}/tools/device_render_core_capabilities.py",
                 f"{prefix}/tools/schemas/jellyframe.app.schema.json",
                 f"{prefix}/tools/templates/apps/blank/jellyframe.app.json",
                 f"{prefix}/tools/presets/targets/round-300.json",

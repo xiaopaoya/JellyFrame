@@ -198,7 +198,7 @@ class Ws147DeviceProviderTests(unittest.TestCase):
             endpoint = "fixture-install-session-order"
             args = argparse.Namespace(operation="install", selector=endpoint, request_id="install-order",
                                       bundle=bundle, allow_downgrade=False)
-            config = provider.ProviderConfig(endpoint, "COM19", 115200, Path("manifest.json"), {})
+            config = provider.ProviderConfig(endpoint, "COM19", 115200, Path("manifest.json"), {"renderCore": {"abi": 1}})
             with (
                 mock.patch.object(provider, "Wire", RecordingWire),
                 mock.patch.object(provider, "decode_capabilities", return_value={}),
