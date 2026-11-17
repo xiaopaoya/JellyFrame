@@ -901,6 +901,16 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
             frame.groups[0].transform.scale_y != 1 || frame.groups[0].transform.rotate_degrees != 0 ||
             frame.shaped_text.size() > kScriptTaskMaxShapedTextRecords ||
             !frame.command_ellipses.empty()) return reject();
+        // Atomic shaped painting needs a full staging surface, including when
+        // only a dirty subregion changes. Bound it before copying the target.
+        std::size_t staged_pixels = 0;
+        if (!checked_multiply(static_cast<std::size_t>(target.width),
+                              static_cast<std::size_t>(target.height), staged_pixels) ||
+            target.pixels.size() != staged_pixels ||
+            (options_.max_temporary_pixels != 0 && staged_pixels > options_.max_temporary_pixels)) {
+            if (status) *status = ScriptTaskFrameRenderStatus::FramebufferRejected;
+            return false;
+        }
         for (const auto& command : frame.display_list)
             if (static_cast<unsigned>(detail::command_type(command)) > static_cast<unsigned>(DisplayCommandType::BoxShadow) ||
                 command.transform.enabled || command.transform.source_clip_index != kScriptTaskNoClip)

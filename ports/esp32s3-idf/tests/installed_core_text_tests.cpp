@@ -8,7 +8,10 @@
 #include "app_runtime/tests/runtime_shaped_text_test_fixture.h"
 #endif
 
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+#if !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API && JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+#include "installed_contextual_text_tests.h"
+int main() { return run_installed_contextual_text_tests(); }
+#elif JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
 using namespace jellyframe;
 using namespace jellyframe_esp32s3;
 

@@ -3,6 +3,7 @@
 #include "jellyframe_esp32s3_input.h"
 #include "jellyframe_esp32s3_resources.h"
 #include "jellyframe_esp32s3_ui_task.h"
+#include "app_runtime/script_task_prepared_text.h"
 #include "boards/waveshare_touch_lcd_boards.h"
 
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
@@ -58,7 +59,11 @@ LayoutEngine make_layout_engine(StyleResolver& resolver,
 #else
 LayoutEngine make_layout_engine(StyleResolver& resolver,
                                 const LayoutEngineOptions& options) {
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     return LayoutEngine(resolver, options);
+#else
+    return LayoutEngine(resolver, {}, options);
+#endif
 }
 #endif
 
@@ -133,8 +138,14 @@ std::uint32_t rect_area(Rect rect) {
 }
 
 std::size_t prepared_text_line_count(const LayoutBox& root) {
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     std::size_t count = root.text_layout_cache.prepared_text
         ? root.text_layout_cache.prepared_lines.size() : 0;
+#else
+    // ABI9's prepared snapshot is opaque. This legacy smoke metric is not an
+    // ABI9 acceptance gate and must not infer prepared lines from scalar text.
+    std::size_t count = 0;
+#endif
     for (const auto& child : root.children) {
         if (child) count += prepared_text_line_count(*child);
     }

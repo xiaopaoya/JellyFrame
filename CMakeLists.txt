@@ -430,6 +430,7 @@ if(JELLYFRAME_BUILD_TESTS)
         endif()
         target_link_libraries(jellyframe_esp32s3_installed_resource_owner_tests
             PRIVATE jellyframe_script_task_runtime jellyframe_script)
+        jellyframe_enable_shaped_test_fixtures(jellyframe_esp32s3_installed_resource_owner_tests)
         target_include_directories(jellyframe_esp32s3_installed_resource_owner_tests PRIVATE
             ports/esp32s3-idf/main)
         jellyframe_enable_test_asserts(jellyframe_esp32s3_installed_resource_owner_tests)

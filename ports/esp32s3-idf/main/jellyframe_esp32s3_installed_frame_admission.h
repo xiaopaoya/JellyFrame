@@ -1,21 +1,26 @@
 #pragma once
 
 #include "app_runtime/script_task_prepared_text.h"
+#include "app_runtime/runtime_shaped_text_binding.h"
 
 // Keep installed-frame selection and resource admission on the same boundary.
 #if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && \
     CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM && \
-    JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
-#define JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED 1
+    (JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API || \
+     (JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API))
+#define JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED 1
 #else
-#define JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED 0
+#define JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED 0
 #endif
 
 #include "app_runtime/script_task_contract.h"
+#include "app_runtime/script_task_frame_codec.h"
 #include "app_runtime/app_installed_bundle.h"
 #include <memory>
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
 #include "jellyframe_esp32s3_installed_resource_owner.h"
+#endif
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
 #include "app_runtime/script_task_frame_renderer.h"
 #endif
 
@@ -23,9 +28,10 @@ namespace jellyframe_esp32s3 {
 inline bool installed_text_pipeline_supported(const jellyframe::AppInstalledTextPipeline& pipeline) {
     using Status = jellyframe::AppInstalledTextPipelineStatus;
     if (pipeline.status == Status::Ready) {
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED && JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
-        return pipeline.frame_version == 11 && pipeline.binding && pipeline.binding->valid() &&
-            jellyframe::script_task_app_frame_codec_supports_version(11);
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED && JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+        return pipeline.frame_version == jellyframe::kRuntimeShapedFrameVersion &&
+            pipeline.binding && pipeline.binding->valid() &&
+            jellyframe::script_task_app_frame_codec_supports_version(jellyframe::kRuntimeShapedFrameVersion);
 #else
         return false;
 #endif
@@ -35,13 +41,18 @@ inline bool installed_text_pipeline_supported(const jellyframe::AppInstalledText
 #if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
     if (pipeline.binding) return false;
 #endif
+#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+    return JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API &&
+        jellyframe::script_task_app_frame_codec_supports_version(10);
+#else
     return true;
+#endif
 }
 
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
 inline bool installed_core_text_frame_renderable(const jellyframe::ScriptTaskAppFrame& frame) {
     for (const auto& command : frame.display_list)
-        if (command.type() == jellyframe::DisplayCommandType::Text) return false;
+        if (jellyframe::detail::command_type(command) == jellyframe::DisplayCommandType::Text) return false;
     return true;
 }
 
@@ -80,14 +91,16 @@ inline jellyframe::ScriptAppSession begin_installed_script_session(
     jellyframe::ScriptTaskSupervisor& supervisor,
     std::uint32_t app_instance_id,
     const std::shared_ptr<const InstalledAppResources>& resources) {
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
-    if (!resources || !resources->text_catalog || !jellyframe::script_task_app_frame_codec_supports_version(10)) return {};
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
+    if (!resources || !resources->text_catalog) return {};
 #if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
     if (resources->shaped_text_binding)
-        return jellyframe::script_task_app_frame_codec_supports_version(11)
+        return !resources->image_provider && resources->shaped_text_binding->valid() &&
+            jellyframe::script_task_app_frame_codec_supports_version(jellyframe::kRuntimeShapedFrameVersion)
             ? supervisor.begin(app_instance_id, resources->text_catalog, resources->image_provider, resources->shaped_text_binding)
             : jellyframe::ScriptAppSession{};
 #endif
+    if (!jellyframe::script_task_app_frame_codec_supports_version(10)) return {};
     return supervisor.begin(app_instance_id, resources->text_catalog, resources->image_provider);
 #else
     (void)resources;

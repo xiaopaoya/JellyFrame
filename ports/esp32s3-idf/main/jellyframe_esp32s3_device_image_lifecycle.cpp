@@ -123,7 +123,7 @@ bool snapshot_active_resources(const jellyframe::AppInstalledBundleBinding& bind
     std::vector<InstalledResourceReference> references;
     if (!prepare_document_styles(*document, entry_path)) return false;
     collect_resource_references(*document, entry_path, references);
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
     std::unique_ptr<DeviceBundleFontTable> font_table(new (std::nothrow) DeviceBundleFontTable);
     std::unique_ptr<DeviceBundleInspectionWorkspace> font_workspace(new (std::nothrow) DeviceBundleInspectionWorkspace);
     if (!font_table || !font_workspace) return false;

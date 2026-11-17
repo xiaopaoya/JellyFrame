@@ -16,6 +16,7 @@
 #include "app_runtime/app_host.h"
 #include "app_runtime/app_font_set.h"
 #include "app_runtime/script_task_command_access.h"
+#include "app_runtime/script_task_prepared_text.h"
 #include "device_runtime_contracts/device_bundle.h"
 #include "render_core/bitmap_font.h"
 #include "render_core/budget.h"
@@ -1759,7 +1760,11 @@ bool rebuild_pipeline(TimerUiTaskContext& context) {
 #if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
     jellyframe::LayoutEngine layout_engine(style_resolver, context.text_measure, layout_options);
 #else
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     jellyframe::LayoutEngine layout_engine(style_resolver, layout_options);
+#else
+    jellyframe::LayoutEngine layout_engine(style_resolver, {}, layout_options);
+#endif
 #endif
     const std::uint64_t layout_start = esp_timer_get_time();
     context.pipeline.layout_tree =
@@ -1981,7 +1986,7 @@ bool render_and_present(TimerUiTaskContext& context,
 #endif
     auto compositor_options = jellyframe::software_compositor_options_from_budgets(context.budgets);
     compositor_options.text_system = context.core_text_system;
-#if defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) && JELLYFRAME_ESP32S3_RENDER_CORE_ABI >= 4
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     jellyframe::SoftwareCompositor compositor(image_painter, compositor_options);
 #else
     jellyframe::SoftwareCompositor compositor({}, image_painter, compositor_options);

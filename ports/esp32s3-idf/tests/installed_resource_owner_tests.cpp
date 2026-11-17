@@ -330,6 +330,43 @@ int run_installed_resource_owner_tests() {
                "replacement snapshot must release after teardown drains its handles")) return 1;
     return 0;
 }
+#elif JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+#include "app_runtime/tests/runtime_font_test_fixture.h"
+#include <cassert>
+int run_installed_resource_owner_tests() {
+    using namespace jellyframe;
+    using namespace jellyframe_esp32s3;
+    auto bytes = std::make_shared<const std::vector<std::uint8_t>>(runtime_test_fonts::font_bytes());
+    const CoreFontResourceView font{bytes->data(), bytes->size()};
+    InstalledResourceSnapshot snapshot;
+    snapshot.entries.push_back({"/fonts/face.jffont2", HostResourceKind::Font, runtime_test_fonts::font_bytes()});
+    DeviceBundleFont metadata;
+    const std::string path = "/fonts/face.jffont2", family = "App Font";
+    std::copy(path.begin(), path.end(), metadata.source.begin());
+    std::copy(family.begin(), family.end(), metadata.family.begin());
+    snapshot.fonts.push_back(metadata);
+    InstalledAppResources::Handle owner;
+    assert(create_installed_app_resources(std::move(snapshot), {}, "/index.html", &font, 1, bytes, nullptr, owner));
+    assert(owner && owner->text_catalog && owner->text_catalog->size() == 2 && !owner->image_provider);
+    ScriptTaskWorkerRuntimeOptions worker;
+    ScriptTaskFrameRendererOptions ui;
+    owner->bind_worker_resources(worker); owner->bind_ui_resources(ui);
+    assert(worker.text_catalog == ui.text_catalog && worker.text_catalog == owner->text_catalog);
+    auto prior = owner;
+    InstalledResourceSnapshot images;
+    images.entries.push_back({"/bad.bmp", HostResourceKind::Image, {1,2,3}});
+    assert(!create_installed_app_resources(std::move(images), {}, "/index.html", &font, 1, bytes, nullptr, owner));
+    assert(owner == prior);
+    assert(!create_installed_app_resources({}, {}, "/index.html", &font,
+        RuntimeFontCatalog::max_faces + 1, bytes, nullptr, owner) && owner == prior);
+    const auto weak = std::weak_ptr<const InstalledResourceSnapshot>(owner->snapshot);
+    prior.reset(); owner.reset(); bytes.reset();
+    assert(!weak.expired());
+    ui = {}; worker = {};
+    assert(weak.expired());
+    std::cout << "installed resource ownership: flat text resources retain snapshot; unsupported image refused\n";
+    return 0;
+}
 #else
 int run_installed_resource_owner_tests() {
     std::cout << "SKIP installed resource owner requires canonical Core API v1\n";

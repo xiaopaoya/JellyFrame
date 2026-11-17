@@ -27,11 +27,12 @@ void InstalledAppResources::bind_ui_resources(
 } // namespace jellyframe_esp32s3
 #endif
 
-#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
 
 #include <array>
 #include <mutex>
 #include <new>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include "render_core/text_backend.h"
@@ -39,7 +40,7 @@ void InstalledAppResources::bind_ui_resources(
 namespace jellyframe_esp32s3 {
 namespace {
 
-#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
 class InstalledSnapshotImageSource final : public jellyframe::RuntimeImageProviderSource {
 public:
     InstalledSnapshotImageSource(std::shared_ptr<const InstalledResourceSnapshot> snapshot,
@@ -118,7 +119,7 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
                                     std::shared_ptr<const void> core_font_owner,
                                     std::int64_t (*clock)(),
                                     InstalledAppResources::Handle& output) {
-#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     if (!clock) return false;
 #else
     (void)clock;
@@ -142,7 +143,9 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
         candidate->snapshot = owned_snapshot;
 
         using namespace jellyframe;
-        if (!core_fonts || !core_font_count || !core_font_owner) return false;
+        if (!core_fonts || !core_font_count || !core_font_owner ||
+            core_font_count > RuntimeFontCatalog::max_faces ||
+            owned_snapshot->fonts.size() > RuntimeFontCatalog::max_faces - core_font_count) return false;
         std::vector<RuntimeFontRegistration> registrations;
         registrations.reserve(core_font_count + owned_snapshot->fonts.size());
         for (std::size_t i = 0; i < core_font_count; ++i) {
@@ -176,7 +179,7 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
         if (RuntimeFontCatalog::create(registrations.data(), registrations.size(), candidate->text_catalog) != RuntimeFontStatus::Ready)
             return false;
 
-#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
         auto source = std::make_shared<InstalledSnapshotImageSource>(
             candidate->snapshot, budgets, entry_path, clock);
         if (!source->preflight()) return false;
@@ -186,6 +189,8 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
         output = std::move(candidate);
         return true;
     } catch (const std::bad_alloc&) {
+        return false;
+    } catch (const std::length_error&) {
         return false;
     }
 }

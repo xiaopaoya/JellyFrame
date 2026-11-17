@@ -35,7 +35,7 @@ struct InstalledAppResources final {
     void bind_ui_resources(jellyframe::ScriptTaskFrameRendererOptions& options) const noexcept;
 };
 
-#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
 bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
                                     const jellyframe::HostBudgets& budgets,
                                     std::string_view entry_path,

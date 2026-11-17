@@ -83,7 +83,7 @@ jellyframe::HostBudgets installed_script_budgets(int width, int height) {
 
 jellyframe::ScriptTaskAppFrameCodecOptions frame_codec_options(std::uint8_t selected_version = 0) {
     jellyframe::ScriptTaskAppFrameCodecOptions options;
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
     options.version = 10;
     options.max_groups = 64;
     options.max_group_depth = 8;
@@ -205,7 +205,7 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options(const InstalledBundleS
     options.text_system = state.host != nullptr
         ? state.host->fonts().core_text_system()
         : nullptr;
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
     if (state.runtime_resources) {
         state.runtime_resources->bind_worker_resources(options);
 #if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
@@ -440,22 +440,18 @@ void ui_entry(void* raw) {
     jellyframe::ScriptTaskFrameRendererOptions renderer_options;
     renderer_options.max_clip_depth = 8;
     renderer_options.max_temporary_pixels = pixel_count;
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
     // Canonical replay charges one staging frame before Core offscreen work.
     renderer_options.max_temporary_pixels = 2 * pixel_count;
     if (state->runtime_resources) {
         state->runtime_resources->bind_ui_resources(renderer_options);
     }
 #endif
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
     const jellyframe::ScriptTaskFrameRenderer renderer(renderer_options);
-#else
-    const jellyframe::ScriptTaskFrameRenderer renderer(renderer_options);
-#endif
     jellyframe::SoftwareRasterizerScratch scratch;
     std::uint32_t input_sequence = 1;
     while (!state->stop.load()) {
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
         jellyframe::ScriptTaskAcceptedAppFrame frame;
         const auto take_status = take_installed_core_text_frame(
             *state->protocol, state->script_session, frame_codec_options(state->text_pipeline.frame_version), frame);
@@ -469,7 +465,7 @@ void ui_entry(void* raw) {
         if (take_status == jellyframe::ScriptTaskAppFrameTakeStatus::Accepted) {
             const jellyframe::Rect full{0, 0, width, height};
             jellyframe::ScriptTaskFrameRenderStatus render_status;
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
             const bool rendered = render_installed_core_text_frame(renderer, frame, framebuffer,
                 {248, 250, 252, 255}, &full, 1, &scratch, &render_status);
 #else
@@ -617,8 +613,10 @@ bool start_installed_bundle_script_task(std::string app_id,
     session = nullptr;
     if (!installed_text_pipeline_supported(text_pipeline)) return false;
 #if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
-    // No legacy fallback when the selected Core cannot replay canonical v10.
-    if (!jellyframe::script_task_app_frame_codec_supports_version(10)) return false;
+    // The declared route must be replayable; contextual packages never require
+    // the unrelated scalar v10 ABI and never fall back to it.
+    const auto selected = text_pipeline.frame_version ? text_pipeline.frame_version : 10;
+    if (!jellyframe::script_task_app_frame_codec_supports_version(selected)) return false;
 #endif
     const boards::BoardProfile& profile = boards::selected_board_profile();
     if (app_id.empty() || app_instance_id == 0 || entry_path.empty() || entry_document.empty() ||
@@ -678,7 +676,7 @@ bool start_installed_bundle_script_task(std::string app_id,
         return false;
     }
 #endif
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
     auto static_font_owner = std::shared_ptr<const void>(
         jellyframe::kNotoSansScSystemFontCatalog, [](const void*) {});
     if (!create_installed_app_resources(std::move(resources), budgets, entry_path,
@@ -690,14 +688,14 @@ bool start_installed_bundle_script_task(std::string app_id,
         return false;
     }
 #endif
-#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
     if (next->text_pipeline.status == jellyframe::AppInstalledTextPipelineStatus::Ready) {
-        if (next->text_pipeline.frame_version != 11 || !next->text_pipeline.binding || !next->runtime_resources) {
+        if (next->text_pipeline.frame_version != jellyframe::kRuntimeShapedFrameVersion || !next->text_pipeline.binding || !next->runtime_resources) {
             vSemaphoreDelete(next->stopped); delete next; return false;
         }
         auto selected = std::make_shared<InstalledAppResources>(*next->runtime_resources);
         selected->shaped_text_binding = next->text_pipeline.binding;
-        // v11 admission refuses image DOM; an unused image adapter must not
+        // Shaped admission refuses image DOM; an unused image adapter must not
         // accidentally turn an otherwise image-free shaped package into v10.
         selected->image_provider.reset();
         next->runtime_resources = std::move(selected);
