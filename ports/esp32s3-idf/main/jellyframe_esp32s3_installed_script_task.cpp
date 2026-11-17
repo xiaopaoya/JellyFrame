@@ -40,6 +40,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <new>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -79,7 +81,7 @@ jellyframe::HostBudgets installed_script_budgets(int width, int height) {
     return budgets;
 }
 
-jellyframe::ScriptTaskAppFrameCodecOptions frame_codec_options() {
+jellyframe::ScriptTaskAppFrameCodecOptions frame_codec_options(std::uint8_t selected_version = 0) {
     jellyframe::ScriptTaskAppFrameCodecOptions options;
 #if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
     options.version = 10;
@@ -88,6 +90,7 @@ jellyframe::ScriptTaskAppFrameCodecOptions frame_codec_options() {
 #else
     options.version = 5;
 #endif
+    if (selected_version) options.version = selected_version;
     options.max_commands = kMaxCommands;
     options.max_text_bytes = 12u * 1024u;
     options.max_input_targets = 48;
@@ -140,6 +143,7 @@ struct InstalledBundleScriptSession {
     std::uint32_t generation = 0;
     int width = 0;
     int height = 0;
+    jellyframe::AppInstalledTextPipeline text_pipeline;
     std::string app_id;
     std::string entry_path;
     std::string entry_document;
@@ -195,7 +199,7 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options(const InstalledBundleS
     };
     options.prepare_document_user = const_cast<InstalledBundleScriptSession*>(&state);
     options.viewport = {0, 0, state.width, state.height};
-    options.frame_codec = frame_codec_options();
+    options.frame_codec = frame_codec_options(state.text_pipeline.frame_version);
     options.input_codec = {32, 256};
     options.service_request_codec = {64};
     options.text_system = state.host != nullptr
@@ -204,6 +208,9 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options(const InstalledBundleS
 #if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
     if (state.runtime_resources) {
         state.runtime_resources->bind_worker_resources(options);
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+        options.shaped_layout.font_family_hash = state.text_pipeline.font_family_hash;
+#endif
     }
 #endif
     return options;
@@ -276,7 +283,7 @@ void worker_entry(void* raw) {
         return;
     }
     state->worker_started.store(true);
-    {
+    try {
     jellyframe::ScriptTaskWorkerRuntime runtime(state->script_session, worker_options(*state));
     const auto initialized = runtime.initialize(*state->protocol, state->entry_document, state->author_css);
     state->init_status.store(static_cast<std::uint8_t>(initialized));
@@ -325,6 +332,19 @@ void worker_entry(void* raw) {
         (void)runtime.publish_fatal(*state->protocol);
     }
     runtime.stop();
+    } catch (const std::bad_alloc&) {
+        // Construction can fail before a worker exists to publish its fatal
+        // record. Report through allocation-free session state so the
+        // supervisor can complete the ordinary protected teardown.
+        state->init_status.store(static_cast<std::uint8_t>(jellyframe::ScriptTaskWorkerRuntimeInitStatus::BudgetRejected));
+        state->fatal_reason.store(static_cast<std::uint8_t>(jellyframe::ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded));
+        state->fatal_seen.store(true);
+        state->stop.store(true);
+    } catch (const std::length_error&) {
+        state->init_status.store(static_cast<std::uint8_t>(jellyframe::ScriptTaskWorkerRuntimeInitStatus::BudgetRejected));
+        state->fatal_reason.store(static_cast<std::uint8_t>(jellyframe::ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded));
+        state->fatal_seen.store(true);
+        state->stop.store(true);
     }
     state->worker_done.store(true);
     // The supervisor reclaims this WithCaps task after its JerryScript state
@@ -438,13 +458,13 @@ void ui_entry(void* raw) {
 #if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
         jellyframe::ScriptTaskAcceptedAppFrame frame;
         const auto take_status = take_installed_core_text_frame(
-            *state->protocol, state->script_session, frame_codec_options(), frame);
+            *state->protocol, state->script_session, frame_codec_options(state->text_pipeline.frame_version), frame);
         const std::uint32_t packet_sequence = frame.sequence();
 #else
         jellyframe::ScriptTaskAppFrame frame;
         std::uint32_t packet_sequence = 0;
         const auto take_status = jellyframe::take_script_task_app_frame(
-            *state->protocol, state->script_session, frame_codec_options(), frame, &packet_sequence);
+            *state->protocol, state->script_session, frame_codec_options(state->text_pipeline.frame_version), frame, &packet_sequence);
 #endif
         if (take_status == jellyframe::ScriptTaskAppFrameTakeStatus::Accepted) {
             const jellyframe::Rect full{0, 0, width, height};
@@ -592,8 +612,10 @@ bool start_installed_bundle_script_task(std::string app_id,
                                         std::string entry_document,
                                         InstalledResourceSnapshot resources,
                                         jellyframe::AppRuntimeHost& host,
-                                        InstalledBundleScriptSession*& session) {
+                                        InstalledBundleScriptSession*& session,
+                                        jellyframe::AppInstalledTextPipeline text_pipeline) {
     session = nullptr;
+    if (!installed_text_pipeline_supported(text_pipeline)) return false;
 #if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
     // No legacy fallback when the selected Core cannot replay canonical v10.
     if (!jellyframe::script_task_app_frame_codec_supports_version(10)) return false;
@@ -645,6 +667,7 @@ bool start_installed_bundle_script_task(std::string app_id,
     next->author_css = std::move(author_css);
     next->scripts = std::move(scripts);
     next->host = &host;
+    next->text_pipeline = std::move(text_pipeline);
 #if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && \
     CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
     if (!host.attach_core_system_font_catalog_view(
@@ -665,6 +688,19 @@ bool start_installed_bundle_script_task(std::string app_id,
         vSemaphoreDelete(next->stopped);
         delete next;
         return false;
+    }
+#endif
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+    if (next->text_pipeline.status == jellyframe::AppInstalledTextPipelineStatus::Ready) {
+        if (next->text_pipeline.frame_version != 11 || !next->text_pipeline.binding || !next->runtime_resources) {
+            vSemaphoreDelete(next->stopped); delete next; return false;
+        }
+        auto selected = std::make_shared<InstalledAppResources>(*next->runtime_resources);
+        selected->shaped_text_binding = next->text_pipeline.binding;
+        // v11 admission refuses image DOM; an unused image adapter must not
+        // accidentally turn an otherwise image-free shaped package into v10.
+        selected->image_provider.reset();
+        next->runtime_resources = std::move(selected);
     }
 #endif
     next->resources.heap_start = observe_heap();
@@ -721,7 +757,7 @@ InstalledBundleScriptTaskTelemetry installed_bundle_script_task_telemetry(const 
 namespace jellyframe_esp32s3 {
 bool start_installed_bundle_script_task(std::string, std::uint32_t, std::uint32_t, std::string, std::string,
                                         InstalledResourceSnapshot, jellyframe::AppRuntimeHost&,
-                                        InstalledBundleScriptSession*&) { return false; }
+                                        InstalledBundleScriptSession*&, jellyframe::AppInstalledTextPipeline) { return false; }
 bool stop_installed_bundle_script_task(InstalledBundleScriptSession*&, std::uint32_t,
                                        InstalledBundleScriptTaskTelemetry*) { return false; }
 bool installed_bundle_script_task_has_fatal(const InstalledBundleScriptSession*) { return false; }

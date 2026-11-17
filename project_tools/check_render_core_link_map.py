@@ -13,10 +13,7 @@ import argparse
 import json
 from pathlib import Path
 
-from render_core_feature_registry import (
-    KNOWN_RENDER_CORE_FEATURES,
-    missing_feature_dependencies,
-)
+from render_core_feature_registry import REGISTRY_PATH, load_registry
 
 
 FEATURE_MARKERS = {
@@ -56,7 +53,7 @@ def fail(message: str) -> None:
     raise SystemExit(f"render_core_link_map_check: {message}")
 
 
-def load_profile(path: Path) -> dict:
+def load_profile(path: Path, known_features: frozenset[str], dependencies: dict[str, frozenset[str]]) -> dict:
     try:
         profile = json.loads(path.read_text(encoding="utf-8"))
     except OSError as error:
@@ -70,10 +67,15 @@ def load_profile(path: Path) -> dict:
         fail("profile features must be an array of strings")
     if len(features) != len(set(features)):
         fail("profile features must be unique")
-    unknown = sorted(set(features) - KNOWN_RENDER_CORE_FEATURES)
+    unknown = sorted(set(features) - known_features)
     if unknown:
         fail("profile contains unknown features: " + ", ".join(unknown))
-    missing_dependencies = missing_feature_dependencies(features)
+    missing_dependencies = sorted(
+        f"{feature} -> {dependency}"
+        for feature in features
+        for dependency in dependencies[feature]
+        if dependency not in features
+    )
     if missing_dependencies:
         fail(
             "profile has missing feature dependencies: "
@@ -86,6 +88,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", required=True, type=Path)
     parser.add_argument("--map", required=True, dest="map_path", type=Path)
+    parser.add_argument(
+        "--registry", type=Path, default=REGISTRY_PATH,
+        help="feature registry belonging to the selected Render Core source",
+    )
     parser.add_argument("--report", type=Path)
     parser.add_argument(
         "--used-feature", action="append", choices=CHECKED_FEATURES,
@@ -104,7 +110,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    profile = load_profile(args.profile)
+    try:
+        dependencies, _metadata = load_registry(args.registry)
+    except (OSError, ValueError) as error:
+        fail(f"cannot load feature registry {args.registry}: {error}")
+    known_features = frozenset(dependencies)
+    profile = load_profile(args.profile, known_features, dependencies)
     try:
         map_text = args.map_path.read_text(encoding="utf-8", errors="replace")
     except OSError as error:
@@ -163,6 +174,7 @@ def main() -> int:
     report = {
         "format": "jellyframe.render_core.link_map_check",
         "profile": str(args.profile),
+        "registry": str(args.registry),
         "map": str(args.map_path),
         "usedFeatures": sorted(used_features) if used_features is not None else None,
         "checks": checks,

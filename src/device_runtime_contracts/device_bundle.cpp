@@ -180,8 +180,9 @@ bool copy_json_string(std::string_view source, std::size_t& index, std::array<ch
 
 class SummaryParser {
 public:
-    SummaryParser(std::string_view source, DeviceBundleSummary& summary, DeviceBundleFontTable* fonts = nullptr)
-        : source_(source), summary_(summary), fonts_(fonts) {}
+    SummaryParser(std::string_view source, DeviceBundleSummary& summary, DeviceBundleFontTable* fonts = nullptr,
+                  DeviceBundleTextPipeline* pipeline = nullptr)
+        : source_(source), summary_(summary), fonts_(fonts), pipeline_(pipeline) {}
 
     bool parse() {
         skip_space();
@@ -230,6 +231,7 @@ private:
         MinRenderCore = 1u << 7,
         Script = 1u << 8,
         Fonts = 1u << 9,
+        TextPipeline = 1u << 10,
     };
 
     void skip_space() {
@@ -260,6 +262,7 @@ private:
 
     bool parse_member(std::string_view key) {
         if (key == "fonts") return fonts_ ? mark_once(Fonts) && parse_fonts() : skip_value(0);
+        if (key == "textPipeline") return mark_once(TextPipeline) && parse_text_pipeline();
         if (key == "id") {
             return mark_once(Id) && copy_json_string(source_, index_, summary_.app_id);
         }
@@ -319,6 +322,72 @@ private:
             return parse_uint32(summary_.version_code);
         }
         return skip_value(0);
+    }
+
+    bool parse_text_pipeline() {
+        DeviceBundleTextPipeline draft;
+        if (!consume('{')) return false;
+        std::uint32_t fields = 0;
+        skip_space();
+        if (consume('}')) return false;
+        for (;;) {
+            std::array<char, 32> key{};
+            if (!copy_json_string(source_, index_, key)) return false;
+            skip_space(); if (!consume(':')) return false; skip_space();
+            const std::string_view name(key.data());
+            constexpr std::string_view names[] = {"kind", "font", "catalog", "companion", "tables", "eligibility",
+                "sourceIdentity", "profileIdentity", "glyphCount", "resourceId", "rasterSize", "weight", "selection", "fontFamilyHash"};
+            std::size_t field = 0;
+            while (field < 14 && names[field] != name) ++field;
+            if (field == 14 || (fields & (1u << field))) return false;
+            fields |= 1u << field;
+            if (field == 0) {
+                std::array<char,32> value{};
+                if (!copy_json_string(source_,index_,value)) return false;
+                const std::string_view kind(value.data());
+                if (kind == "jfsp1-block-v11") draft.kind = DeviceBundleTextPipelineKind::Jfsp1BlockV11;
+                else if (kind == "jfsp2-block-v12") draft.kind = DeviceBundleTextPipelineKind::Jfsp2BlockV12;
+                else return false;
+            } else if (field <= 5) {
+                auto& path = draft.paths[field-1];
+                if (!copy_json_string(source_,index_,path)) return false;
+                const std::string_view value(path.data());
+                if (!path_is_normalized(reinterpret_cast<const std::uint8_t*>(value.data()),value.size()) ||
+                    string_has_control_character(value)) return false;
+            } else if (field <= 7) {
+                std::array<char,65> hex{};
+                if (!copy_json_string(source_,index_,hex) || std::strlen(hex.data()) != 64) return false;
+                auto& digest = field == 6 ? draft.source_identity : draft.profile_identity;
+                const auto nibble=[](char c) { return c >= '0' && c <= '9' ? c-'0' : c >= 'a' && c <= 'f' ? c-'a'+10 : -1; };
+                bool nonzero=false;
+                for (std::size_t i=0;i<32;++i) {
+                    const auto a=nibble(hex[i*2]), b=nibble(hex[i*2+1]);
+                    if (a < 0 || b < 0) return false;
+                    digest[i]=static_cast<unsigned char>(a*16+b); nonzero=nonzero || digest[i];
+                }
+                if (!nonzero) return false;
+            } else {
+                std::uint32_t value=0;
+                if (!parse_uint32(value)) return false;
+                if (field == 8) { if (!value || value > 65536) return false; draft.glyph_count=value; }
+                if (field == 9) { if (!value) return false; draft.resource_id=value; }
+                if (field == 10) { if (!value || value > 65535) return false; draft.raster_size=static_cast<std::uint16_t>(value); }
+                if (field == 11) { if (!value || value > 1000) return false; draft.weight=static_cast<std::uint16_t>(value); }
+                if (field == 12) { if (value > 65535) return false; draft.selection=static_cast<std::uint16_t>(value); }
+                if (field == 13) draft.font_family_hash=value;
+            }
+            skip_space(); if (consume('}')) break;
+            if (!consume(',')) return false;
+            skip_space();
+        }
+        // All fields except the optional explicit family selection are required.
+        if ((fields & 8191u) != 8191u) return false;
+        for (std::size_t i=0;i<draft.paths.size();++i)
+            for (std::size_t j=0;j<i;++j)
+                if (draft.paths[i] == draft.paths[j]) return false;
+        shaped_pipeline_ = true;
+        if (pipeline_) *pipeline_ = draft;
+        return true;
     }
 
     bool parse_fonts() {
@@ -550,6 +619,7 @@ private:
     }
 
     bool summary_is_valid() const {
+        if (shaped_pipeline_ && summary_.script_mode != DeviceBundleScriptMode::Classic) return false;
         if (summary_.app_id_view().empty() || summary_.app_name_view().empty() || summary_.version_name_view().empty() ||
             summary_.entry_path_view().empty() || std::string_view(summary_.min_jellyframe.data()).empty() ||
             std::string_view(summary_.min_render_core.data()).empty()) {
@@ -570,6 +640,8 @@ private:
     std::string_view source_;
     DeviceBundleSummary& summary_;
     DeviceBundleFontTable* fonts_ = nullptr;
+    DeviceBundleTextPipeline* pipeline_ = nullptr;
+    bool shaped_pipeline_ = false;
     std::size_t index_ = 0;
     std::uint16_t seen_ = 0;
 };
@@ -663,6 +735,31 @@ std::string_view DeviceBundleSummary::entry_path_view() const {
     return std::string_view(entry_path.data());
 }
 
+DeviceBundleStatus read_device_bundle_text_pipeline(const DeviceBundleReader& reader,
+    const DeviceBundleDescriptor& descriptor, DeviceBundleInspectionWorkspace& workspace,
+    DeviceBundleTextPipeline& output) {
+    output = {};
+    if (!descriptor.summary_bytes || descriptor.summary_bytes > workspace.summary_bytes.size() ||
+        !section_is_valid(descriptor.bundle_bytes,descriptor.summary_offset,descriptor.summary_bytes))
+        return DeviceBundleStatus::InvalidSummary;
+    if (!reader.read_at(descriptor.summary_offset,workspace.summary_bytes.data(),descriptor.summary_bytes))
+        return DeviceBundleStatus::ReadFailed;
+    DeviceBundleSummary summary;
+    DeviceBundleTextPipeline draft;
+    const std::string_view json(reinterpret_cast<const char*>(workspace.summary_bytes.data()),descriptor.summary_bytes);
+    if (!SummaryParser(json,summary,nullptr,&draft).parse()) return DeviceBundleStatus::InvalidSummary;
+    std::array<std::uint8_t, kDeviceBundleHeaderBytes> header{};
+    if (!reader.read_at(0,header.data(),header.size())) return DeviceBundleStatus::ReadFailed;
+    const auto expected_format = draft.kind == DeviceBundleTextPipelineKind::Scalar
+        ? kDeviceBundleScalarFormat : kDeviceBundleShapedFormat;
+    if (!std::equal(std::begin(kBundleMagic),std::end(kBundleMagic),header.begin()) ||
+        read_le16(header.data()+8) != kDeviceBundleHeaderBytes ||
+        read_le16(header.data()+10) != expected_format || read_le32(header.data()+12) != 0 ||
+        read_le32(header.data()+kHeaderReservedOffset) != 0) return DeviceBundleStatus::UnsupportedVersion;
+    output = draft;
+    return DeviceBundleStatus::Ok;
+}
+
 DeviceBundleStatus read_device_bundle_fonts(const DeviceBundleReader& reader,
                                             const DeviceBundleDescriptor& descriptor,
                                             DeviceBundleInspectionWorkspace& workspace,
@@ -700,7 +797,9 @@ DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,
     if (!std::equal(std::begin(kBundleMagic), std::end(kBundleMagic), header.begin())) {
         return DeviceBundleStatus::InvalidMagic;
     }
-    if (read_le16(header.data() + 8) != kDeviceBundleHeaderBytes || read_le16(header.data() + 10) != 0) {
+    const auto format_version = read_le16(header.data() + 10);
+    if (read_le16(header.data() + 8) != kDeviceBundleHeaderBytes ||
+        (format_version != kDeviceBundleScalarFormat && format_version != kDeviceBundleShapedFormat)) {
         return DeviceBundleStatus::UnsupportedVersion;
     }
     if (read_le32(header.data() + 12) != 0 || read_le32(header.data() + kHeaderReservedOffset) != 0) {
@@ -745,10 +844,14 @@ DeviceBundleStatus inspect_device_bundle(const DeviceBundleReader& reader,
     if (!reader.read_at(descriptor.summary_offset, workspace.summary_bytes.data(), descriptor.summary_bytes)) {
         return DeviceBundleStatus::ReadFailed;
     }
+    DeviceBundleTextPipeline pipeline;
     if (!SummaryParser(std::string_view(reinterpret_cast<const char*>(workspace.summary_bytes.data()), descriptor.summary_bytes),
-                       descriptor.summary).parse()) {
+                       descriptor.summary, nullptr, &pipeline).parse()) {
         return DeviceBundleStatus::InvalidSummary;
     }
+    const auto required_format = pipeline.kind == DeviceBundleTextPipelineKind::Scalar
+        ? kDeviceBundleScalarFormat : kDeviceBundleShapedFormat;
+    if (format_version != required_format) return DeviceBundleStatus::UnsupportedVersion;
     if ((!policy.required_min_jellyframe.empty() &&
          std::string_view(descriptor.summary.min_jellyframe.data()) != policy.required_min_jellyframe) ||
         (!policy.required_min_render_core.empty() &&

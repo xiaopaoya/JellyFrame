@@ -11,6 +11,10 @@ namespace jellyframe {
 // owns byte validation and bounded lookup only; storage policy and app startup
 // remain Device OS and App Runtime responsibilities.
 constexpr std::size_t kDeviceBundleHeaderBytes = 56;
+// Header format 1 requires the explicit shaped route; old V0-only readers
+// reject it before parsing optional summary fields. The byte layout is shared.
+constexpr std::uint16_t kDeviceBundleScalarFormat = 0;
+constexpr std::uint16_t kDeviceBundleShapedFormat = 1;
 constexpr std::size_t kDeviceBundleResourceEntryBytes = 28;
 constexpr std::size_t kDeviceBundleMaxSummaryBytes = 4096;
 constexpr std::size_t kDeviceBundleMaxResourcePathBytes = 255;
@@ -38,6 +42,17 @@ struct DeviceBundleFontTable {
             font.family.fill('\0');
         }
     }
+};
+
+// Versioned package-selected text route. Existing summary/descriptor layouts
+// stay unchanged; launch reads this optional declaration from the same lease.
+enum class DeviceBundleTextPipelineKind : std::uint8_t { Scalar, Jfsp1BlockV11, Jfsp2BlockV12 };
+struct DeviceBundleTextPipeline {
+    DeviceBundleTextPipelineKind kind = DeviceBundleTextPipelineKind::Scalar;
+    std::array<std::array<char, kDeviceBundleMaxResourcePathBytes + 1>, 5> paths{};
+    std::array<unsigned char, 32> source_identity{}, profile_identity{};
+    std::uint32_t glyph_count = 0, resource_id = 0, font_family_hash = 0;
+    std::uint16_t raster_size = 0, weight = 0, selection = 0;
 };
 
 enum class DeviceBundleStatus : std::uint8_t {
@@ -170,6 +185,10 @@ DeviceBundleStatus find_device_bundle_resource(const DeviceBundleReader& reader,
 // Optional launch-time font admission. Reuses the normalized summary parser;
 // callers keep the table and workspace off small device task stacks. Output
 // is cleared on refusal and never exposes bytes owned by storage.
+DeviceBundleStatus read_device_bundle_text_pipeline(const DeviceBundleReader& reader,
+    const DeviceBundleDescriptor& descriptor, DeviceBundleInspectionWorkspace& workspace,
+    DeviceBundleTextPipeline& output);
+
 DeviceBundleStatus read_device_bundle_fonts(const DeviceBundleReader& reader,
                                             const DeviceBundleDescriptor& descriptor,
                                             DeviceBundleInspectionWorkspace& workspace,

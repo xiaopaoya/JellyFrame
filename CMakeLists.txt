@@ -60,6 +60,7 @@ option(JELLYFRAME_ENABLE_ADVANCED_FORMS "Compile the forms.advanced Render Core 
 option(JELLYFRAME_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer on supported toolchains" OFF)
 
 include(GNUInstallDirs)
+include(cmake/jellyframe_shaped_test_fixtures.cmake)
 
 if(JELLYFRAME_BUILD_SCRIPTING AND NOT JELLYFRAME_BUILD_APP_RUNTIME)
     message(FATAL_ERROR
@@ -134,6 +135,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_render_core_provider.cmake
 if(JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS)
     add_library(jellyframe_device_runtime_contracts
         src/device_runtime_contracts/device_bundle.cpp
+        src/device_runtime_contracts/device_signed_package.cpp
         src/device_runtime_contracts/device_install_transaction.cpp
         src/device_runtime_contracts/device_runtime_protocol.cpp
     )
@@ -162,6 +164,7 @@ add_library(jellyframe_app_runtime
     src/app_runtime/app_host.cpp
     src/app_runtime/app_host_data.cpp
     src/app_runtime/app_installed_bundle.cpp
+    src/app_runtime/runtime_shaped_text_binding.cpp
     src/app_runtime/app_lifecycle.cpp
     src/app_runtime/app_load_telemetry.cpp
     src/app_runtime/app_service_worker.cpp
@@ -366,6 +369,18 @@ endif()
 
 if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
+    add_executable(jellyframe_native_package_route_tests tests/native_package_route_tests.cpp)
+    target_link_libraries(jellyframe_native_package_route_tests PRIVATE jellyframe_render_core)
+    target_include_directories(jellyframe_native_package_route_tests PRIVATE tools/native)
+    target_compile_features(jellyframe_native_package_route_tests PRIVATE cxx_std_17)
+    target_compile_definitions(jellyframe_native_package_route_tests PRIVATE
+        JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION="${JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION}"
+        JELLYFRAME_RENDER_CORE_ACTIVE_PACKAGE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
+    jellyframe_enable_test_asserts(jellyframe_native_package_route_tests)
+    jellyframe_stage_sanitizer_runtime(jellyframe_native_package_route_tests)
+    add_test(NAME jellyframe_native_package_route_tests COMMAND jellyframe_native_package_route_tests
+        "${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_font_policy/jellyframe.app.json"
+        "${CMAKE_CURRENT_BINARY_DIR}/native-package-route-fixture.jfapp")
     if(TARGET jellyframe_embedded_host_demo)
         add_test(NAME jellyframe_embedded_host_core_text
             COMMAND jellyframe_embedded_host_demo)
@@ -439,6 +454,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 target_sources(${_text_target} PRIVATE ports/esp32s3-idf/main/jellyframe_esp32s3_image.cpp)
             endif()
             target_link_libraries(${_text_target} PRIVATE jellyframe_script_task_runtime jellyframe_script)
+            jellyframe_enable_shaped_test_fixtures(${_text_target})
             target_include_directories(${_text_target} PRIVATE ports/esp32s3-idf/main)
             target_compile_definitions(${_text_target} PRIVATE
                 CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM=1
@@ -678,6 +694,11 @@ if(JELLYFRAME_BUILD_TESTS)
         ${JELLYFRAME_APP_RUNTIME_TEST_SOURCES}
     )
     target_link_libraries(jellyframe_app_runtime_tests PRIVATE jellyframe_app_runtime)
+    if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME AND JELLYFRAME_BUILD_SCRIPTING)
+        target_link_libraries(jellyframe_app_runtime_tests PRIVATE jellyframe_script_task_runtime jellyframe_script)
+        target_compile_definitions(jellyframe_app_runtime_tests PRIVATE JELLYFRAME_INSTALLED_PIPELINE_WORKER_TESTS=1)
+    endif()
+    jellyframe_enable_shaped_test_fixtures(jellyframe_app_runtime_tests)
     jellyframe_enable_test_asserts(jellyframe_app_runtime_tests)
     jellyframe_stage_sanitizer_runtime(jellyframe_app_runtime_tests)
     add_test(NAME jellyframe_app_runtime_tests COMMAND jellyframe_app_runtime_tests)
@@ -687,6 +708,7 @@ if(JELLYFRAME_BUILD_TESTS)
     if(JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS)
         set(JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES
             src/device_runtime_contracts/tests/device_bundle_tests.cpp
+            src/device_runtime_contracts/tests/device_signed_package_tests.cpp
             src/device_runtime_contracts/tests/device_install_transaction_tests.cpp
             src/device_runtime_contracts/tests/device_runtime_protocol_tests.cpp
             src/device_runtime_contracts/tests/device_protocol_vector_tests.cpp
@@ -740,6 +762,16 @@ if(JELLYFRAME_BUILD_TESTS)
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/device_cli_tests.py
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             add_test(
+                NAME jellyframe_signed_provider_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/signed_provider_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            add_test(
+                NAME jellyframe_ws147_device_provider_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/ws147_device_provider_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            add_test(
                 NAME jellyframe_ws147_device_provider_release_tests
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/ws147_device_provider_release_tests.py
@@ -782,6 +814,7 @@ if(JELLYFRAME_BUILD_TESTS)
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/project_tools/check_render_core_link_map.py
                     --profile ${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_profile.json
+                    --registry ${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_registry.csv
                     --map ${_jellyframe_render_core_tests_map})
         set_tests_properties(jellyframe_render_core_generated_link_map PROPERTIES
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -1476,6 +1509,7 @@ if(JELLYFRAME_BUILD_TESTS)
         if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
             target_compile_definitions(jellyframe_script_tests
                 PRIVATE JELLYFRAME_SCRIPT_TASK_RUNTIME_ENABLED=1)
+            jellyframe_enable_shaped_test_fixtures(jellyframe_script_tests)
         endif()
         jellyframe_enable_test_asserts(jellyframe_script_tests)
         jellyframe_stage_sanitizer_runtime(jellyframe_script_tests)
@@ -1512,6 +1546,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 ${JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES}
             )
             target_link_libraries(jellyframe_script_task_runtime_tests PRIVATE jellyframe_script_task_runtime)
+            jellyframe_enable_shaped_test_fixtures(jellyframe_script_task_runtime_tests)
             jellyframe_enable_test_asserts(jellyframe_script_task_runtime_tests)
             jellyframe_stage_sanitizer_runtime(jellyframe_script_task_runtime_tests)
             add_test(NAME jellyframe_script_task_runtime_tests COMMAND jellyframe_script_task_runtime_tests)

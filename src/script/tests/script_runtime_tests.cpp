@@ -3279,7 +3279,9 @@ void javascript_canvas_2d_is_optional_and_lazy() {
     TextFontFace font_face;
     font_face.resource_id = 1;
     font_face.family_id = 0;
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     font_face.css_family_hash = normalized_font_family_hash("system-ui");
+#endif
     check(font_face.resource.load(font_bytes.data(), font_bytes.size()) == FontResourceStatus::Loaded,
           "script canvas test font resource loads");
     TextSystem text_system;

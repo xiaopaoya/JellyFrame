@@ -831,6 +831,13 @@ app 作者和编辑器集成：每条保留稳定诊断 `code`、severity，以�
 
 `tools/package_app.py` 仍作为 CLI 和嵌入式构建集成使用的底层 packer。
 
+离线签名封装使用 `python tools/sign_app_package.py --bundle app.jfapp
+--private-key local-key.pem --key-id <32位十六进制> --output app.jfsg`，需要可选的
+Python `cryptography` 依赖。加密 PEM 可加 `--encrypted-key` 在本地输入口令。
+签名器保留原始 JFAPP 字节，并认证整个容器及每项资源的哈希；已有输出不会被覆盖。
+生成签名不会向目标设备配置信任密钥。生产信任表仍为空，签名设备链路仍在验证中；
+格式、主机安装证据和限制见[签名安装验证](../../../docs/evaluation/2026-11-17-signed-install-host.md)。
+
 内置 weather、clock、timer 和 calculator 模板都是普通 source package。它们覆盖
 event delegation、`dataset`、timers、grid layout 和 form controls，不会在
 HTML/CSS/JS 之上再引入一层 app framework。

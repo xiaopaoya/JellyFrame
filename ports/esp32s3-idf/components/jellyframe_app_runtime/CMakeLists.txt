@@ -100,6 +100,7 @@ idf_component_register(
         "${JELLYFRAME_ROOT}/src/app_runtime/app_host.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/app_host_data.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/app_installed_bundle.cpp"
+        "${JELLYFRAME_ROOT}/src/app_runtime/runtime_shaped_text_binding.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/app_lifecycle.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/app_load_telemetry.cpp"
         "${JELLYFRAME_ROOT}/src/app_runtime/app_service_worker.cpp"

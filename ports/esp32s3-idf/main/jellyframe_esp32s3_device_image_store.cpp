@@ -1,12 +1,16 @@
 #include "jellyframe_esp32s3_device_image_store.h"
+#include "jellyframe_esp32s3_package_signature.h"
 
 #include "esp_rom_crc.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
+#include "mbedtls/sha256.h"
 
 #include <algorithm>
 #include <cstring>
 #include <new>
+#include <memory>
 
 namespace jellyframe_esp32s3 {
 namespace {
@@ -14,7 +18,7 @@ namespace {
 using namespace jellyframe;
 
 constexpr std::uint32_t kRegistryMagic = 0x4a465247u; // JFRG
-constexpr std::uint16_t kRegistryVersion = 1;
+constexpr std::uint16_t kRegistryVersion = 3;
 constexpr std::uint32_t kRegistryBytes = 4096;
 constexpr std::uint32_t kRegistrySlots = 2;
 constexpr std::uint8_t kBundleSlots = 3;
@@ -33,6 +37,8 @@ enum class AcceptanceFaultPoint : int {
     CorruptRegistryAtBoot = 7,
     RejectRegistryPublish = 8,
     RejectStagingAllocation = 9,
+    CorruptPublishedEnvelope = 10,
+    DowngradeRegistryVersion = 11,
 };
 
 bool has_acceptance_fault(AcceptanceFaultPoint point) {
@@ -62,6 +68,15 @@ std::uint32_t crc32(const void* bytes, std::size_t size) {
     return esp_rom_crc32_le(0, static_cast<const std::uint8_t*>(bytes), size);
 }
 
+std::uint32_t read_le32(const std::uint8_t* p) {
+    return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8u) |
+           (static_cast<std::uint32_t>(p[2]) << 16u) | (static_cast<std::uint32_t>(p[3]) << 24u);
+}
+
+bool sha256(const std::uint8_t* bytes, std::size_t size, std::array<std::uint8_t, 32>& digest) {
+    return bytes != nullptr && mbedtls_sha256(bytes, size, digest.data(), 0) == 0;
+}
+
 template <std::size_t N>
 bool copy_string(std::array<char, N>& output, std::string_view input) {
     if (input.empty() || input.size() >= N || input.find('\0') != std::string_view::npos) {
@@ -87,6 +102,9 @@ struct DeviceImageStore::BundleRecord {
     std::uint8_t slot = kNoSlot;
     std::uint8_t reserved[3]{};
     std::uint32_t bundle_bytes = 0;
+    std::uint32_t envelope_payload_offset = 0;
+    std::uint32_t envelope_bytes = 0;
+    std::uint32_t envelope_crc32 = 0;
     std::uint32_t bundle_crc32 = 0;
     std::uint32_t version_code = 0;
     std::array<char, kDeviceMaxAppIdBytes + 1> app_id{};
@@ -105,32 +123,65 @@ struct DeviceImageStore::RegistryRecord {
 
 class DeviceImageStore::PartitionReader final : public DeviceBundleReader {
 public:
-    PartitionReader(const DeviceImageStore& store, std::uint8_t slot) : store_(store), slot_(slot) {}
+    PartitionReader(const DeviceImageStore& store, std::uint8_t slot, std::uint32_t base_offset = 0)
+        : store_(store), slot_(slot), base_offset_(base_offset) {}
 
     bool read_at(std::uint32_t offset, std::uint8_t* output, std::size_t size) const override {
-        return store_.read_slot_cached(slot_, offset, output, size);
+        return offset <= UINT32_MAX - base_offset_ &&
+               store_.read_slot_cached(slot_, base_offset_ + offset, output, size);
     }
 
 private:
     const DeviceImageStore& store_;
     std::uint8_t slot_ = kNoSlot;
+    std::uint32_t base_offset_ = 0;
 };
 
 class DeviceImageStore::Lease final : public AppInstalledBundleLease {
 public:
-    Lease(const DeviceImageStore& store, std::uint8_t slot, const DeviceBundleDescriptor& descriptor)
-        : reader_(store, slot), descriptor_(descriptor) {}
+    Lease(const DeviceImageStore& store, std::uint8_t slot, std::uint32_t payload_offset,
+          const DeviceBundleDescriptor& descriptor,
+          const std::array<std::array<char, kDeviceSignedPackageMaxPathBytes + 1>, 128>& paths,
+          const std::array<std::array<std::uint8_t, 32>, 128>& hashes,
+          std::uint32_t resource_count,
+          const std::array<std::uint8_t, kDeviceSignedPackageKeyIdBytes>& key_id)
+        : reader_(store, slot, payload_offset), descriptor_(descriptor), paths_(paths), hashes_(hashes),
+          resource_count_(resource_count), key_id_(key_id) {}
 
     bool read_at(std::uint32_t offset, std::uint8_t* output, std::size_t size) const override {
         return !released_ && reader_.read_at(offset, output, size);
     }
 
     const DeviceBundleDescriptor& descriptor() const override { return descriptor_; }
+    bool copy_authenticated_resource_sha256(std::string_view path,
+                                            std::array<std::uint8_t, 32>& sha256) const override {
+        sha256.fill(0);
+        if (released_ || path.empty()) return false;
+        for (std::uint32_t i = 0; i < resource_count_; ++i) {
+            const std::string_view owned_path(paths_[i].data());
+            if (owned_path == path) {
+                sha256 = hashes_[i];
+                return true;
+            }
+        }
+        return false;
+    }
+    bool copy_authenticated_signer_key_id(
+        std::array<std::uint8_t, kDeviceSignedPackageKeyIdBytes>& key_id) const override {
+        key_id.fill(0);
+        if (released_) return false;
+        key_id = key_id_;
+        return true;
+    }
     void release() override { released_ = true; delete this; }
 
 private:
     PartitionReader reader_;
     DeviceBundleDescriptor descriptor_{};
+    std::array<std::array<char, kDeviceSignedPackageMaxPathBytes + 1>, 128> paths_{};
+    std::array<std::array<std::uint8_t, 32>, 128> hashes_{};
+    std::uint32_t resource_count_ = 0;
+    std::array<std::uint8_t, kDeviceSignedPackageKeyIdBytes> key_id_{};
     bool released_ = false;
 };
 
@@ -139,7 +190,7 @@ DeviceImageStore::DeviceImageStore(const esp_partition_t* partition) : partition
 }
 
 bool DeviceImageStore::initialize() {
-    if (partition_ == nullptr || registry_ == nullptr || partition_->size <= kStorageHeaderBytes) {
+    if (partition_ == nullptr || registry_ == nullptr || max_bundle_bytes() == 0) {
         return false;
     }
     initialized_ = load_registry();
@@ -159,11 +210,16 @@ bool DeviceImageStore::initialize() {
         }
         return false;
     }
+    if (initialized_ && registry_->active.slot != kNoSlot &&
+        has_acceptance_fault(AcceptanceFaultPoint::DowngradeRegistryVersion)) {
+        if (inject_legacy_registry_for_test()) esp_restart();
+        return false;
+    }
     return initialized_;
 }
 
 bool DeviceImageStore::begin_staging(const DeviceInstallRequest& request) {
-    if (!initialized_ || staging_active_ || request.bundle_bytes == 0 || request.bundle_bytes > kMaxBundleBytes) {
+    if (!initialized_ || staging_active_ || request.bundle_bytes == 0 || request.bundle_bytes > max_bundle_bytes()) {
         return false;
     }
     // Test-only port adapter refusal. This reaches the real transaction/store
@@ -198,19 +254,23 @@ bool DeviceImageStore::begin_staging(const DeviceInstallRequest& request) {
     staging_verified_ = false;
     staging_transaction_id_ = request.transaction_id;
     staging_bundle_bytes_ = request.bundle_bytes;
+    staging_payload_offset_ = 0;
+    staging_payload_bytes_ = 0;
     staging_descriptor_ = {};
     restart_for_acceptance_fault(AcceptanceFaultPoint::AfterBegin);
     return true;
 }
 
 bool DeviceImageStore::write_staging(std::uint32_t offset, const std::uint8_t* bytes, std::size_t size) {
-    if (!staging_active_ || bytes == nullptr || size == 0 || offset > kMaxBundleBytes ||
-        size > kMaxBundleBytes - offset) {
+    if (!staging_active_ || bytes == nullptr || size == 0 || offset > staging_bundle_bytes_ ||
+        size > staging_bundle_bytes_ - offset) {
         return false;
     }
     if (!write_slot(staging_slot_, offset, bytes, size)) {
         return false;
     }
+    staging_verified_ = false;
+    staging_descriptor_ = {};
     if (offset == 0) {
         restart_for_acceptance_fault(AcceptanceFaultPoint::AfterFirstChunk);
     }
@@ -221,55 +281,124 @@ bool DeviceImageStore::write_staging(std::uint32_t offset, const std::uint8_t* b
 }
 
 bool DeviceImageStore::verify_staging(const DeviceInstallRequest& request) {
-    if (!staging_active_ || request.transaction_id != staging_transaction_id_ || request.bundle_bytes > kMaxBundleBytes) {
+    if (!staging_active_ || request.transaction_id != staging_transaction_id_ ||
+        request.bundle_bytes != staging_bundle_bytes_ || request.bundle_bytes > max_bundle_bytes()) {
         return false;
     }
-    PartitionReader reader(*this, staging_slot_);
+    staging_verified_ = false;
+    staging_descriptor_ = {};
+    // JFSG verification needs one immutable envelope snapshot: the parser
+    // checks exact package bytes while all descriptor/hash reads use its JFAPP
+    // payload. The bounded snapshot is placed in PSRAM, keeping internal heap
+    // available for the verifier and normal device tasks.
+    std::unique_ptr<std::uint8_t, decltype(&heap_caps_free)> package(
+        static_cast<std::uint8_t*>(heap_caps_malloc(request.bundle_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)),
+        &heap_caps_free);
+    if (!package || !read_slot(staging_slot_, 0, package.get(), request.bundle_bytes)) return false;
+    verify_telemetry_ = {};
+    const std::int64_t crc_started_us = esp_timer_get_time();
+    const std::uint32_t package_crc = crc32(package.get(), request.bundle_bytes);
+    verify_telemetry_.transport_crc_us = static_cast<std::uint32_t>(esp_timer_get_time() - crc_started_us);
+    if (package_crc != request.bundle_crc32) return false;
+
+    constexpr std::size_t kHeaderBytes = kDeviceSignedPackageHeaderBytes;
+    if (request.bundle_bytes < kHeaderBytes + 2 * kDeviceSignedPackageSignatureBytes) return false;
+    const std::uint32_t manifest_bytes = read_le32(package.get() + 16);
+    if (manifest_bytes > request.bundle_bytes - kHeaderBytes - 2 * kDeviceSignedPackageSignatureBytes) return false;
+    const std::uint32_t bundle_offset = static_cast<std::uint32_t>(kHeaderBytes) + manifest_bytes +
+        static_cast<std::uint32_t>(kDeviceSignedPackageSignatureBytes);
+    if (bundle_offset > request.bundle_bytes) return false;
+    const std::uint32_t inner_bundle_bytes = request.bundle_bytes - bundle_offset;
+    DeviceBundleMemoryReader inner_reader(package.get() + bundle_offset, inner_bundle_bytes);
     DeviceBundleValidationPolicy policy;
     policy.max_bundle_bytes = kMaxBundleBytes;
     policy.max_resource_entries = 128;
     policy.max_summary_bytes = kDeviceBundleMaxSummaryBytes;
     DeviceBundleDescriptor descriptor;
-    std::uint32_t transport_crc = 0;
-    verify_telemetry_ = {};
-    reader_cache_slot_ = kNoSlot;
-    reader_cache_offset_ = 0xffffffffu;
-    const std::int64_t crc_started_us = esp_timer_get_time();
-    for (std::uint32_t offset = 0; offset < request.bundle_bytes;) {
-        const std::size_t bytes = std::min<std::size_t>(verify_scratch_.size(), request.bundle_bytes - offset);
-        if (!reader.read_at(offset, verify_scratch_.data(), bytes)) {
-            return false;
-        }
-        transport_crc = esp_rom_crc32_le(transport_crc, verify_scratch_.data(), bytes);
-        offset += static_cast<std::uint32_t>(bytes);
-    }
-    verify_telemetry_.transport_crc_us = static_cast<std::uint32_t>(esp_timer_get_time() - crc_started_us);
     const std::int64_t inspect_started_us = esp_timer_get_time();
-    const DeviceBundleStatus inspect = inspect_device_bundle(reader, request.bundle_bytes, policy,
+    const DeviceBundleStatus inspect = inspect_device_bundle(inner_reader, inner_bundle_bytes, policy,
                                                               inspection_workspace_, descriptor);
     verify_telemetry_.inspect_bundle_us = static_cast<std::uint32_t>(esp_timer_get_time() - inspect_started_us);
-    if (transport_crc != request.bundle_crc32 || inspect != DeviceBundleStatus::Ok ||
+    if (inspect != DeviceBundleStatus::Ok ||
         descriptor.summary.app_id_view() != request.app_id_view()) {
         return false;
     }
-    if (!request.allow_downgrade && registry_->active.slot != kNoSlot &&
+    if (registry_->active.slot != kNoSlot &&
         descriptor.summary.app_id_view() == string_view(registry_->active.app_id) &&
         descriptor.summary.version_code < registry_->active.version_code) {
         return false;
     }
+
+    std::array<std::uint8_t, 32> bundle_hash{};
+    if (!sha256(package.get() + bundle_offset, inner_bundle_bytes, bundle_hash)) return false;
+    auto* resource_metadata = new (std::nothrow) DeviceSignedPackageResourceMetadata[descriptor.resource_count]{};
+    auto* output_resources = new (std::nothrow) DeviceSignedPackageResourceOutput[descriptor.resource_count]{};
+    if (resource_metadata == nullptr || output_resources == nullptr) {
+        delete[] resource_metadata;
+        delete[] output_resources;
+        return false;
+    }
+    bool hashes_valid = true;
+    for (std::uint32_t i = 0; i < descriptor.resource_count && hashes_valid; ++i) {
+        const std::uint8_t* entry = package.get() + bundle_offset + descriptor.index_offset +
+            i * kDeviceBundleResourceEntryBytes;
+        const std::uint32_t path_offset = read_le32(entry + 4);
+        const std::uint16_t path_bytes = static_cast<std::uint16_t>(entry[8]) |
+            static_cast<std::uint16_t>(static_cast<std::uint16_t>(entry[9]) << 8u);
+        const std::uint32_t payload_offset = read_le32(entry + 12);
+        const std::uint32_t payload_bytes = read_le32(entry + 16);
+        if (path_offset > descriptor.string_table_bytes || path_bytes > descriptor.string_table_bytes - path_offset ||
+            payload_offset > descriptor.payload_bytes || payload_bytes > descriptor.payload_bytes - payload_offset) {
+            hashes_valid = false;
+            break;
+        }
+        const char* path = reinterpret_cast<const char*>(package.get() + bundle_offset +
+            descriptor.string_table_offset + path_offset);
+        resource_metadata[i].path = std::string_view(path, path_bytes);
+        hashes_valid = sha256(package.get() + bundle_offset + descriptor.payload_offset + payload_offset,
+                              payload_bytes, resource_metadata[i].sha256);
+    }
+    DeviceSignedPackageBundleMetadata metadata;
+    metadata.app_id = descriptor.summary.app_id_view();
+    metadata.version = descriptor.summary.version_name_view();
+    metadata.version_code = descriptor.summary.version_code;
+    metadata.bundle_sha256 = bundle_hash;
+    metadata.resources = resource_metadata;
+    metadata.resource_count = descriptor.resource_count;
+    DeviceSignedPackageView package_view;
+    const DeviceSignedPackageStatus signed_status = hashes_valid
+        ? inspect_device_signed_package(package.get(), request.bundle_bytes, metadata,
+              verify_device_package_signature, nullptr, output_resources, descriptor.resource_count, {}, package_view)
+        : DeviceSignedPackageStatus::InvalidBundle;
+    delete[] resource_metadata;
+    delete[] output_resources;
+    if (signed_status != DeviceSignedPackageStatus::Ok ||
+        package_view.bundle_size != inner_bundle_bytes ||
+        package_view.app_id != descriptor.summary.app_id_view() ||
+        package_view.version != descriptor.summary.version_name_view() ||
+        package_view.version_code != descriptor.summary.version_code) return false;
+
     restart_for_acceptance_fault(AcceptanceFaultPoint::DuringVerify);
     staging_descriptor_ = descriptor;
+    staging_package_crc32_ = package_crc;
+    staging_payload_offset_ = bundle_offset;
+    staging_payload_bytes_ = inner_bundle_bytes;
     staging_verified_ = true;
     return true;
 }
 
 bool DeviceImageStore::commit_staging(const DeviceInstallRequest& request) {
-    if (!staging_active_ || !staging_verified_ || request.transaction_id != staging_transaction_id_) {
+    if (!staging_active_ || !staging_verified_ || request.transaction_id != staging_transaction_id_ ||
+        request.bundle_bytes != staging_bundle_bytes_ || request.bundle_crc32 != staging_package_crc32_ ||
+        request.app_id_view() != staging_descriptor_.summary.app_id_view()) {
         return false;
     }
     BundleRecord next;
     next.slot = staging_slot_;
-    next.bundle_bytes = request.bundle_bytes;
+    next.bundle_bytes = staging_payload_bytes_;
+    next.envelope_payload_offset = staging_payload_offset_;
+    next.envelope_bytes = staging_bundle_bytes_;
+    next.envelope_crc32 = staging_package_crc32_;
     next.bundle_crc32 = staging_descriptor_.bundle_crc32;
     next.version_code = staging_descriptor_.summary.version_code;
     if (!copy_string(next.app_id, staging_descriptor_.summary.app_id_view()) ||
@@ -297,7 +426,15 @@ bool DeviceImageStore::commit_staging(const DeviceInstallRequest& request) {
     staging_verified_ = false;
     staging_transaction_id_ = 0;
     staging_bundle_bytes_ = 0;
+    staging_payload_offset_ = 0;
+    staging_payload_bytes_ = 0;
+    staging_package_crc32_ = 0;
     staging_descriptor_ = {};
+    if (has_acceptance_fault(AcceptanceFaultPoint::CorruptPublishedEnvelope)) {
+        const std::uint8_t invalid = 0;
+        if (!write_slot(next.slot, next.envelope_payload_offset, &invalid, sizeof(invalid))) return false;
+    }
+    restart_for_acceptance_fault(AcceptanceFaultPoint::CorruptPublishedEnvelope);
     restart_for_acceptance_fault(AcceptanceFaultPoint::AfterRegistryPublish);
     return true;
 }
@@ -311,6 +448,9 @@ void DeviceImageStore::abort_staging(std::uint32_t transaction_id) {
     staging_verified_ = false;
     staging_transaction_id_ = 0;
     staging_bundle_bytes_ = 0;
+    staging_payload_offset_ = 0;
+    staging_payload_bytes_ = 0;
+    staging_package_crc32_ = 0;
     staging_descriptor_ = {};
     set_recovery(DeviceRecoveryReason::StagingDiscarded, {}, DeviceRecoveryLauncherActive);
 }
@@ -326,7 +466,20 @@ DeviceBundleStatus DeviceImageStore::acquire_installed_bundle(std::string_view a
         set_recovery(DeviceRecoveryReason::RegistryInvalid, app_id, DeviceRecoveryLauncherActive);
         return DeviceBundleStatus::BadChecksum;
     }
-    auto* next = new (std::nothrow) Lease(*this, registry_->active.slot, descriptor);
+    using AuthenticatedPaths = std::array<std::array<char, kDeviceSignedPackageMaxPathBytes + 1>, 128>;
+    using AuthenticatedHashes = std::array<std::array<std::uint8_t, 32>, 128>;
+    std::unique_ptr<AuthenticatedPaths> paths(new (std::nothrow) AuthenticatedPaths{});
+    std::unique_ptr<AuthenticatedHashes> hashes(new (std::nothrow) AuthenticatedHashes{});
+    if (!paths || !hashes) return DeviceBundleStatus::ReadFailed;
+    std::uint32_t resource_count = 0;
+    std::array<std::uint8_t, kDeviceSignedPackageKeyIdBytes> key_id{};
+    if (!verify_record_envelope(registry_->active, &descriptor, paths.get(), hashes.get(), &resource_count, &key_id)) {
+        set_recovery(DeviceRecoveryReason::RegistryInvalid, app_id, DeviceRecoveryLauncherActive);
+        return DeviceBundleStatus::BadChecksum;
+    }
+    auto* next = new (std::nothrow) Lease(*this, registry_->active.slot,
+                                          registry_->active.envelope_payload_offset, descriptor,
+                                          *paths, *hashes, resource_count, key_id);
     if (next == nullptr) {
         return DeviceBundleStatus::ReadFailed;
     }
@@ -410,6 +563,9 @@ void DeviceImageStore::record_recovery(DeviceRecoveryReason reason, std::string_
 std::uint32_t DeviceImageStore::available_storage_bytes() const {
     return partition_ == nullptr || partition_->size <= kStorageHeaderBytes ? 0 : partition_->size - kStorageHeaderBytes;
 }
+std::uint32_t DeviceImageStore::max_bundle_bytes() const {
+    return std::min(kMaxBundleBytes, bundle_slot_bytes(partition_));
+}
 std::uint32_t DeviceImageStore::registry_generation() const { return registry_ == nullptr ? 0 : registry_->generation; }
 
 bool DeviceImageStore::inject_registry_corruption_for_test() {
@@ -419,6 +575,13 @@ bool DeviceImageStore::inject_registry_corruption_for_test() {
     const std::uint32_t invalid = 0;
     return esp_partition_write(partition_, 0, &invalid, sizeof(invalid)) == ESP_OK &&
            esp_partition_write(partition_, kRegistryBytes, &invalid, sizeof(invalid)) == ESP_OK;
+}
+
+bool DeviceImageStore::inject_legacy_registry_for_test() {
+    if (partition_ == nullptr || !initialized_) return false;
+    const std::uint16_t legacy_version = 1;
+    return esp_partition_write(partition_, 4, &legacy_version, sizeof(legacy_version)) == ESP_OK &&
+           esp_partition_write(partition_, kRegistryBytes + 4, &legacy_version, sizeof(legacy_version)) == ESP_OK;
 }
 
 bool DeviceImageStore::load_registry() {
@@ -431,8 +594,12 @@ bool DeviceImageStore::load_registry() {
         const std::uint32_t stored = candidates[i].crc32;
         candidates[i].crc32 = 0;
         valid[i] = candidates[i].magic == kRegistryMagic && candidates[i].version == kRegistryVersion &&
-                   candidates[i].bytes == sizeof(RegistryRecord) && stored == crc32(&candidates[i], sizeof(RegistryRecord));
+                   candidates[i].bytes == sizeof(RegistryRecord) &&
+                   stored == crc32(&candidates[i], sizeof(RegistryRecord));
         candidates[i].crc32 = stored;
+        if (valid[i] && candidates[i].active.slot != kNoSlot) {
+            valid[i] = validate_record(candidates[i].active, nullptr);
+        }
     }
     if (!valid[0] && !valid[1]) {
         return false;
@@ -440,9 +607,6 @@ bool DeviceImageStore::load_registry() {
     const RegistryRecord& selected = !valid[1] || (valid[0] && candidates[0].generation >= candidates[1].generation)
         ? candidates[0] : candidates[1];
     *registry_ = selected;
-    if (registry_->active.slot != kNoSlot && !validate_record(registry_->active, nullptr)) {
-        return false;
-    }
     return true;
 }
 
@@ -535,18 +699,93 @@ bool DeviceImageStore::write_slot(std::uint8_t slot, std::uint32_t offset, const
 }
 
 bool DeviceImageStore::validate_record(const BundleRecord& record, DeviceBundleDescriptor* descriptor) const {
-    if (record.slot == kNoSlot || record.bundle_bytes == 0 || record.bundle_bytes > kMaxBundleBytes) {
-        return false;
-    }
-    PartitionReader reader(*this, record.slot);
+    return verify_record_envelope(record, descriptor, nullptr, nullptr, nullptr, nullptr);
+}
+
+bool DeviceImageStore::verify_record_envelope(
+    const BundleRecord& record,
+    DeviceBundleDescriptor* descriptor,
+    std::array<std::array<char, kDeviceSignedPackageMaxPathBytes + 1>, 128>* paths,
+    std::array<std::array<std::uint8_t, 32>, 128>* hashes,
+    std::uint32_t* resource_count,
+    std::array<std::uint8_t, kDeviceSignedPackageKeyIdBytes>* key_id) const {
+    if (record.slot == kNoSlot || record.bundle_bytes == 0 || record.bundle_bytes > max_bundle_bytes() ||
+        record.envelope_bytes < kDeviceSignedPackageHeaderBytes + kDeviceSignedPackageSignatureBytes ||
+        record.envelope_bytes > max_bundle_bytes() || record.envelope_payload_offset > record.envelope_bytes ||
+        record.bundle_bytes != record.envelope_bytes - record.envelope_payload_offset ||
+        record.envelope_payload_offset > UINT32_MAX - kDeviceSignedPackageSignatureBytes) return false;
+
+    std::unique_ptr<std::uint8_t, decltype(&heap_caps_free)> package(
+        static_cast<std::uint8_t*>(heap_caps_malloc(record.envelope_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)),
+        &heap_caps_free);
+    if (!package || !read_slot(record.slot, 0, package.get(), record.envelope_bytes) ||
+        crc32(package.get(), record.envelope_bytes) != record.envelope_crc32) return false;
+
+    const std::uint32_t manifest_bytes = read_le32(package.get() + 16);
+    if (manifest_bytes > UINT32_MAX - kDeviceSignedPackageHeaderBytes - kDeviceSignedPackageSignatureBytes ||
+        kDeviceSignedPackageHeaderBytes + manifest_bytes + kDeviceSignedPackageSignatureBytes !=
+            record.envelope_payload_offset) return false;
+    DeviceBundleMemoryReader bundle_reader(package.get() + record.envelope_payload_offset, record.bundle_bytes);
     DeviceBundleValidationPolicy policy;
     policy.max_bundle_bytes = kMaxBundleBytes;
     policy.max_resource_entries = 128;
     policy.max_summary_bytes = kDeviceBundleMaxSummaryBytes;
     DeviceBundleDescriptor inspected;
-    if (inspect_device_bundle(reader, record.bundle_bytes, policy, inspection_workspace_, inspected) != DeviceBundleStatus::Ok ||
-        inspected.bundle_crc32 != record.bundle_crc32 || inspected.summary.app_id_view() != string_view(record.app_id)) {
+    if (inspect_device_bundle(bundle_reader, record.bundle_bytes, policy, inspection_workspace_, inspected) !=
+            DeviceBundleStatus::Ok || inspected.bundle_crc32 != record.bundle_crc32 ||
+        inspected.summary.app_id_view() != string_view(record.app_id) ||
+        inspected.summary.version_code != record.version_code ||
+        inspected.summary.version_name_view() != string_view(record.version_name) || inspected.resource_count > 128) {
         return false;
+    }
+
+    std::unique_ptr<DeviceSignedPackageResourceMetadata[]> expected(
+        new (std::nothrow) DeviceSignedPackageResourceMetadata[128]{});
+    std::unique_ptr<DeviceSignedPackageResourceOutput[]> parsed(
+        new (std::nothrow) DeviceSignedPackageResourceOutput[128]{});
+    if (!expected || !parsed) return false;
+    for (std::uint32_t i = 0; i < inspected.resource_count; ++i) {
+        const std::uint8_t* entry = package.get() + record.envelope_payload_offset + inspected.index_offset +
+            i * kDeviceBundleResourceEntryBytes;
+        const std::uint32_t path_offset = read_le32(entry + 4);
+        const std::uint16_t path_bytes = static_cast<std::uint16_t>(entry[8]) |
+            static_cast<std::uint16_t>(static_cast<std::uint16_t>(entry[9]) << 8u);
+        const std::uint32_t payload_offset = read_le32(entry + 12);
+        const std::uint32_t payload_bytes = read_le32(entry + 16);
+        if (path_offset > inspected.string_table_bytes || path_bytes > inspected.string_table_bytes - path_offset ||
+            payload_offset > inspected.payload_bytes || payload_bytes > inspected.payload_bytes - payload_offset) return false;
+        const char* path = reinterpret_cast<const char*>(package.get() + record.envelope_payload_offset +
+            inspected.string_table_offset + path_offset);
+        expected[i].path = std::string_view(path, path_bytes);
+        if (!sha256(package.get() + record.envelope_payload_offset + inspected.payload_offset + payload_offset,
+                    payload_bytes, expected[i].sha256)) return false;
+    }
+    std::array<std::uint8_t, 32> bundle_sha{};
+    if (!sha256(package.get() + record.envelope_payload_offset, record.bundle_bytes, bundle_sha)) return false;
+    DeviceSignedPackageBundleMetadata metadata;
+    metadata.app_id = inspected.summary.app_id_view();
+    metadata.version = inspected.summary.version_name_view();
+    metadata.version_code = inspected.summary.version_code;
+    metadata.bundle_sha256 = bundle_sha;
+    metadata.resources = expected.get();
+    metadata.resource_count = inspected.resource_count;
+    DeviceSignedPackageView signed_view;
+    const auto signed_status = inspect_device_signed_package(
+        package.get(), record.envelope_bytes, metadata, verify_device_package_signature, nullptr,
+        parsed.get(), 128, {}, signed_view);
+    if (signed_status != DeviceSignedPackageStatus::Ok ||
+        signed_view.bundle_bytes != package.get() + record.envelope_payload_offset ||
+        signed_view.bundle_size != record.bundle_bytes) return false;
+
+    if (paths != nullptr && hashes != nullptr && resource_count != nullptr && key_id != nullptr) {
+        for (std::uint32_t i = 0; i < inspected.resource_count; ++i) {
+            if (parsed[i].path.empty() || parsed[i].path.size() >= (*paths)[i].size()) return false;
+            std::memcpy((*paths)[i].data(), parsed[i].path.data(), parsed[i].path.size());
+            (*paths)[i][parsed[i].path.size()] = '\0';
+            (*hashes)[i] = parsed[i].sha256;
+        }
+        *resource_count = static_cast<std::uint32_t>(inspected.resource_count);
+        *key_id = signed_view.key_id;
     }
     if (descriptor != nullptr) {
         *descriptor = inspected;

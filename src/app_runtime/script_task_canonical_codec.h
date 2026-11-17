@@ -43,7 +43,16 @@ constexpr bool elliptical_available = available && has_radius_y_fields<DisplayCo
     has_layer_radius_y<LayerNode>::value;
 constexpr std::uint8_t kVersionV9 = 9;
 constexpr std::uint8_t kVersionV10 = 10;
+constexpr std::uint8_t kVersionV11 = 11;
+constexpr std::uint8_t kVersionV12 = 12;
+constexpr bool contextual_available = JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API;
+inline bool selected_version(std::uint8_t version) {
+    return ((version==kVersionV9 || version==kVersionV10) && available) ||
+           (version==kVersionV11 && available && JELLYFRAME_RUNTIME_SHAPED_TEXT_API && !JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API) ||
+           (version==kVersionV12 && contextual_available);
+}
 inline std::size_t group_bytes(std::uint8_t version) { return version >= kVersionV10 ? group_bytes_v10 : group_bytes_v9; }
+constexpr std::size_t shaped_text_record_bytes = 52;
 
 inline void u32(std::vector<std::uint8_t>& b, std::size_t at, std::uint32_t value) {
     for (unsigned i = 0; i < 4; ++i) b[at + i] = static_cast<std::uint8_t>(value >> (8 * i));
@@ -143,6 +152,11 @@ inline Status validate_groups(const ScriptTaskAppFrame& frame, std::size_t max_g
         }
         if (ancestors.size() >= max_depth) return Status::InvalidGroup;
         ancestors.push_back(static_cast<std::uint32_t>(index));
+        if (version==kVersionV12 && (frame.groups.size()!=1 || g.type!=LayerType::Root ||
+            g.has_clip || g.has_transform || g.opacity!=1 || g.scroll_y || g.max_scroll_y || g.z_index ||
+            g.clip_border_radius || (g.clip_border_radius_y!=-1 && g.clip_border_radius_y!=0) ||
+            g.transform.translate_x || g.transform.translate_y || g.transform.scale_x!=1 ||
+            g.transform.scale_y!=1 || g.transform.rotate_degrees)) return Status::UnsupportedGroupFeature;
         if (g.clip_axes != 3 || g.has_affine || g.has_clip_ellipse ||
             g.affine != std::array<float, 6>{{1, 0, 0, 1, 0, 0}} ||
             g.clip_ellipse != std::array<int, 8>{}) return Status::UnsupportedGroupFeature;
@@ -162,9 +176,11 @@ inline Status validate_groups(const ScriptTaskAppFrame& frame, std::size_t max_g
     return command == frame.display_list.size() ? Status::Accepted : Status::InvalidGroup;
 }
 
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API || JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
 static_assert(kPreparedTextHeaderBytes == 32 && kPreparedTextRecordBytes == 52,
               "v9/v10 require the canonical JFTP v1/v2 record layout");
+#endif
 
 // Stable canonical wire kinds; never serialize a Core enum's underlying value.
 template<class E> inline int kind_impl(E t) {
@@ -172,7 +188,10 @@ template<class E> inline int kind_impl(E t) {
     case DisplayCommandType::FillRect: return 0; case DisplayCommandType::StrokeRect: return 1;
     case DisplayCommandType::LinearGradient: return 2; case DisplayCommandType::ConicGradient: return 3;
     case DisplayCommandType::RadialGradient: return 4; case DisplayCommandType::BoxShadow: return 5;
-    case DisplayCommandType::Text: return 6; case DisplayCommandType::PreparedText: return 7;
+    case DisplayCommandType::Text: return 6;
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
+    case DisplayCommandType::PreparedText: return 7;
+#endif
     case DisplayCommandType::Image: return 8;
     default: return -1;
     }
@@ -228,7 +247,7 @@ template<class C> inline bool set_kind_impl(C& c, unsigned value) {
 inline bool set_kind(DisplayCommand& c, unsigned value) { return set_kind_impl(c, value); }
 template<class C> inline bool valid_command(const C& c, std::uint8_t version = kVersionV10) {
     const auto k = command_kind(c);
-    if (k < 0 || !valid_rect(c.rect) || !valid_transform(c.transform) ||
+    if ((version==kVersionV12 && (k!=0 || legacy_command_fields(c).border_radius!=0 || c.transform.enabled || !c.text.empty())) || k < 0 || !valid_rect(c.rect) || !valid_transform(c.transform) ||
         c.text.size() > UINT32_MAX) return false;
     if (k <= 5) {
         const auto p = legacy_command_fields(c);
@@ -304,6 +323,7 @@ template<class C> inline void put_command(std::vector<std::uint8_t>& b, std::siz
 template<class C> inline bool get_command(const std::vector<std::uint8_t>& b, std::size_t at, C& c,
                                           std::uint8_t version) {
     const auto k = u32(b, at);
+    if (version==kVersionV12 && k!=0) return false;
     if (!set_kind_impl(c, k) || u32(b, at + 32) > 1 || u32(b, at + 60) > 65535) return false;
     c.rect = rect(b, at + 4); c.color = {b[at+20], b[at+21], b[at+22], b[at+23]};
     c.color2 = {b[at+24], b[at+25], b[at+26], b[at+27]};
@@ -382,7 +402,8 @@ inline bool get_group(const std::vector<std::uint8_t>& b, std::size_t at, Script
 }
 
 inline Status validate(const ScriptTaskAppFrame& f, const ScriptTaskAppFrameCodecOptions& o, std::size_t& total) {
-    if (o.version != kVersionV9 && o.version != kVersionV10) return Status::UnsupportedVersion;
+    if (!selected_version(o.version)) return Status::UnsupportedVersion;
+    if (o.version == kVersionV11 && !JELLYFRAME_RUNTIME_SHAPED_TEXT_API) return Status::UnsupportedVersion;
     if (o.version == kVersionV10 && !elliptical_available) return Status::UnsupportedVersion;
     if (!valid_rect(f.viewport)) return Status::InvalidValue;
     if (f.clip_metadata_overflow) return Status::InvalidClip;
@@ -390,6 +411,13 @@ inline Status validate(const ScriptTaskAppFrame& f, const ScriptTaskAppFrameCode
     if (f.input_targets.size() > o.max_input_targets || f.input_targets.size() > UINT32_MAX) return Status::TooManyInputTargets;
     if (f.clips.size() > o.max_clips || f.clips.size() > 65535) return Status::TooManyClips;
     auto status = validate_groups(f, o.max_groups, o.max_group_depth, o.version); if (status != Status::Accepted) return status;
+    if (o.version < kVersionV11 && !f.shaped_text.empty()) return Status::UnsupportedTextFeature;
+    if (o.version >= kVersionV11 && (!f.clips.empty() || !f.command_ellipses.empty() || !f.display_clip_indices.empty() ||
+        f.groups.size() != 1 || f.groups[0].type != LayerType::Root || f.groups[0].parent != kScriptTaskNoParentClip ||
+        f.groups[0].has_clip || f.groups[0].has_transform || f.groups[0].opacity != 1.0F ||
+        f.groups[0].transform.translate_x != 0 || f.groups[0].transform.translate_y != 0 ||
+        f.groups[0].transform.scale_x != 1 || f.groups[0].transform.scale_y != 1 ||
+        f.groups[0].transform.rotate_degrees != 0)) return Status::UnsupportedGroupFeature;
     std::vector<std::size_t> depths;
     for (const auto& c : f.clips) {
         const auto index = depths.size();
@@ -406,13 +434,29 @@ inline Status validate(const ScriptTaskAppFrame& f, const ScriptTaskAppFrameCode
     std::size_t text = 0;
     for (const auto& c : f.display_list) {
         if (!valid_command(c, o.version)) return Status::InvalidValue;
+        if (o.version >= kVersionV11 && command_kind(c) == 7) return Status::UnsupportedTextFeature;
+        if (!f.shaped_text.empty() && command_kind(c) > 5) return Status::UnsupportedTextFeature;
         // Group commands remain in local source coordinates. A second command
         // transform would not be applied by the canonical compositor.
         if (c.transform.enabled || c.transform.source_clip_index != kScriptTaskNoClip) return Status::UnsupportedTransformFeature;
         if (!add(text, c.text.size()) || text > o.max_text_bytes) return Status::TooManyTextBytes;
         if (!add(total, c.text.size())) return Status::PayloadTooLarge;
     }
-    const bool has_images = std::any_of(f.display_list.begin(), f.display_list.end(), [](const auto& c) { return c.type() == DisplayCommandType::Image; });
+    if (f.shaped_text.size() > kScriptTaskMaxShapedTextRecords ||
+        f.shaped_text.size() > o.max_commands - f.display_list.size()) return Status::TooManyCommands;
+    std::uint32_t previous_position = 0;
+    for (const auto& item : f.shaped_text) {
+        if (o.version != kRuntimeShapedFrameVersion || item.packet.size() > UINT32_MAX ||
+            !runtime_shaped_packet_header_matches(item.packet) || item.after_command_count > f.display_list.size() ||
+            item.after_command_count < previous_position ||
+            !valid_rect(item.bounds) || item.bounds.width <= 0 || item.bounds.height <= 0 ||
+            !valid_rect(item.clip) || item.clip.width <= 0 || item.clip.height <= 0)
+            return Status::InvalidValue;
+        previous_position = item.after_command_count;
+        if (!add(text, item.packet.size()) || text > o.max_text_bytes) return Status::TooManyTextBytes;
+        if (!add(total, shaped_text_record_bytes) || !add(total, item.packet.size())) return Status::PayloadTooLarge;
+    }
+    const bool has_images = std::any_of(f.display_list.begin(), f.display_list.end(), [](const auto& c) { return detail::command_type(c) == DisplayCommandType::Image; });
     if (has_images != (f.image_provider_id != 0)) return Status::InvalidValue;
     for (std::size_t i = 0; i < f.input_targets.size(); ++i) {
         const auto& t = f.input_targets[i];
@@ -429,6 +473,7 @@ inline Status encode(const ScriptTaskAppFrame& f, const ScriptTaskAppFrameCodecO
     std::vector<std::uint8_t> b(total, 0); u32(b, 0, 0x4653464aU); b[4] = o.version; rect(b, 8, f.viewport);
     u32(b, 24, static_cast<std::uint32_t>(f.display_list.size())); u32(b, 28, static_cast<std::uint32_t>(f.input_targets.size()));
     u32(b, 32, static_cast<std::uint32_t>(f.clips.size())); u32(b, 36, static_cast<std::uint32_t>(f.groups.size()));
+    if (o.version >= kVersionV11) u32(b, 40, static_cast<std::uint32_t>(f.shaped_text.size()));
     u32(b, 44, static_cast<std::uint32_t>(f.image_provider_id)); u32(b, 48, static_cast<std::uint32_t>(f.image_provider_id >> 32));
     std::size_t at = header_bytes;
     for (const auto& c : f.clips) {
@@ -441,6 +486,13 @@ inline Status encode(const ScriptTaskAppFrame& f, const ScriptTaskAppFrameCodecO
         put_command(b, at, c, o.version); at += command_bytes;
         std::copy(c.text.begin(), c.text.end(), b.begin() + at); at += c.text.size();
     }
+    for (const auto& item : f.shaped_text) {
+        u32(b, at, item.after_command_count); u32(b, at + 4, item.baseline_x_q1000);
+        u32(b, at + 8, item.baseline_y_q1000); rect(b, at + 12, item.bounds); rect(b, at + 28, item.clip);
+        b[at + 44] = item.color.r; b[at + 45] = item.color.g; b[at + 46] = item.color.b; b[at + 47] = item.color.a;
+        u32(b, at + 48, static_cast<std::uint32_t>(item.packet.size())); at += shaped_text_record_bytes;
+        std::copy(item.packet.begin(), item.packet.end(), b.begin() + at); at += item.packet.size();
+    }
     for (const auto& t : f.input_targets) {
         u32(b, at, t.target_key); rect(b, at + 4, t.rect); b[at + 20] = t.enabled;
         b[at + 21] = static_cast<std::uint8_t>(t.clip_index); b[at + 22] = static_cast<std::uint8_t>(t.clip_index >> 8); at += target_bytes;
@@ -449,17 +501,22 @@ inline Status encode(const ScriptTaskAppFrame& f, const ScriptTaskAppFrameCodecO
 }
 
 inline Status decode(const std::vector<std::uint8_t>& b, const ScriptTaskAppFrameCodecOptions& o, ScriptTaskAppFrame& output) {
-    if (o.version != kVersionV9 && o.version != kVersionV10) return Status::UnsupportedVersion;
+    if (!selected_version(o.version)) return Status::UnsupportedVersion;
+    if (o.version == kVersionV11 && !JELLYFRAME_RUNTIME_SHAPED_TEXT_API) return Status::UnsupportedVersion;
     if (b.size() < header_bytes || b.size() > o.max_payload_bytes || u32(b, 0) != 0x4653464aU || b[4] != o.version ||
-        !zero(b, 5, 3) || u32(b, 40) != 0) return Status::Malformed;
+        !zero(b, 5, 3) || (o.version < kVersionV11 && u32(b, 40) != 0)) return Status::Malformed;
+    const auto shaped_count = o.version >= kVersionV11 ? u32(b, 40) : 0U;
+    if (shaped_count > kScriptTaskMaxShapedTextRecords) return Status::TooManyCommands;
     const auto commands = u32(b, 24), targets = u32(b, 28), clips = u32(b, 32), groups = u32(b, 36);
     if (commands > o.max_commands) return Status::TooManyCommands;
+    if (shaped_count > o.max_commands - commands) return Status::TooManyCommands;
     if (targets > o.max_input_targets) return Status::TooManyInputTargets;
     if (clips > o.max_clips || clips > 65535) return Status::TooManyClips;
     if (groups > o.max_groups) return Status::TooManyGroups;
     std::size_t minimum = header_bytes;
     if (!add(minimum, commands, command_bytes) || !add(minimum, targets, target_bytes) ||
-        !add(minimum, clips, clip_bytes) || !add(minimum, groups, group_bytes(o.version)) || minimum > b.size()) return Status::Malformed;
+        !add(minimum, clips, clip_bytes) || !add(minimum, groups, group_bytes(o.version)) ||
+        !add(minimum, shaped_count, shaped_text_record_bytes) || minimum > b.size()) return Status::Malformed;
     ScriptTaskAppFrame f; f.viewport = rect(b, 8); f.image_provider_id = u32(b, 44) | (std::uint64_t(u32(b, 48)) << 32); std::size_t at = header_bytes;
     for (std::uint32_t i = 0; i < clips; ++i) {
         if (o.version == kVersionV9 && !zero(b, at + 24, 4)) return Status::Malformed;
@@ -479,7 +536,21 @@ inline Status decode(const std::vector<std::uint8_t>& b, const ScriptTaskAppFram
         if (length > b.size() - at) return Status::Malformed;
         if (!add(text, length) || text > o.max_text_bytes) return Status::TooManyTextBytes;
         c.text.assign(reinterpret_cast<const char*>(b.data() + at), length); at += length;
+        if (o.version >= kVersionV11 && command_kind(c) == 7) return Status::UnsupportedTextFeature;
         f.display_list.push_back(std::move(c));
+    }
+    for (std::uint32_t i = 0; i < shaped_count; ++i) {
+        if (b.size() - at < shaped_text_record_bytes) return Status::Malformed;
+        ScriptTaskFrameShapedText item; item.after_command_count = u32(b, at);
+        item.baseline_x_q1000 = i32(b, at + 4); item.baseline_y_q1000 = i32(b, at + 8);
+        item.bounds = rect(b, at + 12); item.clip = rect(b, at + 28);
+        item.color = {b[at + 44], b[at + 45], b[at + 46], b[at + 47]};
+        const auto length = u32(b, at + 48); at += shaped_text_record_bytes;
+        if (length > b.size() - at) return Status::Malformed;
+        if (!add(text, length) || text > o.max_text_bytes)
+            return Status::TooManyTextBytes;
+        item.packet.assign(reinterpret_cast<const char*>(b.data() + at), length); at += length;
+        f.shaped_text.push_back(std::move(item));
     }
     for (std::uint32_t i = 0; i < targets; ++i) {
         if (b.size() - at < target_bytes || b[at + 20] > 1 || b[at + 23] != 0) return Status::Malformed;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "jellyframe_esp32s3_resources.h"
+#include "app_runtime/app_installed_bundle.h"
 
 #include <cstdint>
 #include <string>
@@ -111,7 +112,8 @@ bool start_installed_bundle_script_task(std::string app_id,
                                         std::string entry_document,
                                         InstalledResourceSnapshot resources,
                                         jellyframe::AppRuntimeHost& host,
-                                        InstalledBundleScriptSession*& session);
+                                        InstalledBundleScriptSession*& session,
+                                        jellyframe::AppInstalledTextPipeline text_pipeline);
 bool stop_installed_bundle_script_task(InstalledBundleScriptSession*& session,
                                        std::uint32_t timeout_ms = 3000,
                                        InstalledBundleScriptTaskTelemetry* telemetry = nullptr);

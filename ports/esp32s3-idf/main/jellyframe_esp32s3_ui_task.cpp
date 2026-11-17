@@ -1981,7 +1981,11 @@ bool render_and_present(TimerUiTaskContext& context,
 #endif
     auto compositor_options = jellyframe::software_compositor_options_from_budgets(context.budgets);
     compositor_options.text_system = context.core_text_system;
+#if defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) && JELLYFRAME_ESP32S3_RENDER_CORE_ABI >= 4
     jellyframe::SoftwareCompositor compositor(image_painter, compositor_options);
+#else
+    jellyframe::SoftwareCompositor compositor({}, image_painter, compositor_options);
+#endif
     const std::uint64_t compose_start = esp_timer_get_time();
     if (rebuild_framebuffer_for_normal_present) {
         compositor.render_into(*context.pipeline.layer_tree,

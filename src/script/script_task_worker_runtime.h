@@ -73,6 +73,14 @@ struct ScriptTaskWorkerRuntimeOptions {
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
     RuntimeFontCatalog::Handle text_catalog;
     RuntimeImageProvider::Handle image_provider;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    RuntimeShapedTextBinding::Handle shaped_text_binding;
+#if JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+    // Used only by explicitly negotiated v11. Binding is always replaced by
+    // the authenticated session owner; all other admission/limits are explicit.
+    runtime_shaped::LayoutOptions shaped_layout;
+#endif
+#endif
 #if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
     // Bounds/statistics for Core's pass-local metadata memo. The worker binds
     // provider/context to image_provider before each synchronous layout call.
@@ -114,6 +122,10 @@ struct ScriptTaskWorkerRuntimeStepResult {
 // Worker-task-only runtime. The object owns all DOM, selected script backend and pipeline
 // objects. Its public surface contains only value packets and scalar telemetry;
 // no Node, realm, layer or renderer address can escape to the port adapter.
+// Init/eval/frame/input/callback operations convert C++ allocation/length
+// failures into budget failures, retaining already accepted frames.
+// Fatal publication can itself refuse allocation and be retried by the host.
+// Construction still follows the ordinary throwing allocation contract.
 class ScriptTaskWorkerRuntime final {
 public:
     explicit ScriptTaskWorkerRuntime(ScriptAppSession session,

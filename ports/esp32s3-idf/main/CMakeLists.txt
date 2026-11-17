@@ -129,6 +129,7 @@ idf_component_register(
         "main.cpp"
         "jellyframe_esp32s3_device_image_lifecycle.cpp"
         "jellyframe_esp32s3_device_image_store.cpp"
+        "jellyframe_esp32s3_package_signature.cpp"
         "jellyframe_esp32s3_hal.cpp"
         ${JELLYFRAME_ESP32S3_IMAGE_SOURCES}
         "jellyframe_esp32s3_installed_resource_owner.cpp"
@@ -161,6 +162,7 @@ idf_component_register(
         esp_lcd
         heap
         log
+        mbedtls
         jellyframe_app_runtime
         jellyframe_device_runtime_contracts
         jellyframe_render_core

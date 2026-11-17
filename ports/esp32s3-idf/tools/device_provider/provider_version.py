@@ -1,3 +1,3 @@
 """Version shared by the WS147 provider executable and release packager."""
 
-PROVIDER_VERSION = "0.1.1-dev"
+PROVIDER_VERSION = "0.1.2-dev"

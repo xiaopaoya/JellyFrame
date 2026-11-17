@@ -90,6 +90,7 @@ enum DeviceRenderCoreFeatureFamily : std::uint32_t {
     DeviceRenderCoreFeatureModernPaint = 1u << 3,
     DeviceRenderCoreFeatureAdvancedForms = 1u << 4,
     DeviceRenderCoreFeatureCanvas2d = 1u << 5,
+    DeviceRenderCoreFeatureTextShaping = 1u << 6,
 };
 
 constexpr std::uint32_t kDeviceRenderCoreFeatureFamilyKnownMask =
@@ -98,7 +99,8 @@ constexpr std::uint32_t kDeviceRenderCoreFeatureFamilyKnownMask =
     DeviceRenderCoreFeatureFlexGrid |
     DeviceRenderCoreFeatureModernPaint |
     DeviceRenderCoreFeatureAdvancedForms |
-    DeviceRenderCoreFeatureCanvas2d;
+    DeviceRenderCoreFeatureCanvas2d |
+    DeviceRenderCoreFeatureTextShaping;
 
 struct DeviceCapabilitySnapshot {
     std::uint8_t protocol_version = kDeviceProtocolVersion;

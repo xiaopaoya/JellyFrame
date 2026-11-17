@@ -24,12 +24,24 @@ def run_checker(
         root = Path(directory)
         profile_path = root / "profile.json"
         map_path = root / "engine.map"
+        registry_path = root / "render_core_feature_registry.csv"
         profile_path.write_text(json.dumps(profile), encoding="utf-8")
         map_path.write_text(map_text, encoding="utf-8")
+        registry_path.write_text(
+            "core.document|-|-|-|0\n"
+            "core.paint|core.document|-|-|1\n"
+            "forms.advanced|core.document|JELLYFRAME_ENABLE_ADVANCED_FORMS|no-forms-advanced|40\n"
+            "css.flex-grid|core.document|JELLYFRAME_ENABLE_FLEX_GRID|no-flex-grid|10\n"
+            "css.modern-paint|core.paint|JELLYFRAME_ENABLE_MODERN_PAINT|no-modern-paint|20\n"
+            "graphics.canvas2d|core.paint|JELLYFRAME_ENABLE_CANVAS2D|no-canvas|30\n"
+            "text.shaping|core.paint|JELLYFRAME_ENABLE_TEXT_SHAPING|no-text-shaping|50\n",
+            encoding="utf-8",
+        )
         return subprocess.run(
             [
                 sys.executable, str(CHECKER),
                 "--profile", str(profile_path), "--map", str(map_path),
+                "--registry", str(registry_path),
                 *extra_args,
             ],
             cwd=REPO_ROOT,
@@ -56,6 +68,14 @@ def run_scoped_checker(
 
 
 class RenderCoreLinkMapTests(unittest.TestCase):
+    def test_selected_core_registry_may_add_features_without_mutating_runtime_registry(self):
+        result = run_checker(
+            {"schemaVersion": 1, "features": ["core.document", "core.paint", "text.shaping"]},
+            "jellyframe_render_core:software_renderer.cpp.obj\n",
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('"failures": []', result.stdout)
+
     def test_enabled_family_markers_are_required(self):
         result = run_checker(
             {"schemaVersion": 1, "features": [

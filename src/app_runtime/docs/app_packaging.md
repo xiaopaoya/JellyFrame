@@ -1001,6 +1001,16 @@ Install/update/delete lifecycle:
 `tools/package_app.py` remains the lower-level packer used by the CLI and
 embedded build integrations.
 
+Offline signed envelopes use `python tools/sign_app_package.py --bundle app.jfapp
+--private-key local-key.pem --key-id <32-hex-digits> --output app.jfsg` (optional
+Python `cryptography` dependency). `--encrypted-key` prompts locally for an
+encrypted PEM password. The signer keeps the original JFAPP bytes, authenticates
+the whole container and each resource hash, and refuses output replacement.
+Signing does not provision target trust. The current production key allowlist
+is empty; the signed device path remains under qualification. Its format,
+host-install evidence and limits are recorded in
+[signed install qualification](../../../docs/evaluation/2026-11-17-signed-install-host.md).
+
 The built-in weather, clock, timer and calculator templates are ordinary source
 packages. They cover event delegation, `dataset`, timers, grid layout and form
 controls without adding another app framework above HTML/CSS/JS.

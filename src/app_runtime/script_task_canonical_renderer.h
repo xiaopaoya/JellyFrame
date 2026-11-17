@@ -3,6 +3,19 @@
 #include "app_runtime/script_task_frame_renderer.h"
 
 namespace jellyframe::detail::canonical {
+inline bool same_group(const ScriptTaskFrameGroup& a, const ScriptTaskFrameGroup& b) {
+    const auto same_rect = [](Rect x, Rect y) { return x.x == y.x && x.y == y.y && x.width == y.width && x.height == y.height; };
+    return a.parent == b.parent && a.command_begin == b.command_begin && a.command_count == b.command_count &&
+        a.type == b.type && same_rect(a.bounds, b.bounds) && same_rect(a.clip_rect, b.clip_rect) &&
+        a.clip_border_radius == b.clip_border_radius && a.clip_border_radius_y == b.clip_border_radius_y &&
+        a.has_clip == b.has_clip && a.opacity == b.opacity &&
+        a.transform.translate_x == b.transform.translate_x && a.transform.translate_y == b.transform.translate_y &&
+        a.transform.scale_x == b.transform.scale_x && a.transform.scale_y == b.transform.scale_y &&
+        a.transform.rotate_degrees == b.transform.rotate_degrees && a.has_transform == b.has_transform &&
+        a.origin_x_percent == b.origin_x_percent && a.origin_y_percent == b.origin_y_percent && a.reasons == b.reasons &&
+        a.scroll_y == b.scroll_y && a.max_scroll_y == b.max_scroll_y && a.z_index == b.z_index && a.source_order == b.source_order;
+}
+
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
 class GroupTree {
 public:
@@ -25,18 +38,6 @@ private:
     std::vector<LayerNode> nodes_;
 };
 
-inline bool same_group(const ScriptTaskFrameGroup& a, const ScriptTaskFrameGroup& b) {
-    const auto same_rect = [](Rect x, Rect y) { return x.x == y.x && x.y == y.y && x.width == y.width && x.height == y.height; };
-    return a.parent == b.parent && a.command_begin == b.command_begin && a.command_count == b.command_count &&
-        a.type == b.type && same_rect(a.bounds, b.bounds) && same_rect(a.clip_rect, b.clip_rect) &&
-        a.clip_border_radius == b.clip_border_radius && a.clip_border_radius_y == b.clip_border_radius_y &&
-        a.has_clip == b.has_clip && a.opacity == b.opacity &&
-        a.transform.translate_x == b.transform.translate_x && a.transform.translate_y == b.transform.translate_y &&
-        a.transform.scale_x == b.transform.scale_x && a.transform.scale_y == b.transform.scale_y &&
-        a.transform.rotate_degrees == b.transform.rotate_degrees && a.has_transform == b.has_transform &&
-        a.origin_x_percent == b.origin_x_percent && a.origin_y_percent == b.origin_y_percent && a.reasons == b.reasons &&
-        a.scroll_y == b.scroll_y && a.max_scroll_y == b.max_scroll_y && a.z_index == b.z_index && a.source_order == b.source_order;
-}
 
 inline bool render(const ScriptTaskAppFrame& frame, FrameBuffer& target, Color background,
                    const Rect* dirty, std::size_t dirty_count, ImagePainter image,

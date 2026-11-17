@@ -151,13 +151,17 @@ void app_font_set_admission_is_transactional() {
     AppFontSet fonts(1);
     auto bytes = tiny_core_font_bytes();
     assert(fonts.load_core_font(1, bytes.data(), bytes.size()).loaded());
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     const auto generation = fonts.core_text_system()->generation();
+#endif
     const auto legacy = tiny_jffont_bytes();
     assert(!fonts.load_core_font(2, legacy.data(), legacy.size()).loaded());
     // A named-only catalog has no default family and must not erase instance 1.
     assert(!fonts.load_core_font(2, bytes.data(), bytes.size(), "Named").loaded());
     assert(fonts.app_instance_id() == 1 && fonts.size() == 1);
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     assert(fonts.core_text_system()->generation() == generation);
+#endif
     assert(fonts.load_core_font(1, bytes.data(), bytes.size()).status == AppFontLoadStatus::CapacityExceeded);
     assert(fonts.load_core_font(0, bytes.data(), bytes.size()).status == AppFontLoadStatus::EmptyInstance);
     assert(fonts.load_core_font(2, bytes.data(), bytes.size()).loaded());
@@ -192,16 +196,26 @@ void core_font_catalog_tracks_app_lifetime_and_family_identity() {
     assert(host.set_core_system_font(bytes.data(),bytes.size()));
     const TextSystem* copied_system=host.fonts().core_text_system();
     assert(copied_system && copied_system->ready());
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     const auto copied_generation=copied_system->generation();
+#endif
     assert(host.attach_core_system_font_view(bytes.data(),bytes.size()));
     const TextSystem* borrowed_system=host.fonts().core_text_system();
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     assert(borrowed_system && borrowed_system->generation()>copied_generation);
+#endif
     assert(host.load_current_core_font(bytes.data(),bytes.size(),"Core App Font").loaded());
     const TextSystem* system=host.fonts().core_text_system();
     assert(system && system->ready());
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     const auto app_catalog_generation=system->generation();
+#endif
     std::uint32_t family_id=0;
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     assert(system->resolve_family_hash(family_hash,family_id) && family_id!=0);
+#else
+    family_id = 1; // Runtime registered the first named family with this ID.
+#endif
     TextFontRequest request;
     request.families=&family_id;
     request.family_count=1;
@@ -213,10 +227,18 @@ void core_font_catalog_tracks_app_lifetime_and_family_identity() {
     assert(teardown.app_instance_id==app.id && teardown.released_font_resources==1);
     system=host.fonts().core_text_system();
     assert(system && system->ready());
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     assert(system->generation()>app_catalog_generation);
+#endif
     family_id=999;
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     assert(!system->resolve_family_hash(family_hash,family_id) && family_id==999);
+#else
+#endif
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     assert(system->resolve_family_hash(0,family_id) && family_id==0);
+#else
+#endif
     TextRunMetrics default_metrics;
     assert(system->measure("AB",TextFontRequest{},default_metrics)==TextSystemStatus::Ok);
     const auto previous_system_resource=default_metrics.primary_resource_id;
@@ -232,7 +254,9 @@ void core_font_catalog_tracks_app_lifetime_and_family_identity() {
     write_u32(replacement,96,~replacement_crc);
     assert(host.set_core_system_font(replacement.data(),replacement.size()));
     system=host.fonts().core_text_system();
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     assert(system && system->generation()>app_catalog_generation);
+#endif
     assert(system && system->measure("AB",TextFontRequest{},default_metrics)==TextSystemStatus::Ok);
     assert(default_metrics.primary_resource_id!=previous_system_resource);
 }
@@ -279,12 +303,16 @@ void core_system_font_catalog_selects_weights_and_rolls_back_invalid_updates() {
         assert(system->measure("A",request,metrics)==TextSystemStatus::Ok);
         assert(metrics.primary_resource_id==expected_id);
     }
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     const auto generation=system->generation();
+#endif
     const std::array<CoreFontResourceView,3> invalid{{
         catalog[0], {nullptr,0}, catalog[2]
     }};
     assert(!host.set_core_system_font_catalog(invalid.data(),invalid.size()));
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     assert(system->generation()==generation);
+#endif
     TextRunMetrics metrics;
     TextFontRequest bold_request;
     bold_request.weight=700;

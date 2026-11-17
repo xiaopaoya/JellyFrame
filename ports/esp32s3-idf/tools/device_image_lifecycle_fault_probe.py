@@ -48,7 +48,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--point", required=True, type=int, choices=range(1, 10))
+    parser.add_argument("--point", required=True, type=int, choices=range(1, 12))
     args = parser.parse_args()
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -59,11 +59,12 @@ def main():
     cases = {}
     try:
         wire.open()
-        if args.point == 7:
+        if args.point in (7, 11):
             entries = p.decode_list(wire.request(p.APP_LIST, 0x9300, 1, label="corrupt-registry-list"))["entries"]
             recovery = p.decode_recovery(wire.request(p.RECOVERY, 0x9300, 2, label="corrupt-registry-recovery"))
             assert entries == [] and recovery["reason"] == 1
-            cases["corrupt_registry_protected_launcher"] = {"result": "pass"}
+            cases["corrupt_registry_protected_launcher" if args.point == 7 else
+                  "legacy_registry_refused"] = {"result": "pass"}
         elif args.point == 9:
             assert_active(wire, 1, 1)
             rejected = p.decode_result(wire.request(
@@ -106,7 +107,7 @@ def main():
                         assert result["code"] == p.RESULT_ACCEPTED
                         request += 1
                         commit = p.transaction_payload(8000 + args.point)
-                        if args.point in (4, 5, 6):
+                        if args.point in (4, 5, 6, 10):
                             expect_restart(wire, p.INSTALL_COMMIT, request, commit, "fault-commit")
                             assert_active(wire, 20, 2 if args.point == 6 else 1)
                             if args.point == 6:

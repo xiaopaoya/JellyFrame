@@ -4,9 +4,6 @@
 #include "app_runtime/script_task_frame_groups.h"
 #include "app_runtime/script_task_prepared_text.h"
 #include "app_runtime/script_task_canonical_codec.h"
-#if JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API
-#include "app_runtime/app_host.h"
-#endif
 
 #include "render_core/raster_primitives.h"
 
@@ -15,6 +12,8 @@
 #include <unordered_set>
 #include <cstring>
 #include <new>
+#include <climits>
+#include <stdexcept>
 
 namespace jellyframe {
 namespace {
@@ -256,6 +255,7 @@ bool point_in_clip_chain(const ScriptTaskAppFrame& frame, std::uint16_t clip_ind
 bool script_task_app_frame_codec_supports_version(std::uint8_t version) {
     return (version == 9 && detail::canonical::available) ||
         (version == 10 && detail::canonical::elliptical_available) ||
+        (version == kRuntimeShapedFrameVersion && detail::canonical::selected_version(version)) ||
         (version >= kVersionV1 && version <= kVersionV4) ||
         (version == kVersionV5 && detail::kScriptTaskSamplingTransportAvailable) ||
         (version == kVersionV6 && detail::kScriptTaskGroupTransportAvailable && detail::kScriptTaskSamplingTransportAvailable) ||
@@ -269,7 +269,9 @@ bool script_task_app_frame_codec_supports_version(std::uint8_t version) {
 ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFrame& frame,
                                                             const ScriptTaskAppFrameCodecOptions& options,
                                                             std::vector<std::uint8_t>& output) {
-    if (options.version == 9 || options.version == 10) return detail::canonical::encode(frame, options, output);
+    if (options.version == 9 || options.version == 10 || options.version == kRuntimeShapedFrameVersion)
+        return detail::canonical::encode(frame, options, output);
+    if (!frame.shaped_text.empty()) return ScriptTaskAppFrameCodecStatus::UnsupportedTextFeature;
     if (frame.image_provider_id) return ScriptTaskAppFrameCodecStatus::InvalidValue;
     if (options.version != kVersionV1 && options.version != kVersionV2 && options.version != kVersionV3 &&
         options.version != kVersionV4 && options.version != kVersionV5 && options.version != kVersionV6 && options.version != kVersionV7 &&
@@ -492,8 +494,8 @@ ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(const ScriptTaskAppFr
 ScriptTaskAppFrameCodecStatus decode_script_task_app_frame(const std::vector<std::uint8_t>& input,
                                                             const ScriptTaskAppFrameCodecOptions& options,
                                                             ScriptTaskAppFrame& output) {
-    if (options.version == 9 || options.version == 10 ||
-        (input.size() > 4 && (input[4] == 9 || input[4] == 10))) {
+    if (options.version == 9 || options.version == 10 || options.version == kRuntimeShapedFrameVersion ||
+        (input.size() > 4 && (input[4] == 9 || input[4] == 10 || (input[4] == 11 || input[4] == 12)))) {
         if (input.size() > 4 && options.version != input[4]) return ScriptTaskAppFrameCodecStatus::UnsupportedVersion;
         return detail::canonical::decode(input, options, output);
     }
@@ -745,7 +747,8 @@ ScriptTaskAppFrameCodecStatus make_script_task_group_frame(
     const LayerNode& root, Rect viewport, const ScriptTaskAppFrameCodecOptions& limits,
     ScriptTaskAppFrame& output) {
     using Status = ScriptTaskAppFrameCodecStatus;
-    if (limits.version == 9) return detail::canonical::capture(root, viewport, limits, output);
+    if (limits.version == 9 || limits.version == kRuntimeShapedFrameVersion)
+        return detail::canonical::capture(root, viewport, limits, output);
     if (limits.version == 10) {
         if (!detail::canonical::elliptical_available) return Status::UnsupportedVersion;
         return detail::canonical::capture(root, viewport, limits, output);
@@ -840,6 +843,112 @@ ScriptTaskAppFrameCodecStatus make_script_task_group_frame(
 #endif
 }
 
+ScriptTaskAppFrameCodecStatus append_script_task_shaped_text(
+    ScriptTaskAppFrame& frame, std::uint32_t after_command_count,
+    std::int32_t baseline_x_q1000, std::int32_t baseline_y_q1000,
+    Rect bounds, Rect clip, Color color, std::string packet) {
+    if (frame.shaped_text.size() >= kScriptTaskMaxShapedTextRecords)
+        return ScriptTaskAppFrameCodecStatus::TooManyCommands;
+    if (after_command_count > frame.display_list.size() ||
+        (!frame.shaped_text.empty() && after_command_count < frame.shaped_text.back().after_command_count) ||
+        !runtime_shaped_packet_header_matches(packet) ||
+        bounds.width <= 0 || bounds.height <= 0 || clip.width <= 0 || clip.height <= 0 ||
+        bounds.width < 0 || bounds.height < 0 || clip.width < 0 || clip.height < 0)
+        return ScriptTaskAppFrameCodecStatus::InvalidValue;
+    try {
+        ScriptTaskFrameShapedText item;
+        item.after_command_count = after_command_count;
+        item.baseline_x_q1000 = baseline_x_q1000;
+        item.baseline_y_q1000 = baseline_y_q1000;
+        item.bounds = bounds; item.clip = clip; item.color = color; item.packet = std::move(packet);
+        frame.shaped_text.push_back(std::move(item));
+    } catch (const std::bad_alloc&) {
+        return ScriptTaskAppFrameCodecStatus::PayloadTooLarge;
+    }
+    return ScriptTaskAppFrameCodecStatus::Accepted;
+}
+
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_PARAGRAPH_API
+namespace {
+ScriptTaskAppFrameCodecStatus append_paragraph_draft(ScriptTaskAppFrame& draft,
+    std::uint32_t after, const runtime_shaped::Paragraph& paragraph, std::int32_t origin_x,
+    std::int32_t origin_y, Rect clip, Color color, TextAlign align, std::int32_t width) {
+    using Status = ScriptTaskAppFrameCodecStatus;
+    if (!paragraph.valid() || after > draft.display_list.size() || clip.width <= 0 || clip.height <= 0)
+        return Status::InvalidValue;
+    if (draft.shaped_text.size() > kScriptTaskMaxShapedTextRecords ||
+        paragraph.lines().size() > kScriptTaskMaxShapedTextRecords - draft.shaped_text.size()) return Status::TooManyCommands;
+    const auto floor_pixel = [](std::int64_t q) { return q >= 0 ? q/1000 : -((-q+999)/1000); };
+    const auto ceil_pixel = [](std::int64_t q) { return q >= 0 ? (q+999)/1000 : -((-q)/1000); };
+    for (const auto& line : paragraph.lines()) {
+        const auto delta = std::int64_t(width) - line.metrics.advance_x;
+        const auto offset = align == TextAlign::End ? delta : align == TextAlign::Center
+            ? delta/2 - (!JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && delta < 0 && delta%2 ? 1 : 0) : 0;
+        const auto x = std::int64_t(origin_x) + offset;
+        const auto y = std::int64_t(origin_y) + line.baseline_y_q1000;
+        if (x < INT32_MIN || x > INT32_MAX || y < INT32_MIN || y > INT32_MAX) return Status::InvalidValue;
+        if (!line.metrics.has_ink) continue;
+        const auto left = floor_pixel(x+line.metrics.ink_left), right = ceil_pixel(x+line.metrics.ink_right);
+        const auto top = floor_pixel(y+line.metrics.ink_top), bottom = ceil_pixel(y+line.metrics.ink_bottom);
+        if (left < INT_MIN || right > INT_MAX || top < INT_MIN || bottom > INT_MAX ||
+            right <= left || bottom <= top || right-left > INT_MAX || bottom-top > INT_MAX) return Status::InvalidValue;
+        const auto status = append_script_task_shaped_text(draft,after,static_cast<std::int32_t>(x),
+            static_cast<std::int32_t>(y),{static_cast<int>(left),static_cast<int>(top),
+            static_cast<int>(right-left),static_cast<int>(bottom-top)},clip,color,line.packet);
+        if (status != Status::Accepted) return status;
+    }
+    return Status::Accepted;
+}
+}
+ScriptTaskAppFrameCodecStatus append_script_task_shaped_paragraph(
+    ScriptTaskAppFrame& frame, std::uint32_t after, const runtime_shaped::Paragraph& paragraph,
+    std::int32_t x, std::int32_t y, Rect clip, Color color, const ScriptTaskAppFrameCodecOptions& limits) {
+    using Status = ScriptTaskAppFrameCodecStatus;
+    if (limits.version != kRuntimeShapedFrameVersion || !script_task_app_frame_codec_supports_version(limits.version)) return Status::UnsupportedVersion;
+    try {
+        std::size_t bytes = 0;
+        auto status = detail::canonical::validate(frame,limits,bytes);
+        if (status != Status::Accepted) return status;
+        auto draft = frame;
+        status = append_paragraph_draft(draft,after,paragraph,x,y,clip,color,TextAlign::Start,0);
+        if (status != Status::Accepted) return status;
+        status = detail::canonical::validate(draft,limits,bytes);
+        if (status != Status::Accepted) return status;
+        frame.shaped_text.swap(draft.shaped_text);
+        return Status::Accepted;
+    } catch (const std::bad_alloc&) { return Status::PayloadTooLarge; }
+      catch (const std::length_error&) { return Status::PayloadTooLarge; }
+}
+#endif
+
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+ScriptTaskAppFrameCodecStatus make_script_task_shaped_frame(const LayerNode& layer,
+    const runtime_shaped::LayoutResult& layout, const std::vector<std::uint32_t>& positions,
+    Rect viewport, const ScriptTaskAppFrameCodecOptions& limits, ScriptTaskAppFrame& output) {
+    using Status = ScriptTaskAppFrameCodecStatus;
+    if (limits.version != kRuntimeShapedFrameVersion) return Status::UnsupportedVersion;
+    if (!layout.valid() || layer.box != layout.tree() || positions.size() != layout.paragraphs().size())
+        return Status::InvalidValue;
+    try {
+        ScriptTaskAppFrame draft;
+        auto status = make_script_task_group_frame(layer,viewport,limits,draft);
+        if (status != Status::Accepted) return status;
+        for (std::size_t i = 0; i < positions.size(); ++i) {
+            const auto& p = layout.paragraphs()[i];
+            status = append_paragraph_draft(draft,positions[i],p.paragraph,p.origin_x_q1000,
+                p.origin_y_q1000,viewport,p.color,p.align,p.content_width_q1000);
+            if (status != Status::Accepted) return status;
+        }
+        std::size_t bytes = 0;
+        status = detail::canonical::validate(draft,limits,bytes);
+        if (status != Status::Accepted) return status;
+        output = std::move(draft);
+        return Status::Accepted;
+    } catch (const std::bad_alloc&) { return Status::PayloadTooLarge; }
+      catch (const std::length_error&) { return Status::PayloadTooLarge; }
+}
+#endif
+
 ScriptTaskAppFramePublisher::ScriptTaskAppFramePublisher(ScriptTaskAppFrameCodecOptions options)
     : options_(options) {
     encoded_.reserve(options_.max_payload_bytes);
@@ -893,15 +1002,6 @@ ScriptTaskAppFrameTakeStatus take_script_task_app_frame(ScriptTaskSupervisor& su
     }
     return ScriptTaskAppFrameTakeStatus::Accepted;
 }
-#if JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API
-ScriptAppSession begin_script_task_app_session(const AppRuntimeHost& host, ScriptTaskSupervisor& supervisor) {
-    const auto instance = host.current_app_instance_id();
-    const auto font_instance = host.fonts().app_instance_id();
-    if (!instance || (font_instance && font_instance != instance)) return {};
-    return supervisor.begin(instance, host.fonts().catalog());
-}
-#endif
-
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
 bool script_task_frame_uses_image_provider(const ScriptTaskAppFrame& frame, const RuntimeImageProvider::Handle& images) {
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
@@ -950,7 +1050,8 @@ ScriptTaskAppFrameTakeStatus take_script_task_app_frame(
     const ScriptTaskAppFrameCodecOptions& options, ScriptTaskAcceptedAppFrame& output) {
     if (!((options.version == 7 && JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API) ||
           (options.version == 9 && detail::canonical::available) ||
-          (options.version == 10 && detail::canonical::elliptical_available)))
+          (options.version == 10 && detail::canonical::elliptical_available) ||
+          (options.version == kRuntimeShapedFrameVersion && detail::canonical::selected_version(options.version))))
         return ScriptTaskAppFrameTakeStatus::TextCatalogRejected;
     auto catalog = supervisor.text_catalog(session);
     if (!catalog) return ScriptTaskAppFrameTakeStatus::TextCatalogRejected;
@@ -959,13 +1060,29 @@ ScriptTaskAppFrameTakeStatus take_script_task_app_frame(
     if (status != ScriptTaskAppFrameTakeStatus::Accepted) return status;
     if (!script_task_frame_uses_catalog(accepted.frame_, *catalog))
         return ScriptTaskAppFrameTakeStatus::TextCatalogRejected;
-    if (options.version == 9 || options.version == 10) {
+    if (!accepted.frame_.shaped_text.empty()) {
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+        accepted.shaped_text_ = supervisor.shaped_text_binding(session);
+        if (!accepted.shaped_text_) return ScriptTaskAppFrameTakeStatus::TextCatalogRejected;
+        std::uint64_t work = accepted.shaped_text_->work_limit();
+        for (const auto& item : accepted.frame_.shaped_text) {
+            if (accepted.shaped_text_->validate_packet(item.packet, work) != runtime_shaped::Status::ok)
+                return ScriptTaskAppFrameTakeStatus::TextCatalogRejected;
+        }
+#else
+        return ScriptTaskAppFrameTakeStatus::TextCatalogRejected;
+#endif
+    }
+    if (options.version == 9 || options.version == 10 || options.version == kRuntimeShapedFrameVersion) {
         accepted.images_ = supervisor.image_provider(session);
         if (!script_task_frame_uses_image_provider(accepted.frame_, accepted.images_))
             return ScriptTaskAppFrameTakeStatus::ImageProviderRejected;
     }
     accepted.session_ = session;
     accepted.catalog_ = std::move(catalog);
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    if (!accepted.shaped_text_) accepted.shaped_text_ = supervisor.shaped_text_binding(session);
+#endif
     output = std::move(accepted);
     return ScriptTaskAppFrameTakeStatus::Accepted;
 }

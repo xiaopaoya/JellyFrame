@@ -34,7 +34,7 @@ SOURCE_REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
 LOG_LEVELS = frozenset({"debug", "info", "warn", "error"})
 RENDER_CORE_FEATURE_FAMILIES = frozenset({
     "core.document", "core.paint", "css.flex-grid", "css.modern-paint",
-    "forms.advanced", "graphics.canvas2d",
+    "forms.advanced", "graphics.canvas2d", "text.shaping",
 })
 APP_LIBRARY_STATES = frozenset({"installed", "disabled", "failed"})
 RECOVERY_REASONS = frozenset({"none", "registry-invalid", "staging-discarded", "app-load-failure", "app-runtime-failure", "app-budget-exceeded", "launcher-fallback"})

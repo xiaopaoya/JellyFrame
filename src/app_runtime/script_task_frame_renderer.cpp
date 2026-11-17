@@ -244,9 +244,30 @@ bool has_valid_clip_parallelism(const ScriptTaskAppFrame& frame) {
 }
 
 bool has_valid_value_frame_shape(const ScriptTaskAppFrame& frame) {
-    return frame.viewport.width > 0 && frame.viewport.height > 0 &&
-        has_valid_clip_parallelism(frame) && !frame.clip_metadata_overflow && frame.groups.empty() &&
-        frame.command_ellipses.empty();
+    const bool shaped_root = frame.groups.size() == 1 &&
+        frame.groups[0].type == LayerType::Root && frame.groups[0].parent == kScriptTaskNoParentClip &&
+        frame.groups[0].command_begin == 0 && frame.groups[0].command_count == frame.display_list.size() &&
+        frame.groups[0].opacity == 1.0F && !frame.groups[0].has_clip && !frame.groups[0].has_transform;
+    return frame.viewport.width > 0 && frame.viewport.height > 0 && has_valid_clip_parallelism(frame) &&
+        !frame.clip_metadata_overflow && frame.command_ellipses.empty() &&
+        (frame.groups.empty() || shaped_root);
+}
+
+bool equal_shaped_text(const ScriptTaskFrameShapedText& a, const ScriptTaskFrameShapedText& b) {
+    return a.after_command_count == b.after_command_count && a.baseline_x_q1000 == b.baseline_x_q1000 &&
+        a.baseline_y_q1000 == b.baseline_y_q1000 && equal_rect(a.bounds, b.bounds) &&
+        equal_rect(a.clip, b.clip) && equal_color(a.color, b.color) && a.packet == b.packet;
+}
+
+template<class Visitor>
+void visit_changed_shaped_text(const ScriptTaskAppFrame& previous,
+                              const ScriptTaskAppFrame& current, Visitor visit) {
+    const auto count = std::max(previous.shaped_text.size(), current.shaped_text.size());
+    for (std::size_t i = 0; i < count; ++i) {
+        const bool old_item = i < previous.shaped_text.size(), new_item = i < current.shaped_text.size();
+        if (old_item && new_item && equal_shaped_text(previous.shaped_text[i], current.shaped_text[i])) continue;
+        visit(old_item ? &previous.shaped_text[i] : nullptr, new_item ? &current.shaped_text[i] : nullptr);
+    }
 }
 
 bool contains_unsupported_sampling(const ScriptTaskAppFrame& frame, const ImagePainter& painter) {
@@ -423,9 +444,20 @@ ScriptTaskFrameDiff diff_script_task_app_frames(const ScriptTaskAppFrame& previo
             }
         }
     }
-    report.paint_structure_equal = report.viewport_equal && report.clip_chains_equal &&
+    const bool shaped_structure_equal = equal_vector(previous.shaped_text, current.shaped_text,
+        [](const auto& a, const auto& b) { return a.after_command_count == b.after_command_count; });
+    bool root_group_equal = previous.groups.empty() && current.groups.empty();
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API || JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+    root_group_equal = previous.groups.size() == current.groups.size() &&
+        (previous.groups.empty() || (previous.groups.size() == 1 && current.groups.size() == 1 &&
+         detail::canonical::same_group(previous.groups[0], current.groups[0])));
+#endif
+    report.paint_structure_equal = report.viewport_equal && report.clip_chains_equal && shaped_structure_equal && root_group_equal &&
         report.display_clip_indices_equal && previous.groups.empty() && current.groups.empty() &&
         previous.command_ellipses.empty() && current.command_ellipses.empty();
+    if (!previous.shaped_text.empty() || !current.shaped_text.empty())
+        report.paint_structure_equal = report.viewport_equal && report.clip_chains_equal && shaped_structure_equal &&
+            root_group_equal && report.display_clip_indices_equal && previous.command_ellipses.empty() && current.command_ellipses.empty();
 
     const std::size_t comparable_count = valid_parallelism
         ? std::min(report.previous_command_count, report.current_command_count)
@@ -437,6 +469,7 @@ ScriptTaskFrameDiff diff_script_task_app_frames(const ScriptTaskAppFrame& previo
     }
     report.changed_command_count = std::max(report.previous_command_count, report.current_command_count) -
         report.unchanged_command_count;
+    visit_changed_shaped_text(previous, current, [&](const auto*, const auto*) { ++report.changed_command_count; });
     while (report.unchanged_prefix_command_count < comparable_count &&
            equal_command_at(previous,
                             report.unchanged_prefix_command_count,
@@ -476,6 +509,15 @@ ScriptTaskFrameDiff diff_script_task_app_frames(const ScriptTaskAppFrame& previo
             }
         }
     }
+    visit_changed_shaped_text(previous, current, [&](const auto* old_item, const auto* new_item) {
+        for (const auto* item : {old_item, new_item}) if (item) {
+            const Rect bounds = intersect_rect(item->bounds, item->clip);
+            if (empty_rect(bounds)) continue;
+            report.changed_command_bounds = report.has_changed_command_bounds
+                ? union_rect(report.changed_command_bounds, bounds) : bounds;
+            report.has_changed_command_bounds = true;
+        }
+    });
     return report;
 }
 
@@ -592,11 +634,13 @@ ScriptTaskFrameDamage plan_script_task_group_damage(
     const ScriptTaskAppFrame& previous, const ScriptTaskAppFrame& current) {
     const Rect viewport{0, 0, current.viewport.width, current.viewport.height};
     const ScriptTaskFrameDamage full{ScriptTaskFrameDamageKind::Full, viewport};
-#if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
-    if (!previous.groups.empty() || !current.groups.empty()) {
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API || JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+    if ((!previous.groups.empty() || !current.groups.empty()) &&
+        (JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API || !previous.shaped_text.empty() || !current.shaped_text.empty())) {
         if (previous.image_provider_id != current.image_provider_id) return full;
         ScriptTaskAppFrameCodecOptions canonical_limits;
-        canonical_limits.version = detail::canonical::elliptical_available ? 10 : 9;
+        const bool has_shaped = !previous.shaped_text.empty() || !current.shaped_text.empty();
+        canonical_limits.version = (has_shaped || JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API) ? kRuntimeShapedFrameVersion : (detail::canonical::elliptical_available ? 10 : 9);
         canonical_limits.max_commands = canonical_limits.max_text_bytes = canonical_limits.max_input_targets =
             canonical_limits.max_payload_bytes = std::numeric_limits<std::size_t>::max();
         canonical_limits.max_groups = 1024; canonical_limits.max_clips = 65535;
@@ -612,6 +656,19 @@ ScriptTaskFrameDamage plan_script_task_group_damage(
             return full;
         for (std::size_t i = 0; i < current.groups.size(); ++i)
             if (!detail::canonical::same_group(previous.groups[i], current.groups[i])) return full;
+        if (has_shaped) {
+            for (const auto* f : {&previous, &current})
+                for (const auto& command : f->display_list) {
+                    Rect bounds;
+                    if (!renderer.command_visual_bounds(command, bounds)) return full;
+                }
+            const auto diff = diff_script_task_app_frames(previous, current);
+            if (!diff.paint_structure_equal) return full;
+            if (!diff.changed_command_count) return {ScriptTaskFrameDamageKind::Unchanged, {}};
+            if (!diff.has_changed_command_bounds) return full;
+            const Rect damage = intersect_rect(diff.changed_command_bounds, viewport);
+            return {empty_rect(damage) ? ScriptTaskFrameDamageKind::Unchanged : ScriptTaskFrameDamageKind::Partial, damage};
+        }
         for (std::size_t i = 0; i < current.display_list.size(); ++i)
             if (!equal_display_command(previous.display_list[i], current.display_list[i])) return full;
         return {ScriptTaskFrameDamageKind::Unchanged, {}};
@@ -791,6 +848,9 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAcceptedAppFrame& acce
     auto options = options_;
     options.text_catalog = accepted.text_catalog();
     options.image_provider = accepted.image_provider();
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    options.shaped_text_binding = accepted.shaped_text_binding();
+#endif
     ScriptTaskFrameRenderer bound(accepted.image_provider() ? accepted.image_provider()->painter() : image_painter_, std::move(options));
     return bound.render_into(accepted.frame(), target, background, dirty_rects, dirty_rect_count, scratch, status);
 }
@@ -808,6 +868,98 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
         if (status) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
         return false;
     }
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    if (!frame.shaped_text.empty()) {
+        const auto reject = [&] {
+            if (status) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+            return false;
+        };
+        // Raw-frame callers receive the same validation as transported frames.
+        // In particular contextual text cannot bypass its plain-background gate.
+        ScriptTaskAppFrameCodecOptions limits;
+        limits.version = kRuntimeShapedFrameVersion;
+        limits.max_commands = limits.max_text_bytes = limits.max_input_targets =
+            limits.max_payload_bytes = std::numeric_limits<std::size_t>::max();
+        limits.max_groups = options_.max_groups;
+        limits.max_group_depth = options_.max_group_depth;
+        try {
+            std::size_t bytes = 0;
+            if (detail::canonical::validate(frame, limits, bytes) != ScriptTaskAppFrameCodecStatus::Accepted)
+                return reject();
+        } catch (const std::bad_alloc&) {
+            if (status) *status = ScriptTaskFrameRenderStatus::FramebufferRejected;
+            return false;
+        }
+        if (!options_.shaped_text_binding || !options_.shaped_text_binding->valid() ||
+            target.width != frame.viewport.width || target.height != frame.viewport.height ||
+            frame.groups.size() != 1 || !frame.clips.empty() || !frame.display_clip_indices.empty() ||
+            frame.groups[0].type != LayerType::Root || frame.groups[0].parent != kScriptTaskNoParentClip ||
+            frame.groups[0].command_begin != 0 || frame.groups[0].command_count != frame.display_list.size() ||
+            frame.groups[0].has_clip || frame.groups[0].has_transform || frame.groups[0].has_affine ||
+            frame.groups[0].opacity != 1.0F || frame.groups[0].transform.translate_x != 0 ||
+            frame.groups[0].transform.translate_y != 0 || frame.groups[0].transform.scale_x != 1 ||
+            frame.groups[0].transform.scale_y != 1 || frame.groups[0].transform.rotate_degrees != 0 ||
+            frame.shaped_text.size() > kScriptTaskMaxShapedTextRecords ||
+            !frame.command_ellipses.empty()) return reject();
+        for (const auto& command : frame.display_list)
+            if (static_cast<unsigned>(detail::command_type(command)) > static_cast<unsigned>(DisplayCommandType::BoxShadow) ||
+                command.transform.enabled || command.transform.source_clip_index != kScriptTaskNoClip)
+                return reject();
+        // One ledger for all validation and all dirty-region paint attempts.
+        std::uint64_t work = std::min(options_.shaped_text_limits.core.work,
+                                     options_.shaped_text_binding->work_limit());
+        std::uint32_t previous_position = 0;
+        for (const auto& item : frame.shaped_text) {
+            if (item.after_command_count > frame.display_list.size() || item.packet.size() < 4 ||
+                item.after_command_count < previous_position ||
+                item.packet.compare(0, 4, "JFSP") != 0 || item.bounds.width <= 0 || item.bounds.height <= 0 ||
+                item.clip.width <= 0 || item.clip.height <= 0) return reject();
+            previous_position = item.after_command_count;
+            if (options_.shaped_text_binding->validate_packet(item.packet, work) != runtime_shaped::Status::ok)
+                return reject();
+        }
+        if (status) *status = ScriptTaskFrameRenderStatus::Accepted;
+        const Rect target_rect{0, 0, target.width, target.height};
+        try {
+            std::vector<Rect> repaint = dirty_rects == nullptr || dirty_rect_count == 0
+                ? std::vector<Rect>{target_rect} : normalize_dirty_rects(dirty_rects, dirty_rect_count, target_rect);
+            FrameBuffer staged = target;
+            SoftwareRasterizerScratch local_scratch;
+            auto* working_scratch = scratch ? scratch : &local_scratch;
+            for (const Rect dirty : repaint) {
+                clear_rect(staged, dirty, background);
+                std::size_t shaped_index = 0;
+                for (std::size_t index = 0; index <= frame.display_list.size(); ++index) {
+                    while (shaped_index < frame.shaped_text.size() &&
+                           index == frame.shaped_text[shaped_index].after_command_count) {
+                        const auto& item = frame.shaped_text[shaped_index++];
+                        Rect paint_clip = intersect_rect(intersect_rect(item.clip, item.bounds), dirty);
+                        paint_clip = intersect_rect(paint_clip, target_rect);
+                        if (!empty_rect(paint_clip)) {
+                            if (runtime_shaped::paint(options_.shaped_text_binding->core_binding(), item.packet,
+                                    staged, item.baseline_x_q1000, item.baseline_y_q1000, paint_clip,
+                                    item.color, options_.shaped_text_limits.core, work) != runtime_shaped::Status::ok)
+                                return reject();
+                        }
+                    }
+                    if (index < frame.display_list.size())
+                        rasterizer_.rasterize_clipped(&frame.display_list[index], 1, staged, dirty,
+                            0, 0, nullptr, 0, working_scratch);
+                }
+            }
+            target = std::move(staged);
+            return true;
+        } catch (const std::bad_alloc&) {
+            if (status) *status = ScriptTaskFrameRenderStatus::FramebufferRejected;
+            return false;
+        }
+    }
+#else
+    if (!frame.shaped_text.empty()) {
+        if (status) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+        return false;
+    }
+#endif
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
     if (std::any_of(frame.display_list.begin(), frame.display_list.end(), [](const auto& command) {
             return detail::command_type(command) == DisplayCommandType::Text;
@@ -870,7 +1022,11 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
             options.text_system = options_.text_catalog ? &options_.text_catalog->text_system() : nullptr;
             options.text_limits = options_.text_limits;
 #endif
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+            SoftwareCompositor compositor(TextPainter{}, image_painter_, options);
+#else
             SoftwareCompositor compositor(image_painter_, options);
+#endif
             const auto result = compositor.render_into_checked(tree.root(), target, background,
                 dirty_rects, dirty_rect_count);
             if (!result.complete() && status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
@@ -1157,6 +1313,13 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& rend
         changed_region = empty_rect(changed_region) ? union_rect(old_bounds, new_bounds)
                                                      : union_rect(changed_region, union_rect(old_bounds, new_bounds));
     }
+    visit_changed_shaped_text(*previous_frame_, frame, [&](const auto* old_item, const auto* new_item) {
+        for (const auto* item : {old_item, new_item}) if (item) {
+            const Rect bounds = intersect_rect(item->bounds, item->clip);
+            if (empty_rect(bounds)) continue;
+            changed_region = empty_rect(changed_region) ? bounds : union_rect(changed_region, bounds);
+        }
+    });
 
     struct ReplayGroupBounds {
         std::uint16_t clip_index = kScriptTaskNoClip;
@@ -1231,6 +1394,11 @@ bool ScriptTaskFrameRetainedReplay::eligible(const ScriptTaskFrameRenderer& rend
             replayed_commands += group.command_count;
         }
     }
+    for (const auto& item : frame.shaped_text)
+        if (!empty_rect(intersect_rect(intersect_rect(item.bounds, item.clip), changed_region))) {
+            ++replayed_command_groups;
+            ++replayed_commands;
+        }
     if (replayed_command_groups == 0) {
         fallback_reason = ScriptTaskFrameRetainedReplayFallbackReason::NoIntersectingCommandGroups;
         return false;

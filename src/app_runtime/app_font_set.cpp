@@ -1,4 +1,5 @@
 #include "app_runtime/app_font_set.h"
+#include "app_runtime/runtime_text_font_face.h"
 
 #include <algorithm>
 #include <unordered_map>
@@ -128,7 +129,7 @@ bool AppFontSet::rebuild_core_text_system() {
         candidate_faces.reserve(core_fonts_.size() + core_system_fonts_.size());
         family_ids.reserve(core_fonts_.size());
         for (const auto& loaded : core_system_fonts_)
-            candidate_faces.push_back({loaded.resource_id, 0, loaded.resource, 0});
+            candidate_faces.push_back(detail::registered_text_face(loaded.resource_id, 0, loaded.resource, 0));
         std::uint32_t next_family_id = 1;
         for (const auto& loaded : core_fonts_) {
             std::uint32_t family_id = 0;
@@ -139,7 +140,7 @@ bool AppFontSet::rebuild_core_text_system() {
             }
             const std::uint64_t resource_id = loaded.resource_id != 0
                 ? loaded.resource_id : next_core_resource_id_;
-            candidate_faces.push_back({resource_id, family_id, loaded.resource, loaded.family_hash});
+            candidate_faces.push_back(detail::registered_text_face(resource_id, family_id, loaded.resource, loaded.family_hash));
         }
     } catch (...) {
         return false;

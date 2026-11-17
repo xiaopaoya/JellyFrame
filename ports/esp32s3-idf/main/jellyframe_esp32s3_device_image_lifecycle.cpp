@@ -202,7 +202,7 @@ public:
 class DeviceImageEndpoint final : public JfdpStreamSink {
 public:
     explicit DeviceImageEndpoint(DeviceImageStore& store)
-        : store_(store), transaction_(DeviceInstallLimits{DeviceImageStore::kMaxBundleBytes, 4096}),
+        : store_(store), transaction_(DeviceInstallLimits{store.max_bundle_bytes(), 4096}),
           host_(AppRuntimeHostOptions{2, 2, 4, 4096, 1}), binding_(store_, &launcher_) {
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
         if (!host_.attach_core_system_font_catalog_view(
@@ -572,11 +572,29 @@ private:
             result.flags = DeviceOperationResultLauncherActive;
             return;
         }
+        std::unique_ptr<DeviceBundleInspectionWorkspace> text_workspace(new (std::nothrow) DeviceBundleInspectionWorkspace);
+        if (!text_workspace) {
+            (void)recover_to_launcher(DeviceRecoveryReason::AppLoadFailure, app_id.app_id_view());
+            result.result_code = DeviceRequestResultCode::Failed;
+            result.flags = DeviceOperationResultLauncherActive;
+            return;
+        }
+        // Bounds admitted source/working storage; peak allocation still needs
+        // device qualification because validated assets have owned copies.
+        constexpr std::size_t kInstalledShapedResourceBytes = 2u * 1024u * 1024u;
+        auto text_pipeline = binding_.select_active_text_pipeline(*text_workspace, kInstalledShapedResourceBytes);
+        if (text_pipeline.status != AppInstalledTextPipelineStatus::Scalar &&
+            text_pipeline.status != AppInstalledTextPipelineStatus::Ready) {
+            (void)recover_to_launcher(DeviceRecoveryReason::AppLoadFailure, app_id.app_id_view());
+            result.result_code = DeviceRequestResultCode::Failed;
+            result.flags = DeviceOperationResultLauncherActive;
+            return;
+        }
         const bool script_app = descriptor.summary.script_mode == DeviceBundleScriptMode::Classic;
         const bool task_started = script_app
             ? start_installed_bundle_script_task(std::string(app_id.app_id_view()), store_.registry_generation(),
                                                  launch.instance.id, std::string(descriptor.summary.entry_path_view()),
-                                                 std::move(entry_document), std::move(resources), host_, script_session_)
+                                                 std::move(entry_document), std::move(resources), host_, script_session_, std::move(text_pipeline))
             : start_installed_bundle_ui_task(std::string(app_id.app_id_view()), store_.registry_generation(),
                                              std::string(descriptor.summary.entry_path_view()), std::move(entry_document),
                                              std::move(resources), ui_session_);
@@ -669,7 +687,7 @@ private:
         capabilities.display_width = 172;
         capabilities.display_height = 320;
         capabilities.capability_bits = DeviceCapabilityTouch | DeviceCapabilityDeviceLogs;
-        capabilities.max_bundle_bytes = DeviceImageStore::kMaxBundleBytes;
+        capabilities.max_bundle_bytes = store_.max_bundle_bytes();
         capabilities.available_storage_bytes = store_.available_storage_bytes();
         // This is the release board identity, not a board-driver label. The
         // explicit host provider compares it with the Developer Image record.
@@ -704,6 +722,9 @@ private:
 #endif
 #if JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED
         identity.feature_family_bits |= DeviceRenderCoreFeatureCanvas2d;
+#endif
+#if JELLYFRAME_RENDER_CORE_TEXT_SHAPING_ENABLED
+        identity.feature_family_bits |= DeviceRenderCoreFeatureTextShaping;
 #endif
         std::array<std::uint8_t, 384> payload{};
         std::size_t size = 0;

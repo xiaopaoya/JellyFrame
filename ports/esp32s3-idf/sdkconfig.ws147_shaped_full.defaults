@@ -1,0 +1,7 @@
+# Opt-in full font+catalog install qualification, applied after worker/CoreText.
+# Moves assets/storage boundaries; never deploy by an app-only update.
+# Requires explicit data preservation and whole-partition migration/recovery.
+CONFIG_JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB=2048
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_16mb_n16r8_shaped_full.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions_16mb_n16r8_shaped_full.csv"

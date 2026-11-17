@@ -34,6 +34,10 @@ struct ScriptTaskFrameRendererOptions {
     // Prepared text requires checked group rendering, as in wire version7.
     RuntimeFontCatalog::Handle text_catalog;
     TextPaintLimits text_limits;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    RuntimeShapedTextBinding::Handle shaped_text_binding;
+    RuntimeShapedTextLimits shaped_text_limits;
+#endif
 #endif
 };
 

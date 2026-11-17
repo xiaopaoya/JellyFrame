@@ -225,6 +225,41 @@ void supervisor_requires_ordered_value_only_teardown() {
     assert(supervisor.post_native_release_intent({active, 46}) == ScriptTaskReleaseIntentStatus::Invalid);
 }
 
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+void shaped_text_owner_rejects_unverified_manifest_transactionally() {
+    RuntimeShapedTextBinding::Handle output;
+    const RuntimeShapedTextManifest incomplete;
+    assert(RuntimeShapedTextBinding::create(incomplete, output) ==
+           RuntimeShapedTextStatus::InvalidRequest);
+    assert(!output);
+
+    RuntimeShapedTextManifest malformed;
+    malformed.font_resource = "font";
+    malformed.shaping_catalog = "catalog";
+    malformed.shaping_companion = "companion";
+    malformed.normalization_tables = "tables";
+    malformed.normalization_eligibility = "eligibility";
+    malformed.source_identity[0] = malformed.profile_identity[0] = 1;
+    malformed.catalog_identity[0] = malformed.companion_identity[0] = 1;
+    malformed.tables_identity[0] = malformed.eligibility_identity[0] = 1;
+    malformed.shaping_glyph_count = 1;
+    malformed.resource_id = 1;
+    malformed.raster_size = 16;
+    malformed.weight = 400;
+    assert(RuntimeShapedTextBinding::create(malformed, output) ==
+           RuntimeShapedTextStatus::InvalidRequest);
+    assert(!output);
+    malformed.font_resource_identity[0] = 1;
+    assert(RuntimeShapedTextBinding::create(malformed, output) ==
+           RuntimeShapedTextStatus::CoreRejected);
+    assert(!output);
+
+    ScriptTaskSupervisor supervisor;
+    assert(!supervisor.begin(70, RuntimeFontCatalog::Handle{}, RuntimeImageProvider::Handle{}, output).valid());
+    assert(!supervisor.current().valid());
+}
+#endif
+
 } // namespace
 
 int script_task_contract_tests_main() {
@@ -237,6 +272,9 @@ int script_task_contract_tests_main() {
     service_tombstones_reject_cancelled_and_stale_completions();
     native_release_intents_are_value_only_and_deduplicated();
     supervisor_requires_ordered_value_only_teardown();
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    shaped_text_owner_rejects_unverified_manifest_transactionally();
+#endif
     std::cout << "script task contract tests passed\n";
     return 0;
 }

@@ -8,6 +8,7 @@ import contextlib
 import io
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -49,6 +50,19 @@ class DeviceCliTests(unittest.TestCase):
         }
         values.update(extra)
         return argparse.Namespace(**values)
+
+    def test_install_forwards_signed_envelope_without_repackaging(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            bundle = Path(temporary) / "signed.jfsg"
+            original = b"exact signed envelope; provider owns format inspection"
+            bundle.write_bytes(original)
+            with patch("jellyframe_cli.device_provider_client.invoke_provider",
+                       return_value=[provider_result("install")]) as invoke:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(jellyframe_cli.cmd_device(self.command_args("install", bundle=bundle)), 0)
+            self.assertEqual(invoke.call_args.kwargs["arguments"], ["--bundle", str(bundle.resolve())])
+            self.assertTrue(invoke.call_args.kwargs["stream"])
+            self.assertEqual(bundle.read_bytes(), original)
 
     def test_lifecycle_commands_forward_an_explicit_selector_and_app_id(self) -> None:
         for command in ("launch", "stop", "remove", "rollback"):

@@ -502,8 +502,37 @@ ScriptAppSession ScriptTaskSupervisor::begin(std::uint32_t app_instance_id, Runt
     next_frame_sequence_ = 1;
     text_catalog_ = std::move(catalog);
     image_provider_ = std::move(images);
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    shaped_text_binding_.reset();
+#endif
     return session;
 }
+
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+ScriptAppSession ScriptTaskSupervisor::begin(std::uint32_t app_instance_id,
+                                             RuntimeFontCatalog::Handle catalog,
+                                             RuntimeImageProvider::Handle images,
+                                             RuntimeShapedTextBinding::Handle shaped_text) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (!catalog || !shaped_text || !shaped_text->valid() ||
+        (images && !images->valid()) || sessions_.current_snapshot().valid() ||
+        retiring_session_.valid()) return {};
+    const auto session = sessions_.begin(app_instance_id);
+    if (!session.valid()) return {};
+    next_frame_sequence_ = 1;
+    text_catalog_ = std::move(catalog);
+    image_provider_ = std::move(images);
+    shaped_text_binding_ = std::move(shaped_text);
+    return session;
+}
+
+RuntimeShapedTextBinding::Handle ScriptTaskSupervisor::shaped_text_binding(
+    const ScriptAppSession& session) const {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    return sessions_.accepts(session) ? shaped_text_binding_
+                                      : RuntimeShapedTextBinding::Handle{};
+}
+#endif
 
 RuntimeImageProvider::Handle ScriptTaskSupervisor::image_provider(const ScriptAppSession& session) const {
     std::lock_guard<std::mutex> lock(state_mutex_);
@@ -731,6 +760,9 @@ ScriptTaskTeardownResult ScriptTaskSupervisor::complete_teardown(const ScriptApp
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
     text_catalog_.reset();
     image_provider_.reset();
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    shaped_text_binding_.reset();
+#endif
 #endif
     return result;
 }

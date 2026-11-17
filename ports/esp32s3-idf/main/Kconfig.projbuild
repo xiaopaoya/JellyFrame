@@ -1,5 +1,16 @@
 menu "JellyFrame ESP32-S3 benchmark"
 
+config JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB
+    int "Installed package envelope cap (KiB)"
+    range 64 2048
+    default 320
+    help
+        Build-time memory/admission cap for the complete incoming package,
+        including the signed envelope. The effective limit is the smaller
+        of this cap and one physical storage slot. Larger shaping packages
+        require an explicitly selected larger storage partition as well.
+        Increasing this value does not resize existing flash partitions.
+
 choice JELLYFRAME_ESP32S3_RUN_MODE
     prompt "Startup run mode"
     default JELLYFRAME_ESP32S3_RUN_BENCHMARK

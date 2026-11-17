@@ -7,6 +7,11 @@
 #include "app_runtime/script_task_canonical_codec.h"
 #include "app_runtime/script_task_frame_renderer.h"
 #include "app_runtime/tests/runtime_font_test_fixture.h"
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
+#include "runtime_shaped_text_test_fixture.h"
+#include "render_core/html_parser.h"
+#include "render_core/css_parser.h"
+#endif
 
 #include <iostream>
 #include <stdexcept>
@@ -1350,6 +1355,302 @@ void worker_canonical_rejects_invalid_config_and_catalog_mismatch_before_vm(std:
     }
 }
 
+#endif // scalar canonical worker cases
+
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
+
+#if JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+void worker_shaped_dom_layout_and_input() {
+    runtime_test_shaped_text::Assets assets("regular", 7401);
+    auto binding = runtime_test_shaped_text::create_binding(assets);
+    runtime_test_fonts::Fonts fonts;
+    auto supervisor = make_supervisor();
+    const auto session = supervisor.begin(740, fonts.catalog, {}, binding);
+    auto options = runtime_options_v3();
+    options.frame_codec.version = kRuntimeShapedFrameVersion;
+    options.frame_codec.max_groups = 32;
+    options.text_catalog = fonts.catalog;
+    options.shaped_text_binding = binding;
+    const std::string html = "<body><div id='first'>A A A</div><section><div id='second'>A A</div></section></body>";
+    const std::string css = "*{margin:0;padding:0;font-weight:400}body{background:#ffffff}"
+        "div{display:block;width:18px;font-size:16px;line-height:18px}"
+        "#first{background:#ffeeaa;color:#224488;text-align:center}"
+        "#second{background:#aaffee;text-align:end}";
+    ScriptTaskAcceptedAppFrame initial, changed, clicked;
+    ScriptTaskFrameRendererOptions render_options;
+    render_options.text_catalog = fonts.catalog;
+    render_options.shaped_text_binding = binding;
+    ScriptTaskFrameRenderer renderer(render_options);
+    auto render_checked = [&](const ScriptTaskAcceptedAppFrame& accepted) {
+        ScriptTaskFrameRenderStatus status;
+        auto image = renderer.render(accepted.frame(), {255,255,255,255}, &status);
+        check(status == ScriptTaskFrameRenderStatus::Accepted, "shaped worker frame renders with exact owner");
+        return image;
+    };
+    auto take = [&](ScriptTaskAcceptedAppFrame& accepted) {
+        check(take_script_task_app_frame(supervisor, session, options.frame_codec, accepted) ==
+              ScriptTaskAppFrameTakeStatus::Accepted, "UI accepts real shaped DOM frame");
+        check(accepted.shaped_text_binding() == binding && accepted.frame().shaped_text.size() > 0,
+              "shaped frame retains exact session binding and final-line records");
+        for (const auto& command : accepted.frame().display_list)
+            check(!detail::is_prepared_command_type(worker_test_access::worker_command_type(command)) &&
+                  !detail::has_prepared_text_packet(command),
+                  "no scalar JFTP text is mixed into shaped layout");
+    };
+    ScriptTaskWorkerRuntime worker(session, options);
+    const auto init_result = worker.initialize(supervisor, html, css);
+    if (init_result != ScriptTaskWorkerRuntimeInitStatus::Accepted)
+        std::cerr << "shaped worker init=" << int(init_result) << " fatal=" << int(worker.fatal_record().reason) << '\n';
+    check(init_result == ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "ordinary multi-paragraph DOM initializes selected shaped worker");
+    check(worker.publish_frame(supervisor).accepted(), "real v11 worker publishes shaped DOM");
+    take(initial);
+    check(initial.frame().shaped_text.size() == 5, "multiple paragraphs produce five final lines");
+    const auto initial_pixels = render_checked(initial);
+    const auto first_packet = initial.frame().shaped_text[0].packet;
+    // Independently feed the same DOM/CSS to Core, then compare final packets,
+    // alignment and insertion points against the worker's transported records.
+    auto dom = HtmlParser{}.parse(html);
+    StyleResolver styles(CssParser{}.parse(css));
+    auto render = RenderTreeBuilder(styles).build(*dom);
+    LayoutEngine engine(styles);
+    runtime_shaped::LayoutResult layout;
+    std::uint64_t work = binding->work_limit();
+    check(binding->layout_document(engine,*render,160,100,options.shaped_layout,work,layout) ==
+              runtime_shaped::Status::ok, "independent Core document producer accepts same source");
+    runtime_shaped::LayerCapture capture;
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+    check(LayerTreeBuilder{}.build_contextual(layout,capture), "independent Core layer mapping");
+    const auto* capture_layer = capture.layer_tree();
+    const auto& capture_positions = capture.after_command_counts();
+#else
+    check(LayerTreeBuilder{}.build_shaped(layout,capture), "independent Core layer mapping");
+    const auto* capture_layer = capture.layer_tree.get();
+    const auto& capture_positions = capture.after_command_counts;
+#endif
+    std::size_t record = 0;
+    for (std::size_t p = 0; p < layout.paragraphs().size(); ++p) {
+        const auto& paragraph = layout.paragraphs()[p];
+        for (const auto& line : paragraph.paragraph.lines()) {
+            const auto& value = initial.frame().shaped_text[record++];
+            const auto spare = std::int64_t(paragraph.content_width_q1000) - line.metrics.advance_x;
+            const auto shift = paragraph.align == TextAlign::Center ?
+                #if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+                spare / 2 : spare;
+#else
+                (spare >= 0 ? spare/2 : -((-spare+1)/2)) : spare;
+#endif
+            check(value.packet == line.packet && value.after_command_count == capture_positions[p] &&
+                  value.baseline_y_q1000 == paragraph.origin_y_q1000+line.baseline_y_q1000 &&
+                  value.baseline_x_q1000 == paragraph.origin_x_q1000+shift,
+                  "worker preserves exact Core final packets, per-line alignment and paint order");
+        }
+    }
+    // Reference pixels come directly from Core's captured backgrounds and
+    // final-line painter, independently of the Runtime codec and renderer.
+    FrameBuffer reference(160,100,{255,255,255,255});
+    SoftwareRasterizer rasterizer;
+    record = 0;
+    work = binding->work_limit();
+    for (std::size_t command = 0; command <= capture_layer->display_list.size(); ++command) {
+        while (record < initial.frame().shaped_text.size() &&
+               initial.frame().shaped_text[record].after_command_count == command) {
+            const auto& value = initial.frame().shaped_text[record++];
+            check(runtime_shaped::paint(binding->core_binding(),value.packet,reference,
+                value.baseline_x_q1000,value.baseline_y_q1000,value.clip,value.color,{},work) ==
+                runtime_shaped::Status::ok, "independent Core final-line paint");
+        }
+        if (command < capture_layer->display_list.size())
+            rasterizer.rasterize(capture_layer->display_list[command],reference,{0,0,160,100});
+    }
+    bool saw_text_ink = false;
+    for (std::size_t i=0;i<reference.pixels.size();++i) {
+        const auto a=reference.pixels[i], b=initial_pixels.pixels[i];
+        check(a.r==b.r && a.g==b.g && a.b==b.b && a.a==b.a,
+              "worker transport pixels equal direct Core paint in insertion order");
+        saw_text_ink = saw_text_ink || (b.r < 100 && b.g < 150 && b.b < 200);
+    }
+    check(saw_text_ink, "real worker frame paints visible glyph ink");
+    check(!worker.eval("1+1").ok && !worker.fatal(), "v11 JS requires validated supervisor");
+    check(worker.eval_with_supervisor(supervisor,
+        "var first=document.getElementById('first');first.textContent='A A';"
+        "first.style.width='40px';first.addEventListener('click',function(){first.textContent='A';});").ok &&
+          !worker.fatal(), "JS text and width mutation rebuild shaped geometry");
+    check(worker.publish_frame(supervisor).accepted(), "mutated shaped frame publishes");
+    take(changed);
+    check(changed.frame().shaped_text.size() == 3 && initial.frame().shaped_text.size() == 5 &&
+          initial.frame().shaped_text[0].packet == first_packet,
+          "new wrapping updates all block heights without mutating old accepted frame");
+    render_checked(changed);
+    for (auto kind : {ScriptTaskInputKind::PointerDown, ScriptTaskInputKind::PointerUp}) {
+        const auto seq = kind == ScriptTaskInputKind::PointerDown ? 1 : 2;
+        check(post_script_task_input(supervisor,session,seq,
+            {kind,2,2,0,0,0,kind == ScriptTaskInputKind::PointerDown ? 1 : 0,0,0,{}},
+            options.input_codec).accepted(), "shaped DOM input posts");
+        const auto step = worker.process_one(supervisor);
+        check(step.input_accepted && !step.fatal, "shaped DOM uses ordinary hit testing and input dispatch");
+        if (kind == ScriptTaskInputKind::PointerUp)
+            check(step.frame_published, "generic block click publishes shaped mutation");
+    }
+    take(clicked);
+    check(clicked.frame().shaped_text[0].packet != changed.frame().shaped_text[0].packet,
+          "click changes authoritative shaped packet");
+    render_checked(clicked);
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+    check(worker.eval_with_supervisor(supervisor,
+        "first.style.width='140px';first.textContent='office AV \u4e2d e\u0301';").ok && !worker.fatal(),
+        "contextual mixed Latin/CJK and combining-source mutation");
+    check(worker.publish_frame(supervisor).accepted(), "mixed contextual source publishes");
+    ScriptTaskAcceptedAppFrame contextual;
+    take(contextual);
+    work = binding->work_limit();
+    std::string expected_packet;
+    runtime_shaped::Metrics mixed_metrics;
+    check(binding->prepare(16000, u8"office AV \u4e2d e\u0301", work, expected_packet, mixed_metrics) ==
+              runtime_shaped::Status::ok && contextual.frame().shaped_text.front().packet == expected_packet,
+          "DOM transport preserves complete contextual shaping output for mixed source");
+    check(mixed_metrics.glyph_count < 15 && mixed_metrics.has_ink,
+          "ligature and normalization output remains authoritative");
+    render_checked(contextual);
+#endif
+    worker.stop();
+    check(supervisor.begin_teardown(session).session == session &&
+          supervisor.complete_teardown(session).session == session, "shaped session tears down");
+    binding.reset(); assets.clear_source_buffers();
+    const auto retained = render_checked(initial);
+    check(retained.pixels.size() == initial_pixels.pixels.size(), "retained framebuffer shape");
+    for (std::size_t i=0;i<retained.pixels.size();++i) {
+        const auto a=retained.pixels[i], b=initial_pixels.pixels[i];
+        check(a.r==b.r && a.g==b.g && a.b==b.b && a.a==b.a,
+              "accepted shaped pixels survive mutation, worker/session and package buffer release");
+    }
+}
+
+void worker_shaped_dom_refuses_incomplete_paths() {
+    runtime_test_shaped_text::Assets assets("regular", 7402);
+    const auto binding = runtime_test_shaped_text::create_binding(assets);
+    runtime_test_shaped_text::Assets other_assets("medium", 7402);
+    const auto other = runtime_test_shaped_text::create_binding(other_assets);
+    runtime_test_fonts::Fonts fonts;
+    auto make_options = [&] {
+        auto options = runtime_options_v3(); options.frame_codec.version=kRuntimeShapedFrameVersion;
+        options.frame_codec.max_groups=32; options.text_catalog=fonts.catalog;
+        options.shaped_text_binding=binding; return options;
+    };
+    for (int mode=0;mode<7;++mode) {
+        auto supervisor=make_supervisor();
+        const auto session=supervisor.begin(750+mode,fonts.catalog,{},binding);
+        auto options=make_options();
+        std::string html="<body><div>A A</div></body>";
+        std::string css="*{margin:0;padding:0;font-weight:400}div{display:block;font-size:16px}";
+        if(mode==0) options.shaped_text_binding.reset();
+        if(mode==1) options.shaped_text_binding=other;
+        if(mode==2) css+="div{letter-spacing:1px}";
+        if(mode==3) html="<body><div>A<span>A</span>A</div></body>";
+        if(mode==4) options.shaped_layout.max_source_bytes=1;
+        if(mode==5) options.shaped_layout.paragraph.shaping.work=1;
+        ScriptTaskWorkerRuntime worker(session,options);
+        const auto result=mode==6 ? worker.initialize(html,css) : worker.initialize(supervisor,html,css);
+        check(result != ScriptTaskWorkerRuntimeInitStatus::Accepted && !worker.initialized(),
+              "v11 refuses missing/wrong owner, unsupported style/topology, budget and unvalidated init");
+        check(!worker.publish_frame(supervisor).accepted(), "refused shaping never falls back to scalar frame");
+    }
+    auto supervisor=make_supervisor();
+    const auto session=supervisor.begin(759,fonts.catalog,{},binding);
+    auto options=make_options();
+    ScriptTaskWorkerRuntime worker(session,options);
+    check(worker.initialize(supervisor,"<body><div id='x'>A</div></body>",
+        "*{margin:0;padding:0;font-weight:400}div{display:block;font-size:16px}") ==
+        ScriptTaskWorkerRuntimeInitStatus::Accepted, "supported shaped document before mutation");
+    worker.eval_with_supervisor(supervisor,"document.getElementById('x').setAttribute('style','letter-spacing:1px');");
+    check(worker.fatal() && !worker.publish_frame(supervisor).accepted(),
+          "unsupported mutation fails closed instead of publishing old/scalar geometry");
+}
+#endif
+
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+void shaped_binding_owner_survives_worker_and_session_teardown() {
+    using runtime_test_shaped_text::Assets;
+    Assets regular("regular", 7301);
+    Assets medium("medium", 7301);
+    auto regular_binding = runtime_test_shaped_text::create_binding(regular);
+    auto medium_binding = runtime_test_shaped_text::create_binding(medium);
+    check(regular_binding->core_binding().resource_id() == medium_binding->core_binding().resource_id() &&
+          regular_binding->core_binding().content_identity() != medium_binding->core_binding().content_identity(),
+          "same resource ID with different verified content creates distinct Core bindings");
+
+    auto mismatched_manifest = regular.manifest;
+    mismatched_manifest.catalog_identity[0] ^= 0x80;
+    RuntimeShapedTextBinding::Handle preserved = medium_binding;
+    check(RuntimeShapedTextBinding::create(mismatched_manifest, preserved) ==
+              RuntimeShapedTextStatus::CoreRejected && preserved == medium_binding,
+          "digest mismatch refuses transactionally without replacing an existing binding");
+
+    regular.clear_source_buffers();
+    medium.clear_source_buffers();
+    std::uint64_t work = 1024U * 1024U;
+    std::string packet;
+    runtime_shaped::Metrics metrics;
+    check(regular_binding->prepare(16000, "A", work, packet, metrics) == runtime_shaped::Status::ok &&
+          metrics.glyph_count == 1 && regular_binding->validate_packet(packet, work) == runtime_shaped::Status::ok,
+          "Core binding retains validated asset bytes after package buffers are released");
+
+    auto supervisor = make_supervisor();
+    runtime_test_fonts::Fonts fonts;
+    const auto session = supervisor.begin(739, fonts.catalog, {}, regular_binding);
+    check(session.valid() && supervisor.shaped_text_binding(session) == regular_binding,
+          "supervisor publishes exact immutable shaped binding");
+
+    auto mismatch_options = runtime_options_v3();
+    mismatch_options.frame_codec.version = 9;
+    mismatch_options.text_catalog = fonts.catalog;
+    mismatch_options.shaped_text_binding = medium_binding;
+    ScriptTaskWorkerRuntime mismatch(session, mismatch_options);
+    check(mismatch.initialize(supervisor, "<body></body>", "") ==
+              ScriptTaskWorkerRuntimeInitStatus::ResourceMismatch && !mismatch.initialized(),
+          "worker rejects a different shaped binding before initialization");
+
+    auto options = runtime_options_v3();
+    options.frame_codec.version = 9;
+    options.frame_codec.max_groups = 32;
+    options.text_catalog = fonts.catalog;
+    options.shaped_text_binding = regular_binding;
+    ScriptTaskAcceptedAppFrame accepted;
+    {
+        ScriptTaskWorkerRuntime worker(session, options);
+        check(worker.initialize(supervisor, "<body><div>A</div></body>",
+              "body{margin:0} div{display:block;font-family:sans-serif;font-size:16px}") ==
+              ScriptTaskWorkerRuntimeInitStatus::Accepted,
+              "worker accepts the exact session shaped binding");
+        check(worker.publish_frame(supervisor).accepted(), "bound worker publishes a frame");
+        check(take_script_task_app_frame(supervisor, session, options.frame_codec, accepted) ==
+                  ScriptTaskAppFrameTakeStatus::Accepted &&
+              accepted.shaped_text_binding() == regular_binding,
+              "accepted frame captures the session shaped binding");
+        worker.stop();
+    }
+
+    check(supervisor.begin_teardown(session).session == session,
+          "session begins teardown after worker stops");
+    check(!supervisor.shaped_text_binding(session),
+          "supervisor releases its shaped binding during teardown");
+    check(supervisor.complete_teardown(session).session == session,
+          "session completes teardown while UI frame retains its binding");
+    regular_binding.reset();
+    medium_binding.reset();
+    check(accepted.valid() && accepted.shaped_text_binding() &&
+          accepted.shaped_text_binding()->core_binding().resource_id() == 7301,
+          "accepted frame pins the binding after worker and session teardown");
+    work = 1024U * 1024U;
+    packet.clear();
+    check(accepted.shaped_text_binding()->prepare(16000, "A", work, packet, metrics) ==
+              runtime_shaped::Status::ok,
+          "retained accepted-frame binding remains usable after teardown");
+}
+#endif
+#endif
+
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
 void worker_canonical_uses_catalog_for_layout_and_publishes_group_frame(std::uint8_t version) {
     ScriptTaskSupervisor supervisor = make_supervisor();
     const runtime_test_fonts::Fonts fonts;
@@ -1792,6 +2093,22 @@ int script_task_worker_runtime_tests_main() {
             worker_generated_inline_text(version);
 #endif
         }
+#endif // scalar canonical worker cases
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+        if (script_task_app_frame_codec_supports_version(9))
+            shaped_binding_owner_survives_worker_and_session_teardown();
+#endif
+#if JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+        if (script_task_app_frame_codec_supports_version(kRuntimeShapedFrameVersion)) {
+            worker_shaped_dom_layout_and_input();
+            worker_shaped_dom_refuses_incomplete_paths();
+            std::cout << "shaped DOM worker v" << unsigned(kRuntimeShapedFrameVersion)
+                      << ": Core packet/pixel oracle, JS mutation, pointer input and retained lifetime passed\n";
+        }
+#endif
+#endif
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
 #if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
         worker_natural_image_cases();
 #if defined(JELLYFRAME_TEST_NATURAL_INLINE_IMAGES) && JELLYFRAME_TEST_NATURAL_INLINE_IMAGES

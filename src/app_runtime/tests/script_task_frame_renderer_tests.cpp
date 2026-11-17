@@ -2,6 +2,9 @@
 #include "app_runtime/script_task_frame_renderer.h"
 #include "app_runtime/script_task_sampling.h"
 #include "app_runtime/script_task_frame_groups.h"
+#include "app_runtime/script_task_canonical_codec.h"
+#include "runtime_shaped_text_test_fixture.h"
+#include "runtime_font_test_fixture.h"
 
 #include <cassert>
 #include <cstdint>
@@ -10,6 +13,361 @@
 using namespace jellyframe;
 
 namespace {
+
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
+void abi4_v11_shaped_text_codec_renderer_and_retained_replay() {
+    using namespace runtime_test_shaped_text;
+    const auto same_color = [](Color a, Color b) {
+        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+    };
+    const auto same_pixels = [&](const FrameBuffer& a, const FrameBuffer& b) {
+        return a.width == b.width && a.height == b.height && a.pixels.size() == b.pixels.size() &&
+            std::equal(a.pixels.begin(), a.pixels.end(), b.pixels.begin(), same_color);
+    };
+    Assets assets("regular", 0x1122334455667788ULL);
+    auto binding = create_binding(assets);
+    std::uint64_t work = 1024U * 1024U;
+    std::string packet;
+    runtime_shaped::Metrics metrics;
+    assert(binding->prepare(16000, "A", work, packet, metrics) == runtime_shaped::Status::ok);
+    assert(packet.size() >= 4 && packet.compare(0, 4, "JFSP") == 0);
+
+    ScriptTaskAppFrame frame;
+    frame.viewport = {0, 0, 48, 32};
+    DisplayCommand background; detail::set_command_type(background, DisplayCommandType::FillRect);
+    background.rect = frame.viewport;
+    background.color = {245, 245, 245, 255};
+    frame.display_list.push_back(background);
+    ScriptTaskFrameGroup root;
+    root.type = LayerType::Root; root.bounds = frame.viewport;
+    root.command_begin = 0; root.command_count = 1;
+    frame.groups.push_back(root);
+    assert(append_script_task_shaped_text(frame, 1, 3 * 1000, 22 * 1000,
+        {2, 8, 20, 18}, {2, 8, 9, 18}, {15, 35, 55, 255}, packet) ==
+        ScriptTaskAppFrameCodecStatus::Accepted);
+
+    ScriptTaskAppFrameCodecOptions codec;
+    codec.version = kRuntimeShapedFrameVersion; codec.max_commands = 4; codec.max_text_bytes = 4096;
+    codec.max_input_targets = 4; codec.max_payload_bytes = 16384; codec.max_clips = 4;
+    codec.max_groups = 4; codec.max_group_depth = 4;
+    assert(script_task_app_frame_codec_supports_version(kRuntimeShapedFrameVersion) ==
+           detail::canonical::selected_version(kRuntimeShapedFrameVersion));
+    std::vector<std::uint8_t> wire;
+    assert(encode_script_task_app_frame(frame, codec, wire) == ScriptTaskAppFrameCodecStatus::Accepted);
+    assert(wire[4] == kRuntimeShapedFrameVersion);
+    ScriptTaskAppFrame decoded;
+    assert(decode_script_task_app_frame(wire, codec, decoded) == ScriptTaskAppFrameCodecStatus::Accepted);
+    assert(decoded.shaped_text.size() == 1 && decoded.shaped_text[0].packet == packet);
+
+    runtime_test_fonts::Fonts fonts;
+    ScriptTaskSupervisorOptions supervisor_options;
+    supervisor_options.frame_mailbox = {2, 256};
+    supervisor_options.frame_leases = {2, 16384, 32768};
+    ScriptTaskSupervisor supervisor(supervisor_options);
+    const auto session = supervisor.begin(801, fonts.catalog, {}, binding);
+    assert(session.valid());
+    assert(supervisor.publish_frame(session, wire).accepted());
+    ScriptTaskAcceptedAppFrame accepted;
+    assert(take_script_task_app_frame(supervisor, session, codec, accepted) == ScriptTaskAppFrameTakeStatus::Accepted);
+    assert(accepted.valid() && accepted.shaped_text_binding() == binding);
+
+    ScriptTaskFrameRendererOptions renderer_options;
+    renderer_options.shaped_text_binding = create_binding(Assets("regular", 0x0102030405060708ULL));
+    ScriptTaskFrameRenderer renderer(renderer_options);
+    const Color clear{245, 245, 245, 255};
+    FrameBuffer image(48, 32, clear);
+    assert(renderer.render_into(accepted, image, clear));
+    for (int y = 0; y < image.height; ++y)
+        for (int x = 11; x < image.width; ++x) assert(same_color(image.pixel(x, y), clear));
+
+    ScriptTaskAppFrame changed = decoded;
+    changed.shaped_text[0].color = {160, 20, 35, 255};
+    const auto diff = diff_script_task_app_frames(decoded, changed);
+    assert(diff.changed_command_count == 1 && diff.has_changed_command_bounds);
+    assert(diff.changed_command_bounds.x == 2 && diff.changed_command_bounds.width == 9);
+
+    ScriptTaskFrameRendererOptions retained_options;
+    retained_options.shaped_text_binding = binding;
+    ScriptTaskFrameRenderer retained_renderer(retained_options);
+    ScriptTaskFrameRetainedReplay replay({true, 48 * 32, 48 * 32});
+    assert(replay.observe_presented(decoded, image, clear, 7));
+    FrameBuffer retained;
+    ScriptTaskFrameRetainedReplayStatus replay_status;
+    assert(replay.render_into(retained_renderer, changed, retained, clear, 7, &replay_status));
+    assert(replay_status == ScriptTaskFrameRetainedReplayStatus::Replayed);
+    FrameBuffer canonical(48, 32, clear);
+    assert(retained_renderer.render_into(changed, canonical, clear));
+    assert(same_pixels(retained, canonical));
+
+    Assets wrong_assets("regular", 0x8877665544332211ULL);
+    auto wrong_owner = create_binding(wrong_assets);
+    renderer_options.shaped_text_binding = wrong_owner;
+    ScriptTaskFrameRenderer wrong_renderer(renderer_options);
+    FrameBuffer sentinel(48, 32, {1, 2, 3, 255});
+    const auto before = sentinel;
+    assert(!wrong_renderer.render_into(decoded, sentinel, clear));
+    assert(same_pixels(sentinel, before));
+
+    ScriptTaskSupervisor wrong_supervisor(supervisor_options);
+    const auto wrong_session = wrong_supervisor.begin(802, fonts.catalog, {}, wrong_owner);
+    assert(wrong_session.valid() && wrong_supervisor.publish_frame(wrong_session, wire).accepted());
+    ScriptTaskAcceptedAppFrame refused;
+    assert(take_script_task_app_frame(wrong_supervisor, wrong_session, codec, refused) ==
+           ScriptTaskAppFrameTakeStatus::TextCatalogRejected);
+
+    auto rejected = decoded;
+    rejected.shaped_text[0].packet.assign("JFTP1", 5);
+    std::vector<std::uint8_t> unchanged{0x5a};
+    assert(encode_script_task_app_frame(rejected, codec, unchanged) != ScriptTaskAppFrameCodecStatus::Accepted);
+    assert(unchanged == std::vector<std::uint8_t>{0x5a});
+    auto wrong_packet_version = decoded;
+    wrong_packet_version.shaped_text[0].packet[4] = 1;
+    assert(encode_script_task_app_frame(wrong_packet_version, codec, unchanged) ==
+           ScriptTaskAppFrameCodecStatus::InvalidValue);
+    auto wrong_frame_version = wire;
+    wrong_frame_version[4] = kRuntimeShapedFrameVersion == 12 ? 11 : 12;
+    ScriptTaskAppFrame preserved;
+    preserved.viewport = {7,8,9,10};
+    assert(decode_script_task_app_frame(wrong_frame_version, codec, preserved) ==
+           ScriptTaskAppFrameCodecStatus::UnsupportedVersion);
+    assert(preserved.viewport.x == 7 && preserved.viewport.height == 10);
+    for (std::size_t size = 0; size < wire.size(); ++size) {
+        const std::vector<std::uint8_t> truncated(wire.begin(), wire.begin()+size);
+        assert(decode_script_task_app_frame(truncated, codec, preserved) !=
+               ScriptTaskAppFrameCodecStatus::Accepted);
+        assert(preserved.viewport.x == 7 && preserved.viewport.height == 10);
+    }
+    auto invalid_background = decoded;
+    invalid_background.display_list[0].rect.width = -1;
+    assert(!retained_renderer.render_into(invalid_background, sentinel, clear));
+    assert(same_pixels(sentinel, before));
+    auto legacy_codec = codec;
+    legacy_codec.version = 10;
+    assert(encode_script_task_app_frame(decoded, legacy_codec, unchanged) ==
+           (JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API ? ScriptTaskAppFrameCodecStatus::UnsupportedVersion :
+            ScriptTaskAppFrameCodecStatus::UnsupportedTextFeature));
+    auto packet_limited = codec;
+    packet_limited.max_text_bytes = decoded.shaped_text[0].packet.size() - 1;
+    assert(encode_script_task_app_frame(decoded, packet_limited, unchanged) ==
+           ScriptTaskAppFrameCodecStatus::TooManyTextBytes);
+    assert(unchanged == std::vector<std::uint8_t>{0x5a});
+}
+#if JELLYFRAME_RUNTIME_SHAPED_PARAGRAPH_API
+void abi4_v11_multiline_capture_damage_and_refusal() {
+    using Status = ScriptTaskAppFrameCodecStatus;
+    const auto same_pixels = [](const FrameBuffer& a, const FrameBuffer& b) {
+        return a.width == b.width && a.height == b.height && a.pixels.size() == b.pixels.size() &&
+            std::equal(a.pixels.begin(), a.pixels.end(), b.pixels.begin(), [](Color x, Color y) {
+                return x.r == y.r && x.g == y.g && x.b == y.b && x.a == y.a;
+            });
+    };
+    const Color clear{245,245,245,255}, ink{30,60,90,190};
+    const Rect viewport{0,0,64,96};
+    constexpr auto budget = 32U * 1024U * 1024U;
+    auto owner = runtime_test_shaped_text::create_binding(
+        runtime_test_shaped_text::Assets("regular", 0x1122334455667788ULL));
+    auto work = std::uint64_t(budget);
+    runtime_shaped::Metrics single;
+    std::string packet;
+    assert(owner->prepare(16500, "A", work, packet, single) == runtime_shaped::Status::ok);
+    runtime_shaped::ParagraphOptions paragraph_options;
+    paragraph_options.size_q1000 = 16500;
+    paragraph_options.width_q1000 = single.advance_x;
+    paragraph_options.line_height_q1000 = 23001;
+    runtime_shaped::Paragraph paragraph;
+    work = budget;
+    assert(owner->layout_paragraph("A A A", paragraph_options, {}, work, paragraph) == runtime_shaped::Status::ok);
+    assert(paragraph.lines().size() == 3);
+    ScriptTaskAppFrame base;
+    base.viewport = viewport;
+    DisplayCommand background; detail::set_command_type(background, DisplayCommandType::FillRect);
+    background.rect = viewport; background.color = clear;
+    base.display_list.push_back(background);
+    ScriptTaskFrameGroup root;
+    root.type = LayerType::Root; root.bounds = viewport; root.command_count = 1;
+    base.groups.push_back(root);
+    ScriptTaskAppFrameCodecOptions limits;
+    limits.version = kRuntimeShapedFrameVersion; limits.max_commands = 4; limits.max_text_bytes = 16384;
+    limits.max_payload_bytes = 32768; limits.max_groups = 1;
+    auto frame = base;
+    assert(append_script_task_shaped_paragraph(frame, 1, paragraph, 3250, 2125,
+        viewport, ink, limits) == Status::Accepted);
+    assert(frame.shaped_text.size() == 3);
+    assert(frame.shaped_text.back().baseline_y_q1000 == 2125 + paragraph.lines().back().baseline_y_q1000);
+    std::vector<std::uint8_t> wire;
+    assert(encode_script_task_app_frame(frame, limits, wire) == Status::Accepted);
+    ScriptTaskAppFrame decoded;
+    assert(decode_script_task_app_frame(wire, limits, decoded) == Status::Accepted);
+    assert(decoded.shaped_text.size() == 3 && decoded.shaped_text.back().packet == paragraph.lines().back().packet);
+    ScriptTaskFrameRendererOptions renderer_options;
+    renderer_options.shaped_text_binding = owner;
+    ScriptTaskFrameRenderer renderer(renderer_options);
+    FrameBuffer image(64,96,clear), reference(64,96,clear);
+    assert(renderer.render_into(decoded, image, clear));
+    // Independent full-clip paint detects a too-small projected ink rectangle.
+    for (const auto& line : paragraph.lines()) {
+        work = budget;
+        assert(runtime_shaped::paint(paragraph.binding(), line.packet, reference, 3250,
+            2125 + line.baseline_y_q1000, viewport, ink, {}, work) == runtime_shaped::Status::ok);
+    }
+    assert(same_pixels(image, reference));
+
+    runtime_test_fonts::Fonts fonts;
+    ScriptTaskSupervisorOptions supervisor_options;
+    supervisor_options.frame_mailbox = {2,256};
+    supervisor_options.frame_leases = {2,32768,65536};
+    ScriptTaskSupervisor supervisor(supervisor_options);
+    const auto session = supervisor.begin(803, fonts.catalog, {}, owner);
+    assert(session.valid() && supervisor.publish_frame(session, wire).accepted());
+    ScriptTaskAcceptedAppFrame accepted;
+    assert(take_script_task_app_frame(supervisor, session, limits, accepted) == ScriptTaskAppFrameTakeStatus::Accepted);
+    assert(accepted.valid() && accepted.frame().shaped_text.size() == 3 && accepted.shaped_text_binding() == owner);
+    supervisor.begin_teardown(session);
+    FrameBuffer accepted_image(64,96,clear);
+    assert(renderer.render_into(accepted, accepted_image, clear) && same_pixels(accepted_image, image));
+
+    // Owner limits below the default are respected without initializing an
+    // oversized ledger that Core would reject before reading any packet.
+    runtime_test_shaped_text::Assets smaller_assets("regular", 0x1122334455667788ULL);
+    RuntimeShapedTextBinding::Handle smaller_owner;
+    RuntimeShapedTextLimits smaller_limits; smaller_limits.core.work = budget / 2;
+    assert(RuntimeShapedTextBinding::create(smaller_assets.manifest, smaller_owner, smaller_limits) ==
+        RuntimeShapedTextStatus::Ready);
+    assert(smaller_owner->work_limit() == budget / 2);
+    ScriptTaskSupervisor smaller_supervisor(supervisor_options);
+    const auto smaller_session = smaller_supervisor.begin(804, fonts.catalog, {}, smaller_owner);
+    assert(smaller_session.valid() && smaller_supervisor.publish_frame(smaller_session, wire).accepted());
+    ScriptTaskAcceptedAppFrame smaller_accepted;
+    assert(take_script_task_app_frame(smaller_supervisor, smaller_session, limits, smaller_accepted) ==
+        ScriptTaskAppFrameTakeStatus::Accepted);
+    assert(renderer.render_into(smaller_accepted, accepted_image, clear) && same_pixels(accepted_image, image));
+
+    auto changed = decoded;
+    changed.shaped_text[2].color = {180,25,10,200};
+    const auto diff = diff_script_task_app_frames(decoded, changed);
+    assert(diff.paint_structure_equal && diff.changed_command_count == 1 && diff.has_changed_command_bounds);
+    assert(diff.changed_command_bounds.y == changed.shaped_text[2].bounds.y);
+    const auto damage = plan_script_task_group_damage(renderer, decoded, changed);
+    assert(damage.kind == ScriptTaskFrameDamageKind::Partial && damage.rect.y == diff.changed_command_bounds.y);
+    assert(plan_script_task_group_damage(renderer, decoded, decoded).kind == ScriptTaskFrameDamageKind::Unchanged);
+    auto partial = image;
+    assert(renderer.render_into(changed, partial, clear, &damage.rect, 1));
+    FrameBuffer full(64,96,clear);
+    assert(renderer.render_into(changed, full, clear) && same_pixels(partial, full));
+    ScriptTaskFrameRetainedReplay replay({true,64*96,64*96});
+    assert(replay.observe_presented(decoded, image, clear, 11));
+    FrameBuffer retained;
+    ScriptTaskFrameRetainedReplayStatus replay_status;
+    assert(replay.render_into(renderer, changed, retained, clear, 11, &replay_status));
+    assert(replay_status == ScriptTaskFrameRetainedReplayStatus::Replayed && same_pixels(retained, full));
+
+    // Records at the same insertion point retain their order even when ink overlaps.
+    auto overlap = decoded;
+    for (auto& item : overlap.shaped_text) {
+        item.baseline_y_q1000 = decoded.shaped_text[0].baseline_y_q1000;
+        item.bounds = decoded.shaped_text[0].bounds;
+    }
+    overlap.shaped_text[1].color = {200,15,20,120};
+    FrameBuffer ordered(64,96,clear), ordered_reference(64,96,clear);
+    assert(renderer.render_into(overlap, ordered, clear));
+    for (const auto& item : overlap.shaped_text) {
+        work = budget;
+        assert(runtime_shaped::paint(owner->core_binding(), item.packet, ordered_reference,
+            item.baseline_x_q1000, item.baseline_y_q1000, viewport, item.color, {}, work) == runtime_shaped::Status::ok);
+    }
+    assert(same_pixels(ordered, ordered_reference));
+
+    auto interleaved = overlap;
+    DisplayCommand overlay; detail::set_command_type(overlay, DisplayCommandType::FillRect);
+    overlay.rect = viewport; overlay.color = {20,180,40,80};
+    interleaved.display_list.push_back(overlay);
+    interleaved.groups[0].command_count = 2;
+    interleaved.shaped_text.back().after_command_count = 2;
+    FrameBuffer interleaved_image(64,96,clear), interleaved_reference(64,96,clear);
+    assert(renderer.render_into(interleaved, interleaved_image, clear));
+    for (std::size_t i = 0; i < interleaved.shaped_text.size(); ++i) {
+        if (i == 2) SoftwareRasterizer{}.rasterize(overlay, interleaved_reference, viewport);
+        const auto& item = interleaved.shaped_text[i];
+        work = budget;
+        assert(runtime_shaped::paint(owner->core_binding(), item.packet, interleaved_reference,
+            item.baseline_x_q1000, item.baseline_y_q1000, viewport, item.color, {}, work) == runtime_shaped::Status::ok);
+    }
+    assert(same_pixels(interleaved_image, interleaved_reference));
+    auto negative = base;
+    assert(append_script_task_shaped_paragraph(negative, 1, paragraph, -1250, -375,
+        viewport, ink, limits) == Status::Accepted);
+    FrameBuffer negative_image(64,96,clear), negative_reference(64,96,clear);
+    assert(renderer.render_into(negative, negative_image, clear));
+    for (const auto& line : paragraph.lines()) {
+        work = budget;
+        assert(runtime_shaped::paint(owner->core_binding(), line.packet, negative_reference,
+            -1250, -375 + line.baseline_y_q1000, viewport, ink, {}, work) == runtime_shaped::Status::ok);
+    }
+    assert(same_pixels(negative_image, negative_reference));
+
+    // Last-record corruption and cumulative work exhaustion leave target intact.
+    auto corrupt = decoded;
+    corrupt.shaped_text.back().packet.back() ^= 1;
+    auto sentinel = image;
+    assert(!renderer.render_into(corrupt, sentinel, clear) && same_pixels(sentinel, image));
+    work = budget;
+    for (const auto& item : decoded.shaped_text)
+        assert(owner->validate_packet(item.packet, work) == runtime_shaped::Status::ok);
+    renderer_options.shaped_text_limits.core.work = budget - work + 1;
+    ScriptTaskFrameRenderer limited_renderer(renderer_options);
+    assert(!limited_renderer.render_into(decoded, sentinel, clear) && same_pixels(sentinel, image));
+    renderer_options.shaped_text_limits.core.work = (budget - work) / 3 + 1;
+    ScriptTaskFrameRenderer validation_limited_renderer(renderer_options);
+    assert(!validation_limited_renderer.render_into(decoded, sentinel, clear) && same_pixels(sentinel, image));
+
+    // Whole-frame budget includes every final packet and regular command.
+    auto refused = base;
+    auto too_small = limits; too_small.max_commands = 3;
+    assert(append_script_task_shaped_paragraph(refused, 1, paragraph, 0, 0, viewport, ink, too_small) == Status::TooManyCommands);
+    assert(refused.shaped_text.empty() && refused.display_list.size() == 1);
+    too_small = limits; too_small.max_text_bytes = packet.size();
+    assert(append_script_task_shaped_paragraph(refused, 1, paragraph, 0, 0, viewport, ink, too_small) == Status::TooManyTextBytes);
+    assert(refused.shaped_text.empty());
+    assert(append_script_task_shaped_paragraph(refused, 1, paragraph, 0, INT32_MAX, viewport, ink, limits) == Status::InvalidValue);
+    assert(refused.shaped_text.empty());
+    auto unsorted = decoded; unsorted.shaped_text[2].after_command_count = 0;
+    std::vector<std::uint8_t> unchanged{0x5a};
+    assert(encode_script_task_app_frame(unsorted, limits, unchanged) == Status::InvalidValue);
+    assert(unchanged == std::vector<std::uint8_t>{0x5a});
+    assert(append_script_task_shaped_text(decoded, 0, 0, 0, viewport, viewport, ink, packet) == Status::InvalidValue);
+    auto oversized_wire = wire;
+    detail::canonical::u32(oversized_wire, 40, kScriptTaskMaxShapedTextRecords + 1);
+    auto generous = limits; generous.max_commands = 1000;
+    assert(decode_script_task_app_frame(oversized_wire, generous, refused) == Status::TooManyCommands);
+    assert(refused.shaped_text.empty());
+    auto truncated = wire; truncated.pop_back();
+    assert(decode_script_task_app_frame(truncated, limits, refused) != Status::Accepted && refused.shaped_text.empty());
+    auto byte_limited = limits;
+    byte_limited.max_text_bytes = 0;
+    for (const auto& item : decoded.shaped_text) byte_limited.max_text_bytes += item.packet.size();
+    --byte_limited.max_text_bytes;
+    assert(encode_script_task_app_frame(decoded, byte_limited, unchanged) == Status::TooManyTextBytes);
+    assert(decode_script_task_app_frame(wire, byte_limited, refused) == Status::TooManyTextBytes);
+    assert(refused.shaped_text.empty() && unchanged == std::vector<std::uint8_t>{0x5a});
+    auto capped = base;
+    capped.shaped_text.assign(kScriptTaskMaxShapedTextRecords, decoded.shaped_text.front());
+    auto cap_limits = limits;
+    cap_limits.max_commands = kScriptTaskMaxShapedTextRecords + 1;
+    cap_limits.max_text_bytes = 1024*1024; cap_limits.max_payload_bytes = 2*1024*1024;
+    assert(encode_script_task_app_frame(capped, cap_limits, unchanged) == Status::Accepted);
+    assert(decode_script_task_app_frame(unchanged, cap_limits, refused) == Status::Accepted);
+    assert(refused.shaped_text.size() == kScriptTaskMaxShapedTextRecords);
+    assert(append_script_task_shaped_text(capped, 1, 0, 0, viewport, viewport, ink, packet) == Status::TooManyCommands);
+
+    // Removing a line invalidates the paint skeleton; damage must not be unchanged.
+    auto removed = decoded; removed.shaped_text.pop_back();
+    assert(diff_script_task_app_frames(decoded, removed).changed_command_count == 1);
+    assert(plan_script_task_group_damage(renderer, decoded, removed).kind == ScriptTaskFrameDamageKind::Full);
+    owner.reset(); paragraph = {};
+    assert(renderer.render_into(decoded, sentinel, clear) && same_pixels(sentinel, image));
+}
+#endif
+#endif
 
 ScriptTaskAppFrame composition_frame(const LayerNode& root, Rect viewport) {
     if (!script_task_app_frame_codec_supports_version(6))
@@ -1338,7 +1696,16 @@ void v6_fractional_image_painter_is_checked_before_group_publication() {
 void v6_damage_matches_full_frames_and_falls_back_at_contract_boundaries() {
 #if JELLYFRAME_SCRIPT_TASK_GROUP_API
     ImagePainter image{bounded_marker_image_painter, nullptr, true};
-    ScriptTaskFrameRenderer renderer(image);
+    TextPainter bounded_text;
+    bounded_text.writes_only_within_rect = true;
+    bounded_text.paint = [](FrameBuffer& target, Rect rect, Color color, const std::string&,
+                            int, int, TextCommandAlign, bool, void*) {
+        for (int y=rect.y; y<rect.y+rect.height; ++y)
+            for (int x=rect.x; x<rect.x+rect.width; ++x)
+                if (target.contains(x,y)) target.pixel(x,y)=color;
+        return true;
+    };
+    ScriptTaskFrameRenderer renderer(bounded_text, image);
     LayerNode root; root.type = LayerType::Root; root.bounds = {0, 0, 96, 80};
     DisplayCommand background; background.rect = root.bounds; background.color = {13, 17, 29, 255};
     root.display_list.push_back(background);
@@ -1449,7 +1816,43 @@ template<class Command> void unknown_typed_command_is_refused_before_frame_write
     }
 }
 
+void shaped_sidecars_are_never_silently_dropped() {
+    ScriptTaskAppFrame frame;
+    frame.viewport = {0,0,8,8};
+    ScriptTaskFrameGroup root;
+    root.type = LayerType::Root; root.bounds = frame.viewport;
+    frame.groups.push_back(root);
+    ScriptTaskFrameShapedText item;
+    item.bounds = item.clip = frame.viewport; item.packet = "JFSP";
+    frame.shaped_text.push_back(item);
+    ScriptTaskAppFrameCodecOptions limits;
+    limits.version = 1; limits.max_commands = 4; limits.max_text_bytes = 4096;
+    limits.max_payload_bytes = 16384; limits.max_groups = 1;
+    std::vector<std::uint8_t> bytes{0x5a};
+    assert(encode_script_task_app_frame(frame, limits, bytes) == ScriptTaskAppFrameCodecStatus::UnsupportedTextFeature);
+    assert(bytes == std::vector<std::uint8_t>{0x5a});
+    if (!JELLYFRAME_RUNTIME_SHAPED_TEXT_API) {
+        limits.version = kRuntimeShapedFrameVersion;
+        assert(!script_task_app_frame_codec_supports_version(kRuntimeShapedFrameVersion));
+        assert(encode_script_task_app_frame(frame, limits, bytes) == ScriptTaskAppFrameCodecStatus::UnsupportedVersion);
+        ScriptTaskAppFrame unchanged;
+        unchanged.viewport = {1,2,3,4};
+        assert(decode_script_task_app_frame(bytes, limits, unchanged) == ScriptTaskAppFrameCodecStatus::UnsupportedVersion);
+        assert(unchanged.viewport.x == 1 && unchanged.viewport.height == 4);
+        ScriptTaskFrameRenderer renderer;
+        FrameBuffer target(8,8,{1,2,3,255}), before = target;
+        assert(!renderer.render_into(frame, target, {}) && equal_framebuffer_pixels(target, before));
+    }
+}
+
 int script_task_frame_renderer_tests_main() {
+    shaped_sidecars_are_never_silently_dropped();
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
+    abi4_v11_shaped_text_codec_renderer_and_retained_replay();
+#if JELLYFRAME_RUNTIME_SHAPED_PARAGRAPH_API
+    abi4_v11_multiline_capture_damage_and_refusal();
+#endif
+#endif
     unknown_typed_command_is_refused_before_frame_writes<DisplayCommand>();
     v6_damage_matches_full_frames_and_falls_back_at_contract_boundaries();
     v6_groups_match_compositor_across_nested_effects_and_dirty_tiles();

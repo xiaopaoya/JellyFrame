@@ -204,7 +204,7 @@ class Ws147DeviceProviderTests(unittest.TestCase):
                 mock.patch.object(provider, "decode_capabilities", return_value={}),
                 mock.patch.object(provider, "decode_identity", return_value={}),
                 mock.patch.object(provider, "device_from_capabilities", return_value=provider.fixture_device()),
-                mock.patch.object(provider, "read_bundle_identity", return_value="org.jellyframe.fixture"),
+                mock.patch.object(provider, "read_target_package", return_value=(b"test bundle", {"appId": "org.jellyframe.fixture"})),
                 mock.patch.object(provider, "LiveInstallSession", side_effect=OSError("local temp unavailable")),
             ):
                 with self.assertRaisesRegex(OSError, "local temp unavailable"):

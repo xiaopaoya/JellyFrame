@@ -1310,6 +1310,10 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json, bool 
     if (!manifest_json_is_strict(json)) {
         throw std::runtime_error("manifest JSON is malformed, too deeply nested, or contains duplicate/escaped member names");
     }
+    std::size_t pipeline_value = 0;
+    if (json_find_direct_value(json, "textPipeline", pipeline_value)) {
+        throw std::runtime_error("this desktop loader does not support package-selected shaped textPipeline");
+    }
     AppPackageManifest manifest;
     json_find_string(json, "id", manifest.id);
     json_find_string(json, "name", manifest.name);

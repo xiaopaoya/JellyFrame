@@ -1,6 +1,6 @@
 # Developer Image Manifest V0
 
-> 最后更新：2026-09-06；适用版本：0.6.0-dev；状态：契约基线
+> 最后更新：2026-11-17；适用版本：0.6.0-dev；状态：契约基线
 
 每个可发布的第一方 Developer Image 都必须在 firmware 与 recovery
 materials 旁发布一份不可变 JSON manifest。它是 Device OS release tooling 与未来
@@ -47,6 +47,19 @@ compatibility check；两者都会拒绝 unknown field 与 duplicate JSON member
 命名的 factory image；它不是擦除或烧录设备的命令。实际 procedure 必须由版本化
 Device OS release document 提供，写明 host tool、target board、confirmation step
 和 recovery outcome。
+
+## 可选安装容量证据
+
+`buildProvenance.partitionTableSha256`、`configuredMaxBundleBytes`、
+`storagePartitionOffset` 与 `storagePartitionBytes` 必须整组提供。解析器检查
+范围、对齐，并要求 `storage.maxBundleBytes` 等于配置上限与物理槽位容量的
+较小值。物理容量扣除两个 4096 字节 registry sector，再分三个槽并向下对齐。
+发布工具核对二进制分区表 MD5/SHA、生成配置头，以及 factory image 中的
+分区表和应用原始字节。这些检查不代表固件远程证明或设备验签通过。
+历史 manifest 未提供这组可选字段时保持原有含义。
+
+JFDP identity 的 `text.shaping` 使用 bit6；对应发布包必须提供构建目录容量证据。
+未知 feature bit 拒绝；签名 `.jfsg` 安装仍由设备信任策略最终裁决。
 
 ## Provider Matching
 

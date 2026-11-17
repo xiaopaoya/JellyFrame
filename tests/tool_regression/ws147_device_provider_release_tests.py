@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import struct
 import subprocess
 import sys
 import tempfile
@@ -112,6 +113,7 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 path.relative_to(release).as_posix(): path
                 for path in release.rglob("*") if path.is_file()
             }
+            self.assertIn("provider/lib/device_install_package.py", release_files)
             self.assertNotIn("provider/jellyframe-device.config.json", release_files)
             self.assertFalse(any("__pycache__" in name or name.endswith(".pyc") for name in release_files))
 
@@ -299,7 +301,7 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             }), encoding="utf-8")
             core_features = [
                 "core.document", "core.paint", "forms.advanced", "css.flex-grid",
-                "css.modern-paint", "graphics.canvas2d",
+                "css.modern-paint", "graphics.canvas2d", "text.shaping",
             ]
             generated_profile = generated / "jellyframe_render_core_profile.json"
             generated_profile.write_text(json.dumps({
@@ -322,7 +324,23 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 f"IDF_TARGET:STRING=esp32s3\nSDKCONFIG_DEFAULTS:UNINITIALIZED={root / 'sdkconfig.defaults'};{root / 'sdkconfig.ws147_core_text.defaults'}\n",
                 encoding="utf-8")
             sdkconfig = build / "sdkconfig"
-            sdkconfig.write_text('CONFIG_IDF_TARGET="esp32s3"\n', encoding="utf-8")
+            sdkconfig.write_text('CONFIG_IDF_TARGET="esp32s3"\nCONFIG_PARTITION_TABLE_OFFSET=0x8000\n'
+                                 'CONFIG_JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB=1024\n', encoding="utf-8")
+            config_header = build / "config/sdkconfig.h"
+            config_header.parent.mkdir()
+            config_header.write_text('#define CONFIG_PARTITION_TABLE_OFFSET 0x8000\n'
+                                     '#define CONFIG_JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB 1024\n')
+            table = (struct.pack("<HBBII16sI", 0x50aa, 0, 0, 0x10000, 8 * 1024 * 1024, b"factory", 0) +
+                     struct.pack("<HBBII16sI", 0x50aa, 1, 2, 0xc10000, 3 * 1024 * 1024, b"storage", 0))
+            table += b"\xeb\xeb" + b"\xff" * 14 + hashlib.md5(table).digest() + b"\xff" * 32
+            partition = build / "partition_table" / "partition-table.bin"
+            partition.parent.mkdir()
+            partition.write_bytes(table)
+            with factory.open("r+b") as image:
+                image.seek(0x8000)
+                image.write(table)
+                image.seek(0x10000)
+                image.write(firmware.read_bytes())
             build_manifest, _ = write_build_evidence(
                 root, firmware, revision="a" * 40, image_version="0.6.2-ws147.build-dir-test",
                 core_version="0.9.0-dev", core_abi=4, families=core_features)
@@ -347,9 +365,33 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 "target": "esp32s3",
                 "buildProfile": "ws147_core_text;render-core-default",
                 "sdkconfigSha256": sha256(sdkconfig),
+                "partitionTableSha256": sha256(partition),
+                "configuredMaxBundleBytes": 1048576,
+                "storagePartitionOffset": 0xc10000, "storagePartitionBytes": 3145728,
             })
+            self.assertEqual(manifest["storage"]["maxBundleBytes"], 1044480)
             bundled_parser = release / "provider" / "lib" / "device_image_manifest.py"
             self.assertTrue(bundled_parser.is_file())
+
+            # A shaping profile cannot silently take the legacy 320 KiB path.
+            missing_capacity = subprocess.run([
+                sys.executable, str(PACKAGER), "--firmware", str(firmware),
+                "--factory-image", str(factory), *identity_args(build_manifest, generated_profile),
+                "--output", str(root / "missing-capacity"),
+            ], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            self.assertNotEqual(missing_capacity.returncode, 0)
+            self.assertIn(b"requires --build-dir capacity evidence", missing_capacity.stderr)
+            self.assertFalse((root / "missing-capacity").exists())
+
+            # The release's inspection module imports using stdlib only, from
+            # an isolated interpreter with no repository on sys.path.
+            isolated = subprocess.run([
+                sys.executable, "-I", "-c",
+                "import sys;sys.path.insert(0,sys.argv[1]);import device_install_package;"
+                "assert device_install_package.MAX_PACKAGE_BYTES == 4194304",
+                str(release / "provider" / "lib"),
+            ], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            self.assertEqual(isolated.returncode, 0, isolated.stderr.decode())
 
             mismatched_firmware = root / "mismatched-firmware.bin"
             mismatched_firmware.write_bytes(b"different firmware\n")

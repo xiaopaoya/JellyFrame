@@ -233,7 +233,8 @@ void image_identity_and_app_logs_payloads_preserve_bounded_values() {
     identity.feature_family_bits = DeviceRenderCoreFeatureDocument |
                                    DeviceRenderCoreFeaturePaint |
                                    DeviceRenderCoreFeatureAdvancedForms |
-                                   DeviceRenderCoreFeatureCanvas2d;
+                                   DeviceRenderCoreFeatureCanvas2d |
+                                   DeviceRenderCoreFeatureTextShaping;
     assert(encode_device_image_identity_payload(identity, encoded.data(), encoded.size(), encoded_size) ==
            DeviceProtocolStatus::Ok);
     DeviceImageIdentityPayload decoded_identity;

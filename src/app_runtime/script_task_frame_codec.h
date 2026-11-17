@@ -8,11 +8,14 @@
 #include <cstdint>
 #include <vector>
 #include <array>
+#include <string>
 
 namespace jellyframe {
 
 constexpr std::uint16_t kScriptTaskNoClip = 0xffffU;
 constexpr std::uint32_t kScriptTaskNoParentClip = 0xffffffffU;
+// Independent hard ceiling; sidecars also consume max_commands/max_text_bytes.
+constexpr std::size_t kScriptTaskMaxShapedTextRecords = 128;
 
 struct ScriptTaskInputTarget {
     std::uint32_t target_key = 0;
@@ -65,6 +68,20 @@ struct ScriptTaskFrameEllipse {
     std::array<int, 8> radii{};
 };
 
+// ABI4 v11 shaped text is a value sidecar; the immutable package owner stays
+// in ScriptTaskAcceptedAppFrame and is never written to the frame wire.
+// Records are ordered by nondecreasing after_command_count. Equal positions
+// paint in vector order, before the next ordinary display command.
+struct ScriptTaskFrameShapedText {
+    std::uint32_t after_command_count = 0;
+    std::int32_t baseline_x_q1000 = 0;
+    std::int32_t baseline_y_q1000 = 0;
+    Rect bounds;
+    Rect clip;
+    Color color;
+    std::string packet;
+};
+
 struct ScriptTaskAppFrame {
     // v9 image handle namespace. Zero for image-free or legacy frames.
     std::uint64_t image_provider_id = 0;
@@ -83,6 +100,7 @@ struct ScriptTaskAppFrame {
     // source command list, not a second flattened copy.
     std::vector<ScriptTaskFrameGroup> groups;
     std::vector<ScriptTaskFrameEllipse> command_ellipses;
+    std::vector<ScriptTaskFrameShapedText> shaped_text;
 };
 
 struct ScriptTaskAppFrameCodecOptions {
@@ -136,6 +154,12 @@ enum class ScriptTaskAppFrameCodecStatus {
 // v10 adds independent encoded Y radii to canonical commands, clips and groups;
 // its group record is 116 bytes. Only in-memory Y=-1 falls back to X. V9 and
 // older formats reject distinct Y axes instead of silently dropping them.
+// v11 adds ordered shaped final-line sidecars under one plain root. Sidecars
+// share command/text/payload budgets and have an independent hard count cap.
+// It requires the shaped Binding API; older/disabled paths reject sidecars.
+// v12 explicitly selects contextual ABI9/JFSP2, with a single plain Root and
+// solid rectangle backgrounds. Peers reject the other frame version; Core
+// separately validates each packet's exact owned binding identity.
 // Configure the same explicitly selected version on both peers. v5 is transport
 // support only; a painter/renderer still has to support its sampling semantics.
 bool script_task_app_frame_codec_supports_version(std::uint8_t version);
@@ -145,6 +169,28 @@ bool script_task_app_frame_codec_supports_version(std::uint8_t version);
 ScriptTaskAppFrameCodecStatus make_script_task_group_frame(
     const LayerNode& root, Rect viewport,
     const ScriptTaskAppFrameCodecOptions& limits, ScriptTaskAppFrame& output);
+
+ScriptTaskAppFrameCodecStatus append_script_task_shaped_text(
+    ScriptTaskAppFrame& frame, std::uint32_t after_command_count,
+    std::int32_t baseline_x_q1000, std::int32_t baseline_y_q1000,
+    Rect bounds, Rect clip, Color color, std::string packet);
+
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_PARAGRAPH_API
+// Transactional final-line capture. Origin is the paragraph top-left in Q1000
+// pixels; ink bounds come from the same final packets as baselines. Refusal
+// preserves the complete frame. Does not consume DOM/scalar layout packets.
+ScriptTaskAppFrameCodecStatus append_script_task_shaped_paragraph(
+    ScriptTaskAppFrame& frame, std::uint32_t after_command_count,
+    const runtime_shaped::Paragraph& paragraph, std::int32_t origin_x_q1000,
+    std::int32_t origin_y_q1000, Rect clip, Color color,
+    const ScriptTaskAppFrameCodecOptions& limits);
+#endif
+
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+ScriptTaskAppFrameCodecStatus make_script_task_shaped_frame(const LayerNode&,
+    const runtime_shaped::LayoutResult&, const std::vector<std::uint32_t>& after_command_counts,
+    Rect viewport, const ScriptTaskAppFrameCodecOptions&, ScriptTaskAppFrame& output);
+#endif
 
 ScriptTaskAppFrameCodecStatus encode_script_task_app_frame(
     const ScriptTaskAppFrame& frame,
@@ -213,11 +259,6 @@ ScriptTaskAppFrameTakeStatus take_script_task_app_frame(ScriptTaskSupervisor& su
                                                         std::uint32_t* accepted_packet_sequence = nullptr);
 
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
-#if JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API
-class AppRuntimeHost;
-// Host-task-only start, capturing the current app's effective immutable catalog.
-ScriptAppSession begin_script_task_app_session(const AppRuntimeHost&, ScriptTaskSupervisor&);
-#endif
 
 // Ownership admission only; glyph semantics/geometry remain checked by Core.
 bool script_task_frame_uses_image_provider(const ScriptTaskAppFrame&, const RuntimeImageProvider::Handle&);
@@ -232,7 +273,17 @@ public:
     std::uint32_t sequence() const noexcept { return sequence_; }
     const RuntimeFontCatalog::Handle& text_catalog() const noexcept { return catalog_; }
     const RuntimeImageProvider::Handle& image_provider() const noexcept { return images_; }
-    bool valid() const noexcept { return session_.valid() && catalog_ && !frame_.groups.empty(); }
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    const RuntimeShapedTextBinding::Handle& shaped_text_binding() const noexcept { return shaped_text_; }
+#endif
+    bool valid() const noexcept {
+        if (!session_.valid() || !catalog_ || frame_.groups.empty()) return false;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+        return frame_.shaped_text.empty() || static_cast<bool>(shaped_text_);
+#else
+        return frame_.shaped_text.empty();
+#endif
+    }
 private:
     friend ScriptTaskAppFrameTakeStatus take_script_task_app_frame(
         ScriptTaskSupervisor&, const ScriptAppSession&, const ScriptTaskAppFrameCodecOptions&,
@@ -242,6 +293,9 @@ private:
     std::uint32_t sequence_ = 0;
     RuntimeFontCatalog::Handle catalog_;
     RuntimeImageProvider::Handle images_;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    RuntimeShapedTextBinding::Handle shaped_text_;
+#endif
 };
 
 // v7/JFTP3 or independently negotiated v9/JFTP1. Captures the supervisor's

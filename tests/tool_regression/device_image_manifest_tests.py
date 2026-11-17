@@ -69,6 +69,31 @@ class DeviceImageManifestTests(unittest.TestCase):
         with self.assertRaises(contract.DeviceImageManifestError):
             contract.parse_device_image_manifest(json.dumps(value))
 
+    def test_capacity_provenance_is_complete_and_matches_physical_slots(self):
+        value = manifest()
+        value["storage"]["maxBundleBytes"] = 1044480
+        value["buildProvenance"] = {
+            "partitionTableSha256": "e" * 64, "configuredMaxBundleBytes": 1048576,
+            "storagePartitionOffset": 0xc10000, "storagePartitionBytes": 3145728,
+        }
+        parsed = contract.parse_device_image_manifest(json.dumps(value))
+        self.assertEqual(parsed["storage"]["maxBundleBytes"], 1044480)
+        for field, bad in (("configuredMaxBundleBytes", True), ("configuredMaxBundleBytes", 1048577),
+                           ("storagePartitionOffset", 0xc10001),
+                           ("storagePartitionBytes", 1048576), ("partitionTableSha256", "x")):
+            changed = json.loads(json.dumps(value))
+            changed["buildProvenance"][field] = bad
+            with self.subTest(field=field), self.assertRaises(contract.DeviceImageManifestError):
+                contract.parse_device_image_manifest(json.dumps(changed))
+        for field in value["buildProvenance"]:
+            changed = json.loads(json.dumps(value))
+            del changed["buildProvenance"][field]
+            with self.subTest(missing=field), self.assertRaises(contract.DeviceImageManifestError):
+                contract.parse_device_image_manifest(json.dumps(changed))
+        changed = device()
+        with self.assertRaises(contract.DeviceImageManifestError):
+            contract.validate_provider_device(parsed, changed)
+
     def test_rejects_duplicate_and_incomplete_manifests(self):
         with self.assertRaises(contract.DeviceImageManifestError):
             contract.parse_device_image_manifest('{"format":"a","format":"b"}')

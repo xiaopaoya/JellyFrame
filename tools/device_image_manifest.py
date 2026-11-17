@@ -86,6 +86,7 @@ def parse_device_image_manifest(data: bytes | str) -> dict[str, Any]:
         allowed_provenance = {
             "renderCoreSourceIdentity", "renderCoreSourceInputCount",
             "idfVersion", "idfRevision", "toolchain", "target", "buildProfile", "sdkconfigSha256",
+            "partitionTableSha256", "configuredMaxBundleBytes", "storagePartitionOffset", "storagePartitionBytes",
         }
         if (not isinstance(provenance, dict) or not provenance or
                 set(provenance) - allowed_provenance):
@@ -97,8 +98,21 @@ def parse_device_image_manifest(data: bytes | str) -> dict[str, Any]:
         for field in ("idfVersion", "idfRevision", "toolchain", "target", "buildProfile"):
             if field in provenance:
                 _string(provenance[field], f"buildProvenance.{field}")
-        if "sdkconfigSha256" in provenance:
-            _string(provenance["sdkconfigSha256"], "buildProvenance.sdkconfigSha256", _HEX64_RE)
+        for field in ("sdkconfigSha256", "partitionTableSha256"):
+            if field in provenance:
+                _string(provenance[field], f"buildProvenance.{field}", _HEX64_RE)
+        capacity_fields = {"partitionTableSha256", "configuredMaxBundleBytes", "storagePartitionOffset", "storagePartitionBytes"}
+        if capacity_fields & set(provenance):
+            if not capacity_fields.issubset(provenance):
+                raise DeviceImageManifestError("incomplete install capacity provenance")
+            for field in capacity_fields - {"partitionTableSha256"}:
+                _positive_int(provenance[field], f"buildProvenance.{field}")
+            configured, offset, size = (provenance[field] for field in
+                                      ("configuredMaxBundleBytes", "storagePartitionOffset", "storagePartitionBytes"))
+            if (not 65536 <= configured <= 2097152 or configured % 1024 or offset % 4096 or size % 4096 or
+                    size <= 8192 or offset + size > 16777216 or
+                    _object(manifest.get("storage"), "storage", {"maxBundleBytes"})["maxBundleBytes"] != min(configured, ((size - 8192) // 3) & ~4095)):
+                raise DeviceImageManifestError("install capacity provenance disagrees with storage")
 
     source = _object(manifest["source"], "source", {"revision", "firmwareSha256"})
     _string(source["revision"], "source.revision", _HEX40_RE)

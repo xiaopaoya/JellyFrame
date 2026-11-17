@@ -10,12 +10,18 @@ void InstalledAppResources::bind_worker_resources(
     jellyframe::ScriptTaskWorkerRuntimeOptions& options) const noexcept {
     options.text_catalog = text_catalog;
     options.image_provider = image_provider;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    options.shaped_text_binding = shaped_text_binding;
+#endif
 }
 
 void InstalledAppResources::bind_ui_resources(
     jellyframe::ScriptTaskFrameRendererOptions& options) const noexcept {
     options.text_catalog = text_catalog;
     options.image_provider = image_provider;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    options.shaped_text_binding = shaped_text_binding;
+#endif
 }
 
 } // namespace jellyframe_esp32s3

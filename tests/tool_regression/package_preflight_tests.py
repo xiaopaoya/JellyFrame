@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -134,6 +135,113 @@ class PackagePreflightTests(unittest.TestCase):
         self.assertEqual(resources[0]["path"], "/fonts/core.jffont2")
         self.assertEqual(resources[0]["kind"], "jellyframe::HostResourceKind::Font")
         self.assertEqual(resources[0]["size"], len(tiny_jffont2()))
+
+    def test_text_pipeline_declaration_has_explicit_versioned_profile(self):
+        profile = {"kind": "jfsp1-block-v11", "font": "/font.jffont2", "catalog": "/catalog",
+                   "companion": "/companion", "tables": "/tables", "eligibility": "/eligibility",
+                   "sourceIdentity": "1" * 64, "profileIdentity": "2" * 64,
+                   "glyphCount": 30900, "resourceId": 555, "rasterSize": 16, "weight": 400, "selection": 0}
+        self.assertEqual(package_app.normalize_text_pipeline(profile)["fontFamilyHash"], 0)
+        contextual = {**profile, "kind": "jfsp2-block-v12"}
+        self.assertEqual(package_app.normalize_text_pipeline(contextual)["kind"], "jfsp2-block-v12")
+        for key, value in [("kind", "future"), ("catalog", "/font.jffont2"), ("glyphCount", True),
+                           ("glyphCount", 65537), ("sourceIdentity", "0" * 64), ("selection", -1),
+                           ("unknown", 0), ("font", "x" * 256)]:
+            with self.subTest(key=key, value=value), self.assertRaises(SystemExit):
+                package_app.normalize_text_pipeline({**profile, key: value})
+        with self.assertRaises(SystemExit): package_app.normalize_text_pipeline(None)
+        manifest = package_app.read_manifest(REPO_ROOT / "samples/apps/packages/jelly_font_policy")
+        manifest["textPipeline"] = profile
+        manifest["runtime"]["script"] = "none"
+        with self.assertRaises(SystemExit): package_app.validate_manifest(manifest)
+        manifest["runtime"]["script"] = "classic"
+        normalized = package_app.validate_manifest(manifest)
+        self.assertEqual(normalized["textPipeline"]["kind"], "jfsp1-block-v11")
+        self.assertIn(b'"textPipeline"', package_app.bundle_summary_bytes(normalized))
+
+    def test_text_pipeline_requires_all_packaged_nonempty_resources(self):
+        profile = {"kind": "jfsp1-block-v11", "font": "/font.jffont2", "catalog": "/catalog",
+                   "companion": "/companion", "tables": "/tables", "eligibility": "/eligibility",
+                   "sourceIdentity": "1" * 64, "profileIdentity": "2" * 64,
+                   "glyphCount": 30900, "resourceId": 555, "rasterSize": 16, "weight": 400, "selection": 0}
+        manifest = {"textPipeline": profile}
+        with tempfile.TemporaryDirectory(prefix="jellyframe-shaped-resources-") as directory:
+            root = Path(directory)
+            data = root / "resource"
+            data.write_bytes(b"fixture")
+            resources = [{"path": profile[field], "file": data, "kind": "jellyframe::HostResourceKind::Other"}
+                         for field in ("font", "catalog", "companion", "tables", "eligibility")]
+            package_app.validate_text_pipeline_resources(manifest, resources)
+            for index in range(len(resources)):
+                with self.subTest(missing=resources[index]["path"]), self.assertRaises(SystemExit):
+                    package_app.write_jfapp_bundle(root / "missing.jfapp", manifest,
+                                                  resources[:index] + resources[index + 1:])
+            self.assertFalse((root / "missing.jfapp").exists())
+            data.write_bytes(b"")
+            with self.assertRaises(SystemExit):
+                package_app.validate_text_pipeline_resources(manifest, resources)
+            package_app.validate_text_pipeline_resources({}, [])
+
+    def test_shaped_bundle_header_is_mandatory_and_matches_summary(self):
+        profile = {"kind": "jfsp1-block-v11", "font": "/font.jffont2", "catalog": "/catalog",
+                   "companion": "/companion", "tables": "/tables", "eligibility": "/eligibility",
+                   "sourceIdentity": "1" * 64, "profileIdentity": "2" * 64,
+                   "glyphCount": 30900, "resourceId": 555, "rasterSize": 16, "weight": 400, "selection": 0}
+        source = package_app.read_manifest(REPO_ROOT / "samples/apps/packages/jelly_font_policy")
+        source["runtime"]["script"] = "classic"
+        source["textPipeline"] = profile
+        manifest = package_app.validate_manifest(source)
+        with tempfile.TemporaryDirectory(prefix="jellyframe-shaped-format-") as directory:
+            root = Path(directory)
+            data = root / "resource"
+            data.write_bytes(b"fixture")
+            resources = [{"path": profile[field], "file": data, "kind": "jellyframe::HostResourceKind::Other"}
+                         for field in ("font", "catalog", "companion", "tables", "eligibility")]
+            bundle = root / "shaped.jfapp"
+            report = package_app.write_jfapp_bundle(bundle, manifest, resources)
+            encoded = bundle.read_bytes()
+            self.assertEqual(report["formatVersion"], 1)
+            self.assertEqual(struct.unpack_from("<H", encoded, 10)[0], 1)
+            self.assertEqual(app_registry.parse_jfapp(encoded)["formatVersion"], 1)
+            def retag(blob, version):
+                changed = bytearray(blob)
+                struct.pack_into("<H", changed, 10, version)
+                struct.pack_into("<I", changed, 48, 0)
+                struct.pack_into("<I", changed, 48, zlib.crc32(changed) & 0xffffffff)
+                return bytes(changed)
+            for version in (0, 2):
+                with self.subTest(version=version), self.assertRaises(SystemExit):
+                    app_registry.parse_jfapp(retag(encoded, version))
+            del manifest["textPipeline"]
+            scalar = root / "scalar.jfapp"
+            report = package_app.write_jfapp_bundle(scalar, manifest, resources)
+            self.assertEqual(report["formatVersion"], 0)
+            self.assertEqual(app_registry.parse_jfapp(scalar.read_bytes())["formatVersion"], 0)
+            with self.assertRaises(SystemExit):
+                app_registry.parse_jfapp(retag(scalar.read_bytes(), 1))
+
+    def test_shaped_cli_refuses_static_cpp_before_emitting_outputs(self):
+        manifest = package_app.read_manifest(REPO_ROOT / "samples/apps/packages/jelly_font_policy")
+        manifest["runtime"]["script"] = "classic"
+        manifest["textPipeline"] = {
+            "kind": "jfsp1-block-v11", "font": "/font.jffont2", "catalog": "/catalog",
+            "companion": "/companion", "tables": "/tables", "eligibility": "/eligibility",
+            "sourceIdentity": "1" * 64, "profileIdentity": "2" * 64,
+            "glyphCount": 30900, "resourceId": 555, "rasterSize": 16, "weight": 400, "selection": 0,
+        }
+        with tempfile.TemporaryDirectory(prefix="jellyframe-shaped-cli-") as directory:
+            root = Path(directory)
+            (root / "jellyframe.app.json").write_text(json.dumps(manifest), encoding="utf-8")
+            outputs = [root / "resources.cpp", root / "report.json", root / "app.jfapp"]
+            result = subprocess.run([
+                sys.executable, str(REPO_ROOT / "tools/package_app.py"), "--root", str(root),
+                "--output-cpp", str(outputs[0]), "--report", str(outputs[1]),
+                "--output-bundle", str(outputs[2]),
+            ], capture_output=True, text=True, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("static C++ resource tables do not select its route", result.stderr)
+            for output in outputs:
+                self.assertFalse(output.exists(), str(output))
 
     def test_first_party_manifests_match_active_runtime_and_core_lines(self):
         runtime_version = package_app.active_runtime_release_version()

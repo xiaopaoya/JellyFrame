@@ -12,6 +12,8 @@
 
 #include <algorithm>
 #include <limits>
+#include <new>
+#include <stdexcept>
 #include <type_traits>
 #include <tuple>
 #include <utility>
@@ -19,7 +21,7 @@
 namespace jellyframe {
 namespace {
 
-bool is_canonical_frame_version(std::uint8_t version) { return version == 9 || version == 10; }
+bool is_canonical_frame_version(std::uint8_t version) { return version == 9 || version == 10 || version == kRuntimeShapedFrameVersion; }
 
 template<class T, class = void>
 struct HasBackgroundResourceResolver : std::false_type {};
@@ -28,7 +30,7 @@ template<class T>
 struct HasBackgroundResourceResolver<T, std::void_t<decltype(
     std::declval<T&>().background_resource_resolver)>> : std::true_type {};
 
-#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
 template<class T> struct FunctionArguments;
 template<class R, class... Args> struct FunctionArguments<R (*)(Args...)> {
     using Tuple = std::tuple<Args...>;
@@ -216,6 +218,10 @@ public:
     RenderObjectPtr render_tree_;
     LayoutBoxPtr layout_tree_;
     LayerNodePtr layer_tree_;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+    runtime_shaped::LayoutResult shaped_layout_;
+    std::vector<std::uint32_t> shaped_positions_;
+#endif
     std::unique_ptr<InputController> input_controller_;
     ScriptTaskAppFramePublisher frame_publisher_;
     ScriptTaskWorkerRuntimeFatalRecord fatal_record_;
@@ -280,6 +286,10 @@ void ScriptTaskWorkerRuntime::State::drain() {
     runtime_.reset();
     input_controller_.reset();
     layer_tree_.reset();
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+    shaped_layout_ = {};
+    shaped_positions_.clear();
+#endif
     layout_tree_.reset();
     render_tree_.reset();
     style_resolver_.reset();
@@ -298,8 +308,13 @@ bool ScriptTaskWorkerRuntime::State::supervisor_matches(const ScriptTaskSupervis
     if (is_canonical_frame_version(options_.frame_codec.version)) {
         const auto catalog = supervisor.text_catalog(session_);
         const auto images = supervisor.image_provider(session_);
-        return options_.text_catalog && catalog == options_.text_catalog &&
-            images == options_.image_provider && (!images || images->valid());
+        if (!options_.text_catalog || catalog != options_.text_catalog ||
+            images != options_.image_provider || (images && !images->valid())) return false;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+        const auto shaped = supervisor.shaped_text_binding(session_);
+        if (shaped != options_.shaped_text_binding || (shaped && !shaped->valid())) return false;
+#endif
+        return true;
     }
 #else
     if (is_canonical_frame_version(options_.frame_codec.version)) return false;
@@ -364,6 +379,17 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::State::initialize(std
             return ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration;
         }
         if (!supervisor_validated_) {
+            set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
+            return ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration;
+        }
+#else
+        set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
+        return ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration;
+#endif
+    }
+    if (options_.frame_codec.version == kRuntimeShapedFrameVersion) {
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+        if (!options_.shaped_text_binding || !options_.shaped_text_binding->valid() || options_.image_provider) {
             set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
             return ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration;
         }
@@ -512,7 +538,19 @@ ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::State::publish_frame(Sc
         return result;
     }
     ScriptTaskAppFrame frame;
-    if (is_canonical_frame_version(options_.frame_codec.version)) {
+    if (options_.frame_codec.version == kRuntimeShapedFrameVersion) {
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+        const auto status = make_script_task_shaped_frame(*layer_tree_, shaped_layout_, shaped_positions_,
+            options_.viewport, options_.frame_codec, frame);
+        if (status != ScriptTaskAppFrameCodecStatus::Accepted) {
+            ++telemetry_.frame_publish_rejections;
+            return result;
+        }
+#else
+        ++telemetry_.frame_publish_rejections;
+        return result;
+#endif
+    } else if (is_canonical_frame_version(options_.frame_codec.version)) {
         const auto status = make_script_task_group_frame(*layer_tree_, options_.viewport,
                                                         options_.frame_codec, frame);
         if (status != ScriptTaskAppFrameCodecStatus::Accepted) {
@@ -823,13 +861,28 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
         }, this};
     }
 #endif
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+    if(options_.frame_codec.version==kRuntimeShapedFrameVersion) layout_options.text_system=nullptr;
+#endif
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     LayoutEngine layout_engine(*style_resolver_, layout_options);
 #else
     LayoutEngine layout_engine(*style_resolver_, TextMeasureProvider{}, layout_options);
 #endif
-    LayoutBoxPtr layout_tree = layout_engine.layout(*render_tree, options_.viewport.width, options_.viewport.height);
-    if (!layout_tree) return false;
+    LayoutBoxPtr layout_tree;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+    runtime_shaped::LayoutResult shaped_layout;
+    if (options_.frame_codec.version == kRuntimeShapedFrameVersion) {
+        auto work = std::min(options_.shaped_text_binding->work_limit(), options_.shaped_layout.paragraph.shaping.work);
+        if (options_.shaped_text_binding->layout_document(layout_engine, *render_tree,
+                options_.viewport.width, options_.viewport.height, options_.shaped_layout, work,
+                shaped_layout) != runtime_shaped::Status::ok) return false;
+    } else
+#endif
+    {
+        layout_tree = layout_engine.layout(*render_tree, options_.viewport.width, options_.viewport.height);
+        if (!layout_tree) return false;
+    }
     // Text layout caches were just rebuilt from this DOM snapshot. Core's layer
     // builder rejects caches while their source nodes still carry dirty flags.
     clear_dirty_flags(*document_owner_.root());
@@ -837,6 +890,10 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
     layer_options.text_system = is_canonical_frame_version(options_.frame_codec.version)
         ? &options_.text_catalog->text_system() : options_.text_system;
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+    if (options_.frame_codec.version == kRuntimeShapedFrameVersion) layer_options.text_system = nullptr;
+#endif
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     if (is_canonical_frame_version(options_.frame_codec.version)) {
         configure_background_resource_resolver(layer_options, style_resolver_.get());
         layer_options.image_resolver = {[](const Node& node, ImageResolveKind kind,
@@ -857,11 +914,29 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
                 set_image_resolve_result(result, resolved);
         }, this};
     }
+#endif
 #else
     layer_options.text_system = options_.text_system;
 #endif
     LayerTreeBuilder layer_builder(layer_options);
-    LayerNodePtr layer_tree = layer_builder.build(*layout_tree);
+    LayerNodePtr layer_tree;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+    runtime_shaped::LayerCapture shaped_capture;
+    if (options_.frame_codec.version == kRuntimeShapedFrameVersion) {
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+        if (!layer_builder.build_contextual(shaped_layout, shaped_capture)) return false;
+        layer_tree=LayerNodePtr(new LayerNode);
+        layer_tree->type=LayerType::Root;layer_tree->reasons=LayerReasonRoot;
+        layer_tree->box=shaped_layout.tree();layer_tree->bounds=shaped_layout.tree()->rect;
+        layer_tree->clip_rect=layer_tree->bounds;
+        layer_tree->display_list=shaped_capture.layer_tree()->display_list;
+#else
+        if (!layer_builder.build_shaped(shaped_layout, shaped_capture)) return false;
+        layer_tree = std::move(shaped_capture.layer_tree);
+#endif
+    } else
+#endif
+        layer_tree = layer_builder.build(*layout_tree);
     if (!layer_tree) return false;
 
     const Node* hovered = input_controller_ != nullptr ? input_controller_->hovered_node() : nullptr;
@@ -880,6 +955,14 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
     render_tree_ = std::move(render_tree);
     layout_tree_ = std::move(layout_tree);
     layer_tree_ = std::move(layer_tree);
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+    shaped_layout_ = std::move(shaped_layout);
+    #if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+    shaped_positions_ = shaped_capture.after_command_counts();
+#else
+    shaped_positions_ = std::move(shaped_capture.after_command_counts);
+#endif
+#endif
     input_controller_ = std::move(input_controller);
     pending_frame_publication_ = true;
     return true;
@@ -943,7 +1026,15 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::strin
     if (!pin) return state_ && !state_->stopped_
         ? ScriptTaskWorkerRuntimeInitStatus::BudgetRejected
         : ScriptTaskWorkerRuntimeInitStatus::Stopped;
-    return pin->initialize(html, css);
+    try {
+        return pin->initialize(html, css);
+    } catch (const std::bad_alloc&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        return ScriptTaskWorkerRuntimeInitStatus::BudgetRejected;
+    } catch (const std::length_error&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        return ScriptTaskWorkerRuntimeInitStatus::BudgetRejected;
+    }
 }
 
 ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(ScriptTaskSupervisor& supervisor, std::string_view html, std::string_view css) {
@@ -954,7 +1045,15 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(ScriptTask
     if (!pin) return state_ && !state_->stopped_
         ? ScriptTaskWorkerRuntimeInitStatus::BudgetRejected
         : ScriptTaskWorkerRuntimeInitStatus::Stopped;
-    return pin->initialize(supervisor, html, css);
+    try {
+        return pin->initialize(supervisor, html, css);
+    } catch (const std::bad_alloc&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        return ScriptTaskWorkerRuntimeInitStatus::BudgetRejected;
+    } catch (const std::length_error&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        return ScriptTaskWorkerRuntimeInitStatus::BudgetRejected;
+    }
 }
 
 void ScriptTaskWorkerRuntime::set_host_time_ms(std::uint64_t now_ms) {
@@ -966,37 +1065,91 @@ void ScriptTaskWorkerRuntime::set_host_time_ms(std::uint64_t now_ms) {
 ScriptEvaluationResult ScriptTaskWorkerRuntime::eval(std::string_view source, std::string_view source_name) {
     OperationPin pin(state_);
     if (!pin) return {false, {}, "worker stopped or operation limit", ScriptEvaluationStatus::Exception};
-    return pin->eval(source, source_name);
+    try {
+        return pin->eval(source, source_name);
+    } catch (const std::bad_alloc&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        return {false, {}, {}, ScriptEvaluationStatus::Exception};
+    } catch (const std::length_error&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        return {false, {}, {}, ScriptEvaluationStatus::Exception};
+    }
 }
 
 ScriptEvaluationResult ScriptTaskWorkerRuntime::eval_with_supervisor(ScriptTaskSupervisor& supervisor, std::string_view source, std::string_view source_name) {
     OperationPin pin(state_);
     if (!pin) return {false, {}, "worker stopped or operation limit", ScriptEvaluationStatus::Exception};
-    return pin->eval_with_supervisor(supervisor, source, source_name);
+    try {
+        return pin->eval_with_supervisor(supervisor, source, source_name);
+    } catch (const std::bad_alloc&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        return {false, {}, {}, ScriptEvaluationStatus::Exception};
+    } catch (const std::length_error&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        return {false, {}, {}, ScriptEvaluationStatus::Exception};
+    }
 }
 
 ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::publish_frame(ScriptTaskSupervisor& supervisor) {
     OperationPin pin(state_);
     if (!pin) return {};
-    return pin->publish_frame(supervisor);
+    try {
+        return pin->publish_frame(supervisor);
+    } catch (const std::bad_alloc&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        return {};
+    } catch (const std::length_error&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        return {};
+    }
 }
 
 ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::process_one(ScriptTaskSupervisor& supervisor) {
     OperationPin pin(state_);
     if (!pin) return {};
-    return pin->process_one(supervisor);
+    try {
+        return pin->process_one(supervisor);
+    } catch (const std::bad_alloc&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        ScriptTaskWorkerRuntimeStepResult result;
+        result.fatal = true;
+        return result;
+    } catch (const std::length_error&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        ScriptTaskWorkerRuntimeStepResult result;
+        result.fatal = true;
+        return result;
+    }
 }
 
 ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::pump_callbacks(std::uint64_t now_ms, ScriptTaskSupervisor& supervisor, std::size_t max_timer_callbacks, std::size_t max_animation_callbacks) {
     OperationPin pin(state_);
     if (!pin) return {};
-    return pin->pump_callbacks(now_ms, supervisor, max_timer_callbacks, max_animation_callbacks);
+    try {
+        return pin->pump_callbacks(now_ms, supervisor, max_timer_callbacks, max_animation_callbacks);
+    } catch (const std::bad_alloc&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        ScriptTaskWorkerRuntimeStepResult result;
+        result.fatal = true;
+        return result;
+    } catch (const std::length_error&) {
+        pin->set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+        ScriptTaskWorkerRuntimeStepResult result;
+        result.fatal = true;
+        return result;
+    }
 }
 
 bool ScriptTaskWorkerRuntime::publish_fatal(ScriptTaskSupervisor& supervisor) {
     OperationPin pin(state_);
     if (!pin) return false;
-    return pin->publish_fatal(supervisor);
+    try {
+        return pin->publish_fatal(supervisor);
+    } catch (const std::bad_alloc&) {
+        return false;
+    } catch (const std::length_error&) {
+        return false;
+    }
 }
 
 bool ScriptTaskWorkerRuntime::inject_c_safe_fatal_for_test(ScriptTaskSupervisor& supervisor, std::uint32_t diagnostic_code) {

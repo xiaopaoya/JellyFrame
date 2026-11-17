@@ -275,9 +275,89 @@ void policy_limits_are_reported_without_parsing_sections() {
                                  descriptor) == DeviceBundleStatus::TooManyResources);
 }
 
+
+void text_pipeline_declaration_is_bounded_and_explicit() {
+    const std::string profile = R"({"kind":"jfsp1-block-v11","font":"/font.jffont2","catalog":"/catalog","companion":"/companion","tables":"/tables","eligibility":"/eligibility","sourceIdentity":")" +
+        std::string(64,'1') + R"(","profileIdentity":")" + std::string(64,'2') +
+        R"(","glyphCount":30900,"resourceId":555,"rasterSize":16,"weight":400,"selection":0,"fontFamilyHash":123})";
+    auto inspect = [&](std::string declaration, bool classic, DeviceBundleTextPipeline& output) {
+        auto summary=valid_summary(); summary.pop_back();
+        if (classic) { const auto at=summary.find("\"none\""); summary.replace(at,6,"\"classic\""); }
+        if (!declaration.empty()) summary+=",\"textPipeline\":"+declaration;
+        summary+='}';
+        auto bytes=make_bundle(summary);
+        if (!declaration.empty()) {
+            write_le16(bytes.data()+10,kDeviceBundleShapedFormat);
+            refresh_bundle_crc(bytes);
+        }
+        DeviceBundleMemoryReader reader(bytes.data(),bytes.size());
+        DeviceBundleDescriptor descriptor; DeviceBundleInspectionWorkspace workspace;
+        const auto status=inspect_device_bundle(reader,static_cast<std::uint32_t>(bytes.size()),policy(),workspace,descriptor);
+        if (status != DeviceBundleStatus::Ok) return status;
+        return read_device_bundle_text_pipeline(reader,descriptor,workspace,output);
+    };
+    DeviceBundleTextPipeline output;
+    assert(inspect("",false,output) == DeviceBundleStatus::Ok && output.kind == DeviceBundleTextPipelineKind::Scalar);
+    assert(inspect(profile,true,output) == DeviceBundleStatus::Ok &&
+        output.kind == DeviceBundleTextPipelineKind::Jfsp1BlockV11 && output.resource_id == 555 &&
+        output.font_family_hash == 123 && output.source_identity[0] == 0x11);
+    auto contextual_profile = profile;
+    contextual_profile.replace(contextual_profile.find("jfsp1-block-v11"), 15, "jfsp2-block-v12");
+    assert(inspect(contextual_profile, true, output) == DeviceBundleStatus::Ok &&
+        output.kind == DeviceBundleTextPipelineKind::Jfsp2BlockV12 && output.resource_id == 555 &&
+        output.font_family_hash == 123);
+    assert(inspect(contextual_profile, false, output) == DeviceBundleStatus::InvalidSummary);
+    // A recognized summary alone cannot turn a V0 container into a new route.
+    auto summary=valid_summary();
+    summary.replace(summary.find("\"none\""),6,"\"classic\"");
+    summary.pop_back(); summary+=",\"textPipeline\":"+profile+"}";
+    auto shaped_bytes=make_bundle(summary);
+    auto check_version = [&](std::vector<std::uint8_t>& bytes, DeviceBundleStatus expected) {
+        DeviceBundleMemoryReader reader(bytes.data(),bytes.size());
+        DeviceBundleDescriptor descriptor; DeviceBundleInspectionWorkspace workspace;
+        assert(inspect_device_bundle(reader,static_cast<std::uint32_t>(bytes.size()),policy(),workspace,descriptor) == expected);
+    };
+    check_version(shaped_bytes,DeviceBundleStatus::UnsupportedVersion);
+    write_le16(shaped_bytes.data()+10,kDeviceBundleShapedFormat); refresh_bundle_crc(shaped_bytes);
+    check_version(shaped_bytes,DeviceBundleStatus::Ok);
+    {
+        DeviceBundleMemoryReader reader(shaped_bytes.data(),shaped_bytes.size());
+        DeviceBundleDescriptor descriptor; DeviceBundleInspectionWorkspace workspace;
+        assert(inspect_device_bundle(reader,static_cast<std::uint32_t>(shaped_bytes.size()),policy(),workspace,descriptor) == DeviceBundleStatus::Ok);
+        write_le16(shaped_bytes.data()+10,kDeviceBundleScalarFormat);
+        assert(read_device_bundle_text_pipeline(reader,descriptor,workspace,output) == DeviceBundleStatus::UnsupportedVersion &&
+            output.kind == DeviceBundleTextPipelineKind::Scalar);
+    }
+    auto scalar_bytes=make_bundle(valid_summary());
+    write_le16(scalar_bytes.data()+10,kDeviceBundleShapedFormat); refresh_bundle_crc(scalar_bytes);
+    check_version(scalar_bytes,DeviceBundleStatus::UnsupportedVersion);
+    write_le16(scalar_bytes.data()+10,2); refresh_bundle_crc(scalar_bytes);
+    check_version(scalar_bytes,DeviceBundleStatus::UnsupportedVersion);
+    assert(inspect(profile,false,output) == DeviceBundleStatus::InvalidSummary);
+    for (const auto& change : std::vector<std::pair<std::string,std::string>>{
+        {"jfsp1-block-v11","future"}, {"/catalog","/font.jffont2"}, {"/tables","/../bad"},
+        {"30900","0"}, {"30900","65537"}, {"400","1001"}, {"555","4294967296"},
+        {std::string(64,'1'),std::string(64,'g')}}) {
+        auto bad=profile; bad.replace(bad.find(change.first),change.first.size(),change.second);
+        assert(inspect(bad,true,output) == DeviceBundleStatus::InvalidSummary);
+    }
+    for (const auto& bad : {std::string("null"), std::string("{}"),
+         profile.substr(0,profile.size()-1)+",\"kind\":\"jfsp1-block-v11\"}",
+         profile.substr(0,profile.size()-1)+",\"future\":0}"})
+        assert(inspect(bad,true,output) == DeviceBundleStatus::InvalidSummary);
+    // A launch read failure clears output rather than retaining a shaped choice.
+    auto bytes=make_bundle(valid_summary()); DeviceBundleDescriptor descriptor;
+    DeviceBundleMemoryReader reader(bytes.data(),bytes.size()); DeviceBundleInspectionWorkspace workspace;
+    assert(inspect_device_bundle(reader,static_cast<std::uint32_t>(bytes.size()),policy(),workspace,descriptor) == DeviceBundleStatus::Ok);
+    descriptor.summary_bytes=0;
+    assert(read_device_bundle_text_pipeline(reader,descriptor,workspace,output) == DeviceBundleStatus::InvalidSummary &&
+        output.kind == DeviceBundleTextPipelineKind::Scalar);
+}
+
 } // namespace
 
 int main() {
+    text_pipeline_declaration_is_bounded_and_explicit();
     const auto inspect_fonts = [](const std::string& fonts, DeviceBundleFontTable& table) {
         std::string summary = valid_summary();
         summary.pop_back();

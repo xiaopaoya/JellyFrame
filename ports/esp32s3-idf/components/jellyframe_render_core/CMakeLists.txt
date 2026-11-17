@@ -53,6 +53,13 @@ target_compile_definitions(${COMPONENT_LIB} PUBLIC
     JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED=${JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED}
 )
 
+# Match the source-selected optional API in every dependent translation unit.
+# Older bundled Core trees do not expose this feature variable.
+if(DEFINED JELLYFRAME_RENDER_CORE_TEXT_SHAPING_ENABLED)
+    target_compile_definitions(${COMPONENT_LIB} PUBLIC
+        JELLYFRAME_RENDER_CORE_TEXT_SHAPING_ENABLED=${JELLYFRAME_RENDER_CORE_TEXT_SHAPING_ENABLED})
+endif()
+
 target_compile_options(${COMPONENT_LIB} PRIVATE
     -Wall
     -Wextra

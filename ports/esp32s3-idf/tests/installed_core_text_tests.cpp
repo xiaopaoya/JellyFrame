@@ -4,6 +4,9 @@
 #include "script/script_task_worker_runtime.h"
 #include <cassert>
 #include <algorithm>
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
+#include "app_runtime/tests/runtime_shaped_text_test_fixture.h"
+#endif
 
 #if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
 using namespace jellyframe;
@@ -17,6 +20,58 @@ static bool same(const FrameBuffer& a, const FrameBuffer& b) {
             a.pixels[i].b != b.pixels[i].b || a.pixels[i].a != b.pixels[i].a) return false;
     return true;
 }
+
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
+static void installed_shaped_owner_reaches_worker_and_ui(const InstalledAppResources::Handle& scalar) {
+    runtime_test_shaped_text::Assets assets("regular", 7501);
+    auto binding = runtime_test_shaped_text::create_binding(assets);
+    auto shaped = std::make_shared<InstalledAppResources>(*scalar);
+    shaped->image_provider.reset();
+    shaped->shaped_text_binding = binding;
+    AppInstalledTextPipeline pipeline;
+    pipeline.status = AppInstalledTextPipelineStatus::Ready;
+    pipeline.frame_version = 11;
+    pipeline.binding = binding;
+    assert(installed_text_pipeline_supported(pipeline));
+    pipeline.frame_version = 10;
+    assert(!installed_text_pipeline_supported(pipeline));
+    ScriptTaskSupervisorOptions supervisor_options;
+    supervisor_options.frame_mailbox = {4,4096};
+    supervisor_options.frame_leases = {4,32768,65536};
+    ScriptTaskSupervisor supervisor(supervisor_options);
+    const auto session = begin_installed_script_session(supervisor,43,shaped);
+    assert(session.valid());
+    ScriptTaskWorkerRuntimeOptions options;
+    shaped->bind_worker_resources(options);
+    assert(options.shaped_text_binding == binding && !options.image_provider);
+    options.viewport = {0,0,64,32};
+    options.frame_codec = {128,16384,16,32768};
+    options.frame_codec.version = 11;
+    options.frame_codec.max_groups = 16;
+    ScriptTaskAcceptedAppFrame accepted;
+    {
+        ScriptTaskWorkerRuntime worker(session,options);
+        assert(worker.initialize(supervisor,"<body><div>A A</div></body>",
+            "*{margin:0;padding:0;font-weight:400}body{background:#ffffff}"
+            "div{display:block;font-size:16px;line-height:18px;color:#224488}") ==
+            ScriptTaskWorkerRuntimeInitStatus::Accepted);
+        assert(worker.publish_frame(supervisor).accepted());
+        assert(take_installed_core_text_frame(supervisor,session,options.frame_codec,accepted) ==
+            ScriptTaskAppFrameTakeStatus::Accepted);
+        assert(accepted.shaped_text_binding() == binding && !accepted.frame().shaped_text.empty());
+        worker.stop();
+    }
+    ScriptTaskFrameRendererOptions renderer_options;
+    shaped->bind_ui_resources(renderer_options);
+    assert(renderer_options.shaped_text_binding == binding);
+    FrameBuffer pixels(64,32,{255,255,255,255});
+    ScriptTaskFrameRenderer renderer(renderer_options);
+    assert(render_installed_core_text_frame(renderer,accepted,pixels,{255,255,255,255},nullptr,0,nullptr,nullptr));
+    assert(std::any_of(pixels.pixels.begin(),pixels.pixels.end(),[](Color color){return color.r < 100;}));
+    supervisor.begin_teardown(session); supervisor.complete_teardown(session);
+}
+#endif
+
 int main() {
     assert(script_task_app_frame_codec_supports_version(10));
     auto bytes = std::make_shared<const std::vector<std::uint8_t>>(runtime_test_fonts::font_bytes());
@@ -31,6 +86,9 @@ int main() {
     InstalledAppResources::Handle resources;
     assert(create_installed_app_resources(std::move(snapshot), {}, "/index.html", &system, 1,
         bytes, clock_us, resources));
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
+    installed_shaped_owner_reaches_worker_and_ui(resources);
+#endif
 #if !CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     assert(!resources->image_provider);
     InstalledResourceSnapshot images;

@@ -3210,8 +3210,8 @@ def cmd_device(args: argparse.Namespace) -> int:
         provider_arguments: list[str] = []
         stream = args.device_command in {"install", "logs"}
         if args.device_command == "install":
-            if not args.bundle.is_absolute() or not args.bundle.is_file() or args.bundle.suffix != ".jfapp":
-                raise OSError("install bundle must be an existing absolute .jfapp file")
+            if not args.bundle.is_absolute() or not args.bundle.is_file() or args.bundle.suffix.lower() not in {".jfapp", ".jfsg"}:
+                raise OSError("install bundle must be an existing absolute .jfapp or .jfsg file")
             bundle = args.bundle.resolve()
             provider_arguments.extend(["--bundle", str(bundle)])
             if args.allow_downgrade:
@@ -4103,10 +4103,10 @@ def main() -> int:
     device_list.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
     device_list.set_defaults(func=cmd_device)
     device_install = device_subparsers.add_parser(
-        "install", help="Install an existing .jfapp through provider JSONL progress.")
+        "install", help="Install an existing .jfapp or signed .jfsg through provider JSONL progress.")
     device_install.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
     device_install.add_argument("--bundle", required=True, type=Path,
-                                help="Existing absolute .jfapp bundle; packaging is a separate step.")
+                                help="Existing absolute .jfapp or signed .jfsg; packaging/signing are separate steps.")
     device_install.add_argument("--allow-downgrade", action="store_true",
                                 help="Request a documented lower-version install where the image permits it.")
     device_install.set_defaults(func=cmd_device)
