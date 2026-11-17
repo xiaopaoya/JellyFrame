@@ -50,6 +50,7 @@
 #include "app_registry.h"
 #include "app_package.h"
 #include "example_css_io.h"
+#include "display_command_access.h"
 
 #include <windows.h>
 #include <windowsx.h>
@@ -297,27 +298,7 @@ struct FrameTraceTimings {
 };
 
 const char* frame_trace_command_type_name(DisplayCommandType type) {
-    switch (type) {
-    case DisplayCommandType::FillRect:
-        return "FillRect";
-    case DisplayCommandType::StrokeRect:
-        return "StrokeRect";
-    case DisplayCommandType::LinearGradient:
-        return "LinearGradient";
-    case DisplayCommandType::ConicGradient:
-        return "ConicGradient";
-    case DisplayCommandType::RadialGradient:
-        return "RadialGradient";
-    case DisplayCommandType::BoxShadow:
-        return "BoxShadow";
-    case DisplayCommandType::Text:
-        return "Text";
-    case DisplayCommandType::PreparedText:
-        return "PreparedText";
-    case DisplayCommandType::Image:
-        return "Image";
-    }
-    return "Unknown";
+    return native::display_command_name(type);
 }
 
 bool trace_owner_id_is_safe(const std::string& id) {
@@ -2596,11 +2577,14 @@ bool draw_text_with_gdi(FrameBuffer& target,
 #endif
 
 BrowserTextBackend make_browser_text_backend(const BrowserOptions& options, AppRuntimeHost* runtime) {
-#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+#if JELLYFRAME_NATIVE_CORE_TEXT_DEFAULT
     (void)options;
     if (runtime == nullptr) throw std::runtime_error("Core font backend requires an active Runtime");
     if (const TextSystem* text_system = runtime->fonts().core_text_system()) {
-        return BrowserTextBackend{text_system, true};
+        BrowserTextBackend backend;
+        backend.text_system = text_system;
+        backend.core_text = true;
+        return backend;
     }
     throw std::runtime_error("Core font catalog is not ready; text startup refused");
 #else
@@ -3381,7 +3365,7 @@ void print_win32_browser_usage(std::ostream& output, const std::string& program_
         << "                                 set-checked, select-index.\n"
         << "  --viewport-width N             Override viewport width.\n"
         << "  --viewport-height N            Override viewport height.\n"
-        << "  --use-app-fonts                Select Core catalog text (default with ABI4).\n"
+        << "  --use-app-fonts                Select Core catalog text (default with ABI4/ABI9).\n"
         << "  --audio-smoke SOURCE           Win32-only host audio smoke test. SOURCE can\n"
         << "                                 be a local file, or /path in --app package.\n"
         << "  --audio-smoke-ms N             Playback duration for --audio-smoke, default 1000.\n"
@@ -3874,6 +3858,10 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
     LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
     layout_options.diagnostics = &diagnostics;
     layout_options.text_system = text_backend.text_system;
+    TextSystemStatus text_status = TextSystemStatus::Ok;
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+    layout_options.text_status = &text_status;
+#endif
     std::vector<std::uint32_t> natural_handles;
     BrowserNaturalImageContext natural_context{&image_resolve_context, &natural_handles};
 #if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
@@ -3887,6 +3875,8 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
     LayoutEngine layout_engine(resolver, text_backend.measure, layout_options);
 #endif
     auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
+    if (!layout_tree) throw std::runtime_error("layout refused (Core text status=" +
+        std::to_string(static_cast<unsigned>(text_status)) + ")");
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     layer_options.diagnostics = &diagnostics;
 #if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
@@ -3897,6 +3887,7 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
     layer_options.image_resolver = ImageHandleResolver{resolve_browser_image_handle, &image_resolve_context};
     LayerTreeBuilder layer_builder(layer_options);
     auto layer_tree = layer_builder.build(*layout_tree);
+    if (!layer_tree) throw std::runtime_error("layer tree refused Core text or paint input");
     int image_drain_pass = 0;
     for (; image_drain_pass < 256 && debug_images.complete_next(app_runtime); ++image_drain_pass) {
         app_runtime.pump_frame_completions(app_frame_scratch);
@@ -3916,7 +3907,10 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
             request_browser_content_images(*page.document, image_resolve_context, request_budget);
             natural_handles.clear();
             layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
+            if (!layout_tree) throw std::runtime_error("layout refused (Core text status=" +
+                std::to_string(static_cast<unsigned>(text_status)) + ")");
             layer_tree = layer_builder.build(*layout_tree);
+            if (!layer_tree) throw std::runtime_error("layer tree refused Core text or paint input");
             std::vector<std::uint32_t> protected_handles = natural_handles;
             collect_image_handles(*layer_tree, protected_handles);
             const AppImageSurfaceEvictionResult evicted =
@@ -4881,6 +4875,7 @@ private:
     std::unique_ptr<StyleResolver> style_resolver_;
     RenderObjectPtr render_tree_;
     LayoutBoxPtr layout_tree_;
+    std::uint64_t layout_document_generation_ = 0;
     LayerNodePtr layer_tree_;
     std::unique_ptr<InputController> input_;
     std::unordered_map<const Node*, int> scroll_offsets_;
@@ -4978,7 +4973,12 @@ private:
         if (app == nullptr) {
             return DefWindowProcW(hwnd, message, wparam, lparam);
         }
-        return app->handle_message(message, wparam, lparam);
+        // Exceptions must never cross the native Win32 callback boundary.
+        try { return app->handle_message(message, wparam, lparam); }
+        catch (const std::exception& error) {
+            app->recover_active_app_after_failure(error);
+            return 0;
+        }
     }
 
     std::uint64_t current_time_ms() const {
@@ -6562,6 +6562,7 @@ private:
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
         layer_tree_ = layer_builder.build(*layout_tree_);
+        if (!layer_tree_) throw std::runtime_error("layer tree refused Core text or paint input");
         if (trace_live_frame) {
             add_live_trace_span(FrameTraceStage::LayerTree,
                                 trace_frame_started,
@@ -7132,6 +7133,21 @@ private:
         frame_scratch_.begin_frame();
 
         BrowserTextBackend text_backend = make_browser_text_backend(options_, &app_runtime_);
+        // ABI9 Core snapshots validate the exact document mutation generation,
+        // including paint-only marks. Rebuilding layers from an older text
+        // snapshot is not a valid reuse operation, even if geometry is stable.
+        bool stale_core_snapshot = false;
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+        stale_core_snapshot = text_backend.core_text && layout_tree_ &&
+            layout_document_generation_ != document_->mutation_generation;
+        if (stale_core_snapshot) {
+            update_plan.action = FrameUpdateAction::RebuildPipeline;
+            update_plan.dirty_rect_mode = FrameDirtyRectMode::FullFrame;
+            update_plan.can_reuse_render_and_layout = false;
+            update_plan.needs_previous_layout = false;
+            update_plan.needs_full_framebuffer = true;
+        }
+#endif
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
         layer_options.diagnostics = &diagnostics_;
         layer_options.paint_scroll_indicators = true;
@@ -7210,6 +7226,8 @@ private:
                 frame_trace_command_attribution_.prepare_for_tree_build(*document_);
             }
             auto next_layer_tree = reused_opacity_layers ? LayerNodePtr{} : layer_builder.build(*layout_tree_);
+            if (!reused_opacity_layers && !next_layer_tree)
+                throw std::runtime_error("layer tree refused Core text or paint input");
             finish_trace_stage(FrameTraceStage::LayerTree);
             const FrameRepaintPlan repaint_plan =
                 current_layout_repaint_plan(update_plan.reason, content_height);
@@ -7299,7 +7317,7 @@ private:
         RenderTreeBuilder sampled_render_builder(*style_resolver_, render_options);
         auto next_render_tree = sampled_render_builder.build(*document_);
         finish_trace_stage(FrameTraceStage::RenderTree);
-        if (!image_layout_dirty_ && update_plan.action == FrameUpdateAction::RebuildPipeline &&
+        if (!stale_core_snapshot && !image_layout_dirty_ && update_plan.action == FrameUpdateAction::RebuildPipeline &&
             update_plan.reason == FrameUpdateReason::LayoutDirtyWithPreviousLayout &&
             render_tree_ != nullptr &&
             layout_tree_ != nullptr &&
@@ -7337,6 +7355,7 @@ private:
                 frame_trace_command_attribution_.prepare_for_tree_build(*document_);
             }
             auto next_layer_tree = layer_builder.build(*layout_tree_);
+            if (!next_layer_tree) throw std::runtime_error("layer tree refused Core text or paint input");
             finish_trace_stage(FrameTraceStage::LayerTree);
             const FrameRepaintPlan repaint_plan =
                 current_layout_repaint_plan(update_plan.reason, content_height);
@@ -7414,6 +7433,10 @@ private:
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets_);
         layout_options.diagnostics = &diagnostics_;
         layout_options.text_system = text_backend.text_system;
+        TextSystemStatus text_status = TextSystemStatus::Ok;
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+        layout_options.text_status = &text_status;
+#endif
         natural_image_handles_.clear();
         BrowserNaturalImageContext natural_context{&image_resolve_context, &natural_image_handles_};
 #if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
@@ -7427,12 +7450,16 @@ private:
         LayoutEngine layout_engine(*style_resolver_, text_backend.measure, layout_options);
 #endif
         auto next_layout_tree = layout_engine.layout(*next_render_tree, viewport_width_, viewport_height_);
+        if (!next_layout_tree) throw std::runtime_error("layout refused (Core text status=" +
+            std::to_string(static_cast<unsigned>(text_status)) + ")");
         image_layout_dirty_ = false;
         finish_trace_stage(FrameTraceStage::Layout);
         if (trace_timing_enabled) {
             frame_trace_command_attribution_.prepare_for_tree_build(*document_);
         }
         auto next_layer_tree = layer_builder.build(*next_layout_tree);
+        if (!next_layer_tree) throw std::runtime_error("layer tree refused Core text or paint input");
+        layout_document_generation_ = document_->mutation_generation;
         finish_trace_stage(FrameTraceStage::LayerTree);
 
         const int content_height = std::max(viewport_height_, next_layout_tree->rect.height);
@@ -9267,7 +9294,11 @@ int main(int argc, char** argv) {
         return 1;
     }
     if (capture_frames_mode) {
-        return app->capture_frames();
+        try { return app->capture_frames(); }
+        catch (const std::exception& error) {
+            std::cerr << "frame capture failed: " << error.what() << '\n';
+            return 1;
+        }
     }
     return app->run();
 }

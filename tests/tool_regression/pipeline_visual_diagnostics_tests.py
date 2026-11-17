@@ -1,9 +1,11 @@
+import argparse
 import json
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+EXPECTED_TEXT_POLICY = "geometry-only"
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -38,8 +40,8 @@ def run_pseudo_browser(exe: Path, html: str, css: str, width: int, height: int) 
         require(result.returncode == 0, result.stdout)
         require(report_path.is_file(), "pseudo browser did not write diagnostics JSON")
         report = json.loads(report_path.read_text(encoding="utf-8-sig"))
-        require(report.get("textPolicy") == "geometry-only",
-                "diagnostics must identify missing font metrics and glyph painting")
+        require(report.get("textPolicy") == EXPECTED_TEXT_POLICY,
+                f"diagnostics must identify the actual text route: {EXPECTED_TEXT_POLICY}")
         return report
 
 
@@ -52,12 +54,15 @@ def diagnostic_codes(report: dict) -> set[str]:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("usage: pipeline_visual_diagnostics_tests.py PATH_TO_PSEUDO_BROWSER PATH_TO_PIPELINE_DUMP")
-        return 2
-
-    exe = Path(sys.argv[1])
-    pipeline_dump = Path(sys.argv[2])
+    global EXPECTED_TEXT_POLICY
+    parser = argparse.ArgumentParser()
+    parser.add_argument("pseudo", type=Path)
+    parser.add_argument("pipeline_dump", type=Path)
+    parser.add_argument("--text-policy", choices=("geometry-only", "core-text"), default="geometry-only")
+    args = parser.parse_args()
+    exe = args.pseudo
+    pipeline_dump = args.pipeline_dump
+    EXPECTED_TEXT_POLICY = args.text_policy
     require(exe.exists(), f"missing executable: {exe}")
     require(pipeline_dump.exists(), f"missing executable: {pipeline_dump}")
     repo_root = Path(__file__).resolve().parents[2]

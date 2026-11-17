@@ -11,15 +11,15 @@
 #include "render_core/render_tree.h"
 #include "render_core/software_renderer.h"
 #include "render_core/style.h"
+#include "display_command_access.h"
 
 #if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME) && \
-    defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    JELLYFRAME_NATIVE_CORE_TEXT_DEFAULT
 #include "app_runtime/app_font_set.h"
 #include "app_runtime/core_system_font_catalog.h"
 #endif
 
 #include "example_css_io.h"
-#include "display_command_access.h"
 
 #include <algorithm>
 #include <chrono>
@@ -537,6 +537,7 @@ std::string json_escape(const std::string& value) {
 
 void write_diagnostics_json(const std::string& path,
                             const BrowserOptions& options,
+                            bool core_text,
                             const PipelineStatistics& statistics,
                             const LayoutBounds& layout_bounds,
                             const LayoutBounds& paint_bounds,
@@ -568,7 +569,7 @@ void write_diagnostics_json(const std::string& path,
     output << "  \"formatVersion\": 0,\n";
     output << "  \"tool\": \"jellyframe_pseudo_browser\",\n";
     output << "  \"mode\": \"render_core\",\n";
-    output << "  \"textPolicy\": \"geometry-only\",\n";
+    output << "  \"textPolicy\": \"" << (core_text ? "core-text" : "geometry-only") << "\",\n";
     output << "  \"html\": \"" << json_escape(options.html_path) << "\",\n";
     output << "  \"css\": \"" << json_escape(options.css_path) << "\",\n";
     output << "  \"output\": \"" << json_escape(options.output_path) << "\",\n";
@@ -699,7 +700,7 @@ int main(int argc, char** argv) {
         const HostBudgets budgets = desktop_validation_budgets();
         VectorDiagnosticSink diagnostics;
 #if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME) && \
-    defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    JELLYFRAME_NATIVE_CORE_TEXT_DEFAULT
         AppFontSet fonts;
         if (!fonts.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog,
                                                         kNotoSansScSystemFontCatalogSize)) {
@@ -757,6 +758,10 @@ int main(int argc, char** argv) {
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
         layout_options.diagnostics = &diagnostics;
         layout_options.text_system = text_system;
+        TextSystemStatus text_status = TextSystemStatus::Ok;
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+        layout_options.text_status = &text_status;
+#endif
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         LayoutEngine layout_engine(resolver, layout_options);
 #else
@@ -764,6 +769,8 @@ int main(int argc, char** argv) {
 #endif
         stage_start = Clock::now();
         auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
+        if (!layout_tree) throw std::runtime_error("layout refused (Core text status=" +
+            std::to_string(static_cast<unsigned>(text_status)) + ")");
         timings.layout_us = elapsed_us(stage_start, Clock::now());
 
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
@@ -772,6 +779,7 @@ int main(int argc, char** argv) {
         LayerTreeBuilder layer_tree_builder(layer_options);
         stage_start = Clock::now();
         auto layer_tree = layer_tree_builder.build(*layout_tree);
+        if (!layer_tree) throw std::runtime_error("layer tree refused Core text or paint input");
         timings.build_layer_tree_us = elapsed_us(stage_start, Clock::now());
         stage_start = Clock::now();
         DisplayList display_list = layer_tree_builder.flatten(*layer_tree);
@@ -855,6 +863,7 @@ int main(int argc, char** argv) {
 
         write_diagnostics_json(options.diagnostics_json_path,
                                options,
+                               text_system != nullptr,
                                pipeline_statistics,
                                layout_bounds,
                                paint_bounds,

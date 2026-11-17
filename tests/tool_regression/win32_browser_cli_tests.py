@@ -500,8 +500,11 @@ def main() -> int:
             require((root / "off" / filename).read_bytes() == (root / "on" / filename).read_bytes(),
                     "trace diagnostic repaint must not change captured pixels")
         records = [json.loads(line) for line in (root / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
-        require(len(records) == 3 and records[1]["action"] == "repaint-existing",
-                "static trace must retain a real initial diagnostic repaint")
+        # ABI9 text snapshots bind the exact DOM generation, including a
+        # diagnostic paint mark. A new snapshot is required for that repaint.
+        expected_action = "rebuild-pipeline" if CORE_ABI >= 9 else "repaint-existing"
+        require(len(records) == 3 and records[1]["action"] == expected_action,
+                f"static trace must retain a real initial diagnostic repaint ({expected_action})")
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-scripted-pointer-drag-") as directory:
         root = Path(directory)

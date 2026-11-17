@@ -912,12 +912,17 @@ if(JELLYFRAME_BUILD_TESTS)
         endif()
 
         if(JELLYFRAME_BUILD_EXAMPLES AND JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS)
+            set(JELLYFRAME_PSEUDO_TEXT_POLICY "geometry-only")
+            if(JELLYFRAME_BUILD_APP_RUNTIME AND JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 4)
+                set(JELLYFRAME_PSEUDO_TEXT_POLICY "core-text")
+            endif()
             add_test(
                 NAME jellyframe_pipeline_visual_diagnostics_tests
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/pipeline_visual_diagnostics_tests.py
                         $<TARGET_FILE:jellyframe_pseudo_browser>
                         $<TARGET_FILE:jellyframe_pipeline_dump>
+                        --text-policy "${JELLYFRAME_PSEUDO_TEXT_POLICY}"
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
@@ -1095,6 +1100,14 @@ if(JELLYFRAME_BUILD_TESTS)
     endif()
 
     if(WIN32 AND JELLYFRAME_BUILD_APP_RUNTIME AND JELLYFRAME_BUILD_EXAMPLES AND JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS)
+        if(JELLYFRAME_BUILD_SCRIPTING AND JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 4)
+            add_test(NAME jellyframe_native_core_text_route
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/native_core_text_route_tests.py
+                    $<TARGET_FILE:jellyframe_desktop_shell> $<TARGET_FILE:jellyframe_pseudo_browser>
+                    --core-version "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
+                    --core-abi "${JELLYFRAME_RENDER_CORE_ENGINE_ABI}")
+        endif()
         set(JELLYFRAME_WIN32_BROWSER_CLI_TEST_ARGS
             ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/win32_browser_cli_tests.py

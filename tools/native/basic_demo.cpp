@@ -68,10 +68,8 @@ int main() {
         print_color(command.color);
         if (type == DisplayCommandType::Text && !command.text.empty()) {
             std::cout << " value=\"" << command.text << "\"";
-#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
-        } else if (command.type() == DisplayCommandType::PreparedText) {
+        } else if (native::is_prepared_text_command(type)) {
             std::cout << " prepared_packet_bytes=" << command.text.size();
-#endif
         }
         std::cout << '\n';
     }
