@@ -10,6 +10,8 @@
 #if !JELLYFRAME_RUNTIME_SHAPED_TEXT_API || !JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
 #error Qualification requires actual Core shaped DOM producer/paint APIs.
 #endif
+static_assert(JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API == JFSG_EXPECT_CONTEXTUAL,
+    "Qualification must execute the explicitly selected text route");
 
 namespace {
 std::vector<std::uint8_t> installed_bytes(AppInstalledBundleBinding& binding, const char* path,
@@ -62,7 +64,16 @@ Rect compare_direct_core(const ScriptTaskAcceptedAppFrame& accepted,
     auto work=binding->work_limit();
     CHECK(binding->layout_document(engine,*tree,172,320,options,work,layout)==runtime_shaped::Status::ok);
     runtime_shaped::LayerCapture capture;
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+    CHECK(LayerTreeBuilder{}.build_contextual(layout,capture));
+    const auto* captured_tree=capture.layer_tree();
+    const auto& captured_positions=capture.after_command_counts();
+#else
     CHECK(LayerTreeBuilder{}.build_shaped(layout,capture));
+    const auto* captured_tree=capture.layer_tree.get();
+    const auto& captured_positions=capture.after_command_counts;
+#endif
+    CHECK(captured_tree);
     std::size_t at=0;
     for (std::size_t p=0;p<layout.paragraphs().size();++p) {
         const auto& paragraph=layout.paragraphs()[p];
@@ -71,7 +82,7 @@ Rect compare_direct_core(const ScriptTaskAcceptedAppFrame& accepted,
             CHECK(at<accepted.frame().shaped_text.size());
             const auto& transported=accepted.frame().shaped_text[at++];
             CHECK(transported.packet==line.packet);
-            CHECK(transported.after_command_count==capture.after_command_counts[p]);
+            CHECK(transported.after_command_count==captured_positions[p]);
             CHECK(transported.baseline_x_q1000==paragraph.origin_x_q1000);
             CHECK(transported.baseline_y_q1000==paragraph.origin_y_q1000+line.baseline_y_q1000);
             CHECK(transported.clip.x==0 && transported.clip.y==0 &&
@@ -85,14 +96,14 @@ Rect compare_direct_core(const ScriptTaskAcceptedAppFrame& accepted,
     SoftwareRasterizer rasterizer;
     work=binding->work_limit();
     at=0;
-    for (std::size_t cmd=0;cmd<=capture.layer_tree->display_list.size();++cmd) {
+    for (std::size_t cmd=0;cmd<=captured_tree->display_list.size();++cmd) {
         while (at<accepted.frame().shaped_text.size() && accepted.frame().shaped_text[at].after_command_count==cmd) {
             const auto& line=accepted.frame().shaped_text[at++];
             CHECK(runtime_shaped::paint(binding->core_binding(),line.packet,reference,
                 line.baseline_x_q1000,line.baseline_y_q1000,line.clip,line.color,{},work)==runtime_shaped::Status::ok);
         }
-        if (cmd<capture.layer_tree->display_list.size())
-            rasterizer.rasterize(capture.layer_tree->display_list[cmd],reference,{0,0,172,320});
+        if (cmd<captured_tree->display_list.size())
+            rasterizer.rasterize(captured_tree->display_list[cmd],reference,{0,0,172,320});
     }
     CHECK(equal(reference,actual));
     std::vector<const LayoutBox*> pending{layout.tree()};
@@ -153,7 +164,7 @@ int main(int argc,char** argv) {
     auto selected=binding->select_active_text_pipeline(workspace,2*1024*1024);
     std::printf("selected pipeline status=%u\n",unsigned(selected.status));
     CHECK(selected.status==AppInstalledTextPipelineStatus::Ready);
-    CHECK(selected.frame_version==11 && selected.binding && selected.binding->valid());
+    CHECK(selected.frame_version==kRuntimeShapedFrameVersion && selected.binding && selected.binding->valid());
     CHECK(installed_text_pipeline_supported(selected));
     if (mode=="binding_oom") {
         allocation_fault::begin();
@@ -213,7 +224,7 @@ int main(int argc,char** argv) {
     resources->bind_worker_resources(options);
     options.viewport={0,0,172,320};
     options.frame_codec={256,32768,32,65536};
-    options.frame_codec.version=11;options.frame_codec.max_groups=64;
+    options.frame_codec.version=kRuntimeShapedFrameVersion;options.frame_codec.max_groups=64;
     options.input_codec={32,256};
     options.shaped_layout.font_family_hash=selected.font_family_hash;
     if (mode=="worker_init_oom") {
@@ -356,8 +367,13 @@ int main(int argc,char** argv) {
     const auto take=[&](ScriptTaskAcceptedAppFrame& accepted) {
         CHECK(take_installed_core_text_frame(supervisor,session,options.frame_codec,accepted)==ScriptTaskAppFrameTakeStatus::Accepted);
         CHECK(accepted.shaped_text_binding()==selected.binding && !accepted.frame().shaped_text.empty());
-        for (const auto& command:accepted.frame().display_list)
-            CHECK(command.type()!=DisplayCommandType::PreparedText && command.type()!=DisplayCommandType::Text);
+        for (const auto& command:accepted.frame().display_list) {
+            const auto type=detail::command_type(command);
+            CHECK(!detail::is_prepared_command_type(type) && type!=DisplayCommandType::Text);
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+            CHECK(type!=DisplayCommandType::GlyphRun);
+#endif
+        }
     };
     ScriptTaskFrameRenderer renderer;
     const auto render=[&](const ScriptTaskAcceptedAppFrame& accepted) {
@@ -404,6 +420,7 @@ int main(int argc,char** argv) {
         button=compare_direct_core(changed,selected.binding,expected,css,pixels,options.shaped_layout);
         if (mode=="pipeline" && round==0) image(fixture/"clicked.ppm",pixels);
     }
+    const std::weak_ptr<const RuntimeShapedTextBinding> retained_owner=selected.binding;
     worker->stop();
     worker.reset();
     CHECK(supervisor.begin_teardown(session).session==session);
@@ -416,6 +433,9 @@ int main(int argc,char** argv) {
     bytes.clear();
     CHECK(equal(render(initial),original));
     std::printf("full-shaped %s PASS bytes=%zu checks=%u crypto_calls=%u records=%zu\n",mode.c_str(),package_bytes,checks,crypto_calls,initial.frame().shaped_text.size());
+    CHECK(!retained_owner.expired());
+    initial={};
+    CHECK(retained_owner.expired());
 }
 namespace jellyframe_esp32s3 {
 const ResourceBundle& generated_resource_bundle() { static const ResourceBundle empty{};return empty; }

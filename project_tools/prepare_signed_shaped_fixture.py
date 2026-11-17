@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import struct
 import sys
 
@@ -21,12 +22,19 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def build(core_fixtures, font, output, capacity, public_test_signature=False):
+def build(core_fixtures, font, output, capacity, public_test_signature=False,
+          pipeline='jfsp1-block-v11', candidate_core_version=None):
     core_fixtures, font, output = Path(core_fixtures), Path(font), Path(output)
     if output.exists() and (not output.is_dir() or any(output.iterdir())):
         raise ValueError('output already exists; preserve previous package evidence')
     if type(capacity) is not int or not 0 < capacity <= 4 * 1024 * 1024:
         raise ValueError('invalid explicit package capacity')
+    if pipeline not in ('jfsp1-block-v11', 'jfsp2-block-v12'):
+        raise ValueError('invalid explicit text pipeline')
+    if candidate_core_version is not None and (
+            pipeline != 'jfsp2-block-v12' or
+            not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', candidate_core_version)):
+        raise ValueError('candidate Core version requires contextual route and exact numeric version')
     records = json.loads((core_fixtures / 'shaping_executor_catalog/manifest.json').read_text(encoding='utf-8'))['faces']['Regular']
     companion_record = json.loads((core_fixtures / 'shaping_resource/manifest.json').read_text(encoding='utf-8'))['faces']['Regular']
     sources = {
@@ -48,6 +56,11 @@ def build(core_fixtures, font, output, capacity, public_test_signature=False):
             sha(companion) != companion_record['fixtureSha256'] or
             catalog[16:48] != raw_font[64:96] or catalog[48:80].hex() != records['profileSha256']):
         raise ValueError('catalog/companion/font evidence mismatch')
+    if pipeline == 'jfsp2-block-v12':
+        complete = json.loads((core_fixtures / 'contextual_font/manifest.json').read_text())
+        reference = next(row for row in complete['resources'] if row['file'] == 'regular.jffont2')
+        if len(raw_font) != reference['bytes'] or sha(raw_font) != reference['sha256']:
+            raise ValueError('contextual route requires exact complete typed4bpp font fixture')
     html = ('<html><head><link rel="stylesheet" href="/app.css"></head><body>'
             '<div id="title">SHAPED CORE</div><div id="label">office AV fi 中 e\u0301</div>'
             '<div id="button">NEXT 0</div><script src="/app.js"></script></body></html>')
@@ -72,12 +85,18 @@ def build(core_fixtures, font, output, capacity, public_test_signature=False):
     manifest['budgets'] = {'maxResourceBytes': 2 * 1024 * 1024, 'maxDomNodes':128,
                            'maxCssRules':64,'maxDisplayCommands':256,'maxTimers':8,'maxEventListeners':16}
     manifest['textPipeline'] = {
-        'kind':'jfsp1-block-v11','font':'/font.jffont2','catalog':'/catalog.jfcat1',
+        'kind':pipeline,'font':'/font.jffont2','catalog':'/catalog.jfcat1',
         'companion':'/companion.jfshr2','tables':'/unicode14.bin','eligibility':'/regular.eligibility',
         'sourceIdentity':records['sourceSha256'],'profileIdentity':records['profileSha256'],
         'glyphCount':companion_record['glyphCount'],'resourceId':55001,'rasterSize':16,'weight':400,'selection':0,
     }
     manifest = package_app.validate_manifest(manifest)
+    production_core_version = manifest['minRenderCore']
+    # Candidate qualification must stage a separate exact lock and matching
+    # manifest in an isolated Runtime snapshot. Signing and inspection then
+    # execute their ordinary strict policy, without overrides or monkeypatches.
+    if candidate_core_version is not None and candidate_core_version != production_core_version:
+        raise ValueError('candidate version must match active isolated tool lock; stage a separate snapshot')
     output.mkdir(parents=True,exist_ok=True)
     for name, data in assets.items():
         (output / name[1:]).write_bytes(data)
@@ -98,9 +117,12 @@ def build(core_fixtures, font, output, capacity, public_test_signature=False):
               'publicTestKey':public_test_signature,'sourceIdentity':records['sourceSha256'],
               'profileIdentity':records['profileSha256'],'fontGlyphs':struct.unpack_from('<I',raw_font,20)[0],
               'catalogRasterGids':records['rasterGids'], 'omittedOriginalAssets':[],
+              'textPipeline':pipeline,'candidateCoreVersion':candidate_core_version,
+              'toolCoreVersion':production_core_version,
+              'candidateLockChecked':candidate_core_version is not None,
               'executionVerified':False}
     if signed and report['fits']:
-        report['hostInspection'] = inspect_install_bytes(signed, capacity, supported_text_pipelines=('jfsp1-block-v11',))
+        report['hostInspection'] = inspect_install_bytes(signed, capacity, supported_text_pipelines=(pipeline,))
     (output / 'package-evidence.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     if not report['fits']:
         raise ValueError(f"full resource package exceeds target capacity: {len(signed or package)} > {capacity}; report retained")
@@ -114,9 +136,12 @@ def main():
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--max-package-bytes',type=int,required=True)
     parser.add_argument('--public-test-signature',action='store_true')
+    parser.add_argument('--text-pipeline',choices=('jfsp1-block-v11','jfsp2-block-v12'),default='jfsp1-block-v11')
+    parser.add_argument('--candidate-core-version',help='Explicit contextual qualification manifest line; production lock unchanged')
     args=parser.parse_args()
     try:
-        report=build(args.core_fixtures,args.font,args.output,args.max_package_bytes,args.public_test_signature)
+        report=build(args.core_fixtures,args.font,args.output,args.max_package_bytes,args.public_test_signature,
+                     args.text_pipeline,args.candidate_core_version)
     except (ValueError,OSError,KeyError,struct.error) as error:
         parser.exit(1,f'prepare_signed_shaped_fixture: {error}\n')
     print(json.dumps(report,indent=2))

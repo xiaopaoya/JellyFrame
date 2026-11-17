@@ -62,3 +62,44 @@ exactly once. The expanded suite passes17/17. It does not inject C malloc/VM are
 or target heap failures and is not a peak-memory/leak measurement. See
 [allocation recovery](../../../../docs/evaluation/2026-11-17-shaped-worker-allocation-recovery.md)
 for measured indices, the confirmed exception-boundary fixes and remaining gates.
+
+## ABI9 contextual qualification
+
+The same harness also selects `jfsp2-block-v12` explicitly when contextual
+text/layout/JFSP2 are all enabled on matching Core ABI9. It checks that the
+compiled API matches that requested route. Capture uses the owned contextual
+API; packet/pixel comparison and retained-owner release checks run in both
+routes. It never paints contextual geometry through scalar JFTP.
+
+For ABI9, use a separate Runtime snapshot with an exact candidate dependency
+lock and matching `samples/apps/packages/jelly_font_policy/jellyframe.app.json`
+minimum Core line. Do not edit production source policy or bypass the signing
+tool's strict validation. The generator's `--candidate-core-version` checks
+that this isolated tool lock matches; it cannot override a mismatched lock.
+The exact staged changes and source hashes are recorded in the topic evidence.
+
+For installed public Core qualification, configure this directory with:
+
+```text
+-DJELLYFRAME_RENDER_CORE_PROVIDER=package
+-DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=<matching exact installed prefix>
+-DJFSG_CORE_FIXTURES_DIR=<frozen Core tests/fixtures>
+-DJELLYFRAME_ENABLE_CONTEXTUAL_TEXT=ON
+-DJELLYFRAME_ENABLE_CONTEXTUAL_LAYOUT=ON
+-DJELLYFRAME_ENABLE_SHAPED_PACKET_V2=ON
+```
+
+Keep `JELLYFRAME_RENDER_CORE_SOURCE_DIR` unset for installed consumers. Fixture
+assets are offline data, not a private header/source fallback. The standalone
+parent target takes package-first include order from app_runtime; otherwise
+the bundled legacy Core headers could precede imported headers. Package API,
+archive linkage, source identity and assertions are audited independently.
+Cropping additionally disables Canvas2D, modern paint, flex/grid, advanced
+forms and length math, using the matching cropped installed prefix.
+
+ABI9 installed full/cropped and ABI4 compatibility each pass17/17. ABI9
+complete resource package size remains1550043B. The provider test derives the
+exact pipeline from fixture evidence and checks wrong ABI, partial capability,
+cross-route and capacity refusal before Begin. These are host mocked wire/NOR
+results with actual mbedTLS verification, not physical installation or VM/heap
+qualification. See [ABI9 execution evidence](../../../../docs/evaluation/2026-11-17-abi9-signed-resource-execution.md).
