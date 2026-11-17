@@ -62,10 +62,11 @@ The three source-tool suites pass137 unittest cases for production0.9.0 and
 skips per configuration. Valid synthetic manifests derive the active line.
 Intentional wrong-version checks remain. Production manifest/docs assertions
 derive the actual repository lock with the test override temporarily cleared.
-Those source-test changes still require coherent integration into the isolated
-candidate snapshot and its broader CLI/sample harness.
+The three source-test changes are synchronized into the isolated candidate
+snapshot. Production metadata consistency checks expose that snapshot's mixed
+source metadata. Broader CLI/sample staging still requires a coherent entry.
 
-The last broad candidate Runtime run remains60/87, with27 failed CTests.
+The final broad candidate Runtime run passes62/87, with25 failed CTests.
 Version/snapshot harness failures and actual product UnsupportedText failures
 remain open. Weather diagnostic copies isolate an additional failure to the
 image-containing scope. The image-free static page, eyebrow, facts and tabs
