@@ -21,8 +21,8 @@ Audience: Render Core or port contributors validating the neutral HAL boundary.
 Start here when a board port has not yet been selected; move to a real port only
 after this smoke path is understood.
 
-The demo borrows a complete 318-byte JFFONT2 resource containing space and
-hand-authored A/B coverage strikes. Its bytes and face registration remain alive
+The demo borrows a complete 468-byte JFFONT2 resource containing space and
+hand-authored 0/A/B/v coverage strikes. Its bytes and face registration remain alive
 through layout, layer construction and composition. The same `TextSystem` is
 bound to all three stages; no text measurement or paint callbacks are installed.
 This uses the supported TextSystem contract in both locked Core 0.8.0 / ABI3 and
@@ -43,3 +43,9 @@ resulting live form state independently.
 With advanced forms enabled, select activation opens the popup and preserves
 `A`; with that family cropped out, the base control cycles to `B`. Both outcomes
 are checked explicitly through the exported feature flag.
+
+ABI9 native controls also require `0` for intrinsic control sizing and `v` for
+the select arrow. The demo includes both rather than substituting missing glyphs.
+The ABI9 profile uses the finite `4 * max_layout_boxes + 1` layer reservation
+ceiling and checks layout, layer construction and painting before publication.
+This host reference does not establish real-device RAM or latency budgets.
