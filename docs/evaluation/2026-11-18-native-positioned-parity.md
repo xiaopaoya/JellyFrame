@@ -48,14 +48,20 @@ installed matrix passed 39/39 per profile under the exact package identity lock.
 The Runtime app-font microbenchmark builds and executes with the ABI9 CSS family
 hash and retains the resolved-family path for the canonical value API.
 
-Desktop qualification is 84/90. Six gates remain: font-policy check and report,
-doctor (font policy and controls), Route Tabs repaint reuse, and Motion Lab dirty
-regions and text reuse. A font-policy copy without Kana succeeds when taken out
-of Flex automatic-minimum sizing; the original CSS still refuses its non-ASCII
-content. Isolated Kana refuses even without that CSS. Test those failure modes
-separately from actual manifest font loading and glyph rendering. Contextual CLI,
-feature inventory, signed/resource/target carry-forward and physical acceptance
-remain separate.
+Core `56f1d07f` (`cc006bfc`) keeps native graphic controls in Flex out of the
+image metadata path. Core passed 26/26 full, 26/26 cropped and 14/14 with
+contextual text disabled. Runtime `df0bde80` shares package font loading
+between preflight and the shell; both produce identical named-font probe
+pixels. The positive Font Policy sample and the negative Kana probe now run
+separately. The matching installed Runtime suites pass 39/39 per profile.
+
+Desktop qualification reaches 88/90 after retaining previous geometry for
+damage calculation when stale scalar text requires a fresh layout. Motion
+Lab rebuilds 68 times, with four local paints and 64 full paints. All 90
+captured frames match forced full repaint. Route Tabs repaint reuse and
+Motion Lab style-stable reuse remain open, as do contextual CLI, feature
+coverage, signed/resource/target carry-forward and physical acceptance.
+Current evidence: E:/Experiments/migration-flex-controls-20261118.
 
 Grid/desktop evidence: E:/Experiments/migration-inline-atom-grid-20261118.
 Installed identity and results: E:/Experiments/migration-inline-atom-installed-20261118/result.json.

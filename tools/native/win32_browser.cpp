@@ -7133,16 +7133,16 @@ private:
         // ABI9 Core snapshots validate the exact document mutation generation,
         // including paint-only marks. Rebuilding layers from an older text
         // snapshot is not a valid reuse operation, even if geometry is stable.
+        // The old geometry and layers still describe the pixels to repair.
         bool stale_core_snapshot = false;
 #if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
         stale_core_snapshot = text_backend.core_text && layout_tree_ &&
             layout_document_generation_ != document_->mutation_generation;
-        if (stale_core_snapshot) {
+        if (stale_core_snapshot && update_plan.action == FrameUpdateAction::RepaintExisting) {
             update_plan.action = FrameUpdateAction::RebuildPipeline;
-            update_plan.dirty_rect_mode = FrameDirtyRectMode::FullFrame;
+            update_plan.dirty_rect_mode = FrameDirtyRectMode::PreviousAndCurrentLayout;
             update_plan.can_reuse_render_and_layout = false;
-            update_plan.needs_previous_layout = false;
-            update_plan.needs_full_framebuffer = true;
+            update_plan.needs_previous_layout = true;
         }
 #endif
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets_);
