@@ -1,5 +1,7 @@
 # Native positioned migration and route coverage
 
+Last updated: 2026-11-18; Applies to: 0.6.0-dev
+
 ## Product qualification
 
 Core source641/hash9645ce6b adds selected positioned percentage widths, definite
@@ -7,7 +9,7 @@ Grid/Flex and canonical positioned Canvas. The exact candidate lock is
 E:/Experiments/migration-positioned-native-20261118/candidate-positioned-canvas-lock.cmake.
 Production lock/defaults remain on their existing release line.
 
-Broad active-source Runtime regression reaches82/89. Canvas Gauges static
+The positioned candidate reached 82/89 after the documentation gate was repaired. Canvas Gauges static
 preflight and frame script, external author trial, Motion startup/equivalence,
 low-power/soak and dirty-flag gates now pass. The source implementations and
 existing product fixtures are used through their ordinary entries.
@@ -38,12 +40,25 @@ actual layout operations.
 
 ## Remaining gates
 
-Seven broad gates fail. Font-policy preflight/report and the dependent doctor
-need coherent app-font/repertoire and intentional-refusal semantics. Band shell
-still reports a Grid intrinsic compatibility fallback. Route and Motion retain
-paint/text reuse and dirty-region performance gaps. Contextual CLI, complete
-feature inventory reconciliation, signed/resource/target carry-forward and
-physical acceptance remain outside these host passes.
+Core `47229e42` (source hash `af853a23…`) resolves Band Shell's Grid source
+width query. The original launcher at 172×320 emits zero diagnostics and its
+BMP is byte-identical to the predecessor capture. Weather route pixel parity
+passes. Core full/cropped/OFF passed 26/26, 26/26 and 14/14. The matching Runtime
+installed matrix passed 39/39 per profile under the exact package identity lock.
+The Runtime app-font microbenchmark builds and executes with the ABI9 CSS family
+hash and retains the resolved-family path for the canonical value API.
+
+Desktop qualification is 84/90. Six gates remain: font-policy check and report,
+doctor (font policy and controls), Route Tabs repaint reuse, and Motion Lab dirty
+regions and text reuse. A font-policy copy without Kana succeeds when taken out
+of Flex automatic-minimum sizing; the original CSS still refuses its non-ASCII
+content. Isolated Kana refuses even without that CSS. Test those failure modes
+separately from actual manifest font loading and glyph rendering. Contextual CLI,
+feature inventory, signed/resource/target carry-forward and physical acceptance
+remain separate.
+
+Grid/desktop evidence: E:/Experiments/migration-inline-atom-grid-20261118.
+Installed identity and results: E:/Experiments/migration-inline-atom-installed-20261118/result.json.
 
 Evidence is E:/Experiments/migration-positioned-native-20261118 and
 E:/Experiments/migration-route-tabs-coverage-20261118. The comprehensive log is

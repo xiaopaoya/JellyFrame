@@ -657,8 +657,13 @@ void bench_font_family_measure(std::size_t capacity) {
     // tiny source bytes rather than admitting the whole shared Noto catalog.
     if (!host.load_current_core_font(kTinyCanonicalFont, sizeof(kTinyCanonicalFont)).loaded() ||
         !host.load_current_core_font(kTinyCanonicalFont, sizeof(kTinyCanonicalFont), "Jelly Tiny").loaded()) std::abort();
-    std::uint32_t family;
-    if (!host.fonts().core_text_system()->resolve_family_hash(normalized_font_family_hash("Jelly Tiny"), family)) std::abort();
+    const auto family_hash = normalized_font_family_hash("Jelly Tiny");
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    std::uint32_t family = 0;
+    if (!host.fonts().core_text_system()->resolve_family_hash(family_hash, family) || family == 0) std::abort();
+#else
+    const std::uint32_t family = family_hash;
+#endif
     TextFontRequest request; request.families = &family; request.family_count = 1; request.size_q1000 = 8000;
     TextRunMetrics metrics;
     for (std::size_t i = 0; i < capacity; ++i)
