@@ -400,12 +400,38 @@ class PackagePreflightTests(unittest.TestCase):
         output_dir = build_dir / "trial"
         with self.assertRaisesRegex(SystemExit, "selected build directory"):
             jellyframe_cli.prepare_trial_output(REPO_ROOT / "outside-trial", clean=True, build_dir=build_dir)
-        with self.assertRaisesRegex(SystemExit, "build directory must be a descendant"):
+        with self.assertRaisesRegex(SystemExit, "build directory must not be the repository root"):
             jellyframe_cli.prepare_trial_output(output_dir, clean=True, build_dir=REPO_ROOT)
 
     def test_trial_build_root_rejects_paths_outside_a_repository_build(self):
         with self.assertRaisesRegex(SystemExit, "inside a CMake build directory"):
             jellyframe_cli.trial_build_root(REPO_ROOT / "tools")
+
+    def test_trial_accepts_separate_build_root_and_keeps_cleanup_inside_it(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-external-trial-") as directory:
+            build = Path(directory) / "build"
+            tools = build / "Release"
+            tools.mkdir(parents=True)
+            (build / "CMakeCache.txt").write_text(
+                f"CMAKE_HOME_DIRECTORY:INTERNAL={REPO_ROOT.as_posix()}\n", encoding="utf-8")
+            self.assertEqual(jellyframe_cli.trial_build_root(tools), build.resolve())
+            output = build / "test_outputs" / "trial"
+            output.mkdir(parents=True)
+            (output / "old.txt").write_text("old", encoding="utf-8")
+            jellyframe_cli.prepare_trial_output(output, clean=True, build_dir=build)
+            self.assertEqual(list(output.iterdir()), [])
+            self.assertTrue((build / "CMakeCache.txt").is_file())
+            with self.assertRaisesRegex(SystemExit, "selected build directory"):
+                jellyframe_cli.prepare_trial_output(Path(directory), clean=True, build_dir=build)
+
+    def test_trial_refuses_cmake_cache_owned_by_another_checkout(self):
+        with tempfile.TemporaryDirectory(prefix="jellyframe-unrelated-build-") as directory:
+            build = Path(directory) / "build"
+            build.mkdir()
+            (build / "CMakeCache.txt").write_text(
+                f"CMAKE_HOME_DIRECTORY:INTERNAL={(Path(directory) / 'other').as_posix()}\n", encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "another source checkout"):
+                jellyframe_cli.trial_build_root(build)
 
     def test_esp32s3_render_core_sources_match_desktop_target(self):
         desktop_cmake = (REPO_ROOT / "CMakeLists.txt").read_text(encoding="utf-8")

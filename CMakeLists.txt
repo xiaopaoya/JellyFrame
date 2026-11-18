@@ -775,6 +775,14 @@ if(JELLYFRAME_BUILD_TESTS)
     endif()
 
     if(Python3_Interpreter_FOUND)
+        add_test(NAME jellyframe_render_core_qualification_lock_tests
+                 COMMAND "${Python3_EXECUTABLE}"
+                         "${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_qualification_lock_tests.py"
+                         --cmake "${CMAKE_COMMAND}"
+                         --generator "${CMAKE_GENERATOR}"
+                         --ctest "${CMAKE_CTEST_COMMAND}"
+                         --configured-build "${CMAKE_CURRENT_BINARY_DIR}"
+                         --work-root "${CMAKE_CURRENT_BINARY_DIR}/test_outputs/qualification-lock")
         add_test(NAME jellyframe_rounded_aa_quality_tests
                  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/rounded_aa_quality_tests.py")
         if(TARGET jellyframe_cpu2d_compare)
@@ -978,13 +986,21 @@ if(JELLYFRAME_BUILD_TESTS)
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/template_trial_tests.py
                         $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_cli_template_trial_tests PROPERTIES
+                ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
 
             if(WIN32)
+                set(_jellyframe_sdk_qualification_args)
+                if(JELLYFRAME_RENDER_CORE_QUALIFICATION_LOCK_FILE)
+                    list(APPEND _jellyframe_sdk_qualification_args
+                        --qualification-lock "${JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_FILE}")
+                endif()
                 add_test(
                     NAME jellyframe_app_author_sdk_packaging
                     COMMAND ${Python3_EXECUTABLE}
                             ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/app_author_sdk_tests.py
                             $<TARGET_FILE_DIR:jellyframe_desktop_shell>
+                            ${_jellyframe_sdk_qualification_args}
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             endif()
 
@@ -1009,7 +1025,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_audio_smoke
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_audio_smoke
                         --target esp32s3-round-300
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_audio_smoke.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
@@ -1020,7 +1036,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_service_status
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_service_status
                         --target esp32s3-round-300
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_service_status.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
@@ -1031,7 +1047,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_font_policy
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_font_policy
                         --target round-300
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_font_policy.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
@@ -1042,7 +1058,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_wearable_launcher
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_wearable_launcher
                         --target round-300
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_wearable_launcher.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
@@ -1053,7 +1069,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/system/band_system_shell
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/system/band_system_shell
                         --target rect-172x320
                         --report ${CMAKE_BINARY_DIR}/test_outputs/band_system_shell.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
@@ -1064,7 +1080,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_smoke
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_canvas_smoke
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_canvas_smoke.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -1074,7 +1090,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_gauges
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_canvas_gauges
                         --targets round-300,rect-320x240,rect-172x320
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_canvas_gauges.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
@@ -1092,7 +1108,15 @@ if(JELLYFRAME_BUILD_TESTS)
                         --report ${CMAKE_BINARY_DIR}/test_outputs/watch_weather.responsive.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-            set_tests_properties(jellyframe_cli_check_watch_weather_responsive PROPERTIES
+            set_tests_properties(
+                jellyframe_cli_check_audio_smoke_package
+                jellyframe_cli_check_service_status_package
+                jellyframe_cli_check_font_policy_package
+                jellyframe_cli_check_wearable_launcher_package
+                jellyframe_cli_check_band_system_shell
+                jellyframe_cli_check_canvas_smoke_package
+                jellyframe_cli_check_canvas_gauges_package
+                jellyframe_cli_check_watch_weather_responsive PROPERTIES
                 FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
 
@@ -1117,10 +1141,13 @@ if(JELLYFRAME_BUILD_TESTS)
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         doctor
                         --trial
+                        --samples-dir ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                         --report-dir ${CMAKE_BINARY_DIR}/test_outputs/external_trial
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_cli_doctor_external_trial PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
+                ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
                 PASS_REGULAR_EXPRESSION
                     "JellyFrame doctor: mode=external-trial samples=4")
 

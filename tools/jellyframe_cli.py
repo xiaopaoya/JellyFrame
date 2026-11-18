@@ -3537,12 +3537,14 @@ def prepare_trial_output(output_dir: Path, clean: bool, build_dir: Path | None =
     resolved_output = output_dir.resolve()
     repository = repo_root().resolve()
     trial_root = (build_dir if build_dir is not None else repository / "build").resolve()
-    if trial_root == repository or not trial_root.is_relative_to(repository):
-        raise SystemExit("trial build directory must be a descendant of the repository root")
     if resolved_output == repository:
         raise SystemExit("trial output directory must not be the repository root")
+    if trial_root == repository:
+        raise SystemExit("trial build directory must not be the repository root")
     if resolved_output == trial_root or not resolved_output.is_relative_to(trial_root):
         raise SystemExit("trial output directory must be a descendant of the selected build directory")
+    if trial_build_root(trial_root) != trial_root:
+        raise SystemExit("trial output must belong to the selected CMake build root")
     if resolved_output.exists() and not resolved_output.is_dir():
         raise SystemExit(f"trial output path is not a directory: {resolved_output}")
     if resolved_output.exists() and any(resolved_output.iterdir()):
@@ -3553,14 +3555,18 @@ def prepare_trial_output(output_dir: Path, clean: bool, build_dir: Path | None =
 
 
 def trial_build_root(build_dir: Path) -> Path:
-    """Return the CMake build root that owns a directory of built tools."""
+    """Return a CMake build root configured from this Runtime checkout."""
     repository = repo_root().resolve()
     candidate = build_dir.resolve()
-    while candidate != repository and candidate.is_relative_to(repository):
-        if (candidate / "CMakeCache.txt").is_file():
+    for candidate in (candidate, *candidate.parents):
+        cache = candidate / "CMakeCache.txt"
+        if cache.is_file():
+            source = re.search(r"^CMAKE_HOME_DIRECTORY:INTERNAL=(.+)$",
+                               cache.read_text(encoding="utf-8-sig", errors="replace"), re.MULTILINE)
+            if source is None or Path(source.group(1)).resolve() != repository:
+                raise SystemExit("trial CMake build directory belongs to another source checkout")
             return candidate
-        candidate = candidate.parent
-    raise SystemExit("trial build directory must be inside a CMake build directory below the repository root")
+    raise SystemExit("trial build directory must be inside a CMake build directory for this checkout")
 
 
 def cmd_trial(args: argparse.Namespace) -> int:

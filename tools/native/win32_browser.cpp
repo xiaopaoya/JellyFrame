@@ -78,6 +78,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -637,41 +638,54 @@ bool has_dirty_image_attributes(const Node& node) {
     return false;
 }
 
+struct PackageImageFixtureState {
+    std::vector<std::string> sources;
+    std::size_t source_bytes = 0, decoded_bytes = 0;
+};
+
+void add_package_image_fixture(const std::string& source,
+                               jellyframe_example::PackageResourceContext& package_context,
+                               ImageDecodeMock& images, DiagnosticSink* diagnostics,
+                               PackageImageFixtureState* state) {
+    if (state != nullptr) {
+        if (std::find(state->sources.begin(), state->sources.end(), source) != state->sources.end()) return;
+        if (state->sources.size() >= jellyframe_example::kJfappMaxResourceEntries ||
+            source.size() > kMaxInputBytes - state->source_bytes)
+            throw std::runtime_error("package image fixture source budget exceeded");
+        state->sources.push_back(source);
+        state->source_bytes += source.size();
+    }
+    std::string bytes;
+    if (!jellyframe_example::load_package_resource(source, package_context.base_url, bytes, &package_context)) return;
+    ImageDecodeFixture fixture;
+    if (!decode_bmp_to_fixture(source, bytes, fixture, diagnostics)) return;
+    const auto decoded_bytes = fixture.pixels.size();
+    if (state != nullptr && decoded_bytes > kMaxInputBytes - state->decoded_bytes)
+        throw std::runtime_error("package image fixture byte budget exceeded");
+    if (images.add_fixture(std::move(fixture)) && state != nullptr) state->decoded_bytes += decoded_bytes;
+}
+
 void add_package_image_fixtures(const Node& document,
                                 jellyframe_example::PackageResourceContext& package_context,
                                 ImageDecodeMock& images,
-                                DiagnosticSink* diagnostics) {
+                                DiagnosticSink* diagnostics, PackageImageFixtureState* state = nullptr) {
     std::vector<std::string> sources;
     collect_image_sources(document, sources);
     for (const std::string& source : sources) {
-        std::string bytes;
-        if (!jellyframe_example::load_package_resource(source, package_context.base_url, bytes, &package_context)) {
-            continue;
-        }
-        ImageDecodeFixture fixture;
-        if (decode_bmp_to_fixture(source, bytes, fixture, diagnostics)) {
-            images.add_fixture(std::move(fixture));
-        }
+        add_package_image_fixture(source, package_context, images, diagnostics, state);
     }
 }
 
 void add_package_background_image_fixtures(const StyleResolver& resolver,
                                            jellyframe_example::PackageResourceContext& package_context,
                                            ImageDecodeMock& images,
-                                           DiagnosticSink* diagnostics) {
+                                           DiagnosticSink* diagnostics, PackageImageFixtureState* state = nullptr) {
     for (std::size_t index = 1; index <= resolver.background_image_resource_count(); ++index) {
         const std::string* source = resolver.background_image_resource_url(static_cast<std::uint16_t>(index));
         if (source == nullptr) {
             continue;
         }
-        std::string bytes;
-        if (!jellyframe_example::load_package_resource(*source, package_context.base_url, bytes, &package_context)) {
-            continue;
-        }
-        ImageDecodeFixture fixture;
-        if (decode_bmp_to_fixture(*source, bytes, fixture, diagnostics)) {
-            images.add_fixture(std::move(fixture));
-        }
+        add_package_image_fixture(*source, package_context, images, diagnostics, state);
     }
 }
 
@@ -4932,6 +4946,8 @@ private:
     jellyframe_example::AppPackageManifest active_package_manifest_;
     AppHostDataSnapshot debug_host_data_;
     bool image_layout_dirty_ = false;
+    std::optional<jellyframe_example::PackageResourceContext> package_image_resources_;
+    PackageImageFixtureState package_image_fixtures_;
     std::vector<std::uint32_t> natural_image_handles_;
     AppImageSurfaceCache image_cache_{AppImageSurfaceCacheOptions{8, 512 * 1024}};
     BrowserImageContext image_context_{&debug_images_, &debug_canvas_};
@@ -5550,6 +5566,8 @@ private:
     }
 
     void reset_image_services() {
+        package_image_resources_.reset();
+        package_image_fixtures_ = {};
         natural_image_handles_.clear();
         image_layout_dirty_ = false;
         image_cache_.release_all(app_runtime_, debug_images_);
@@ -6205,7 +6223,7 @@ private:
             active_package_manifest_ = page.package_mode ? page.package_manifest : jellyframe_example::AppPackageManifest{};
             apply_debug_service_policies(page.package_mode);
             if (page.package_mode) {
-                add_package_image_fixtures(*page.document, page.package_context, debug_images_, &diagnostics_);
+                add_package_image_fixtures(*page.document, page.package_context, debug_images_, &diagnostics_, &package_image_fixtures_);
             }
             document_ = std::move(page.document);
             StyleResolverOptions style_options;
@@ -6215,7 +6233,7 @@ private:
                 add_package_background_image_fixtures(*style_resolver_,
                                                       page.package_context,
                                                       debug_images_,
-                                                      &diagnostics_);
+                                                      &diagnostics_, &package_image_fixtures_);
             }
             page_background_ = page_background_color(*document_, *style_resolver_);
             render_tree_.reset();
@@ -6358,6 +6376,7 @@ private:
                 }
             }
 #endif
+            if (page.package_mode) package_image_resources_ = std::move(page.package_context);
             render_current(nullptr, nullptr, nullptr);
             SetTimer(hwnd_, kScriptTimerId, kScriptTimerPeriodMs, nullptr);
             print_diagnostics(diagnostics_);
@@ -7113,6 +7132,8 @@ private:
         // Host-only mock decoding is bounded and happens before taking DOM/
         // style snapshots. Dispatch completions through the normal handler so
         // script/service results cannot be dropped by an image-only pump.
+        if (package_image_resources_)
+            add_package_image_fixtures(*document_, *package_image_resources_, debug_images_, &diagnostics_, &package_image_fixtures_);
         BrowserImageResolveContext startup_images{&app_runtime_, &debug_images_, &image_cache_,
                                                   &debug_canvas_, &diagnostics_};
         startup_images.style_resolver = style_resolver_.get();
