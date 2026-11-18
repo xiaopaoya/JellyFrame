@@ -1,5 +1,7 @@
 # ABI9 Core and Runtime host qualification
 
+Last updated: 2026-11-19; Applies to: 0.6.0-dev
+
 The independent, manually dispatched ABI9 qualification takes a full Core
 commit, its exact numeric version and the source SHA-256 from the independently
 reviewed Core source manifest. The selected Runtime revision is the workflow
