@@ -391,37 +391,32 @@ bool post_board_input(InstalledBundleScriptSession& state,
     return posted.accepted();
 }
 
-void ui_entry(void* raw) {
-    auto* state = static_cast<InstalledBundleScriptSession*>(raw);
-    if (state == nullptr || state->protocol == nullptr) {
-        vTaskDeleteWithCaps(nullptr);
-        return;
-    }
-    state->ui_started.store(true);
-    {
+void run_installed_bundle_ui(InstalledBundleScriptSession* state) {
     boards::BoardRuntime board = boards::initialize_selected_board();
+    const auto fail = [&] {
+        state->fatal_seen.store(true);
+        state->stop.store(true);
+        boards::release_board_runtime(board);
+    };
     const int width = board.profile.display.width;
     const int height = board.profile.display.height;
     if (width != state->width || height != state->height || width <= 0 || height <= 0) {
         ESP_LOGE(kTag, "ui viewport mismatch expected=%dx%d actual=%dx%d",
                  state->width, state->height, width, height);
-        state->fatal_seen.store(true);
-        state->stop.store(true);
-        boards::release_board_runtime(board);
-        state->ui_done.store(true);
-        vTaskSuspend(nullptr);
+        fail();
         return;
     }
     boards::attach_input_queue(board, &state->input_queue);
     jellyframe::FrameBuffer framebuffer(width, height, {248, 250, 252, 255});
+    if (framebuffer.width != width || framebuffer.height != height) {
+        ESP_LOGE(kTag, "ui framebuffer allocation failed for %dx%d", width, height);
+        fail();
+        return;
+    }
     const std::size_t pixel_count = rgb565_buffer_pixels(width, height);
     std::unique_ptr<std::uint16_t[]> packed(new (std::nothrow) std::uint16_t[pixel_count]);
     if (!packed) {
-        state->fatal_seen.store(true);
-        state->stop.store(true);
-        boards::release_board_runtime(board);
-        state->ui_done.store(true);
-        vTaskSuspend(nullptr);
+        fail();
         return;
     }
     Rgb565Panel panel;
@@ -499,7 +494,16 @@ void ui_entry(void* raw) {
     }
     scratch.release();
     boards::release_board_runtime(board);
+}
+
+void ui_entry(void* raw) {
+    auto* state = static_cast<InstalledBundleScriptSession*>(raw);
+    if (state == nullptr || state->protocol == nullptr) {
+        vTaskDeleteWithCaps(nullptr);
+        return;
     }
+    state->ui_started.store(true);
+    run_installed_bundle_ui(state);
     state->ui_done.store(true);
     // The supervisor deletes this suspended WithCaps task after the packed
     // surface, raster scratch and board runtime have all been released.
