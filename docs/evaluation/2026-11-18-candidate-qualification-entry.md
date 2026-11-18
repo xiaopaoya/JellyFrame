@@ -65,22 +65,24 @@ tests pass6/6 including fixture setup.
 
 ## Current gate
 
-The active-source Desktop build uses Core source641/hashfea4b7fa, full archive
-955b7c3af705ff010d247b30a6eb10a08f62b0569b44715e014a9a14d7ba2d48.
-Its broad Runtime suite passes73/88 with15 failed gates. Remaining failures
-include calculator input sizing, font-policy repertoire, Canvas/motion layout,
+The active-source Desktop build now uses Core8ac70baf, source641/hashf431075e,
+full archive8d7de78599857e0190574e49acda5921899f2009c06a022c9ff2b50bd5cb17fd.
+The Core-owned native-size correction closes calculator strict validation on all
+three targets and the unchanged template trial. Its broad Runtime suite now
+passes74/88 with14 failed gates. Remaining failures include font-policy repertoire, Canvas/motion layout,
 incremental/counter expectations and dependent aggregate trials. The external
 trial now reaches the actual Canvas failure. No acceptance assertion was
 weakened to close these product gates.
 
 Evidence directories are
 E:/Experiments/migration-candidate-qualification-entry-20261118 and
-E:/Experiments/migration-grid-image-scope-20261118. The final active-source log is
-runtime-final-source-ctest.log. Earlier snapshot62/87 and active-source72/88 runs
-remain historical. Installed Runtime full/cropped/contextual-OFF now each pass
+E:/Experiments/migration-native-control-sizing-20261118. The current active-source
+log is the latter directory's runtime-full-ctest.log. Earlier snapshot62/87 and
+active-source72/88 and73/88 runs remain historical.
+Installed Runtime full/cropped/contextual-OFF now each pass
 39/39 CTests against this same Core identity. The wrapper probe, imported archive,
 public headers, active assertions and absence of bundled Core source are audited.
 Runtime inputs remain unchanged during the matrix. Receipt is
-E:/Experiments/migration-contextual-installed-fea4b7fa-20261118/result.json.
+E:/Experiments/migration-contextual-installed-f431075e-20261118/result.json.
 Sample/Desktop and signed execution are separately configured scopes. Complete
 signed/resource/target carry-forward and physical acceptance remain open.
