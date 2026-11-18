@@ -42,6 +42,17 @@ static int shell(const char* executable, const std::filesystem::path& package,
     return static_cast<int>(_spawnv(_P_WAIT, executable, arguments));
 }
 
+#if defined(_WIN32)
+static int pseudo(const char* executable, const std::filesystem::path& package,
+                  const std::filesystem::path& output, const std::filesystem::path& report) {
+    const auto root = package.string(), html = (package / "index.html").string();
+    const auto css = (package / "empty.css").string(), capture = output.string(), json = report.string();
+    const char* arguments[] = {executable, html.c_str(), css.c_str(), capture.c_str(), "120", "100",
+        "--resource-root", root.c_str(), "--package", "--diagnostics-json", json.c_str(), nullptr};
+    return static_cast<int>(_spawnv(_P_WAIT, executable, arguments));
+}
+#endif
+
 static int shell_frames(const char* executable, const std::filesystem::path& package,
                         const std::filesystem::path& script) {
     const auto app = package.string(), frames = script.string();
@@ -187,6 +198,26 @@ int main(int argc, char** argv) {
             capture, nullptr));
         assert(capture.pixels.size() == before.size() * sizeof(Color));
         assert(std::memcmp(before.data(), capture.pixels.data(), before.size() * sizeof(Color)) == 0);
+        if (argc > 3) {
+            const auto output = root / "pseudo.bmp", report = root / "pseudo.json";
+            write(root / "empty.css", "");
+            assert(pseudo(argv[3], root, output, report) == 0);
+            assert(native::decode_bmp_to_fixture("pseudo", read_text_file_limited(output, 65536),
+                capture, nullptr));
+            assert(capture.pixels.size() == before.size() * sizeof(Color));
+            assert(std::memcmp(before.data(), capture.pixels.data(), capture.pixels.size()) == 0);
+            assert(read_text_file_limited(report, 65536).find("\"core-contextual-v12-local\"") != std::string::npos);
+
+            const auto refused_output = root / "pseudo-refused.bmp";
+            const auto refused_report = root / "pseudo-refused.json";
+            std::filesystem::remove(refused_output);
+            std::filesystem::remove(refused_report);
+            write(root / "font.jffont2", "invalid font");
+            const auto refused = pseudo(argv[3], root, refused_output, refused_report);
+            write(root / "font.jffont2", assets.font);
+            assert(refused == 1 && !std::filesystem::exists(refused_output) &&
+                !std::filesystem::exists(refused_report));
+        }
         const auto bundle = make_bundle(root, pipeline);
         const auto bundle_path = root / "contextual.jfapp";
         write(bundle_path, {reinterpret_cast<const char*>(bundle.data()), bundle.size()});

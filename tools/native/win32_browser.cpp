@@ -57,6 +57,12 @@
 #include "native_image.h"
 #if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
 #include "render_core/fractional_image_sampling.h"
+#if defined(__has_include)
+#if __has_include("render_core/text_snapshot_rebind.h")
+#include "render_core/text_snapshot_rebind.h"
+#define JELLYFRAME_HAS_CORE_TEXT_SNAPSHOT_REBIND 1
+#endif
+#endif
 #endif
 
 #include <windows.h>
@@ -7295,6 +7301,7 @@ private:
         render_options.viewport_width = viewport_width_;
         render_options.viewport_height = viewport_height_;
         RenderTreeBuilder render_builder(*style_resolver_, render_options);
+        const auto candidate_generation = document_->mutation_generation;
         auto target_render_tree = render_builder.build(*document_);
         const std::uint64_t now_ms = current_time_ms();
         bool animation_started = false;
@@ -7314,22 +7321,34 @@ private:
         RenderTreeBuilder sampled_render_builder(*style_resolver_, render_options);
         auto next_render_tree = sampled_render_builder.build(*document_);
         finish_trace_stage(FrameTraceStage::RenderTree);
-        if (!stale_core_snapshot && !image_layout_dirty_ && update_plan.action == FrameUpdateAction::RebuildPipeline &&
+        if (document_->mutation_generation != candidate_generation) return;
+        const bool stable_style_reuse_base = !image_layout_dirty_ &&
+            update_plan.action == FrameUpdateAction::RebuildPipeline &&
             update_plan.reason == FrameUpdateReason::LayoutDirtyWithPreviousLayout &&
-            render_tree_ != nullptr &&
-            layout_tree_ != nullptr &&
+            render_tree_ != nullptr && layout_tree_ != nullptr;
+        bool stable_style_reuse_candidate = stable_style_reuse_base;
+        if (stable_style_reuse_base) {
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
-            style_dirty_can_reuse_layout(*document_,
-                                         *render_tree_,
-                                         *next_render_tree,
-                                         *layout_tree_) &&
+            stable_style_reuse_candidate = style_dirty_can_reuse_layout(*document_,
+                                         *render_tree_, *next_render_tree, *layout_tree_);
 #else
-            style_dirty_can_reuse_layout(*document_,
-                                         *render_tree_,
-                                         *next_render_tree,
-                                         *layout_tree_,
-                                         text_backend.measure) &&
+            stable_style_reuse_candidate = style_dirty_can_reuse_layout(*document_,
+                                         *render_tree_, *next_render_tree, *layout_tree_,
+                                         text_backend.measure);
 #endif
+        }
+#if defined(JELLYFRAME_HAS_CORE_TEXT_SNAPSHOT_REBIND)
+        if (stale_core_snapshot && stable_style_reuse_base) {
+            const auto status = rebind_core_text_transform_opacity(*layout_tree_, *render_tree_, *next_render_tree,
+                text_backend.text_system, layer_options, layout_document_generation_, candidate_generation);
+            if (status == CoreTextPaintRebindStatus::Rebound) {
+                stale_core_snapshot = false;
+                stable_style_reuse_candidate = true;
+                layout_document_generation_ = candidate_generation;
+            }
+        }
+#endif
+        if (!stale_core_snapshot && stable_style_reuse_candidate &&
             apply_render_styles_to_layout(*next_render_tree, *layout_tree_)) {
             std::vector<StyleOverride> previous_repaint_overrides;
             std::vector<StyleOverride> current_repaint_overrides;

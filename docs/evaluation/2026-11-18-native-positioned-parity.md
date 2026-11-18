@@ -32,11 +32,21 @@ repaint3/rebuild4. ABI4 functional and calibrated performance tests pass3/3
 including staging. ABI9 functional state passes while performance remains
 repaint0/rebuild7, so its gate remains failed.
 
-Core requires exact document generation for its scalar snapshots. Runtime's
-stale-snapshot guard correctly rebuilds at present. Reuse needs a proved Core
-refresh/rebind path for paint changes. Text mutations need their own coherent
-source/paragraph update contract. Counter reporting must continue reflecting
-actual layout operations.
+Core requires exact document generation for its scalar snapshots. Core
+mark_dirty advances that generation for paint-only marks too; each scalar text
+snapshot and shared paragraph proof binds to the same exact generation. Runtime
+retains the old geometry/layers for damage, but LayerTree correctly refuses to
+consume stale snapshots. Therefore the unchanged-layout predicate alone cannot
+admit ABI9 reuse.
+
+The subsequent Core experiment is an explicit snapshot rebind operation that
+refreshes proof metadata only after Runtime proves equal tree shape, layout
+fields and stable text sources. It must refresh shared IFC/control proofs
+transactionally, reject partial/unsupported trees, and keep direct stale
+LayerTree builds failing. Route Tabs changes paragraph source text and must
+continue shaping current text; any reuse there needs an explicit source update
+contract. Motion Lab's transform/opacity animation is the paint-only positive
+candidate.
 
 ## Remaining gates
 
@@ -58,9 +68,20 @@ separately. The matching installed Runtime suites pass 39/39 per profile.
 Desktop qualification reaches 88/90 after retaining previous geometry for
 damage calculation when stale scalar text requires a fresh layout. Motion
 Lab rebuilds 68 times, with four local paints and 64 full paints. All 90
-captured frames match forced full repaint. Route Tabs repaint reuse and
-Motion Lab style-stable reuse remain open, as do contextual CLI, feature
-coverage, signed/resource/target carry-forward and physical acceptance.
+captured frames match forced full repaint. Contextual CLI package rendering is
+implemented through the existing five-resource loader and contextual capture
+path. The positive fixture is byte-identical to desktop-shell pixels; invalid
+font bytes refuse before output. Targeted contextual/paint/font-policy gates
+pass 6/6. The current Core rebind requires the generation of the candidate tree
+and refuses a transform change above absolute/fixed descendants. Route Tabs
+uses local repaint on the three scripted navigations; Motion Lab reuses the
+layout for 63 of 64 transform/opacity updates and all 90 frames match full
+repaint. The device-provider simulation now isolates its temporary session
+directory. Runtime Release passes 108/108 with a source override (contextual
+OFF), and 90/90 against the installed full Core at exact source f92cbd9e
+(contextual available; the desktop/CLI fixture exercises this route).
+Feature inventory, signed/resource/target carry-forward and physical
+acceptance remain open.
 Current evidence: E:/Experiments/migration-flex-controls-20261118.
 
 Grid/desktop evidence: E:/Experiments/migration-inline-atom-grid-20261118.

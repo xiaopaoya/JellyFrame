@@ -16,6 +16,10 @@
 #include "native_paint.h"
 #include "app_package.h"
 
+#if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+#include "native_contextual.h"
+#endif
+
 #if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
 #include "native_image.h"
 #include "app_runtime/app_frame_policy.h"
@@ -684,7 +688,7 @@ std::string json_escape(const std::string& value) {
 
 void write_diagnostics_json(const std::string& path,
                             const BrowserOptions& options,
-                            bool core_text,
+                            const char* text_policy,
                             const PipelineStatistics& statistics,
                             const LayoutBounds& layout_bounds,
                             const LayoutBounds& paint_bounds,
@@ -716,7 +720,7 @@ void write_diagnostics_json(const std::string& path,
     output << "  \"formatVersion\": 0,\n";
     output << "  \"tool\": \"jellyframe_pseudo_browser\",\n";
     output << "  \"mode\": \"render_core\",\n";
-    output << "  \"textPolicy\": \"" << (core_text ? "core-text" : "geometry-only") << "\",\n";
+    output << "  \"textPolicy\": \"" << text_policy << "\",\n";
     output << "  \"html\": \"" << json_escape(options.html_path) << "\",\n";
     output << "  \"css\": \"" << json_escape(options.css_path) << "\",\n";
     output << "  \"output\": \"" << json_escape(options.output_path) << "\",\n";
@@ -790,6 +794,83 @@ void write_diagnostics_json(const std::string& path,
     }
     output << "  ]\n";
     output << "}\n";
+}
+
+void finish_capture(const BrowserOptions& options, VectorDiagnosticSink& diagnostics,
+                    PipelineTimings& timings, Clock::time_point total_start,
+                    const Node& document, const RenderObject& render_tree,
+                    const LayoutBox& layout_tree, const LayerNode& layer_tree,
+                    const DisplayList& display_list, const FrameBuffer& frame_buffer,
+                    Color background, const char* text_policy, std::size_t resource_bytes) {
+    ImageFrameSinkContext frame_sink_context{options.output_path, false};
+    const Rect full_dirty{0, 0, frame_buffer.width, frame_buffer.height};
+    const HostFrameSink frame_sink{write_image_frame_sink, &frame_sink_context};
+    auto stage_start = Clock::now();
+    if (!present_frame(frame_buffer, frame_sink, &full_dirty, 1)) {
+        throw std::runtime_error("failed to present output frame");
+    }
+    timings.present_us = elapsed_us(stage_start, Clock::now());
+
+    stage_start = Clock::now();
+    const PipelineStatistics pipeline_statistics = collect_pipeline_statistics(PipelineStatisticsInput{
+        &document,
+        &render_tree,
+        &layout_tree,
+        &layer_tree,
+        &display_list,
+        &frame_buffer,
+        nullptr,
+        nullptr,
+        nullptr,
+        resource_bytes,
+    });
+    timings.statistics_us = elapsed_us(stage_start, Clock::now());
+
+    LayoutBounds layout_bounds;
+    accumulate_layout_bounds(layout_tree, layout_bounds);
+    LayoutBounds paint_bounds;
+    accumulate_display_bounds(display_list, paint_bounds);
+    report_visual_diagnostics(options, pipeline_statistics, layout_tree, layout_bounds, paint_bounds, diagnostics);
+    timings.total_us = elapsed_us(total_start, Clock::now());
+
+    std::cout << "JellyFrame render core pseudo browser\n";
+    std::cout << "  output=" << options.output_path << '\n';
+    std::cout << "  text_policy=" << text_policy << '\n';
+    std::cout << "  viewport=" << options.viewport_width << "x" << options.viewport_height << '\n';
+    std::cout << "  dom_nodes=" << pipeline_statistics.dom.node_count << '\n';
+    std::cout << "  dom_max_depth=" << pipeline_statistics.dom.max_depth << '\n';
+    std::cout << "  dom_attributes=" << pipeline_statistics.dom.attribute_count << '\n';
+    std::cout << "  render_objects=" << pipeline_statistics.render_objects << '\n';
+    std::cout << "  layout_boxes=" << pipeline_statistics.layout_boxes << '\n';
+    std::cout << "  layers=" << pipeline_statistics.layers << '\n';
+    std::cout << "  display_commands=" << pipeline_statistics.flattened_display_commands << '\n';
+    std::cout << "  layer_display_commands=" << pipeline_statistics.display_commands << '\n';
+    std::cout << "  framebuffer_bytes=" << pipeline_statistics.framebuffer_bytes << '\n';
+    std::cout << "  resource_bytes=" << pipeline_statistics.resource_bytes << '\n';
+    std::cout << "  estimated_pipeline_bytes=" << pipeline_statistics.estimated_heap_bytes << '\n';
+    std::cout << "  timing_total_us=" << timings.total_us << '\n';
+    std::cout << "  timing_paint_us=" << timings.paint_us << '\n';
+    std::cout << "  frame_sink=" << (frame_sink_context.ok ? "image" : "none") << '\n';
+    std::cout << "  non_background_pixels=" << count_non_background_pixels(frame_buffer, background) << '\n';
+    std::cout << "  diagnostics=" << diagnostics.size() << '\n';
+    for (const Diagnostic& diagnostic : diagnostics.diagnostics()) {
+        std::cout << "  diagnostic [" << diagnostic_severity_name(diagnostic.severity) << "] "
+                  << diagnostic_stage_name(diagnostic.stage) << "::" << diagnostic.code
+                  << " - " << diagnostic.message;
+        if (!diagnostic.detail.empty()) {
+            std::cout << " (" << diagnostic.detail << ')';
+        }
+        std::cout << '\n';
+    }
+
+    write_diagnostics_json(options.diagnostics_json_path,
+                           options,
+                           text_policy,
+                           pipeline_statistics,
+                           layout_bounds,
+                           paint_bounds,
+                           timings,
+                           diagnostics);
 }
 
 BrowserOptions parse_options(int argc, char** argv) {
@@ -871,27 +952,35 @@ int main(int argc, char** argv) {
             package_resources.diagnostics = &diagnostics;
         }
         jellyframe_example::AppPackageManifest manifest;
+        bool contextual = false;
         if (options.package_mode) {
             manifest = jellyframe_example::load_app_package(package_resources.root, kMaxInputBytes, true).manifest;
-            if (!manifest.contextual_text_pipeline.empty())
-                throw std::runtime_error("pseudo browser requires the scalar text pipeline");
+            contextual = !manifest.contextual_text_pipeline.empty();
+#if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+            if (contextual && !native::contextual_desktop_available)
+#else
+            if (contextual)
+#endif
+                throw std::runtime_error("contextual package capture is unavailable in this build");
             if (manifest.entry != package_resources.base_url)
                 throw std::runtime_error("HTML entry does not match the package manifest");
         }
+        const TextSystem* text_system = nullptr;
 #if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME) && \
     JELLYFRAME_NATIVE_CORE_TEXT_DEFAULT
         AppRuntimeHost font_runtime{AppRuntimeHostOptions{0, 0, 0, 0, native::kDesktopAppFontCapacity}};
-        native::attach_desktop_system_font_catalog(font_runtime);
-        if (!manifest.font_sources.empty()) {
-            font_runtime.launch(manifest.id, AppRole::App);
-            native::load_package_fonts_into_runtime(manifest, package_resources, font_runtime, &diagnostics);
+        if (!contextual) {
+            native::attach_desktop_system_font_catalog(font_runtime);
+            if (!manifest.font_sources.empty()) {
+                font_runtime.launch(manifest.id, AppRole::App);
+                native::load_package_fonts_into_runtime(manifest, package_resources, font_runtime, &diagnostics);
+            }
+            text_system = font_runtime.fonts().core_text_system();
+            if (text_system == nullptr) throw std::runtime_error("Core TextSystem initialization failed");
         }
-        const TextSystem* text_system = font_runtime.fonts().core_text_system();
-        if (text_system == nullptr) throw std::runtime_error("Core TextSystem initialization failed");
 #else
-        if (!manifest.font_sources.empty())
+        if (!contextual && !manifest.font_sources.empty())
             throw std::runtime_error("package fonts require the Core text backend");
-        const TextSystem* text_system = nullptr;
 #endif
 
         HtmlParser html_parser;
@@ -933,6 +1022,30 @@ int main(int argc, char** argv) {
         render_options.diagnostics = &diagnostics;
         render_options.viewport_width = options.viewport_width;
         render_options.viewport_height = options.viewport_height;
+        const Color background = page_background_color(*document, resolver);
+#if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME) && defined(_WIN32) && \
+    JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
+        if (contextual) {
+            const auto selected = native::load_desktop_contextual_text(manifest, package_resources);
+            auto layout_options = layout_engine_options_from_budgets(budgets);
+            auto layer_options = layer_tree_options_from_budgets(budgets);
+            layout_options.diagnostics = &diagnostics;
+            layer_options.diagnostics = &diagnostics;
+            stage_start = Clock::now();
+            const auto frame = native::build_desktop_contextual_frame(*document, resolver, selected,
+                options.viewport_width, options.viewport_height, render_options, layout_options, layer_options);
+            timings.layout_us = elapsed_us(stage_start, Clock::now());
+            stage_start = Clock::now();
+            const auto pixels = native::paint_desktop_contextual_frame(frame, options.viewport_width,
+                options.viewport_height, background, budgets.max_framebuffer_pixels);
+            timings.paint_us = elapsed_us(stage_start, Clock::now());
+            const auto& layer = *frame.capture.layer_tree();
+            finish_capture(options, diagnostics, timings, total_start, *document, *frame.render_tree,
+                *frame.layout.tree(), layer, layer.display_list, pixels,
+                background, "core-contextual-v12-local", html.size() + css.size());
+            return 0;
+        }
+#endif
         RenderTreeBuilder render_tree_builder(resolver, render_options);
         stage_start = Clock::now();
         auto render_tree = render_tree_builder.build(*document);
@@ -992,7 +1105,6 @@ int main(int argc, char** argv) {
         SoftwareCompositor compositor(TextPainter{}, ImagePainter{}, compositor_options);
 #endif
 #endif
-        const Color background = page_background_color(*document, resolver);
         stage_start = Clock::now();
         FrameBuffer frame_buffer = native::paint_frame(compositor, *layer_tree, options.viewport_width,
             options.viewport_height, background, budgets.max_framebuffer_pixels);
@@ -1001,74 +1113,9 @@ int main(int argc, char** argv) {
             throw std::runtime_error("framebuffer budget exceeded");
         }
 
-        ImageFrameSinkContext frame_sink_context{options.output_path, false};
-        const Rect full_dirty{0, 0, frame_buffer.width, frame_buffer.height};
-        const HostFrameSink frame_sink{write_image_frame_sink, &frame_sink_context};
-        stage_start = Clock::now();
-        if (!present_frame(frame_buffer, frame_sink, &full_dirty, 1)) {
-            throw std::runtime_error("failed to present output frame");
-        }
-        timings.present_us = elapsed_us(stage_start, Clock::now());
-
-        stage_start = Clock::now();
-        const PipelineStatistics pipeline_statistics = collect_pipeline_statistics(PipelineStatisticsInput{
-            document.get(),
-            render_tree.get(),
-            layout_tree.get(),
-            layer_tree.get(),
-            &display_list,
-            &frame_buffer,
-            nullptr,
-            nullptr,
-            nullptr,
-            html.size() + css.size(),
-        });
-        timings.statistics_us = elapsed_us(stage_start, Clock::now());
-
-        LayoutBounds layout_bounds;
-        accumulate_layout_bounds(*layout_tree, layout_bounds);
-        LayoutBounds paint_bounds;
-        accumulate_display_bounds(display_list, paint_bounds);
-        report_visual_diagnostics(options, pipeline_statistics, *layout_tree, layout_bounds, paint_bounds, diagnostics);
-        timings.total_us = elapsed_us(total_start, Clock::now());
-
-        std::cout << "JellyFrame render core pseudo browser\n";
-        std::cout << "  output=" << options.output_path << '\n';
-        std::cout << "  viewport=" << options.viewport_width << "x" << options.viewport_height << '\n';
-        std::cout << "  dom_nodes=" << pipeline_statistics.dom.node_count << '\n';
-        std::cout << "  dom_max_depth=" << pipeline_statistics.dom.max_depth << '\n';
-        std::cout << "  dom_attributes=" << pipeline_statistics.dom.attribute_count << '\n';
-        std::cout << "  render_objects=" << pipeline_statistics.render_objects << '\n';
-        std::cout << "  layout_boxes=" << pipeline_statistics.layout_boxes << '\n';
-        std::cout << "  layers=" << pipeline_statistics.layers << '\n';
-        std::cout << "  display_commands=" << pipeline_statistics.flattened_display_commands << '\n';
-        std::cout << "  layer_display_commands=" << pipeline_statistics.display_commands << '\n';
-        std::cout << "  framebuffer_bytes=" << pipeline_statistics.framebuffer_bytes << '\n';
-        std::cout << "  resource_bytes=" << pipeline_statistics.resource_bytes << '\n';
-        std::cout << "  estimated_pipeline_bytes=" << pipeline_statistics.estimated_heap_bytes << '\n';
-        std::cout << "  timing_total_us=" << timings.total_us << '\n';
-        std::cout << "  timing_paint_us=" << timings.paint_us << '\n';
-        std::cout << "  frame_sink=" << (frame_sink_context.ok ? "image" : "none") << '\n';
-        std::cout << "  non_background_pixels=" << count_non_background_pixels(frame_buffer, background) << '\n';
-        std::cout << "  diagnostics=" << diagnostics.size() << '\n';
-        for (const Diagnostic& diagnostic : diagnostics.diagnostics()) {
-            std::cout << "  diagnostic [" << diagnostic_severity_name(diagnostic.severity) << "] "
-                      << diagnostic_stage_name(diagnostic.stage) << "::" << diagnostic.code
-                      << " - " << diagnostic.message;
-            if (!diagnostic.detail.empty()) {
-                std::cout << " (" << diagnostic.detail << ')';
-            }
-            std::cout << '\n';
-        }
-
-        write_diagnostics_json(options.diagnostics_json_path,
-                               options,
-                               text_system != nullptr,
-                               pipeline_statistics,
-                               layout_bounds,
-                               paint_bounds,
-                               timings,
-                               diagnostics);
+        finish_capture(options, diagnostics, timings, total_start, *document, *render_tree,
+            *layout_tree, *layer_tree, display_list, frame_buffer, background,
+            text_system ? "core-text" : "geometry-only", html.size() + css.size());
     } catch (const std::exception& error) {
         std::cerr << "pseudo browser failed: " << error.what() << '\n';
         return 1;

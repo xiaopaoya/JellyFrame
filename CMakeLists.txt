@@ -310,6 +310,10 @@ if(JELLYFRAME_BUILD_EXAMPLES)
         JELLYFRAME_RENDER_CORE_ACTIVE_PACKAGE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
     if(JELLYFRAME_BUILD_APP_RUNTIME)
         target_link_libraries(jellyframe_pseudo_browser PRIVATE jellyframe_app_runtime)
+        if(WIN32 AND JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 9)
+            target_link_libraries(jellyframe_pseudo_browser PRIVATE bcrypt)
+            target_compile_definitions(jellyframe_pseudo_browser PRIVATE NOMINMAX)
+        endif()
         target_compile_definitions(jellyframe_pseudo_browser PRIVATE JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME=1)
     endif()
     add_jellyframe_tool(jellyframe_font_resource_check tools/native/font_resource_check.cpp)
@@ -393,9 +397,11 @@ if(JELLYFRAME_BUILD_TESTS)
         jellyframe_enable_test_asserts(jellyframe_native_contextual_desktop_tests)
         jellyframe_stage_sanitizer_runtime(jellyframe_native_contextual_desktop_tests)
         if(TARGET jellyframe_desktop_shell)
-            add_dependencies(jellyframe_native_contextual_desktop_tests jellyframe_desktop_shell)
+            add_dependencies(jellyframe_native_contextual_desktop_tests
+                jellyframe_desktop_shell jellyframe_pseudo_browser)
             add_test(NAME jellyframe_native_contextual_desktop COMMAND jellyframe_native_contextual_desktop_tests
-                "${CMAKE_CURRENT_BINARY_DIR}/native-contextual-desktop-package" $<TARGET_FILE:jellyframe_desktop_shell>)
+                "${CMAKE_CURRENT_BINARY_DIR}/native-contextual-desktop-package"
+                $<TARGET_FILE:jellyframe_desktop_shell> $<TARGET_FILE:jellyframe_pseudo_browser>)
         else()
             add_test(NAME jellyframe_native_contextual_desktop COMMAND jellyframe_native_contextual_desktop_tests
                 "${CMAKE_CURRENT_BINARY_DIR}/native-contextual-desktop-package")
@@ -1423,7 +1429,7 @@ if(JELLYFRAME_BUILD_TESTS)
             set_tests_properties(jellyframe_win32_route_tabs_frame_script PROPERTIES
                 FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION
-                    "frame_update idle=0 repaint=3 rebuild=4 first_paint=1")
+                    "frame_repaint dirty_rect=6 full_frame=1 full_first_paint=1")
 
             add_test(
                 NAME jellyframe_win32_route_tabs_state
