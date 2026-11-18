@@ -69,14 +69,15 @@ def write_qualification_harness(harness):
 #include <cassert>
 static_assert(JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API == QUALIFICATION_CONTEXTUAL);
 static_assert(JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API == QUALIFICATION_CONTEXTUAL);
-static_assert(!JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API);
+static_assert(JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API == (QUALIFICATION_SCALAR_FRAME == 10));
 #if QUALIFICATION_CONTEXTUAL && !defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
 #error "installed positive corpus requires explicit fixtures"
 #endif
 int main() {
     assert(jellyframe::script_task_app_frame_codec_supports_version(12) == bool(QUALIFICATION_CONTEXTUAL));
     assert(!jellyframe::script_task_app_frame_codec_supports_version(11));
-    assert(!jellyframe::script_task_app_frame_codec_supports_version(10));
+    assert(jellyframe::script_task_app_frame_codec_supports_version(10) == (QUALIFICATION_SCALAR_FRAME == 10));
+    assert(jellyframe::script_task_app_frame_codec_supports_version(13) == (QUALIFICATION_SCALAR_FRAME == 13));
 }
 ''')
     with (harness / 'CMakeLists.txt').open('w') as cmake:
@@ -90,7 +91,8 @@ add_subdirectory("${QUALIFICATION_RUNTIME_SOURCE}" runtime)
 # Isolated qualification only: no replacement Core source or private headers.
 add_executable(jellyframe_installed_route_probe qualification_route_probe.cpp)
 target_link_libraries(jellyframe_installed_route_probe PRIVATE jellyframe_script_task_runtime)
-target_compile_definitions(jellyframe_installed_route_probe PRIVATE QUALIFICATION_CONTEXTUAL=${QUALIFICATION_CONTEXTUAL})
+target_compile_definitions(jellyframe_installed_route_probe PRIVATE
+    QUALIFICATION_CONTEXTUAL=${QUALIFICATION_CONTEXTUAL} QUALIFICATION_SCALAR_FRAME=${QUALIFICATION_SCALAR_FRAME})
 jellyframe_enable_shaped_test_fixtures(jellyframe_installed_route_probe)
 jellyframe_enable_test_asserts(jellyframe_installed_route_probe)
 add_test(NAME jellyframe_installed_route_probe COMMAND jellyframe_installed_route_probe)
@@ -114,6 +116,7 @@ def main():
     parser.add_argument('--cmake', default='cmake')
     parser.add_argument('--ctest', default='ctest')
     parser.add_argument('--jobs', type=int, default=2)
+    parser.add_argument('--scalar-frame', type=int, choices=(10, 13), default=13)
     args = parser.parse_args()
     if args.jobs < 1:
         parser.error('--jobs must be positive')
@@ -142,8 +145,10 @@ def main():
         contextual = {'text.contextual-jfsp2', 'text.contextual-layout'}
         assert bool(features & contextual) == (name != 'off')
         assert name == 'off' or contextual.issubset(features)
-        optional = {'graphics.canvas2d', 'css.modern-paint', 'css.flex-grid',
-                    'forms.advanced', 'css.length-math'}
+        optional = {'graphics.canvas2d', 'css.modern-paint', 'css.flex-grid', 'forms.advanced'}
+        # The experimental implementation also makes length math optional.
+        if args.scalar_frame == 13:
+            optional.add('css.length-math')
         assert (optional.issubset(features) if name != 'cropped' else not (optional & features))
         joined = ''.join(row['path'] + '\t' + row['sha256'] + '\n'
                          for row in manifest['files']).encode()
@@ -211,6 +216,7 @@ def main():
                   '-DJELLYFRAME_BUILD_EXAMPLES=OFF', '-DJELLYFRAME_BUILD_BENCHMARKS=OFF',
                   '-DJELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS=OFF',
                   '-DJERRYSCRIPT_ROOT=' + str(args.jerry.resolve()),
+                  '-DQUALIFICATION_SCALAR_FRAME=' + str(args.scalar_frame),
                   '-DQUALIFICATION_CONTEXTUAL=' + ('0' if name == 'off' else '1')]
         if name == 'cropped':
             common += ['-DJELLYFRAME_ENABLE_' + feature + '=OFF' for feature in
@@ -223,7 +229,7 @@ def main():
         assert total >= 36 and 'Skipped' not in log
         audit = audit_installed_package(build, runtime, probe, packages[name], identities[name],
                                         production_lock_sha256)
-        return {'profile': name, 'passed': total, 'skipped': 0, 'failed': 0,
+        return {'profile': name, 'scalarFrame': args.scalar_frame, 'passed': total, 'skipped': 0, 'failed': 0,
                 'identity': identities[name], **audit}
 
     results = []

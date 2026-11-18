@@ -12,8 +12,11 @@ the checkout declares ABI9 and matches the supplied version and source hash;
 it does not override either ABI or version at build time. Runtime consumes the
 installed package using a generated, separate qualification lock. Full and
 cropped enable contextual features; off keeps the full scalar feature profile
-but disables contextual text, layout and JFSP2. Every profile runs the ordinary
-signed frame13 host test, and full/cropped also run explicit signed frame12.
+but disables contextual text, layout and JFSP2. Every profile executes the
+ordinary signed host test (typed mainline frame10), and full/cropped also run
+explicit signed frame12. Use `--scalar-frame 13` to qualify the experimental
+Core, whose scalar command representation uses frame13. The probe verifies the
+expected codec, and the signed test checks the actual selected route.
 The host fixture uses a public test key and never provisions a device.
 
 To run one profile locally, use a clean Runtime and Core checkout, CMake,

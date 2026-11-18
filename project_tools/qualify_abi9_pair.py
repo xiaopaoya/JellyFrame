@@ -48,6 +48,8 @@ def main():
     parser.add_argument('--core-version', required=True)
     parser.add_argument('--core-source-hash', required=True)
     parser.add_argument('--profile', required=True, choices=('full', 'cropped', 'off'))
+    parser.add_argument('--scalar-frame', type=int, choices=(10, 13), default=10,
+                        help='Expected transport for the ordinary signed app (10 for typed mainline, 13 for the experiment)')
     parser.add_argument('--jerry', type=Path, required=True, help='Pinned and patched JerryScript built with VM halt')
     parser.add_argument('--mbedtls', type=Path, required=True, help='Pinned clean ESP-IDF mbedTLS checkout')
     parser.add_argument('--output', type=Path, required=True, help='New directory for build and evidence')
@@ -96,7 +98,8 @@ def main():
     profile_flags = [f'-DJELLYFRAME_ENABLE_{feature}={"OFF" if args.profile == "off" else "ON"}'
                      for feature in CONTEXTUAL_FEATURES]
     if args.profile == 'cropped':
-        profile_flags += [f'-DJELLYFRAME_ENABLE_{feature}=OFF' for feature in CROP_FEATURES]
+        crop_features = CROP_FEATURES if args.scalar_frame == 13 else CROP_FEATURES[:-1]
+        profile_flags += [f'-DJELLYFRAME_ENABLE_{feature}=OFF' for feature in crop_features]
     core_build = output / 'core-build'
     install = output / 'core-install'
     run('core-configure', [*configure, '-S', core, '-B', core_build, '-DJELLYFRAME_BUILD_TESTS=OFF',
@@ -113,10 +116,11 @@ def main():
     run('runtime-installed', [sys.executable, RUNTIME / 'project_tools/qualify_contextual_installed_packages.py',
                               '--package', f'{args.profile}={install}', '--qualification-lock', lock,
                               '--fixtures', fixtures, '--jerry', jerry, '--output', installed,
+                              '--scalar-frame', args.scalar_frame,
                               '--build-root', output / 'runtime-builds', '--compiler', args.cxx_compiler,
                               '--jobs', args.jobs])
     route_tests = {}
-    routes = {'signed_scalar': {'jfsg_scalar_installed_frame13'}}
+    routes = {'signed_scalar': {f'jfsg_scalar_installed_frame{args.scalar_frame}'}}
     if args.profile != 'off':
         routes['signed_shaped'] = {'jfsg_shaped_pipeline', 'jfsg_shaped_reboot',
                                    'jfsg_shaped_provider_transport', 'jfsg_vm_fatal_boundary'}
@@ -128,6 +132,8 @@ def main():
                       f'-DCMAKE_C_COMPILER={args.c_compiler}']
         if route == 'signed_shaped':
             parameters.append(f'-DJFSG_CORE_FIXTURES_DIR={fixtures.as_posix()}')
+        else:
+            parameters.append(f'-DJFSG_EXPECT_SCALAR_FRAME={args.scalar_frame}')
         run(route + '-configure', [*configure, '-S', RUNTIME / 'ports/esp32s3-idf/tests' / route, '-B', build,
             '-DJELLYFRAME_RENDER_CORE_PROVIDER=package', *parameters, *profile_flags])
         provenance = json.loads((build / 'runtime/generated/jellyframe_render_core_provenance.json').read_text())
@@ -144,6 +150,7 @@ def main():
     test_result, = json.loads((installed / 'result.json').read_text())
     evidence = {'schemaVersion': 1, 'scope': 'installed Runtime and signed host tests; no target execution',
                 'coreCommit': args.core_commit, 'runtimeCommit': runtime_commit, 'profile': args.profile,
+                'scalarFrame': args.scalar_frame,
                 'candidateLockSha256': sha(lock), 'productionLockSha256': lock_hash,
                 'jerryCommit': JERRY_COMMIT, 'mbedtlsCommit': MBEDTLS_COMMIT,
                 'installed': test_result, 'signedTestsPassed': route_tests}

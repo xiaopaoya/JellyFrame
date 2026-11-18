@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
         DeviceBundleInspectionWorkspace workspace;
         const auto pipeline = binding.select_active_text_pipeline(workspace, 16384);
         CHECK(pipeline.status == AppInstalledTextPipelineStatus::Scalar);
-        CHECK(installed_text_pipeline_frame_version(pipeline) == 13);
+        CHECK(installed_text_pipeline_frame_version(pipeline) == JFSG_EXPECT_SCALAR_FRAME);
 
         const auto html = read_resource(binding, "/index.html");
         const auto css = read_resource(binding, "/app.css");
@@ -121,8 +121,13 @@ int main(int argc, char** argv) {
             CHECK(std::any_of(retained.frame().display_list.begin(), retained.frame().display_list.end(),
                   [](const auto& command) {
                       PreparedTextView packet;
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+                      return command.type() == DisplayCommandType::PreparedText &&
+                             decode_prepared_text(command.text, packet) && packet.size() != 0;
+#else
                       return command.type == DisplayCommandType::GlyphRun && decode_prepared_text(command.text, packet) &&
                              packet.packet_version() == 3;
+#endif
                   }));
             original = paint(retained);
             CHECK(same_color(original.pixels[32 * 172 + 8], mark));
@@ -158,7 +163,8 @@ int main(int argc, char** argv) {
     CHECK(std::equal(replayed.pixels.begin(), replayed.pixels.end(), original.pixels.begin(), same_color));
     retained = {};
     CHECK(fonts.expired() && images.expired());
-    std::printf("format0 frame13 PASS bytes=%zu checks=%u crypto_calls=%u\n", package.size(), checks, crypto_calls);
+    std::printf("format0 frame%d PASS bytes=%zu checks=%u crypto_calls=%u\n",
+                JFSG_EXPECT_SCALAR_FRAME, package.size(), checks, crypto_calls);
 }
 
 namespace jellyframe_esp32s3 {

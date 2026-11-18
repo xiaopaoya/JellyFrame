@@ -26,7 +26,12 @@ add_executable(jfsg_scalar_pipeline_tests signed_scalar_pipeline_tests.cpp $<TAR
     "${port}/main/jellyframe_esp32s3_image.cpp")
 target_include_directories(jfsg_scalar_pipeline_tests PRIVATE ../signed_install ../signed_install/stubs
     ../package_signature "${port}/main")
+set(JFSG_EXPECT_SCALAR_FRAME "13" CACHE STRING "Expected scalar transport for this Core package")
+if(NOT JFSG_EXPECT_SCALAR_FRAME MATCHES "^(10|13)$")
+    message(FATAL_ERROR "JFSG_EXPECT_SCALAR_FRAME must be 10 or 13")
+endif()
 target_compile_definitions(jfsg_scalar_pipeline_tests PRIVATE
+    JFSG_EXPECT_SCALAR_FRAME=${JFSG_EXPECT_SCALAR_FRAME}
     CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM=1
     CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER=1
     JELLYFRAME_PACKAGE_SIGNATURE_TESTING=1)
@@ -54,5 +59,5 @@ add_custom_command(OUTPUT "${fixture}"
     VERBATIM)
 add_custom_target(jfsg_scalar_fixture DEPENDS "${fixture}")
 add_dependencies(jfsg_scalar_pipeline_tests jfsg_scalar_fixture)
-add_test(NAME jfsg_scalar_installed_frame13 COMMAND jfsg_scalar_pipeline_tests "${fixture}"
+add_test(NAME jfsg_scalar_installed_frame${JFSG_EXPECT_SCALAR_FRAME} COMMAND jfsg_scalar_pipeline_tests "${fixture}"
     "${port}/font/core-system-noto-regular-16.jffont2")
