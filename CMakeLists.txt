@@ -443,6 +443,15 @@ if(JELLYFRAME_BUILD_TESTS)
     target_compile_definitions(jellyframe_esp32s3_band_navigation_tests PRIVATE
         "JELLYFRAME_BAND_SHELL_FIXTURE=\"${CMAKE_CURRENT_SOURCE_DIR}/ports/esp32s3-idf/resources/app/band_shell.html\"")
 
+    add_executable(jellyframe_esp32s3_vm_fault_boot_receipt_tests
+        ports/esp32s3-idf/tests/vm_fault_boot_receipt_tests.cpp)
+    target_include_directories(jellyframe_esp32s3_vm_fault_boot_receipt_tests PRIVATE
+        ports/esp32s3-idf/main "${CMAKE_CURRENT_SOURCE_DIR}/src")
+    target_compile_features(jellyframe_esp32s3_vm_fault_boot_receipt_tests PRIVATE cxx_std_17)
+    jellyframe_enable_test_asserts(jellyframe_esp32s3_vm_fault_boot_receipt_tests)
+    add_test(NAME jellyframe_esp32s3_vm_fault_boot_receipt_tests
+        COMMAND jellyframe_esp32s3_vm_fault_boot_receipt_tests)
+
     add_executable(jellyframe_esp32s3_resource_reference_tests
         ports/esp32s3-idf/tests/resource_reference_tests.cpp
         ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp)

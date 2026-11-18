@@ -6,15 +6,18 @@
 #include "jellyframe_esp32s3_ui_task.h"
 #include "jellyframe_esp32s3_installed_frame_admission.h"
 #include "jellyframe_esp32s3_render_core_identity.h"
+#include "jellyframe_esp32s3_vm_fault_receipt.h"
 
 #include "app_runtime/app_installed_bundle.h"
 #include "device_runtime_contracts/device_install_transaction.h"
 #include "render_core/html_parser.h"
 
 #include "driver/usb_serial_jtag.h"
+#include "esp_attr.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_partition.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -42,6 +45,12 @@ constexpr TickType_t kUsbIoTimeout = pdMS_TO_TICKS(50);
 constexpr std::int64_t kUsbWriteDeadlineUs = 2500000;
 constexpr std::int64_t kPartialFrameTimeoutUs = 500000;
 constexpr std::size_t kInstalledAppEntryMaxBytes = 16u * 1024u;
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
+constexpr std::int64_t kVmFaultUiStopGraceUs = 200000;
+// Only the lifecycle task writes/consumes this receipt. Keep the boot guard
+// separate from the port's volatile task-handle receipt.
+RTC_NOINIT_ATTR VmFaultBootReceipt s_vm_fault_boot;
+#endif
 
 constexpr char kImageId[] = "org.jellyframe.ws147.developer";
 constexpr char kProfileId[] = "rect-172x320";
@@ -252,8 +261,37 @@ public:
     }
 
     void poll_lifecycle() {
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
+        const auto fault = installed_bundle_script_task_vm_fault(script_session_);
+        if (fault.code != -1) {
+            // Stop dispatching JFDP requests while the UI exits. Do not
+            // require its cooperation to reset a wedged application.
+            const auto started = esp_timer_get_time();
+            while (!installed_bundle_script_task_vm_fault(script_session_).ui_done &&
+                   esp_timer_get_time() - started < kVmFaultUiStopGraceUs) {
+                vTaskDelay(1);
+            }
+            // This runs on the lifecycle task's internal stack, outside
+            // all store operations. Never free or unwind the VM here.
+            s_vm_fault_boot = make_vm_fault_boot_receipt(active_app_id_, fault.generation, fault.code);
+            __sync_synchronize();
+            esp_restart();
+        }
+#endif
         poll_active_session();
     }
+
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
+    void restore_vm_fault_log() {
+        VmFaultBootReceipt receipt{};
+        if (!consume_vm_fault_boot_receipt(s_vm_fault_boot, esp_reset_reason() == ESP_RST_SW, receipt))
+            return;
+        char message[kDeviceAppLogMaxMessageBytes + 1]{};
+        std::snprintf(message, sizeof(message), "jerry-vm-fatal code=%u device-restarted; explicit launch required",
+                      static_cast<unsigned>(receipt.code));
+        record_app_log(DeviceAppLogLevel::Error, receipt.app_id.data(), receipt.generation, message);
+    }
+#endif
 
     void on_jfdp_transport_reset() override { abort_active_transaction(); }
     JfdpTransportCounters& counters() { return counters_; }
@@ -904,6 +942,11 @@ void device_image_lifecycle_task(void*) {
         vTaskDelete(nullptr);
         return;
     }
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
+    // Store initialization reauthenticates its library. No installed app
+    // starts until an explicit Launch request, including after VM recovery.
+    runtime->endpoint.restore_vm_fault_log();
+#endif
     std::int64_t last_byte_us = 0;
     bool was_connected = usb_serial_jtag_is_connected();
     for (;;) {

@@ -1,6 +1,6 @@
 if(CMAKE_BUILD_EARLY_EXPANSION)
     # The requirements subprocess has no JELLYFRAME_BUILD_SCRIPTING cache value.
-    idf_component_register(REQUIRES esp_timer freertos heap log)
+    idf_component_register(REQUIRES esp_hw_support esp_timer freertos heap log)
     return()
 endif()
 
@@ -76,6 +76,7 @@ idf_component_register(
         ${JELLYFRAME_JERRY_CORE_SOURCES}
         "jerry_port_esp32s3.c"
     INCLUDE_DIRS
+        "."
         "${JELLYFRAME_JERRY_PATCH_ROOT}/jerry-core/ecma/base"
         "${JERRY_ROOT}/jerry-core/include"
         "${JERRY_ROOT}/jerry-core"
@@ -94,6 +95,7 @@ idf_component_register(
         "${JERRY_ROOT}/jerry-core/vm"
         "${CMAKE_CURRENT_BINARY_DIR}"
     REQUIRES
+        esp_hw_support
         esp_timer
         freertos
         heap

@@ -9,6 +9,7 @@
 #include "jellyframe_esp32s3_hal.h"
 #include "jellyframe_esp32s3_input.h"
 #include "jellyframe_esp32s3_installed_frame_admission.h"
+#include "jellyframe_jerry_port_fatal.h"
 
 #include "app_runtime/app_host.h"
 #include "app_runtime/script_task_contract.h"
@@ -123,6 +124,7 @@ struct InstalledBundleScriptSession {
     std::atomic<bool> ui_done{false};
     std::atomic<bool> initialized{false};
     std::atomic<bool> fatal_seen{false};
+    std::atomic<int> vm_fatal_code{-1};
     std::atomic<bool> worker_started{false};
     std::atomic<bool> ui_started{false};
     std::atomic<std::uint8_t> init_status{0xff};
@@ -510,6 +512,21 @@ void ui_entry(void* raw) {
     vTaskSuspend(nullptr);
 }
 
+// A Jerry fatal leaves live C++ owners on the worker stack and can leave VM
+// locks held. Keep this supervisor stack, protocol and session alive until
+// the lifecycle task resets the device. The semaphore only wakes a pending
+// stop call; that call must distinguish quarantine from normal completion.
+void quarantine_on_vm_fatal(InstalledBundleScriptSession& state, TaskHandle_t worker) {
+    TaskHandle_t owner = nullptr;
+    int code = -1;
+    if (worker == nullptr || state.worker_done.load() ||
+        !jellyframe_jerry_port_try_get_fatal(&owner, &code) || owner != worker) return;
+    state.stop.store(true);
+    state.vm_fatal_code.store(code);
+    xSemaphoreGive(state.stopped);
+    for (;;) vTaskSuspend(nullptr);
+}
+
 void supervisor_entry(void* raw) {
     auto* state = static_cast<InstalledBundleScriptSession*>(raw);
     if (state == nullptr || state->host == nullptr || state->stopped == nullptr) {
@@ -547,11 +564,13 @@ void supervisor_entry(void* raw) {
     ESP_LOGI(kTag, "session app=%s generation=%u worker=%d ui=%d viewport=%dx%d",
              state->app_id.c_str(), static_cast<unsigned>(state->generation),
              worker_created == pdPASS ? 1 : 0, ui_created == pdPASS ? 1 : 0, state->width, state->height);
+    quarantine_on_vm_fatal(*state, worker);
     sample_resources(*state, worker, ui);
     std::int64_t last_resource_us = esp_timer_get_time();
     jellyframe::AppFrameScratch completion_scratch;
     completion_scratch.reserve_from_options({8, 4, 8, 2048, 1});
     while (!state->stop.load() && !state->worker_done.load()) {
+        quarantine_on_vm_fatal(*state, worker);
         const std::int64_t now_us = esp_timer_get_time();
         if (now_us - last_resource_us >= 1000000) {
             sample_resources(*state, worker, ui);
@@ -568,15 +587,16 @@ void supervisor_entry(void* raw) {
         }
         vTaskDelay(pdMS_TO_TICKS(kSupervisorPollMs));
     }
-    // Input is gated before this point. Teardown then waits until the worker
-    // has destroyed its private JerryScript/DOM state and UI has dropped all
-    // decoded frame values before host lifecycle ownership can change.
+    // Stop accepting input and pumping services. Wait for cooperative worker
+    // and UI exit before touching the protocol in teardown: a VM fatal may
+    // otherwise leave owners or synchronization held indefinitely.
     state->stop.store(true);
-    (void)protocol.begin_teardown(state->script_session);
-    (void)bridge.begin_teardown(state->script_session);
     while (!state->worker_done.load() || !state->ui_done.load()) {
+        quarantine_on_vm_fatal(*state, worker);
         vTaskDelay(pdMS_TO_TICKS(kSupervisorPollMs));
     }
+    (void)protocol.begin_teardown(state->script_session);
+    (void)bridge.begin_teardown(state->script_session);
     sample_resources(*state, worker, ui);
     if (worker != nullptr) vTaskDeleteWithCaps(worker);
     if (ui != nullptr) vTaskDeleteWithCaps(ui);
@@ -615,6 +635,7 @@ bool start_installed_bundle_script_task(std::string app_id,
                                         InstalledBundleScriptSession*& session,
                                         jellyframe::AppInstalledTextPipeline text_pipeline) {
     session = nullptr;
+    if (jellyframe_jerry_port_try_get_fatal(nullptr, nullptr)) return false;
     if (!installed_text_pipeline_supported(text_pipeline)) return false;
 #if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
     // The declared route must be replayable; contextual packages never require
@@ -731,8 +752,10 @@ bool stop_installed_bundle_script_task(InstalledBundleScriptSession*& session,
                                        InstalledBundleScriptTaskTelemetry* telemetry) {
     if (session == nullptr) return true;
     if (session->stopped == nullptr) return false;
+    if (session->vm_fatal_code.load() != -1) return false;
     session->stop.store(true);
     if (xSemaphoreTake(session->stopped, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) return false;
+    if (session->vm_fatal_code.load() != -1) return false;
     if (telemetry != nullptr) *telemetry = telemetry_snapshot(*session);
     if (session->supervisor_task != nullptr) {
         vTaskDeleteWithCaps(session->supervisor_task);
@@ -746,6 +769,13 @@ bool stop_installed_bundle_script_task(InstalledBundleScriptSession*& session,
 
 bool installed_bundle_script_task_has_fatal(const InstalledBundleScriptSession* session) {
     return session != nullptr && session->fatal_seen.load();
+}
+
+InstalledScriptVmFault installed_bundle_script_task_vm_fault(const InstalledBundleScriptSession* session) {
+    if (session == nullptr) return {};
+    const int code = session->vm_fatal_code.load();
+    return code == -1 ? InstalledScriptVmFault{} :
+        InstalledScriptVmFault{code, session->generation, session->ui_done.load()};
 }
 
 InstalledBundleScriptTaskTelemetry installed_bundle_script_task_telemetry(const InstalledBundleScriptSession* session) {
@@ -763,6 +793,7 @@ bool start_installed_bundle_script_task(std::string, std::uint32_t, std::uint32_
 bool stop_installed_bundle_script_task(InstalledBundleScriptSession*&, std::uint32_t,
                                        InstalledBundleScriptTaskTelemetry*) { return false; }
 bool installed_bundle_script_task_has_fatal(const InstalledBundleScriptSession*) { return false; }
+InstalledScriptVmFault installed_bundle_script_task_vm_fault(const InstalledBundleScriptSession*) { return {}; }
 InstalledBundleScriptTaskTelemetry installed_bundle_script_task_telemetry(const InstalledBundleScriptSession*) { return {}; }
 } // namespace jellyframe_esp32s3
 
