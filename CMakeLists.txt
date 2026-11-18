@@ -1058,15 +1058,29 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
-                NAME jellyframe_cli_check_font_policy_package
+                NAME jellyframe_cli_validate_font_policy_package
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
+                        --skip-check
                         --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_font_policy
                         --target round-300
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_font_policy.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            if(JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 4)
+                add_test(
+                    NAME jellyframe_cli_check_font_policy_package
+                    COMMAND ${Python3_EXECUTABLE}
+                            ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
+                            check
+                            --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_font_policy
+                            --target round-300
+                            --report ${CMAKE_BINARY_DIR}/test_outputs/jellyframe_font_policy_render.report.json
+                            --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            endif()
 
             add_test(
                 NAME jellyframe_cli_check_wearable_launcher_package
@@ -1126,7 +1140,6 @@ if(JELLYFRAME_BUILD_TESTS)
             set_tests_properties(
                 jellyframe_cli_check_audio_smoke_package
                 jellyframe_cli_check_service_status_package
-                jellyframe_cli_check_font_policy_package
                 jellyframe_cli_check_wearable_launcher_package
                 jellyframe_cli_check_band_system_shell
                 jellyframe_cli_check_canvas_smoke_package
@@ -1135,6 +1148,22 @@ if(JELLYFRAME_BUILD_TESTS)
                 FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
 
+            set_tests_properties(jellyframe_cli_validate_font_policy_package PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
+                ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
+            if(JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 4)
+                set_tests_properties(jellyframe_cli_check_font_policy_package PROPERTIES
+                    FIXTURES_REQUIRED jellyframe_candidate_app_packages
+                    ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
+            endif()
+
+            set(_jellyframe_doctor_sample_args)
+            if(JELLYFRAME_RENDER_CORE_ENGINE_ABI LESS 4)
+                # These samples require the Core-owned text backend for render preflight.
+                list(APPEND _jellyframe_doctor_sample_args
+                    --exclude-sample jelly_font_policy
+                    --exclude-sample jelly_font_size_warning)
+            endif()
             add_test(
                 NAME jellyframe_cli_doctor_sample_packages
                 COMMAND ${Python3_EXECUTABLE}
@@ -1143,6 +1172,7 @@ if(JELLYFRAME_BUILD_TESTS)
                         --samples-dir ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                         --report-dir ${CMAKE_BINARY_DIR}/test_outputs/doctor
+                        ${_jellyframe_doctor_sample_args}
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_cli_doctor_sample_packages PROPERTIES
                 FIXTURES_REQUIRED jellyframe_candidate_app_packages

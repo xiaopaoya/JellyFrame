@@ -638,6 +638,7 @@ jobs:
             -DJERRYSCRIPT_ROOT="$env:GITHUB_WORKSPACE/third_party/jerryscript"
           if ($LASTEXITCODE -ne 0) { throw 'Installed resource host configure failed' }
           cmake --build $build --config Release --parallel --target `
+            jellyframe_esp32s3_vm_fault_boot_receipt_tests `
             jellyframe_esp32s3_installed_core_text_0_tests jellyframe_esp32s3_installed_core_text_1_tests `
             jellyframe_esp32s3_installed_resource_owner_tests jellyframe_esp32s3_resource_reference_tests `
             jellyframe_esp32s3_frame_admission_0_0_tests jellyframe_esp32s3_frame_admission_0_1_tests `

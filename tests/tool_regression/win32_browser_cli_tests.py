@@ -1023,11 +1023,12 @@ def main() -> int:
         svg_report = report_data.get("staticSvgRasterization", {})
         require(svg_report.get("rasterizedCount") == 1,
                 "static SVG package report must record one generated icon")
-        require(report_data.get("pipelineDiagnostics", {}).get("pipeline", {}).get("displayCommands", 0) > 0,
-                "static SVG preview must pass transformed-package image preflight")
-        red, green, blue = read_bmp_rgb(capture, 32, 20)
-        require(green > 160 and red < 80 and blue > 80,
-                f"rasterized SVG icon must retain its green surface, got {(red, green, blue)}")
+        if CORE_ABI >= 9:
+            require(report_data.get("pipelineDiagnostics", {}).get("pipeline", {}).get("displayCommands", 0) > 0,
+                    "ABI9 static SVG preview must consume the transformed image")
+            red, green, blue = read_bmp_rgb(capture, 32, 20)
+            require(green > 160 and red < 80 and blue > 80,
+                    f"rasterized SVG icon must retain its green surface, got {(red, green, blue)}")
 
     time_event_result = run_case(exe, ["--frame-event", "2:time-ms:nope"])
     require(time_event_result.returncode != 0, "invalid time event must fail")

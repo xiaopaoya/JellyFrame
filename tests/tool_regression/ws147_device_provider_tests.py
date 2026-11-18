@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -101,13 +102,23 @@ class Ws147DeviceProviderTests(unittest.TestCase):
         self.assertEqual(parse_provider_result(mismatch.stdout)["devices"][0]["profileId"], "wrong-profile")
 
     def test_runtime_cli_accepts_confirmed_cancel_and_rejects_manifest_mismatch(self) -> None:
-        provider = str((ROOT / "ports" / "esp32s3-idf" / "tools" / "device_provider" / "jellyframe-device.cmd").resolve())
-        cancelled = cli("--provider", provider, "cancel", "--selector", "fixture-ws147", "--transaction-id", "9",
-                        fixture="confirmed-cancel")
-        self.assertEqual(cancelled.returncode, 0, cancelled.stderr.decode())
-        self.assertTrue(json.loads(cancelled.stdout)["cancellation"]["confirmed"])
-
         with tempfile.TemporaryDirectory() as temporary:
+            provider = ROOT / "ports" / "esp32s3-idf" / "tools" / "device_provider" / "jellyframe-device.cmd"
+            if os.name != "nt":
+                provider = Path(temporary) / "jellyframe-device"
+                provider.write_text(
+                    f"#!{sys.executable}\n"
+                    "import os, sys\n"
+                    f"os.execv(sys.executable, [sys.executable, {str(PROVIDER)!r}, *sys.argv[1:]])\n",
+                    encoding="utf-8",
+                )
+                provider.chmod(0o755)
+
+            cancelled = cli("--provider", str(provider.resolve()), "cancel", "--selector", "fixture-ws147",
+                            "--transaction-id", "9", fixture="confirmed-cancel")
+            self.assertEqual(cancelled.returncode, 0, cancelled.stderr.decode())
+            self.assertTrue(json.loads(cancelled.stdout)["cancellation"]["confirmed"])
+
             manifest = Path(temporary) / "manifest.json"
             manifest.write_text(json.dumps({
                 "format": "jellyframe.device-image", "formatVersion": 0,

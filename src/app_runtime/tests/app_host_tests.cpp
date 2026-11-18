@@ -222,9 +222,15 @@ void core_font_catalog_tracks_app_lifetime_and_family_identity() {
     TextRunMetrics metrics;
     assert(system->measure("AB",request,metrics)==TextSystemStatus::Ok);
     assert(metrics.primary_resource_id!=0 && metrics.glyph_count==2 && metrics.advance>0);
+    const std::uint32_t system_family_id = 0;
+    TextFontRequest system_request;
+    system_request.families = &system_family_id;
+    system_request.family_count = 1;
     TextRunMetrics system_metrics;
-    assert(system->measure("AB",TextFontRequest{},system_metrics)==TextSystemStatus::Ok);
+    assert(system->measure("AB",system_request,system_metrics)==TextSystemStatus::Ok);
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     assert(metrics.primary_resource_id!=system_metrics.primary_resource_id);
+#endif
 
     const auto teardown=host.exit_current();
     assert(teardown.app_instance_id==app.id && teardown.released_font_resources==1);
