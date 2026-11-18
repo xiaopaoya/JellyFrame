@@ -141,23 +141,25 @@ class Ws147DeviceProviderTests(unittest.TestCase):
         spec.loader.exec_module(provider)
         endpoint = "fixture-live-cancel"
         device = provider.fixture_device()
-        session = provider.LiveInstallSession(endpoint, 77, device)
-        try:
-            result: dict[str, object] = {}
+        with tempfile.TemporaryDirectory(prefix="jellyframe-live-session-") as directory:
+            with mock.patch.object(provider.tempfile, "gettempdir", return_value=directory):
+                session = provider.LiveInstallSession(endpoint, 77, device)
+                try:
+                    result: dict[str, object] = {}
 
-            def request() -> None:
-                result.update(provider.request_live_cancel(endpoint, 77) or {})
+                    def request() -> None:
+                        result.update(provider.request_live_cancel(endpoint, 77) or {})
 
-            import threading
-            thread = threading.Thread(target=request)
-            thread.start()
-            self.assertTrue(session.cancel_requested.wait(1))
-            session.finish(True, "cancelled")
-            thread.join(2)
-            self.assertEqual(result, {"confirmed": True, "resultCode": "cancelled", "device": device})
-        finally:
-            session.close()
-        self.assertIsNone(provider.request_live_cancel(endpoint, 77))
+                    import threading
+                    thread = threading.Thread(target=request)
+                    thread.start()
+                    self.assertTrue(session.cancel_requested.wait(1))
+                    session.finish(True, "cancelled")
+                    thread.join(2)
+                    self.assertEqual(result, {"confirmed": True, "resultCode": "cancelled", "device": device})
+                finally:
+                    session.close()
+                self.assertIsNone(provider.request_live_cancel(endpoint, 77))
 
     def test_live_cancel_rejects_an_unselected_endpoint_before_opening_transport(self) -> None:
         spec = importlib.util.spec_from_file_location("ws147_device_provider_selector", PROVIDER)
