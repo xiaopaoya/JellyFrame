@@ -2683,7 +2683,7 @@ def run_pipeline_check(args: argparse.Namespace, target_override: str | None = N
             command.append(str(width))
         if height:
             command.append(str(height))
-        command.extend(["--diagnostics-json", str(diagnostics_json), "--resource-root", str(pipeline_root)])
+        command.extend(["--diagnostics-json", str(diagnostics_json), "--resource-root", str(pipeline_root), "--package"])
         result = run_command(command)
         if result == 0:
             return result, load_json_if_exists(diagnostics_json)

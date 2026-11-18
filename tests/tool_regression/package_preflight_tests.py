@@ -382,6 +382,7 @@ class PackagePreflightTests(unittest.TestCase):
             self.assertEqual(Path(commands[0][1]), prepared / "pages" / "index.html")
             self.assertEqual(commands[0][4:6], ["64", "48"])
             self.assertEqual(Path(commands[0][commands[0].index("--resource-root") + 1]), prepared)
+            self.assertIn("--package", commands[0])
 
     def test_svg_pipeline_staging_propagates_packaging_failure(self):
         args = SimpleNamespace(root=Path("source"), report=Path("report.json"), rasterize_svg=True,

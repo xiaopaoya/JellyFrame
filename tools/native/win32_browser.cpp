@@ -3,7 +3,7 @@
 #endif
 
 #include "app_runtime/app_host.h"
-#include "app_runtime/core_system_font_catalog.h"
+#include "native_package_fonts.h"
 #include "app_runtime/app_budget.h"
 #include "app_runtime/authorized_file_broker.h"
 #include "app_runtime/app_device_services.h"
@@ -1132,7 +1132,7 @@ HostBudgets desktop_browser_budgets() {
 }
 
 AppRuntimeHostOptions desktop_app_runtime_options() {
-    return AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, 4};
+    return AppRuntimeHostOptions{64, 32, 64, 1024 * 1024, native::kDesktopAppFontCapacity};
 }
 
 AppRuntimeHostOptions desktop_app_runtime_options(const BrowserOptions& options) {
@@ -2568,13 +2568,6 @@ BrowserTextBackend make_browser_text_backend(const BrowserOptions& options, AppR
 #endif
 }
 
-void attach_desktop_system_font_catalog(AppRuntimeHost& runtime) {
-    if (!runtime.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog,
-                                                       kNotoSansScSystemFontCatalogSize)) {
-        throw std::runtime_error("Core system font catalog is invalid; desktop text startup was refused");
-    }
-}
-
 void bind_browser_text_backend(Canvas2DRegistry& canvas, const BrowserTextBackend& backend) {
     canvas.set_text_system(backend.text_system);
 }
@@ -3649,57 +3642,6 @@ const Node* find_shell_action_node(const Node* node) {
     return nullptr;
 }
 
-void load_package_fonts_into_runtime(const jellyframe_example::AppPackageManifest& manifest,
-                                     jellyframe_example::PackageResourceContext& package_context,
-                                     AppRuntimeHost* app_runtime,
-                                     DiagnosticSink* diagnostics) {
-    if (app_runtime == nullptr || manifest.font_sources.empty()) {
-        return;
-    }
-    app_runtime->clear_current_fonts();
-    for (std::size_t index = 0; index < manifest.font_sources.size(); ++index) {
-        const std::string& source = manifest.font_sources[index];
-        const std::string_view family =
-            index < manifest.font_families.size() ? std::string_view(manifest.font_families[index]) : std::string_view{};
-        jellyframe_example::PackageResourceView view;
-        if (jellyframe_example::load_package_resource_view(source, manifest.entry, view, &package_context) &&
-            view.stable) {
-            const AppFontLoadResult result = app_runtime->attach_current_core_font_view(view.data, view.size, family);
-            if (result.loaded()) {
-                continue;
-            }
-            report_diagnostic(diagnostics,
-                              DiagnosticStage::Package,
-                              DiagnosticSeverity::Warning,
-                              "app-font-resource-invalid",
-                              "Manifest font supplement is invalid or cannot be added to the Core font catalog",
-                              source);
-            continue;
-        }
-
-        std::string bytes;
-        if (!jellyframe_example::load_package_resource(source, manifest.entry, bytes, &package_context)) {
-            report_diagnostic(diagnostics,
-                              DiagnosticStage::Package,
-                              DiagnosticSeverity::Warning,
-                              "app-font-resource-missing",
-                              "Manifest font resource could not be loaded",
-                              source);
-            continue;
-        }
-        const auto* data = reinterpret_cast<const std::uint8_t*>(bytes.data());
-        const AppFontLoadResult result = app_runtime->load_current_core_font(data, bytes.size(), family);
-        if (!result.loaded()) {
-            report_diagnostic(diagnostics,
-                              DiagnosticStage::Package,
-                              DiagnosticSeverity::Warning,
-                              "app-font-resource-invalid",
-                              "Manifest font supplement is invalid or cannot be added to the Core font catalog",
-                              source);
-        }
-    }
-}
-
 LoadedPage load_page(const BrowserOptions& options,
                      const HostBudgets& budgets,
                      DiagnosticSink* diagnostics,
@@ -3732,8 +3674,8 @@ LoadedPage load_page(const BrowserOptions& options,
         page.package_context.bundle_bytes = std::move(package.bundle_bytes);
         page.package_context.bundle_entries = std::move(package.bundle_entries);
         page.package_context.bundle_payload_offset = package.bundle_payload_offset;
-        if (package.manifest.contextual_text_pipeline.empty())
-            load_package_fonts_into_runtime(package.manifest, page.package_context, app_runtime, diagnostics);
+        if (app_runtime && package.manifest.contextual_text_pipeline.empty())
+            native::load_package_fonts_into_runtime(package.manifest, page.package_context, *app_runtime, diagnostics);
         std::string html;
         if (!jellyframe_example::load_package_resource(package.manifest.entry,
                                                        package.manifest.entry,
@@ -3790,7 +3732,7 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
         app_runtime.launch("org.jellyframe.debug.capture", AppRole::App);
         runtime = &app_runtime;
     }
-    attach_desktop_system_font_catalog(app_runtime);
+    native::attach_desktop_system_font_catalog(app_runtime);
     LoadedPage page = load_page(options, budgets, &diagnostics, runtime);
 #if defined(_WIN32) && JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
     if (!page.package_manifest.contextual_text_pipeline.empty()) {
@@ -4375,7 +4317,7 @@ public:
         } else {
             app_runtime_.launch("org.jellyframe.debug.page", AppRole::App);
         }
-        attach_desktop_system_font_catalog(app_runtime_);
+        native::attach_desktop_system_font_catalog(app_runtime_);
         const char* weather_json =
             "{\"modes\":{"
             "\"hourly\":{\"temp\":\"27\",\"condition\":\"Rain soon\",\"summary\":\"Next hour 35%\",\"wind\":\"9\",\"rain\":\"35\",\"updated\":\"Live\",\"icon\":\"rain\"},"

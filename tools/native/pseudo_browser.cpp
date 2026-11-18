@@ -24,8 +24,7 @@
 
 #if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME) && \
     JELLYFRAME_NATIVE_CORE_TEXT_DEFAULT
-#include "app_runtime/app_font_set.h"
-#include "app_runtime/core_system_font_catalog.h"
+#include "native_package_fonts.h"
 #endif
 
 #include "example_css_io.h"
@@ -59,6 +58,7 @@ struct BrowserOptions {
     int viewport_height = 240;
     bool viewport_width_set = false;
     bool viewport_height_set = false;
+    bool package_mode = false;
 };
 
 struct ImageFrameSinkContext {
@@ -88,7 +88,7 @@ struct PseudoImages {
         resources.max_input_bytes = kMaxInputBytes;
         resources.diagnostics = sink;
         const auto manifest_path = resources.root / "jellyframe.app.json";
-        if (std::filesystem::exists(manifest_path)) {
+        if (!options.package_mode && std::filesystem::exists(manifest_path)) {
             const auto manifest = jellyframe_example::parse_app_manifest_text(
                 jellyframe_example::read_text_file_limited(manifest_path, kMaxInputBytes), false, true);
             if (!manifest.contextual_text_pipeline.empty())
@@ -795,13 +795,13 @@ void write_diagnostics_json(const std::string& path,
 BrowserOptions parse_options(int argc, char** argv) {
     if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
         std::cout << "usage: jellyframe_pseudo_browser page.html style.css output.ppm "
-                     "[viewport_width] [viewport_height] [--diagnostics-json report.json] [--resource-root directory]\n";
+                     "[viewport_width] [viewport_height] [--diagnostics-json report.json] [--resource-root directory] [--package]\n";
         std::exit(0);
     }
     if (argc < 4) {
         throw std::runtime_error(
             "usage: jellyframe_pseudo_browser page.html style.css output.ppm "
-            "[viewport_width] [viewport_height] [--diagnostics-json report.json] [--resource-root directory]");
+            "[viewport_width] [viewport_height] [--diagnostics-json report.json] [--resource-root directory] [--package]");
     }
 
     BrowserOptions options;
@@ -813,6 +813,10 @@ BrowserOptions parse_options(int argc, char** argv) {
     bool height_set = false;
     for (int i = 4; i < argc; ++i) {
         const std::string arg = argv[i];
+        if (arg == "--package") {
+            options.package_mode = true;
+            continue;
+        }
         if (arg == "--resource-root") {
             if (i + 1 >= argc) throw std::runtime_error("--resource-root requires a directory");
             options.resource_root = argv[++i];
@@ -839,6 +843,9 @@ BrowserOptions parse_options(int argc, char** argv) {
         }
         throw std::runtime_error("unexpected extra argument: " + arg);
     }
+    if (options.package_mode && options.resource_root.empty()) {
+        throw std::runtime_error("--package requires --resource-root");
+    }
     return options;
 }
 
@@ -851,16 +858,39 @@ int main(int argc, char** argv) {
         const BrowserOptions options = parse_options(argc, argv);
         const HostBudgets budgets = desktop_validation_budgets();
         VectorDiagnosticSink diagnostics;
+        const std::filesystem::path html_path(options.html_path);
+        jellyframe_example::PackageResourceContext package_resources;
+        if (!options.resource_root.empty()) {
+            package_resources.root = std::filesystem::weakly_canonical(options.resource_root);
+            const auto relative = std::filesystem::weakly_canonical(html_path).lexically_relative(package_resources.root);
+            if (relative.empty() || relative.is_absolute() ||
+                std::any_of(relative.begin(), relative.end(), [](const auto& part) { return part == ".."; }))
+                throw std::runtime_error("HTML entry is outside the package resource root");
+            package_resources.base_url = "/" + relative.generic_string();
+            package_resources.max_input_bytes = kMaxInputBytes;
+            package_resources.diagnostics = &diagnostics;
+        }
+        jellyframe_example::AppPackageManifest manifest;
+        if (options.package_mode) {
+            manifest = jellyframe_example::load_app_package(package_resources.root, kMaxInputBytes, true).manifest;
+            if (!manifest.contextual_text_pipeline.empty())
+                throw std::runtime_error("pseudo browser requires the scalar text pipeline");
+            if (manifest.entry != package_resources.base_url)
+                throw std::runtime_error("HTML entry does not match the package manifest");
+        }
 #if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME) && \
     JELLYFRAME_NATIVE_CORE_TEXT_DEFAULT
-        AppFontSet fonts;
-        if (!fonts.attach_core_system_font_catalog_view(kNotoSansScSystemFontCatalog,
-                                                        kNotoSansScSystemFontCatalogSize)) {
-            throw std::runtime_error("Core system font catalog is invalid");
+        AppRuntimeHost font_runtime{AppRuntimeHostOptions{0, 0, 0, 0, native::kDesktopAppFontCapacity}};
+        native::attach_desktop_system_font_catalog(font_runtime);
+        if (!manifest.font_sources.empty()) {
+            font_runtime.launch(manifest.id, AppRole::App);
+            native::load_package_fonts_into_runtime(manifest, package_resources, font_runtime, &diagnostics);
         }
-        const TextSystem* text_system = fonts.core_text_system();
+        const TextSystem* text_system = font_runtime.fonts().core_text_system();
         if (text_system == nullptr) throw std::runtime_error("Core TextSystem initialization failed");
 #else
+        if (!manifest.font_sources.empty())
+            throw std::runtime_error("package fonts require the Core text backend");
         const TextSystem* text_system = nullptr;
 #endif
 
@@ -875,29 +905,17 @@ int main(int argc, char** argv) {
         timings.parse_html_us = elapsed_us(stage_start, Clock::now());
 
         jellyframe_example::StylesheetLoadContext stylesheet_context;
-        const std::filesystem::path html_path(options.html_path);
         stylesheet_context.base_dir =
             html_path.has_parent_path() ? html_path.parent_path() : std::filesystem::current_path();
         stylesheet_context.max_input_bytes = kMaxInputBytes;
         stylesheet_context.diagnostics = &diagnostics;
-        jellyframe_example::PackageResourceContext package_stylesheets;
-        if (!options.resource_root.empty()) {
-            package_stylesheets.root = std::filesystem::weakly_canonical(options.resource_root);
-            const auto relative = std::filesystem::weakly_canonical(html_path).lexically_relative(package_stylesheets.root);
-            if (relative.empty() || relative.is_absolute() ||
-                std::any_of(relative.begin(), relative.end(), [](const auto& part) { return part == ".."; }))
-                throw std::runtime_error("HTML entry is outside the package resource root");
-            package_stylesheets.base_url = "/" + relative.generic_string();
-            package_stylesheets.max_input_bytes = kMaxInputBytes;
-            package_stylesheets.diagnostics = &diagnostics;
-        }
         stage_start = Clock::now();
         const std::string css = combine_author_css(jellyframe_example::read_file_limited(options.css_path, kMaxInputBytes),
                                                    *document,
                                                    options.resource_root.empty() ? jellyframe_example::load_linked_stylesheet :
                                                        jellyframe_example::load_package_stylesheet,
                                                    options.resource_root.empty() ? static_cast<void*>(&stylesheet_context) :
-                                                       static_cast<void*>(&package_stylesheets),
+                                                       static_cast<void*>(&package_resources),
                                                    document_style_collection_options_from_budgets(budgets, &diagnostics));
 
         CssParser css_parser;

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -30,8 +31,7 @@ def assert_font_report(report_path: Path) -> None:
     diagnostics = report["fontDiagnostics"]
     assert diagnostics["usableRuntimeFontCount"] == 2
     assert diagnostics["runtimeFontGlyphs"] == 5
-    assert diagnostics["missingNonAsciiCodepointCount"] == 1
-    assert diagnostics["missingNonAsciiSample"][0]["codepoint"] == "U+3042"
+    assert diagnostics["missingNonAsciiCodepointCount"] == 0
 
     fonts = {font["id"]: font for font in diagnostics["manifestFonts"]}
     assert fonts["tiny-cn"]["status"] == "usable"
@@ -65,16 +65,14 @@ def assert_font_report(report_path: Path) -> None:
     assert diagnostics["fontFamilyUsage"]["unmatchedPrimaryCount"] == 0
 
     warnings = report.get("warnings", [])
-    assert [warning["code"] for warning in warnings] == [
-        "font-missing-glyphs",
-    ]
+    assert not warnings
 
     subset = report["fontSubset"]
     assert subset["mode"] == "auto"
     assert subset["generated"] is False
     used_chars = Path(subset["usedChars"])
     assert used_chars.is_file()
-    assert "あ" in used_chars.read_text(encoding="utf-8")
+    assert "\u4e2d" in used_chars.read_text(encoding="utf-8")
 
 
 def assert_font_size_warning_report(report_path: Path) -> None:
@@ -129,11 +127,29 @@ def main() -> int:
         ], capture=True)
         output = result.stdout or ""
         print(output, end="")
-        assert "diagnostics: 1" in output
-        assert output.count("layout-core-text-refused") == 1  # intentional Kana remains outside scalar admission
+        assert "diagnostics: 0" in output
         assert "app_fonts=on" in output
         assert "text_backend=core-text" in output
         assert capture.is_file() and capture.stat().st_size > 54
+
+        unsupported = output_dir / "unsupported-kana"
+        shutil.copytree(font_policy, unsupported)
+        entry = unsupported / "index.html"
+        html = entry.read_text(encoding="utf-8")
+        assert "&#x4E2D;" in html
+        entry.write_text(html.replace("&#x4E2D;", "\u3042"), encoding="utf-8")
+        rejected_report = output_dir / "unsupported-kana.report.json"
+        rejected = subprocess.run([
+            sys.executable, str(REPO_ROOT / "tools" / "jellyframe_cli.py"), "check",
+            "--root", str(unsupported), "--target", "round-300", "--report", str(rejected_report),
+            "--build-dir", str(build_tool_dir), "--strict",
+        ], cwd=REPO_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        rejected_output = rejected.stdout + rejected.stderr
+        assert rejected.returncode != 0, rejected_output
+        assert "layout refused" in rejected_output or "layout-core-text-refused" in rejected_output, rejected_output
+        missing = json.loads(rejected_report.read_text(encoding="utf-8"))["fontDiagnostics"]
+        assert missing["missingNonAsciiCodepointCount"] == 1
+        assert missing["missingNonAsciiSample"][0]["codepoint"] == "U+3042"
 
         warning_report = output_dir / "font_size_warning.report.json"
         warning_bundle = output_dir / "font_size_warning.jfapp"

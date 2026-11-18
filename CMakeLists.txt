@@ -1370,6 +1370,7 @@ if(JELLYFRAME_BUILD_TESTS)
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/canonical_app_font_ink_tests.py
                     $<TARGET_FILE:jellyframe_desktop_shell>
+                    $<TARGET_FILE:jellyframe_pseudo_browser>
                     "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
