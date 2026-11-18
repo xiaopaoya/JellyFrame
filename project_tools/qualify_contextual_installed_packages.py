@@ -21,6 +21,21 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def parse_ctest_passed_count(log):
+    legacy = re.search(r'0 tests failed out of (\d+)', log)
+    if legacy:
+        return int(legacy[1])
+
+    current = re.search(r'(\d+)% tests passed, (\d+) tests failed out of (\d+)', log)
+    if current:
+        percent, failed, total = map(int, current.groups())
+        if percent == 100 and failed == 0:
+            return total
+        raise RuntimeError(f'CTest reported {failed} failures out of {total} tests')
+
+    raise RuntimeError('CTest output has no recognized final summary')
+
+
 def audit_installed_package(build, runtime, probe, prefix, identity, production_lock_sha256):
     provenance = json.loads((build / 'runtime/generated/jellyframe_render_core_provenance.json').read_text())
     assert provenance['engineAbi'] == 9 and provenance['lockEnforced'], 'package lock not enforced'
@@ -228,7 +243,7 @@ def main():
         run(name + '-build', [args.cmake, '--build', build, '--parallel', str(args.jobs)])
         run(name + '-ctest', [args.ctest, '--test-dir', build, '--output-on-failure'])
         log = (output / (name + '-ctest.log')).read_text()
-        total = int(re.search(r'0 tests failed out of (\d+)', log)[1])
+        total = parse_ctest_passed_count(log)
         assert total >= 36 and 'Skipped' not in log
         audit = audit_installed_package(build, runtime, probe, packages[name], identities[name],
                                         production_lock_sha256)

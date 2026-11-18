@@ -91,6 +91,8 @@ jobs:
       - name: Build and qualify the pinned installed pair
         shell: pwsh
         run: |
+          python tests/tool_regression/installed_qualification_summary_tests.py
+          if ($LASTEXITCODE -ne 0) { throw 'CTest summary parser regression failed' }
           python project_tools/qualify_abi9_pair.py `
             --core build/abi9-core --core-commit $env:CORE_COMMIT `
             --core-version $env:CORE_VERSION --core-source-hash $env:CORE_SOURCE_HASH `
