@@ -113,13 +113,16 @@ def main():
     parser.add_argument('--compiler', default='clang++')
     parser.add_argument('--cmake', default='cmake')
     parser.add_argument('--ctest', default='ctest')
+    parser.add_argument('--jobs', type=int, default=2)
     args = parser.parse_args()
+    if args.jobs < 1:
+        parser.error('--jobs must be positive')
     runtime = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(runtime / 'tools'))
     from bootstrap_render_core import read_lock
     qualification_lock = args.qualification_lock.resolve(strict=True)
     expected = read_lock(qualification_lock)
-    assert expected['version'] == '0.6.2' and expected['abi'] == '9', 'this qualifier requires ABI9 Core 0.6.2'
+    assert expected['abi'] == '9', 'this qualifier requires ABI9 Core'
     production_lock_sha256 = sha(runtime / 'cmake/jellyframe_dependency_lock.cmake')
     output = args.output.resolve()
     builds = args.build_root.resolve()
@@ -133,7 +136,7 @@ def main():
         share = prefix / 'share/jellyframe-render-core'
         profile = json.loads((share / 'jellyframe_render_core_profile.json').read_text())
         manifest = json.loads((share / 'jellyframe_render_core_source_manifest.json').read_text())
-        assert profile['engineAbi'] == 9 and profile['packageVersion'] == '0.6.2'
+        assert profile['engineAbi'] == 9 and profile['packageVersion'] == expected['version']
         features = set(profile['features'])
         assert {'core.document', 'core.paint'}.issubset(features)
         contextual = {'text.contextual-jfsp2', 'text.contextual-layout'}
@@ -213,7 +216,7 @@ def main():
             common += ['-DJELLYFRAME_ENABLE_' + feature + '=OFF' for feature in
                        ('CANVAS2D', 'MODERN_PAINT', 'FLEX_GRID', 'ADVANCED_FORMS', 'LENGTH_MATH')]
         run(name + '-configure', [args.cmake, '-S', harness, '-B', build] + common)
-        run(name + '-build', [args.cmake, '--build', build, '--parallel', '2'])
+        run(name + '-build', [args.cmake, '--build', build, '--parallel', str(args.jobs)])
         run(name + '-ctest', [args.ctest, '--test-dir', build, '--output-on-failure'])
         log = (output / (name + '-ctest.log')).read_text()
         total = int(re.search(r'0 tests failed out of (\d+)', log)[1])
@@ -239,7 +242,7 @@ def main():
                       if not (runtime / row['path']).is_file() or sha(runtime / row['path']) != row['sha256']]
     (output / 'runtime-input-changes.json').write_text(json.dumps(changed_inputs, indent=2) + '\n')
     print(json.dumps(results, indent=2))
-    return int(any('error' in row for row in results))
+    return int(bool(changed_inputs) or any('error' in row for row in results))
 
 
 if __name__ == '__main__':

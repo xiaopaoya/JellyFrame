@@ -98,8 +98,13 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${fixture_inputs}
 string(SHA256 fixture_identity "${fixture_identity}")
 string(SUBSTRING "${fixture_identity}" 0 16 fixture_identity)
 set(fixtures "${CMAKE_CURRENT_BINARY_DIR}/fixtures-${fixture_identity}")
+set(fixture_command "${Python3_EXECUTABLE}")
+if(qualification_contextual AND JELLYFRAME_RENDER_CORE_QUALIFICATION_LOCK_FILE)
+    set(fixture_command "${CMAKE_COMMAND}" -E env "JELLYFRAME_TEST_RENDER_CORE_VERSION=${qualification_core_version}"
+        "${Python3_EXECUTABLE}")
+endif()
 add_custom_command(OUTPUT "${fixtures}/package-evidence.json"
-    COMMAND "${Python3_EXECUTABLE}" "${runtime_root}/project_tools/prepare_signed_shaped_fixture.py"
+    COMMAND ${fixture_command} "${runtime_root}/project_tools/prepare_signed_shaped_fixture.py"
         --core-fixtures "${JFSG_CORE_FIXTURES_DIR}"
         --font "${fixture_font}" --text-pipeline "${fixture_pipeline}" ${fixture_candidate_args}
         --output "${fixtures}" --max-package-bytes 2093056 --public-test-signature

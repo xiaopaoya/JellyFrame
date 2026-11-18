@@ -12,8 +12,10 @@ import package_app
 import sign_app_package
 
 
-def make_fixture(output):
+def make_fixture(output, core_version=None):
     manifest = package_app.read_manifest(ROOT / "samples/apps/packages/jelly_font_policy")
+    if core_version is not None:
+        manifest["runtime"]["minRenderCore"] = core_version
     manifest.update(id="org.jellyframe.signed-test", name="Signed Scalar", fonts=[],
                     viewport={"designWidth": 172, "designHeight": 320, "shape": "rect"})
     manifest["runtime"]["script"] = "classic"
@@ -52,4 +54,4 @@ def make_fixture(output):
 
 
 if __name__ == "__main__":
-    make_fixture(Path(sys.argv[1]))
+    make_fixture(Path(sys.argv[1]), *sys.argv[2:])

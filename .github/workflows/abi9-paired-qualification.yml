@@ -1,0 +1,111 @@
+name: ABI9 Core and Runtime qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      core_commit:
+        description: Full commit SHA in the JellyFrame Render Core repository
+        type: string
+        required: true
+      core_version:
+        description: Exact numeric version declared by the Core candidate
+        type: string
+        required: true
+      core_source_hash:
+        description: SHA-256 from the independently reviewed Core source manifest
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  paired-installed:
+    name: ABI9 installed and signed host tests (${{ matrix.profile }})
+    runs-on: windows-2025
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [full, cropped, off]
+    env:
+      CORE_COMMIT: ${{ inputs.core_commit }}
+      CORE_VERSION: ${{ inputs.core_version }}
+      CORE_SOURCE_HASH: ${{ inputs.core_source_hash }}
+      PROFILE: ${{ matrix.profile }}
+
+    steps:
+      - name: Validate candidate selection
+        shell: pwsh
+        run: |
+          if ($env:CORE_COMMIT -cnotmatch '\A[0-9a-f]{40}\z' -or
+              $env:CORE_VERSION -cnotmatch '\A[0-9]+\.[0-9]+\.[0-9]+\z' -or
+              $env:CORE_SOURCE_HASH -cnotmatch '\A[0-9a-f]{64}\z') {
+            throw 'Use a full Core commit, numeric version and lowercase source SHA-256.'
+          }
+
+      - name: Checkout Runtime
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Checkout pinned Core candidate
+        uses: actions/checkout@v5
+        with:
+          repository: xiaopaoya/JellyFrame-Render-Core
+          ref: ${{ inputs.core_commit }}
+          path: build/abi9-core
+          persist-credentials: false
+
+      - name: Checkout JerryScript
+        uses: actions/checkout@v5
+        with:
+          repository: jerryscript-project/jerryscript
+          ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
+          path: build/abi9-jerry
+          persist-credentials: false
+
+      - name: Checkout ESP-IDF 5.3.1 mbedTLS
+        uses: actions/checkout@v5
+        with:
+          repository: espressif/mbedtls
+          ref: 72aa687352a469044cbb946f3fdb261430e41ce1
+          path: build/abi9-mbedtls
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Build JerryScript and install the host signing fixture dependency
+        shell: pwsh
+        run: |
+          python -m pip install cryptography==50.0.2
+          if ($LASTEXITCODE -ne 0) { throw 'Host signing fixture dependency failed' }
+          python tools/dependencies/patch_jerryscript.py --source-root build/abi9-jerry
+          if ($LASTEXITCODE -ne 0) { throw 'JerryScript patch failed' }
+          python build/abi9-jerry/tools/build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+          if ($LASTEXITCODE -ne 0) { throw 'JerryScript build failed' }
+
+      - name: Build and qualify the pinned installed pair
+        shell: pwsh
+        run: |
+          python project_tools/qualify_abi9_pair.py `
+            --core build/abi9-core --core-commit $env:CORE_COMMIT `
+            --core-version $env:CORE_VERSION --core-source-hash $env:CORE_SOURCE_HASH `
+            --jerry build/abi9-jerry --mbedtls build/abi9-mbedtls `
+            --profile $env:PROFILE --jobs 3 --output "$env:RUNNER_TEMP/abi9-pair"
+          if ($LASTEXITCODE -ne 0) { throw 'ABI9 installed pair qualification failed' }
+
+      - name: Upload qualification logs and receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: abi9-pair-${{ matrix.profile }}
+          path: |
+            ${{ runner.temp }}/abi9-pair/candidate-lock.cmake
+            ${{ runner.temp }}/abi9-pair/receipt.json
+            ${{ runner.temp }}/abi9-pair/logs/
+            ${{ runner.temp }}/abi9-pair/installed-evidence/
+            ${{ runner.temp }}/abi9-pair/signed_shaped/fixtures-*/package-evidence.json

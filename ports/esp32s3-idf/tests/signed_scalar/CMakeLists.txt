@@ -37,8 +37,16 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "package")
     target_include_directories(jfsg_scalar_store BEFORE PRIVATE ${core_includes})
 endif()
 set(fixture "${CMAKE_CURRENT_BINARY_DIR}/scalar.jfsg")
+set(fixture_command "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/generate_fixture.py" "${fixture}")
+if(JELLYFRAME_RENDER_CORE_QUALIFICATION_LOCK_FILE)
+    file(READ "${CMAKE_CURRENT_BINARY_DIR}/runtime/generated/jellyframe_render_core_provenance.json" core_provenance)
+    string(JSON fixture_core_version GET "${core_provenance}" packageVersion)
+    set(fixture "${CMAKE_CURRENT_BINARY_DIR}/scalar-${fixture_core_version}.jfsg")
+    set(fixture_command "${CMAKE_COMMAND}" -E env "JELLYFRAME_TEST_RENDER_CORE_VERSION=${fixture_core_version}"
+        "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/generate_fixture.py" "${fixture}" "${fixture_core_version}")
+endif()
 add_custom_command(OUTPUT "${fixture}"
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/generate_fixture.py" "${fixture}"
+    COMMAND ${fixture_command}
     DEPENDS generate_fixture.py "${runtime_root}/tools/package_app.py" "${runtime_root}/tools/sign_app_package.py"
         "${runtime_root}/tools/app_registry.py" "${runtime_root}/tools/jellyframe_versions.py"
         "${runtime_root}/VERSION" "${runtime_root}/cmake/jellyframe_dependency_lock.cmake"
