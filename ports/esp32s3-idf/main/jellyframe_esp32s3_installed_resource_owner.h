@@ -6,7 +6,7 @@
 #include "app_runtime/runtime_image_provider.h"
 #include "app_runtime/app_font_set.h"
 #include "app_runtime/runtime_shaped_text_binding.h"
-#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+#if JELLYFRAME_RUNTIME_IMAGE_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
 #include "jellyframe_esp32s3_image.h"
 #endif
 

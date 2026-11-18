@@ -82,16 +82,13 @@ jellyframe::HostBudgets installed_script_budgets(int width, int height) {
     return budgets;
 }
 
-jellyframe::ScriptTaskAppFrameCodecOptions frame_codec_options(std::uint8_t selected_version = 0) {
+jellyframe::ScriptTaskAppFrameCodecOptions frame_codec_options(const jellyframe::AppInstalledTextPipeline& pipeline) {
     jellyframe::ScriptTaskAppFrameCodecOptions options;
 #if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
-    options.version = 10;
     options.max_groups = 64;
     options.max_group_depth = 8;
-#else
-    options.version = 5;
 #endif
-    if (selected_version) options.version = selected_version;
+    options.version = installed_text_pipeline_frame_version(pipeline);
     options.max_commands = kMaxCommands;
     options.max_text_bytes = 12u * 1024u;
     options.max_input_targets = 48;
@@ -201,7 +198,7 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options(const InstalledBundleS
     };
     options.prepare_document_user = const_cast<InstalledBundleScriptSession*>(&state);
     options.viewport = {0, 0, state.width, state.height};
-    options.frame_codec = frame_codec_options(state.text_pipeline.frame_version);
+    options.frame_codec = frame_codec_options(state.text_pipeline);
     options.input_codec = {32, 256};
     options.service_request_codec = {64};
     options.text_system = state.host != nullptr
@@ -262,7 +259,7 @@ bool publish_malformed_v3_with_v4_source_clip(InstalledBundleScriptSession& stat
     frame.display_list.push_back(fill);
     frame.display_clip_indices.push_back(0);
     std::vector<std::uint8_t> encoded;
-    if (jellyframe::encode_script_task_app_frame(frame, frame_codec_options(), encoded) !=
+    if (jellyframe::encode_script_task_app_frame(frame, frame_codec_options(state.text_pipeline), encoded) !=
             jellyframe::ScriptTaskAppFrameCodecStatus::Accepted ||
         encoded.size() < 36 + 28 + 104) {
         return false;
@@ -451,13 +448,13 @@ void run_installed_bundle_ui(InstalledBundleScriptSession* state) {
 #if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
         jellyframe::ScriptTaskAcceptedAppFrame frame;
         const auto take_status = take_installed_core_text_frame(
-            *state->protocol, state->script_session, frame_codec_options(state->text_pipeline.frame_version), frame);
+            *state->protocol, state->script_session, frame_codec_options(state->text_pipeline), frame);
         const std::uint32_t packet_sequence = frame.sequence();
 #else
         jellyframe::ScriptTaskAppFrame frame;
         std::uint32_t packet_sequence = 0;
         const auto take_status = jellyframe::take_script_task_app_frame(
-            *state->protocol, state->script_session, frame_codec_options(state->text_pipeline.frame_version), frame, &packet_sequence);
+            *state->protocol, state->script_session, frame_codec_options(state->text_pipeline), frame, &packet_sequence);
 #endif
         if (take_status == jellyframe::ScriptTaskAppFrameTakeStatus::Accepted) {
             const jellyframe::Rect full{0, 0, width, height};
@@ -637,12 +634,6 @@ bool start_installed_bundle_script_task(std::string app_id,
     session = nullptr;
     if (jellyframe_jerry_port_try_get_fatal(nullptr, nullptr)) return false;
     if (!installed_text_pipeline_supported(text_pipeline)) return false;
-#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
-    // The declared route must be replayable; contextual packages never require
-    // the unrelated scalar v10 ABI and never fall back to it.
-    const auto selected = text_pipeline.frame_version ? text_pipeline.frame_version : 10;
-    if (!jellyframe::script_task_app_frame_codec_supports_version(selected)) return false;
-#endif
     const boards::BoardProfile& profile = boards::selected_board_profile();
     if (app_id.empty() || app_instance_id == 0 || entry_path.empty() || entry_document.empty() ||
         profile.display.width <= 0 || profile.display.height <= 0 || !resources.rebuild_views()) {

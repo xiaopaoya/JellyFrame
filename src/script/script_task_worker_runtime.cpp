@@ -21,7 +21,10 @@
 namespace jellyframe {
 namespace {
 
-bool is_canonical_frame_version(std::uint8_t version) { return version == 9 || version == 10 || version == kRuntimeShapedFrameVersion; }
+bool uses_owned_frame_resources(std::uint8_t version) {
+    return version == 9 || version == 10 || version == kRuntimeShapedFrameVersion ||
+           version == kRuntimeScalarFrameVersion;
+}
 
 template<class T, class = void>
 struct HasBackgroundResourceResolver : std::false_type {};
@@ -30,7 +33,7 @@ template<class T>
 struct HasBackgroundResourceResolver<T, std::void_t<decltype(
     std::declval<T&>().background_resource_resolver)>> : std::true_type {};
 
-#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+#if JELLYFRAME_RUNTIME_IMAGE_API
 template<class T> struct FunctionArguments;
 template<class R, class... Args> struct FunctionArguments<R (*)(Args...)> {
     using Tuple = std::tuple<Args...>;
@@ -39,7 +42,7 @@ using ImageResolveResult = std::remove_reference_t<std::remove_cv_t<
     std::tuple_element_t<3, typename FunctionArguments<ImageHandleResolveCallback>::Tuple>>>;
 
 template<class Result>
-bool set_image_resolve_result(Result& result, const ResolvedImageResource& resolved) {
+bool set_image_resolve_result(Result& result, const RuntimeResolvedImage& resolved) {
     if constexpr (std::is_same<Result, std::uint32_t>::value) {
         result = resolved.image_handle;
         return result != 0;
@@ -59,7 +62,7 @@ void configure_background_resource_resolver(Options& options, const StyleResolve
 ScriptTaskAppFrameCodecOptions frame_options_from(const ScriptTaskWorkerRuntimeOptions& options) {
     ScriptTaskAppFrameCodecOptions result = options.frame_codec;
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
-    if (is_canonical_frame_version(result.version) && options.image_provider)
+    if (uses_owned_frame_resources(result.version) && options.image_provider)
         result.image_provider_id = options.image_provider->id();
 #endif
     if (result.max_commands == 0) result.max_commands = std::max<std::size_t>(1, options.budgets.max_display_commands);
@@ -258,10 +261,6 @@ ScriptTaskWorkerRuntime::State::State(ScriptAppSession session,
         options_.service_request_codec.max_payload_bytes = std::max<std::size_t>(64, options_.budgets.max_resource_bytes);
     }
     fatal_record_.session = session_;
-#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
-    if (is_canonical_frame_version(options_.frame_codec.version) && options_.image_provider)
-        options_.frame_codec.image_provider_id = options_.image_provider->id();
-#endif
 }
 
 ScriptTaskWorkerRuntime::State::~State() {
@@ -305,7 +304,7 @@ void ScriptTaskWorkerRuntime::State::release_operation() {
 bool ScriptTaskWorkerRuntime::State::supervisor_matches(const ScriptTaskSupervisor& supervisor) const {
     if (!session_.valid() || !supervisor.accepts(session_)) return false;
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
-    if (is_canonical_frame_version(options_.frame_codec.version)) {
+    if (uses_owned_frame_resources(options_.frame_codec.version)) {
         const auto catalog = supervisor.text_catalog(session_);
         const auto images = supervisor.image_provider(session_);
         if (!options_.text_catalog || catalog != options_.text_catalog ||
@@ -313,11 +312,12 @@ bool ScriptTaskWorkerRuntime::State::supervisor_matches(const ScriptTaskSupervis
 #if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
         const auto shaped = supervisor.shaped_text_binding(session_);
         if (shaped != options_.shaped_text_binding || (shaped && !shaped->valid())) return false;
+        if (options_.frame_codec.version == kRuntimeScalarFrameVersion && shaped) return false;
 #endif
         return true;
     }
 #else
-    if (is_canonical_frame_version(options_.frame_codec.version)) return false;
+    if (uses_owned_frame_resources(options_.frame_codec.version)) return false;
 #endif
     return true;
 }
@@ -371,10 +371,12 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::State::initialize(std
     if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
     if (initialized_) return ScriptTaskWorkerRuntimeInitStatus::AlreadyInitialized;
     if (!session_.valid()) return ScriptTaskWorkerRuntimeInitStatus::InvalidSession;
-    if (is_canonical_frame_version(options_.frame_codec.version)) {
+    if (uses_owned_frame_resources(options_.frame_codec.version)) {
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
         if (!options_.text_catalog ||
-            (options_.image_provider && !options_.image_provider->valid())) {
+            (options_.image_provider && !options_.image_provider->valid()) ||
+            (options_.frame_codec.version == kRuntimeScalarFrameVersion &&
+             !script_task_app_frame_codec_supports_version(kRuntimeScalarFrameVersion))) {
             set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
             return ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration;
         }
@@ -461,7 +463,7 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::State::initialize(
     if (stopped_) return ScriptTaskWorkerRuntimeInitStatus::Stopped;
     if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
     if (initialized_) return ScriptTaskWorkerRuntimeInitStatus::AlreadyInitialized;
-    if (is_canonical_frame_version(options_.frame_codec.version)) {
+    if (uses_owned_frame_resources(options_.frame_codec.version)) {
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
         if (!options_.text_catalog || (options_.image_provider && !options_.image_provider->valid())) {
             set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
@@ -490,8 +492,8 @@ ScriptEvaluationResult ScriptTaskWorkerRuntime::State::eval(std::string_view sou
     if (!initialized_ || fatal()) {
         return {false, {}, "worker runtime is not active", ScriptEvaluationStatus::Exception};
     }
-    if (is_canonical_frame_version(options_.frame_codec.version) && active_supervisor_ == nullptr) {
-        return {false, {}, "canonical frame evaluation requires supervisor validation", ScriptEvaluationStatus::Exception};
+    if (uses_owned_frame_resources(options_.frame_codec.version) && active_supervisor_ == nullptr) {
+        return {false, {}, "owned-resource frame evaluation requires supervisor validation", ScriptEvaluationStatus::Exception};
     }
     ScriptEvaluationResult result = runtime_->eval(source, source_name);
     if (!result.ok) {
@@ -550,7 +552,7 @@ ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::State::publish_frame(Sc
         ++telemetry_.frame_publish_rejections;
         return result;
 #endif
-    } else if (is_canonical_frame_version(options_.frame_codec.version)) {
+    } else if (uses_owned_frame_resources(options_.frame_codec.version)) {
         const auto status = make_script_task_group_frame(*layer_tree_, options_.viewport,
                                                         options_.frame_codec, frame);
         if (status != ScriptTaskAppFrameCodecStatus::Accepted) {
@@ -843,22 +845,36 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
     if (!render_tree) return false;
     LayoutEngineOptions layout_options = layout_engine_options_from_budgets(options_.budgets);
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
-    layout_options.text_system = is_canonical_frame_version(options_.frame_codec.version)
+    layout_options.text_system = uses_owned_frame_resources(options_.frame_codec.version)
         ? &options_.text_catalog->text_system() : options_.text_system;
 #else
     layout_options.text_system = options_.text_system;
 #endif
 #if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1 && JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
-    if (is_canonical_frame_version(options_.frame_codec.version) && options_.image_provider) {
+    if (uses_owned_frame_resources(options_.frame_codec.version) && options_.image_provider) {
         layout_options.natural_image_sizing = options_.natural_image_sizing;
         // Metadata and paint resolve against the same immutable, owned snapshot.
         layout_options.natural_image_sizing.provider = {[](const Node& node, void* context) {
             const auto* runtime = static_cast<const State*>(context);
             const auto& images = runtime->options_.image_provider;
-            ResolvedImageResource resolved;
+            RuntimeResolvedImage resolved;
             return images->resolve(node.attribute("src"), resolved)
                 ? resolved.intrinsic_size : ImageIntrinsicSize{};
         }, this};
+    }
+#elif JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API && !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+    auto natural_image_sizing = options_.natural_image_sizing;
+    if (options_.frame_codec.version == kRuntimeScalarFrameVersion && options_.image_provider) {
+        natural_image_sizing.provider = {[](const Node& node, int& width, int& height, void* context) {
+            const auto& runtime = *static_cast<const State*>(context);
+            RuntimeResolvedImage resolved;
+            if (!runtime.options_.image_provider->resolve(node.attribute("src"), resolved) ||
+                resolved.width <= 0 || resolved.height <= 0) return false;
+            width = resolved.width;
+            height = resolved.height;
+            return true;
+        }, this};
+        layout_options.natural_image_sizing = &natural_image_sizing;
     }
 #endif
 #if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
@@ -888,13 +904,13 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
     clear_dirty_flags(*document_owner_.root());
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(options_.budgets);
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
-    layer_options.text_system = is_canonical_frame_version(options_.frame_codec.version)
+    layer_options.text_system = uses_owned_frame_resources(options_.frame_codec.version)
         ? &options_.text_catalog->text_system() : options_.text_system;
 #if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
     if (options_.frame_codec.version == kRuntimeShapedFrameVersion) layer_options.text_system = nullptr;
 #endif
-#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
-    if (is_canonical_frame_version(options_.frame_codec.version)) {
+#if JELLYFRAME_RUNTIME_IMAGE_API
+    if (uses_owned_frame_resources(options_.frame_codec.version)) {
         configure_background_resource_resolver(layer_options, style_resolver_.get());
         layer_options.image_resolver = {[](const Node& node, ImageResolveKind kind,
                                              std::uint16_t resource_id, ImageResolveResult& result,
@@ -909,10 +925,26 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
                 const std::string* background_url = runtime->style_resolver_->background_image_resource_url(resource_id);
                 if (background_url != nullptr) url = *background_url;
             }
-            ResolvedImageResource resolved;
+            RuntimeResolvedImage resolved;
             return !url.empty() && runtime->options_.image_provider->resolve(url, resolved) &&
                 set_image_resolve_result(result, resolved);
         }, this};
+#if JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API && !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+        layer_options.image_resolver.intrinsic_size = [](std::uint32_t handle, int& width, int& height,
+                                                         void* context) {
+            const auto& runtime = *static_cast<const State*>(context);
+            return runtime.options_.image_provider &&
+                runtime.options_.image_provider->intrinsic_size(handle, width, height);
+        };
+        layer_options.image_resolver.resolve_url = [](std::string_view url, std::uint32_t& handle,
+                                                      void* context) {
+            const auto& runtime = *static_cast<const State*>(context);
+            RuntimeResolvedImage resolved;
+            if (!runtime.options_.image_provider || !runtime.options_.image_provider->resolve(url, resolved)) return false;
+            handle = resolved.image_handle;
+            return true;
+        };
+#endif
     }
 #endif
 #else

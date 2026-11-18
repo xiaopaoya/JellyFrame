@@ -1,6 +1,7 @@
 #pragma once
 
 #include "jellyframe_esp32s3_resources.h"
+#include "app_runtime/runtime_image_provider.h"
 
 #include "render_core/geometry.h"
 #include "render_core/layer_tree.h"
@@ -45,14 +46,14 @@ public:
     bool resolve(const jellyframe::Node& node,
                  jellyframe::ImageResolveKind kind,
                  std::uint16_t background_resource_id,
-                 jellyframe::ResolvedImageResource& result);
+                 jellyframe::RuntimeResolvedImage& result);
 
 #if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION)
     jellyframe::ImageIntrinsicSize natural_size(const jellyframe::Node& node);
 #endif
 
     bool paint(jellyframe::FrameBuffer& target,
-               const jellyframe::ImagePaintRequest& request);
+               const jellyframe::RuntimeImagePaintRequest& request);
 
     const ImageAdapterStats& stats() const { return stats_; }
 

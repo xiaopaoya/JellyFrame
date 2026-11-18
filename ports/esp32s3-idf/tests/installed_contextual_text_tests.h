@@ -2,34 +2,61 @@
 
 #include <iostream>
 
-// ABI9 flat scalar resources are not a substitute for the contextual v12 route.
+// ABI9 scalar and contextual resources use explicit independent frame routes.
 inline int run_installed_contextual_text_tests() {
     using namespace jellyframe;
     using namespace jellyframe_esp32s3;
     auto bytes = std::make_shared<const std::vector<std::uint8_t>>(runtime_test_fonts::font_bytes());
     CoreFontResourceView system{bytes->data(), bytes->size()};
+    const auto clock = +[]() -> std::int64_t { return 1; };
     InstalledAppResources::Handle resources;
-    assert(create_installed_app_resources({}, {}, "/index.html", &system, 1, bytes, nullptr, resources));
-    assert(resources && resources->text_catalog && !resources->image_provider);
+    assert(create_installed_app_resources({}, {}, "/index.html", &system, 1, bytes, clock, resources));
+    assert(resources && resources->text_catalog);
     InstalledResourceSnapshot images;
     images.entries.push_back({"/bad.bmp", HostResourceKind::Image, {1,2,3}});
     auto original = resources;
-    assert(!create_installed_app_resources(std::move(images), {}, "/index.html", &system, 1, bytes, nullptr, resources));
+    assert(!create_installed_app_resources(std::move(images), {}, "/index.html", &system, 1, bytes, clock, resources));
     assert(resources == original);
     ScriptTaskSupervisorOptions supervisor_options;
     supervisor_options.frame_mailbox = {4,4096};
     supervisor_options.frame_leases = {4,32768,65536};
     ScriptTaskSupervisor supervisor(supervisor_options);
     assert(!script_task_app_frame_codec_supports_version(10));
-    assert(!begin_installed_script_session(supervisor,41,resources).valid());
+    const auto scalar_session = begin_installed_script_session(supervisor,41,resources);
+    assert(scalar_session.valid());
     AppInstalledTextPipeline pipeline;
     pipeline.status = AppInstalledTextPipelineStatus::Scalar;
-    assert(!installed_text_pipeline_supported(pipeline));
+    assert(installed_text_pipeline_supported(pipeline));
+    assert(installed_text_pipeline_frame_version(pipeline) == kRuntimeScalarFrameVersion);
+    ScriptTaskWorkerRuntimeOptions scalar_options;
+    resources->bind_worker_resources(scalar_options);
+    scalar_options.viewport = {0,0,64,32};
+    scalar_options.frame_codec = {128,16384,16,32768};
+    scalar_options.frame_codec.version = installed_text_pipeline_frame_version(pipeline);
+    scalar_options.frame_codec.max_groups = 16;
+    ScriptTaskAcceptedAppFrame scalar_frame;
+    {
+        ScriptTaskWorkerRuntime worker(scalar_session, scalar_options);
+        assert(worker.initialize(supervisor, "<body><div>AB</div></body>",
+            "body{margin:0;background:#fff}div{font-size:16px;color:#000}") ==
+            ScriptTaskWorkerRuntimeInitStatus::Accepted);
+        assert(worker.publish_frame(supervisor).accepted());
+        assert(take_installed_core_text_frame(supervisor, scalar_session,
+            scalar_options.frame_codec, scalar_frame) == ScriptTaskAppFrameTakeStatus::Accepted);
+        worker.stop();
+    }
+    FrameBuffer scalar_pixels(64,32,{255,255,255,255});
+    assert(render_installed_core_text_frame(ScriptTaskFrameRenderer{},scalar_frame,scalar_pixels,
+        {255,255,255,255},nullptr,0,nullptr,nullptr));
+    assert(std::any_of(scalar_pixels.pixels.begin(), scalar_pixels.pixels.end(), [](Color c){ return c.r < 100; }));
+    supervisor.begin_teardown(scalar_session); supervisor.complete_teardown(scalar_session);
+    scalar_frame = {}; scalar_options = {};
 #if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
     runtime_test_shaped_text::Assets assets("regular", 7501);
     auto binding = runtime_test_shaped_text::create_binding(assets);
     auto shaped = std::make_shared<InstalledAppResources>(*resources);
     shaped->shaped_text_binding = binding;
+    shaped->image_provider.reset();
     pipeline.status = AppInstalledTextPipelineStatus::Ready;
     pipeline.frame_version = kRuntimeShapedFrameVersion;
     pipeline.binding = binding;
@@ -141,7 +168,7 @@ inline int run_installed_contextual_text_tests() {
     pipeline.frame_version=12;
     assert(!installed_text_pipeline_supported(pipeline));
     assert(!script_task_app_frame_codec_supports_version(12));
-    std::cout << "installed contextual OFF: resources retained; v12 and scalar downgrade refused\n";
+    std::cout << "installed contextual OFF: resources retained; v13 scalar replay passed and v12 refused\n";
 #endif
     return 0;
 }

@@ -81,7 +81,8 @@ struct ScriptTaskWorkerRuntimeOptions {
     runtime_shaped::LayoutOptions shaped_layout;
 #endif
 #endif
-#if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1
+#if (defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) && JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION >= 1) || \
+    (JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API && !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API)
     // Bounds/statistics for Core's pass-local metadata memo. The worker binds
     // provider/context to image_provider before each synchronous layout call.
     // A supplied statistics pointer must outlive this worker and all rebuilds.

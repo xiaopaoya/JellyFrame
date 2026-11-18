@@ -570,6 +570,19 @@ class PackagePreflightTests(unittest.TestCase):
             "core.document", "core.paint", "graphics.canvas2d",
         ])
 
+    def test_abi9_profile_checks_contextual_layout_dependency(self):
+        profile = {
+            "schemaVersion": 1,
+            "engineAbi": 9,
+            "profileId": "render-core-default",
+            "features": ["core.document", "core.paint", "css.length-math", "css.counters",
+                         "css.borders", "css.tables", "css.positioned-sizing", "text.contextual-layout"],
+        }
+        with self.assertRaisesRegex(SystemExit, "text.contextual-layout -> text.contextual-jfsp2"):
+            self._load_temporary_render_core_profile(profile)
+        profile["features"].append("text.contextual-jfsp2")
+        self.assertEqual(self._load_temporary_render_core_profile(profile)["features"], profile["features"])
+
     @staticmethod
     def _load_temporary_render_core_profile(profile):
         handle = tempfile.NamedTemporaryFile(

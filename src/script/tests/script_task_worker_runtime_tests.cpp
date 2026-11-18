@@ -2048,6 +2048,103 @@ void worker_owner_admission_refusal() {
     capped.stop();
 }
 
+#if JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API && !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+class ScalarWorkerImages final : public RuntimeImageProviderSource {
+public:
+    std::uint64_t generation() const noexcept override { return 1; }
+    bool contains(std::uint32_t handle) const noexcept override { return handle == 73; }
+    bool resolve(std::string_view url, RuntimeResolvedImage& output) const override {
+        if (url != "/assets/content.bmp") return false;
+        output = {73, 20, 12};
+        return true;
+    }
+    bool intrinsic_size(std::uint32_t handle, int& width, int& height) const override {
+        if (!contains(handle)) return false;
+        width = 20;
+        height = 12;
+        return true;
+    }
+    bool paint(FrameBuffer& target, const RuntimeImagePaintRequest& request) const override {
+        if (!contains(request.image_handle)) return false;
+        const auto& clip = request.clip;
+        for (int y = std::max(0, clip.y); y < std::min(target.height, clip.y + clip.height); ++y)
+            for (int x = std::max(0, clip.x); x < std::min(target.width, clip.x + clip.width); ++x)
+                target.pixel(x, y) = {227, 13, 49, 255};
+        return true;
+    }
+};
+
+void worker_scalar_v13_owns_nbsp_and_natural_images() {
+    auto supervisor = make_supervisor();
+    runtime_test_fonts::Fonts fonts;
+    RuntimeImageProvider::Handle images;
+    check(RuntimeImageProvider::create(std::make_shared<ScalarWorkerImages>(), images) == RuntimeImageProviderStatus::Ready,
+          "scalar worker image owner is ready");
+    const auto session = supervisor.begin(313, fonts.catalog, images);
+    auto options = runtime_options_v3();
+    options.frame_codec.version = kRuntimeScalarFrameVersion;
+    options.frame_codec.max_groups = 24;
+    options.text_catalog = fonts.catalog;
+    options.image_provider = images;
+    const auto html = "<body><div id='card'><p id='label'>A&nbsp;B</p><img src='/assets/content.bmp'></div></body>";
+    const auto css = "body,p{margin:0}#card{width:64px;opacity:.75;border-radius:4px;overflow:hidden}"
+                     "p{font-size:16px;line-height:20px;word-spacing:3px}img{display:block}";
+    {
+        RuntimeImageProvider::Handle foreign;
+        check(RuntimeImageProvider::create(std::make_shared<ScalarWorkerImages>(), foreign) == RuntimeImageProviderStatus::Ready,
+              "foreign image namespace is ready");
+        auto mismatched = options;
+        mismatched.image_provider = std::move(foreign);
+        ScriptTaskWorkerRuntime rejected(session, mismatched);
+        check(rejected.initialize(supervisor, html, css) == ScriptTaskWorkerRuntimeInitStatus::ResourceMismatch,
+              "scalar worker rejects foreign image owner before VM initialization");
+    }
+    auto worker = std::make_unique<ScriptTaskWorkerRuntime>(session, options);
+    check(worker->initialize(supervisor, html, css) == ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "ordinary installed scalar DOM initializes");
+    const auto take = [&](ScriptTaskAcceptedAppFrame& accepted) {
+        check(worker->publish_frame(supervisor).accepted(), "ordinary installed scalar frame publishes");
+        check(take_script_task_app_frame(supervisor, session, options.frame_codec, accepted) ==
+                  ScriptTaskAppFrameTakeStatus::Accepted, "ordinary scalar frame is accepted with resources");
+    };
+    ScriptTaskAcceptedAppFrame original;
+    take(original);
+    check(original.frame().groups.size() > 1 && original.frame().image_provider_id == images->id(),
+          "scalar frame retains non-root group and image namespace");
+    bool natural_image = false, spaced_nbsp = false;
+    for (const auto& command : original.frame().display_list) {
+        if (command.type == DisplayCommandType::Image)
+            natural_image |= command.image_handle == 73 && command.rect.width == 20 && command.rect.height == 12;
+        if (command.type != DisplayCommandType::GlyphRun) continue;
+        PreparedTextView packet;
+        check(decode_prepared_text(command.text, packet), "scalar worker JFTP decodes");
+        spaced_nbsp |= packet.packet_version() == 4 && packet.word_spacing_for(0xa0) == 3000;
+    }
+    check(natural_image && spaced_nbsp, "ordinary scalar frame transports natural image and JFTP v4 NBSP");
+
+    check(worker->eval_with_supervisor(supervisor, "document.getElementById('label').textContent = 'B A';").ok,
+          "scalar worker rebuilds after document mutation");
+    ScriptTaskAcceptedAppFrame changed;
+    take(changed);
+    check(std::none_of(changed.frame().display_list.begin(), changed.frame().display_list.end(), [](const auto& command) {
+        return command.type == DisplayCommandType::GlyphRun && command.text.size() > 4 && command.text[4] == 4;
+    }), "scalar mutation returns compatible JFTP v3 packets");
+
+    worker->stop(); worker.reset();
+    supervisor.begin_teardown(session);
+    supervisor.complete_teardown(session);
+    images.reset(); options.image_provider.reset();
+    fonts.catalog.reset(); options.text_catalog.reset();
+    ScriptTaskFrameRenderer renderer;
+    FrameBuffer pixels(options.viewport.width, options.viewport.height, {});
+    check(renderer.render_into(original, pixels, {255, 255, 255, 255}, nullptr, 0, nullptr),
+          "accepted scalar frame replays after worker and supervisor release");
+    check(std::any_of(pixels.pixels.begin(), pixels.pixels.end(), [](Color c) {
+        return c.r > c.g + 60 && c.r > c.b + 60;
+    }), "retained ordinary image paints visible pixels");
+}
+#endif
+
 } // namespace
 
 int script_task_worker_runtime_tests_main() {
@@ -2077,6 +2174,10 @@ int script_task_worker_runtime_tests_main() {
         worker_input_and_service_callback_exceptions_stop_the_worker();
         worker_stop_is_explicit_and_idempotent();
         worker_stop_preserves_supervisor_owned_frame_lease();
+#if JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API && !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+        if (script_task_app_frame_codec_supports_version(kRuntimeScalarFrameVersion))
+            worker_scalar_v13_owns_nbsp_and_natural_images();
+#endif
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
         for (auto version : {std::uint8_t{9}, std::uint8_t{10}}) {
             if (!script_task_app_frame_codec_supports_version(version)) continue;

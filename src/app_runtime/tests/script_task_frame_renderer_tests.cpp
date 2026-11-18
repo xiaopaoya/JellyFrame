@@ -14,6 +14,116 @@ using namespace jellyframe;
 
 namespace {
 
+#if JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API && JELLYFRAME_RUNTIME_IMAGE_API
+class ScalarReplayImages final : public RuntimeImageProviderSource {
+public:
+    std::uint64_t epoch = 1;
+    std::uint64_t generation() const noexcept override { return epoch; }
+    bool contains(std::uint32_t handle) const noexcept override { return handle == 73; }
+    bool resolve(std::string_view, RuntimeResolvedImage& output) const override {
+        output = {73, 8, 8};
+        return true;
+    }
+    bool paint(FrameBuffer& target, const RuntimeImagePaintRequest& request) const override {
+        if (!contains(request.image_handle)) return false;
+        for (int y = std::max(0, request.clip.y); y < std::min(target.height, request.clip.y + request.clip.height); ++y)
+            for (int x = std::max(0, request.clip.x); x < std::min(target.width, request.clip.x + request.clip.width); ++x)
+                if (x >= request.rect.x && y >= request.rect.y &&
+                    x < request.rect.x + request.rect.width && y < request.rect.y + request.rect.height)
+                    target.pixel(x, y) = {41, 97, 173, 255};
+        return true;
+    }
+};
+
+void installed_scalar_replay_pins_resources_and_preserves_tiles() {
+    runtime_test_fonts::Fonts fonts;
+    auto source = std::make_shared<ScalarReplayImages>();
+    RuntimeImageProvider::Handle images;
+    assert(RuntimeImageProvider::create(source, images) == RuntimeImageProviderStatus::Ready);
+    const Color clear{251, 249, 247, 255};
+    const auto same = [](const FrameBuffer& a, const FrameBuffer& b) {
+        return a.width == b.width && a.height == b.height && a.pixels.size() == b.pixels.size() &&
+            std::equal(a.pixels.begin(), a.pixels.end(), b.pixels.begin(), [](Color x, Color y) {
+                return x.r == y.r && x.g == y.g && x.b == y.b && x.a == y.a;
+            });
+    };
+    for (const bool nbsp : {false, true}) {
+        TextFontRequest request;
+        request.size_q1000 = 16000;
+        request.word_spacing_q1000 = nbsp ? 750 : 0;
+        const std::string text = nbsp ? "A\xc2\xa0" "B" : "AB";
+        PreparedTextGlyph glyphs[3];
+        TextRunMetrics metrics;
+        assert(fonts.catalog->text_system().prepare(text, request, glyphs, 3, metrics) == TextSystemStatus::Ok);
+        DisplayCommand prepared;
+        detail::set_command_type(prepared, DisplayCommandType::GlyphRun);
+        prepared.rect = {0, 0, 48, 32}; prepared.color = {197, 31, 61, 255};
+        set_glyph_run_origin(prepared, 4, 24);
+        assert(encode_prepared_text(glyphs, metrics.glyph_count, request.size_q1000,
+            static_cast<std::uint32_t>(text.size()), prepared.text, 0, request.word_spacing_q1000));
+        assert(static_cast<unsigned char>(prepared.text[4]) == (nbsp ? 4 : 3));
+        LayerNode root; root.type = LayerType::Root; root.bounds = prepared.rect;
+        LayerNodePtr child(new LayerNode, LayerNodeDeleter{});
+        child->type = LayerType::Composited; child->bounds = root.bounds;
+        child->has_clip = true; child->clip_rect = {2, 2, 42, 28}; child->clip_border_radius = 3;
+        child->opacity = 0.75F;
+        DisplayCommand image; detail::set_command_type(image, DisplayCommandType::Image);
+        image.rect = {8, 4, 24, 12}; detail::command_image_handle(image) = 73;
+        child->display_list = {image, prepared}; root.children.push_back(std::move(child));
+        ScriptTaskAppFrameCodecOptions codec;
+        codec.version = kRuntimeScalarFrameVersion; codec.image_provider_id = images->id();
+        codec.max_commands = 8; codec.max_groups = 8; codec.max_text_bytes = 4096;
+        codec.max_payload_bytes = 16384;
+        ScriptTaskAppFrame frame;
+        assert(make_script_task_group_frame(root, root.bounds, codec, frame) == ScriptTaskAppFrameCodecStatus::Accepted);
+        ScriptTaskFrameRendererOptions options; options.text_catalog = fonts.catalog; options.image_provider = images;
+        ScriptTaskFrameRenderer renderer(options);
+        FrameBuffer full(48, 32, clear);
+        assert(renderer.render_into(frame, full, clear));
+        SoftwareCompositor::Options core_options;
+        core_options.text_system = &fonts.catalog->text_system();
+        SoftwareCompositor core(TextPainter{}, images->painter(), core_options);
+        const auto expected = core.render(root, 48, 32, clear);
+        assert(same(full, expected));
+        assert(std::any_of(full.pixels.begin(), full.pixels.end(), [&](Color p) { return p.r != clear.r; }));
+        FrameBuffer tiled(48, 32, clear);
+        for (int y = 0; y < 32; y += 8) for (int x = 0; x < 48; x += 8) {
+            const Rect tile{x, y, 8, 8};
+            assert(renderer.render_into(frame, tiled, clear, &tile, 1));
+        }
+        assert(same(full, tiled));
+        ScriptTaskSupervisor supervisor({{2, 24}, {1, 0}, {1, 16384, 16384}, 0, 0});
+        auto session = supervisor.begin(901, fonts.catalog, images);
+        ScriptTaskAppFramePublisher publisher(codec);
+        assert(publisher.publish(supervisor, session, frame).accepted());
+        ScriptTaskAcceptedAppFrame accepted;
+        assert(take_script_task_app_frame(supervisor, session, codec, accepted) == ScriptTaskAppFrameTakeStatus::Accepted);
+        supervisor.begin(902, {});
+        ScriptTaskFrameRendererOptions stale;
+        stale.text_catalog = runtime_test_fonts::Fonts{}.catalog;
+        auto foreign_source = std::make_shared<ScalarReplayImages>();
+        assert(RuntimeImageProvider::create(foreign_source, stale.image_provider) == RuntimeImageProviderStatus::Ready);
+        ScriptTaskFrameRenderer stale_renderer(stale);
+        FrameBuffer sentinel(48, 32, {1, 2, 3, 255}), before = sentinel;
+        assert(!stale_renderer.render_into(frame, sentinel, clear) && same(before, sentinel));
+        assert(stale_renderer.render_into(accepted, sentinel, clear) && same(full, sentinel));
+        auto missing = frame; detail::command_image_handle(missing.display_list[0]) = 74;
+        sentinel = before;
+        assert(!renderer.render_into(missing, sentinel, clear) && same(before, sentinel));
+        stale.image_provider = images;
+        ScriptTaskFrameRenderer foreign_catalog(stale);
+        assert(!foreign_catalog.render_into(frame, sentinel, clear) && same(before, sentinel));
+        ++source->epoch;
+        assert(!renderer.render_into(frame, sentinel, clear) && same(before, sentinel));
+        --source->epoch;
+        if (nbsp) {
+            fonts.catalog.reset(); images.reset(); source.reset();
+            assert(stale_renderer.render_into(accepted, sentinel, clear) && same(full, sentinel));
+        }
+    }
+}
+#endif
+
 #if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
 void abi4_v11_shaped_text_codec_renderer_and_retained_replay() {
     using namespace runtime_test_shaped_text;
@@ -1846,6 +1956,9 @@ void shaped_sidecars_are_never_silently_dropped() {
 }
 
 int script_task_frame_renderer_tests_main() {
+#if JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API && JELLYFRAME_RUNTIME_IMAGE_API
+    installed_scalar_replay_pins_resources_and_preserves_tiles();
+#endif
     shaped_sidecars_are_never_silently_dropped();
 #if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
     abi4_v11_shaped_text_codec_renderer_and_retained_replay();

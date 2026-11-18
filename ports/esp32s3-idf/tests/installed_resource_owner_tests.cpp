@@ -345,26 +345,56 @@ int run_installed_resource_owner_tests() {
     std::copy(path.begin(), path.end(), metadata.source.begin());
     std::copy(family.begin(), family.end(), metadata.family.begin());
     snapshot.fonts.push_back(metadata);
+    const auto clock = +[]() -> std::int64_t { return 1; };
     InstalledAppResources::Handle owner;
-    assert(create_installed_app_resources(std::move(snapshot), {}, "/index.html", &font, 1, bytes, nullptr, owner));
-    assert(owner && owner->text_catalog && owner->text_catalog->size() == 2 && !owner->image_provider);
+    assert(create_installed_app_resources(std::move(snapshot), {}, "/index.html", &font, 1, bytes, clock, owner));
+    assert(owner && owner->text_catalog && owner->text_catalog->size() == 2);
     ScriptTaskWorkerRuntimeOptions worker;
     ScriptTaskFrameRendererOptions ui;
     owner->bind_worker_resources(worker); owner->bind_ui_resources(ui);
     assert(worker.text_catalog == ui.text_catalog && worker.text_catalog == owner->text_catalog);
+#if JELLYFRAME_RUNTIME_IMAGE_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+    std::vector<std::uint8_t> bmp(58, 0);
+    bmp[0] = 'B'; bmp[1] = 'M'; bmp[2] = 58; bmp[10] = 54; bmp[14] = 40;
+    bmp[18] = 1; bmp[22] = 1; bmp[26] = 1; bmp[28] = 24; bmp[34] = 4; bmp[56] = 255;
+    InstalledResourceSnapshot image_snapshot;
+    image_snapshot.entries.push_back({"/pixel.bmp", HostResourceKind::Image, bmp});
+    InstalledAppResources::Handle image_owner;
+    assert(create_installed_app_resources(std::move(image_snapshot), {}, "/index.html",
+        &font, 1, bytes, clock, image_owner));
+    assert(image_owner->image_provider && image_owner->image_provider->valid());
+    RuntimeResolvedImage image;
+    assert(image_owner->image_provider->resolve("/pixel.bmp", image));
+    assert(image.width == 1 && image.height == 1);
+    auto painter = image_owner->image_provider->painter();
+    FrameBuffer target(3, 3, {0, 0, 0, 255});
+    RuntimeImagePaintRequest request{};
+    request.rect = {0, 0, 3, 3}; request.sampling_rect = request.rect;
+    request.sampling.width = {3, 1}; request.sampling.height = {3, 1};
+    request.clip = {1, 1, 1, 1}; request.image_handle = image.image_handle;
+    assert(painter.paint_fractional_clipped(target, request, painter.context));
+    assert(target.pixel(1, 1).r == 255 && target.pixel(0, 0).r == 0);
+    const auto image_weak = std::weak_ptr<const InstalledResourceSnapshot>(image_owner->snapshot);
+    auto retained_provider = image_owner->image_provider;
+    image_owner.reset();
+    assert(!image_weak.expired());
+    assert(painter.paint_fractional_clipped(target, request, painter.context));
+    retained_provider.reset();
+    assert(image_weak.expired());
+#endif
     auto prior = owner;
     InstalledResourceSnapshot images;
     images.entries.push_back({"/bad.bmp", HostResourceKind::Image, {1,2,3}});
-    assert(!create_installed_app_resources(std::move(images), {}, "/index.html", &font, 1, bytes, nullptr, owner));
+    assert(!create_installed_app_resources(std::move(images), {}, "/index.html", &font, 1, bytes, clock, owner));
     assert(owner == prior);
     assert(!create_installed_app_resources({}, {}, "/index.html", &font,
-        RuntimeFontCatalog::max_faces + 1, bytes, nullptr, owner) && owner == prior);
+        RuntimeFontCatalog::max_faces + 1, bytes, clock, owner) && owner == prior);
     const auto weak = std::weak_ptr<const InstalledResourceSnapshot>(owner->snapshot);
     prior.reset(); owner.reset(); bytes.reset();
     assert(!weak.expired());
     ui = {}; worker = {};
     assert(weak.expired());
-    std::cout << "installed resource ownership: flat text resources retain snapshot; unsupported image refused\n";
+    std::cout << "installed resource ownership: scalar resources retain snapshots and corrupt images are refused\n";
     return 0;
 }
 #else

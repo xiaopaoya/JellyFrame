@@ -12,6 +12,8 @@
 
 namespace jellyframe {
 
+constexpr std::uint8_t kRuntimeScalarFrameVersion = 13;
+
 constexpr std::uint16_t kScriptTaskNoClip = 0xffffU;
 constexpr std::uint32_t kScriptTaskNoParentClip = 0xffffffffU;
 // Independent hard ceiling; sidecars also consume max_commands/max_text_bytes.
@@ -83,7 +85,7 @@ struct ScriptTaskFrameShapedText {
 };
 
 struct ScriptTaskAppFrame {
-    // v9 image handle namespace. Zero for image-free or legacy frames.
+    // v9/v13 image handle namespace. Zero for image-free or legacy frames.
     std::uint64_t image_provider_id = 0;
     Rect viewport;
     std::vector<ScriptTaskFrameClip> clips;
@@ -109,7 +111,7 @@ struct ScriptTaskAppFrameCodecOptions {
     std::size_t max_input_targets = 0;
     std::size_t max_payload_bytes = 0;
     std::uint8_t version = 1;
-    // Producer-owned namespace used during canonical v9/v10 group capture only.
+    // Producer-owned namespace used during resource-backed group capture.
     std::uint64_t image_provider_id = 0;
     std::size_t max_clips = 0;
     std::size_t max_clip_depth = 8;
@@ -160,6 +162,9 @@ enum class ScriptTaskAppFrameCodecStatus {
 // v12 explicitly selects contextual ABI9/JFSP2, with a single plain Root and
 // solid rectangle backgrounds. Peers reject the other frame version; Core
 // separately validates each packet's exact owned binding identity.
+// v13 carries the ordinary ABI9 scalar JFTP v3/v4 group family with v8
+// command/group/ellipse records and a 52-byte header including the exact
+// 64-bit image provider ID. Accepted frames pin catalog and image ownership.
 // Configure the same explicitly selected version on both peers. v5 is transport
 // support only; a painter/renderer still has to support its sampling semantics.
 bool script_task_app_frame_codec_supports_version(std::uint8_t version);

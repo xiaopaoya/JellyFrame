@@ -459,26 +459,26 @@ if(JELLYFRAME_BUILD_TESTS)
         ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
         "${CMAKE_CURRENT_SOURCE_DIR}/src")
     if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
-        function(jellyframe_probe_installed_canonical_owner)
+        function(jellyframe_probe_installed_image_owner)
             include(CheckCXXSourceCompiles)
             set(CMAKE_REQUIRED_DEFINITIONS ${_native_core_probe_definitions})
             set(CMAKE_REQUIRED_INCLUDES
                 ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
                 "${CMAKE_CURRENT_SOURCE_DIR}/src")
             set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
-            unset(JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE CACHE)
+            unset(JELLYFRAME_INSTALLED_IMAGE_OWNER_AVAILABLE CACHE)
             check_cxx_source_compiles(
-                "#include \"app_runtime/script_task_prepared_text.h\"\nstatic_assert(JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API, \"canonical owner requires packet API\");"
-                JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE)
-            set(JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE
-                ${JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE} PARENT_SCOPE)
+                "#include \"app_runtime/runtime_image_provider.h\"\nstatic_assert(JELLYFRAME_RUNTIME_IMAGE_API, \"owned images require a Core image callback API\");"
+                JELLYFRAME_INSTALLED_IMAGE_OWNER_AVAILABLE)
+            set(JELLYFRAME_INSTALLED_IMAGE_OWNER_AVAILABLE
+                ${JELLYFRAME_INSTALLED_IMAGE_OWNER_AVAILABLE} PARENT_SCOPE)
         endfunction()
-        jellyframe_probe_installed_canonical_owner()
+        jellyframe_probe_installed_image_owner()
         add_executable(jellyframe_esp32s3_installed_resource_owner_tests
             ports/esp32s3-idf/tests/installed_resource_owner_tests.cpp
             ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp
             ports/esp32s3-idf/main/jellyframe_esp32s3_installed_resource_owner.cpp)
-        if(JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE)
+        if(JELLYFRAME_INSTALLED_IMAGE_OWNER_AVAILABLE)
             target_sources(jellyframe_esp32s3_installed_resource_owner_tests PRIVATE
                 ports/esp32s3-idf/main/jellyframe_esp32s3_image.cpp)
         endif()
@@ -505,7 +505,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 ports/esp32s3-idf/tests/installed_core_text_tests.cpp
                 ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp
                 ports/esp32s3-idf/main/jellyframe_esp32s3_installed_resource_owner.cpp)
-            if(_bmp AND JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE)
+            if(_bmp AND JELLYFRAME_INSTALLED_IMAGE_OWNER_AVAILABLE)
                 target_sources(${_text_target} PRIVATE ports/esp32s3-idf/main/jellyframe_esp32s3_image.cpp)
             endif()
             target_link_libraries(${_text_target} PRIVATE jellyframe_script_task_runtime jellyframe_script)

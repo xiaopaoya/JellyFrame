@@ -788,6 +788,92 @@ template<class Command> void typed_payloads_require_negotiated_transport() {
     }
 }
 
+void v13_scalar_namespace_and_groups_are_transactional() {
+    constexpr bool supported = JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API &&
+        detail::kScriptTaskGroupTransportAvailable && detail::kScriptTaskSamplingTransportAvailable;
+    assert(script_task_app_frame_codec_supports_version(kRuntimeScalarFrameVersion) == supported);
+    if (!supported) return;
+    using Status = ScriptTaskAppFrameCodecStatus;
+    ScriptTaskAppFrameCodecOptions options;
+    options.version = kRuntimeScalarFrameVersion;
+    options.max_commands = 4; options.max_groups = 4;
+    options.max_text_bytes = 64; options.max_payload_bytes = 4096;
+    options.image_provider_id = (1ULL << 48) + 73;
+    LayerNode root;
+    root.bounds = {0, 0, 32, 32};
+    root.opacity = 0.75F;
+#if JELLYFRAME_SCRIPT_TASK_GROUP_API
+    root.has_clip = true;
+    root.clip_rect = {2, 3, 24, 25};
+    root.clip_axes = 1;
+    root.clip_ellipse_geometry = std::make_unique<EllipticalCornerRadii>(
+        detail::group_radii(std::array<int, 8>{{1, 2, 3, 4, 5, 6, 7, 8}}));
+    root.ellipse_geometry = std::make_unique<CommandEllipseGeometryList>();
+    root.ellipse_geometry->entries.push_back({0,
+        detail::group_radii(std::array<int, 8>{{2, 3, 4, 5, 6, 7, 8, 9}})});
+#endif
+    DisplayCommand image;
+    detail::set_command_type(image, DisplayCommandType::Image);
+    image.rect = {1, 2, 12, 10};
+    auto paint = detail::legacy_command_fields(image);
+    paint.image_handle = 73;
+    detail::apply_legacy_command_fields(image, paint);
+    detail::set_command_background_paint_clip(image, {-3, 4, 8, 9});
+    root.display_list.push_back(image);
+    ScriptTaskAppFrame frame;
+    assert(make_script_task_group_frame(root, root.bounds, options, frame) == Status::Accepted);
+    std::vector<std::uint8_t> bytes;
+    assert(encode_script_task_app_frame(frame, options, bytes) == Status::Accepted);
+    assert(bytes.size() == 52 + 152 + 36 + 128 && bytes[4] == 13);
+    assert(bytes[44] == 73 && bytes[50] == 1);
+    ScriptTaskAppFrame decoded;
+    assert(decode_script_task_app_frame(bytes, options, decoded) == Status::Accepted);
+    assert(decoded.image_provider_id == options.image_provider_id);
+    assert(decoded.groups.size() == 1 && decoded.groups[0].opacity == 0.75F);
+    assert(decoded.groups[0].has_clip && decoded.groups[0].clip_axes == 1);
+    assert(decoded.groups[0].clip_rect.x == 2 && decoded.groups[0].clip_rect.height == 25);
+    assert(decoded.groups[0].has_clip_ellipse && decoded.groups[0].clip_ellipse[7] == 8);
+    assert(decoded.command_ellipses.size() == 1 && decoded.command_ellipses[0].radii[7] == 9);
+    if constexpr (detail::has_background_clip_transport<DisplayCommand>()) {
+        assert(detail::command_background_paint_clip(decoded.display_list[0]).dx == -3);
+    } else {
+        assert(detail::command_background_paint_clip_empty(
+            detail::command_background_paint_clip(decoded.display_list[0])));
+        auto clipped = bytes;
+        const auto clip_offset = 52 + 152 + 36 + 120;
+        clipped[clip_offset + 4] = 8;
+        clipped[clip_offset + 6] = 9;
+        assert(decode_script_task_app_frame(clipped, options, decoded) == Status::Malformed);
+        assert(decoded.image_provider_id == options.image_provider_id);
+    }
+    const auto valid = bytes;
+    decoded.viewport = {91, 92, 93, 94};
+    for (std::size_t length = 0; length < valid.size(); ++length) {
+        auto truncated = valid; truncated.resize(length);
+        assert(decode_script_task_app_frame(truncated, options, decoded) != Status::Accepted);
+        assert(decoded.viewport.x == 91);
+    }
+    for (std::size_t at = 44; at < 52; ++at) bytes[at] = 0;
+    assert(decode_script_task_app_frame(bytes, options, decoded) == Status::Malformed);
+    assert(decoded.viewport.x == 91);
+    frame.image_provider_id = 0;
+    bytes = {17, 18};
+    assert(encode_script_task_app_frame(frame, options, bytes) == Status::InvalidValue);
+    assert((bytes == std::vector<std::uint8_t>{17, 18}));
+    frame.image_provider_id = options.image_provider_id;
+    frame.display_list[0].transform.source_clip_index = 0;
+    assert(encode_script_task_app_frame(frame, options, bytes) != Status::Accepted);
+    frame.display_list[0].transform.source_clip_index = kScriptTaskNoClip;
+    frame.command_ellipses[0].radii[0] = -1;
+    assert(encode_script_task_app_frame(frame, options, bytes) != Status::Accepted);
+    frame.command_ellipses[0].radii[0] = 2;
+    frame.groups[0].parent = 0;
+    assert(encode_script_task_app_frame(frame, options, bytes) != Status::Accepted);
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    assert(!script_task_frame_uses_image_provider(frame, {}));
+#endif
+}
+
 void v8_background_paint_clip_transport_is_opt_in_and_atomic() {
     if constexpr (!detail::has_background_clip_transport<DisplayCommand>()) return;
     if (!script_task_app_frame_codec_supports_version(8)) {
@@ -873,6 +959,7 @@ int script_task_frame_codec_tests_main() {
     supported_legacy_command_records_keep_frozen_layouts();
     typed_payloads_require_negotiated_transport<DisplayCommand>();
     v8_background_paint_clip_transport_is_opt_in_and_atomic();
+    v13_scalar_namespace_and_groups_are_transactional();
     v6_group_codec_preserves_values_and_rejects_malformed_topology();
     frame_round_trip_preserves_render_values_and_target_order();
     frame_codec_rejects_budget_and_wire_integrity_failures();

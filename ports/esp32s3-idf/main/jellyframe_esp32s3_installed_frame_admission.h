@@ -6,8 +6,7 @@
 // Keep installed-frame selection and resource admission on the same boundary.
 #if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && \
     CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM && \
-    (JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API || \
-     (JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API))
+    JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
 #define JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED 1
 #else
 #define JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED 0
@@ -25,13 +24,14 @@
 #endif
 
 namespace jellyframe_esp32s3 {
-inline bool installed_text_pipeline_supported(const jellyframe::AppInstalledTextPipeline& pipeline) {
+inline std::uint8_t installed_text_pipeline_frame_version(const jellyframe::AppInstalledTextPipeline& pipeline) {
     using Status = jellyframe::AppInstalledTextPipelineStatus;
     if (pipeline.status == Status::Ready) {
 #if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED && JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
         return pipeline.frame_version == jellyframe::kRuntimeShapedFrameVersion &&
             pipeline.binding && pipeline.binding->valid() &&
-            jellyframe::script_task_app_frame_codec_supports_version(jellyframe::kRuntimeShapedFrameVersion);
+            jellyframe::script_task_app_frame_codec_supports_version(jellyframe::kRuntimeShapedFrameVersion)
+            ? jellyframe::kRuntimeShapedFrameVersion : 0;
 #else
         return false;
 #endif
@@ -42,11 +42,19 @@ inline bool installed_text_pipeline_supported(const jellyframe::AppInstalledText
     if (pipeline.binding) return false;
 #endif
 #if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
-    return JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API &&
-        jellyframe::script_task_app_frame_codec_supports_version(10);
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+    constexpr std::uint8_t version = 10;
 #else
-    return true;
+    constexpr std::uint8_t version = jellyframe::kRuntimeScalarFrameVersion;
 #endif
+    return jellyframe::script_task_app_frame_codec_supports_version(version) ? version : 0;
+#else
+    return jellyframe::script_task_app_frame_codec_supports_version(5) ? 5 : 4;
+#endif
+}
+
+inline bool installed_text_pipeline_supported(const jellyframe::AppInstalledTextPipeline& pipeline) {
+    return installed_text_pipeline_frame_version(pipeline) != 0;
 }
 
 #if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
@@ -100,7 +108,9 @@ inline jellyframe::ScriptAppSession begin_installed_script_session(
             ? supervisor.begin(app_instance_id, resources->text_catalog, resources->image_provider, resources->shaped_text_binding)
             : jellyframe::ScriptAppSession{};
 #endif
-    if (!jellyframe::script_task_app_frame_codec_supports_version(10)) return {};
+    jellyframe::AppInstalledTextPipeline scalar;
+    scalar.status = jellyframe::AppInstalledTextPipelineStatus::Scalar;
+    if (!installed_text_pipeline_frame_version(scalar)) return {};
     return supervisor.begin(app_instance_id, resources->text_catalog, resources->image_provider);
 #else
     (void)resources;

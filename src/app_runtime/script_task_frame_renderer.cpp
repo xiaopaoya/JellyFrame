@@ -24,6 +24,14 @@ namespace {
 bool empty_rect(Rect rect) {
     return rect.width <= 0 || rect.height <= 0;
 }
+
+ImagePainter bound_image_painter(ImagePainter painter,
+                                 const ScriptTaskFrameRendererOptions& options) {
+#if JELLYFRAME_SCRIPT_TASK_PREPARED_TEXT_API && !JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
+    if (options.image_provider) return options.image_provider->painter();
+#endif
+    return painter;
+}
 template<class Clip>
 auto set_raster_clip_y(Clip& clip, int y, int) -> decltype(clip.border_radius_y = y, void()) {
     clip.border_radius_y = y;
@@ -559,51 +567,37 @@ void ScriptTaskFrameDiffAccumulator::reset() {
 }
 
 ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(ScriptTaskFrameRendererOptions options)
-#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
-    : rasterizer_(ImagePainter{},
-                  options.diagnostics,
-                  SoftwareRasterizerOptions{
-                      options.max_temporary_pixels,
-                      options.rasterizer_statistics,
-                      options.rasterizer_timing}),
-      options_(options) {}
-#else
-    : rasterizer_(TextPainter{}, ImagePainter{}, options.diagnostics,
-                  SoftwareRasterizerOptions{options.max_temporary_pixels,
-                                            options.rasterizer_statistics,
-                                            options.rasterizer_timing}),
-      options_(options) {}
-#endif
+    : ScriptTaskFrameRenderer(ImagePainter{}, std::move(options)) {}
 
 ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(ImagePainter image_painter,
                                                  ScriptTaskFrameRendererOptions options)
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
-    : rasterizer_(image_painter,
+    : rasterizer_(bound_image_painter(image_painter, options),
                   options.diagnostics,
                   SoftwareRasterizerOptions{
                       options.max_temporary_pixels,
                       options.rasterizer_statistics,
                       options.rasterizer_timing}),
       options_(options),
-      image_painter_(image_painter) {}
+      image_painter_(bound_image_painter(image_painter, options)) {}
 #else
-    : rasterizer_(TextPainter{}, image_painter, options.diagnostics,
+    : rasterizer_(TextPainter{}, bound_image_painter(image_painter, options), options.diagnostics,
                   SoftwareRasterizerOptions{options.max_temporary_pixels,
                                             options.rasterizer_statistics,
                                             options.rasterizer_timing}),
       options_(options),
-      image_painter_(image_painter) {}
+      image_painter_(bound_image_painter(image_painter, options)) {}
 
 ScriptTaskFrameRenderer::ScriptTaskFrameRenderer(TextPainter text_painter,
                                                  ImagePainter image_painter,
                                                  ScriptTaskFrameRendererOptions options)
-    : rasterizer_(text_painter, image_painter, options.diagnostics,
+    : rasterizer_(text_painter, bound_image_painter(image_painter, options), options.diagnostics,
                   SoftwareRasterizerOptions{options.max_temporary_pixels,
                                             options.rasterizer_statistics,
                                             options.rasterizer_timing}),
       options_(options),
       text_painter_(text_painter),
-      image_painter_(image_painter) {}
+      image_painter_(bound_image_painter(image_painter, options)) {}
 #endif
 
 bool ScriptTaskFrameRenderer::command_visual_bounds(const DisplayCommand& command, Rect& output) const {
@@ -1001,6 +995,11 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
         return false;
     }
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+    if ((frame.image_provider_id != 0 || options_.image_provider) &&
+        !script_task_frame_uses_image_provider(frame, options_.image_provider)) {
+        if (status) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+        return false;
+    }
     if (options_.text_catalog) {
         if (!script_task_frame_uses_catalog(frame, *options_.text_catalog)) {
             if (status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
@@ -1039,7 +1038,13 @@ bool ScriptTaskFrameRenderer::render_into(const ScriptTaskAppFrame& frame,
 #endif
             const auto result = compositor.render_into_checked(tree.root(), target, background,
                 dirty_rects, dirty_rect_count);
-            if (!result.complete() && status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+            if (!result.complete()) {
+                if (options_.diagnostics != nullptr)
+                    report_diagnostic(options_.diagnostics, DiagnosticStage::Paint, DiagnosticSeverity::Warning,
+                                      "script-frame-group-paint", "Core refused the grouped value frame",
+                                      std::to_string(static_cast<unsigned>(result.status)));
+                if (status != nullptr) *status = ScriptTaskFrameRenderStatus::InvalidFrame;
+            }
             return result.complete();
         } catch (const std::bad_alloc&) {
             if (status != nullptr) *status = ScriptTaskFrameRenderStatus::FramebufferRejected;
