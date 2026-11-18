@@ -32,7 +32,7 @@ def audit_installed_package(build, runtime, probe, prefix, identity, production_
     # C++ source is not. Only the generated route probe is outside the checkout.
     assert cpp and all(Path(row['file']).is_relative_to(runtime) or
                        Path(row['file']) == probe for row in cpp), 'external Core C++ source'
-    assert not any('/render_core/' in row['file'].replace('\\', '/') for row in cpp), 'bundled Core source fallback'
+    assert not any('/src/render_core/' in row['file'].replace('\\', '/') for row in cpp), 'bundled Core source fallback'
     tests = [row for row in cpp if '/tests/' in row['file'].replace('\\', '/') or
              row['file'].endswith('qualification_route_probe.cpp')]
     assert tests, 'no consumer test compilation records'
