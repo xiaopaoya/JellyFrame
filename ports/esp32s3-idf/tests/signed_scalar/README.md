@@ -1,5 +1,7 @@
 # Signed ordinary installed worker qualification
 
+Last updated: 2026-11-19; Applies to: 0.6.0-dev.
+
 This host suite installs a format0 classic-script package over a mocked NOR
 partition using the real store, transaction and mbedTLS signature verifier.
 After reopening the store it checks scalar route selection, frame13, firmware
