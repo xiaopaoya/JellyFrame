@@ -396,7 +396,7 @@ int main(int argc,char** argv) {
         for (const auto& command:accepted.frame().display_list) {
             const auto type=detail::command_type(command);
             CHECK(!detail::is_prepared_command_type(type) && type!=DisplayCommandType::Text);
-#if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
             CHECK(type!=DisplayCommandType::GlyphRun);
 #endif
         }

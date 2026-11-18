@@ -254,8 +254,8 @@ void abi4_v11_shaped_text_codec_renderer_and_retained_replay() {
     auto legacy_codec = codec;
     legacy_codec.version = 10;
     assert(encode_script_task_app_frame(decoded, legacy_codec, unchanged) ==
-           (JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API ? ScriptTaskAppFrameCodecStatus::UnsupportedVersion :
-            ScriptTaskAppFrameCodecStatus::UnsupportedTextFeature));
+           (script_task_app_frame_codec_supports_version(10) ?
+            ScriptTaskAppFrameCodecStatus::UnsupportedTextFeature : ScriptTaskAppFrameCodecStatus::UnsupportedVersion));
     auto packet_limited = codec;
     packet_limited.max_text_bytes = decoded.shaped_text[0].packet.size() - 1;
     assert(encode_script_task_app_frame(decoded, packet_limited, unchanged) ==

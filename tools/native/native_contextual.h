@@ -2,6 +2,7 @@
 
 #include "app_package.h"
 #include "app_runtime/runtime_shaped_text_binding.h"
+#include "app_runtime/script_task_command_access.h"
 
 #if defined(_WIN32) && JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
 #include "device_runtime_contracts/device_bundle.h"
@@ -139,9 +140,13 @@ inline FrameBuffer paint_desktop_contextual_frame(const DesktopContextualFrame& 
                     throw std::runtime_error("Desktop contextual typed paint refused");
             }
         }
-        if (command_index < commands.size() && !rasterizer.rasterize_clipped_checked(
-                commands[command_index], staged, clip, 0, 0, nullptr, 0).complete())
-            throw std::runtime_error("Desktop contextual background paint refused");
+        if (command_index < commands.size()) {
+            const auto& command = commands[command_index];
+            // Capture admits only solid backgrounds, which need no image or clip surface.
+            if (detail::command_type(command) != DisplayCommandType::FillRect)
+                throw std::runtime_error("Desktop contextual background paint refused");
+            rasterizer.rasterize(command, staged, clip);
+        }
     }
     if (paragraph_index != paragraphs.size()) throw std::runtime_error("Desktop contextual capture order invalid");
     return staged;

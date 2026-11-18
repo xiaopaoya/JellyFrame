@@ -634,7 +634,8 @@ ScriptTaskFrameDamage plan_script_task_group_damage(
         if (previous.image_provider_id != current.image_provider_id) return full;
         ScriptTaskAppFrameCodecOptions canonical_limits;
         const bool has_shaped = !previous.shaped_text.empty() || !current.shaped_text.empty();
-        canonical_limits.version = (has_shaped || JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API) ? kRuntimeShapedFrameVersion : (detail::canonical::elliptical_available ? 10 : 9);
+        canonical_limits.version = has_shaped ? kRuntimeShapedFrameVersion :
+            (detail::canonical::elliptical_available ? 10 : 9);
         canonical_limits.max_commands = canonical_limits.max_text_bytes = canonical_limits.max_input_targets =
             canonical_limits.max_payload_bytes = std::numeric_limits<std::size_t>::max();
         canonical_limits.max_groups = 1024; canonical_limits.max_clips = 65535;

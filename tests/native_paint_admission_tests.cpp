@@ -1,6 +1,9 @@
 #include "../tools/native/native_budgets.h"
 #include "../tools/native/native_paint.h"
+#if __has_include("render_core/fractional_sampling.h")
 #include "render_core/fractional_sampling.h"
+#define JELLYFRAME_TEST_FRACTIONAL_PAINT 1
+#endif
 #include <cassert>
 #include <iostream>
 
@@ -21,13 +24,14 @@ int main() {
     LayerNode root;
     root.type = LayerType::Root;
     root.bounds = {0, 0, 8, 8};
+    const Color background{255, 255, 255, 255};
+#if JELLYFRAME_TEST_FRACTIONAL_PAINT
     DisplayCommand command;
     command.type = DisplayCommandType::Image;
     command.image_handle = 7;
     command.rect = command.sampling_rect = {0, 0, 8, 8};
     assert(encode_fractional_sampling({{0, 1}, {0, 1}, {8, 1}, {8, 1}}, command.text));
     root.display_list.push_back(command);
-    const Color background{255, 255, 255, 255};
     SoftwareCompositor missing;
     bool refused = false;
     try { auto frame = native::paint_frame(missing, root, 8, 8, background, 64); (void)frame; }
@@ -46,9 +50,14 @@ int main() {
     SoftwareCompositor ready({}, painter);
     const auto frame = native::paint_frame(ready, root, 8, 8, background, 64);
     assert(frame.pixel(4, 4).r == 21);
+#else
+    SoftwareCompositor ready;
+    const auto frame = native::paint_frame(ready, root, 8, 8, background, 64);
+    assert(frame.pixels.size() == 64 && frame.pixel(4, 4).r == 255);
+#endif
     bool budget_refused = false;
     try { auto oversized = native::paint_frame(ready, root, 8, 8, background, 63); (void)oversized; }
     catch (const std::runtime_error&) { budget_refused = true; }
     assert(budget_refused);
-    std::cout << "Native paint refusal, required painter, desktop reservation and overflow passed\n";
+    std::cout << "Native paint, desktop reservation and pixel budget passed\n";
 }

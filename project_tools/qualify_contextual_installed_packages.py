@@ -89,8 +89,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 enable_testing()
 add_subdirectory("${QUALIFICATION_RUNTIME_SOURCE}" runtime)
 # Isolated qualification only: no replacement Core source or private headers.
+set(CMAKE_NO_SYSTEM_FROM_IMPORTED ON)
 add_executable(jellyframe_installed_route_probe qualification_route_probe.cpp)
 target_link_libraries(jellyframe_installed_route_probe PRIVATE jellyframe_script_task_runtime)
+target_include_directories(jellyframe_installed_route_probe BEFORE PRIVATE
+    "${JELLYFRAME_RENDER_CORE_PACKAGE_DIR}/include")
 target_compile_definitions(jellyframe_installed_route_probe PRIVATE
     QUALIFICATION_CONTEXTUAL=${QUALIFICATION_CONTEXTUAL} QUALIFICATION_SCALAR_FRAME=${QUALIFICATION_SCALAR_FRAME})
 jellyframe_enable_shaped_test_fixtures(jellyframe_installed_route_probe)

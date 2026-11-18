@@ -33,7 +33,7 @@ static void installed_shaped_owner_reaches_worker_and_ui(const InstalledAppResou
     shaped->shaped_text_binding = binding;
     AppInstalledTextPipeline pipeline;
     pipeline.status = AppInstalledTextPipelineStatus::Ready;
-    pipeline.frame_version = 11;
+    pipeline.frame_version = kRuntimeShapedFrameVersion;
     pipeline.binding = binding;
     assert(installed_text_pipeline_supported(pipeline));
     pipeline.frame_version = 10;
@@ -49,7 +49,7 @@ static void installed_shaped_owner_reaches_worker_and_ui(const InstalledAppResou
     assert(options.shaped_text_binding == binding && !options.image_provider);
     options.viewport = {0,0,64,32};
     options.frame_codec = {128,16384,16,32768};
-    options.frame_codec.version = 11;
+    options.frame_codec.version = kRuntimeShapedFrameVersion;
     options.frame_codec.max_groups = 16;
     ScriptTaskAcceptedAppFrame accepted;
     {
