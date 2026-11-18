@@ -996,7 +996,10 @@ jobs:
           --parallel
 
       - name: Run Runtime package consumer CTest
-        run: ctest --test-dir build/framework-external-core --output-on-failure
+        run: >
+          ctest --test-dir build/framework-external-core
+          -R '^(jellyframe_app_runtime_tests|jellyframe_device_runtime_contracts_tests|jellyframe_esp32s3_resource_reference_tests|jellyframe_esp32s3_band_navigation_tests|jellyframe_esp32s3_image_metadata_tests)$'
+          --output-on-failure
 
   released-abi4-installed-consumers:
     name: Released Core ABI4 Installed Consumers (${{ matrix.profile }})

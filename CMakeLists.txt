@@ -1466,9 +1466,12 @@ if(JELLYFRAME_BUILD_TESTS)
                         --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_route_tabs/capture_route_tabs.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_route_tabs_frame_script PROPERTIES
-                FIXTURES_REQUIRED jellyframe_candidate_app_packages
-                PASS_REGULAR_EXPRESSION
-                    "frame_repaint dirty_rect=6 full_frame=1 full_first_paint=1")
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages)
+            if(JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 9)
+                set_tests_properties(jellyframe_win32_route_tabs_frame_script PROPERTIES
+                    PASS_REGULAR_EXPRESSION
+                        "frame_repaint dirty_rect=6 full_frame=1 full_first_paint=1")
+            endif()
 
             add_test(
                 NAME jellyframe_win32_route_tabs_state

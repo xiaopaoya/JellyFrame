@@ -180,9 +180,12 @@ class QualificationLockTests(unittest.TestCase):
         apps, version = Path(stage_command[-2]), stage_command[-1]
         environment = f"JELLYFRAME_TEST_RENDER_CORE_VERSION={version}"
         names = ["jellyframe_cli_check_" + suffix for suffix in (
-            "audio_smoke_package", "service_status_package", "font_policy_package",
+            "audio_smoke_package", "service_status_package",
             "wearable_launcher_package", "band_system_shell", "canvas_smoke_package",
             "canvas_gauges_package", "watch_weather_responsive")]
+        names.append("jellyframe_cli_validate_font_policy_package")
+        if "jellyframe_cli_check_font_policy_package" in tests:
+            names.append("jellyframe_cli_check_font_policy_package")
         names += ["jellyframe_cli_doctor_sample_packages", "jellyframe_cli_doctor_external_trial"]
         if "jellyframe_cli_template_trial_tests" not in tests:
             self.skipTest("native examples are not configured")
