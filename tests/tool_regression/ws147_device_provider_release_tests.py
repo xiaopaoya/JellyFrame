@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import struct
 import subprocess
 import sys
 import tempfile
@@ -112,6 +113,8 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 path.relative_to(release).as_posix(): path
                 for path in release.rglob("*") if path.is_file()
             }
+            self.assertIn("provider/lib/device_install_package.py", release_files)
+            self.assertIn("provider/lib/device_render_core_capabilities.py", release_files)
             self.assertNotIn("provider/jellyframe-device.config.json", release_files)
             self.assertFalse(any("__pycache__" in name or name.endswith(".pyc") for name in release_files))
 
@@ -280,6 +283,12 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             self.assertFalse(output.exists())
 
     def test_build_dir_imports_and_cross_checks_idf_provenance(self) -> None:
+        self._exercise_build_dir(4)
+
+    def test_contextual_build_dir_release_and_isolated_import(self) -> None:
+        self._exercise_build_dir(9)
+
+    def _exercise_build_dir(self, abi: int) -> None:
         with tempfile.TemporaryDirectory(prefix="jellyframe-ws147-build-dir-") as directory:
             root = Path(directory)
             build = root / "build"
@@ -292,18 +301,22 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 stream.truncate(16 * 1024 * 1024)
             identity = "a" * 64
             (generated / "jellyframe_render_core_port_provenance.txt").write_text(
-                f"package=0.9.0-dev\nabi=4\nprofile=render-core-default\nsource={identity}\nfiles=163\n",
+                f"package=0.9.0-dev\nabi={abi}\nprofile=render-core-default\nsource={identity}\nfiles=163\n",
                 encoding="utf-8")
             (generated / "jellyframe_render_core_source_manifest.json").write_text(json.dumps({
                 "sourceHash": identity, "sourceFileCount": 163, "files": [],
             }), encoding="utf-8")
             core_features = [
                 "core.document", "core.paint", "forms.advanced", "css.flex-grid",
-                "css.modern-paint", "graphics.canvas2d",
+                "css.modern-paint", "graphics.canvas2d", "text.shaping",
             ]
+            if abi == 9:
+                core_features.remove('text.shaping')
+                core_features += ['text.contextual-jfsp2','text.contextual-layout',
+                                  'css.length-math','css.counters','css.borders','css.tables','css.positioned-sizing']
             generated_profile = generated / "jellyframe_render_core_profile.json"
             generated_profile.write_text(json.dumps({
-                "schemaVersion": 1, "packageVersion": "0.9.0-dev", "engineAbi": 4,
+                "schemaVersion": 1, "packageVersion": "0.9.0-dev", "engineAbi": abi,
                 "profileId": "render-core-default", "features": core_features,
             }), encoding="utf-8")
             (build / "project_description.json").write_text(json.dumps({
@@ -322,10 +335,26 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 f"IDF_TARGET:STRING=esp32s3\nSDKCONFIG_DEFAULTS:UNINITIALIZED={root / 'sdkconfig.defaults'};{root / 'sdkconfig.ws147_core_text.defaults'}\n",
                 encoding="utf-8")
             sdkconfig = build / "sdkconfig"
-            sdkconfig.write_text('CONFIG_IDF_TARGET="esp32s3"\n', encoding="utf-8")
+            sdkconfig.write_text('CONFIG_IDF_TARGET="esp32s3"\nCONFIG_PARTITION_TABLE_OFFSET=0x8000\n'
+                                 'CONFIG_JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB=1024\n', encoding="utf-8")
+            config_header = build / "config/sdkconfig.h"
+            config_header.parent.mkdir()
+            config_header.write_text('#define CONFIG_PARTITION_TABLE_OFFSET 0x8000\n'
+                                     '#define CONFIG_JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB 1024\n')
+            table = (struct.pack("<HBBII16sI", 0x50aa, 0, 0, 0x10000, 8 * 1024 * 1024, b"factory", 0) +
+                     struct.pack("<HBBII16sI", 0x50aa, 1, 2, 0xc10000, 3 * 1024 * 1024, b"storage", 0))
+            table += b"\xeb\xeb" + b"\xff" * 14 + hashlib.md5(table).digest() + b"\xff" * 32
+            partition = build / "partition_table" / "partition-table.bin"
+            partition.parent.mkdir()
+            partition.write_bytes(table)
+            with factory.open("r+b") as image:
+                image.seek(0x8000)
+                image.write(table)
+                image.seek(0x10000)
+                image.write(firmware.read_bytes())
             build_manifest, _ = write_build_evidence(
                 root, firmware, revision="a" * 40, image_version="0.6.2-ws147.build-dir-test",
-                core_version="0.9.0-dev", core_abi=4, families=core_features)
+                core_version="0.9.0-dev", core_abi=abi, families=core_features)
             common = [
                 sys.executable, str(PACKAGER), "--firmware", str(firmware),
                 "--factory-image", str(factory), *identity_args(build_manifest, generated_profile),
@@ -337,7 +366,8 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             release = Path(json.loads(completed.stdout)["release"])
             manifest_path = release / "developer-image" / "ws147-developer-image.manifest.json"
             manifest = device_image_manifest.parse_device_image_manifest(manifest_path.read_bytes())
-            self.assertEqual(manifest["renderCore"], {"version": "0.9.0-dev", "abi": 4})
+            self.assertEqual(manifest["renderCore"], {"version": "0.9.0-dev", "abi": abi})
+            self.assertEqual(manifest['profile']['featureFamilies'],core_features)
             self.assertEqual(manifest["buildProvenance"], {
                 "renderCoreSourceIdentity": identity,
                 "renderCoreSourceInputCount": 163,
@@ -347,9 +377,33 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 "target": "esp32s3",
                 "buildProfile": "ws147_core_text;render-core-default",
                 "sdkconfigSha256": sha256(sdkconfig),
+                "partitionTableSha256": sha256(partition),
+                "configuredMaxBundleBytes": 1048576,
+                "storagePartitionOffset": 0xc10000, "storagePartitionBytes": 3145728,
             })
+            self.assertEqual(manifest["storage"]["maxBundleBytes"], 1044480)
             bundled_parser = release / "provider" / "lib" / "device_image_manifest.py"
             self.assertTrue(bundled_parser.is_file())
+
+            # A shaping profile cannot silently take the legacy 320 KiB path.
+            missing_capacity = subprocess.run([
+                sys.executable, str(PACKAGER), "--firmware", str(firmware),
+                "--factory-image", str(factory), *identity_args(build_manifest, generated_profile),
+                "--output", str(root / "missing-capacity"),
+            ], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            self.assertNotEqual(missing_capacity.returncode, 0)
+            self.assertIn(b"requires --build-dir capacity evidence", missing_capacity.stderr)
+            self.assertFalse((root / "missing-capacity").exists())
+
+            # The release's inspection module imports using stdlib only, from
+            # an isolated interpreter with no repository on sys.path.
+            isolated = subprocess.run([
+                sys.executable, "-I", "-c",
+                "import sys;sys.path.insert(0,sys.argv[1]);import device_install_package;"
+                "assert device_install_package.MAX_PACKAGE_BYTES == 4194304",
+                str(release / "provider" / "lib"),
+            ], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            self.assertEqual(isolated.returncode, 0, isolated.stderr.decode())
 
             mismatched_firmware = root / "mismatched-firmware.bin"
             mismatched_firmware.write_bytes(b"different firmware\n")

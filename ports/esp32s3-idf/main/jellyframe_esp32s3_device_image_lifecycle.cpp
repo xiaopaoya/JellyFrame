@@ -5,15 +5,19 @@
 #endif
 #include "jellyframe_esp32s3_ui_task.h"
 #include "jellyframe_esp32s3_installed_frame_admission.h"
+#include "jellyframe_esp32s3_render_core_identity.h"
+#include "jellyframe_esp32s3_vm_fault_receipt.h"
 
 #include "app_runtime/app_installed_bundle.h"
 #include "device_runtime_contracts/device_install_transaction.h"
 #include "render_core/html_parser.h"
 
 #include "driver/usb_serial_jtag.h"
+#include "esp_attr.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_partition.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -41,6 +45,12 @@ constexpr TickType_t kUsbIoTimeout = pdMS_TO_TICKS(50);
 constexpr std::int64_t kUsbWriteDeadlineUs = 2500000;
 constexpr std::int64_t kPartialFrameTimeoutUs = 500000;
 constexpr std::size_t kInstalledAppEntryMaxBytes = 16u * 1024u;
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
+constexpr std::int64_t kVmFaultUiStopGraceUs = 200000;
+// Only the lifecycle task writes/consumes this receipt. Keep the boot guard
+// separate from the port's volatile task-handle receipt.
+RTC_NOINIT_ATTR VmFaultBootReceipt s_vm_fault_boot;
+#endif
 
 constexpr char kImageId[] = "org.jellyframe.ws147.developer";
 constexpr char kProfileId[] = "rect-172x320";
@@ -123,7 +133,7 @@ bool snapshot_active_resources(const jellyframe::AppInstalledBundleBinding& bind
     std::vector<InstalledResourceReference> references;
     if (!prepare_document_styles(*document, entry_path)) return false;
     collect_resource_references(*document, entry_path, references);
-#if JELLYFRAME_ESP32S3_INSTALLED_FRAME10_ENABLED
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
     std::unique_ptr<DeviceBundleFontTable> font_table(new (std::nothrow) DeviceBundleFontTable);
     std::unique_ptr<DeviceBundleInspectionWorkspace> font_workspace(new (std::nothrow) DeviceBundleInspectionWorkspace);
     if (!font_table || !font_workspace) return false;
@@ -202,7 +212,7 @@ public:
 class DeviceImageEndpoint final : public JfdpStreamSink {
 public:
     explicit DeviceImageEndpoint(DeviceImageStore& store)
-        : store_(store), transaction_(DeviceInstallLimits{DeviceImageStore::kMaxBundleBytes, 4096}),
+        : store_(store), transaction_(DeviceInstallLimits{store.max_bundle_bytes(), 4096}),
           host_(AppRuntimeHostOptions{2, 2, 4, 4096, 1}), binding_(store_, &launcher_) {
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
         if (!host_.attach_core_system_font_catalog_view(
@@ -251,8 +261,37 @@ public:
     }
 
     void poll_lifecycle() {
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
+        const auto fault = installed_bundle_script_task_vm_fault(script_session_);
+        if (fault.code != -1) {
+            // Stop dispatching JFDP requests while the UI exits. Do not
+            // require its cooperation to reset a wedged application.
+            const auto started = esp_timer_get_time();
+            while (!installed_bundle_script_task_vm_fault(script_session_).ui_done &&
+                   esp_timer_get_time() - started < kVmFaultUiStopGraceUs) {
+                vTaskDelay(1);
+            }
+            // This runs on the lifecycle task's internal stack, outside
+            // all store operations. Never free or unwind the VM here.
+            s_vm_fault_boot = make_vm_fault_boot_receipt(active_app_id_, fault.generation, fault.code);
+            __sync_synchronize();
+            esp_restart();
+        }
+#endif
         poll_active_session();
     }
+
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
+    void restore_vm_fault_log() {
+        VmFaultBootReceipt receipt{};
+        if (!consume_vm_fault_boot_receipt(s_vm_fault_boot, esp_reset_reason() == ESP_RST_SW, receipt))
+            return;
+        char message[kDeviceAppLogMaxMessageBytes + 1]{};
+        std::snprintf(message, sizeof(message), "jerry-vm-fatal code=%u device-restarted; explicit launch required",
+                      static_cast<unsigned>(receipt.code));
+        record_app_log(DeviceAppLogLevel::Error, receipt.app_id.data(), receipt.generation, message);
+    }
+#endif
 
     void on_jfdp_transport_reset() override { abort_active_transaction(); }
     JfdpTransportCounters& counters() { return counters_; }
@@ -572,11 +611,29 @@ private:
             result.flags = DeviceOperationResultLauncherActive;
             return;
         }
+        std::unique_ptr<DeviceBundleInspectionWorkspace> text_workspace(new (std::nothrow) DeviceBundleInspectionWorkspace);
+        if (!text_workspace) {
+            (void)recover_to_launcher(DeviceRecoveryReason::AppLoadFailure, app_id.app_id_view());
+            result.result_code = DeviceRequestResultCode::Failed;
+            result.flags = DeviceOperationResultLauncherActive;
+            return;
+        }
+        // Bounds admitted source/working storage; peak allocation still needs
+        // device qualification because validated assets have owned copies.
+        constexpr std::size_t kInstalledShapedResourceBytes = 2u * 1024u * 1024u;
+        auto text_pipeline = binding_.select_active_text_pipeline(*text_workspace, kInstalledShapedResourceBytes);
+        if (text_pipeline.status != AppInstalledTextPipelineStatus::Scalar &&
+            text_pipeline.status != AppInstalledTextPipelineStatus::Ready) {
+            (void)recover_to_launcher(DeviceRecoveryReason::AppLoadFailure, app_id.app_id_view());
+            result.result_code = DeviceRequestResultCode::Failed;
+            result.flags = DeviceOperationResultLauncherActive;
+            return;
+        }
         const bool script_app = descriptor.summary.script_mode == DeviceBundleScriptMode::Classic;
         const bool task_started = script_app
             ? start_installed_bundle_script_task(std::string(app_id.app_id_view()), store_.registry_generation(),
                                                  launch.instance.id, std::string(descriptor.summary.entry_path_view()),
-                                                 std::move(entry_document), std::move(resources), host_, script_session_)
+                                                 std::move(entry_document), std::move(resources), host_, script_session_, std::move(text_pipeline))
             : start_installed_bundle_ui_task(std::string(app_id.app_id_view()), store_.registry_generation(),
                                              std::string(descriptor.summary.entry_path_view()), std::move(entry_document),
                                              std::move(resources), ui_session_);
@@ -669,7 +726,7 @@ private:
         capabilities.display_width = 172;
         capabilities.display_height = 320;
         capabilities.capability_bits = DeviceCapabilityTouch | DeviceCapabilityDeviceLogs;
-        capabilities.max_bundle_bytes = DeviceImageStore::kMaxBundleBytes;
+        capabilities.max_bundle_bytes = store_.max_bundle_bytes();
         capabilities.available_storage_bytes = store_.available_storage_bytes();
         // This is the release board identity, not a board-driver label. The
         // explicit host provider compares it with the Developer Image record.
@@ -692,19 +749,7 @@ private:
         std::memcpy(identity.source_revision.data(), JELLYFRAME_ESP32S3_SOURCE_REVISION,
                     sizeof(JELLYFRAME_ESP32S3_SOURCE_REVISION));
         identity.render_core_abi = JELLYFRAME_ESP32S3_RENDER_CORE_ABI;
-        identity.feature_family_bits = DeviceRenderCoreFeatureDocument | DeviceRenderCoreFeaturePaint;
-#if JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
-        identity.feature_family_bits |= DeviceRenderCoreFeatureFlexGrid;
-#endif
-#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
-        identity.feature_family_bits |= DeviceRenderCoreFeatureModernPaint;
-#endif
-#if JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED
-        identity.feature_family_bits |= DeviceRenderCoreFeatureAdvancedForms;
-#endif
-#if JELLYFRAME_RENDER_CORE_CANVAS2D_ENABLED
-        identity.feature_family_bits |= DeviceRenderCoreFeatureCanvas2d;
-#endif
+        identity.feature_family_bits = render_core_feature_family_bits();
         std::array<std::uint8_t, 384> payload{};
         std::size_t size = 0;
         if (encode_device_image_identity_payload(identity, payload.data(), payload.size(), size) == DeviceProtocolStatus::Ok) {
@@ -897,6 +942,11 @@ void device_image_lifecycle_task(void*) {
         vTaskDelete(nullptr);
         return;
     }
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
+    // Store initialization reauthenticates its library. No installed app
+    // starts until an explicit Launch request, including after VM recovery.
+    runtime->endpoint.restore_vm_fault_log();
+#endif
     std::int64_t last_byte_us = 0;
     bool was_connected = usb_serial_jtag_is_connected();
     for (;;) {

@@ -242,6 +242,11 @@ def validate_bundle_summary(summary: object) -> dict:
         fail(".jfapp summary role is invalid")
     if summary["script"] not in {"none", "classic"}:
         fail(".jfapp summary script is invalid")
+    if "textPipeline" in summary:
+        from package_app import normalize_text_pipeline
+        normalize_text_pipeline(summary["textPipeline"])
+        if summary["script"] != "classic":
+            fail(".jfapp shaped textPipeline requires classic script")
     if not isinstance(summary.get("versionCode"), int) or isinstance(summary["versionCode"], bool) or summary["versionCode"] < 0:
         fail(".jfapp summary versionCode must be a non-negative integer")
     entry = Path(summary["entry"])
@@ -325,7 +330,7 @@ def parse_jfapp(bundle: bytes) -> dict:
     ) = struct.unpack_from(JFAPP_HEADER_FORMAT, bundle, 0)
     if magic != JFAPP_MAGIC:
         fail("bundle magic is not JFAPPV0")
-    if header_size != JFAPP_HEADER_SIZE or format_version != 0:
+    if header_size != JFAPP_HEADER_SIZE or format_version not in (0, 1):
         fail("unsupported .jfapp format version")
     if flags != 0 or reserved != 0:
         fail(".jfapp V0 flags/reserved fields must be zero")
@@ -365,7 +370,10 @@ def parse_jfapp(bundle: bytes) -> dict:
     except (json.JSONDecodeError, ValueError) as error:
         fail(f".jfapp summary JSON is invalid: {error}")
     summary = validate_bundle_summary(summary)
+    if format_version != (1 if "textPipeline" in summary else 0):
+        fail(".jfapp format version does not match required text pipeline")
     return {
+        "formatVersion": format_version,
         "summary": summary,
         "resourceCount": resource_count,
         "payloadBytes": payload_size,

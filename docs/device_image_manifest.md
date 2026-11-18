@@ -1,6 +1,6 @@
 # Developer Image Manifest V0
 
-> Last updated: 2026-09-06; Applies to: 0.6.0-dev; status: contract baseline
+> Last updated: 2026-11-17; Applies to: 0.6.0-dev; status: contract baseline
 
 Each releasable first-party Developer Image publishes one immutable JSON
 manifest beside its firmware and recovery materials. It is the common identity
@@ -50,6 +50,37 @@ hash identifies the factory image described by the procedure named in
 `procedureId`; it is not an instruction to erase or flash a device. The actual
 procedure is a versioned Device OS release document and must state host tools,
 target board, confirmation steps and recovery outcomes.
+
+## Optional install-capacity provenance
+
+When a release supplies `buildProvenance.partitionTableSha256`, it must also
+supply `configuredMaxBundleBytes`, `storagePartitionOffset` and
+`storagePartitionBytes`. The parser checks their bounds/alignment and requires
+`storage.maxBundleBytes` to equal the smaller of configured capacity and the
+physical three-slot capacity after two 4096-byte registry sectors. Release
+tooling checks binary partition MD5/SHA, generated configuration and factory
+partition/application bytes. These are host consistency checks, not firmware
+attestation or a device signature-verification result. Historical manifests
+without this optional group retain their original meaning.
+
+The JFDP identity feature family `text.shaping` uses bit6. Its release requires
+build-directory capacity evidence; unknown feature bits are rejected. Signed
+`.jfsg` installation remains subject to device trust policy.
+
+## Optional install-capacity provenance
+
+When `buildProvenance.partitionTableSha256` is supplied,
+`configuredMaxBundleBytes`, `storagePartitionOffset` and `storagePartitionBytes`
+are required with it. Bounds/alignment are checked, and `storage.maxBundleBytes`
+must equal min(configured capacity, physical three-slot capacity after two
+4096-byte registry sectors). Release tooling checks binary partition MD5/SHA,
+generated configuration and factory partition/application bytes. These host
+consistency checks do not attest running firmware or verify signatures.
+Historical manifests without this group retain their original meaning.
+
+JFDP identity feature family `text.shaping` uses bit6 and requires build-directory
+capacity evidence for packaging. Unknown feature bits are rejected. Signed
+`.jfsg` installation remains subject to device trust policy.
 
 ## Provider Matching
 

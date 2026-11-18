@@ -13,6 +13,7 @@ gap 6
 
 # Switch routes through ordinary buttons. Each click updates location.hash and
 # the app redraws its local state through hashchange; no browser navigation runs.
-event 2 click 150 278
-event 4 click 235 278
-event 6 click 50 278
+# The authored 38px tabs occupy y238..276 at this viewport.
+event 2 click 150 257
+event 4 click 235 257
+event 6 click 50 257

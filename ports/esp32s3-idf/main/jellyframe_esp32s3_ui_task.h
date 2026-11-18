@@ -1,6 +1,7 @@
 #pragma once
 
 #include "jellyframe_esp32s3_resources.h"
+#include "app_runtime/app_installed_bundle.h"
 
 #include <cstdint>
 #include <string>
@@ -90,6 +91,14 @@ struct InstalledBundleScriptTaskTelemetry {
     std::uint32_t accepted_after_malformed_v4_probe = 0;
 };
 
+// The VM port does not unwind on fatal. This is a value observation; it
+// never claims the worker/session can be destroyed.
+struct InstalledScriptVmFault {
+    int code = -1;
+    std::uint32_t generation = 0;
+    bool ui_done = false;
+};
+
 // The Device Runtime passes a copied entry document to this task. No registry,
 // bundle lease, transport buffer, or renderer object crosses the task boundary.
 bool start_installed_bundle_ui_task(std::string app_id,
@@ -111,11 +120,13 @@ bool start_installed_bundle_script_task(std::string app_id,
                                         std::string entry_document,
                                         InstalledResourceSnapshot resources,
                                         jellyframe::AppRuntimeHost& host,
-                                        InstalledBundleScriptSession*& session);
+                                        InstalledBundleScriptSession*& session,
+                                        jellyframe::AppInstalledTextPipeline text_pipeline);
 bool stop_installed_bundle_script_task(InstalledBundleScriptSession*& session,
                                        std::uint32_t timeout_ms = 3000,
                                        InstalledBundleScriptTaskTelemetry* telemetry = nullptr);
 bool installed_bundle_script_task_has_fatal(const InstalledBundleScriptSession* session);
+InstalledScriptVmFault installed_bundle_script_task_vm_fault(const InstalledBundleScriptSession* session);
 InstalledBundleScriptTaskTelemetry installed_bundle_script_task_telemetry(const InstalledBundleScriptSession* session);
 bool start_app_runtime_recovery_acceptance_task();
 bool start_script_task_value_protocol_acceptance_task();

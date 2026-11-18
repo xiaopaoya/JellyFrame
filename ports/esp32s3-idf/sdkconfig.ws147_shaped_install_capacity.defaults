@@ -1,0 +1,7 @@
+# Apply after the lifecycle/CoreText/worker defaults in a fresh SDKCONFIG.
+# Partition boundaries change. Preserve required installed data externally;
+# deployment must explicitly initialize the new assets/storage layout.
+CONFIG_JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB=1024
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_16mb_n16r8_shaped_install.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions_16mb_n16r8_shaped_install.csv"

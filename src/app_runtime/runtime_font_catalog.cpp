@@ -2,6 +2,7 @@
 
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
 #include "app_runtime/runtime_font_id.h"
+#include "app_runtime/runtime_text_font_face.h"
 #include <cstring>
 #include <new>
 
@@ -68,8 +69,8 @@ RuntimeFontStatus RuntimeFontCatalog::create(const RuntimeFontRegistration* regi
         draft->faces_.reset(new TextFontFace[count]);
         for (std::size_t i = 0; i < count; ++i) {
             draft->registrations_[i] = registrations[i];
-            draft->faces_[i] = {registrations[i].resource->id(), registrations[i].family_id,
-                                registrations[i].resource->resource(), registrations[i].css_family_hash};
+            draft->faces_[i] = detail::registered_text_face(registrations[i].resource->id(), registrations[i].family_id,
+                                registrations[i].resource->resource(), registrations[i].css_family_hash);
         }
         const auto status = draft->system_.bind(draft->faces_.get(), count, limits.text);
         if (status != TextSystemStatus::Ok) return status == TextSystemStatus::ResourceLimit

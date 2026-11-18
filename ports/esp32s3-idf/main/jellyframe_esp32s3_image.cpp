@@ -231,7 +231,7 @@ bool BmpImageAdapter::decode_cached(Entry& entry) {
 bool BmpImageAdapter::resolve(const jellyframe::Node& node,
                               jellyframe::ImageResolveKind kind,
                               std::uint16_t background_resource_id,
-                              jellyframe::ResolvedImageResource& result) {
+                              jellyframe::RuntimeResolvedImage& result) {
     result = {};
     std::string_view url;
     if (kind == jellyframe::ImageResolveKind::Content) {
@@ -270,10 +270,15 @@ bool BmpImageAdapter::resolve(const jellyframe::Node& node,
 #else
         if (cached->status == CacheStatus::MetadataOnly) return false;
 #endif
-        if (cached->status == CacheStatus::Ready)
+        if (cached->status == CacheStatus::Ready) {
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
             result = {cached->handle, {jellyframe::ImageIntrinsicSizeState::Known,
                                        static_cast<std::uint16_t>(cached->width),
                                        static_cast<std::uint16_t>(cached->height)}};
+#else
+            result = {cached->handle, cached->width, cached->height};
+#endif
+        }
         return cached->status == CacheStatus::Ready;
     }
     if (entries_.size() >= kMaxCacheEntries) {
@@ -323,9 +328,13 @@ bool BmpImageAdapter::resolve(const jellyframe::Node& node,
     }
     const Entry& stored = entries_.back();
     if (stored.status != CacheStatus::Ready) return false;
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     result = {handle, {jellyframe::ImageIntrinsicSizeState::Known,
                        static_cast<std::uint16_t>(stored.width),
                        static_cast<std::uint16_t>(stored.height)}};
+#else
+    result = {handle, stored.width, stored.height};
+#endif
     return true;
 }
 
@@ -378,26 +387,44 @@ jellyframe::ImageIntrinsicSize BmpImageAdapter::natural_size(const jellyframe::N
 #endif
 
 bool BmpImageAdapter::paint(jellyframe::FrameBuffer& target,
-                            const jellyframe::ImagePaintRequest& request) {
+                            const jellyframe::RuntimeImagePaintRequest& request) {
     ++stats_.paint_calls;
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     const jellyframe::Rect rect = request.destination;
+    const double origin_x = rect.x, origin_y = rect.y;
+    const double width = rect.width, height = rect.height;
+    const jellyframe::Rect clip = rect;
+#else
+    const jellyframe::Rect rect = request.rect;
+    const auto fraction = [](const jellyframe::SamplingFraction& value) {
+        return static_cast<double>(value.numerator) / value.denominator;
+    };
+    if (request.sampling.x.denominator <= 0 || request.sampling.y.denominator <= 0 ||
+        request.sampling.width.denominator <= 0 || request.sampling.height.denominator <= 0 ||
+        request.sampling.width.numerator <= 0 || request.sampling.height.numerator <= 0) return false;
+    const double origin_x = request.sampling_rect.x + fraction(request.sampling.x);
+    const double origin_y = request.sampling_rect.y + fraction(request.sampling.y);
+    const double width = fraction(request.sampling.width), height = fraction(request.sampling.height);
+    const jellyframe::Rect clip = request.clip;
+#endif
     const Entry* entry = find(request.image_handle);
     if (entry == nullptr || entry->status != CacheStatus::Ready || rect.width <= 0 || rect.height <= 0) {
         ++stats_.paint_failures;
         return false;
     }
+    if (clip.width <= 0 || clip.height <= 0) return true;
     const double source_w = static_cast<double>(entry->width);
     const double source_h = static_cast<double>(entry->height);
-    double draw_w = static_cast<double>(rect.width);
-    double draw_h = static_cast<double>(rect.height);
+    double draw_w = width;
+    double draw_h = height;
     if (request.object_fit == jellyframe::ObjectFit::None) {
         draw_w = source_w;
         draw_h = source_h;
     } else if (request.object_fit == jellyframe::ObjectFit::Contain ||
                request.object_fit == jellyframe::ObjectFit::Cover ||
                request.object_fit == jellyframe::ObjectFit::ScaleDown) {
-        const double contain_scale = std::min(rect.width / source_w, rect.height / source_h);
-        const double cover_scale = std::max(rect.width / source_w, rect.height / source_h);
+        const double contain_scale = std::min(width / source_w, height / source_h);
+        const double cover_scale = std::max(width / source_w, height / source_h);
         double scale = request.object_fit == jellyframe::ObjectFit::Cover ? cover_scale : contain_scale;
         if (request.object_fit == jellyframe::ObjectFit::ScaleDown) {
             scale = std::min(1.0, contain_scale);
@@ -407,19 +434,23 @@ bool BmpImageAdapter::paint(jellyframe::FrameBuffer& target,
     }
     const int position_x = std::clamp(request.object_position.x_percent, 0, 100);
     const int position_y = std::clamp(request.object_position.y_percent, 0, 100);
-    const double offset_x = (static_cast<double>(rect.width) - draw_w) * position_x / 100.0;
-    const double offset_y = (static_cast<double>(rect.height) - draw_h) * position_y / 100.0;
-    for (int y = 0; y < rect.height; ++y) {
-        const double source_y = (y - offset_y) * source_h / draw_h;
+    const double offset_x = (width - draw_w) * position_x / 100.0;
+    const double offset_y = (height - draw_h) * position_y / 100.0;
+    const int left = std::max({rect.x, clip.x, 0});
+    const int top = std::max({rect.y, clip.y, 0});
+    const int right = static_cast<int>(std::min({static_cast<std::int64_t>(rect.x) + rect.width,
+        static_cast<std::int64_t>(clip.x) + clip.width, static_cast<std::int64_t>(target.width)}));
+    const int bottom = static_cast<int>(std::min({static_cast<std::int64_t>(rect.y) + rect.height,
+        static_cast<std::int64_t>(clip.y) + clip.height, static_cast<std::int64_t>(target.height)}));
+    for (int ty = top; ty < bottom; ++ty) {
+        const double source_y = (ty - origin_y - offset_y) * source_h / draw_h;
         if (source_y < 0.0 || source_y >= source_h) continue;
         const int sy = std::clamp(static_cast<int>(source_y), 0, entry->height - 1);
-        for (int x = 0; x < rect.width; ++x) {
-            const double source_x = (x - offset_x) * source_w / draw_w;
+        for (int tx = left; tx < right; ++tx) {
+            const double source_x = (tx - origin_x - offset_x) * source_w / draw_w;
             if (source_x < 0.0 || source_x >= source_w) continue;
             const int sx = std::clamp(static_cast<int>(source_x), 0, entry->width - 1);
             const std::size_t index = static_cast<std::size_t>(sy) * entry->width + sx;
-            const int tx = rect.x + x;
-            const int ty = rect.y + y;
             if (target.contains(tx, ty)) {
                 blend_pixel(target.pixel(tx, ty), unpack_rgb565(entry->pixels[index], entry->alpha[index]));
             }
@@ -432,10 +463,21 @@ namespace {
 bool resolve_callback(const jellyframe::Node& node,
                       jellyframe::ImageResolveKind kind,
                       std::uint16_t background_resource_id,
-                      jellyframe::ResolvedImageResource& result,
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+                      jellyframe::RuntimeResolvedImage& result,
+#else
+                      std::uint32_t& handle,
+#endif
                       void* context) {
     auto* adapter = static_cast<BmpImageAdapter*>(context);
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
     return adapter != nullptr && adapter->resolve(node, kind, background_resource_id, result);
+#else
+    jellyframe::RuntimeResolvedImage result;
+    if (!adapter || !adapter->resolve(node, kind, background_resource_id, result)) return false;
+    handle = result.image_handle;
+    return true;
+#endif
 }
 
 #if defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION)
@@ -445,12 +487,40 @@ jellyframe::ImageIntrinsicSize natural_size_callback(const jellyframe::Node& nod
 }
 #endif
 
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
 bool paint_callback(jellyframe::FrameBuffer& target,
-                    const jellyframe::ImagePaintRequest& request,
+                    const jellyframe::RuntimeImagePaintRequest& request,
                     void* context) {
     auto* adapter = static_cast<BmpImageAdapter*>(context);
     return adapter != nullptr && adapter->paint(target, request);
 }
+#else
+bool paint_fractional_callback(jellyframe::FrameBuffer& target,
+    const jellyframe::RuntimeImagePaintRequest& request, void* context) {
+    auto* adapter = static_cast<BmpImageAdapter*>(context);
+    return adapter && adapter->paint(target, request);
+}
+bool paint_clipped_callback(jellyframe::FrameBuffer& target, jellyframe::Rect rect,
+    jellyframe::Rect clip, std::uint32_t handle, jellyframe::ObjectFit fit,
+    jellyframe::ObjectPosition position, jellyframe::ImageRendering rendering, void* context) {
+    jellyframe::RuntimeImagePaintRequest request{};
+    request.rect = rect;
+    request.sampling_rect = rect;
+    request.sampling.width = {rect.width, 1};
+    request.sampling.height = {rect.height, 1};
+    request.clip = clip;
+    request.image_handle = handle;
+    request.object_fit = fit;
+    request.object_position = position;
+    request.image_rendering = rendering;
+    return paint_fractional_callback(target, request, context);
+}
+bool paint_callback(jellyframe::FrameBuffer& target, jellyframe::Rect rect,
+    std::uint32_t handle, jellyframe::ObjectFit fit, jellyframe::ObjectPosition position,
+    jellyframe::ImageRendering rendering, void* context) {
+    return paint_clipped_callback(target, rect, rect, handle, fit, position, rendering, context);
+}
+#endif
 } // namespace
 
 jellyframe::ImageHandleResolver make_bmp_image_resolver(BmpImageAdapter& adapter) {
@@ -464,7 +534,14 @@ jellyframe::NaturalImageSizeProvider make_bmp_natural_image_size_provider(BmpIma
 #endif
 
 jellyframe::ImagePainter make_bmp_image_painter(BmpImageAdapter& adapter) {
-    return jellyframe::ImagePainter{paint_callback, &adapter};
+    jellyframe::ImagePainter painter{paint_callback, &adapter};
+#if !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+    painter.writes_only_within_rect = true;
+    painter.paint_clipped = paint_clipped_callback;
+    painter.supports_tiled_replay = true;
+    painter.paint_fractional_clipped = paint_fractional_callback;
+#endif
+    return painter;
 }
 
 } // namespace jellyframe_esp32s3

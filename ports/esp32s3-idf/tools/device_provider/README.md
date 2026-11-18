@@ -1,6 +1,6 @@
 # WS147 Device Provider
 
-> Last updated: 2026-11-16; Applies to: 0.6.0-dev
+> Last updated: 2026-11-17; Applies to: 0.6.0-dev
 
 `jellyframe-device.cmd` is the explicitly configured WS147 Device OS provider.
 It is a host-side adapter for JFDP/1 over the board's native USB Serial/JTAG
@@ -15,7 +15,7 @@ procedure and `SHA256SUMS.txt`.
 
 The archive is intentionally board-specific. It contains no serial-port scan,
 serial-console parser or fallback provider. Its provider release record is
-currently `jellyframe-device@0.1.1-dev`.
+currently `jellyframe-device@0.1.2-dev`.
 
 ```powershell
 python ports\esp32s3-idf\tools\device_provider\package_ws147_device_provider.py `
@@ -39,7 +39,10 @@ copied into the Developer Image manifest. Unsupported JFDP feature families,
 missing evidence and identity mismatches are rejected. Identity fields cannot
 be overridden on the command line.
 
-The optional `--build-dir` adds ESP-IDF provenance checks: it validates the
+`--build-dir` is mandatory for all text-pipeline releases (`text.shaping` or
+`text.contextual-jfsp2`/`text.contextual-layout`). For historical scalar
+release evidence it remains optional, preserving the old 327680-byte limit.
+When supplied, it adds ESP-IDF provenance checks: it validates the
 generated Core source manifest/provenance/profile, ESP-IDF
 `project_description.json`, `CMakeCache.txt`, and `sdkconfig`; confirms Core
 identity/version/ABI/features and ESP target; and hashes the `app_bin` named by
@@ -50,6 +53,17 @@ version and versioned compiler evidence must agree with this build directory.
 Compiler evidence uses the `esp-<version>_<date>` toolchain identifier. The final
 Developer Image manifest passes the same strict parser bundled with the provider
 before any release output is written.
+
+Capacity comes from the matching `sdkconfig`, generated `config/sdkconfig.h`
+and binary `partition_table/partition-table.bin`, including its MD5, bounds,
+labels and non-overlap. It is `min(configured KiB * 1024,
+((storageBytes - 8192) / 3 rounded down) aligned down to 4096)`, matching the
+store's two registry sectors and three bundle slots. The manifest records the
+partition SHA-256 and configured/physical inputs. Factory partition bytes and
+the application at the factory partition offset must match the build exactly.
+The opt-in 3 MiB storage profile advertises 1044480 bytes. It moves partition
+boundaries and requires explicit data/partition migration; an app-only update
+cannot deploy that layout.
 
 `runtimeVersion` matches the lifecycle firmware's JFDP runtime contract (`0.6.0-dev`);
 `imageVersion` records the selected firmware build version separately.
@@ -87,6 +101,32 @@ For VS Code, set `jellyframe.deviceProvider` to the absolute path of this
 manifest. Run Discover Device, then Device Info. The extension only invokes
 this explicit provider through `jellyframe_cli.py`; it neither embeds the
 provider nor infers a serial endpoint.
+
+Install accepts an absolute scalar `.jfapp` or signed `.jfsg`. Shaped format1
+requires a signed envelope and an explicitly matched route. The ABI4
+`jfsp1-block-v11` route requires `text.shaping` (JFDP identity bit6). ABI9
+`jfsp2-block-v12` requires both `text.contextual-jfsp2` (bit7) and
+`text.contextual-layout` (bit8); neither route grants the other. Contextual
+JFSP2 alone does not grant installed DOM layout. The device's Core ABI and
+complete family set must match the configured manifest before package
+inspection or INSTALL_BEGIN. Scalar format0 remains supported by the host. Device store
+policy still decides whether unsigned scalar installation is permitted.
+Inspection and transport use one bounded immutable read, so replacing the file
+after admission cannot change transmitted bytes. The standalone stdlib inspector
+checks envelope bounds, metadata, resource CRC/SHA and shaped declarations. It
+never claims signature verification: only the device's configured trust table
+authenticates the package. Production trust keys remain unchanged.
+
+The stdlib `device_render_core_capabilities.py` module owns host-side wire names
+and route selection and ships in both provider and author SDK archives. The
+complete Core feature set is preserved, including optional length math,
+counters, borders, tables and positioned sizing (bits9–13). Unknown bits and
+conflicting ABI/text declarations refuse; profiles are never silently filtered.
+
+`jellyframe_cli.py device install --bundle <absolute.jfsg>` forwards the envelope
+without repackaging. USB chunks remain 1024 bytes; progress events are coalesced
+to stay within the provider JSONL contract. This local provider version is not a
+claim of signed-package device execution or provisioning qualification.
 
 ## Test Fixtures
 

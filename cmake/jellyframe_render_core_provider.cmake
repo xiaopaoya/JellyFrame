@@ -7,6 +7,55 @@
 set(JELLYFRAME_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(_jellyframe_runtime_cmake_dir "${CMAKE_CURRENT_LIST_DIR}")
 
+# Qualification changes the consumer's exact package lock, never the production
+# tooling/manifests or the in-tree development provider's policy.
+set(JELLYFRAME_RENDER_CORE_QUALIFICATION_LOCK_FILE "" CACHE FILEPATH
+    "Qualification-only exact Render Core package lock; production lock stays unchanged")
+set(_jellyframe_render_core_lock_file
+    "${_jellyframe_runtime_cmake_dir}/jellyframe_dependency_lock.cmake")
+set(JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_KIND "production")
+if(JELLYFRAME_RENDER_CORE_QUALIFICATION_LOCK_FILE)
+    if(NOT JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "package")
+        message(FATAL_ERROR
+            "JELLYFRAME_RENDER_CORE_QUALIFICATION_LOCK_FILE is only valid with the package Render Core provider")
+    endif()
+    get_filename_component(_jellyframe_render_core_lock_file
+        "${JELLYFRAME_RENDER_CORE_QUALIFICATION_LOCK_FILE}" ABSOLUTE
+        BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+    set(JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_KIND "qualification")
+    message(STATUS "Render Core qualification lock: ${_jellyframe_render_core_lock_file}")
+endif()
+if(NOT EXISTS "${_jellyframe_render_core_lock_file}" OR
+   IS_DIRECTORY "${_jellyframe_render_core_lock_file}")
+    message(FATAL_ERROR "Render Core dependency lock is not a file: ${_jellyframe_render_core_lock_file}")
+endif()
+# Never allow an incomplete lock to inherit a caller/cache identity.
+foreach(_field VERSION ENGINE_ABI SOURCE_HASH)
+    unset(JELLYFRAME_RENDER_CORE_LOCKED_${_field})
+    unset(JELLYFRAME_RENDER_CORE_LOCKED_${_field} CACHE)
+endforeach()
+include("${_jellyframe_render_core_lock_file}")
+if(NOT JELLYFRAME_RENDER_CORE_LOCKED_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+    message(FATAL_ERROR "Render Core dependency lock has no valid release version")
+endif()
+if(NOT JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI MATCHES "^[1-9][0-9]*$")
+    message(FATAL_ERROR "Render Core dependency lock has no valid engine ABI")
+endif()
+string(LENGTH "${JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH}" _lock_hash_length)
+if(NOT _lock_hash_length EQUAL 64 OR
+   NOT JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH MATCHES "^[0-9a-fA-F]+$")
+    message(FATAL_ERROR "Render Core dependency lock has no valid source hash")
+endif()
+string(TOLOWER "${JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH}"
+    JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH)
+file(TO_CMAKE_PATH "${_jellyframe_render_core_lock_file}"
+    JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_FILE)
+file(SHA256 "${_jellyframe_render_core_lock_file}"
+    JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_SHA256)
+unset(_field)
+unset(_lock_hash_length)
+unset(_jellyframe_render_core_lock_file)
+
 if(JELLYFRAME_RENDER_CORE_SOURCE_DIR)
     get_filename_component(JELLYFRAME_RENDER_CORE_SOURCE_ROOT
         "${JELLYFRAME_RENDER_CORE_SOURCE_DIR}" ABSOLUTE)
@@ -42,7 +91,6 @@ if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")
     endif()
 endif()
 
-include("${_jellyframe_runtime_cmake_dir}/jellyframe_dependency_lock.cmake")
 include("${_jellyframe_runtime_cmake_dir}/render_core_link_map.cmake")
 
 if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "in-tree")

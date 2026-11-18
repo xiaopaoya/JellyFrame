@@ -101,7 +101,7 @@ def main():
         '<img id="width-ratio" src="/ten-by-five.bmp">'
         '<img id="height-ratio" src="/ten-by-five.bmp">'
         '<img id="definite" src="/ten-by-five.bmp">'
-        '<img id="unresolved" src="/missing.bmp">'
+        '<img id="unresolved">'
         '<div id="following"></div></body></html>')
     (sizing / "style.css").write_text(
         'html,body{margin:0;padding:0;background:#ffffff}img{display:block}'

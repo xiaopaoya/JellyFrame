@@ -8,10 +8,12 @@ from pathlib import Path
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "cmake" / "render_core_feature_registry.csv"
 
 
-def _load_registry() -> tuple[dict[str, frozenset[str]], dict[str, dict[str, str]]]:
+def load_registry(
+    registry_path: Path = REGISTRY_PATH,
+) -> tuple[dict[str, frozenset[str]], dict[str, dict[str, str]]]:
     dependencies: dict[str, frozenset[str]] = {}
     metadata: dict[str, dict[str, str]] = {}
-    for line_number, raw_line in enumerate(REGISTRY_PATH.read_text(encoding="utf-8").splitlines(), 1):
+    for line_number, raw_line in enumerate(registry_path.read_text(encoding="utf-8").splitlines(), 1):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
@@ -43,7 +45,7 @@ def _load_registry() -> tuple[dict[str, frozenset[str]], dict[str, dict[str, str
     return dependencies, metadata
 
 
-RENDER_CORE_FEATURE_DEPENDENCIES, RENDER_CORE_FEATURE_METADATA = _load_registry()
+RENDER_CORE_FEATURE_DEPENDENCIES, RENDER_CORE_FEATURE_METADATA = load_registry()
 KNOWN_RENDER_CORE_FEATURES = frozenset(RENDER_CORE_FEATURE_DEPENDENCIES)
 
 

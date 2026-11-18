@@ -21,9 +21,11 @@ void *heap_caps_aligned_alloc(size_t, size_t, unsigned);
 void heap_caps_free(void *);
 ''',
     'esp_log.h': 'void test_record_fatal(int);\n#define ESP_LOGE(tag, format, code) test_record_fatal(code)\n#define ESP_LOGI(...) ((void)0)\n',
+    'esp_attr.h': '#define DRAM_ATTR\n',
+    'esp_cpu.h': '#include <stdbool.h>\n#include <stdint.h>\nbool esp_cpu_compare_and_set(volatile uint32_t *, uint32_t, uint32_t);\n',
     'esp_timer.h': '#include <stdint.h>\nint64_t esp_timer_get_time(void);\n',
-    'freertos/FreeRTOS.h': '#define pdMS_TO_TICKS(x) (x)\n#define portMAX_DELAY 0xffffffff\n',
-    'freertos/task.h': '#include <stddef.h>\nvoid vTaskSuspend(void *);\nvoid vTaskDelay(unsigned);\n',
+    'freertos/FreeRTOS.h': '#include <stdint.h>\ntypedef void *TaskHandle_t;\n#define pdMS_TO_TICKS(x) (x)\n#define portMAX_DELAY 0xffffffff\n',
+    'freertos/task.h': '#include <stddef.h>\n#include "freertos/FreeRTOS.h"\nTaskHandle_t xTaskGetCurrentTaskHandle(void);\nvoid vTaskSuspend(void *);\nvoid vTaskDelay(unsigned);\n',
 }
 for name, text in headers.items():
     (build / name).write_text(text)

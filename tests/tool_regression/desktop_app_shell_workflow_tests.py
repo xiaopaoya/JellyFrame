@@ -347,6 +347,8 @@ def main() -> int:
             run_remove_delete_data_flow(exe, evidence_root / "remove_delete_data", primary_bundle, steps)
             write_report(evidence_root / "desktop_app_shell_workflow.report.json", steps)
         except Exception as error:  # pragma: no cover - direct script failure path
+            # Completed steps alone cannot prove a workflow that aborted.
+            steps.append({"name": "workflow-aborted", "passed": False, "error": str(error)})
             write_report(evidence_root / "desktop_app_shell_workflow.report.json", steps)
             print(f"desktop app-shell workflow failed: {error}")
             return 1

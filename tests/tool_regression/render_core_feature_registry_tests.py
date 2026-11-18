@@ -24,10 +24,14 @@ class RenderCoreFeatureRegistryTests(unittest.TestCase):
             {
                 "core.document", "core.paint", "forms.advanced", "css.flex-grid",
                 "css.modern-paint", "graphics.canvas2d",
+                "css.length-math", "css.counters", "css.borders", "css.tables",
+                "css.positioned-sizing", "text.contextual-jfsp2", "text.contextual-layout",
             },
         )
         self.assertEqual(RENDER_CORE_FEATURE_DEPENDENCIES["core.paint"], {"core.document"})
         self.assertEqual(RENDER_CORE_FEATURE_DEPENDENCIES["css.modern-paint"], {"core.paint"})
+        self.assertEqual(RENDER_CORE_FEATURE_DEPENDENCIES["text.contextual-layout"],
+                         {"core.document", "text.contextual-jfsp2"})
         self.assertEqual(
             RENDER_CORE_FEATURE_METADATA["graphics.canvas2d"],
             {"option": "JELLYFRAME_ENABLE_CANVAS2D", "suffix": "no-canvas", "order": "30"},

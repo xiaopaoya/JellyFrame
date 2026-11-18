@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PROVIDER = ROOT / "ports" / "esp32s3-idf" / "tools" / "device_provider" / "jellyframe_device.py"
 sys.path.insert(0, str(ROOT / "tools"))
 from device_provider_contract import parse_provider_jsonl, parse_provider_result  # noqa: E402
+from jellyframe_versions import active_render_core_release_version  # noqa: E402
 
 
 def invoke(*arguments: str) -> subprocess.CompletedProcess[bytes]:
@@ -100,13 +102,23 @@ class Ws147DeviceProviderTests(unittest.TestCase):
         self.assertEqual(parse_provider_result(mismatch.stdout)["devices"][0]["profileId"], "wrong-profile")
 
     def test_runtime_cli_accepts_confirmed_cancel_and_rejects_manifest_mismatch(self) -> None:
-        provider = str((ROOT / "ports" / "esp32s3-idf" / "tools" / "device_provider" / "jellyframe-device.cmd").resolve())
-        cancelled = cli("--provider", provider, "cancel", "--selector", "fixture-ws147", "--transaction-id", "9",
-                        fixture="confirmed-cancel")
-        self.assertEqual(cancelled.returncode, 0, cancelled.stderr.decode())
-        self.assertTrue(json.loads(cancelled.stdout)["cancellation"]["confirmed"])
-
         with tempfile.TemporaryDirectory() as temporary:
+            provider = ROOT / "ports" / "esp32s3-idf" / "tools" / "device_provider" / "jellyframe-device.cmd"
+            if os.name != "nt":
+                provider = Path(temporary) / "jellyframe-device"
+                provider.write_text(
+                    f"#!{sys.executable}\n"
+                    "import os, sys\n"
+                    f"os.execv(sys.executable, [sys.executable, {str(PROVIDER)!r}, *sys.argv[1:]])\n",
+                    encoding="utf-8",
+                )
+                provider.chmod(0o755)
+
+            cancelled = cli("--provider", str(provider.resolve()), "cancel", "--selector", "fixture-ws147",
+                            "--transaction-id", "9", fixture="confirmed-cancel")
+            self.assertEqual(cancelled.returncode, 0, cancelled.stderr.decode())
+            self.assertTrue(json.loads(cancelled.stdout)["cancellation"]["confirmed"])
+
             manifest = Path(temporary) / "manifest.json"
             manifest.write_text(json.dumps({
                 "format": "jellyframe.device-image", "formatVersion": 0,
@@ -140,23 +152,25 @@ class Ws147DeviceProviderTests(unittest.TestCase):
         spec.loader.exec_module(provider)
         endpoint = "fixture-live-cancel"
         device = provider.fixture_device()
-        session = provider.LiveInstallSession(endpoint, 77, device)
-        try:
-            result: dict[str, object] = {}
+        with tempfile.TemporaryDirectory(prefix="jellyframe-live-session-") as directory:
+            with mock.patch.object(provider.tempfile, "gettempdir", return_value=directory):
+                session = provider.LiveInstallSession(endpoint, 77, device)
+                try:
+                    result: dict[str, object] = {}
 
-            def request() -> None:
-                result.update(provider.request_live_cancel(endpoint, 77) or {})
+                    def request() -> None:
+                        result.update(provider.request_live_cancel(endpoint, 77) or {})
 
-            import threading
-            thread = threading.Thread(target=request)
-            thread.start()
-            self.assertTrue(session.cancel_requested.wait(1))
-            session.finish(True, "cancelled")
-            thread.join(2)
-            self.assertEqual(result, {"confirmed": True, "resultCode": "cancelled", "device": device})
-        finally:
-            session.close()
-        self.assertIsNone(provider.request_live_cancel(endpoint, 77))
+                    import threading
+                    thread = threading.Thread(target=request)
+                    thread.start()
+                    self.assertTrue(session.cancel_requested.wait(1))
+                    session.finish(True, "cancelled")
+                    thread.join(2)
+                    self.assertEqual(result, {"confirmed": True, "resultCode": "cancelled", "device": device})
+                finally:
+                    session.close()
+                self.assertIsNone(provider.request_live_cancel(endpoint, 77))
 
     def test_live_cancel_rejects_an_unselected_endpoint_before_opening_transport(self) -> None:
         spec = importlib.util.spec_from_file_location("ws147_device_provider_selector", PROVIDER)
@@ -198,13 +212,13 @@ class Ws147DeviceProviderTests(unittest.TestCase):
             endpoint = "fixture-install-session-order"
             args = argparse.Namespace(operation="install", selector=endpoint, request_id="install-order",
                                       bundle=bundle, allow_downgrade=False)
-            config = provider.ProviderConfig(endpoint, "COM19", 115200, Path("manifest.json"), {})
+            config = provider.ProviderConfig(endpoint, "COM19", 115200, Path("manifest.json"), {"renderCore": {"abi": 1}})
             with (
                 mock.patch.object(provider, "Wire", RecordingWire),
                 mock.patch.object(provider, "decode_capabilities", return_value={}),
                 mock.patch.object(provider, "decode_identity", return_value={}),
                 mock.patch.object(provider, "device_from_capabilities", return_value=provider.fixture_device()),
-                mock.patch.object(provider, "read_bundle_identity", return_value="org.jellyframe.fixture"),
+                mock.patch.object(provider, "read_target_package", return_value=(b"test bundle", {"appId": "org.jellyframe.fixture"})),
                 mock.patch.object(provider, "LiveInstallSession", side_effect=OSError("local temp unavailable")),
             ):
                 with self.assertRaisesRegex(OSError, "local temp unavailable"):
@@ -271,7 +285,7 @@ class Ws147DeviceProviderTests(unittest.TestCase):
             (root / "jellyframe.app.json").write_text(json.dumps({
                 "format": "jellyframe.app", "formatVersion": 0, "id": "org.example.installed",
                 "name": "Installed", "version": {"name": "1.0.0", "code": 1}, "entry": "/index.html",
-                "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": "0.9.0", "script": "none"},
+                "runtime": {"minJellyFrame": "0.6.0", "minRenderCore": active_render_core_release_version(), "script": "none"},
                 "viewport": {"designWidth": 172, "designHeight": 320, "shape": "rect"},
                 "budgets": {"maxResourceBytes": 1024, "maxDomNodes": 8, "maxCssRules": 4,
                             "maxDisplayCommands": 8, "maxTimers": 0, "maxEventListeners": 0},

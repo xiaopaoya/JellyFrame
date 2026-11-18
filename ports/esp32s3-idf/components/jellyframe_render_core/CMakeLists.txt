@@ -53,8 +53,25 @@ target_compile_definitions(${COMPONENT_LIB} PUBLIC
     JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED=${JELLYFRAME_RENDER_CORE_ADVANCED_FORMS_ENABLED}
 )
 
+# Match the source-selected optional API in every dependent translation unit.
+# Older bundled Core trees do not expose this feature variable.
+# Public headers and sources must see the same selected feature values. Some
+# headers provide legacy defaults, so omitting a definition can change a macro
+# halfway through a translation unit (for example LENGTH_MATH).
+foreach(_core_feature TEXT_SHAPING CONTEXTUAL_TEXT CONTEXTUAL_LAYOUT SHAPED_PACKET_V2
+        LENGTH_MATH CSS_COUNTERS CSS_BORDERS TABLES POSITIONED_SIZING
+        POSITIONED_TRANSACTIONS AFFINE2D COMPUTED_FONT_PRECISION SHARED_INLINE PRESERVED_TEXT)
+    if(DEFINED JELLYFRAME_RENDER_CORE_${_core_feature}_ENABLED)
+        target_compile_definitions(${COMPONENT_LIB} PUBLIC
+            JELLYFRAME_RENDER_CORE_${_core_feature}_ENABLED=${JELLYFRAME_RENDER_CORE_${_core_feature}_ENABLED})
+    endif()
+endforeach()
+
 target_compile_options(${COMPONENT_LIB} PRIVATE
     -Wall
     -Wextra
     -Wno-missing-field-initializers
+    # Core's compact statements remain warnings under GCC, as in the standalone
+    # consumer build; retain diagnostics without IDF's blanket -Werror=all.
+    -Wno-error=misleading-indentation
 )

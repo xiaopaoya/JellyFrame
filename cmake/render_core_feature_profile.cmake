@@ -8,6 +8,13 @@ if(NOT DEFINED JELLYFRAME_RENDER_CORE_ENGINE_ABI)
 endif()
 
 include("${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_registry.cmake")
+# The authoring tools also know about external Core families. The legacy
+# in-tree sources do not implement them, even when passed their cache flags.
+foreach(_external_only_feature IN ITEMS css.length-math css.counters css.borders
+        css.tables css.positioned-sizing text.contextual-jfsp2 text.contextual-layout)
+    list(REMOVE_ITEM JELLYFRAME_RENDER_CORE_FEATURE_IDS "${_external_only_feature}")
+endforeach()
+unset(_external_only_feature)
 jellyframe_render_core_enabled_features(_jellyframe_render_core_features)
 
 set(_jellyframe_render_core_disabled_profile_entries)

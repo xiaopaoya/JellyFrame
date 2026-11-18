@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+from contextlib import contextmanager
 import json
 import re
 import shlex
@@ -2633,18 +2634,40 @@ def enforce_diagnostics_policy(args: argparse.Namespace) -> int:
     return 0
 
 
+@contextmanager
+def prepared_pipeline_package(args: argparse.Namespace):
+    existing = getattr(args, "_pipeline_root", None)
+    if existing is not None or not getattr(args, "rasterize_svg", False):
+        yield existing or args.root
+        return
+    with tempfile.TemporaryDirectory(prefix="jellyframe-preflight-package-") as directory:
+        staged_args = argparse.Namespace(**vars(args))
+        staged_args.debug_dir = Path(directory) / "package"
+        staged_args.output_cpp = None
+        staged_args.output_bundle = None
+        if run_command(package_command(staged_args, False)) != 0:
+            yield None
+            return
+        args._pipeline_root = staged_args.debug_dir
+        try:
+            yield staged_args.debug_dir
+        finally:
+            del args._pipeline_root
+
+
 def run_pipeline_check(args: argparse.Namespace, target_override: str | None = None) -> tuple[int, dict]:
     pseudo_browser = tool_path(args.build_dir, "jellyframe_pseudo_browser")
     ensure_tool(pseudo_browser)
-    manifest_path = args.root / "jellyframe.app.json"
+    pipeline_root = getattr(args, "_pipeline_root", args.root)
+    manifest_path = pipeline_root / "jellyframe.app.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
     entry = str(manifest.get("entry", "/index.html"))
-    entry_path = args.root / Path(*entry.lstrip("/").split("/"))
+    entry_path = pipeline_root / Path(*entry.lstrip("/").split("/"))
     target = target_override if target_override is not None else getattr(args, "target", None)
     target_config = effective_target_config(args.root, target) if target else {}
     viewport = target_config.get("viewport", {}) if isinstance(target_config.get("viewport", {}), dict) else {}
-    width = int(viewport.get("width", 0) or 0)
-    height = int(viewport.get("height", 0) or 0)
+    width = int(getattr(args, "width", 0) or viewport.get("width", 0) or 0)
+    height = int(getattr(args, "height", 0) or viewport.get("height", 0) or 0)
     with tempfile.TemporaryDirectory(prefix="jellyframe-pipeline-check-") as directory:
         empty_css = Path(directory) / "empty.css"
         empty_css.write_text("", encoding="utf-8")
@@ -2660,7 +2683,7 @@ def run_pipeline_check(args: argparse.Namespace, target_override: str | None = N
             command.append(str(width))
         if height:
             command.append(str(height))
-        command.extend(["--diagnostics-json", str(diagnostics_json)])
+        command.extend(["--diagnostics-json", str(diagnostics_json), "--resource-root", str(pipeline_root), "--package"])
         result = run_command(command)
         if result == 0:
             return result, load_json_if_exists(diagnostics_json)
@@ -2676,6 +2699,13 @@ def run_single_pipeline_check(args: argparse.Namespace) -> int:
 
 
 def run_responsive_profile_checks(args: argparse.Namespace) -> int:
+    with prepared_pipeline_package(args) as pipeline_root:
+        if pipeline_root is None:
+            return 1
+        return check_prepared_responsive_profiles(args)
+
+
+def check_prepared_responsive_profiles(args: argparse.Namespace) -> int:
     targets = requested_targets(args)
     if not targets:
         return run_single_pipeline_check(args)
@@ -2740,6 +2770,15 @@ def cmd_package(args: argparse.Namespace) -> int:
 def cmd_preview(args: argparse.Namespace) -> int:
     if args.report is None:
         args.report = args.output.with_suffix(".report.json")
+    with prepared_pipeline_package(args) as pipeline_root:
+        if pipeline_root is None:
+            return 1
+        return render_prepared_preview(args)
+
+
+def render_prepared_preview(args: argparse.Namespace) -> int:
+    if args.report is None:
+        args.report = args.output.with_suffix(".report.json")
     preflight_result = run_package_preflight(args, include_pipeline=True)
     if preflight_result != 0:
         return preflight_result
@@ -2750,19 +2789,22 @@ def cmd_preview(args: argparse.Namespace) -> int:
     width = args.width or int(viewport.get("width", 0) or 0)
     height = args.height or int(viewport.get("height", 0) or 0)
     with tempfile.TemporaryDirectory(prefix="jellyframe-preview-package-") as directory:
-        previous_debug_dir = getattr(args, "debug_dir", None)
-        args.debug_dir = Path(directory) / "package"
-        package_result = run_command(package_command(args, False))
-        args.debug_dir = previous_debug_dir
-        if package_result != 0:
-            return package_result
+        preview_root = getattr(args, "_pipeline_root", None)
+        if preview_root is None:
+            previous_debug_dir = getattr(args, "debug_dir", None)
+            args.debug_dir = Path(directory) / "package"
+            package_result = run_command(package_command(args, False))
+            preview_root = args.debug_dir
+            args.debug_dir = previous_debug_dir
+            if package_result != 0:
+                return package_result
         merge_font_subset_report(args.report, getattr(args, "_font_subset_report", {}))
         merge_pipeline_report(args.report, getattr(args, "_pipeline_report", {}))
         merge_responsive_profiles(args.report, getattr(args, "_responsive_profiles", []))
         if getattr(args, "frame_script", None):
             result = run_programmatic_validation(
                 args,
-                Path(directory) / "package",
+                preview_root,
                 args.report,
                 montage_path=args.output,
             )
@@ -2772,7 +2814,7 @@ def cmd_preview(args: argparse.Namespace) -> int:
                 "--capture",
                 str(args.output),
                 "--app",
-                str(Path(directory) / "package"),
+                str(preview_root),
             ]
             if width:
                 command.extend(["--viewport-width", str(width)])
@@ -3210,8 +3252,8 @@ def cmd_device(args: argparse.Namespace) -> int:
         provider_arguments: list[str] = []
         stream = args.device_command in {"install", "logs"}
         if args.device_command == "install":
-            if not args.bundle.is_absolute() or not args.bundle.is_file() or args.bundle.suffix != ".jfapp":
-                raise OSError("install bundle must be an existing absolute .jfapp file")
+            if not args.bundle.is_absolute() or not args.bundle.is_file() or args.bundle.suffix.lower() not in {".jfapp", ".jfsg"}:
+                raise OSError("install bundle must be an existing absolute .jfapp or .jfsg file")
             bundle = args.bundle.resolve()
             provider_arguments.extend(["--bundle", str(bundle)])
             if args.allow_downgrade:
@@ -3495,12 +3537,14 @@ def prepare_trial_output(output_dir: Path, clean: bool, build_dir: Path | None =
     resolved_output = output_dir.resolve()
     repository = repo_root().resolve()
     trial_root = (build_dir if build_dir is not None else repository / "build").resolve()
-    if trial_root == repository or not trial_root.is_relative_to(repository):
-        raise SystemExit("trial build directory must be a descendant of the repository root")
     if resolved_output == repository:
         raise SystemExit("trial output directory must not be the repository root")
+    if trial_root == repository:
+        raise SystemExit("trial build directory must not be the repository root")
     if resolved_output == trial_root or not resolved_output.is_relative_to(trial_root):
         raise SystemExit("trial output directory must be a descendant of the selected build directory")
+    if trial_build_root(trial_root) != trial_root:
+        raise SystemExit("trial output must belong to the selected CMake build root")
     if resolved_output.exists() and not resolved_output.is_dir():
         raise SystemExit(f"trial output path is not a directory: {resolved_output}")
     if resolved_output.exists() and any(resolved_output.iterdir()):
@@ -3511,14 +3555,18 @@ def prepare_trial_output(output_dir: Path, clean: bool, build_dir: Path | None =
 
 
 def trial_build_root(build_dir: Path) -> Path:
-    """Return the CMake build root that owns a directory of built tools."""
+    """Return a CMake build root configured from this Runtime checkout."""
     repository = repo_root().resolve()
     candidate = build_dir.resolve()
-    while candidate != repository and candidate.is_relative_to(repository):
-        if (candidate / "CMakeCache.txt").is_file():
+    for candidate in (candidate, *candidate.parents):
+        cache = candidate / "CMakeCache.txt"
+        if cache.is_file():
+            source = re.search(r"^CMAKE_HOME_DIRECTORY:INTERNAL=(.+)$",
+                               cache.read_text(encoding="utf-8-sig", errors="replace"), re.MULTILINE)
+            if source is None or Path(source.group(1)).resolve() != repository:
+                raise SystemExit("trial CMake build directory belongs to another source checkout")
             return candidate
-        candidate = candidate.parent
-    raise SystemExit("trial build directory must be inside a CMake build directory below the repository root")
+    raise SystemExit("trial build directory must be inside a CMake build directory for this checkout")
 
 
 def cmd_trial(args: argparse.Namespace) -> int:
@@ -4103,10 +4151,10 @@ def main() -> int:
     device_list.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
     device_list.set_defaults(func=cmd_device)
     device_install = device_subparsers.add_parser(
-        "install", help="Install an existing .jfapp through provider JSONL progress.")
+        "install", help="Install an existing .jfapp or signed .jfsg through provider JSONL progress.")
     device_install.add_argument("--selector", required=True, help="Opaque endpoint ID returned by discover.")
     device_install.add_argument("--bundle", required=True, type=Path,
-                                help="Existing absolute .jfapp bundle; packaging is a separate step.")
+                                help="Existing absolute .jfapp or signed .jfsg; packaging/signing are separate steps.")
     device_install.add_argument("--allow-downgrade", action="store_true",
                                 help="Request a documented lower-version install where the image permits it.")
     device_install.set_defaults(func=cmd_device)

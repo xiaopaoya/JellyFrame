@@ -1,14 +1,22 @@
 #include "jerryscript-port.h"
 #include "esp_heap_caps.h"
 #include <assert.h>
+#include <stdbool.h>
 #include <setjmp.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "freertos/FreeRTOS.h"
 
 static jmp_buf fatal_boundary;
 static int fatal_code;
 void test_record_fatal(int code) { fatal_code = code; }
+bool esp_cpu_compare_and_set(volatile uint32_t *value, uint32_t expected, uint32_t desired) {
+    if (*value != expected) return false;
+    *value = desired;
+    return true;
+}
+TaskHandle_t xTaskGetCurrentTaskHandle(void) { return NULL; }
 static unsigned allocation_calls;
 static unsigned fail_attempts;
 static unsigned release_calls;

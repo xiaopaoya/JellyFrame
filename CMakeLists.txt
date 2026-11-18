@@ -60,6 +60,7 @@ option(JELLYFRAME_ENABLE_ADVANCED_FORMS "Compile the forms.advanced Render Core 
 option(JELLYFRAME_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer on supported toolchains" OFF)
 
 include(GNUInstallDirs)
+include(cmake/jellyframe_shaped_test_fixtures.cmake)
 
 if(JELLYFRAME_BUILD_SCRIPTING AND NOT JELLYFRAME_BUILD_APP_RUNTIME)
     message(FATAL_ERROR
@@ -134,6 +135,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jellyframe_render_core_provider.cmake
 if(JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS)
     add_library(jellyframe_device_runtime_contracts
         src/device_runtime_contracts/device_bundle.cpp
+        src/device_runtime_contracts/device_signed_package.cpp
         src/device_runtime_contracts/device_install_transaction.cpp
         src/device_runtime_contracts/device_runtime_protocol.cpp
     )
@@ -162,6 +164,7 @@ add_library(jellyframe_app_runtime
     src/app_runtime/app_host.cpp
     src/app_runtime/app_host_data.cpp
     src/app_runtime/app_installed_bundle.cpp
+    src/app_runtime/runtime_shaped_text_binding.cpp
     src/app_runtime/app_lifecycle.cpp
     src/app_runtime/app_load_telemetry.cpp
     src/app_runtime/app_service_worker.cpp
@@ -302,8 +305,15 @@ if(JELLYFRAME_BUILD_EXAMPLES)
     add_jellyframe_tool(jellyframe_layer_tree_dump tools/native/layer_tree_dump.cpp)
     add_jellyframe_tool(jellyframe_pipeline_dump tools/native/pipeline_dump.cpp)
     add_jellyframe_tool(jellyframe_pseudo_browser tools/native/pseudo_browser.cpp)
+    target_compile_definitions(jellyframe_pseudo_browser PRIVATE
+        JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION="${JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION}"
+        JELLYFRAME_RENDER_CORE_ACTIVE_PACKAGE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
     if(JELLYFRAME_BUILD_APP_RUNTIME)
         target_link_libraries(jellyframe_pseudo_browser PRIVATE jellyframe_app_runtime)
+        if(WIN32 AND JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 9)
+            target_link_libraries(jellyframe_pseudo_browser PRIVATE bcrypt)
+            target_compile_definitions(jellyframe_pseudo_browser PRIVATE NOMINMAX)
+        endif()
         target_compile_definitions(jellyframe_pseudo_browser PRIVATE JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME=1)
     endif()
     add_jellyframe_tool(jellyframe_font_resource_check tools/native/font_resource_check.cpp)
@@ -317,7 +327,7 @@ if(JELLYFRAME_BUILD_EXAMPLES)
             add_jellyframe_tool(jellyframe_desktop_shell tools/native/win32_browser.cpp)
         endif()
         if(JELLYFRAME_BUILD_APP_RUNTIME)
-        target_link_libraries(jellyframe_desktop_shell PRIVATE jellyframe_app_runtime gdi32 user32 winmm)
+        target_link_libraries(jellyframe_desktop_shell PRIVATE jellyframe_app_runtime gdi32 user32 winmm bcrypt)
         if(JELLYFRAME_BUILD_SCRIPTING)
             target_link_libraries(jellyframe_desktop_shell PRIVATE jellyframe_script)
         endif()
@@ -366,6 +376,55 @@ endif()
 
 if(JELLYFRAME_BUILD_TESTS)
     enable_testing()
+    get_target_property(_native_core_definitions jellyframe_render_core INTERFACE_COMPILE_DEFINITIONS)
+    set(_native_core_probe_definitions)
+    foreach(_definition IN LISTS _native_core_definitions)
+        if(_definition MATCHES "^[A-Za-z_][A-Za-z0-9_]*(=.*)?$")
+            list(APPEND _native_core_probe_definitions "-D${_definition}")
+        endif()
+    endforeach()
+    if(WIN32 AND JELLYFRAME_BUILD_APP_RUNTIME AND JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 9)
+        add_executable(jellyframe_native_contextual_desktop_tests tests/native_contextual_desktop_tests.cpp)
+        target_link_libraries(jellyframe_native_contextual_desktop_tests PRIVATE jellyframe_app_runtime bcrypt)
+        target_include_directories(jellyframe_native_contextual_desktop_tests PRIVATE tools/native)
+        target_compile_definitions(jellyframe_native_contextual_desktop_tests PRIVATE
+            NOMINMAX JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION="${JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION}"
+            JELLYFRAME_RENDER_CORE_ACTIVE_PACKAGE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
+        if(JELLYFRAME_BUILD_SCRIPTING)
+            target_compile_definitions(jellyframe_native_contextual_desktop_tests PRIVATE JELLYFRAME_ENABLE_SCRIPTING=1)
+        endif()
+        jellyframe_enable_shaped_test_fixtures(jellyframe_native_contextual_desktop_tests)
+        jellyframe_enable_test_asserts(jellyframe_native_contextual_desktop_tests)
+        jellyframe_stage_sanitizer_runtime(jellyframe_native_contextual_desktop_tests)
+        if(TARGET jellyframe_desktop_shell)
+            add_dependencies(jellyframe_native_contextual_desktop_tests
+                jellyframe_desktop_shell jellyframe_pseudo_browser)
+            add_test(NAME jellyframe_native_contextual_desktop COMMAND jellyframe_native_contextual_desktop_tests
+                "${CMAKE_CURRENT_BINARY_DIR}/native-contextual-desktop-package"
+                $<TARGET_FILE:jellyframe_desktop_shell> $<TARGET_FILE:jellyframe_pseudo_browser>)
+        else()
+            add_test(NAME jellyframe_native_contextual_desktop COMMAND jellyframe_native_contextual_desktop_tests
+                "${CMAKE_CURRENT_BINARY_DIR}/native-contextual-desktop-package")
+        endif()
+        set_tests_properties(jellyframe_native_contextual_desktop PROPERTIES SKIP_RETURN_CODE 77)
+    endif()
+    if(JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 9)
+        add_jellyframe_tool(jellyframe_native_paint_admission_tests tests/native_paint_admission_tests.cpp)
+        jellyframe_enable_test_asserts(jellyframe_native_paint_admission_tests)
+        add_test(NAME jellyframe_native_paint_admission COMMAND jellyframe_native_paint_admission_tests)
+    endif()
+    add_executable(jellyframe_native_package_route_tests tests/native_package_route_tests.cpp)
+    target_link_libraries(jellyframe_native_package_route_tests PRIVATE jellyframe_render_core)
+    target_include_directories(jellyframe_native_package_route_tests PRIVATE tools/native)
+    target_compile_features(jellyframe_native_package_route_tests PRIVATE cxx_std_17)
+    target_compile_definitions(jellyframe_native_package_route_tests PRIVATE
+        JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION="${JELLYFRAME_RUNTIME_ACTIVE_RELEASE_VERSION}"
+        JELLYFRAME_RENDER_CORE_ACTIVE_PACKAGE_VERSION="${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
+    jellyframe_enable_test_asserts(jellyframe_native_package_route_tests)
+    jellyframe_stage_sanitizer_runtime(jellyframe_native_package_route_tests)
+    add_test(NAME jellyframe_native_package_route_tests COMMAND jellyframe_native_package_route_tests
+        "${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_font_policy/jellyframe.app.json"
+        "${CMAKE_CURRENT_BINARY_DIR}/native-package-route-fixture.jfapp")
     if(TARGET jellyframe_embedded_host_demo)
         add_test(NAME jellyframe_embedded_host_core_text
             COMMAND jellyframe_embedded_host_demo)
@@ -384,6 +443,15 @@ if(JELLYFRAME_BUILD_TESTS)
     target_compile_definitions(jellyframe_esp32s3_band_navigation_tests PRIVATE
         "JELLYFRAME_BAND_SHELL_FIXTURE=\"${CMAKE_CURRENT_SOURCE_DIR}/ports/esp32s3-idf/resources/app/band_shell.html\"")
 
+    add_executable(jellyframe_esp32s3_vm_fault_boot_receipt_tests
+        ports/esp32s3-idf/tests/vm_fault_boot_receipt_tests.cpp)
+    target_include_directories(jellyframe_esp32s3_vm_fault_boot_receipt_tests PRIVATE
+        ports/esp32s3-idf/main "${CMAKE_CURRENT_SOURCE_DIR}/src")
+    target_compile_features(jellyframe_esp32s3_vm_fault_boot_receipt_tests PRIVATE cxx_std_17)
+    jellyframe_enable_test_asserts(jellyframe_esp32s3_vm_fault_boot_receipt_tests)
+    add_test(NAME jellyframe_esp32s3_vm_fault_boot_receipt_tests
+        COMMAND jellyframe_esp32s3_vm_fault_boot_receipt_tests)
+
     add_executable(jellyframe_esp32s3_resource_reference_tests
         ports/esp32s3-idf/tests/resource_reference_tests.cpp
         ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp)
@@ -391,30 +459,32 @@ if(JELLYFRAME_BUILD_TESTS)
         ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
         "${CMAKE_CURRENT_SOURCE_DIR}/src")
     if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
-        function(jellyframe_probe_installed_canonical_owner)
+        function(jellyframe_probe_installed_image_owner)
             include(CheckCXXSourceCompiles)
+            set(CMAKE_REQUIRED_DEFINITIONS ${_native_core_probe_definitions})
             set(CMAKE_REQUIRED_INCLUDES
                 ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS}
                 "${CMAKE_CURRENT_SOURCE_DIR}/src")
             set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
-            unset(JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE CACHE)
+            unset(JELLYFRAME_INSTALLED_IMAGE_OWNER_AVAILABLE CACHE)
             check_cxx_source_compiles(
-                "#include \"app_runtime/script_task_prepared_text.h\"\nstatic_assert(JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API, \"canonical owner requires packet API\");"
-                JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE)
-            set(JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE
-                ${JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE} PARENT_SCOPE)
+                "#include \"app_runtime/runtime_image_provider.h\"\nstatic_assert(JELLYFRAME_RUNTIME_IMAGE_API, \"owned images require a Core image callback API\");"
+                JELLYFRAME_INSTALLED_IMAGE_OWNER_AVAILABLE)
+            set(JELLYFRAME_INSTALLED_IMAGE_OWNER_AVAILABLE
+                ${JELLYFRAME_INSTALLED_IMAGE_OWNER_AVAILABLE} PARENT_SCOPE)
         endfunction()
-        jellyframe_probe_installed_canonical_owner()
+        jellyframe_probe_installed_image_owner()
         add_executable(jellyframe_esp32s3_installed_resource_owner_tests
             ports/esp32s3-idf/tests/installed_resource_owner_tests.cpp
             ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp
             ports/esp32s3-idf/main/jellyframe_esp32s3_installed_resource_owner.cpp)
-        if(JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE)
+        if(JELLYFRAME_INSTALLED_IMAGE_OWNER_AVAILABLE)
             target_sources(jellyframe_esp32s3_installed_resource_owner_tests PRIVATE
                 ports/esp32s3-idf/main/jellyframe_esp32s3_image.cpp)
         endif()
         target_link_libraries(jellyframe_esp32s3_installed_resource_owner_tests
             PRIVATE jellyframe_script_task_runtime jellyframe_script)
+        jellyframe_enable_shaped_test_fixtures(jellyframe_esp32s3_installed_resource_owner_tests)
         target_include_directories(jellyframe_esp32s3_installed_resource_owner_tests PRIVATE
             ports/esp32s3-idf/main)
         jellyframe_enable_test_asserts(jellyframe_esp32s3_installed_resource_owner_tests)
@@ -435,10 +505,11 @@ if(JELLYFRAME_BUILD_TESTS)
                 ports/esp32s3-idf/tests/installed_core_text_tests.cpp
                 ports/esp32s3-idf/main/jellyframe_esp32s3_resources.cpp
                 ports/esp32s3-idf/main/jellyframe_esp32s3_installed_resource_owner.cpp)
-            if(_bmp AND JELLYFRAME_INSTALLED_CANONICAL_OWNER_AVAILABLE)
+            if(_bmp AND JELLYFRAME_INSTALLED_IMAGE_OWNER_AVAILABLE)
                 target_sources(${_text_target} PRIVATE ports/esp32s3-idf/main/jellyframe_esp32s3_image.cpp)
             endif()
             target_link_libraries(${_text_target} PRIVATE jellyframe_script_task_runtime jellyframe_script)
+            jellyframe_enable_shaped_test_fixtures(${_text_target})
             target_include_directories(${_text_target} PRIVATE ports/esp32s3-idf/main)
             target_compile_definitions(${_text_target} PRIVATE
                 CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM=1
@@ -479,12 +550,14 @@ if(JELLYFRAME_BUILD_TESTS)
     jellyframe_enable_test_asserts(jellyframe_esp32s3_resource_reference_tests)
     jellyframe_stage_sanitizer_runtime(jellyframe_esp32s3_resource_reference_tests)
     include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_DEFINITIONS ${_native_core_probe_definitions})
     set(CMAKE_REQUIRED_INCLUDES ${JELLYFRAME_RENDER_CORE_PACKAGE_INCLUDE_DIRS})
     unset(JELLYFRAME_RENDER_CORE_NATURAL_IMAGE_API_AVAILABLE CACHE)
     check_cxx_source_compiles(
         "#include <render_core/layout.h>\n#if !defined(JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION) || JELLYFRAME_NATURAL_IMAGE_LAYOUT_API_VERSION < 1\n#error natural image layout API is unavailable\n#endif\nint main() { return 0; }"
         JELLYFRAME_RENDER_CORE_NATURAL_IMAGE_API_AVAILABLE)
     unset(CMAKE_REQUIRED_INCLUDES)
+    unset(CMAKE_REQUIRED_DEFINITIONS)
     if(JELLYFRAME_RENDER_CORE_NATURAL_IMAGE_API_AVAILABLE)
         add_executable(jellyframe_esp32s3_image_metadata_tests
             ports/esp32s3-idf/tests/image_metadata_tests.cpp
@@ -678,6 +751,11 @@ if(JELLYFRAME_BUILD_TESTS)
         ${JELLYFRAME_APP_RUNTIME_TEST_SOURCES}
     )
     target_link_libraries(jellyframe_app_runtime_tests PRIVATE jellyframe_app_runtime)
+    if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME AND JELLYFRAME_BUILD_SCRIPTING)
+        target_link_libraries(jellyframe_app_runtime_tests PRIVATE jellyframe_script_task_runtime jellyframe_script)
+        target_compile_definitions(jellyframe_app_runtime_tests PRIVATE JELLYFRAME_INSTALLED_PIPELINE_WORKER_TESTS=1)
+    endif()
+    jellyframe_enable_shaped_test_fixtures(jellyframe_app_runtime_tests)
     jellyframe_enable_test_asserts(jellyframe_app_runtime_tests)
     jellyframe_stage_sanitizer_runtime(jellyframe_app_runtime_tests)
     add_test(NAME jellyframe_app_runtime_tests COMMAND jellyframe_app_runtime_tests)
@@ -687,6 +765,7 @@ if(JELLYFRAME_BUILD_TESTS)
     if(JELLYFRAME_BUILD_DEVICE_RUNTIME_CONTRACTS)
         set(JELLYFRAME_DEVICE_RUNTIME_CONTRACT_TEST_SOURCES
             src/device_runtime_contracts/tests/device_bundle_tests.cpp
+            src/device_runtime_contracts/tests/device_signed_package_tests.cpp
             src/device_runtime_contracts/tests/device_install_transaction_tests.cpp
             src/device_runtime_contracts/tests/device_runtime_protocol_tests.cpp
             src/device_runtime_contracts/tests/device_protocol_vector_tests.cpp
@@ -711,6 +790,14 @@ if(JELLYFRAME_BUILD_TESTS)
     endif()
 
     if(Python3_Interpreter_FOUND)
+        add_test(NAME jellyframe_render_core_qualification_lock_tests
+                 COMMAND "${Python3_EXECUTABLE}"
+                         "${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/render_core_qualification_lock_tests.py"
+                         --cmake "${CMAKE_COMMAND}"
+                         --generator "${CMAKE_GENERATOR}"
+                         --ctest "${CMAKE_CTEST_COMMAND}"
+                         --configured-build "${CMAKE_CURRENT_BINARY_DIR}"
+                         --work-root "${CMAKE_CURRENT_BINARY_DIR}/test_outputs/qualification-lock")
         add_test(NAME jellyframe_rounded_aa_quality_tests
                  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/rounded_aa_quality_tests.py")
         if(TARGET jellyframe_cpu2d_compare)
@@ -738,6 +825,16 @@ if(JELLYFRAME_BUILD_TESTS)
                 NAME jellyframe_device_cli_tests
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/device_cli_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            add_test(
+                NAME jellyframe_signed_provider_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/signed_provider_tests.py
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            add_test(
+                NAME jellyframe_ws147_device_provider_tests
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/ws147_device_provider_tests.py
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             add_test(
                 NAME jellyframe_ws147_device_provider_release_tests
@@ -782,6 +879,7 @@ if(JELLYFRAME_BUILD_TESTS)
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/project_tools/check_render_core_link_map.py
                     --profile ${JELLYFRAME_RENDER_CORE_PROFILE_OUTPUT_DIR}/jellyframe_render_core_profile.json
+                    --registry ${JELLYFRAME_RENDER_CORE_SOURCE_ROOT}/cmake/render_core_feature_registry.csv
                     --map ${_jellyframe_render_core_tests_map})
         set_tests_properties(jellyframe_render_core_generated_link_map PROPERTIES
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -878,12 +976,23 @@ if(JELLYFRAME_BUILD_TESTS)
         endif()
 
         if(JELLYFRAME_BUILD_EXAMPLES AND JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS)
+            set(JELLYFRAME_PSEUDO_TEXT_POLICY "geometry-only")
+            if(JELLYFRAME_BUILD_APP_RUNTIME AND JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 4)
+                set(JELLYFRAME_PSEUDO_TEXT_POLICY "core-text")
+            endif()
+            set(_pseudo_image_preflight)
+            if(JELLYFRAME_BUILD_APP_RUNTIME AND JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 9 AND
+               "JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED=1" IN_LIST _native_core_definitions)
+                set(_pseudo_image_preflight --image-preflight)
+            endif()
             add_test(
                 NAME jellyframe_pipeline_visual_diagnostics_tests
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/pipeline_visual_diagnostics_tests.py
                         $<TARGET_FILE:jellyframe_pseudo_browser>
                         $<TARGET_FILE:jellyframe_pipeline_dump>
+                        --text-policy "${JELLYFRAME_PSEUDO_TEXT_POLICY}"
+                        ${_pseudo_image_preflight}
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
@@ -892,13 +1001,21 @@ if(JELLYFRAME_BUILD_TESTS)
                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/template_trial_tests.py
                         $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_cli_template_trial_tests PROPERTIES
+                ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
 
             if(WIN32)
+                set(_jellyframe_sdk_qualification_args)
+                if(JELLYFRAME_RENDER_CORE_QUALIFICATION_LOCK_FILE)
+                    list(APPEND _jellyframe_sdk_qualification_args
+                        --qualification-lock "${JELLYFRAME_RENDER_CORE_PROVENANCE_LOCK_FILE}")
+                endif()
                 add_test(
                     NAME jellyframe_app_author_sdk_packaging
                     COMMAND ${Python3_EXECUTABLE}
                             ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/app_author_sdk_tests.py
                             $<TARGET_FILE_DIR:jellyframe_desktop_shell>
+                            ${_jellyframe_sdk_qualification_args}
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             endif()
 
@@ -923,7 +1040,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_audio_smoke
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_audio_smoke
                         --target esp32s3-round-300
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_audio_smoke.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
@@ -934,29 +1051,43 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_service_status
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_service_status
                         --target esp32s3-round-300
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_service_status.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
             add_test(
-                NAME jellyframe_cli_check_font_policy_package
+                NAME jellyframe_cli_validate_font_policy_package
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_font_policy
+                        --skip-check
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_font_policy
                         --target round-300
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_font_policy.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+            if(JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 4)
+                add_test(
+                    NAME jellyframe_cli_check_font_policy_package
+                    COMMAND ${Python3_EXECUTABLE}
+                            ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
+                            check
+                            --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_font_policy
+                            --target round-300
+                            --report ${CMAKE_BINARY_DIR}/test_outputs/jellyframe_font_policy_render.report.json
+                            --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            endif()
 
             add_test(
                 NAME jellyframe_cli_check_wearable_launcher_package
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_wearable_launcher
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_wearable_launcher
                         --target round-300
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_wearable_launcher.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
@@ -967,7 +1098,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/system/band_system_shell
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/system/band_system_shell
                         --target rect-172x320
                         --report ${CMAKE_BINARY_DIR}/test_outputs/band_system_shell.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
@@ -978,7 +1109,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_smoke
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_canvas_smoke
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_canvas_smoke.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -988,7 +1119,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 COMMAND ${Python3_EXECUTABLE}
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         check
-                        --root ${CMAKE_CURRENT_SOURCE_DIR}/samples/apps/packages/jelly_canvas_gauges
+                        --root ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_canvas_gauges
                         --targets round-300,rect-320x240,rect-172x320
                         --report ${CMAKE_BINARY_DIR}/test_outputs/jelly_canvas_gauges.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
@@ -1006,10 +1137,33 @@ if(JELLYFRAME_BUILD_TESTS)
                         --report ${CMAKE_BINARY_DIR}/test_outputs/watch_weather.responsive.report.json
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-            set_tests_properties(jellyframe_cli_check_watch_weather_responsive PROPERTIES
+            set_tests_properties(
+                jellyframe_cli_check_audio_smoke_package
+                jellyframe_cli_check_service_status_package
+                jellyframe_cli_check_wearable_launcher_package
+                jellyframe_cli_check_band_system_shell
+                jellyframe_cli_check_canvas_smoke_package
+                jellyframe_cli_check_canvas_gauges_package
+                jellyframe_cli_check_watch_weather_responsive PROPERTIES
                 FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
 
+            set_tests_properties(jellyframe_cli_validate_font_policy_package PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
+                ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
+            if(JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 4)
+                set_tests_properties(jellyframe_cli_check_font_policy_package PROPERTIES
+                    FIXTURES_REQUIRED jellyframe_candidate_app_packages
+                    ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}")
+            endif()
+
+            set(_jellyframe_doctor_sample_args)
+            if(JELLYFRAME_RENDER_CORE_ENGINE_ABI LESS 4)
+                # These samples require the Core-owned text backend for render preflight.
+                list(APPEND _jellyframe_doctor_sample_args
+                    --exclude-sample jelly_font_policy
+                    --exclude-sample jelly_font_size_warning)
+            endif()
             add_test(
                 NAME jellyframe_cli_doctor_sample_packages
                 COMMAND ${Python3_EXECUTABLE}
@@ -1018,6 +1172,7 @@ if(JELLYFRAME_BUILD_TESTS)
                         --samples-dir ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                         --report-dir ${CMAKE_BINARY_DIR}/test_outputs/doctor
+                        ${_jellyframe_doctor_sample_args}
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_cli_doctor_sample_packages PROPERTIES
                 FIXTURES_REQUIRED jellyframe_candidate_app_packages
@@ -1031,10 +1186,13 @@ if(JELLYFRAME_BUILD_TESTS)
                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/jellyframe_cli.py
                         doctor
                         --trial
+                        --samples-dir ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages
                         --build-dir $<TARGET_FILE_DIR:jellyframe_pseudo_browser>
                         --report-dir ${CMAKE_BINARY_DIR}/test_outputs/external_trial
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_cli_doctor_external_trial PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages
+                ENVIRONMENT "JELLYFRAME_TEST_RENDER_CORE_VERSION=${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
                 PASS_REGULAR_EXPRESSION
                     "JellyFrame doctor: mode=external-trial samples=4")
 
@@ -1061,6 +1219,14 @@ if(JELLYFRAME_BUILD_TESTS)
     endif()
 
     if(WIN32 AND JELLYFRAME_BUILD_APP_RUNTIME AND JELLYFRAME_BUILD_EXAMPLES AND JELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS)
+        if(JELLYFRAME_BUILD_SCRIPTING AND JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 4)
+            add_test(NAME jellyframe_native_core_text_route
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/native_core_text_route_tests.py
+                    $<TARGET_FILE:jellyframe_desktop_shell> $<TARGET_FILE:jellyframe_pseudo_browser>
+                    --core-version "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
+                    --core-abi "${JELLYFRAME_RENDER_CORE_ENGINE_ABI}")
+        endif()
         set(JELLYFRAME_WIN32_BROWSER_CLI_TEST_ARGS
             ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/win32_browser_cli_tests.py
@@ -1249,6 +1415,7 @@ if(JELLYFRAME_BUILD_TESTS)
             COMMAND ${Python3_EXECUTABLE}
                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/canonical_app_font_ink_tests.py
                     $<TARGET_FILE:jellyframe_desktop_shell>
+                    $<TARGET_FILE:jellyframe_pseudo_browser>
                     "${JELLYFRAME_RENDER_CORE_PACKAGE_VERSION}"
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -1299,9 +1466,23 @@ if(JELLYFRAME_BUILD_TESTS)
                         --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_route_tabs/capture_route_tabs.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_route_tabs_frame_script PROPERTIES
-                FIXTURES_REQUIRED jellyframe_candidate_app_packages
-                PASS_REGULAR_EXPRESSION
-                    "frame_update idle=0 repaint=[1-9][0-9]* rebuild=1 first_paint=1")
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages)
+            if(JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 9)
+                set_tests_properties(jellyframe_win32_route_tabs_frame_script PROPERTIES
+                    PASS_REGULAR_EXPRESSION
+                        "frame_repaint dirty_rect=6 full_frame=1 full_first_paint=1")
+            endif()
+
+            add_test(
+                NAME jellyframe_win32_route_tabs_state
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/route_tabs_capture_tests.py
+                        $<TARGET_FILE:jellyframe_desktop_shell>
+                        ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_route_tabs
+                        ${CMAKE_CURRENT_BINARY_DIR}/test_outputs/route_tabs_state
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_route_tabs_state PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
             add_test(
                 NAME jellyframe_win32_motion_lab_low_power_frame_script
@@ -1476,6 +1657,7 @@ if(JELLYFRAME_BUILD_TESTS)
         if(JELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME)
             target_compile_definitions(jellyframe_script_tests
                 PRIVATE JELLYFRAME_SCRIPT_TASK_RUNTIME_ENABLED=1)
+            jellyframe_enable_shaped_test_fixtures(jellyframe_script_tests)
         endif()
         jellyframe_enable_test_asserts(jellyframe_script_tests)
         jellyframe_stage_sanitizer_runtime(jellyframe_script_tests)
@@ -1512,6 +1694,7 @@ if(JELLYFRAME_BUILD_TESTS)
                 ${JELLYFRAME_SCRIPT_TASK_RUNTIME_TEST_SOURCES}
             )
             target_link_libraries(jellyframe_script_task_runtime_tests PRIVATE jellyframe_script_task_runtime)
+            jellyframe_enable_shaped_test_fixtures(jellyframe_script_task_runtime_tests)
             jellyframe_enable_test_asserts(jellyframe_script_task_runtime_tests)
             jellyframe_stage_sanitizer_runtime(jellyframe_script_task_runtime_tests)
             add_test(NAME jellyframe_script_task_runtime_tests COMMAND jellyframe_script_task_runtime_tests)

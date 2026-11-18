@@ -25,27 +25,7 @@ constexpr std::size_t kMaxInputBytes = 512 * 1024;
 using jellyframe::native::read_file_limited;
 
 const char* command_name(DisplayCommandType type) {
-    switch (type) {
-    case DisplayCommandType::FillRect:
-        return "fill_rect";
-    case DisplayCommandType::StrokeRect:
-        return "stroke";
-    case DisplayCommandType::LinearGradient:
-        return "linear_gradient";
-    case DisplayCommandType::RadialGradient:
-        return "radial_gradient";
-    case DisplayCommandType::ConicGradient:
-        return "conic_gradient";
-    case DisplayCommandType::BoxShadow:
-        return "box_shadow";
-    case DisplayCommandType::Text:
-        return "text";
-    case DisplayCommandType::PreparedText:
-        return "prepared_text";
-    case DisplayCommandType::Image:
-        return "image";
-    }
-    return "unknown";
+    return native::display_command_name(type, true);
 }
 
 void print_command(const DisplayCommand& command, std::size_t index) {
@@ -63,10 +43,8 @@ void print_command(const DisplayCommand& command, std::size_t index) {
         std::cout << " font_weight=" << command.font_weight
                   << " text=\"" << command.text << "\"";
 #endif
-#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
-    } else if (command.type() == DisplayCommandType::PreparedText) {
+    } else if (native::is_prepared_text_command(type)) {
         std::cout << " packet_bytes=" << command.text.size();
-#endif
     }
     std::cout << '\n';
 }

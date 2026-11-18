@@ -4,7 +4,9 @@
 import argparse
 import hashlib
 import json
+import re
 import shutil
+import sys
 import tempfile
 import zipfile
 from pathlib import Path
@@ -13,11 +15,17 @@ from sdk_python_runtime import install_runtime
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPOSITORY / "tools"))
+try:
+    from bootstrap_render_core import read_lock
+finally:
+    sys.path.pop(0)
 AUTHOR_TOOL_FILES = (
     "app_registry.py",
     "device_image_manifest.py",
     "device_provider_client.py",
     "device_provider_contract.py",
+    "device_render_core_capabilities.py",
     "device_reference.py",
     "jellyframe_cli.py",
     "jellyframe_versions.py",
@@ -97,9 +105,47 @@ def write_sdk_readme(root: Path, version: str) -> None:
     )
 
 
+def desktop_core_identity(build_dir: Path, expected: dict[str, str], qualification: bool) -> dict:
+    candidates = [build_dir / "generated" / "jellyframe_render_core_provenance.json",
+                  build_dir.parent / "generated" / "jellyframe_render_core_provenance.json"]
+    provenance_file = next((path for path in candidates if path.is_file()), None)
+    if provenance_file is None:
+        raise SystemExit(f"missing desktop Render Core build provenance: {build_dir}")
+    provenance = json.loads(provenance_file.read_text(encoding="utf-8"))
+    if provenance.get("schemaVersion") != 1 or provenance.get("consumer") != "jellyframe-runtime":
+        raise SystemExit(f"invalid desktop Render Core build provenance: {provenance_file}")
+    development = not qualification and provenance.get("lockEnforced") is False and provenance.get(
+        "provider") in ("in-tree", "source-override")
+    if development:
+        identity = {key: provenance.get(key) for key in ("packageVersion", "engineAbi", "sourceHash", "sourceFileCount")}
+        if (not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", str(identity["packageVersion"])) or
+                type(identity["engineAbi"]) is not int or identity["engineAbi"] <= 0 or
+                not re.fullmatch(r"[0-9a-f]{64}", str(identity["sourceHash"])) or
+                type(identity["sourceFileCount"]) is not int or identity["sourceFileCount"] <= 0):
+            raise SystemExit(f"invalid development Render Core identity: {provenance_file}")
+        return {**identity, "lockKind": "development"}
+    for field, value in (("packageVersion", expected["version"]), ("engineAbi", expected["abi"]),
+                         ("sourceHash", expected["source_hash"])):
+        if str(provenance.get(field, "")) != value:
+            raise SystemExit(f"desktop Render Core {field} does not match selected SDK lock: {build_dir}")
+    if qualification and provenance.get("lockEnforced") is not True:
+        raise SystemExit(f"qualification SDK requires an exact installed-package build: {build_dir}")
+    return {**{key: provenance[key] for key in ("packageVersion", "engineAbi", "sourceHash", "sourceFileCount")},
+            "lockKind": "qualification" if qualification else "production"}
+
+
 def build_sdk(build_dir: Path, scripting_build_dir: Path | None, output: Path,
-              embedded_python_cache: Path | None = None, msvc_runtime_dir: Path | None = None) -> None:
+              embedded_python_cache: Path | None = None, msvc_runtime_dir: Path | None = None,
+              qualification_lock: Path | None = None) -> None:
     version = (REPOSITORY / "VERSION").read_text(encoding="utf-8").strip()
+    selected_lock = qualification_lock or REPOSITORY / "cmake" / "jellyframe_dependency_lock.cmake"
+    expected_core = read_lock(required_file(selected_lock, "SDK Render Core lock"))
+    core_identity = desktop_core_identity(build_dir.resolve(), expected_core, qualification_lock is not None)
+    if scripting_build_dir is not None:
+        scripting_core = desktop_core_identity(scripting_build_dir.resolve(), expected_core, qualification_lock is not None)
+        if any(scripting_core[key] != core_identity[key] for key in
+               ("packageVersion", "engineAbi", "sourceHash", "sourceFileCount")):
+            raise SystemExit("SDK desktop and scripting profiles have different Render Core identities")
     output = output.resolve()
     if output.suffix.lower() != ".zip":
         raise SystemExit("SDK output must use a .zip extension")
@@ -120,8 +166,17 @@ def build_sdk(build_dir: Path, scripting_build_dir: Path | None, output: Path,
                   root / "project_tools" / "render_core_feature_registry.py")
         copy_file(required_file(REPOSITORY / "cmake" / "render_core_feature_registry.csv", "feature registry data"),
                   root / "cmake" / "render_core_feature_registry.csv")
-        copy_file(required_file(REPOSITORY / "cmake" / "jellyframe_dependency_lock.cmake", "Render Core dependency lock"),
-                  root / "cmake" / "jellyframe_dependency_lock.cmake")
+        copy_file(selected_lock, root / "cmake" / "jellyframe_dependency_lock.cmake")
+        if core_identity["lockKind"] == "development":
+            (root / "cmake" / "jellyframe_dependency_lock.cmake").write_text(
+                f'set(JELLYFRAME_RENDER_CORE_LOCKED_VERSION "{core_identity["packageVersion"]}")\n'
+                f'set(JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI "{core_identity["engineAbi"]}")\n'
+                f'set(JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH "{core_identity["sourceHash"]}")\n', encoding="utf-8")
+        if core_identity["lockKind"] != "production":
+            for path in (tools / "templates").rglob("jellyframe.app.json"):
+                template = json.loads(path.read_text(encoding="utf-8"))
+                template["runtime"]["minRenderCore"] = core_identity["packageVersion"]
+                path.write_text(json.dumps(template, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         copy_file(required_file(REPOSITORY / "VERSION", "version file"), root / "VERSION")
 
         normal_destination = root / "build" / "desktop-release" / "Release"
@@ -146,6 +201,7 @@ def build_sdk(build_dir: Path, scripting_build_dir: Path | None, output: Path,
             "format": "jellyframe.app-author-sdk",
             "formatVersion": 1,
             "runtimeVersion": version,
+            "renderCore": core_identity,
             **({"pythonRuntime": python_runtime} if python_runtime else {}),
             **({"nativeRuntime": {"kind": "msvc-app-local", "files": sorted(
                 library.name for library in msvc_runtime_dir.glob("*.dll"))}} if msvc_runtime_dir else {}),
@@ -174,8 +230,11 @@ def main() -> int:
                         help="Include pinned Windows x64 Python and pyserial; download/cache artifacts here at build time.")
     parser.add_argument("--msvc-runtime-dir", type=Path,
                         help="Visual Studio redistributable x64 Microsoft.VC*.CRT directory for app-local DLLs.")
+    parser.add_argument("--qualification-lock", type=Path,
+                        help="Exact candidate Core lock for an isolated qualification SDK.")
     args = parser.parse_args()
-    build_sdk(args.build_dir, args.scripting_build_dir, args.output, args.embedded_python_cache, args.msvc_runtime_dir)
+    build_sdk(args.build_dir, args.scripting_build_dir, args.output, args.embedded_python_cache,
+              args.msvc_runtime_dir, args.qualification_lock)
     return 0
 
 

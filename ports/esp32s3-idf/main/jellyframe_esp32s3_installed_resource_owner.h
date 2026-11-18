@@ -5,7 +5,8 @@
 #include "app_runtime/runtime_font_catalog.h"
 #include "app_runtime/runtime_image_provider.h"
 #include "app_runtime/app_font_set.h"
-#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+#include "app_runtime/runtime_shaped_text_binding.h"
+#if JELLYFRAME_RUNTIME_IMAGE_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
 #include "jellyframe_esp32s3_image.h"
 #endif
 
@@ -26,12 +27,15 @@ struct InstalledAppResources final {
     std::shared_ptr<const InstalledResourceSnapshot> snapshot;
     jellyframe::RuntimeFontCatalog::Handle text_catalog;
     jellyframe::RuntimeImageProvider::Handle image_provider;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    jellyframe::RuntimeShapedTextBinding::Handle shaped_text_binding;
+#endif
 
     void bind_worker_resources(jellyframe::ScriptTaskWorkerRuntimeOptions& options) const noexcept;
     void bind_ui_resources(jellyframe::ScriptTaskFrameRendererOptions& options) const noexcept;
 };
 
-#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
 bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
                                     const jellyframe::HostBudgets& budgets,
                                     std::string_view entry_path,

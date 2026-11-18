@@ -1,5 +1,8 @@
 #include "jerryscript-port.h"
+#include "jellyframe_jerry_port_fatal.h"
 
+#include "esp_attr.h"
+#include "esp_cpu.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -16,9 +19,32 @@
 static const char *const jellyframe_jerry_tag = "JellyFrameJerry";
 static jerry_context_t *jellyframe_jerry_context = NULL;
 
+enum { JELLYFRAME_FATAL_EMPTY, JELLYFRAME_FATAL_WRITING, JELLYFRAME_FATAL_READY };
+// Internal RAM lets ESP-IDF's CAS use its bounded CPU instruction path.
+static DRAM_ATTR uint32_t jellyframe_fatal_state;
+static DRAM_ATTR TaskHandle_t jellyframe_fatal_owner;
+static DRAM_ATTR int jellyframe_fatal_code;
+
+bool jellyframe_jerry_port_try_get_fatal(TaskHandle_t *owner, int *code) {
+    if (__atomic_load_n(&jellyframe_fatal_state, __ATOMIC_ACQUIRE) !=
+        JELLYFRAME_FATAL_READY) {
+        return false;
+    }
+    if (owner != NULL) *owner = jellyframe_fatal_owner;
+    if (code != NULL) *code = jellyframe_fatal_code;
+    return true;
+}
+
 void jerry_port_init(void) {}
 
 void jerry_port_fatal(jerry_fatal_code_t code) {
+    if (esp_cpu_compare_and_set(&jellyframe_fatal_state, JELLYFRAME_FATAL_EMPTY,
+                                JELLYFRAME_FATAL_WRITING)) {
+        jellyframe_fatal_owner = xTaskGetCurrentTaskHandle();
+        jellyframe_fatal_code = (int) code;
+        __atomic_store_n(&jellyframe_fatal_state, JELLYFRAME_FATAL_READY,
+                         __ATOMIC_RELEASE);
+    }
     ESP_LOGE(jellyframe_jerry_tag, "fatal code=%d; suspending script task", (int) code);
     vTaskSuspend(NULL);
     for (;;) {

@@ -10,22 +10,29 @@ void InstalledAppResources::bind_worker_resources(
     jellyframe::ScriptTaskWorkerRuntimeOptions& options) const noexcept {
     options.text_catalog = text_catalog;
     options.image_provider = image_provider;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    options.shaped_text_binding = shaped_text_binding;
+#endif
 }
 
 void InstalledAppResources::bind_ui_resources(
     jellyframe::ScriptTaskFrameRendererOptions& options) const noexcept {
     options.text_catalog = text_catalog;
     options.image_provider = image_provider;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    options.shaped_text_binding = shaped_text_binding;
+#endif
 }
 
 } // namespace jellyframe_esp32s3
 #endif
 
-#if JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
 
 #include <array>
 #include <mutex>
 #include <new>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include "render_core/text_backend.h"
@@ -33,7 +40,7 @@ void InstalledAppResources::bind_ui_resources(
 namespace jellyframe_esp32s3 {
 namespace {
 
-#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+#if JELLYFRAME_RUNTIME_IMAGE_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
 class InstalledSnapshotImageSource final : public jellyframe::RuntimeImageProviderSource {
 public:
     InstalledSnapshotImageSource(std::shared_ptr<const InstalledResourceSnapshot> snapshot,
@@ -48,12 +55,12 @@ public:
 
     bool contains(std::uint32_t handle) const noexcept override {
         std::lock_guard<std::mutex> lock(mutex_);
-        for (std::size_t i = 0; i < handle_count_; ++i) if (handles_[i] == handle) return true;
+        for (std::size_t i = 0; i < handle_count_; ++i) if (images_[i].image_handle == handle) return true;
         return false;
     }
 
     bool resolve(std::string_view package_url,
-                 jellyframe::ResolvedImageResource& output) const override {
+                 jellyframe::RuntimeResolvedImage& output) const override {
         output = {};
         if (package_url.empty() || package_url.size() > 256) return false;
         try {
@@ -64,9 +71,9 @@ public:
             image.tag_name = "img";
             image.attributes["src"] = std::move(resolved_url);
             if (!adapter_.resolve(image, jellyframe::ImageResolveKind::Content, 0, output)) return false;
-            for (std::size_t i = 0; i < handle_count_; ++i) if (handles_[i] == output.image_handle) return true;
-            if (handle_count_ == handles_.size()) { output = {}; return false; }
-            handles_[handle_count_++] = output.image_handle;
+            for (std::size_t i = 0; i < handle_count_; ++i) if (images_[i].image_handle == output.image_handle) return true;
+            if (handle_count_ == images_.size()) { output = {}; return false; }
+            images_[handle_count_++] = output;
             return true;
         } catch (const std::bad_alloc&) {
             output = {};
@@ -74,21 +81,34 @@ public:
         }
     }
 
+#if !JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+    bool intrinsic_size(std::uint32_t handle, int& width, int& height) const override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (std::size_t i = 0; i < handle_count_; ++i) {
+            if (images_[i].image_handle != handle) continue;
+            width = images_[i].width;
+            height = images_[i].height;
+            return width > 0 && height > 0;
+        }
+        return false;
+    }
+#endif
+
     bool preflight() const {
         if (!snapshot_) return false;
         for (const InstalledResourceSnapshotEntry& entry : snapshot_->entries) {
             if (entry.kind != jellyframe::HostResourceKind::Image) continue;
-            jellyframe::ResolvedImageResource resolved;
+            jellyframe::RuntimeResolvedImage resolved;
             if (!resolve(entry.url, resolved)) return false;
         }
         return true;
     }
 
     bool paint(jellyframe::FrameBuffer& target,
-               const jellyframe::ImagePaintRequest& request) const override {
+               const jellyframe::RuntimeImagePaintRequest& request) const override {
         std::lock_guard<std::mutex> lock(mutex_);
         bool known = false;
-        for (std::size_t i = 0; i < handle_count_; ++i) known = known || handles_[i] == request.image_handle;
+        for (std::size_t i = 0; i < handle_count_; ++i) known = known || images_[i].image_handle == request.image_handle;
         return known && adapter_.paint(target, request);
     }
 
@@ -97,7 +117,7 @@ private:
     std::string base_url_;
     mutable std::mutex mutex_;
     mutable BmpImageAdapter adapter_;
-    mutable std::array<std::uint32_t, 16> handles_{};
+    mutable std::array<jellyframe::RuntimeResolvedImage, 16> images_{};
     mutable std::size_t handle_count_ = 0;
 };
 #endif
@@ -112,7 +132,7 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
                                     std::shared_ptr<const void> core_font_owner,
                                     std::int64_t (*clock)(),
                                     InstalledAppResources::Handle& output) {
-#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+#if JELLYFRAME_RUNTIME_IMAGE_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
     if (!clock) return false;
 #else
     (void)clock;
@@ -136,7 +156,9 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
         candidate->snapshot = owned_snapshot;
 
         using namespace jellyframe;
-        if (!core_fonts || !core_font_count || !core_font_owner) return false;
+        if (!core_fonts || !core_font_count || !core_font_owner ||
+            core_font_count > RuntimeFontCatalog::max_faces ||
+            owned_snapshot->fonts.size() > RuntimeFontCatalog::max_faces - core_font_count) return false;
         std::vector<RuntimeFontRegistration> registrations;
         registrations.reserve(core_font_count + owned_snapshot->fonts.size());
         for (std::size_t i = 0; i < core_font_count; ++i) {
@@ -170,7 +192,7 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
         if (RuntimeFontCatalog::create(registrations.data(), registrations.size(), candidate->text_catalog) != RuntimeFontStatus::Ready)
             return false;
 
-#if defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
+#if JELLYFRAME_RUNTIME_IMAGE_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
         auto source = std::make_shared<InstalledSnapshotImageSource>(
             candidate->snapshot, budgets, entry_path, clock);
         if (!source->preflight()) return false;
@@ -180,6 +202,8 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
         output = std::move(candidate);
         return true;
     } catch (const std::bad_alloc&) {
+        return false;
+    } catch (const std::length_error&) {
         return false;
     }
 }

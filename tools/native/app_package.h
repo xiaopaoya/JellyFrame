@@ -80,6 +80,8 @@ struct AppPackageManifest {
     bool background_location_in_low_power = false;
     std::vector<std::string> font_sources;
     std::vector<std::string> font_families;
+    // Explicit developer Desktop route. Other native consumers refuse it.
+    std::string contextual_text_pipeline;
 };
 
 struct BundleResourceEntry {
@@ -1306,11 +1308,25 @@ inline void validate_normalized_bundle_summary(const std::string& json, const Ap
     }
 }
 
-inline AppPackageManifest parse_app_manifest_text(const std::string& json, bool require_normalized_summary = false) {
+inline AppPackageManifest parse_app_manifest_text(const std::string& json, bool require_normalized_summary = false,
+                                                 bool allow_contextual_desktop = false) {
     if (!manifest_json_is_strict(json)) {
         throw std::runtime_error("manifest JSON is malformed, too deeply nested, or contains duplicate/escaped member names");
     }
+    std::size_t pipeline_value = 0;
     AppPackageManifest manifest;
+    if (json_find_direct_value(json, "textPipeline", pipeline_value)) {
+        if (!allow_contextual_desktop) {
+            throw std::runtime_error("this desktop loader does not support package-selected shaped textPipeline");
+        }
+        std::size_t open = 0, close = 0;
+        std::string kind;
+        if (!json_find_object_range(json, "textPipeline", open, close) ||
+            !json_find_string(json.substr(open, close - open), "kind", kind) || kind != "jfsp2-block-v12") {
+            throw std::runtime_error("Desktop requires an explicit jfsp2-block-v12 textPipeline");
+        }
+        manifest.contextual_text_pipeline = json.substr(open, close - open);
+    }
     json_find_string(json, "id", manifest.id);
     json_find_string(json, "name", manifest.name);
     json_find_string(json, "role", manifest.role);
@@ -1442,7 +1458,8 @@ inline AppPackageManifest parse_app_manifest_text(const std::string& json, bool 
     return manifest;
 }
 
-inline AppPackage load_jfapp_bundle(const std::filesystem::path& bundle_path, std::size_t max_input_bytes) {
+inline AppPackage load_jfapp_bundle(const std::filesystem::path& bundle_path, std::size_t max_input_bytes,
+                                   bool allow_contextual_desktop = false) {
     std::vector<std::uint8_t> bytes = read_binary_file_limited(bundle_path, max_input_bytes);
     if (bytes.size() < kJfappHeaderSize) {
         throw std::runtime_error("failed to read .jfapp header");
@@ -1452,8 +1469,12 @@ inline AppPackage load_jfapp_bundle(const std::filesystem::path& bundle_path, st
     }
     const std::uint16_t header_size = read_le16(bytes.data() + 8);
     const std::uint16_t format_version = read_le16(bytes.data() + 10);
-    if (header_size != kJfappHeaderSize || format_version != 0) {
+    if (header_size != kJfappHeaderSize || (format_version != 0 &&
+        !(allow_contextual_desktop && format_version == 1))) {
         throw std::runtime_error("unsupported .jfapp format version");
+    }
+    if (format_version == 1 && (read_le32(bytes.data() + 12) != 0 || read_le32(bytes.data() + 52) != 0)) {
+        throw std::runtime_error("unsupported .jfapp contextual header flags");
     }
     const std::uint32_t summary_offset = read_le32(bytes.data() + 16);
     const std::uint32_t summary_size = read_le32(bytes.data() + 20);
@@ -1514,17 +1535,21 @@ inline AppPackage load_jfapp_bundle(const std::filesystem::path& bundle_path, st
 
     AppPackage package;
     package.root = std::filesystem::absolute(bundle_path).parent_path();
-    package.manifest = parse_app_manifest_text(summary, true);
+    package.manifest = parse_app_manifest_text(summary, true, allow_contextual_desktop);
+    if ((format_version == 1) != !package.manifest.contextual_text_pipeline.empty()) {
+        throw std::runtime_error(".jfapp textPipeline and format version disagree");
+    }
     package.bundle_payload_offset = payload_offset;
     package.bundle_entries = std::move(entries);
     package.bundle_bytes = std::move(bytes);
     return package;
 }
 
-inline AppPackage load_app_package(const std::filesystem::path& package_root, std::size_t max_input_bytes) {
+inline AppPackage load_app_package(const std::filesystem::path& package_root, std::size_t max_input_bytes,
+                                   bool allow_contextual_desktop = false) {
     const std::filesystem::path root = std::filesystem::absolute(package_root);
     if (std::filesystem::is_regular_file(root)) {
-        return load_jfapp_bundle(root, max_input_bytes);
+        return load_jfapp_bundle(root, max_input_bytes, allow_contextual_desktop);
     }
     const std::filesystem::path manifest_path = root / "jellyframe.app.json";
     if (std::filesystem::is_symlink(manifest_path)) {
@@ -1534,7 +1559,7 @@ inline AppPackage load_app_package(const std::filesystem::path& package_root, st
     if (manifest_text.empty()) {
         throw std::runtime_error("failed to read jellyframe.app.json");
     }
-    return AppPackage{root, parse_app_manifest_text(manifest_text)};
+    return AppPackage{root, parse_app_manifest_text(manifest_text, false, allow_contextual_desktop)};
 }
 
 } // namespace jellyframe_example

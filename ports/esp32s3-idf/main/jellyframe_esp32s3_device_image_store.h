@@ -1,8 +1,13 @@
 #pragma once
 
+#if defined(ESP_PLATFORM)
+#include "sdkconfig.h"
+#endif
+
 #include "app_runtime/app_installed_bundle.h"
 #include "device_runtime_contracts/device_install_transaction.h"
 #include "device_runtime_contracts/device_runtime_protocol.h"
+#include "device_runtime_contracts/device_signed_package.h"
 
 #include "esp_partition.h"
 
@@ -19,7 +24,14 @@ namespace jellyframe_esp32s3 {
 class DeviceImageStore final : public jellyframe::DeviceInstallStore,
                                public jellyframe::AppInstalledBundleProvider {
 public:
+#if defined(CONFIG_JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB)
+    static constexpr std::uint32_t kMaxBundleBytes =
+        CONFIG_JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB * 1024u;
+#else
     static constexpr std::uint32_t kMaxBundleBytes = 320u * 1024u;
+#endif
+    static_assert(kMaxBundleBytes >= 64u * 1024u && kMaxBundleBytes <= 2u * 1024u * 1024u,
+                  "installed package cap outside supported configuration range");
 
     explicit DeviceImageStore(const esp_partition_t* partition);
 
@@ -42,6 +54,9 @@ public:
                          std::string_view app_id,
                          std::uint16_t flags);
     std::uint32_t available_storage_bytes() const;
+    // Effective envelope limit, constrained by both the selected build cap
+    // and one actual physical slot (active/rollback/staging remain separate).
+    std::uint32_t max_bundle_bytes() const;
     std::uint32_t registry_generation() const;
 
     struct VerifyTelemetry {
@@ -57,6 +72,7 @@ public:
     // Acceptance-only fault injection. It uses the same registry reader that
     // production boot uses; no host-side registry mutation is involved.
     bool inject_registry_corruption_for_test();
+    bool inject_legacy_registry_for_test();
 
 private:
     struct RegistryRecord;
@@ -73,6 +89,12 @@ private:
     bool read_slot_cached(std::uint8_t slot, std::uint32_t offset, void* output, std::size_t size) const;
     bool write_slot(std::uint8_t slot, std::uint32_t offset, const void* bytes, std::size_t size);
     bool validate_record(const BundleRecord& record, jellyframe::DeviceBundleDescriptor* descriptor) const;
+    bool verify_record_envelope(const BundleRecord& record,
+                                jellyframe::DeviceBundleDescriptor* descriptor,
+                                std::array<std::array<char, jellyframe::kDeviceSignedPackageMaxPathBytes + 1>, 128>* paths,
+                                std::array<std::array<std::uint8_t, 32>, 128>* hashes,
+                                std::uint32_t* resource_count,
+                                std::array<std::uint8_t, jellyframe::kDeviceSignedPackageKeyIdBytes>* key_id) const;
     void set_recovery(jellyframe::DeviceRecoveryReason reason, std::string_view app_id, std::uint16_t flags);
 
     const esp_partition_t* partition_ = nullptr;
@@ -83,6 +105,9 @@ private:
     std::uint8_t staging_slot_ = 0;
     std::uint32_t staging_transaction_id_ = 0;
     std::uint32_t staging_bundle_bytes_ = 0;
+    std::uint32_t staging_payload_offset_ = 0;
+    std::uint32_t staging_payload_bytes_ = 0;
+    std::uint32_t staging_package_crc32_ = 0;
     jellyframe::DeviceBundleDescriptor staging_descriptor_{};
     jellyframe::DeviceRecoveryDetailPayload recovery_{};
     // The endpoint serializes store access. Keep validation workspace and the

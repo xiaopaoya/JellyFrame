@@ -14,7 +14,11 @@ set(JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_CPP
 set(JELLYFRAME_ESP32S3_GENERATED_NOTO_FONT_H
     "${JELLYFRAME_ESP32S3_FONT_OUTPUT_DIR}/jellyframe_esp32s3_noto_sans_sc_font.h")
 get_filename_component(JELLYFRAME_ESP32S3_SOURCE_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
-include("${JELLYFRAME_ESP32S3_SOURCE_ROOT}/cmake/render_core_version.cmake")
+if(JELLYFRAME_RENDER_CORE_SOURCE_DIR)
+    include("${JELLYFRAME_RENDER_CORE_SOURCE_DIR}/cmake/render_core_version.cmake")
+else()
+    include("${JELLYFRAME_ESP32S3_SOURCE_ROOT}/cmake/render_core_version.cmake")
+endif()
 
 set(JELLYFRAME_ESP32S3_LEGACY_SCRIPT_ACCEPTANCE OFF)
 if(JELLYFRAME_RENDER_CORE_ENGINE_ABI LESS 4 AND
@@ -129,6 +133,7 @@ idf_component_register(
         "main.cpp"
         "jellyframe_esp32s3_device_image_lifecycle.cpp"
         "jellyframe_esp32s3_device_image_store.cpp"
+        "jellyframe_esp32s3_package_signature.cpp"
         "jellyframe_esp32s3_hal.cpp"
         ${JELLYFRAME_ESP32S3_IMAGE_SOURCES}
         "jellyframe_esp32s3_installed_resource_owner.cpp"
@@ -161,6 +166,7 @@ idf_component_register(
         esp_lcd
         heap
         log
+        mbedtls
         jellyframe_app_runtime
         jellyframe_device_runtime_contracts
         jellyframe_render_core

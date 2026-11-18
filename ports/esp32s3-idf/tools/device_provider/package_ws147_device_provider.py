@@ -8,6 +8,7 @@ import hashlib
 import json
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -20,12 +21,10 @@ from provider_version import PROVIDER_VERSION
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "tools"))
 from device_image_manifest import DeviceImageManifestError, parse_device_image_manifest  # noqa: E402
+from device_render_core_capabilities import KNOWN_FEATURE_FAMILIES, supported_text_pipelines
 
 PROVIDER_SOURCE = Path(__file__).resolve().parent
-PROVIDER_FEATURE_FAMILIES = {
-    "core.document", "core.paint", "css.flex-grid", "css.modern-paint",
-    "forms.advanced", "graphics.canvas2d",
-}
+PROVIDER_FEATURE_FAMILIES = KNOWN_FEATURE_FAMILIES
 VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$")
 
 
@@ -95,6 +94,10 @@ def _identity_from_build_evidence(build_manifest_path: Path, profile_path: Path,
     if unsupported:
         raise SystemExit("generated Render Core profile contains feature families the JFDP provider cannot encode: " +
                          ", ".join(sorted(unsupported)))
+    try:
+        supported_text_pipelines(abi, profile_features)
+    except ValueError as error:
+        raise SystemExit(f"generated Render Core profile has conflicting text capabilities: {error}") from error
     if (not isinstance(expected_firmware_hash, str) or
             re.fullmatch(r"[0-9a-fA-F]{64}", expected_firmware_hash) is None):
         raise SystemExit(f"build manifest profile {build_profile}.bin.sha256 is invalid")
@@ -194,6 +197,10 @@ def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, li
             len(set(core_features)) != len(core_features) or
             set(core_features) - PROVIDER_FEATURE_FAMILIES):
         raise SystemExit("ESP-IDF generated Core profile has invalid or unsupported feature families")
+    try:
+        supported_text_pipelines(abi, core_features)
+    except ValueError as error:
+        raise SystemExit(f"ESP-IDF Core text capabilities conflict: {error}") from error
     if (not isinstance(identity, str) or re.fullmatch(r"[0-9a-f]{64}", identity) is None or
             count <= 0 or abi <= 0 or not isinstance(idf_revision, str) or not idf_revision or
             not isinstance(compiler, str) or not compiler):
@@ -250,6 +257,88 @@ def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, li
     return version, abi, core_features, provenance
 
 
+def _install_capacity(build_dir: Path, firmware: Path, factory: Path | None = None) -> tuple[int, dict[str, object]]:
+    """Mirror DeviceImageStore's 2 registry sectors + 3 aligned bundle slots.
+
+    Use generated binary partitions, never the editable CSV or profile name.
+    Recovery images must contain these same partitions and exact application.
+    """
+    try:
+        values = {}
+        for line in (build_dir / "sdkconfig").read_text(encoding="utf-8").splitlines():
+            if line.startswith("CONFIG_") and "=" in line:
+                key, value = line.split("=", 1)
+                # IDF's generated compatibility aliases can repeat identical
+                # assignments. Conflicting values remain ambiguous evidence.
+                if key in values and values[key] != value:
+                    raise ValueError("conflicting sdkconfig key")
+                values[key] = value
+        configured = int(values["CONFIG_JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB"]) * 1024
+        table_at = int(values["CONFIG_PARTITION_TABLE_OFFSET"], 0)
+        generated_config = (build_dir / "config" / "sdkconfig.h").read_text(encoding="utf-8")
+        for key in ("CONFIG_PARTITION_TABLE_OFFSET", "CONFIG_JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB"):
+            definitions = re.findall(rf"(?m)^#define {key}\s+(\S+)\s*$", generated_config)
+            if len(definitions) != 1 or int(definitions[0], 0) != int(values[key], 0):
+                raise ValueError("generated sdkconfig header disagrees with capacity configuration")
+        table = (build_dir / "partition_table" / "partition-table.bin").read_bytes()
+        if (not 64 * 1024 <= configured <= 2048 * 1024 or
+                not 4096 <= table_at <= 16 * 1024 * 1024 - 4096 or table_at % 4096):
+            raise ValueError("invalid configured capacity or partition offset")
+        if not table or len(table) > 4096 or len(table) % 32:
+            raise ValueError("invalid binary partition table length")
+        partitions = []
+        digest_seen = False
+        ended = False
+        for at in range(0, len(table), 32):
+            record = table[at:at + 32]
+            if record == bytes([255]) * 32:
+                ended = True
+                continue
+            if ended:
+                raise ValueError("records after partition terminator")
+            if record[:16] == b"\xeb\xeb" + bytes([255]) * 14:
+                if digest_seen or record[16:] != hashlib.md5(table[:at]).digest():
+                    raise ValueError("partition table MD5 mismatch")
+                digest_seen = True
+                continue
+            if digest_seen:
+                raise ValueError("partition after MD5")
+            magic, kind, subtype, offset, size, label, flags = struct.unpack("<HBBII16sI", record)
+            if magic != 0x50aa or not size or offset < table_at + 4096 or offset + size > 16 * 1024 * 1024:
+                raise ValueError("invalid partition bounds")
+            name = label.rstrip(b"\0").decode("ascii")
+            if not name or any(p[0] == name or (offset < p[4] + p[3] and p[3] < offset + size) for p in partitions):
+                raise ValueError("duplicate or overlapping partition")
+            partitions.append((name, kind, subtype, offset, size, flags))
+        if not digest_seen:
+            raise ValueError("partition MD5 record missing")
+        stores = [p for p in partitions if p[0] == "storage" and p[1:3] == (1, 2) and p[5] == 0]
+        apps = [p for p in partitions if p[0] == "factory" and p[1:3] == (0, 0) and p[5] == 0]
+        if len(stores) != 1 or len(apps) != 1:
+            raise ValueError("missing supported storage/factory partition")
+        storage, app = stores[0], apps[0]
+        if storage[3] % 4096 or storage[4] % 4096 or storage[4] <= 8192:
+            raise ValueError("invalid storage alignment/size")
+        effective = min(configured, ((storage[4] - 8192) // 3) & ~4095)
+        if not effective or firmware.stat().st_size > app[4]:
+            raise ValueError("no install slot or application exceeds partition")
+        if factory is not None:
+            with factory.open("rb") as image:
+                image.seek(table_at)
+                if image.read(len(table)) != table:
+                    raise ValueError("factory image partition table does not match build")
+                image.seek(app[3])
+                if image.read(firmware.stat().st_size) != firmware.read_bytes():
+                    raise ValueError("factory image application does not match firmware")
+        return effective, {
+            "partitionTableSha256": hashlib.sha256(table).hexdigest(),
+            "configuredMaxBundleBytes": configured,
+            "storagePartitionOffset": storage[3], "storagePartitionBytes": storage[4],
+        }
+    except (OSError, UnicodeError, ValueError, KeyError, struct.error) as error:
+        raise SystemExit(f"invalid ESP-IDF install capacity evidence: {error}") from error
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--firmware", required=True, type=Path)
@@ -274,6 +363,9 @@ def main() -> int:
     (source_revision, image_version, render_core_version, render_core_abi,
      feature_families, build_provenance) = _identity_from_build_evidence(
         args.build_manifest.resolve(), args.render_core_profile.resolve(), firmware, args.build_profile)
+    max_bundle_bytes = 327680  # Historical scalar releases without build-dir evidence.
+    if any(family.startswith('text.') for family in feature_families) and args.build_dir is None:
+        raise SystemExit("text pipeline provider release requires --build-dir capacity evidence")
     if args.build_dir is not None:
         idf_version, idf_abi, idf_features, idf_provenance = _idf_build_provenance(
             args.build_dir.resolve(), firmware)
@@ -294,7 +386,9 @@ def main() -> int:
             recorded_toolchain = re.search(r"esp-[0-9.]+_[0-9]+", str(build_provenance["toolchain"]))
             if recorded_toolchain is None or recorded_toolchain.group() != idf_provenance["toolchain"]:
                 raise SystemExit("build manifest versioned toolchain conflicts with ESP-IDF build directory")
+        max_bundle_bytes, capacity_provenance = _install_capacity(args.build_dir.resolve(), firmware, factory)
         build_provenance.update(idf_provenance)
+        build_provenance.update(capacity_provenance)
 
     output = args.output.resolve()
     archive_name = f"jellyframe-ws147-developer-{image_version}-provider-{PROVIDER_VERSION}"
@@ -311,7 +405,7 @@ def main() -> int:
         "board": {"id": "ws147", "display": {"width": 172, "height": 320, "shape": "rect"}},
         "profile": {"id": "rect-172x320", "featureFamilies": feature_families},
         "transport": {"protocol": "JFDP/1", "kind": "usb-serial-jtag"},
-        "storage": {"maxBundleBytes": 327680},
+        "storage": {"maxBundleBytes": max_bundle_bytes},
         "recovery": {"procedureId": "ws147-usb-recovery-v1", "factoryImageSha256": sha256(factory)},
     }
     if build_provenance:
@@ -331,7 +425,8 @@ def main() -> int:
         recovery.mkdir()
         for name in ("jellyframe_device.py", "jellyframe-device.cmd", "provider_version.py", "requirements.txt", "README.md"):
             copy(PROVIDER_SOURCE / name, provider / name)
-        copy(ROOT / "tools" / "device_image_manifest.py", provider / "lib" / "device_image_manifest.py")
+        for module in ("device_image_manifest.py", "device_install_package.py", "device_render_core_capabilities.py"):
+            copy(ROOT / "tools" / module, provider / "lib" / module)
         config = {
             "endpointId": "ws147-developer-local", "port": "COMx", "baud": 115200,
             "manifest": "../developer-image/ws147-developer-image.manifest.json",

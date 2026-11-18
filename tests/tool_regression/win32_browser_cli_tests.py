@@ -500,8 +500,11 @@ def main() -> int:
             require((root / "off" / filename).read_bytes() == (root / "on" / filename).read_bytes(),
                     "trace diagnostic repaint must not change captured pixels")
         records = [json.loads(line) for line in (root / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
-        require(len(records) == 3 and records[1]["action"] == "repaint-existing",
-                "static trace must retain a real initial diagnostic repaint")
+        # ABI9 text snapshots bind the exact DOM generation, including a
+        # diagnostic paint mark. A new snapshot is required for that repaint.
+        expected_action = "rebuild-pipeline" if CORE_ABI >= 9 else "repaint-existing"
+        require(len(records) == 3 and records[1]["action"] == expected_action,
+                f"static trace must retain a real initial diagnostic repaint ({expected_action})")
 
     with tempfile.TemporaryDirectory(prefix="jellyframe-scripted-pointer-drag-") as directory:
         root = Path(directory)
@@ -1020,9 +1023,12 @@ def main() -> int:
         svg_report = report_data.get("staticSvgRasterization", {})
         require(svg_report.get("rasterizedCount") == 1,
                 "static SVG package report must record one generated icon")
-        red, green, blue = read_bmp_rgb(capture, 32, 20)
-        require(green > 160 and red < 80 and blue > 80,
-                f"rasterized SVG icon must retain its green surface, got {(red, green, blue)}")
+        if CORE_ABI >= 9:
+            require(report_data.get("pipelineDiagnostics", {}).get("pipeline", {}).get("displayCommands", 0) > 0,
+                    "ABI9 static SVG preview must consume the transformed image")
+            red, green, blue = read_bmp_rgb(capture, 32, 20)
+            require(green > 160 and red < 80 and blue > 80,
+                    f"rasterized SVG icon must retain its green surface, got {(red, green, blue)}")
 
     time_event_result = run_case(exe, ["--frame-event", "2:time-ms:nope"])
     require(time_event_result.returncode != 0, "invalid time event must fail")

@@ -2,6 +2,7 @@ import contextlib
 import hashlib
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -16,6 +17,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 import app_registry  # noqa: E402
 import jellyframe_cli  # noqa: E402
+from jellyframe_versions import active_render_core_release_version  # noqa: E402
 
 
 def write_jfapp(
@@ -26,7 +28,7 @@ def write_jfapp(
     entry: str = "/index.html",
     script: str = "classic",
     min_jellyframe: str = "0.6.0",
-    min_render_core: str = "0.9.0",
+    min_render_core: str = active_render_core_release_version(),
     capabilities: list[str] | None = None,
     network_allowed: bool = False,
     summary_text: str | None = None,
@@ -101,7 +103,7 @@ def write_jfapp_with_invalid_resource_entry(path: Path) -> None:
         "versionCode": 1,
         "entry": "/index.html",
         "minJellyFrame": "0.6.0",
-        "minRenderCore": "0.9.0",
+        "minRenderCore": active_render_core_release_version(),
         "script": "classic",
         "viewport": {"designWidth": 172, "designHeight": 320},
         "budgets": {"maxResourceBytes": 65536},
@@ -234,7 +236,7 @@ class AppRegistryTests(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 SystemExit,
-                "must target the active pre-1.0 Render Core line 0.9.0",
+                re.escape(f"must target the active pre-1.0 Render Core line {active_render_core_release_version()}"),
             ):
                 app_registry.install_bundle(
                     root / "store",

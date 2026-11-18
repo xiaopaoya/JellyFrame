@@ -6,6 +6,7 @@
 #include <vector>
 #include "app_runtime/runtime_font_catalog.h"
 #include "app_runtime/runtime_image_provider.h"
+#include "app_runtime/runtime_shaped_text_binding.h"
 
 namespace jellyframe {
 
@@ -356,6 +357,12 @@ public:
     RuntimeFontCatalog::Handle text_catalog(const ScriptAppSession& session) const;
     ScriptAppSession begin(std::uint32_t app_instance_id, RuntimeFontCatalog::Handle catalog, RuntimeImageProvider::Handle images);
     RuntimeImageProvider::Handle image_provider(const ScriptAppSession& session) const;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    ScriptAppSession begin(std::uint32_t app_instance_id, RuntimeFontCatalog::Handle catalog,
+                           RuntimeImageProvider::Handle images,
+                           RuntimeShapedTextBinding::Handle shaped_text);
+    RuntimeShapedTextBinding::Handle shaped_text_binding(const ScriptAppSession& session) const;
+#endif
 #endif
 
     ScriptTaskMailboxPostStatus post_input(const ScriptTaskPacket& packet);
@@ -426,6 +433,9 @@ private:
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
     RuntimeFontCatalog::Handle text_catalog_;
     RuntimeImageProvider::Handle image_provider_;
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+    RuntimeShapedTextBinding::Handle shaped_text_binding_;
+#endif
 #endif
     std::uint32_t next_frame_sequence_ = 1;
 };

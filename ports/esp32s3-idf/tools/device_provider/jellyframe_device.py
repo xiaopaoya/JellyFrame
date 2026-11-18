@@ -32,6 +32,8 @@ _bundled_lib = Path(__file__).resolve().parent / "lib"
 sys.path.insert(0, str(_bundled_lib if _bundled_lib.is_dir() else ROOT / "tools"))
 
 from device_image_manifest import DeviceImageManifestError, parse_device_image_manifest
+from device_install_package import read_install_package
+from device_render_core_capabilities import FEATURE_FAMILIES, supported_text_pipelines
 
 
 PROVIDER = {"id": "jellyframe-device", "version": PROVIDER_VERSION}
@@ -49,6 +51,7 @@ INSTALL_CONTROL_WAIT_SECONDS = INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS + 3.0
 # board's bounded USB write-all deadline without treating the 90s process
 # guard as a protocol response timeout.
 LOGS_REQUEST_TIMEOUT_SECONDS = 5.0
+MAX_LOG_RECORDS = 11
 DISCOVERY, APP_LIST, INSTALL_BEGIN, INSTALL_CHUNK, INSTALL_COMMIT, INSTALL_ABORT, LAUNCH, STOP, LOGS, RECOVERY, REMOVE, ROLLBACK, IDENTITY = range(1, 14)
 RESULT_CODES = {
     0: "ok", 1: "accepted", 2: "queued", 3: "invalid-request", 4: "busy",
@@ -60,14 +63,6 @@ APP_STATES = {0: "installed", 1: "disabled", 2: "failed"}
 RECOVERY_REASONS = {
     0: "none", 1: "registry-invalid", 2: "staging-discarded", 3: "app-load-failure",
     4: "app-runtime-failure", 5: "app-budget-exceeded", 6: "launcher-fallback",
-}
-FEATURE_FAMILIES = {
-    1 << 0: "core.document",
-    1 << 1: "core.paint",
-    1 << 2: "css.flex-grid",
-    1 << 3: "css.modern-paint",
-    1 << 4: "forms.advanced",
-    1 << 5: "graphics.canvas2d",
 }
 LOG_LEVELS = {0: "debug", 1: "info", 2: "warn", 3: "error"}
 SUPPORTED_OPERATIONS = (
@@ -331,8 +326,13 @@ def decode_identity(payload: bytes) -> dict[str, Any]:
             len(payload) != 16 + image_bytes + profile_bytes + version_bytes + core_bytes + revision_bytes):
         raise ProviderError("protocol-mismatch", "device image identity length is invalid")
     abi, feature_bits = struct.unpack_from("<II", payload, 8)
-    if not abi or feature_bits & ~sum(FEATURE_FAMILIES) or not feature_bits & 0x3:
+    if not abi or feature_bits & ~sum(FEATURE_FAMILIES) or feature_bits & 0x3 != 0x3:
         raise ProviderError("protocol-mismatch", "device image identity feature bits are invalid")
+    families = [name for bit, name in FEATURE_FAMILIES.items() if feature_bits & bit]
+    try:
+        supported_text_pipelines(abi, families)
+    except ValueError as error:
+        raise ProviderError("protocol-mismatch", str(error)) from error
     cursor = 16
     try:
         image_id = payload[cursor:cursor + image_bytes].decode("utf-8"); cursor += image_bytes
@@ -348,18 +348,18 @@ def decode_identity(payload: bytes) -> dict[str, Any]:
         raise ProviderError("protocol-mismatch", "device source revision is invalid")
     return {"imageId": image_id, "profileId": profile_id, "imageVersion": image_version,
             "renderCoreVersion": core_version, "sourceRevision": revision, "renderCoreAbi": abi,
-            "featureFamilies": [name for bit, name in FEATURE_FAMILIES.items() if feature_bits & bit]}
+            "featureFamilies": families}
 
 
 def logs_payload(app_id: str, limit: int) -> bytes:
     value = app_id.encode("utf-8")
-    if len(value) > 95 or not 1 <= limit <= 11 or b"\0" in value:
+    if len(value) > 95 or not 1 <= limit <= MAX_LOG_RECORDS or b"\0" in value:
         raise ProviderError("invalid-request", "logs request is invalid")
     return bytes((1, len(value))) + struct.pack("<H", limit) + value
 
 
 def decode_logs(payload: bytes) -> tuple[int, list[dict[str, Any]]]:
-    if len(payload) < 8 or payload[0] != 1 or payload[2:4] != b"\0\0" or payload[1] > 11:
+    if len(payload) < 8 or payload[0] != 1 or payload[2:4] != b"\0\0" or payload[1] > MAX_LOG_RECORDS:
         raise ProviderError("protocol-mismatch", "device returned invalid app logs")
     count = payload[1]
     dropped = struct.unpack_from("<I", payload, 4)[0]
@@ -655,39 +655,17 @@ def run_fixture(args: argparse.Namespace) -> tuple[int, list[dict[str, Any]]]:
     raise ProviderError("invalid-request", "unknown provider fixture")
 
 
-def read_bundle_identity(bundle: Path) -> str:
-    # DeviceInstallStore remains the final JFAPPV0 authority. The provider
-    # reads just the standard, bounded summary so it can populate the existing
-    # JFDP InstallBegin app-id field without asking the caller for a sidecar.
-    if not bundle.is_absolute() or not bundle.is_file() or bundle.suffix != ".jfapp" or bundle.stat().st_size > 327680:
-        raise ProviderError("invalid-request", "install requires a bounded absolute .jfapp bundle")
-    raw = bundle.read_bytes()
-    header_format = "<8sHHIIIIIIIIIII"
-    header_size = struct.calcsize(header_format)
-    if len(raw) < header_size or raw[:8] != b"JFAPPV0\0":
-        raise ProviderError("integrity-failed", "bundle is not a JFAPPV0 container")
+def read_target_package(bundle: Path, max_bytes: int, *, text_pipelines: tuple[str, ...] = ()) -> tuple[bytes, dict[str, Any]]:
     try:
-        (_magic, declared_header_bytes, format_version, _flags, summary_offset, summary_bytes,
-         _index_offset, _resource_count, _strings_offset, _strings_bytes, _payload_offset,
-         _payload_bytes, stored_crc, reserved) = struct.unpack_from(header_format, raw)
-        if (declared_header_bytes != header_size or format_version != 0 or reserved != 0 or
-                summary_bytes == 0 or summary_bytes > 4096 or summary_offset < header_size or
-                summary_offset + summary_bytes > len(raw)):
-            raise ValueError("invalid JFAPPV0 header")
-        crc_bytes = bytearray(raw)
-        crc_bytes[48:52] = b"\0\0\0\0"
-        if zlib.crc32(crc_bytes) & 0xffffffff != stored_crc:
-            raise ValueError("invalid JFAPPV0 checksum")
-        summary = json.loads(raw[summary_offset:summary_offset + summary_bytes].decode("utf-8"),
-                             object_pairs_hook=reject_duplicate_members)
-        if not isinstance(summary, dict):
-            raise ValueError("invalid JFAPPV0 summary")
-        app_id = summary["id"]
-    except (KeyError, UnicodeDecodeError, ValueError, struct.error, json.JSONDecodeError) as error:
-        raise ProviderError("integrity-failed", "bundle has an invalid JFAPPV0 summary") from error
-    if not isinstance(app_id, str) or not app_id or not app_id.isascii() or len(app_id) > 95:
-        raise ProviderError("invalid-request", "bundle package report has an invalid app id")
-    return app_id
+        return read_install_package(bundle, max_bytes, supported_text_pipelines=text_pipelines)
+    except (OSError, ValueError, UnicodeError, KeyError, struct.error, RecursionError) as error:
+        raise ProviderError("invalid-request", f"invalid install package: {error}") from error
+
+
+def read_bundle_identity(bundle: Path) -> str:
+    # Legacy tooling helper. Physical installs use the exact target capacity
+    # and transmit the same immutable bytes inspected by read_target_package.
+    return read_target_package(bundle, 327680)[1]["appId"]
 
 
 def reject_duplicate_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -761,8 +739,15 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
                                        logSummary={"returnedRecords": len(records), "droppedRecords": dropped}))
             return 0, events
         if args.operation == "install":
-            app_id = read_bundle_identity(args.bundle)
-            bundle = args.bundle.read_bytes()
+            target = device["capabilities"]
+            # device_from_capabilities already attests ABI/families against
+            # this manifest; derive the exact route from that matched identity.
+            try:
+                pipelines = supported_text_pipelines(config.manifest["renderCore"]["abi"], target["featureFamilies"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise ProviderError("protocol-mismatch", "invalid matched text pipeline identity") from error
+            bundle, facts = read_target_package(args.bundle, target["maxBundleBytes"], text_pipelines=pipelines)
+            app_id = facts["appId"]
             transaction = int(time.monotonic_ns() & 0xffffffff) or 1
             events: list[dict[str, Any]] = []
             sequence = 1
@@ -787,9 +772,12 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
                     if progress["resultCode"] != "accepted":
                         live_session.finish(False, progress["resultCode"])
                         return exit_code_for(progress["resultCode"]), [*events, stream_event("result", "install", args.request_id, sequence, resultCode=progress["resultCode"], device=device, transaction=progress["transaction"])]
-                    events.append(stream_event("progress", "install", args.request_id, sequence,
-                                               progress={"completedBytes": progress["transaction"]["receivedBytes"], "totalBytes": len(bundle)}))
-                    sequence += 1
+                    # Keep large-package output within the provider contract's
+                    # JSONL byte/event bounds; USB chunks remain unchanged.
+                    if offset % (8 * 1024) == 0 or offset + len(chunk) == len(bundle):
+                        events.append(stream_event("progress", "install", args.request_id, sequence,
+                                                   progress={"completedBytes": progress["transaction"]["receivedBytes"], "totalBytes": len(bundle)}))
+                        sequence += 1
                 if live_session.cancel_requested.is_set():
                     aborted = decode_result(wire.request(INSTALL_ABORT, transaction_payload(transaction),
                                                         INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS))
@@ -834,7 +822,7 @@ def parse_args() -> argparse.Namespace:
             command.add_argument("--keep-data", action="store_true")
     logs = subparsers.add_parser("logs")
     logs.add_argument("--id", dest="app_id", required=True)
-    logs.add_argument("--limit", type=int, default=64)
+    logs.add_argument("--limit", type=int, default=MAX_LOG_RECORDS)
     return parser.parse_args()
 
 

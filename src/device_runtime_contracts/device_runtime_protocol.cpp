@@ -102,8 +102,13 @@ bool has_valid_lower_hex_revision(const char* value, std::size_t& length) {
     return true;
 }
 
-bool has_valid_render_core_feature_families(std::uint32_t bits) {
+bool has_valid_render_core_feature_families(std::uint32_t bits, std::uint32_t abi) {
+    const bool contextual = (bits & DeviceRenderCoreFeatureContextualJfsp2) != 0;
+    const bool layout = (bits & DeviceRenderCoreFeatureContextualLayout) != 0;
+    const bool shaping = (bits & DeviceRenderCoreFeatureTextShaping) != 0;
     return bits != 0 && (bits & ~kDeviceRenderCoreFeatureFamilyKnownMask) == 0 &&
+           (!layout || contextual) && (!contextual || abi == 9) &&
+           (!shaping || (abi == 4 && !contextual)) &&
            (bits & (DeviceRenderCoreFeatureDocument | DeviceRenderCoreFeaturePaint)) ==
                (DeviceRenderCoreFeatureDocument | DeviceRenderCoreFeaturePaint);
 }
@@ -391,7 +396,7 @@ DeviceProtocolStatus encode_device_image_identity_payload(const DeviceImageIdent
         !has_valid_bounded_string(payload.image_version.data(), payload.image_version.size(), image_version_length) ||
         !has_valid_bounded_string(payload.render_core_version.data(), payload.render_core_version.size(), render_core_version_length) ||
         !has_valid_lower_hex_revision(payload.source_revision.data(), source_revision_length) ||
-        payload.render_core_abi == 0 || !has_valid_render_core_feature_families(payload.feature_family_bits)) {
+        payload.render_core_abi == 0 || !has_valid_render_core_feature_families(payload.feature_family_bits, payload.render_core_abi)) {
         return DeviceProtocolStatus::InvalidArgument;
     }
     const std::size_t payload_size = kImageIdentityFixedBytes + image_id_length + profile_id_length +
@@ -457,7 +462,7 @@ DeviceProtocolStatus decode_device_image_identity_payload(const std::uint8_t* in
     }
     const std::uint32_t render_core_abi = read_u32(input + 8);
     const std::uint32_t feature_family_bits = read_u32(input + 12);
-    if (render_core_abi == 0 || !has_valid_render_core_feature_families(feature_family_bits)) {
+    if (render_core_abi == 0 || !has_valid_render_core_feature_families(feature_family_bits, render_core_abi)) {
         return DeviceProtocolStatus::InvalidArgument;
     }
     std::size_t cursor = kImageIdentityFixedBytes;

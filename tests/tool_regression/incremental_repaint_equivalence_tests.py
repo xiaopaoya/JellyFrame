@@ -36,10 +36,8 @@ CASES = (
     CaptureCase(
         name="motion",
         app="samples/apps/packages/jelly_motion_lab",
-        frame_count=30,
-        frame_events=("8:click:150:260",),
-        frame_step_ms=33,
-        frame_start_ms=1000,
+        frame_count=90,
+        frame_script="capture_soak_30fps.jfcapture",
     ),
     CaptureCase(
         name="route-tabs",

@@ -556,6 +556,43 @@ def render_core_feature_diagnostics(manifest: dict, profile: dict | None) -> tup
     }, warnings
 
 
+def normalize_text_pipeline(value: object) -> dict | None:
+    if value is None:
+        fail("manifest textPipeline must be an object when present")
+    if not isinstance(value, dict):
+        fail("manifest textPipeline must be an object")
+    required = {"kind", "font", "catalog", "companion", "tables", "eligibility",
+                "sourceIdentity", "profileIdentity", "glyphCount", "resourceId", "rasterSize", "weight", "selection"}
+    if set(value) - required - {"fontFamilyHash"} or required - set(value):
+        fail("manifest textPipeline has unknown or missing fields")
+    if value["kind"] not in ("jfsp1-block-v11", "jfsp2-block-v12"):
+        fail("manifest textPipeline.kind is unsupported")
+    result = {"kind": value["kind"]}
+    for field in ("font", "catalog", "companion", "tables", "eligibility"):
+        raw = value[field]
+        if not isinstance(raw, str) or not raw or any(ord(c) < 32 for c in raw):
+            fail(f"manifest textPipeline.{field} must be a package-local path")
+        result[field] = normalize_app_path(raw)
+        if len(result[field].encode("utf-8")) > 255:
+            fail(f"manifest textPipeline.{field} exceeds device path limit")
+    if len({result[field] for field in ("font", "catalog", "companion", "tables", "eligibility")}) != 5:
+        fail("manifest textPipeline resource paths must be distinct")
+    for field in ("sourceIdentity", "profileIdentity"):
+        raw = value[field]
+        if not isinstance(raw, str) or len(raw) != 64 or any(c not in "0123456789abcdef" for c in raw) or int(raw, 16) == 0:
+            fail(f"manifest textPipeline.{field} must be a nonzero lowercase SHA-256 identity")
+        result[field] = raw
+    bounds = {"glyphCount": (1, 65536), "resourceId": (1, 0xffffffff),
+              "rasterSize": (1, 65535), "weight": (1, 1000), "selection": (0, 65535),
+              "fontFamilyHash": (0, 0xffffffff)}
+    for field, (low, high) in bounds.items():
+        raw = value.get(field, 0)
+        if type(raw) is not int or not low <= raw <= high:
+            fail(f"manifest textPipeline.{field} is out of range")
+        result[field] = raw
+    return result
+
+
 def validate_manifest(manifest: dict) -> dict:
     if not isinstance(manifest, dict):
         fail("manifest root must be an object")
@@ -593,6 +630,9 @@ def validate_manifest(manifest: dict) -> dict:
     script_mode = required_string(runtime, "script", "manifest runtime")
     if script_mode not in {"none", "classic"}:
         fail("manifest runtime.script must be one of: none, classic")
+    text_pipeline = normalize_text_pipeline(manifest["textPipeline"]) if "textPipeline" in manifest else None
+    if text_pipeline is not None and script_mode != "classic":
+        fail("manifest textPipeline requires runtime.script classic")
     viewport = required_object(manifest, "viewport")
     required_int(viewport, "designWidth", "manifest viewport", 1)
     required_int(viewport, "designHeight", "manifest viewport", 1)
@@ -706,6 +746,7 @@ def validate_manifest(manifest: dict) -> dict:
         "systemWeatherAllowed": system_weather_allowed,
         "systemActivityAllowed": system_activity_allowed,
         "backgroundServices": background_services,
+        **({"textPipeline": text_pipeline} if text_pipeline is not None else {}),
     }
 
 
@@ -837,6 +878,7 @@ def collect_manifest_warnings(manifest: dict) -> list[dict]:
         "capabilities",
         "requiresFeatures",
         "optionalFeatures",
+        "textPipeline",
         "backgroundServices",
         "targets",
     }
@@ -3004,7 +3046,23 @@ def bundle_summary_bytes(manifest: dict) -> bytes:
     return (json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
 
+def validate_text_pipeline_resources(manifest: dict, resources: list[dict]) -> None:
+    if "textPipeline" not in manifest:
+        return
+    pipeline = normalize_text_pipeline(manifest["textPipeline"])
+    packaged = {resource["path"]: resource for resource in resources}
+    for field in ("font", "catalog", "companion", "tables", "eligibility"):
+        path = pipeline[field]
+        resource = packaged.get(path)
+        if resource is None or not resource["file"].is_file() or resource["file"].stat().st_size == 0:
+            fail(f"manifest textPipeline.{field} requires a nonempty packaged resource: {path}")
+
+
 def write_jfapp_bundle(output: Path, manifest: dict, resources: list[dict]) -> dict:
+    validate_text_pipeline_resources(manifest, resources)
+    # Old readers reject a new mandatory execution route at the header before
+    # they can ignore an unfamiliar optional summary field.
+    format_version = 1 if "textPipeline" in manifest else 0
     output.parent.mkdir(parents=True, exist_ok=True)
     summary = bundle_summary_bytes(manifest)
     strings = bytearray()
@@ -3071,7 +3129,7 @@ def write_jfapp_bundle(output: Path, manifest: dict, resources: list[dict]) -> d
         JFAPP_HEADER_FORMAT,
         JFAPP_MAGIC,
         JFAPP_HEADER_SIZE,
-        0,
+        format_version,
         0,
         summary_offset,
         summary_size,
@@ -3090,7 +3148,7 @@ def write_jfapp_bundle(output: Path, manifest: dict, resources: list[dict]) -> d
         JFAPP_HEADER_FORMAT,
         JFAPP_MAGIC,
         JFAPP_HEADER_SIZE,
-        0,
+        format_version,
         0,
         summary_offset,
         summary_size,
@@ -3106,7 +3164,7 @@ def write_jfapp_bundle(output: Path, manifest: dict, resources: list[dict]) -> d
     output.write_bytes(bundle)
     return {
         "format": "jfapp",
-        "formatVersion": 0,
+        "formatVersion": format_version,
         "path": str(output),
         "size": len(bundle),
         "crc32": f"{bundle_crc32:08x}",
@@ -3148,6 +3206,8 @@ def main() -> int:
     raw_manifest = read_manifest(root)
     warnings = collect_manifest_warnings(raw_manifest)
     manifest = validate_manifest(raw_manifest)
+    if "textPipeline" in manifest and args.output_cpp:
+        fail("package-selected textPipeline requires an installed .jfapp; static C++ resource tables do not select its route")
     target_config = effective_target_config(manifest, args.target)
     render_core_profile = load_render_core_profile(
         Path(args.render_core_profile).resolve() if args.render_core_profile else None)
@@ -3166,6 +3226,7 @@ def main() -> int:
     module_staging = tempfile.TemporaryDirectory(prefix="jellyframe-static-modules-")
     resources, module_diagnostics = apply_static_module_bundle(
         resources, manifest["entry"], Path(module_staging.name), max_resource_bytes)
+    validate_text_pipeline_resources(manifest, resources)
     warnings.extend(collect_resource_budget_warnings(resources, budgets))
     warnings.extend(collect_audio_resource_warnings(manifest, resources))
     warnings.extend(collect_service_target_warnings(manifest, target_config))

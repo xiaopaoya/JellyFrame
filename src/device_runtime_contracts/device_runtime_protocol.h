@@ -90,6 +90,14 @@ enum DeviceRenderCoreFeatureFamily : std::uint32_t {
     DeviceRenderCoreFeatureModernPaint = 1u << 3,
     DeviceRenderCoreFeatureAdvancedForms = 1u << 4,
     DeviceRenderCoreFeatureCanvas2d = 1u << 5,
+    DeviceRenderCoreFeatureTextShaping = 1u << 6,
+    DeviceRenderCoreFeatureContextualJfsp2 = 1u << 7,
+    DeviceRenderCoreFeatureContextualLayout = 1u << 8,
+    DeviceRenderCoreFeatureLengthMath = 1u << 9,
+    DeviceRenderCoreFeatureCounters = 1u << 10,
+    DeviceRenderCoreFeatureBorders = 1u << 11,
+    DeviceRenderCoreFeatureTables = 1u << 12,
+    DeviceRenderCoreFeaturePositionedSizing = 1u << 13,
 };
 
 constexpr std::uint32_t kDeviceRenderCoreFeatureFamilyKnownMask =
@@ -98,7 +106,15 @@ constexpr std::uint32_t kDeviceRenderCoreFeatureFamilyKnownMask =
     DeviceRenderCoreFeatureFlexGrid |
     DeviceRenderCoreFeatureModernPaint |
     DeviceRenderCoreFeatureAdvancedForms |
-    DeviceRenderCoreFeatureCanvas2d;
+    DeviceRenderCoreFeatureCanvas2d |
+    DeviceRenderCoreFeatureTextShaping |
+    DeviceRenderCoreFeatureContextualJfsp2 |
+    DeviceRenderCoreFeatureContextualLayout |
+    DeviceRenderCoreFeatureLengthMath |
+    DeviceRenderCoreFeatureCounters |
+    DeviceRenderCoreFeatureBorders |
+    DeviceRenderCoreFeatureTables |
+    DeviceRenderCoreFeaturePositionedSizing;
 
 struct DeviceCapabilitySnapshot {
     std::uint8_t protocol_version = kDeviceProtocolVersion;
