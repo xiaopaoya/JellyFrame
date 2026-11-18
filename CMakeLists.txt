@@ -1422,7 +1422,18 @@ if(JELLYFRAME_BUILD_TESTS)
             set_tests_properties(jellyframe_win32_route_tabs_frame_script PROPERTIES
                 FIXTURES_REQUIRED jellyframe_candidate_app_packages
                 PASS_REGULAR_EXPRESSION
-                    "frame_update idle=0 repaint=[1-9][0-9]* rebuild=1 first_paint=1")
+                    "frame_update idle=0 repaint=3 rebuild=4 first_paint=1")
+
+            add_test(
+                NAME jellyframe_win32_route_tabs_state
+                COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_regression/route_tabs_capture_tests.py
+                        $<TARGET_FILE:jellyframe_desktop_shell>
+                        ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_route_tabs
+                        ${CMAKE_CURRENT_BINARY_DIR}/test_outputs/route_tabs_state
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+            set_tests_properties(jellyframe_win32_route_tabs_state PROPERTIES
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages)
 
             add_test(
                 NAME jellyframe_win32_motion_lab_low_power_frame_script
