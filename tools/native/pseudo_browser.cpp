@@ -20,7 +20,9 @@
 #include "native_contextual.h"
 #endif
 
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+#if (defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) || \
+    defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)) && \
+    defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
 #include "native_image.h"
 #include "app_runtime/app_frame_policy.h"
 #if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
@@ -72,7 +74,9 @@ struct ImageFrameSinkContext {
     bool ok = false;
 };
 
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+#if (defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) || \
+    defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)) && \
+    defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
 // One synchronous owner spans metadata selection, layer resolution and paint.
 // All jobs finish before any borrowed metadata is exposed to Core.
 struct PseudoImages {
@@ -1150,23 +1154,26 @@ int main(int argc, char** argv) {
         auto render_tree = render_tree_builder.build(*document);
         timings.build_render_tree_us = elapsed_us(stage_start, Clock::now());
 
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION) && \
+    defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+        PseudoImages images(options, resolver, &diagnostics);
+        images.prepare(*render_tree);
+#elif defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && \
+    defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
         PseudoImages images(options, resolver, &diagnostics);
         images.prepare(*render_tree);
         NaturalImageSizingOptions natural_images;
-#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
-        natural_images.provider.intrinsic_size = PseudoImages::natural_size;
-        natural_images.provider.context = &images;
-#else
         natural_images.provider = {PseudoImages::natural_size, &images};
-#endif
 #endif
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
         layout_options.diagnostics = &diagnostics;
         layout_options.text_system = text_system;
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+#if (defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) || \
+    defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)) && \
+    defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
-        layout_options.natural_image_sizing = natural_images;
+        layout_options.natural_image_sizing.provider.intrinsic_size = PseudoImages::natural_size;
+        layout_options.natural_image_sizing.provider.context = &images;
 #else
         layout_options.natural_image_sizing = &natural_images;
 #endif
@@ -1190,7 +1197,9 @@ int main(int argc, char** argv) {
         LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
         layer_options.diagnostics = &diagnostics;
         layer_options.text_system = text_system;
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+#if (defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) || \
+    defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)) && \
+    defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         layer_options.image_resolver = {PseudoImages::resolve, &images};
 #else
@@ -1210,7 +1219,11 @@ int main(int argc, char** argv) {
         compositor_options.diagnostics = &diagnostics;
         compositor_options.text_system = text_system;
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+#if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
         SoftwareCompositor compositor(images.painter(), compositor_options);
+#else
+        SoftwareCompositor compositor(ImagePainter{}, compositor_options);
+#endif
 #else
 #if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
         SoftwareCompositor compositor(TextPainter{}, images.painter(), compositor_options);
