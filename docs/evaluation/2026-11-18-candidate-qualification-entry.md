@@ -77,5 +77,10 @@ Evidence directories are
 E:/Experiments/migration-candidate-qualification-entry-20261118 and
 E:/Experiments/migration-grid-image-scope-20261118. The final active-source log is
 runtime-final-source-ctest.log. Earlier snapshot62/87 and active-source72/88 runs
-remain historical. Complete installed/contextual/signed/resource/target
-carry-forward and physical acceptance remain open.
+remain historical. Installed Runtime full/cropped/contextual-OFF now each pass
+39/39 CTests against this same Core identity. The wrapper probe, imported archive,
+public headers, active assertions and absence of bundled Core source are audited.
+Runtime inputs remain unchanged during the matrix. Receipt is
+E:/Experiments/migration-contextual-installed-fea4b7fa-20261118/result.json.
+Sample/Desktop and signed execution are separately configured scopes. Complete
+signed/resource/target carry-forward and physical acceptance remain open.
