@@ -51,6 +51,7 @@ INSTALL_CONTROL_WAIT_SECONDS = INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS + 3.0
 # board's bounded USB write-all deadline without treating the 90s process
 # guard as a protocol response timeout.
 LOGS_REQUEST_TIMEOUT_SECONDS = 5.0
+MAX_LOG_RECORDS = 11
 DISCOVERY, APP_LIST, INSTALL_BEGIN, INSTALL_CHUNK, INSTALL_COMMIT, INSTALL_ABORT, LAUNCH, STOP, LOGS, RECOVERY, REMOVE, ROLLBACK, IDENTITY = range(1, 14)
 RESULT_CODES = {
     0: "ok", 1: "accepted", 2: "queued", 3: "invalid-request", 4: "busy",
@@ -352,13 +353,13 @@ def decode_identity(payload: bytes) -> dict[str, Any]:
 
 def logs_payload(app_id: str, limit: int) -> bytes:
     value = app_id.encode("utf-8")
-    if len(value) > 95 or not 1 <= limit <= 11 or b"\0" in value:
+    if len(value) > 95 or not 1 <= limit <= MAX_LOG_RECORDS or b"\0" in value:
         raise ProviderError("invalid-request", "logs request is invalid")
     return bytes((1, len(value))) + struct.pack("<H", limit) + value
 
 
 def decode_logs(payload: bytes) -> tuple[int, list[dict[str, Any]]]:
-    if len(payload) < 8 or payload[0] != 1 or payload[2:4] != b"\0\0" or payload[1] > 11:
+    if len(payload) < 8 or payload[0] != 1 or payload[2:4] != b"\0\0" or payload[1] > MAX_LOG_RECORDS:
         raise ProviderError("protocol-mismatch", "device returned invalid app logs")
     count = payload[1]
     dropped = struct.unpack_from("<I", payload, 4)[0]
@@ -821,7 +822,7 @@ def parse_args() -> argparse.Namespace:
             command.add_argument("--keep-data", action="store_true")
     logs = subparsers.add_parser("logs")
     logs.add_argument("--id", dest="app_id", required=True)
-    logs.add_argument("--limit", type=int, default=64)
+    logs.add_argument("--limit", type=int, default=MAX_LOG_RECORDS)
     return parser.parse_args()
 
 
