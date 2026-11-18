@@ -143,17 +143,48 @@ def main():
         run(route + '-build', ['cmake', '--build', build, '--parallel', args.jobs])
         route_tests[route] = checked_ctest(run, route + '-ctest', build, required)
 
+    desktop_build = output / 'desktop-consumer-build'
+    desktop_parameters = [f'-DJELLYFRAME_RENDER_CORE_PROVIDER=package',
+                          f'-DJELLYFRAME_RENDER_CORE_PACKAGE_DIR={install.as_posix()}',
+                          f'-DJELLYFRAME_RENDER_CORE_QUALIFICATION_LOCK_FILE={lock.as_posix()}',
+                          f'-DJERRYSCRIPT_ROOT={jerry.as_posix()}',
+                          '-DJELLYFRAME_BUILD_APP_RUNTIME=ON', '-DJELLYFRAME_BUILD_SCRIPTING=ON',
+                          '-DJELLYFRAME_BUILD_SCRIPT_TASK_RUNTIME=ON', '-DJELLYFRAME_BUILD_EXAMPLES=ON',
+                          '-DJELLYFRAME_BUILD_BENCHMARKS=OFF',
+                          '-DJELLYFRAME_BUILD_SAMPLE_REGRESSION_TESTS=ON', *profile_flags]
+    run('desktop-consumer-configure', [*configure, '-S', RUNTIME, '-B', desktop_build,
+        f'-DCMAKE_C_COMPILER={args.c_compiler}', *desktop_parameters])
+    desktop_provenance = json.loads((desktop_build / 'generated/jellyframe_render_core_provenance.json').read_text())
+    if (desktop_provenance['provider'], desktop_provenance['lockKind'], desktop_provenance['lockEnforced'],
+            desktop_provenance['sourceHash'], desktop_provenance['lockFileSha256']) != (
+            'package', 'qualification', True, args.core_source_hash, sha(lock)):
+        raise ValueError('desktop consumers did not select the exact qualified Core package')
+    run('desktop-consumer-build', ['cmake', '--build', desktop_build, '--target',
+        'jellyframe_desktop_shell', 'jellyframe_pseudo_browser', '--parallel', args.jobs])
+    desktop_inventory = json.loads(run('desktop-consumer-inventory',
+        ['ctest', '--test-dir', desktop_build, '--show-only=json-v1']))
+    if 'jellyframe_native_core_text_route' not in {test['name'] for test in desktop_inventory['tests']}:
+        raise RuntimeError('desktop consumer build is missing jellyframe_native_core_text_route')
+    desktop_test_log = run('desktop-consumer-route-test', ['ctest', '--test-dir', desktop_build,
+        '-R', '^jellyframe_native_core_text_route$', '--output-on-failure', '--no-tests=error'])
+    if 'Skipped' in desktop_test_log or 'Not Run' in desktop_test_log:
+        raise RuntimeError('desktop consumer route test did not complete')
+
     check_commit(core, args.core_commit)
     check_commit(RUNTIME, runtime_commit)
     if lock_hash != sha(production_lock):
         raise RuntimeError('production lock changed during candidate qualification')
     test_result, = json.loads((installed / 'result.json').read_text())
-    evidence = {'schemaVersion': 1, 'scope': 'installed Runtime and signed host tests; no target execution',
+    evidence = {'schemaVersion': 1,
+                'scope': 'installed Runtime, signed host tests and Win32 desktop consumers; no target execution',
                 'coreCommit': args.core_commit, 'runtimeCommit': runtime_commit, 'profile': args.profile,
                 'scalarFrame': args.scalar_frame,
                 'candidateLockSha256': sha(lock), 'productionLockSha256': lock_hash,
                 'jerryCommit': JERRY_COMMIT, 'mbedtlsCommit': MBEDTLS_COMMIT,
-                'installed': test_result, 'signedTestsPassed': route_tests}
+                'installed': test_result, 'signedTestsPassed': route_tests,
+                'desktopConsumers': {'provenance': desktop_provenance,
+                                    'targets': ['jellyframe_desktop_shell', 'jellyframe_pseudo_browser'],
+                                    'routeTest': 'jellyframe_native_core_text_route'}}
     (output / 'receipt.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
     print(f'{args.profile}: {test_result["passed"]} installed tests, {route_tests}; {output / "receipt.json"}')
 

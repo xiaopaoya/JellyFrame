@@ -108,4 +108,5 @@ jobs:
             ${{ runner.temp }}/abi9-pair/receipt.json
             ${{ runner.temp }}/abi9-pair/logs/
             ${{ runner.temp }}/abi9-pair/installed-evidence/
+            ${{ runner.temp }}/abi9-pair/desktop-consumer-build/
             ${{ runner.temp }}/abi9-pair/signed_shaped/fixtures-*/package-evidence.json

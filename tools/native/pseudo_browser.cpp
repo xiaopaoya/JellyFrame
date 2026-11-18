@@ -23,7 +23,9 @@
 #if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
 #include "native_image.h"
 #include "app_runtime/app_frame_policy.h"
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
 #include "render_core/fractional_image_sampling.h"
+#endif
 #endif
 
 #if defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME) && \
@@ -126,11 +128,22 @@ struct PseudoImages {
     void prepare(const RenderObject& object) {
         if (object.node && object.node->type == NodeType::Element && object.node->tag_name == "img")
             prepare_source(object.node->attribute("src"));
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+        const auto image_count = std::min<std::size_t>(object.style.background_layer_count,
+            object.style.background_layers.size());
+        for (std::size_t i = 0; i < image_count; ++i) {
+            const auto resource_id = object.style.background_layers[i].image.resource_id;
+            if (!resource_id) continue;
+            const auto* source = resolver.background_image_resource_url(resource_id);
+            if (source) prepare_source(*source);
+        }
+#else
         const auto resource_id = background_image_resource_id(object.style.background_overlay_packed);
         if (resource_id) {
             const auto* source = resolver.background_image_resource_url(resource_id);
             if (source) prepare_source(*source);
         }
+#endif
         for (const auto& child : object.children) prepare(*child);
     }
 
@@ -141,6 +154,20 @@ struct PseudoImages {
             self.resolver.background_image_resource_url(id) : &node.attribute("src");
         return source && self.cache.ready_handle(self.runtime, *source, &handle);
     }
+
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    static bool resolve(const Node& node, ImageResolveKind kind, std::uint16_t id,
+                        ResolvedImageResource& result, void* raw) {
+        std::uint32_t handle = 0;
+        if (!resolve(node, kind, id, handle, raw)) return false;
+        int width = 0, height = 0;
+        if (!dimensions(handle, width, height, raw)) return false;
+        result.image_handle = handle;
+        result.intrinsic_size = {ImageIntrinsicSizeState::Known,
+            static_cast<std::uint16_t>(width), static_cast<std::uint16_t>(height)};
+        return true;
+    }
+#endif
 
     static bool dimensions(std::uint32_t handle, int& width, int& height, void* raw) {
         const auto* surface = static_cast<PseudoImages*>(raw)->decoder.surface(handle);
@@ -156,6 +183,77 @@ struct PseudoImages {
             dimensions(handle, width, height, raw);
     }
 
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    static ImageIntrinsicSize natural_size(const Node& node, void* raw) {
+        std::uint32_t handle = 0;
+        int width = 0, height = 0;
+        if (!resolve(node, ImageResolveKind::Content, 0, handle, raw) ||
+            !dimensions(handle, width, height, raw)) return {};
+        return {ImageIntrinsicSizeState::Known,
+            static_cast<std::uint16_t>(width), static_cast<std::uint16_t>(height)};
+    }
+
+    static bool paint_canonical(FrameBuffer& target, const ImagePaintRequest& request, void* raw) {
+        const auto* surface = static_cast<PseudoImages*>(raw)->decoder.surface(request.image_handle);
+        if (!surface || surface->pixel_format != HostPixelFormat::Rgba8888 ||
+            surface->width <= 0 || surface->height <= 0 || surface->stride_pixels < surface->width ||
+            static_cast<std::size_t>(surface->stride_pixels) >
+                surface->pixels.size() / 4 / static_cast<std::size_t>(surface->height) ||
+            request.destination.width <= 0 || request.destination.height <= 0) return false;
+
+        const Rect destination = request.destination;
+        double scale_x = static_cast<double>(destination.width) / surface->width;
+        double scale_y = static_cast<double>(destination.height) / surface->height;
+        double scale = 1.0;
+        int draw_width = destination.width, draw_height = destination.height;
+        if (request.object_fit == ObjectFit::None) {
+            draw_width = surface->width;
+            draw_height = surface->height;
+        } else if (request.object_fit != ObjectFit::Fill) {
+            const bool cover = request.object_fit == ObjectFit::Cover;
+            scale = cover ? std::max(scale_x, scale_y) : std::min(scale_x, scale_y);
+            if (request.object_fit == ObjectFit::ScaleDown) scale = std::min(1.0, scale);
+            draw_width = std::max(1, static_cast<int>(std::lround(surface->width * scale)));
+            draw_height = std::max(1, static_cast<int>(std::lround(surface->height * scale)));
+        }
+        const int draw_x = destination.x + static_cast<int>(std::lround(
+            (destination.width - draw_width) * request.object_position.x_percent / 100.0));
+        const int draw_y = destination.y + static_cast<int>(std::lround(
+            (destination.height - draw_height) * request.object_position.y_percent / 100.0));
+        const int left = std::max(0, std::max(destination.x, draw_x));
+        const int top = std::max(0, std::max(destination.y, draw_y));
+        const int right = std::min(target.width, std::min(destination.x + destination.width,
+                                                          draw_x + draw_width));
+        const int bottom = std::min(target.height, std::min(destination.y + destination.height,
+                                                            draw_y + draw_height));
+        for (int y = top; y < bottom; ++y) {
+            const int source_y = std::clamp(static_cast<int>(
+                (static_cast<std::int64_t>(y - draw_y) * surface->height) / draw_height),
+                0, surface->height - 1);
+            for (int x = left; x < right; ++x) {
+                const int source_x = std::clamp(static_cast<int>(
+                    (static_cast<std::int64_t>(x - draw_x) * surface->width) / draw_width),
+                    0, surface->width - 1);
+                const auto index = (static_cast<std::size_t>(source_y) * surface->stride_pixels + source_x) * 4;
+                const Color source{surface->pixels[index], surface->pixels[index + 1],
+                                   surface->pixels[index + 2], surface->pixels[index + 3]};
+                Color& output = target.pixel(x, y);
+                const unsigned inverse = 255U - source.a;
+                const unsigned alpha = source.a + (output.a * inverse + 127U) / 255U;
+                if (!alpha) { output = {0, 0, 0, 0}; continue; }
+                const auto blend = [&](unsigned src, unsigned dst) {
+                    return static_cast<std::uint8_t>((src * source.a +
+                        (dst * output.a * inverse + 127U) / 255U + alpha / 2U) / alpha);
+                };
+                output = {blend(source.r, output.r), blend(source.g, output.g),
+                          blend(source.b, output.b), static_cast<std::uint8_t>(alpha)};
+            }
+        }
+        return true;
+    }
+
+    ImagePainter painter() { return {paint_canonical, this, true}; }
+#else
     static bool paint(FrameBuffer& target, const ImagePaintFractionalRequest& request, void* raw) {
         const auto* surface = static_cast<PseudoImages*>(raw)->decoder.surface(request.image_handle);
         if (!surface || surface->pixel_format != HostPixelFormat::Rgba8888 ||
@@ -203,6 +301,7 @@ struct PseudoImages {
         result.paint_fractional_clipped = paint;
         return result;
     }
+#endif
 };
 #endif
 
@@ -1055,16 +1154,26 @@ int main(int argc, char** argv) {
         PseudoImages images(options, resolver, &diagnostics);
         images.prepare(*render_tree);
         NaturalImageSizingOptions natural_images;
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+        natural_images.provider.intrinsic_size = PseudoImages::natural_size;
+        natural_images.provider.context = &images;
+#else
         natural_images.provider = {PseudoImages::natural_size, &images};
+#endif
 #endif
         LayoutEngineOptions layout_options = layout_engine_options_from_budgets(budgets);
         layout_options.diagnostics = &diagnostics;
         layout_options.text_system = text_system;
 #if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+        layout_options.natural_image_sizing = natural_images;
+#else
         layout_options.natural_image_sizing = &natural_images;
 #endif
+#endif
         TextSystemStatus text_status = TextSystemStatus::Ok;
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && \
+    !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
         layout_options.text_status = &text_status;
 #endif
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
@@ -1082,7 +1191,11 @@ int main(int argc, char** argv) {
         layer_options.diagnostics = &diagnostics;
         layer_options.text_system = text_system;
 #if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+        layer_options.image_resolver = {PseudoImages::resolve, &images};
+#else
         layer_options.image_resolver = {PseudoImages::resolve, &images, PseudoImages::dimensions};
+#endif
 #endif
         LayerTreeBuilder layer_tree_builder(layer_options);
         stage_start = Clock::now();
@@ -1097,7 +1210,7 @@ int main(int argc, char** argv) {
         compositor_options.diagnostics = &diagnostics;
         compositor_options.text_system = text_system;
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
-        SoftwareCompositor compositor(ImagePainter{}, compositor_options);
+        SoftwareCompositor compositor(images.painter(), compositor_options);
 #else
 #if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && defined(JELLYFRAME_PSEUDO_BROWSER_HAS_APP_RUNTIME)
         SoftwareCompositor compositor(TextPainter{}, images.painter(), compositor_options);

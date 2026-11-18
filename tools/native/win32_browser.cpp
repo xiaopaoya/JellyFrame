@@ -55,7 +55,8 @@
 #include "native_paint.h"
 #include "native_contextual.h"
 #include "native_image.h"
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && \
+    !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
 #include "render_core/fractional_image_sampling.h"
 #if defined(__has_include)
 #if __has_include("render_core/text_snapshot_rebind.h")
@@ -1910,6 +1911,7 @@ struct BrowserImageResolveContext {
     Canvas2DRegistry* canvas = nullptr;
     DiagnosticSink* diagnostics = nullptr;
     const StyleResolver* style_resolver = nullptr;
+    std::string* failed_content_image_source = nullptr;
 };
 
 bool resolve_browser_image_handle_impl(const Node& node,
@@ -1983,7 +1985,8 @@ struct BrowserNaturalImageContext {
     std::vector<std::uint32_t>* selected;
 };
 #if JELLYFRAME_NATIVE_NATURAL_IMAGE_LAYOUT
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && \
+    !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
 bool browser_natural_image_size(const Node& node, int& width, int& height, void* raw) {
     auto& context = *static_cast<BrowserNaturalImageContext*>(raw);
     auto& source = *context.source;
@@ -2037,6 +2040,19 @@ void request_browser_content_images(const Node& node, BrowserImageResolveContext
 #endif
 }
 
+void record_failed_browser_content_image(const Node& node, ImageResolveKind kind,
+                                         BrowserImageResolveContext& context) {
+    if (kind == ImageResolveKind::Content && node.type == NodeType::Element &&
+        node.tag_name == "img" && context.failed_content_image_source != nullptr &&
+        context.failed_content_image_source->empty()) {
+        const auto& source = node.attribute("src");
+        if (!source.empty() && context.cache != nullptr &&
+            context.cache->state_for_url(source) == AppImageSurfaceState::Failed) {
+            *context.failed_content_image_source = source;
+        }
+    }
+}
+
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_LAYER_API_VERSION)
 bool resolve_browser_image_handle(const Node& node,
                                   ImageResolveKind kind,
@@ -2044,9 +2060,12 @@ bool resolve_browser_image_handle(const Node& node,
                                   ResolvedImageResource& resource,
                                   void* raw_context) {
     resource = {};
-    if (!resolve_browser_image_handle_impl(node, kind, background_resource_id,
-                                           resource.image_handle, raw_context)) return false;
     auto* context = static_cast<BrowserImageResolveContext*>(raw_context);
+    if (!resolve_browser_image_handle_impl(node, kind, background_resource_id,
+                                           resource.image_handle, raw_context)) {
+        if (context != nullptr) record_failed_browser_content_image(node, kind, *context);
+        return false;
+    }
     if (const AppDecodedSurfaceRecord* surface = context->images->surface(resource.image_handle)) {
         resource.intrinsic_size = browser_surface_size(*surface);
     }
@@ -2058,7 +2077,11 @@ bool resolve_browser_image_handle(const Node& node,
                                   std::uint16_t background_resource_id,
                                   std::uint32_t& handle,
                                   void* raw_context) {
-    return resolve_browser_image_handle_impl(node, kind, background_resource_id, handle, raw_context);
+    auto* context = static_cast<BrowserImageResolveContext*>(raw_context);
+    if (resolve_browser_image_handle_impl(node, kind, background_resource_id, handle, raw_context))
+        return true;
+    if (context != nullptr) record_failed_browser_content_image(node, kind, *context);
+    return false;
 }
 #endif
 
@@ -2392,7 +2415,8 @@ bool paint_image_surface(FrameBuffer& target,
 
 ImagePainter make_browser_image_painter(BrowserImageContext* context) {
     ImagePainter painter{paint_image_surface, context};
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && \
+    !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
     painter.paint_fractional_clipped = [](FrameBuffer& target,
         const ImagePaintFractionalRequest& request, void* raw) {
         auto* source = static_cast<BrowserImageContext*>(raw);
@@ -3764,7 +3788,9 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
     AppImageSurfaceCache image_cache(AppImageSurfaceCacheOptions{8, 512 * 1024});
     Canvas2DRegistry debug_canvas;
     bind_browser_text_backend(debug_canvas, text_backend);
+    std::string failed_content_image_source;
     BrowserImageResolveContext image_resolve_context{&app_runtime, &debug_images, &image_cache, &debug_canvas, &diagnostics};
+    image_resolve_context.failed_content_image_source = &failed_content_image_source;
     BrowserImageContext image_context{&debug_images, &debug_canvas};
     StyleResolverOptions style_options;
     style_options.diagnostics = &diagnostics;
@@ -3801,12 +3827,17 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
     layout_options.diagnostics = &diagnostics;
     layout_options.text_system = text_backend.text_system;
     TextSystemStatus text_status = TextSystemStatus::Ok;
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION) && \
+    defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
     layout_options.text_status = &text_status;
 #endif
     std::vector<std::uint32_t> natural_handles;
     BrowserNaturalImageContext natural_context{&image_resolve_context, &natural_handles};
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    layout_options.natural_image_sizing.provider = NaturalImageSizeProvider{
+        static_cast<ImageIntrinsicSize (*)(const Node&, void*)>(browser_natural_image_size),
+        &natural_context};
+#elif defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
     NaturalImageSizingOptions natural_options;
     natural_options.provider = {browser_natural_image_size, &natural_context};
     layout_options.natural_image_sizing = &natural_options;
@@ -3823,6 +3854,14 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
     auto layout_tree = layout_engine.layout(*render_tree, options.viewport_width, options.viewport_height);
     if (!layout_tree) throw std::runtime_error("layout refused (Core text status=" +
         std::to_string(static_cast<unsigned>(text_status)) + ")");
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    if (std::any_of(diagnostics.diagnostics().begin(), diagnostics.diagnostics().end(),
+            [](const Diagnostic& diagnostic) {
+                return diagnostic.code == "layout-core-text-refused";
+            })) {
+        throw std::runtime_error("Core text layout refused");
+    }
+#endif
     LayerTreeBuilderOptions layer_options = layer_tree_options_from_budgets(budgets);
     layer_options.diagnostics = &diagnostics;
 #if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
@@ -3872,6 +3911,9 @@ FrameBuffer render_page_with_browser_text(const BrowserOptions& options,
         report_diagnostic(&diagnostics, DiagnosticStage::Package, DiagnosticSeverity::Warning,
                           "image-capture-drain-limit", "Capture image drain reached 256 completions",
                           "Remaining images retain unknown/pending geometry in this bounded capture");
+    }
+    if (!failed_content_image_source.empty()) {
+        throw std::runtime_error("required content image failed: " + failed_content_image_source);
     }
 
     SoftwareCompositor::Options compositor_options = software_compositor_options_from_budgets(budgets);
@@ -7450,12 +7492,17 @@ private:
         layout_options.diagnostics = &diagnostics_;
         layout_options.text_system = text_backend.text_system;
         TextSystemStatus text_status = TextSystemStatus::Ok;
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION) && \
+    defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
         layout_options.text_status = &text_status;
 #endif
         natural_image_handles_.clear();
         BrowserNaturalImageContext natural_context{&image_resolve_context, &natural_image_handles_};
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+        layout_options.natural_image_sizing.provider = NaturalImageSizeProvider{
+            static_cast<ImageIntrinsicSize (*)(const Node&, void*)>(browser_natural_image_size),
+            &natural_context};
+#elif defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
         NaturalImageSizingOptions natural_options;
         natural_options.provider = {browser_natural_image_size, &natural_context};
         layout_options.natural_image_sizing = &natural_options;
