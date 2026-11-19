@@ -4,6 +4,7 @@
 #include <cassert>
 #include "render_core/css_parser.h"
 #include "render_core/document_style.h"
+#include "render_core/feature_config.h"
 #include "render_core/html_parser.h"
 #include "render_core/software_renderer.h"
 #include <fstream>
@@ -42,7 +43,12 @@ void installed_canvas_fills_the_unoccupied_viewport() {
     assert(canvas("html { background: #ff0000; } body { background: #14252b; }").r == 255);
     assert(canvas("html { background: rgba(0, 0, 0, 0.5); } body { background: #14252b; }").r == fallback.r);
     assert(canvas("body { display: none; background: #14252b; }").r == fallback.r);
-    assert(canvas("body { background: #14252b; background-image: linear-gradient(red, blue); }").r == fallback.r);
+    const auto gradient = canvas("body { background: #14252b; background-image: linear-gradient(red, blue); }");
+#if JELLYFRAME_RENDER_CORE_MODERN_PAINT_ENABLED
+    assert(gradient.r == fallback.r);
+#else
+    assert(gradient.r == background.r && gradient.g == background.g && gradient.b == background.b);
+#endif
 }
 
 } // namespace
