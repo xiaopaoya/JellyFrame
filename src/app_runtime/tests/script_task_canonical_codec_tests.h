@@ -154,6 +154,90 @@ inline void canonical_motion_damage(std::uint8_t version) {
         assert(plan_script_task_group_damage(renderer, *frame, base).kind == ScriptTaskFrameDamageKind::Full);
     }
 }
+inline void canonical_command_damage() {
+    using Kind = ScriptTaskFrameDamageKind;
+    runtime_test_fonts::Fonts fonts;
+    ScriptTaskFrameRendererOptions options;
+    options.text_catalog = fonts.catalog;
+    const ScriptTaskFrameRenderer renderer({}, options);
+    const Color background{23, 32, 54, 255};
+
+    DisplayCommand text;
+    text.set_type(DisplayCommandType::PreparedText);
+    text.rect = {14, 14, 24, 11};
+    text.color = {255, 255, 255, 255};
+    text.text_paint().origin_x = 15;
+    text.text_paint().baseline_y = 21;
+    TextFontRequest request;
+    request.size_q1000 = 16000;
+    TextRunMetrics metrics;
+    PreparedTextGlyph glyphs[2];
+    assert(fonts.catalog->text_system().prepare("AB", request, glyphs, 2, metrics) == TextSystemStatus::Ok);
+    assert(encode_prepared_text(glyphs, 2, request.size_q1000, 2, text.text));
+
+    ScriptTaskAppFrame base;
+    base.viewport = {0, 0, 80, 64};
+    base.groups.resize(2);
+    auto& root = base.groups[0];
+    root.type = LayerType::Root;
+    root.bounds = base.viewport;
+    root.has_clip = true;
+    root.clip_rect = {10, 8, 55, 48};
+    root.command_count = 1;
+    auto& overlay = base.groups[1];
+    overlay.parent = 0;
+    overlay.command_begin = 1;
+    overlay.command_count = 1;
+    overlay.bounds = {15, 17, 6, 7};
+    DisplayCommand fill;
+    fill.rect = overlay.bounds;
+    fill.color = {191, 88, 30, 125};
+    base.display_list = {text, fill};
+
+    auto moved = base;
+    auto& new_text = moved.display_list[0];
+    translate_display_command(new_text, 19, 0);
+    new_text.color = {150, 213, 43, 255};
+    auto inserted = moved;
+    fill.rect = {12, 4, 35, 13};
+    inserted.display_list.insert(inserted.display_list.begin(), fill);
+    ++inserted.groups[0].command_count;
+    ++inserted.groups[1].command_begin;
+    auto removed = inserted;
+    removed.display_list.erase(removed.display_list.begin() + 1);
+    --removed.groups[0].command_count;
+    --removed.groups[1].command_begin;
+
+    const auto check = [&](const ScriptTaskAppFrame& before, const ScriptTaskAppFrame& after) {
+        FrameBuffer retained(80, 64, background), expected(80, 64, background);
+        assert(renderer.render_into(before, retained, background));
+        assert(renderer.render_into(after, expected, background));
+        assert(!same_pixels(retained, expected));
+        const auto damage = plan_script_task_group_damage(renderer, before, after);
+        assert(damage.kind == Kind::Partial && damage.rect.y >= 8);
+        assert(renderer.render_into(after, retained, background, &damage.rect, 1));
+        assert(same_pixels(retained, expected));
+    };
+    check(base, moved);
+    check(moved, inserted);
+    check(inserted, removed);
+    check(base, removed);
+    check(removed, base);
+
+    auto reclip = moved;
+    --reclip.groups[0].clip_rect.width;
+    assert(plan_script_task_group_damage(renderer, base, reclip).kind == Kind::Full);
+    auto translucent = moved;
+    translucent.groups[1].opacity = 0.75F;
+    assert(plan_script_task_group_damage(renderer, base, translucent).kind == Kind::Full);
+    auto with_image = inserted;
+    assert(detail::canonical::set_kind(with_image.display_list.back(), 8));
+    with_image.display_list.back().image_paint().image_handle = 73;
+    auto image_before = with_image;
+    image_before.display_list[0].color.r++;
+    assert(plan_script_task_group_damage(renderer, image_before, with_image).kind == Kind::Full);
+}
+
 inline bool image(FrameBuffer& target, const ImagePaintRequest& request, void*) {
     if (request.image_handle != 73) return false;
     for (int y = 0; y < target.height; ++y) for (int x = 0; x < target.width; ++x) {
@@ -760,6 +844,7 @@ inline void run() {
 #endif
     rendering();
     canonical_motion_damage(detail::canonical::kVersionV9);
+    canonical_command_damage();
     if (detail::canonical::elliptical_available) canonical_motion_damage(detail::canonical::kVersionV10);
     elliptical_v10_round_trip<DisplayCommand, LayerNode>();
 #else

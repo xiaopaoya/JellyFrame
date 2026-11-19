@@ -734,6 +734,59 @@ ScriptTaskFrameDamage plan_canonical_motion_damage(const ScriptTaskAppFrame& pre
     return {empty_rect(damage) ? ScriptTaskFrameDamageKind::Unchanged : ScriptTaskFrameDamageKind::Partial, damage};
 }
 
+ScriptTaskFrameDamage plan_canonical_command_damage(const ScriptTaskAppFrame& previous,
+                                                   const ScriptTaskAppFrame& current,
+                                                   Rect viewport) {
+    const ScriptTaskFrameDamage full{ScriptTaskFrameDamageKind::Full, viewport};
+    if (current.image_provider_id != 0) return full;
+
+    Rect damage{};
+    for (std::size_t i = 0; i < current.groups.size(); ++i) {
+        const auto& a = previous.groups[i];
+        const auto& b = current.groups[i];
+        auto normalized = b;
+        normalized.command_begin = a.command_begin;
+        normalized.command_count = a.command_count;
+        const auto& t = b.transform;
+        if (!detail::canonical::same_group(a, normalized) || b.type == LayerType::Composited ||
+            b.opacity != 1.0F || b.clip_border_radius != 0 || b.clip_border_radius_y > 0 ||
+            t.translate_x != 0 || t.translate_y != 0 || t.scale_x != 1 || t.scale_y != 1 ||
+            t.rotate_degrees != 0) return full;
+
+        const auto old_commands = previous.display_list.begin() + a.command_begin;
+        const auto new_commands = current.display_list.begin() + b.command_begin;
+        const auto direct_paint = [](const auto& command) {
+            const auto kind = detail::canonical::command_kind(command);
+            return (kind >= 0 && kind <= 5) || kind == 7;
+        };
+        if (!std::all_of(old_commands, old_commands + a.command_count, direct_paint) ||
+            !std::all_of(new_commands, new_commands + b.command_count, direct_paint)) return full;
+
+        std::size_t first = 0;
+        std::size_t old_end = a.command_count;
+        std::size_t new_end = b.command_count;
+        while (first < old_end && first < new_end &&
+               equal_display_command(old_commands[first], new_commands[first])) ++first;
+        while (first < old_end && first < new_end &&
+               equal_display_command(old_commands[old_end - 1], new_commands[new_end - 1])) {
+            --old_end;
+            --new_end;
+        }
+
+        // Core's direct scalar rasterizer clips prepared glyph ink to the
+        // command rectangle as well as the replay clip. Use both frames so
+        // deleted commands and ink outside the replacement's rect are cleared.
+        const Rect clip = b.has_clip ? intersect_rect(b.clip_rect, viewport) : viewport;
+        for (std::size_t j = first; j < std::max(old_end, new_end); ++j) {
+            if (old_end == new_end && equal_display_command(old_commands[j], new_commands[j])) continue;
+            if (j < old_end) damage = union_rect(damage, intersect_rect(old_commands[j].rect, clip));
+            if (j < new_end) damage = union_rect(damage, intersect_rect(new_commands[j].rect, clip));
+        }
+    }
+    if (equal_rect(damage, viewport)) return full;
+    return {empty_rect(damage) ? ScriptTaskFrameDamageKind::Unchanged : ScriptTaskFrameDamageKind::Partial, damage};
+}
+
 } // namespace
 #endif
 
@@ -748,8 +801,7 @@ ScriptTaskFrameDamage plan_script_task_group_damage(
         if (previous.image_provider_id != current.image_provider_id ||
             !equal_rect(previous.viewport, current.viewport) ||
             !equal_rect(current.viewport, viewport) || empty_rect(viewport) ||
-            previous.groups.size() != current.groups.size() ||
-            previous.display_list.size() != current.display_list.size()) return full;
+            previous.groups.size() != current.groups.size()) return full;
         ScriptTaskAppFrameCodecOptions canonical_limits;
         const bool has_shaped = !previous.shaped_text.empty() || !current.shaped_text.empty();
         canonical_limits.version = has_shaped ? kRuntimeShapedFrameVersion :
@@ -767,6 +819,7 @@ ScriptTaskFrameDamage plan_script_task_group_damage(
             return full;
         }
         if (has_shaped) {
+            if (previous.display_list.size() != current.display_list.size()) return full;
             for (std::size_t i = 0; i < current.groups.size(); ++i)
                 if (!detail::canonical::same_group(previous.groups[i], current.groups[i])) return full;
             for (const auto* f : {&previous, &current})
@@ -782,8 +835,13 @@ ScriptTaskFrameDamage plan_script_task_group_damage(
             return {empty_rect(damage) ? ScriptTaskFrameDamageKind::Unchanged : ScriptTaskFrameDamageKind::Partial, damage};
         }
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
-        return plan_canonical_motion_damage(previous, current, viewport);
+        if (previous.display_list.size() == current.display_list.size()) {
+            const auto motion = plan_canonical_motion_damage(previous, current, viewport);
+            if (motion.kind != ScriptTaskFrameDamageKind::Full) return motion;
+        }
+        return plan_canonical_command_damage(previous, current, viewport);
 #else
+        if (previous.display_list.size() != current.display_list.size()) return full;
         for (std::size_t i = 0; i < current.groups.size(); ++i)
             if (!detail::canonical::same_group(previous.groups[i], current.groups[i])) return full;
         for (std::size_t i = 0; i < current.display_list.size(); ++i)
