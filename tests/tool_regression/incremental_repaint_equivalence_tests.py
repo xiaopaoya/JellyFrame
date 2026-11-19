@@ -40,6 +40,14 @@ CASES = (
         frame_script="capture_soak_30fps.jfcapture",
     ),
     CaptureCase(
+        name="motion-slide-rect",
+        app="samples/apps/packages/jelly_motion_lab",
+        frame_count=36,
+        frame_script="capture_review.jfcapture",
+        viewport_width=172,
+        viewport_height=320,
+    ),
+    CaptureCase(
         name="route-tabs",
         app="samples/apps/packages/jelly_route_tabs",
         frame_count=9,

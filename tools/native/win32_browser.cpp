@@ -7555,6 +7555,27 @@ private:
                                         style_overrides_,
                                         content_height,
                                         dirty_region);
+            if (render_tree_ && (rebuild_dirty_flags & (DomDirtyStyle | DomDirtyAttributes)) != 0U &&
+                dirty_region.mode == DirtyRegionMode::DirtyRects) {
+                // The rebuild path also sees inline style changes that did not
+                // go through the animation timeline. Use each layout's own
+                // geometry to damage both the old and the new painted bounds.
+                std::vector<StyleOverride> previous_repaint_overrides;
+                std::vector<StyleOverride> current_repaint_overrides;
+                collect_style_repaint_overrides(*render_tree_, *next_render_tree,
+                                                previous_repaint_overrides,
+                                                current_repaint_overrides);
+                const auto remove_non_transforms = [](auto& overrides) {
+                    overrides.erase(std::remove_if(overrides.begin(), overrides.end(),
+                        [](const StyleOverride& item) { return !item.has_transform; }), overrides.end());
+                };
+                remove_non_transforms(previous_repaint_overrides);
+                remove_non_transforms(current_repaint_overrides);
+                merge_override_invalidation(*previous_layout, previous_repaint_overrides,
+                                            previous_repaint_overrides, content_height, dirty_region);
+                merge_override_invalidation(*next_layout_tree, current_repaint_overrides,
+                                            current_repaint_overrides, content_height, dirty_region);
+            }
         }
         finish_trace_stage(FrameTraceStage::Dirty);
         const std::vector<Rect>& dirty_rects = dirty_region.rects;
