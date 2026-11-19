@@ -78,6 +78,27 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install pinned LLVM 22.1.8
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'LLVM-22.1.8-win64.exe'
+          Invoke-WebRequest `
+            -Uri 'https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-win64.exe' `
+            -OutFile $installer
+          $actualHash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne '16e5709785fef73c854646241c4a92c5cd574318d1b33c63330dd7721903e55c') {
+            throw "LLVM installer SHA-256 mismatch: $actualHash"
+          }
+          $llvmRoot = Join-Path $env:RUNNER_TEMP 'llvm-22.1.8'
+          $install = Start-Process -FilePath $installer -ArgumentList "/S /D=$llvmRoot" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "LLVM installer failed: $($install.ExitCode)" }
+          $llvmBin = Join-Path $llvmRoot 'bin'
+          $version = & (Join-Path $llvmBin 'clang++.exe') --version
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch 'clang version 22\.1\.8') {
+            throw "Unexpected qualification compiler: $version"
+          }
+          "LLVM_BIN=$llvmBin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Build JerryScript and install the host signing fixture dependency
         shell: pwsh
         run: |
@@ -97,6 +118,7 @@ jobs:
             --core build/abi9-core --core-commit $env:CORE_COMMIT `
             --core-version $env:CORE_VERSION --core-source-hash $env:CORE_SOURCE_HASH `
             --jerry build/abi9-jerry --mbedtls build/abi9-mbedtls `
+            --c-compiler "$env:LLVM_BIN/clang.exe" --cxx-compiler "$env:LLVM_BIN/clang++.exe" `
             --profile $env:PROFILE --jobs 3 --output "$env:RUNNER_TEMP/abi9-pair"
           if ($LASTEXITCODE -ne 0) { throw 'ABI9 installed pair qualification failed' }
 

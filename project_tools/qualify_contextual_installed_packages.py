@@ -26,7 +26,7 @@ def parse_ctest_passed_count(log):
     if legacy:
         return int(legacy[1])
 
-    current = re.search(r'(\d+)% tests passed, (\d+) tests failed out of (\d+)', log)
+    current = re.search(r'(\d+)% tests passed(?:,\s*|\s+\()(\d+) tests failed out of (\d+)\)?', log)
     if current:
         percent, failed, total = map(int, current.groups())
         if percent == 100 and failed == 0:
