@@ -93,6 +93,38 @@ int run_installed_resource_owner_tests() {
         }
         return snapshot;
     };
+    {
+        auto snapshot = app_snapshot();
+        jellyframe::AppFontSet fonts(snapshot.fonts.size());
+        if (!check(fonts.attach_core_system_font_catalog_view(
+                jellyframe::kNotoSansScSystemFontCatalog, jellyframe::kNotoSansScSystemFontCatalogSize),
+                "retained UI system catalog must bind")) return 1;
+        const auto family_hash = jellyframe::normalized_font_family_hash("Named Family");
+        std::uint32_t family = 0;
+        if (!check(!fonts.core_text_system()->resolve_family_hash(family_hash, family),
+                "system fonts alone cannot resolve the app family")) return 1;
+        if (!check(attach_installed_app_fonts(snapshot, fonts),
+                "retained UI must attach both app faces")) return 1;
+        const auto& text = *fonts.core_text_system();
+        if (!check(text.resolve_family_hash(family_hash, family) && family != 0,
+                "retained UI must resolve the app family")) return 1;
+        jellyframe::TextFontRequest request;
+        request.families = &family;
+        request.family_count = 1;
+        jellyframe::TextRunMetrics metrics;
+        jellyframe::PreparedTextGlyph glyph;
+        if (!check(text.prepare("A", request, &glyph, 1, metrics) == jellyframe::TextSystemStatus::Ok &&
+                metrics.advance == 9600, "retained UI must prepare the app glyph")) return 1;
+        std::string packet;
+        jellyframe::PreparedTextView view;
+        if (!check(jellyframe::encode_prepared_text(&glyph, 1, request.size_q1000, 1, packet) &&
+                jellyframe::decode_prepared_text(packet, view), "app glyph must encode")) return 1;
+        jellyframe::FrameBuffer pixels(16, 16, {0, 0, 0, 255});
+        if (!check(text.paint(view, pixels, {0, 0, 16, 16}, 4000, 8000, {255, 255, 255, 255}) ==
+                jellyframe::TextSystemStatus::Ok &&
+                std::any_of(pixels.pixels.begin(), pixels.pixels.end(), [](auto p) { return p.r != 0; }),
+                "retained UI must paint app ink")) return 1;
+    }
     InstalledAppResources::Handle named;
     const std::size_t app_font_start = jellyframe::kNotoSansScSystemFontCatalogSize;
     const auto admit = [&](InstalledResourceSnapshot snapshot) {

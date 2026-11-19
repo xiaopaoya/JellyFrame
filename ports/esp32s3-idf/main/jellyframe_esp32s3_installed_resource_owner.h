@@ -21,6 +21,10 @@ struct ScriptTaskFrameRendererOptions;
 namespace jellyframe_esp32s3 {
 
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+// The UI session owns the snapshot until its font set is destroyed.
+bool attach_installed_app_fonts(const InstalledResourceSnapshot& snapshot,
+                                jellyframe::AppFontSet& fonts);
+
 struct InstalledAppResources final {
     using Handle = std::shared_ptr<const InstalledAppResources>;
 

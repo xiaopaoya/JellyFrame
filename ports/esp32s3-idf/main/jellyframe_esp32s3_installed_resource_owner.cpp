@@ -40,6 +40,25 @@ void InstalledAppResources::bind_ui_resources(
 namespace jellyframe_esp32s3 {
 namespace {
 
+const InstalledResourceSnapshotEntry* find_installed_font(
+    const InstalledResourceSnapshot& snapshot, const jellyframe::DeviceBundleFont& metadata) {
+    if (metadata.source.back() != '\0' || metadata.family.back() != '\0') return nullptr;
+    const std::string_view path(metadata.source.data());
+    if (path.size() < 8 || path.substr(path.size() - 8) != ".jffont2") return nullptr;
+    std::string normalized;
+    if (!resolve_local_resource_url(path, "/", normalized) || normalized != path) return nullptr;
+    for (const unsigned char ch : std::string_view(metadata.family.data()))
+        if (ch < 0x20) return nullptr;
+    const InstalledResourceSnapshotEntry* match = nullptr;
+    for (const auto& entry : snapshot.entries) {
+        if (entry.url != path) continue;
+        if (match || entry.kind != jellyframe::HostResourceKind::Font ||
+            entry.bytes.empty() || entry.bytes.size() > kInstalledResourceMaxBytes) return nullptr;
+        match = &entry;
+    }
+    return match;
+}
+
 #if JELLYFRAME_RUNTIME_IMAGE_API && defined(CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER) && CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER
 class InstalledSnapshotImageSource final : public jellyframe::RuntimeImageProviderSource {
 public:
@@ -124,6 +143,23 @@ private:
 
 } // namespace
 
+bool attach_installed_app_fonts(const InstalledResourceSnapshot& snapshot,
+                                jellyframe::AppFontSet& fonts) {
+    if (snapshot.fonts.size() > jellyframe::kDeviceBundleMaxFonts) return false;
+    // A retained UI task owns a fresh font set for exactly one app instance.
+    constexpr std::uint32_t app_instance = 1;
+    try {
+        for (const auto& metadata : snapshot.fonts) {
+            const auto* font = find_installed_font(snapshot, metadata);
+            if (!font || !fonts.attach_core_font_view(app_instance, font->bytes.data(),
+                    font->bytes.size(), metadata.family.data()).loaded()) return false;
+        }
+    } catch (const std::bad_alloc&) {
+        return false;
+    }
+    return true;
+}
+
 bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
                                     const jellyframe::HostBudgets& budgets,
                                     std::string_view entry_path,
@@ -169,20 +205,8 @@ bool create_installed_app_resources(InstalledResourceSnapshot&& snapshot,
         }
         if (owned_snapshot->fonts.size() > kDeviceBundleMaxFonts) return false;
         for (const auto& metadata : owned_snapshot->fonts) {
-            if (metadata.source.back() != '\0' || metadata.family.back() != '\0') return false;
-            const std::string_view path(metadata.source.data());
-            if (path.size() < 8 || path.substr(path.size() - 8) != ".jffont2") return false;
-            std::string normalized;
-            if (!resolve_local_resource_url(path, "/", normalized) || normalized != path) return false;
-            for (const unsigned char ch : std::string_view(metadata.family.data()))
-                if (ch < 0x20) return false;
-            const InstalledResourceSnapshotEntry* match = nullptr;
-            for (const auto& entry : owned_snapshot->entries) {
-                if (entry.url != path) continue;
-                if (match || entry.kind != HostResourceKind::Font) return false;
-                match = &entry;
-            }
-            if (!match || match->bytes.empty()) return false;
+            const auto* match = find_installed_font(*owned_snapshot, metadata);
+            if (!match) return false;
             RuntimeFontResource::Handle resource;
             if (RuntimeFontResource::retain(match->bytes.data(), match->bytes.size(), owned_snapshot, resource) !=
                 RuntimeFontStatus::Ready) return false;
