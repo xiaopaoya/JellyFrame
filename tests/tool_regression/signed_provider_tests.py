@@ -166,8 +166,8 @@ class PackageInspectionTests(unittest.TestCase):
 @unittest.skipIf(ec is None, "optional cryptography package unavailable")
 class PhysicalTransportTests(unittest.TestCase):
     def exercise(self, raw, root, *, cap=1044480, shaping=True, replace=False, fail_commit=False,
-                 abi=4, features=None):
-        path = root / 'install.jfsg'
+                 abi=4, features=None, suffix='jfsg', requires_signed=None):
+        path = root / f'install.{suffix}'
         path.write_bytes(raw)
         calls, reconstructed = [], bytearray()
         device = provider.fixture_device()
@@ -203,18 +203,34 @@ class PhysicalTransportTests(unittest.TestCase):
         self_test = self
         session = mock.Mock(cancel_requested=threading.Event())
         args = argparse.Namespace(operation='install', selector='fixture', request_id='signed-install', bundle=path, allow_downgrade=False)
-        config = provider.ProviderConfig('fixture', 'COM19', 115200, root / 'manifest.json', {'renderCore': {'abi': abi}})
+        manifest = {'renderCore': {'abi': abi}, 'storage': {'maxBundleBytes': cap}}
+        if requires_signed is not None:
+            manifest['storage']['requiresSignedBundle'] = requires_signed
+        config = provider.ProviderConfig('fixture', 'COM19', 115200, root / 'manifest.json', manifest)
         with (mock.patch.object(provider, 'Wire', Wire),
               mock.patch.object(provider, 'decode_capabilities', return_value={}),
               mock.patch.object(provider, 'decode_identity', return_value={}),
               mock.patch.object(provider, 'device_from_capabilities', return_value=device),
-              mock.patch.object(provider, 'LiveInstallSession', return_value=session)):
+              mock.patch.object(provider, 'LiveInstallSession', return_value=session) as live_session):
             try:
                 result = provider.run_physical(args, config)
             except provider.ProviderError:
                 self.assertNotIn(provider.INSTALL_BEGIN, calls)
+                live_session.assert_not_called()
                 raise
         return result, bytes(reconstructed), calls
+
+    def test_signed_store_rejects_raw_scalar_before_begin(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            raw, envelope = signed(root, shaped=False)
+            with self.assertRaisesRegex(provider.ProviderError, r'requires a \.jfsg bundle'):
+                self.exercise(raw, root, shaping=False, suffix='jfapp', requires_signed=True)
+            for policy, data, suffix in ((True, envelope, 'jfsg'), (False, raw, 'jfapp'), (None, raw, 'jfapp')):
+                with self.subTest(policy=policy):
+                    (code, _), received, calls = self.exercise(
+                        data, root, shaping=False, suffix=suffix, requires_signed=policy)
+                    self.assertEqual((code, received, calls[-1]), (0, data, provider.INSTALL_COMMIT))
 
     def test_large_signed_exact_bytes_once_read_and_bounded_jsonl(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -1,6 +1,6 @@
 # WS147 Device Provider
 
-> Last updated: 2026-11-17; Applies to: 0.6.0-dev
+> Last updated: 2026-11-19; Applies to: 0.6.0-dev
 
 `jellyframe-device.cmd` is the explicitly configured WS147 Device OS provider.
 It is a host-side adapter for JFDP/1 over the board's native USB Serial/JTAG
@@ -25,6 +25,7 @@ python ports\esp32s3-idf\tools\device_provider\package_ws147_device_provider.py 
   --render-core-profile <jellyframe_render_core_profile.json> `
   --build-profile installedWorker `
   --build-dir <esp-idf-build-directory> `
+  --requires-signed-bundle `
   --output <release-directory>
 ```
 
@@ -109,8 +110,12 @@ requires a signed envelope and an explicitly matched route. The ABI4
 `text.contextual-layout` (bit8); neither route grants the other. Contextual
 JFSP2 alone does not grant installed DOM layout. The device's Core ABI and
 complete family set must match the configured manifest before package
-inspection or INSTALL_BEGIN. Scalar format0 remains supported by the host. Device store
-policy still decides whether unsigned scalar installation is permitted.
+inspection or `INSTALL_BEGIN`. Pass `--requires-signed-bundle` when packaging an
+image whose store requires JFSG, including the current WS147 signed store.
+The manifest then tells the provider to reject a raw JFAPP before `INSTALL_BEGIN`.
+If the field is absent, the provider forwards structurally valid scalar JFAPP
+and the firmware applies its own policy. Keep the provider and manifest from
+the same archive.
 Inspection and transport use one bounded immutable read, so replacing the file
 after admission cannot change transmitted bytes. The standalone stdlib inspector
 checks envelope bounds, metadata, resource CRC/SHA and shaped declarations. It

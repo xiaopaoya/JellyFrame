@@ -102,6 +102,18 @@ class DeviceImageManifestTests(unittest.TestCase):
         with self.assertRaises(contract.DeviceImageManifestError):
             contract.parse_device_image_manifest(json.dumps(invalid))
 
+    def test_optional_signed_bundle_policy_is_a_boolean(self):
+        value = manifest()
+        for policy in (True, False):
+            value['storage']['requiresSignedBundle'] = policy
+            parsed = contract.parse_device_image_manifest(json.dumps(value))
+            self.assertIs(parsed['storage']['requiresSignedBundle'], policy)
+        for invalid in (1, 'true', None):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(
+                    contract.DeviceImageManifestError, 'storage.requiresSignedBundle'):
+                value['storage']['requiresSignedBundle'] = invalid
+                contract.parse_device_image_manifest(json.dumps(value))
+
     def test_rejects_provider_identity_or_capability_drift(self):
         parsed = contract.parse_device_image_manifest(json.dumps(manifest()))
         changed = device()

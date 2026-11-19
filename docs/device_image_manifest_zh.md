@@ -48,6 +48,11 @@ compatibility check；两者都会拒绝 unknown field 与 duplicate JSON member
 Device OS release document 提供，写明 host tool、target board、confirmation step
 和 recovery outcome。
 
+可选布尔字段 `storage.requiresSignedBundle` 声明此镜像只接受签名安装包。为 `true` 时，
+provider 在核对设备与清单一致后，会在 `INSTALL_BEGIN` 前拒绝普通 JFAPP。省略或为
+`false` 时，主机不增加这项限制。实际签名验证仍由固件执行。请配套使用同一归档中的
+provider 和清单，旧版严格解析器不识别新字段。
+
 ## 可选安装容量证据
 
 `buildProvenance.partitionTableSha256`、`configuredMaxBundleBytes`、

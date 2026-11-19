@@ -51,6 +51,13 @@ hash identifies the factory image described by the procedure named in
 procedure is a versioned Device OS release document and must state host tools,
 target board, confirmation steps and recovery outcomes.
 
+The optional boolean `storage.requiresSignedBundle` declares a signed-only
+install store. If true, the provider rejects a raw JFAPP before `INSTALL_BEGIN`
+after matching the device to the manifest. Absence or false adds no host
+restriction. The firmware still authenticates every package according to its
+own policy. Use the provider and manifest from the same archive; older strict
+manifest readers do not recognize the field.
+
 ## Optional install-capacity provenance
 
 When a release supplies `buildProvenance.partitionTableSha256`, it must also
