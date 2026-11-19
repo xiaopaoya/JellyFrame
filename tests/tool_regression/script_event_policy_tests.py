@@ -42,7 +42,8 @@ class ScriptEventPolicyTests(unittest.TestCase):
             headers = root / 'render_core'
             headers.mkdir()
             source = root / 'probe.cpp'
-            msvc = arguments.compiler.name.lower() in ('cl.exe', 'cl', 'clang-cl.exe', 'clang-cl')
+            compiler_name = arguments.compiler.name.lower()
+            msvc = compiler_name in ('cl.exe', 'cl', 'clang-cl.exe', 'clang-cl')
             for name, policy, completion, failure, submit, forms, rtti, accepted in cases:
                 with self.subTest(name=name):
                     api = {'DISPATCH_COMPLETION': completion, 'DISPATCH_FAILURE': failure, 'SUBMIT_KIND': submit}
@@ -57,7 +58,11 @@ class ScriptEventPolicyTests(unittest.TestCase):
                         encoding='utf-8')
                     if msvc:
                         flags = ['/nologo', '/Zs', '/std:c++17', f'/I{root}', f'/I{arguments.source_root / "src"}']
-                        if not rtti: flags.append('/GR-')
+                        if not rtti:
+                            if compiler_name in ('clang-cl.exe', 'clang-cl'):
+                                flags.append('/clang:-fno-rtti')
+                            else:
+                                flags.append('/GR-')
                     else:
                         flags = ['-std=c++17', '-fsyntax-only', '-I', str(root), '-I', str(arguments.source_root / 'src')]
                         if not rtti: flags.append('-fno-rtti')
