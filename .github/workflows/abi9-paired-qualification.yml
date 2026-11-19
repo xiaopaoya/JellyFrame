@@ -78,6 +78,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Set up the MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Install pinned LLVM 22.1.8
         shell: pwsh
         run: |
@@ -118,7 +123,7 @@ jobs:
             --core build/abi9-core --core-commit $env:CORE_COMMIT `
             --core-version $env:CORE_VERSION --core-source-hash $env:CORE_SOURCE_HASH `
             --jerry build/abi9-jerry --mbedtls build/abi9-mbedtls `
-            --c-compiler "$env:LLVM_BIN/clang.exe" --cxx-compiler "$env:LLVM_BIN/clang++.exe" `
+            --c-compiler "$env:LLVM_BIN/clang-cl.exe" --cxx-compiler "$env:LLVM_BIN/clang-cl.exe" `
             --profile $env:PROFILE --jobs 3 --output "$env:RUNNER_TEMP/abi9-pair"
           if ($LASTEXITCODE -ne 0) { throw 'ABI9 installed pair qualification failed' }
 
