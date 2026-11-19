@@ -286,9 +286,9 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
         self._exercise_build_dir(4)
 
     def test_contextual_build_dir_release_and_isolated_import(self) -> None:
-        self._exercise_build_dir(9)
+        self._exercise_build_dir(9, custom_sdkconfig=True)
 
-    def _exercise_build_dir(self, abi: int) -> None:
+    def _exercise_build_dir(self, abi: int, *, custom_sdkconfig: bool = False) -> None:
         with tempfile.TemporaryDirectory(prefix="jellyframe-ws147-build-dir-") as directory:
             root = Path(directory)
             build = root / "build"
@@ -319,11 +319,20 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 "schemaVersion": 1, "packageVersion": "0.9.0-dev", "engineAbi": abi,
                 "profileId": "render-core-default", "features": core_features,
             }), encoding="utf-8")
-            (build / "project_description.json").write_text(json.dumps({
+            description_path = build / "project_description.json"
+            description = {
                 "build_dir": str(build), "git_revision": "a" * 40, "target": "esp32s3",
                 "idf_path": str(root / "idf"), "app_bin": "jellyframe_esp32s3_bench.bin",
                 "c_compiler": r"C:\Espressif\tools\xtensa-esp-elf\esp-13.2.0_20240530\bin\xtensa-esp32s3-elf-gcc.exe",
-            }), encoding="utf-8")
+            }
+            sdkconfig = build / ("sdkconfig.board" if custom_sdkconfig else "sdkconfig")
+            if custom_sdkconfig:
+                description["config_file"] = str(sdkconfig)
+                (build / "sdkconfig").write_text('CONFIG_IDF_TARGET="esp32s3"\n'
+                                                 'CONFIG_PARTITION_TABLE_OFFSET=0x8000\n'
+                                                 'CONFIG_JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB=320\n',
+                                                 encoding="utf-8")
+            description_path.write_text(json.dumps(description), encoding="utf-8")
             idf_version_file = root / "idf" / "tools" / "cmake" / "version.cmake"
             idf_version_file.parent.mkdir(parents=True)
             idf_version_file.write_text(
@@ -332,9 +341,9 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             app_bin = build / "jellyframe_esp32s3_bench.bin"
             app_bin.write_bytes(firmware.read_bytes())
             (build / "CMakeCache.txt").write_text(
-                f"IDF_TARGET:STRING=esp32s3\nSDKCONFIG_DEFAULTS:UNINITIALIZED={root / 'sdkconfig.defaults'};{root / 'sdkconfig.ws147_core_text.defaults'}\n",
+                f"IDF_TARGET:STRING=esp32s3\nSDKCONFIG_DEFAULTS:UNINITIALIZED={root / 'sdkconfig.defaults'};{root / 'sdkconfig.ws147_core_text.defaults'}\n"
+                + (f"SDKCONFIG:UNINITIALIZED={sdkconfig}\n" if custom_sdkconfig else ""),
                 encoding="utf-8")
-            sdkconfig = build / "sdkconfig"
             sdkconfig.write_text('CONFIG_IDF_TARGET="esp32s3"\nCONFIG_PARTITION_TABLE_OFFSET=0x8000\n'
                                  'CONFIG_JELLYFRAME_ESP32S3_DEVICE_IMAGE_MAX_PACKAGE_KIB=1024\n', encoding="utf-8")
             config_header = build / "config/sdkconfig.h"
@@ -382,6 +391,17 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 "storagePartitionOffset": 0xc10000, "storagePartitionBytes": 3145728,
             })
             self.assertEqual(manifest["storage"]["maxBundleBytes"], 1044480)
+            if custom_sdkconfig:
+                description["config_file"] = str(build / "sdkconfig")
+                description_path.write_text(json.dumps(description), encoding="utf-8")
+                conflict_output = root / "config-conflict"
+                conflict = subprocess.run([*common, "--output", str(conflict_output)], cwd=ROOT,
+                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                self.assertNotEqual(conflict.returncode, 0)
+                self.assertIn(b"disagree on sdkconfig", conflict.stderr)
+                self.assertFalse(conflict_output.exists())
+                description["config_file"] = str(sdkconfig)
+                description_path.write_text(json.dumps(description), encoding="utf-8")
             bundled_parser = release / "provider" / "lib" / "device_image_manifest.py"
             self.assertTrue(bundled_parser.is_file())
 

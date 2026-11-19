@@ -140,15 +140,14 @@ def _identity_from_build_evidence(build_manifest_path: Path, profile_path: Path,
     return revision, image_version, version, abi, profile_features, provenance
 
 
-def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, list[str], dict[str, object]]:
+def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, list[str], dict[str, object], Path]:
     generated = build_dir / "esp-idf" / "jellyframe_render_core" / "generated"
     port_path = generated / "jellyframe_render_core_port_provenance.txt"
     source_path = generated / "jellyframe_render_core_source_manifest.json"
     profile_path = generated / "jellyframe_render_core_profile.json"
     description_path = build_dir / "project_description.json"
     cache_path = build_dir / "CMakeCache.txt"
-    sdkconfig_path = build_dir / "sdkconfig"
-    required = (port_path, source_path, profile_path, description_path, cache_path, sdkconfig_path)
+    required = (port_path, source_path, profile_path, description_path, cache_path)
     if not all(path.is_file() for path in required):
         missing = [str(path) for path in required if not path.is_file()]
         raise SystemExit("ESP-IDF build directory is missing provenance files: " + ", ".join(missing))
@@ -165,6 +164,20 @@ def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, li
         match = re.match(r"^([^:#]+):[^=]*=(.*)$", line)
         if match:
             cache[match.group(1)] = match.group(2)
+
+    config_paths = []
+    for metadata, field in ((description, "config_file"), (cache, "SDKCONFIG")):
+        if field not in metadata:
+            continue
+        value = metadata[field]
+        if not isinstance(value, str) or not value.strip():
+            raise SystemExit("ESP-IDF build provenance has an invalid sdkconfig path")
+        config_paths.append((build_dir / value).resolve())
+    if len(set(config_paths)) > 1:
+        raise SystemExit("ESP-IDF project description and CMake cache disagree on sdkconfig")
+    sdkconfig_path = config_paths[0] if config_paths else build_dir / "sdkconfig"
+    if not sdkconfig_path.is_file():
+        raise SystemExit(f"ESP-IDF build directory is missing the effective sdkconfig: {sdkconfig_path}")
 
     try:
         version = port["package"]
@@ -254,10 +267,11 @@ def _idf_build_provenance(build_dir: Path, firmware: Path) -> tuple[str, int, li
         "buildProfile": ",".join(named_profiles) + ";" + core_profile_id,
         "sdkconfigSha256": sha256(sdkconfig_path),
     }
-    return version, abi, core_features, provenance
+    return version, abi, core_features, provenance, sdkconfig_path
 
 
-def _install_capacity(build_dir: Path, firmware: Path, factory: Path | None = None) -> tuple[int, dict[str, object]]:
+def _install_capacity(build_dir: Path, firmware: Path, factory: Path | None = None,
+                      *, sdkconfig_path: Path | None = None) -> tuple[int, dict[str, object]]:
     """Mirror DeviceImageStore's 2 registry sectors + 3 aligned bundle slots.
 
     Use generated binary partitions, never the editable CSV or profile name.
@@ -265,7 +279,7 @@ def _install_capacity(build_dir: Path, firmware: Path, factory: Path | None = No
     """
     try:
         values = {}
-        for line in (build_dir / "sdkconfig").read_text(encoding="utf-8").splitlines():
+        for line in (sdkconfig_path or build_dir / "sdkconfig").read_text(encoding="utf-8").splitlines():
             if line.startswith("CONFIG_") and "=" in line:
                 key, value = line.split("=", 1)
                 # IDF's generated compatibility aliases can repeat identical
@@ -367,7 +381,7 @@ def main() -> int:
     if any(family.startswith('text.') for family in feature_families) and args.build_dir is None:
         raise SystemExit("text pipeline provider release requires --build-dir capacity evidence")
     if args.build_dir is not None:
-        idf_version, idf_abi, idf_features, idf_provenance = _idf_build_provenance(
+        idf_version, idf_abi, idf_features, idf_provenance, sdkconfig_path = _idf_build_provenance(
             args.build_dir.resolve(), firmware)
         if ((render_core_version, render_core_abi) != (idf_version, idf_abi) or
                 set(feature_families) != set(idf_features)):
@@ -386,7 +400,8 @@ def main() -> int:
             recorded_toolchain = re.search(r"esp-[0-9.]+_[0-9]+", str(build_provenance["toolchain"]))
             if recorded_toolchain is None or recorded_toolchain.group() != idf_provenance["toolchain"]:
                 raise SystemExit("build manifest versioned toolchain conflicts with ESP-IDF build directory")
-        max_bundle_bytes, capacity_provenance = _install_capacity(args.build_dir.resolve(), firmware, factory)
+        max_bundle_bytes, capacity_provenance = _install_capacity(
+            args.build_dir.resolve(), firmware, factory, sdkconfig_path=sdkconfig_path)
         build_provenance.update(idf_provenance)
         build_provenance.update(capacity_provenance)
 
