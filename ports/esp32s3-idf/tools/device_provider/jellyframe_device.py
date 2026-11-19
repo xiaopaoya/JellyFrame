@@ -45,6 +45,8 @@ RESPONSE_FLAG = 1
 # commit and abort can synchronously erase or inspect a raw flash slot, so
 # those explicitly opt in to the longer, still bounded deadline below.
 CONTROL_REQUEST_TIMEOUT_SECONDS = 3.0
+# Launch and rollback reauthenticate the selected bundle before replying.
+BUNDLE_LIFECYCLE_REQUEST_TIMEOUT_SECONDS = 15.0
 INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS = 30.0
 INSTALL_CONTROL_WAIT_SECONDS = INSTALL_FLASH_OPERATION_TIMEOUT_SECONDS + 3.0
 # Logs can carry one complete bounded JFDP payload. Leave room beyond the
@@ -707,7 +709,9 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
             return 0, [envelope("recovery", args.request_id, "ok", device=device, recovery=decode_recovery(wire.request(RECOVERY)))]
         if args.operation in {"launch", "stop", "remove", "rollback"}:
             type_map = {"launch": LAUNCH, "stop": STOP, "remove": REMOVE, "rollback": ROLLBACK}
-            result = decode_result(wire.request(type_map[args.operation], app_id_payload(args.app_id)))
+            timeout = (BUNDLE_LIFECYCLE_REQUEST_TIMEOUT_SECONDS if args.operation in {"launch", "rollback"}
+                       else CONTROL_REQUEST_TIMEOUT_SECONDS)
+            result = decode_result(wire.request(type_map[args.operation], app_id_payload(args.app_id), timeout))
             result_code = result["resultCode"]
             return exit_code_for(result_code), [envelope(args.operation, args.request_id, result_code, device=device,
                                                          **operation_result_fields(result))]

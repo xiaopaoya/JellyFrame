@@ -226,6 +226,52 @@ class Ws147DeviceProviderTests(unittest.TestCase):
 
         self.assertNotIn(provider.INSTALL_BEGIN, requests)
 
+    def test_slow_bundle_lifecycle_can_complete_without_extending_other_control_deadlines(self) -> None:
+        spec = importlib.util.spec_from_file_location("ws147_device_provider_launch", PROVIDER)
+        assert spec is not None and spec.loader is not None
+        provider = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = provider
+        spec.loader.exec_module(provider)
+
+        class SlowLifecycleWire:
+            def __init__(self, _config: object) -> None:
+                pass
+
+            def open(self) -> None:
+                pass
+
+            def close(self) -> None:
+                pass
+
+            def request(self, message_type: int, _payload: bytes = b"", timeout_seconds: float = 3.0) -> bytes:
+                if message_type in {provider.DISCOVERY, provider.IDENTITY}:
+                    return b"stub"
+                if timeout_seconds < 8.2:
+                    raise provider.ProviderError("transport-unavailable", "simulated response deadline")
+                return bytes((1, 0, 3, 0)) + bytes(12)
+
+        device = provider.fixture_device()
+        endpoint = device["endpointId"]
+        config = provider.ProviderConfig(endpoint, "COM19", 115200, Path("manifest.json"), {})
+        args = argparse.Namespace(operation="launch", selector=endpoint, request_id="slow-launch",
+                                  app_id="org.jellyframe.fixture")
+        with (
+            mock.patch.object(provider, "Wire", SlowLifecycleWire),
+            mock.patch.object(provider, "decode_capabilities", return_value={}),
+            mock.patch.object(provider, "decode_identity", return_value={}),
+            mock.patch.object(provider, "device_from_capabilities", return_value=device),
+        ):
+            for operation in ("launch", "rollback"):
+                with self.subTest(operation=operation):
+                    args.operation = operation
+                    status, events = provider.run_physical(args, config)
+                    self.assertEqual((status, events[0]["resultCode"]), (0, "ok"))
+            for operation in ("stop", "remove"):
+                with self.subTest(operation=operation):
+                    args.operation = operation
+                    with self.assertRaisesRegex(provider.ProviderError, "simulated response deadline"):
+                        provider.run_physical(args, config)
+
     def test_identity_and_typed_logs_decoders_reject_unbounded_shapes(self) -> None:
         spec = importlib.util.spec_from_file_location("ws147_device_provider_typed", PROVIDER)
         assert spec is not None and spec.loader is not None
