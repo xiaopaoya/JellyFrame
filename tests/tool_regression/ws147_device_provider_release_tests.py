@@ -137,6 +137,7 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             self.assertEqual(manifest["source"]["firmwareSha256"], sha256(firmware))
             self.assertEqual(manifest["recovery"]["factoryImageSha256"], sha256(factory))
             self.assertEqual(manifest["renderCore"], {"version": "0.6.2", "abi": 1})
+            self.assertNotIn("requiresSignedBundle", manifest["storage"])
 
             prefix = f"{release.name}/"
             with zipfile.ZipFile(archive_path) as archive:
@@ -168,6 +169,7 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 "--firmware", str(firmware),
                 "--factory-image", str(factory),
                 *identity_args(build_manifest, core_profile),
+                "--requires-signed-bundle",
                 "--output", str(root / "release"),
             ], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr.decode("utf-8", errors="replace"))
@@ -175,6 +177,7 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             manifest = device_image_manifest.parse_device_image_manifest(
                 (release / "developer-image" / "ws147-developer-image.manifest.json").read_bytes())
             self.assertEqual(manifest["renderCore"], {"version": "0.9.0-dev", "abi": 4})
+            self.assertIs(manifest["storage"]["requiresSignedBundle"], True)
             self.assertEqual(manifest["imageVersion"], version)
             self.assertEqual(manifest["source"]["revision"], revision)
             self.assertEqual(manifest["source"]["firmwareSha256"], sha256(firmware))

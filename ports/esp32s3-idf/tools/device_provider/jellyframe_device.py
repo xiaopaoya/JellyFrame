@@ -747,6 +747,8 @@ def run_physical(args: argparse.Namespace, config: ProviderConfig) -> tuple[int,
             except (KeyError, TypeError, ValueError) as error:
                 raise ProviderError("protocol-mismatch", "invalid matched text pipeline identity") from error
             bundle, facts = read_target_package(args.bundle, target["maxBundleBytes"], text_pipelines=pipelines)
+            if config.manifest.get("storage", {}).get("requiresSignedBundle") and not facts["signedEnvelope"]:
+                raise ProviderError("invalid-request", "this image requires a .jfsg bundle signed with a key trusted by the device")
             app_id = facts["appId"]
             transaction = int(time.monotonic_ns() & 0xffffffff) or 1
             events: list[dict[str, Any]] = []

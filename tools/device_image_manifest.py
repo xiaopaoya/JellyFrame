@@ -81,6 +81,14 @@ def parse_device_image_manifest(data: bytes | str) -> dict[str, Any]:
     _string(render_core["version"], "renderCore.version", _VERSION_RE)
     _positive_int(render_core["abi"], "renderCore.abi")
 
+    storage = manifest["storage"]
+    if (not isinstance(storage, dict) or "maxBundleBytes" not in storage or
+            set(storage) - {"maxBundleBytes", "requiresSignedBundle"}):
+        raise DeviceImageManifestError("storage has unknown or missing fields")
+    _positive_int(storage["maxBundleBytes"], "storage.maxBundleBytes")
+    if "requiresSignedBundle" in storage and not isinstance(storage["requiresSignedBundle"], bool):
+        raise DeviceImageManifestError("storage.requiresSignedBundle must be a boolean")
+
     if "buildProvenance" in manifest:
         provenance = manifest["buildProvenance"]
         allowed_provenance = {
@@ -111,7 +119,7 @@ def parse_device_image_manifest(data: bytes | str) -> dict[str, Any]:
                                       ("configuredMaxBundleBytes", "storagePartitionOffset", "storagePartitionBytes"))
             if (not 65536 <= configured <= 2097152 or configured % 1024 or offset % 4096 or size % 4096 or
                     size <= 8192 or offset + size > 16777216 or
-                    _object(manifest.get("storage"), "storage", {"maxBundleBytes"})["maxBundleBytes"] != min(configured, ((size - 8192) // 3) & ~4095)):
+                    storage["maxBundleBytes"] != min(configured, ((size - 8192) // 3) & ~4095)):
                 raise DeviceImageManifestError("install capacity provenance disagrees with storage")
 
     source = _object(manifest["source"], "source", {"revision", "firmwareSha256"})
@@ -138,9 +146,6 @@ def parse_device_image_manifest(data: bytes | str) -> dict[str, Any]:
     if transport["protocol"] != "JFDP/1":
         raise DeviceImageManifestError("transport.protocol must be JFDP/1")
     _string(transport["kind"], "transport.kind", _ID_RE)
-
-    storage = _object(manifest["storage"], "storage", {"maxBundleBytes"})
-    _positive_int(storage["maxBundleBytes"], "storage.maxBundleBytes")
 
     recovery = _object(manifest["recovery"], "recovery", {"procedureId", "factoryImageSha256"})
     _string(recovery["procedureId"], "recovery.procedureId", _ID_RE)

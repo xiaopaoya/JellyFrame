@@ -365,6 +365,8 @@ def main() -> int:
                         help="named profile in the build manifest, such as native or installedWorker")
     parser.add_argument("--build-dir", type=Path,
                         help="optional ESP-IDF build directory for additional provenance cross-checks")
+    parser.add_argument("--requires-signed-bundle", action="store_true",
+                        help="declare that this firmware's install store requires signed JFSG bundles")
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -423,6 +425,8 @@ def main() -> int:
         "storage": {"maxBundleBytes": max_bundle_bytes},
         "recovery": {"procedureId": "ws147-usb-recovery-v1", "factoryImageSha256": sha256(factory)},
     }
+    if args.requires_signed_bundle:
+        manifest["storage"]["requiresSignedBundle"] = True
     if build_provenance:
         manifest["buildProvenance"] = build_provenance
     try:
