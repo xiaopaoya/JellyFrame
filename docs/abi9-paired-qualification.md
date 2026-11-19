@@ -20,7 +20,7 @@ expected codec, and the signed test checks the actual selected route.
 The host fixture uses a public test key and never provisions a device.
 
 To run one profile locally, use a clean Runtime and Core checkout, CMake,
-LLVM/Clang 22.1.8 and Ninja for Windows, Python 3.11 with `cryptography`, plus the pinned
+Clang and Ninja for Windows, Python 3.11 with `cryptography`, plus the pinned
 JerryScript and mbedTLS sources listed in the workflow. Apply the Runtime
 JerryScript patch and build it with `JERRY_VM_HALT=ON` as in the workflow.
 Pass a fresh output directory outside the source checkouts:

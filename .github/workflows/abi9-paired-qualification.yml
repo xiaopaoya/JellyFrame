@@ -93,7 +93,7 @@ jobs:
           $install = Start-Process -FilePath $installer -ArgumentList "/S /D=$llvmRoot" -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw "LLVM installer failed: $($install.ExitCode)" }
           $llvmBin = Join-Path $llvmRoot 'bin'
-          $version = & (Join-Path $llvmBin 'clang++.exe') --version
+          $version = (& (Join-Path $llvmBin 'clang++.exe') --version | Out-String)
           if ($LASTEXITCODE -ne 0 -or $version -notmatch 'clang version 22\.1\.8') {
             throw "Unexpected qualification compiler: $version"
           }
