@@ -14,6 +14,7 @@ from device_provider_contract import ProviderContractError, parse_provider_jsonl
 
 
 DEFAULT_TIMEOUT_SECONDS = 30
+DEFAULT_INSTALL_TIMEOUT_SECONDS = 240
 MAX_PROVIDER_OUTPUT_BYTES = 256 * 1024
 _PROVIDER_READ_CHUNK_BYTES = 4096
 
@@ -54,11 +55,15 @@ def invoke_provider(
     selector: str | None = None,
     arguments: list[str] | None = None,
     stream: bool = False,
-    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+    timeout_seconds: int | None = None,
     request_id: str | None = None,
 ) -> dict[str, Any] | list[dict[str, Any]]:
     """Invoke one provider operation without shell parsing or endpoint inference."""
     executable = _provider_path(provider)
+    if timeout_seconds is None:
+        # Install covers the entire transfer, including erase and commit verification.
+        timeout_seconds = (DEFAULT_INSTALL_TIMEOUT_SECONDS if operation == "install"
+                           else DEFAULT_TIMEOUT_SECONDS)
     if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 300:
         raise DeviceProviderClientError("provider timeout must be between 1 and 300 seconds")
     request = request_id or new_request_id()

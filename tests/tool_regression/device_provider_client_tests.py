@@ -54,16 +54,44 @@ class DeviceProviderClientTests(unittest.TestCase):
         with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "absolute"):
             device_provider_client.invoke_provider(Path("provider"), "discover")
 
+    def test_install_outlives_control_budget_but_respects_explicit_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            provider = Path(directory) / "provider.exe"
+            provider.write_bytes(b"")
+            completed = subprocess.CompletedProcess([], 0, result("install", "jf-test"), b"")
+            for override in (None, 30):
+                with self.subTest(timeout=override):
+                    process = FakeProviderProcess(completed)
+
+                    def wait(timeout: int | None = None) -> int:
+                        if not process.killed and timeout is not None and timeout < 98:
+                            raise subprocess.TimeoutExpired([], timeout)
+                        return process.returncode
+
+                    process.wait = wait
+                    with patch("device_provider_client.subprocess.Popen", return_value=process):
+                        if override is None:
+                            response = device_provider_client.invoke_provider(provider, "install", request_id="jf-test")
+                            self.assertEqual(response["resultCode"], "ok")
+                            self.assertFalse(process.killed)
+                        else:
+                            with self.assertRaisesRegex(device_provider_client.DeviceProviderClientError, "provider timed out"):
+                                device_provider_client.invoke_provider(provider, "install", request_id="jf-test",
+                                                                      timeout_seconds=override)
+                            self.assertTrue(process.killed)
+
     def test_invocation_is_shell_free_and_correlated(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             provider = Path(directory) / "provider.exe"
             provider.write_bytes(b"")
             completed = subprocess.CompletedProcess([], 0, result("discover", "jf-test"), b"")
             process = FakeProviderProcess(completed)
-            with patch("device_provider_client.subprocess.Popen", return_value=process) as run:
+            with (patch("device_provider_client.subprocess.Popen", return_value=process) as run,
+                  patch.object(process, "wait", wraps=process.wait) as wait):
                 response = device_provider_client.invoke_provider(
                     provider, "discover", request_id="jf-test"
                 )
+            wait.assert_called_once_with(timeout=30)
             self.assertEqual(response["resultCode"], "ok")
             command = run.call_args.args[0]
             self.assertEqual(command, [str(provider), "--output", "json", "--request-id", "jf-test", "discover"])
