@@ -7,6 +7,7 @@
 #include "jellyframe_esp32s3_image.h"
 #endif
 #include "jellyframe_esp32s3_input.h"
+#include "jellyframe_esp32s3_installed_resource_owner.h"
 #include "jellyframe_esp32s3_resources.h"
 #include "jellyframe_esp32s3_band_navigation.h"
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
@@ -478,6 +479,8 @@ struct PortTelemetry {
 };
 
 struct TimerUiTaskContext {
+    explicit TimerUiTaskContext(std::size_t app_font_count = 0) : core_text_fonts(app_font_count) {}
+
     boards::BoardRuntime board_runtime;
     BoardInputQueue input_queue;
     jellyframe::HostBudgets budgets;
@@ -491,7 +494,8 @@ struct TimerUiTaskContext {
 #if !defined(JELLYFRAME_ESP32S3_RENDER_CORE_ABI) || JELLYFRAME_ESP32S3_RENDER_CORE_ABI < 4
     jellyframe::TextMeasureProvider text_measure{};
 #endif
-    jellyframe::AppFontSet core_text_fonts{0};
+    InstalledResourceSnapshot installed_resources;
+    jellyframe::AppFontSet core_text_fonts;
     const jellyframe::TextSystem* core_text_system = nullptr;
     jellyframe::FrameScratch frame_scratch;
     jellyframe::AppFrameScratch app_scratch;
@@ -560,7 +564,6 @@ struct TimerUiTaskContext {
     std::string installed_app_id;
     std::uint32_t installed_generation = 0;
     std::string installed_entry_document;
-    InstalledResourceSnapshot installed_resources;
     InstalledBundleUiSession* installed_session = nullptr;
 };
 
@@ -2332,7 +2335,7 @@ void run_retained_ui_task(void* raw_context) {
                                                             nullptr};
 #endif
 #if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
-    if (!context->core_text_fonts.attach_core_system_font_catalog_view(
+    if (!context->installed_bundle_app && !context->core_text_fonts.attach_core_system_font_catalog_view(
             jellyframe::kNotoSansScSystemFontCatalog,
             jellyframe::kNotoSansScSystemFontCatalogSize)) {
         ESP_LOGE(kTag, "Core system font catalog failed validation");
@@ -3026,11 +3029,18 @@ bool start_installed_bundle_ui_task(std::string app_id,
     if (app_id.empty() || app_id.size() > jellyframe::kDeviceBundleMaxAppIdBytes ||
         entry_path.empty() || entry_path.size() > jellyframe::kDeviceBundleMaxEntryPathBytes ||
         entry_document.empty() || entry_document.size() > 16u * 1024u ||
+        resources.fonts.size() > jellyframe::kDeviceBundleMaxFonts ||
         !resources.rebuild_views()) {
         return false;
     }
     auto* next_session = new (std::nothrow) InstalledBundleUiSession();
-    auto* context = new (std::nothrow) TimerUiTaskContext();
+    TimerUiTaskContext* context = nullptr;
+    try {
+        context = new (std::nothrow) TimerUiTaskContext(resources.fonts.size());
+    } catch (const std::bad_alloc&) {
+        delete next_session;
+        return false;
+    }
     if (next_session == nullptr || context == nullptr) {
         delete next_session;
         delete context;
@@ -3054,6 +3064,20 @@ bool start_installed_bundle_ui_task(std::string app_id,
         delete context;
         return false;
     }
+#if CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM
+    if (!context->core_text_fonts.attach_core_system_font_catalog_view(
+            jellyframe::kNotoSansScSystemFontCatalog, jellyframe::kNotoSansScSystemFontCatalogSize)
+#if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
+        || !attach_installed_app_fonts(context->installed_resources, context->core_text_fonts)
+#endif
+    ) {
+        ESP_LOGE(kTag, "installed app font registration failed app=%s", context->installed_app_id.c_str());
+        vSemaphoreDelete(next_session->stopped);
+        delete next_session;
+        delete context;
+        return false;
+    }
+#endif
     context->installed_session = next_session;
     context->telemetry_case = "installed_bundle_ui_cumulative";
     context->telemetry_app_id = context->installed_app_id.c_str();
