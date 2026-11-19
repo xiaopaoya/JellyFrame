@@ -175,7 +175,7 @@ desktop tools, not by the MCU runtime:
 
 Before `1.0`, `runtime.minJellyFrame` must equal the active release line derived
 from `VERSION`, and `runtime.minRenderCore` must equal the Render Core version
-locked by this Runtime (`0.11.0` for the current package contract). Together they
+locked by this Runtime (`0.12.0` for the current package contract). Together they
 identify the current app contract; they are not a promise that historical
 pre-release apps remain supported.
 
@@ -194,7 +194,7 @@ pre-release apps remain supported.
   "entry": "/index.html",
   "runtime": {
     "minJellyFrame": "0.6.0",
-    "minRenderCore": "0.11.0",
+    "minRenderCore": "0.12.0",
     "script": "classic"
   },
   "viewport": {

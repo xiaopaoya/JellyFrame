@@ -20,8 +20,8 @@ permissions:
 
 env:
   # Keep the release archive in sync with cmake/jellyframe_dependency_lock.cmake.
-  RELEASED_RENDER_CORE_VERSION: "0.11.0"
-  RELEASED_RENDER_CORE_ARCHIVE_SHA256: "6da40c1040e2e5d33d70997c63d6e4204fcaf1347222af2d049200e546b85c88"
+  RELEASED_RENDER_CORE_VERSION: "0.12.0"
+  RELEASED_RENDER_CORE_ARCHIVE_SHA256: "6c948474a30817fa6488a69382c986c18d4d0c882554ca4e9715e225294e5f53"
 
 jobs:
   linux-sanitizers:
@@ -1183,8 +1183,8 @@ jobs:
               $provenance.provider -ne 'source-override' -or
               $provenance.lockEnforced -ne $false -or
               $provenance.sourceHash -ne 'fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795' -or
-              $provenance.lockedVersion -ne $env:RELEASED_RENDER_CORE_VERSION -or $provenance.lockedEngineAbi -ne 10 -or
-              $provenance.lockedSourceHash -ne 'f71e637c92c3d5e031fe11f49700aa80cf05bdd77700629f9c40fcc93b4c7cb4') {
+              $provenance.lockedVersion -ne $env:RELEASED_RENDER_CORE_VERSION -or $provenance.lockedEngineAbi -ne 11 -or
+              $provenance.lockedSourceHash -ne 'dfb4723c72679f2a7a7bdfa71360c8055e03ba5d795a9afac73cab3076be3849') {
             throw "Unexpected ABI3 source-override provenance: $($provenance | ConvertTo-Json -Compress)"
           }
           cmake --build build\abi3-default --config Release --target jellyframe_desktop_shell --parallel
@@ -1253,8 +1253,8 @@ jobs:
               $provenance.lockEnforced -ne $false -or
               $provenance.sourceHash -ne '8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186' -or
               $provenance.sourceFileCount -ne 159 -or
-              $provenance.lockedVersion -ne $env:RELEASED_RENDER_CORE_VERSION -or $provenance.lockedEngineAbi -ne 10 -or
-              $provenance.lockedSourceHash -ne 'f71e637c92c3d5e031fe11f49700aa80cf05bdd77700629f9c40fcc93b4c7cb4') {
+              $provenance.lockedVersion -ne $env:RELEASED_RENDER_CORE_VERSION -or $provenance.lockedEngineAbi -ne 11 -or
+              $provenance.lockedSourceHash -ne 'dfb4723c72679f2a7a7bdfa71360c8055e03ba5d795a9afac73cab3076be3849') {
             throw "Unexpected Core source-override provenance: $($provenance | ConvertTo-Json -Compress)"
           }
 
