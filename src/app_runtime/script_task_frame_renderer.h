@@ -165,14 +165,14 @@ struct ScriptTaskFrameDamage {
     Rect rect;
 };
 
-// Conservative v6 damage for an existing framebuffer. Both inputs must come
+// Conservative group damage for an existing framebuffer. Both inputs must come
 // from the same immutable resource/painter snapshot and background. Previous
 // must describe the last successfully rendered AND presented framebuffer.
 // Invalidate it after any render/present failure or external framebuffer write.
 // The caller retains only its bounded decoded frame; no second image is needed.
-// Transform/structure changes and unbounded painters select Full. Partial
-// replays the entire current paint graph through Core's normal dirty clipping,
-// including unchanged translucent underlays/overlays and rounded groups.
+// Canonical scalar frames can track transform and opacity changes on bounded
+// composited leaves with stable commands. Partial replays the entire current
+// paint graph through Core's dirty clipping, including unchanged overlays.
 ScriptTaskFrameDamage plan_script_task_group_damage(
     const ScriptTaskFrameRenderer& renderer,
     const ScriptTaskAppFrame& previous, const ScriptTaskAppFrame& current);
