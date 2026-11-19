@@ -73,6 +73,7 @@ struct Ws147DisplayContext {
     TaskHandle_t touch_task = nullptr;
     std::uint16_t* dma_pixels = nullptr;
     std::size_t dma_pixel_capacity = 0;
+    bool dma_recovery_needed = false;
     bool panel_scroll_configured = false;
     std::uint16_t panel_scroll_start = 0;
 #if CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_DIRECTION_DIAGNOSTICS
@@ -372,6 +373,15 @@ bool ws147_packed_flush_locked(const std::uint16_t* pixels,
     if (metrics != nullptr) {
         *metrics = {};
     }
+    if (display->dma_recovery_needed) {
+        // IDF drains pending color transactions even without a command.
+        // Consume the old completion before touching the DMA buffer again.
+        if (esp_lcd_panel_io_tx_param(display->lcd_io, -1, nullptr, 0) != ESP_OK) {
+            return false;
+        }
+        xSemaphoreTake(display->lcd_color_done, 0);
+        display->dma_recovery_needed = false;
+    }
     for (int y = 0; y < dirty_rect.height; y += rows_per_chunk) {
         const int rows = std::min(rows_per_chunk, dirty_rect.height - y);
         const std::size_t pixels_in_chunk =
@@ -409,6 +419,7 @@ bool ws147_packed_flush_locked(const std::uint16_t* pixels,
             ++metrics->chunks;
         }
         if (window_result != ESP_OK || submit_result != ESP_OK || !completed) {
+            display->dma_recovery_needed = window_result == ESP_OK;
             return false;
         }
     }
@@ -971,6 +982,7 @@ void release_waveshare_147(Ws147DisplayContext& display) {
         display.dma_pixels = nullptr;
     }
     display.dma_pixel_capacity = 0;
+    display.dma_recovery_needed = false;
     display.panel_scroll_configured = false;
     display.panel_scroll_start = 0;
     display.input_queue = nullptr;

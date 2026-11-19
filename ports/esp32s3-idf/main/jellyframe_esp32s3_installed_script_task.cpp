@@ -440,7 +440,16 @@ void run_installed_bundle_ui(InstalledBundleScriptSession* state) {
     panel.packed_pixels = packed.get();
     panel.packed_pixel_capacity = pixel_count;
     auto packed_sink = make_rgb565_sink(panel);
-    const jellyframe::HostFrameSink sink = jellyframe::embedded_frame_sink(packed_sink);
+    auto region_sink = make_packed_rgb565_sink(panel);
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED && JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+    const bool partial_enabled = board.profile.id == boards::BoardId::WaveshareEsp32s3TouchLcd147 &&
+        board.hardware_display_ready && installed_text_pipeline_frame_version(state->text_pipeline) == 10;
+#else
+    constexpr bool partial_enabled = false;
+#endif
+    const jellyframe::HostFrameSink sink = partial_enabled
+        ? jellyframe::embedded_packed_rgb565_sink(region_sink)
+        : jellyframe::embedded_frame_sink(packed_sink);
     jellyframe::ScriptTaskFrameRendererOptions renderer_options;
     renderer_options.max_clip_depth = 8;
     renderer_options.max_temporary_pixels = pixel_count;
@@ -453,6 +462,9 @@ void run_installed_bundle_ui(InstalledBundleScriptSession* state) {
 #endif
     const jellyframe::ScriptTaskFrameRenderer renderer(renderer_options);
     jellyframe::SoftwareRasterizerScratch scratch;
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
+    jellyframe::ScriptTaskAcceptedAppFrame previous;
+#endif
     while (!state->stop.load()) {
 #if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
         jellyframe::ScriptTaskAcceptedAppFrame frame;
@@ -466,20 +478,38 @@ void run_installed_bundle_ui(InstalledBundleScriptSession* state) {
             *state->protocol, state->script_session, frame_codec_options(state->text_pipeline), frame, &packet_sequence);
 #endif
         if (take_status == jellyframe::ScriptTaskAppFrameTakeStatus::Accepted) {
-            const jellyframe::Rect full{0, 0, width, height};
-            jellyframe::ScriptTaskFrameRenderStatus render_status;
+            jellyframe::ScriptTaskFrameDamage damage{
+                jellyframe::ScriptTaskFrameDamageKind::Full, {0, 0, width, height}};
+            auto render_status = jellyframe::ScriptTaskFrameRenderStatus::Accepted;
 #if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
-            const bool rendered = render_installed_core_text_frame(renderer, frame, framebuffer,
-                {248, 250, 252, 255}, &full, 1, &scratch, &render_status);
+            if (partial_enabled && previous.valid() &&
+                previous.session() == frame.session() &&
+                previous.text_catalog() == frame.text_catalog() &&
+                previous.image_provider() == frame.image_provider()) {
+                damage = jellyframe::plan_script_task_group_damage(renderer, previous.frame(), frame.frame());
+            }
+            const bool unchanged = damage.kind == jellyframe::ScriptTaskFrameDamageKind::Unchanged;
+            const bool rendered = unchanged || render_installed_core_text_frame(renderer, frame, framebuffer,
+                {248, 250, 252, 255}, &damage.rect, 1, &scratch, &render_status);
 #else
+            constexpr bool unchanged = false;
             const bool rendered = renderer.render_into(frame, framebuffer, {248, 250, 252, 255},
-                                                       &full, 1, &scratch, &render_status);
+                                                       &damage.rect, 1, &scratch, &render_status);
 #endif
             state->render_status.store(static_cast<std::uint8_t>(render_status));
-            const bool presented = rendered && jellyframe::present_frame(framebuffer, sink, &full, 1);
-            if (presented) {
+            const bool presented = rendered && !unchanged &&
+                jellyframe::present_frame(framebuffer, sink, &damage.rect, 1);
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
+            if (partial_enabled && !unchanged) {
+                // A failed flush may have already changed some panel pixels.
+                // The next accepted frame must repaint and submit the whole screen.
+                if (presented) previous = std::move(frame);
+                else previous = {};
+            }
+#endif
+            if (presented || unchanged) {
                 state->accepted_frame_seq.store(packet_sequence);
-                if (state->malformed_v4_probe_rejected.load()) {
+                if (presented && state->malformed_v4_probe_rejected.load()) {
                     state->accepted_after_malformed_v4_probe.fetch_add(1);
                 }
             } else {
