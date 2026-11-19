@@ -275,6 +275,10 @@ bool publish_malformed_v3_with_v4_source_clip(InstalledBundleScriptSession& stat
 }
 #endif
 
+void post_board_input(InstalledBundleScriptSession& state,
+                      const BoardInputEvent& event,
+                      std::uint32_t& next_sequence);
+
 void worker_entry(void* raw) {
     auto* state = static_cast<InstalledBundleScriptSession*>(raw);
     if (state == nullptr || state->protocol == nullptr) {
@@ -314,7 +318,14 @@ void worker_entry(void* raw) {
              state->app_id.c_str(), initialized == jellyframe::ScriptTaskWorkerRuntimeInitStatus::Accepted ? 1 : 0,
              static_cast<unsigned>(state->init_status.load()), static_cast<unsigned>(state->fatal_reason.load()),
              static_cast<unsigned>(state->scripts.size()));
+    std::uint32_t input_sequence = 1;
     while (!state->stop.load() && !runtime.fatal()) {
+        // Read one event at a time so pending pointer moves can coalesce
+        // in the board queue while the worker is busy.
+        BoardInputEvent event;
+        if (state->accepted_frame_seq.load() != 0 && state->input_queue.dequeue(event)) {
+            post_board_input(*state, event, input_sequence);
+        }
         const auto input = runtime.process_one(*state->protocol);
         const auto callbacks = runtime.pump_callbacks(
             static_cast<std::uint64_t>(esp_timer_get_time() / 1000), *state->protocol);
@@ -351,10 +362,10 @@ void worker_entry(void* raw) {
     vTaskSuspend(nullptr);
 }
 
-bool post_board_input(InstalledBundleScriptSession& state,
+void post_board_input(InstalledBundleScriptSession& state,
                       const BoardInputEvent& event,
                       std::uint32_t& next_sequence) {
-    if (state.protocol == nullptr || state.stop.load()) return false;
+    if (state.protocol == nullptr || state.stop.load()) return;
     jellyframe::ScriptTaskInputEvent input;
     input.x = event.x;
     input.y = event.y;
@@ -378,7 +389,7 @@ bool post_board_input(InstalledBundleScriptSession& state,
     case BoardInputKind::Wheel: input.kind = jellyframe::ScriptTaskInputKind::Wheel; break;
     default:
         state.input_unsupported.fetch_add(1);
-        return false;
+        return;
     }
     const auto posted = jellyframe::post_script_task_input(
         *state.protocol, state.script_session, next_sequence++, input, {32, 256});
@@ -387,7 +398,6 @@ bool post_board_input(InstalledBundleScriptSession& state,
     } else {
         state.input_rejected.fetch_add(1);
     }
-    return posted.accepted();
 }
 
 void run_installed_bundle_ui(InstalledBundleScriptSession* state) {
@@ -443,7 +453,6 @@ void run_installed_bundle_ui(InstalledBundleScriptSession* state) {
 #endif
     const jellyframe::ScriptTaskFrameRenderer renderer(renderer_options);
     jellyframe::SoftwareRasterizerScratch scratch;
-    std::uint32_t input_sequence = 1;
     while (!state->stop.load()) {
 #if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
         jellyframe::ScriptTaskAcceptedAppFrame frame;
@@ -483,11 +492,6 @@ void run_installed_bundle_ui(InstalledBundleScriptSession* state) {
                    state->malformed_v4_probe_published.load()) {
             state->malformed_v4_probe_rejected.store(true);
             ESP_LOGI(kTag, "v4 malformed probe rejected app=%s", state->app_id.c_str());
-        }
-        BoardInputEvent event;
-        std::size_t event_count = 0;
-        while (event_count++ < 8 && state->input_queue.dequeue(event)) {
-            (void)post_board_input(*state, event, input_sequence);
         }
         vTaskDelay(pdMS_TO_TICKS(kWorkerPollMs));
     }
