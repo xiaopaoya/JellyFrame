@@ -1,4 +1,4 @@
-name: ABI9 Core and Runtime qualification
+name: Core and Runtime paired qualification
 
 on:
   workflow_dispatch:
@@ -11,6 +11,11 @@ on:
         description: Exact numeric version declared by the Core candidate
         type: string
         required: true
+      core_abi:
+        description: Positive ABI declared by the Core candidate
+        type: string
+        default: '9'
+        required: false
       core_source_hash:
         description: SHA-256 from the independently reviewed Core source manifest
         type: string
@@ -21,7 +26,7 @@ permissions:
 
 jobs:
   paired-installed:
-    name: ABI9 installed and signed host tests (${{ matrix.profile }})
+    name: ABI${{ inputs.core_abi }} installed and signed host tests (${{ matrix.profile }})
     runs-on: windows-2025
     timeout-minutes: 45
     strategy:
@@ -31,6 +36,7 @@ jobs:
     env:
       CORE_COMMIT: ${{ inputs.core_commit }}
       CORE_VERSION: ${{ inputs.core_version }}
+      CORE_ABI: ${{ inputs.core_abi }}
       CORE_SOURCE_HASH: ${{ inputs.core_source_hash }}
       PROFILE: ${{ matrix.profile }}
 
@@ -40,8 +46,9 @@ jobs:
         run: |
           if ($env:CORE_COMMIT -cnotmatch '\A[0-9a-f]{40}\z' -or
               $env:CORE_VERSION -cnotmatch '\A[0-9]+\.[0-9]+\.[0-9]+\z' -or
+              $env:CORE_ABI -cnotmatch '\A[1-9][0-9]*\z' -or
               $env:CORE_SOURCE_HASH -cnotmatch '\A[0-9a-f]{64}\z') {
-            throw 'Use a full Core commit, numeric version and lowercase source SHA-256.'
+            throw 'Use a full Core commit, numeric version, positive ABI and lowercase source SHA-256.'
           }
 
       - name: Checkout Runtime
@@ -118,20 +125,20 @@ jobs:
         shell: pwsh
         run: |
           python tests/tool_regression/installed_qualification_summary_tests.py
-          if ($LASTEXITCODE -ne 0) { throw 'CTest summary parser regression failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Installed qualification regression failed' }
           python project_tools/qualify_abi9_pair.py `
             --core build/abi9-core --core-commit $env:CORE_COMMIT `
-            --core-version $env:CORE_VERSION --core-source-hash $env:CORE_SOURCE_HASH `
+            --core-version $env:CORE_VERSION --core-abi $env:CORE_ABI --core-source-hash $env:CORE_SOURCE_HASH `
             --jerry build/abi9-jerry --mbedtls build/abi9-mbedtls `
             --c-compiler "$env:LLVM_BIN/clang-cl.exe" --cxx-compiler "$env:LLVM_BIN/clang-cl.exe" `
             --profile $env:PROFILE --jobs 3 --output "$env:RUNNER_TEMP/abi9-pair"
-          if ($LASTEXITCODE -ne 0) { throw 'ABI9 installed pair qualification failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Installed pair qualification failed' }
 
       - name: Upload qualification logs and receipt
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: abi9-pair-${{ matrix.profile }}
+          name: abi${{ inputs.core_abi }}-pair-${{ matrix.profile }}
           path: |
             ${{ runner.temp }}/abi9-pair/candidate-lock.cmake
             ${{ runner.temp }}/abi9-pair/receipt.json
