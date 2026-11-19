@@ -26,12 +26,19 @@ def parse_ctest_passed_count(log):
     if legacy:
         return int(legacy[1])
 
-    current = re.search(r'(\d+)% tests passed, (\d+) tests failed out of (\d+)', log)
+    current = re.search(r'(\d+)% tests passed(?:,\s*|\s+\()(\d+) tests failed out of (\d+)\)?', log)
     if current:
         percent, failed, total = map(int, current.groups())
         if percent == 100 and failed == 0:
             return total
         raise RuntimeError(f'CTest reported {failed} failures out of {total} tests')
+
+    passed_only = re.search(r'(\d+)% tests passed out of (\d+)', log)
+    if passed_only:
+        percent, total = map(int, passed_only.groups())
+        if percent == 100:
+            return total
+        raise RuntimeError(f'CTest reported {percent}% passed out of {total} tests')
 
     raise RuntimeError('CTest output has no recognized final summary')
 
