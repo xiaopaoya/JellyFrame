@@ -289,7 +289,9 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
         self._exercise_build_dir(4)
 
     def test_contextual_build_dir_release_and_isolated_import(self) -> None:
-        self._exercise_build_dir(9, custom_sdkconfig=True)
+        for abi in (9, 10):
+            with self.subTest(abi=abi):
+                self._exercise_build_dir(abi, custom_sdkconfig=True)
 
     def _exercise_build_dir(self, abi: int, *, custom_sdkconfig: bool = False) -> None:
         with tempfile.TemporaryDirectory(prefix="jellyframe-ws147-build-dir-") as directory:
@@ -313,7 +315,7 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 "core.document", "core.paint", "forms.advanced", "css.flex-grid",
                 "css.modern-paint", "graphics.canvas2d", "text.shaping",
             ]
-            if abi == 9:
+            if abi >= 9:
                 core_features.remove('text.shaping')
                 core_features += ['text.contextual-jfsp2','text.contextual-layout',
                                   'css.length-math','css.counters','css.borders','css.tables','css.positioned-sizing']

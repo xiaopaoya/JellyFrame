@@ -105,10 +105,10 @@ provider nor infers a serial endpoint.
 
 Install accepts an absolute scalar `.jfapp` or signed `.jfsg`. Shaped format1
 requires a signed envelope and an explicitly matched route. The ABI4
-`jfsp1-block-v11` route requires `text.shaping` (JFDP identity bit6). ABI9
-`jfsp2-block-v12` requires both `text.contextual-jfsp2` (bit7) and
-`text.contextual-layout` (bit8); neither route grants the other. Contextual
-JFSP2 alone does not grant installed DOM layout. The device's Core ABI and
+`jfsp1-block-v11` route requires `text.shaping` (JFDP identity bit6).
+`jfsp2-block-v12` requires Core ABI 9 or later and both `text.contextual-jfsp2`
+(bit7) and `text.contextual-layout` (bit8). Contextual JFSP2 alone does not grant
+installed DOM layout. The device's Core ABI and
 complete family set must match the configured manifest before package
 inspection or `INSTALL_BEGIN`. Pass `--requires-signed-bundle` when packaging an
 image whose store requires JFSG, including the current WS147 signed store.

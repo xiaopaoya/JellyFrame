@@ -1,4 +1,5 @@
 """Send the complete executable fixture through the actual provider, mocked wire only."""
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -11,15 +12,21 @@ from signed_provider_tests import PhysicalTransportTests, provider, parse_provid
 
 
 def main():
-    fixture = Path(sys.argv[1])
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('fixture', type=Path)
+    parser.add_argument('--core-abi', type=int, required=True)
+    args = parser.parse_args()
+    fixture = args.fixture
     raw = (fixture / 'full-shaped.jfsg').read_bytes()
     evidence = json.loads((fixture / 'package-evidence.json').read_text(encoding='utf-8'))
+    abi = args.core_abi
+    if evidence.get('coreAbi') != abi:
+        parser.error('fixture Core ABI does not match the qualification Core ABI')
     assert hashlib.sha256(raw).hexdigest() == evidence['signedSha256']
     assert evidence['fontGlyphs'] >= 4000 and evidence['omittedOriginalAssets'] == []
-    pipeline = evidence.get('textPipeline', 'jfsp1-block-v11')
+    pipeline = evidence['textPipeline']
     assert pipeline in ('jfsp1-block-v11', 'jfsp2-block-v12')
     contextual = pipeline == 'jfsp2-block-v12'
-    abi = 9 if contextual else 4
     features = ['text.contextual-jfsp2', 'text.contextual-layout'] if contextual else ['text.shaping']
     case = PhysicalTransportTests(methodName='test_large_signed_exact_bytes_once_read_and_bounded_jsonl')
     with tempfile.TemporaryDirectory(prefix='full-shaped-wire-') as temp:
@@ -33,9 +40,9 @@ def main():
         case.assertEqual(parse_provider_jsonl(text)[-1]['resultCode'], 'ok')
         refused = [(1044480, abi, features), (2093056, abi, [])]
         refused += ([(2093056, 4, ['text.shaping']),
-                     (2093056, 9, ['text.contextual-jfsp2']),
-                     (2093056, 9, ['text.contextual-layout']),
-                     (2093056, 4, features)] if contextual else
+                     (2093056, abi, ['text.contextual-jfsp2']),
+                     (2093056, abi, ['text.contextual-layout']),
+                     (2093056, 8, features)] if contextual else
                     [(2093056, 9, ['text.contextual-jfsp2', 'text.contextual-layout'])])
         for cap, wrong_abi, wrong_features in refused:
             with case.assertRaises(provider.ProviderError):

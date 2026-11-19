@@ -20,16 +20,34 @@ add_subdirectory("${runtime_root}" runtime)
 file(READ "${CMAKE_CURRENT_BINARY_DIR}/runtime/generated/jellyframe_render_core_provenance.json" core_provenance)
 string(JSON qualification_core_abi GET "${core_provenance}" engineAbi)
 string(JSON qualification_core_version GET "${core_provenance}" packageVersion)
+if(DEFINED JFSG_EXPECT_CORE_ABI AND NOT qualification_core_abi STREQUAL JFSG_EXPECT_CORE_ABI)
+    message(FATAL_ERROR "Selected qualification Core ABI ${qualification_core_abi} does not match expected ABI ${JFSG_EXPECT_CORE_ABI}")
+endif()
+file(READ "${CMAKE_CURRENT_BINARY_DIR}/runtime/generated/jellyframe_render_core_profile.json" core_profile)
+string(JSON feature_count LENGTH "${core_profile}" features)
+set(qualification_features)
+if(feature_count GREATER 0)
+    math(EXPR feature_last "${feature_count} - 1")
+    foreach(index RANGE ${feature_last})
+        string(JSON feature GET "${core_profile}" features ${index})
+        list(APPEND qualification_features "${feature}")
+    endforeach()
+endif()
 if(JELLYFRAME_ENABLE_CONTEXTUAL_TEXT OR JELLYFRAME_ENABLE_CONTEXTUAL_LAYOUT)
     if(NOT JELLYFRAME_ENABLE_CONTEXTUAL_TEXT OR NOT JELLYFRAME_ENABLE_CONTEXTUAL_LAYOUT OR
-       NOT JELLYFRAME_ENABLE_SHAPED_PACKET_V2 OR NOT qualification_core_abi STREQUAL "9")
-        message(FATAL_ERROR "Contextual signed qualification requires matching ABI9 text/layout/JFSP2")
+       NOT JELLYFRAME_ENABLE_SHAPED_PACKET_V2 OR qualification_core_abi LESS 9 OR
+       NOT "text.contextual-jfsp2" IN_LIST qualification_features OR
+       NOT "text.contextual-layout" IN_LIST qualification_features)
+        message(FATAL_ERROR "Contextual signed qualification requires Core ABI 9 or later with text/layout/JFSP2")
     endif()
     set(fixture_pipeline jfsp2-block-v12)
     set(qualification_contextual 1)
     set(fixture_font "${JFSG_CORE_FIXTURES_DIR}/contextual_font/regular.jffont2")
     set(fixture_candidate_args --candidate-core-version "${qualification_core_version}")
 else()
+    if(NOT qualification_core_abi EQUAL 4 OR NOT "text.shaping" IN_LIST qualification_features)
+        message(FATAL_ERROR "Legacy signed shaping qualification requires Core ABI 4 with text.shaping")
+    endif()
     set(fixture_pipeline jfsp1-block-v11)
     set(qualification_contextual 0)
     set(fixture_font "${runtime_root}/ports/esp32s3-idf/font/core-system-noto-regular-16.jffont2")
@@ -53,6 +71,7 @@ target_compile_definitions(jfsg_shaped_pipeline_tests PRIVATE
     CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM=1
     CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER=0
     JFSG_EXPECT_CONTEXTUAL=${qualification_contextual}
+    JFSG_QUALIFICATION_CORE_ABI=${qualification_core_abi}
     JELLYFRAME_PACKAGE_SIGNATURE_TESTING=1 JFSG_HOST_PARTITION_BYTES=6291456)
 target_compile_options(jfsg_shaped_pipeline_tests PRIVATE -UNDEBUG)
 target_link_libraries(jfsg_shaped_pipeline_tests PRIVATE jellyframe_script_task_runtime jellyframe_script jfsg_mbedcrypto)
@@ -89,7 +108,7 @@ set(fixture_inputs
 if(fixture_pipeline STREQUAL "jfsp2-block-v12")
     list(APPEND fixture_inputs "${JFSG_CORE_FIXTURES_DIR}/contextual_font/manifest.json")
 endif()
-set(fixture_identity "${fixture_pipeline};${fixture_candidate_args}")
+set(fixture_identity "${fixture_pipeline};${qualification_core_abi};${fixture_candidate_args}")
 foreach(input IN LISTS fixture_inputs)
     file(SHA256 "${input}" input_hash)
     string(APPEND fixture_identity "${input_hash}")
@@ -106,7 +125,8 @@ endif()
 add_custom_command(OUTPUT "${fixtures}/package-evidence.json"
     COMMAND ${fixture_command} "${runtime_root}/project_tools/prepare_signed_shaped_fixture.py"
         --core-fixtures "${JFSG_CORE_FIXTURES_DIR}"
-        --font "${fixture_font}" --text-pipeline "${fixture_pipeline}" ${fixture_candidate_args}
+        --font "${fixture_font}" --text-pipeline "${fixture_pipeline}" --core-abi "${qualification_core_abi}"
+        ${fixture_candidate_args}
         --output "${fixtures}" --max-package-bytes 2093056 --public-test-signature
     DEPENDS ${fixture_inputs})
 add_custom_target(jfsg_shaped_fixtures DEPENDS "${fixtures}/package-evidence.json")
@@ -122,4 +142,4 @@ add_test(NAME jfsg_vm_fatal_boundary COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/vm_exhaustion_test.py" "$<TARGET_FILE:jfsg_shaped_pipeline_tests>" "${fixtures}")
 set_tests_properties(jfsg_vm_fatal_boundary PROPERTIES TIMEOUT 40)
 add_test(NAME jfsg_shaped_provider_transport COMMAND "${Python3_EXECUTABLE}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/provider_transport_tests.py" "${fixtures}")
+    "${CMAKE_CURRENT_SOURCE_DIR}/provider_transport_tests.py" "${fixtures}" --core-abi "${qualification_core_abi}")

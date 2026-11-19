@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify public ABI9 installed packages against the active Runtime checkout.
+"""Qualify public installed Core packages against the active Runtime checkout.
 
 The explicit candidate lock is used only by CMake's package consumer.
 Production tooling retains its unchanged production lock/manifests. This is
@@ -17,8 +17,61 @@ import sys
 import traceback
 
 
+DEFAULT_CORE_ABI = 9
+
+
+def positive_core_abi(value):
+    if not re.fullmatch(r'[1-9][0-9]*', value):
+        raise argparse.ArgumentTypeError('Core ABI must be a positive decimal integer')
+    return int(value)
+
+
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def check_core_identity(profile, manifest, identity, label):
+    if (type(profile['engineAbi']) is not int or
+            (profile['packageVersion'], profile['engineAbi'], manifest['sourceHash']) !=
+            (identity['version'], identity['abi'], identity['sourceHash'])):
+        raise ValueError(f'{label}: Core ABI, version or source hash differs from the selected candidate')
+
+
+def check_qualification_provenance(provenance, identity, lock_sha256, label):
+    expected = {
+        'provider': 'package', 'lockKind': 'qualification', 'lockEnforced': True,
+        'packageVersion': identity['version'], 'lockedVersion': identity['version'],
+        'engineAbi': identity['abi'], 'lockedEngineAbi': identity['abi'],
+        'sourceHash': identity['sourceHash'], 'lockedSourceHash': identity['sourceHash'],
+        'lockFileSha256': lock_sha256,
+    }
+    differing = [key for key, value in expected.items()
+                 if provenance.get(key) != value or type(provenance.get(key)) is not type(value)]
+    if differing:
+        raise ValueError(f'{label}: selected Core package/lock differs in {", ".join(differing)}')
+
+
+def inspect_package(prefix, name, identity, scalar_frame):
+    share = prefix / 'share/jellyframe-render-core'
+    profile = json.loads((share / 'jellyframe_render_core_profile.json').read_text())
+    manifest = json.loads((share / 'jellyframe_render_core_source_manifest.json').read_text())
+    check_core_identity(profile, manifest, identity, name)
+    features = set(profile['features'])
+    assert {'core.document', 'core.paint'}.issubset(features)
+    contextual = {'text.contextual-jfsp2', 'text.contextual-layout'}
+    assert bool(features & contextual) == (name != 'off')
+    assert name == 'off' or contextual.issubset(features)
+    optional = {'graphics.canvas2d', 'css.modern-paint', 'css.flex-grid', 'forms.advanced'}
+    # The experimental implementation also makes length math optional.
+    if scalar_frame == 13:
+        optional.add('css.length-math')
+    assert (optional.issubset(features) if name != 'cropped' else not (optional & features))
+    joined = ''.join(row['path'] + '\t' + row['sha256'] + '\n'
+                     for row in manifest['files']).encode()
+    assert hashlib.sha256(joined).hexdigest() == manifest['sourceHash']
+    assert manifest['sourceFileCount'] == len(manifest['files'])
+    return {**identity, 'features': sorted(features), 'sourceFileCount': manifest['sourceFileCount'],
+            'archiveSha256': sha(prefix / 'lib/jellyframe_render_core.lib')}
 
 
 def parse_ctest_passed_count(log):
@@ -46,11 +99,11 @@ def parse_ctest_passed_count(log):
 def test_assertions_enabled(command):
     return re.search(r'(?<!\S)(?:-UNDEBUG|/UNDEBUG)(?=\s|$)', command) is not None
 
-def audit_installed_package(build, runtime, probe, prefix, identity, production_lock_sha256):
+
+def audit_installed_package(build, runtime, probe, prefix, identity, lock_sha256, production_lock_sha256):
     provenance = json.loads((build / 'runtime/generated/jellyframe_render_core_provenance.json').read_text())
-    assert provenance['engineAbi'] == 9 and provenance['lockEnforced'], 'package lock not enforced'
-    assert provenance['lockKind'] == 'qualification', 'qualification lock was not selected'
-    assert provenance['sourceHash'] == identity['sourceHash'], 'package source mismatch'
+    check_qualification_provenance(provenance, identity, lock_sha256, build.name)
+    assert provenance['sourceFileCount'] == identity['sourceFileCount'], 'package source file count mismatch'
     commands = json.loads((build / 'compile_commands.json').read_text())
     cpp = [row for row in commands if Path(row['file']).suffix in ('.cpp', '.cc', '.cxx')]
     # JerryScript's selected external C implementation is expected; Core
@@ -140,6 +193,8 @@ def main():
     parser.add_argument('--build-root', type=Path, required=True)
     parser.add_argument('--qualification-lock', type=Path, required=True,
                         help='reviewed exact candidate CMake lock, independent of installed packages')
+    parser.add_argument('--core-abi', type=positive_core_abi, default=DEFAULT_CORE_ABI,
+                        help='Expected positive Core ABI in the qualification lock and packages (default: %(default)s)')
     parser.add_argument('--compiler', default='clang++')
     parser.add_argument('--cmake', default='cmake')
     parser.add_argument('--ctest', default='ctest')
@@ -153,7 +208,10 @@ def main():
     from bootstrap_render_core import read_lock
     qualification_lock = args.qualification_lock.resolve(strict=True)
     expected = read_lock(qualification_lock)
-    assert expected['abi'] == '9', 'this qualifier requires ABI9 Core'
+    if expected['abi'] != str(args.core_abi):
+        parser.error('--core-abi must agree with the selected qualification lock')
+    expected_identity = {'version': expected['version'], 'abi': args.core_abi, 'sourceHash': expected['source_hash']}
+    lock_sha256 = sha(qualification_lock)
     production_lock_sha256 = sha(runtime / 'cmake/jellyframe_dependency_lock.cmake')
     output = args.output.resolve()
     builds = args.build_root.resolve()
@@ -164,32 +222,8 @@ def main():
         if not separator or name not in ('full', 'cropped', 'off') or name in packages:
             parser.error('each --package must name a distinct full/cropped/off profile')
         prefix = Path(value).resolve()
-        share = prefix / 'share/jellyframe-render-core'
-        profile = json.loads((share / 'jellyframe_render_core_profile.json').read_text())
-        manifest = json.loads((share / 'jellyframe_render_core_source_manifest.json').read_text())
-        assert profile['engineAbi'] == 9 and profile['packageVersion'] == expected['version']
-        features = set(profile['features'])
-        assert {'core.document', 'core.paint'}.issubset(features)
-        contextual = {'text.contextual-jfsp2', 'text.contextual-layout'}
-        assert bool(features & contextual) == (name != 'off')
-        assert name == 'off' or contextual.issubset(features)
-        optional = {'graphics.canvas2d', 'css.modern-paint', 'css.flex-grid', 'forms.advanced'}
-        # The experimental implementation also makes length math optional.
-        if args.scalar_frame == 13:
-            optional.add('css.length-math')
-        assert (optional.issubset(features) if name != 'cropped' else not (optional & features))
-        joined = ''.join(row['path'] + '\t' + row['sha256'] + '\n'
-                         for row in manifest['files']).encode()
-        assert hashlib.sha256(joined).hexdigest() == manifest['sourceHash']
-        assert manifest['sourceFileCount'] == len(manifest['files'])
-        assert re.fullmatch('[0-9a-f]{64}', manifest['sourceHash'])
-        assert manifest['sourceHash'] == expected['source_hash'], 'package source differs from reviewed qualification lock'
+        identities[name] = inspect_package(prefix, name, expected_identity, args.scalar_frame)
         packages[name] = prefix
-        identities[name] = {'version': profile['packageVersion'], 'abi': profile['engineAbi'],
-                            'sourceHash': manifest['sourceHash'], 'features': sorted(features),
-                            'sourceFileCount': manifest['sourceFileCount'],
-                            'archiveSha256': sha(prefix / 'lib/jellyframe_render_core.lib')}
-    assert len({row['sourceHash'] for row in identities.values()}) == 1
     output.mkdir(parents=True, exist_ok=False)
     builds.mkdir(parents=True, exist_ok=False)
     harness = output / 'cmake-harness'
@@ -216,7 +250,7 @@ def main():
     revision = subprocess.check_output(['git', '-C', str(runtime), 'rev-parse', 'HEAD'], text=True).strip()
     (output / 'runtime-source.json').write_text(json.dumps({
         'path': str(runtime), 'revision': revision,
-        'qualificationLock': str(qualification_lock), 'qualificationLockSha256': sha(qualification_lock),
+        'qualificationLock': str(qualification_lock), 'qualificationLockSha256': lock_sha256,
         'productionLockSha256': production_lock_sha256,
     }, indent=2) + '\n')
 
@@ -255,7 +289,7 @@ def main():
         log = (output / (name + '-ctest.log')).read_text()
         total = parse_ctest_passed_count(log)
         assert total >= 36 and 'Skipped' not in log
-        audit = audit_installed_package(build, runtime, probe, packages[name], identities[name],
+        audit = audit_installed_package(build, runtime, probe, packages[name], identities[name], lock_sha256,
                                         production_lock_sha256)
         return {'profile': name, 'scalarFrame': args.scalar_frame, 'passed': total, 'skipped': 0, 'failed': 0,
                 'identity': identities[name], **audit}
@@ -276,7 +310,10 @@ def main():
                       if not (runtime / row['path']).is_file() or sha(runtime / row['path']) != row['sha256']]
     (output / 'runtime-input-changes.json').write_text(json.dumps(changed_inputs, indent=2) + '\n')
     print(json.dumps(results, indent=2))
-    return int(bool(changed_inputs) or any('error' in row for row in results))
+    lock_changed = sha(qualification_lock) != lock_sha256
+    if lock_changed:
+        print('qualification lock changed during package qualification', file=sys.stderr)
+    return int(lock_changed or bool(changed_inputs) or any('error' in row for row in results))
 
 
 if __name__ == '__main__':
