@@ -107,7 +107,7 @@ bool has_valid_render_core_feature_families(std::uint32_t bits, std::uint32_t ab
     const bool layout = (bits & DeviceRenderCoreFeatureContextualLayout) != 0;
     const bool shaping = (bits & DeviceRenderCoreFeatureTextShaping) != 0;
     return bits != 0 && (bits & ~kDeviceRenderCoreFeatureFamilyKnownMask) == 0 &&
-           (!layout || contextual) && (!contextual || abi == 9) &&
+           (!layout || contextual) && (!contextual || abi >= 9) &&
            (!shaping || (abi == 4 && !contextual)) &&
            (bits & (DeviceRenderCoreFeatureDocument | DeviceRenderCoreFeaturePaint)) ==
                (DeviceRenderCoreFeatureDocument | DeviceRenderCoreFeaturePaint);

@@ -48,17 +48,21 @@ def identity() -> dict:
 class DeviceProviderContractTests(unittest.TestCase):
     def test_contextual_identity_requires_matched_abi_and_dependencies(self):
         contextual = identity()
-        contextual['renderCoreAbi'] = 9
-        contextual['featureFamilies'] = ['core.document','core.paint','text.contextual-jfsp2','text.contextual-layout',
-                                         'css.length-math','css.counters','css.borders','css.tables','css.positioned-sizing']
-        self.assertEqual(contract.parse_provider_result(json.dumps(
-            result(operation='info',device=device(),identity=contextual)))['identity'],contextual)
-        for abi, families in ((4,contextual['featureFamilies']),
-                              (9,['core.document','core.paint','text.contextual-layout']),
-                              (9,['core.document','core.paint','text.shaping'])):
-            malformed = dict(contextual,renderCoreAbi=abi,featureFamilies=families)
-            with self.subTest(abi=abi,families=families),self.assertRaises(contract.ProviderContractError):
-                contract.parse_provider_result(json.dumps(result(operation='info',device=device(),identity=malformed)))
+        base = ['core.document', 'core.paint']
+        contextual['featureFamilies'] = base + [
+            'text.contextual-jfsp2', 'text.contextual-layout', 'css.length-math',
+            'css.counters', 'css.borders', 'css.tables', 'css.positioned-sizing',
+        ]
+        for abi in (9, 10):
+            with self.subTest(abi=abi):
+                contextual['renderCoreAbi'] = abi
+                self.assertEqual(contract.parse_provider_result(json.dumps(
+                    result(operation='info', device=device(), identity=contextual)))['identity'], contextual)
+        for abi, families in ((8, contextual['featureFamilies']),
+                              (10, base + ['text.contextual-layout']), (10, base + ['text.shaping'])):
+            malformed = dict(contextual, renderCoreAbi=abi, featureFamilies=families)
+            with self.subTest(abi=abi, families=families), self.assertRaises(contract.ProviderContractError):
+                contract.parse_provider_result(json.dumps(result(operation='info', device=device(), identity=malformed)))
 
     def test_accepts_bounded_discovery(self):
         parsed = contract.parse_provider_result(json.dumps(result(devices=[device()])))

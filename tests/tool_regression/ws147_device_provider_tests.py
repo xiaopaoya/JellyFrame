@@ -319,6 +319,14 @@ class Ws147DeviceProviderTests(unittest.TestCase):
         self.assertIn("846118199", str(raised.exception))
         self.assertIn("or flash the Developer Image", str(raised.exception))
 
+        contextual = ["core.document", "core.paint", "text.contextual-jfsp2", "text.contextual-layout"]
+        manifest["profile"]["featureFamilies"] = contextual
+        manifest["renderCore"]["abi"] = 9
+        identity.update(sourceRevision=manifest["source"]["revision"], renderCoreAbi=10,
+                        featureFamilies=contextual)
+        with self.assertRaisesRegex(provider.ProviderError, "identity mismatch at renderCoreAbi"):
+            provider.device_from_capabilities(config, capabilities, identity)
+
     def test_jfapp_identity_comes_from_bundle_not_package_report(self) -> None:
         spec = importlib.util.spec_from_file_location("ws147_device_provider", PROVIDER)
         assert spec is not None and spec.loader is not None

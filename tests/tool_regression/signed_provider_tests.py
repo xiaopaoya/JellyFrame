@@ -63,15 +63,17 @@ class PackageInspectionTests(unittest.TestCase):
         from device_render_core_capabilities import supported_text_pipelines
         base = ['core.document', 'core.paint']
         self.assertEqual(supported_text_pipelines(4, base + ['text.shaping']), ('jfsp1-block-v11',))
-        self.assertEqual(supported_text_pipelines(9, base + ['text.contextual-jfsp2', 'text.contextual-layout']), ('jfsp2-block-v12',))
-        self.assertEqual(supported_text_pipelines(9, base + ['text.contextual-jfsp2']), ())
-        for abi in (1,4,9):
+        contextual = ['text.contextual-jfsp2', 'text.contextual-layout']
+        for abi in (9, 10):
+            with self.subTest(abi=abi):
+                self.assertEqual(supported_text_pipelines(abi, base + contextual), ('jfsp2-block-v12',))
+                self.assertEqual(supported_text_pipelines(abi, base + contextual[:1]), ())
+        for abi in (1, 4, 9, 10):
             self.assertEqual(supported_text_pipelines(abi, base), ())
-        for abi, features in ((9,['text.shaping']), (4,['text.contextual-jfsp2']),
-                              (9,['text.contextual-layout']), (9,['text.shaping','text.contextual-jfsp2']),
-                              (10,['text.contextual-jfsp2','text.contextual-layout'])):
-            with self.subTest(abi=abi,features=features), self.assertRaises(ValueError):
-                supported_text_pipelines(abi,base+features)
+        for abi, features in ((4, contextual[:1]), (8, contextual), (9, ['text.shaping']),
+                              (10, contextual[1:]), (10, ['text.shaping'] + contextual)):
+            with self.subTest(abi=abi, features=features), self.assertRaises(ValueError):
+                supported_text_pipelines(abi, base + features)
 
     def test_signed_both_formats_and_legacy_scalar(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -265,29 +267,36 @@ class PhysicalTransportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             _, raw = signed(root, pipeline_kind='jfsp2-block-v12')
-            contextual = ['text.contextual-jfsp2','text.contextual-layout']
-            (code, events), received, calls = self.exercise(raw,root,abi=9,features=contextual,replace=True)
-            self.assertEqual((code,received,calls[-1]),(0,raw,provider.INSTALL_COMMIT))
-            parse_provider_jsonl('\n'.join(json.dumps(e) for e in events))
-            for abi, features in ((4,['text.shaping']), (9,[]), (9,contextual[:1]),
-                                  (4,contextual), (9,['text.shaping']), (9,contextual[1:])):
-                with self.subTest(abi=abi,features=features), self.assertRaises(provider.ProviderError):
-                    self.exercise(raw,root,abi=abi,features=features)
+            contextual = ['text.contextual-jfsp2', 'text.contextual-layout']
+            for abi in (9, 10):
+                with self.subTest(abi=abi):
+                    (code, events), received, calls = self.exercise(
+                        raw, root, abi=abi, features=contextual, replace=True)
+                    self.assertEqual((code, received, calls[-1]), (0, raw, provider.INSTALL_COMMIT))
+                    parse_provider_jsonl('\n'.join(json.dumps(e) for e in events))
+            for abi, features in ((4, ['text.shaping']), (9, []), (9, contextual[:1]),
+                                  (8, contextual), (10, ['text.shaping']), (10, contextual[1:])):
+                with self.subTest(abi=abi, features=features), self.assertRaises(provider.ProviderError):
+                    self.exercise(raw, root, abi=abi, features=features)
             _, legacy = signed(root)
             with self.assertRaises(provider.ProviderError):
-                self.exercise(legacy,root,abi=9,features=contextual)
+                self.exercise(legacy, root, abi=10, features=contextual)
 
     def test_feature_wire_bit_and_unknown_bit(self):
         encoded = (bytes((1, 3, 3, 3, 5, 40, 0, 0)) + struct.pack('<II', 4, 3 | 64) +
                    b'imgprover0.9.0' + b'a' * 40)
         self.assertIn('text.shaping', provider.decode_identity(encoded)['featureFamilies'])
         changed = bytearray(encoded)
-        struct.pack_into('<II', changed, 8, 9, 3 | 128 | 256)
-        self.assertEqual(provider.decode_identity(changed)['featureFamilies'],
-                         ['core.document','core.paint','text.contextual-jfsp2','text.contextual-layout'])
-        for abi,bits in ((4,3|128|256),(9,3|256),(9,3|64),(9,1)):
-            struct.pack_into('<II', changed,8,abi,bits)
-            with self.assertRaises(provider.ProviderError): provider.decode_identity(changed)
+        for abi in (9, 10):
+            struct.pack_into('<II', changed, 8, abi, 3 | 128 | 256)
+            identity = provider.decode_identity(changed)
+            self.assertEqual(identity['renderCoreAbi'], abi)
+            self.assertEqual(identity['featureFamilies'],
+                             ['core.document', 'core.paint', 'text.contextual-jfsp2', 'text.contextual-layout'])
+        for abi, bits in ((4, 3 | 128 | 256), (8, 3 | 128 | 256), (10, 3 | 256), (10, 3 | 64), (10, 1)):
+            struct.pack_into('<II', changed, 8, abi, bits)
+            with self.subTest(abi=abi, bits=bits), self.assertRaises(provider.ProviderError):
+                provider.decode_identity(changed)
         changed = bytearray(encoded)
         struct.pack_into('<I', changed, 12, 3 | (1 << 14))
         with self.assertRaises(provider.ProviderError): provider.decode_identity(changed)

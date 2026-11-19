@@ -43,8 +43,8 @@ def supported_text_pipelines(core_abi, feature_families):
     shaping = "text.shaping" in families
     if layout and not contextual:
         raise ValueError("contextual layout requires contextual JFSP2")
-    if (contextual or layout) and core_abi != 9:
-        raise ValueError("contextual pipeline requires matched Core ABI9")
+    if contextual and core_abi < 9:
+        raise ValueError("contextual pipeline requires Core ABI 9 or later")
     if shaping and (core_abi != 4 or contextual):
         raise ValueError("legacy shaping requires matched Core ABI4")
     if contextual and layout:
