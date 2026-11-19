@@ -1467,7 +1467,14 @@ if(JELLYFRAME_BUILD_TESTS)
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_route_tabs_frame_script PROPERTIES
                 FIXTURES_REQUIRED jellyframe_candidate_app_packages)
-            if(JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 9)
+            if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "package" AND
+               JELLYFRAME_RENDER_CORE_PACKAGE_VERSION STREQUAL "0.10.0")
+                # The released scalar layout's route damage exceeds the area
+                # limit three times. Route state and paint parity are separate tests.
+                set_tests_properties(jellyframe_win32_route_tabs_frame_script PROPERTIES
+                    PASS_REGULAR_EXPRESSION
+                        "frame_repaint dirty_rect=3 full_frame=4 full_first_paint=1")
+            elseif(JELLYFRAME_RENDER_CORE_ENGINE_ABI GREATER_EQUAL 9)
                 set_tests_properties(jellyframe_win32_route_tabs_frame_script PROPERTIES
                     PASS_REGULAR_EXPRESSION
                         "frame_repaint dirty_rect=6 full_frame=1 full_first_paint=1")
@@ -1587,9 +1594,19 @@ if(JELLYFRAME_BUILD_TESTS)
                         --frame-script ${JELLYFRAME_CANDIDATE_TEST_APPS_DIR}/packages/jelly_motion_lab/capture_soak_30fps.jfcapture
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
             set_tests_properties(jellyframe_win32_motion_lab_text_reuse_frame_script PROPERTIES
-                FIXTURES_REQUIRED jellyframe_candidate_app_packages
-                PASS_REGULAR_EXPRESSION
-                    "frame_update idle=0 repaint=[1-9][0-9]* rebuild=[1-9][0-9]* first_paint=1 .* style_stable=[1-9][0-9]*")
+                FIXTURES_REQUIRED jellyframe_candidate_app_packages)
+            if(JELLYFRAME_RENDER_CORE_PROVIDER STREQUAL "package" AND
+               JELLYFRAME_RENDER_CORE_PACKAGE_VERSION STREQUAL "0.10.0")
+                # v0.10.0 has no scalar snapshot rebind API. Require that
+                # fresh layout still permits local paint after the first frame.
+                set_tests_properties(jellyframe_win32_motion_lab_text_reuse_frame_script PROPERTIES
+                    PASS_REGULAR_EXPRESSION
+                        "frame_repaint dirty_rect=67 full_frame=1 full_first_paint=1")
+            else()
+                set_tests_properties(jellyframe_win32_motion_lab_text_reuse_frame_script PROPERTIES
+                    PASS_REGULAR_EXPRESSION
+                        "frame_update idle=0 repaint=[1-9][0-9]* rebuild=[1-9][0-9]* first_paint=1 .* style_stable=[1-9][0-9]*")
+            endif()
 
             add_test(
                 NAME jellyframe_win32_script_watchdog_recovery
