@@ -4139,8 +4139,8 @@ def main() -> int:
                         help="Absolute path to the Device OS provider executable.")
     device.add_argument("--manifest", type=Path,
                         help="Optional Developer Image manifest used to validate returned device identity.")
-    device.add_argument("--timeout", type=int, default=30,
-                        help="Provider timeout in seconds (1..300).")
+    device.add_argument("--timeout", type=int,
+                        help="Whole provider process timeout in seconds (1..300; 240 for install, 30 otherwise).")
     device_subparsers = device.add_subparsers(dest="device_command", required=True)
     device_discover = device_subparsers.add_parser("discover", help="List provider-reported devices.")
     device_discover.set_defaults(func=cmd_device)
