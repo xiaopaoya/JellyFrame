@@ -15,6 +15,7 @@
 #include <cmath>
 #include <limits>
 #include <new>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -623,6 +624,119 @@ bool ScriptTaskFrameRenderer::command_visual_bounds(const DisplayCommand& comman
     return script_task_frame_command_visual_bounds(command, output);
 }
 
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
+namespace {
+
+bool canonical_group_scales(const ScriptTaskFrameGroup& group) {
+    return std::abs(group.transform.scale_x - 1.0F) >= 0.001F ||
+           std::abs(group.transform.scale_y - 1.0F) >= 0.001F;
+}
+
+std::optional<Rect> canonical_motion_footprint(const ScriptTaskAppFrame& frame,
+                                               const ScriptTaskFrameGroup& group) {
+    // Core restricts a composited leaf to its offscreen source. That source
+    // includes every command rectangle and may extend beyond the layout box.
+    Rect source = group.bounds;
+    for (std::size_t i = group.command_begin; i < group.command_begin + group.command_count; ++i)
+        source = union_rect(source, frame.display_list[i].rect);
+
+    const int dx = round_float_to_int(group.transform.translate_x);
+    const int dy = round_float_to_int(group.transform.translate_y);
+    source.x = safe_add(source.x, dx);
+    source.y = safe_add(source.y, dy);
+    if (!canonical_group_scales(group)) return source;
+
+    // Match Core's positive, axis-aligned projection after integer translation.
+    const float origin_x = static_cast<float>(safe_add(group.bounds.x, dx)) +
+        static_cast<float>(group.bounds.width) * static_cast<float>(group.origin_x_percent) / 100.0F;
+    const float origin_y = static_cast<float>(safe_add(group.bounds.y, dy)) +
+        static_cast<float>(group.bounds.height) * static_cast<float>(group.origin_y_percent) / 100.0F;
+    const auto project_x = [&](int x) {
+        return origin_x + (static_cast<float>(x) - origin_x) * group.transform.scale_x;
+    };
+    const auto project_y = [&](int y) {
+        return origin_y + (static_cast<float>(y) - origin_y) * group.transform.scale_y;
+    };
+    const float left = project_x(source.x);
+    const float top = project_y(source.y);
+    const float right = project_x(safe_edge(source.x, source.width));
+    const float bottom = project_y(safe_edge(source.y, source.height));
+    if (!std::isfinite(left) || !std::isfinite(top) ||
+        !std::isfinite(right) || !std::isfinite(bottom)) return std::nullopt;
+    const int x = floor_float_to_int(left);
+    const int y = floor_float_to_int(top);
+    return Rect{x, y, std::max(1, safe_span(x, ceil_float_to_int(right))),
+                std::max(1, safe_span(y, ceil_float_to_int(bottom)))};
+}
+
+bool canonical_motion_has_direct_ancestors(const ScriptTaskAppFrame& frame, std::size_t index) {
+    while (index != 0) {
+        index = frame.groups[index].parent;
+        const auto& ancestor = frame.groups[index];
+        const auto& t = ancestor.transform;
+        if (ancestor.type == LayerType::Composited || ancestor.opacity < 0.999F ||
+            ancestor.clip_border_radius != 0 || ancestor.clip_border_radius_y > 0 ||
+            t.translate_x != 0 || t.translate_y != 0 ||
+            t.scale_x != 1 || t.scale_y != 1 || t.rotate_degrees != 0) return false;
+    }
+    return true;
+}
+
+ScriptTaskFrameDamage plan_canonical_motion_damage(const ScriptTaskAppFrame& previous,
+                                                  const ScriptTaskAppFrame& current,
+                                                  Rect viewport) {
+    const ScriptTaskFrameDamage full{ScriptTaskFrameDamageKind::Full, viewport};
+    for (std::size_t i = 0; i < current.display_list.size(); ++i)
+        if (!equal_display_command(previous.display_list[i], current.display_list[i])) return full;
+
+    Rect damage{};
+    bool changed = false;
+    // Canonical image painters can use different blending paths depending on
+    // whether the dirty clip fully contains their destination.
+    bool partial_supported = current.image_provider_id == 0;
+    for (std::size_t i = 0; i < current.groups.size(); ++i) {
+        const auto& a = previous.groups[i];
+        const auto& b = current.groups[i];
+        if (a.parent != b.parent) return full;
+        const bool leaf = i + 1 == current.groups.size() ||
+                          current.groups[i + 1].parent != i;
+        // Replay can change the source clip or the coordinate origin for
+        // scaled surfaces, including unchanged layers painted over damage.
+        if (b.transform.rotate_degrees != 0 ||
+            (canonical_group_scales(b) && (!leaf || b.has_clip ||
+                b.transform.scale_x <= 0 || b.transform.scale_y <= 0 ||
+                !canonical_motion_has_direct_ancestors(current, i)))) {
+            partial_supported = false;
+        }
+        if (detail::canonical::same_group(a, b)) continue;
+        changed = true;
+        auto normalized = b;
+        normalized.opacity = a.opacity;
+        normalized.transform = a.transform;
+        normalized.has_transform = a.has_transform;
+        normalized.reasons = (b.reasons & ~(LayerReasonOpacity | LayerReasonTransform)) |
+                             (a.reasons & (LayerReasonOpacity | LayerReasonTransform));
+        if (i == 0 || !leaf || a.type != LayerType::Composited ||
+            !detail::canonical::same_group(a, normalized)) return full;
+
+        if (!partial_supported || !canonical_motion_has_direct_ancestors(current, i) ||
+            a.transform.rotate_degrees != 0 ||
+            (canonical_group_scales(a) && (a.has_clip ||
+                a.transform.scale_x <= 0 || a.transform.scale_y <= 0))) return full;
+        const auto before = canonical_motion_footprint(previous, a);
+        const auto after = canonical_motion_footprint(current, b);
+        if (!before || !after) return full;
+        damage = union_rect(damage, intersect_rect(*before, viewport));
+        damage = union_rect(damage, intersect_rect(*after, viewport));
+    }
+    if (!changed) return {ScriptTaskFrameDamageKind::Unchanged, {}};
+    if (!partial_supported || equal_rect(damage, viewport)) return full;
+    return {empty_rect(damage) ? ScriptTaskFrameDamageKind::Unchanged : ScriptTaskFrameDamageKind::Partial, damage};
+}
+
+} // namespace
+#endif
+
 ScriptTaskFrameDamage plan_script_task_group_damage(
     const ScriptTaskFrameRenderer& renderer,
     const ScriptTaskAppFrame& previous, const ScriptTaskAppFrame& current) {
@@ -631,7 +745,11 @@ ScriptTaskFrameDamage plan_script_task_group_damage(
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API || JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
     if ((!previous.groups.empty() || !current.groups.empty()) &&
         (JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API || !previous.shaped_text.empty() || !current.shaped_text.empty())) {
-        if (previous.image_provider_id != current.image_provider_id) return full;
+        if (previous.image_provider_id != current.image_provider_id ||
+            !equal_rect(previous.viewport, current.viewport) ||
+            !equal_rect(current.viewport, viewport) || empty_rect(viewport) ||
+            previous.groups.size() != current.groups.size() ||
+            previous.display_list.size() != current.display_list.size()) return full;
         ScriptTaskAppFrameCodecOptions canonical_limits;
         const bool has_shaped = !previous.shaped_text.empty() || !current.shaped_text.empty();
         canonical_limits.version = has_shaped ? kRuntimeShapedFrameVersion :
@@ -639,19 +757,18 @@ ScriptTaskFrameDamage plan_script_task_group_damage(
         canonical_limits.max_commands = canonical_limits.max_text_bytes = canonical_limits.max_input_targets =
             canonical_limits.max_payload_bytes = std::numeric_limits<std::size_t>::max();
         canonical_limits.max_groups = 1024; canonical_limits.max_clips = 65535;
-        for (const auto* f : {&previous, &current}) {
-            std::size_t bytes;
-            if (detail::canonical::validate(*f, canonical_limits, bytes) != ScriptTaskAppFrameCodecStatus::Accepted)
-                return full;
-        }
-        if (!equal_rect(previous.viewport, current.viewport) || previous.groups.size() != current.groups.size() ||
-            previous.display_list.size() != current.display_list.size() ||
-            detail::canonical::validate_groups(previous, 1024, 32, canonical_limits.version) != ScriptTaskAppFrameCodecStatus::Accepted ||
-            detail::canonical::validate_groups(current, 1024, 32, canonical_limits.version) != ScriptTaskAppFrameCodecStatus::Accepted)
+        try {
+            for (const auto* f : {&previous, &current}) {
+                std::size_t bytes;
+                if (detail::canonical::validate(*f, canonical_limits, bytes) != ScriptTaskAppFrameCodecStatus::Accepted)
+                    return full;
+            }
+        } catch (const std::bad_alloc&) {
             return full;
-        for (std::size_t i = 0; i < current.groups.size(); ++i)
-            if (!detail::canonical::same_group(previous.groups[i], current.groups[i])) return full;
+        }
         if (has_shaped) {
+            for (std::size_t i = 0; i < current.groups.size(); ++i)
+                if (!detail::canonical::same_group(previous.groups[i], current.groups[i])) return full;
             for (const auto* f : {&previous, &current})
                 for (const auto& command : f->display_list) {
                     Rect bounds;
@@ -664,9 +781,15 @@ ScriptTaskFrameDamage plan_script_task_group_damage(
             const Rect damage = intersect_rect(diff.changed_command_bounds, viewport);
             return {empty_rect(damage) ? ScriptTaskFrameDamageKind::Unchanged : ScriptTaskFrameDamageKind::Partial, damage};
         }
+#if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
+        return plan_canonical_motion_damage(previous, current, viewport);
+#else
+        for (std::size_t i = 0; i < current.groups.size(); ++i)
+            if (!detail::canonical::same_group(previous.groups[i], current.groups[i])) return full;
         for (std::size_t i = 0; i < current.display_list.size(); ++i)
             if (!equal_display_command(previous.display_list[i], current.display_list[i])) return full;
         return {ScriptTaskFrameDamageKind::Unchanged, {}};
+#endif
     }
 #endif
     if (!equal_rect(previous.viewport, current.viewport) || current.viewport.x != 0 ||

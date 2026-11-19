@@ -5,6 +5,7 @@
 #include "runtime_font_test_fixture.h"
 #include <cassert>
 #include <iostream>
+#include <limits>
 
 namespace jellyframe::canonical_codec_tests {
 #if JELLYFRAME_SCRIPT_TASK_CANONICAL_ABI4_API
@@ -15,6 +16,143 @@ inline bool same_pixels(const FrameBuffer& a, const FrameBuffer& b) {
         if (x.r != y.r || x.g != y.g || x.b != y.b || x.a != y.a) return false;
     }
     return true;
+}
+
+inline void canonical_motion_damage(std::uint8_t version) {
+    using Status = ScriptTaskAppFrameCodecStatus;
+    ScriptTaskAppFrame base;
+    base.viewport = {0, 0, 96, 80};
+    base.groups.resize(3);
+    auto& root = base.groups[0];
+    root.type = LayerType::Root;
+    root.bounds = base.viewport;
+    root.command_count = 1;
+    auto& moving = base.groups[1];
+    moving.parent = 0;
+    moving.type = LayerType::Composited;
+    moving.bounds = {22, 18, 22, 24};
+    moving.command_begin = 1;
+    moving.command_count = 1;
+    moving.has_transform = true;
+    auto& foreground = base.groups[2];
+    foreground.parent = 0;
+    foreground.bounds = {36, 17, 5, 45};
+    foreground.command_begin = 2;
+    foreground.command_count = 1;
+    for (const auto& rect : {base.viewport, Rect{20, 19, 29, 22}, foreground.bounds}) {
+        DisplayCommand command;
+        assert(detail::canonical::set_kind(command, 0));
+        command.rect = rect;
+        base.display_list.push_back(command);
+    }
+    base.display_list[0].color = {12, 30, 94, 255};
+    base.display_list[1].color = {180, 230, 41, 255};
+    base.display_list[1].basic_paint().border_radius = 6;
+    base.display_list[2].color = {254, 40, 80, 147};
+    ScriptTaskAppFrameCodecOptions options;
+    options.version = version;
+    options.max_commands = base.display_list.size();
+    options.max_groups = base.groups.size();
+    options.max_payload_bytes = 4096;
+    const auto round_trip = [&](const ScriptTaskAppFrame& value) {
+        std::vector<std::uint8_t> bytes;
+        ScriptTaskAppFrame decoded;
+        assert(encode_script_task_app_frame(value, options, bytes) == Status::Accepted);
+        assert(decode_script_task_app_frame(bytes, options, decoded) == Status::Accepted);
+        return decoded;
+    };
+    const ScriptTaskFrameRenderer renderer;
+    const Color background{0, 0, 0, 255};
+    const auto check = [&](const ScriptTaskAppFrame& a, const ScriptTaskAppFrame& b) {
+        const auto old_frame = round_trip(a);
+        const auto new_frame = round_trip(b);
+        FrameBuffer retained(base.viewport.width, base.viewport.height, background);
+        FrameBuffer expected(base.viewport.width, base.viewport.height, background);
+        assert(renderer.render_into(old_frame, retained, background));
+        assert(renderer.render_into(new_frame, expected, background));
+        assert(!same_pixels(retained, expected));
+        const auto damage = plan_script_task_group_damage(renderer, old_frame, new_frame);
+        assert(damage.kind == ScriptTaskFrameDamageKind::Partial);
+        assert(damage.rect.width < base.viewport.width && damage.rect.height < base.viewport.height);
+        assert(renderer.render_into(new_frame, retained, background, &damage.rect, 1));
+        assert(same_pixels(retained, expected));
+    };
+    auto scaled = base;
+    scaled.groups[1].transform = {2.5F, 3.5F, 1.4F, 0.76F, 0.0F};
+    scaled.groups[1].opacity = 0.63F;
+    scaled.groups[1].origin_x_percent = 72;
+    base.groups[1].origin_x_percent = 72;
+    auto shifted = base;
+    shifted.groups[1].transform.translate_x = -29.5F;
+    shifted.groups[1].transform.translate_y = -20.5F;
+    check(base, scaled);
+    check(scaled, shifted);
+    check(shifted, base);
+    auto faded = base;
+    faded.groups[1].opacity = 0.25F;
+    faded.groups[1].reasons |= LayerReasonOpacity;
+    check(base, faded);
+    check(faded, base);
+    assert(plan_script_task_group_damage(renderer, base, base).kind == ScriptTaskFrameDamageKind::Unchanged);
+
+    auto clipped = base;
+    clipped.groups[1].has_clip = true;
+    clipped.groups[1].clip_rect = clipped.groups[1].bounds;
+    auto clipped_shift = clipped;
+    clipped_shift.groups[1].transform.translate_x = 9;
+    check(clipped, clipped_shift);
+    clipped_shift.groups[1].transform.scale_x = 1.4F;
+    assert(plan_script_task_group_damage(renderer, clipped, clipped_shift).kind == ScriptTaskFrameDamageKind::Full);
+    auto command_changed = scaled;
+    command_changed.display_list[1].color.r++;
+    assert(plan_script_task_group_damage(renderer, base, command_changed).kind == ScriptTaskFrameDamageKind::Full);
+
+    auto with_image = base;
+    assert(detail::canonical::set_kind(with_image.display_list[2], 8));
+    with_image.display_list[2].image_paint().image_handle = 73;
+    with_image.image_provider_id = 1;
+    auto moved_under_image = with_image;
+    moved_under_image.groups[1].transform = shifted.groups[1].transform;
+    assert(plan_script_task_group_damage(renderer, with_image, moved_under_image).kind ==
+           ScriptTaskFrameDamageKind::Full);
+    assert(plan_script_task_group_damage(renderer, with_image, with_image).kind ==
+           ScriptTaskFrameDamageKind::Unchanged);
+
+    auto nested = base;
+    ScriptTaskFrameGroup offscreen;
+    offscreen.parent = 0;
+    offscreen.type = LayerType::Composited;
+    offscreen.bounds = foreground.bounds;
+    offscreen.command_begin = 2;
+    nested.groups.insert(nested.groups.begin() + 2, offscreen);
+    nested.groups[3].parent = 2;
+    nested.groups[3].type = LayerType::Composited;
+    nested.groups[3].has_transform = true;
+    nested.groups[3].transform.scale_x = 1.35F;
+    auto moved_under_nested = nested;
+    moved_under_nested.groups[1].transform = shifted.groups[1].transform;
+    assert(plan_script_task_group_damage(renderer, nested, moved_under_nested).kind ==
+           ScriptTaskFrameDamageKind::Full);
+
+    auto rotated = base;
+    rotated.groups[1].transform.rotate_degrees = 5;
+    auto mirrored = base;
+    mirrored.groups[1].transform.scale_x = -1;
+    auto reparented = base;
+    reparented.groups[2].parent = 1;
+    auto malformed_parent = shifted;
+    malformed_parent.groups[1].parent = 1;
+    auto malformed_commands = shifted;
+    malformed_commands.groups[1].command_count = std::numeric_limits<std::size_t>::max();
+    auto malformed_transform = shifted;
+    malformed_transform.groups[1].transform.scale_x = std::numeric_limits<float>::infinity();
+    auto extreme_scale = scaled;
+    extreme_scale.groups[1].transform.scale_x = std::numeric_limits<float>::max();
+    for (const auto* frame : {&rotated, &mirrored, &reparented, &malformed_parent,
+                             &malformed_commands, &malformed_transform, &extreme_scale}) {
+        assert(plan_script_task_group_damage(renderer, base, *frame).kind == ScriptTaskFrameDamageKind::Full);
+        assert(plan_script_task_group_damage(renderer, *frame, base).kind == ScriptTaskFrameDamageKind::Full);
+    }
 }
 inline bool image(FrameBuffer& target, const ImagePaintRequest& request, void*) {
     if (request.image_handle != 73) return false;
@@ -621,6 +759,8 @@ inline void run() {
     signed_packet_v2();
 #endif
     rendering();
+    canonical_motion_damage(detail::canonical::kVersionV9);
+    if (detail::canonical::elliptical_available) canonical_motion_damage(detail::canonical::kVersionV10);
     elliptical_v10_round_trip<DisplayCommand, LayerNode>();
 #else
     std::cout << "canonical v9 unavailable on selected Core; legacy contracts retained\n";
