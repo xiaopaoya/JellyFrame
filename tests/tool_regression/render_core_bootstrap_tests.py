@@ -13,7 +13,7 @@ SCRIPT = Path(__file__).resolve().parents[2] / "tools/bootstrap_render_core.py"
 SPEC = importlib.util.spec_from_file_location("render_core_bootstrap", SCRIPT)
 BOOTSTRAP = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BOOTSTRAP)
-ROOT_NAME = "jellyframe-render-core-0.9.0"
+ROOT_NAME = "jellyframe-render-core-0.10.0"
 
 
 class RenderCoreBootstrapTests(unittest.TestCase):
@@ -53,9 +53,9 @@ class RenderCoreBootstrapTests(unittest.TestCase):
 
     def test_lock_values_match_current_runtime_pin(self):
         lock = BOOTSTRAP.read_lock(SCRIPT.parents[1] / "cmake/jellyframe_dependency_lock.cmake")
-        self.assertEqual(lock["version"], "0.9.0")
-        self.assertEqual(lock["abi"], "4")
-        self.assertEqual(lock["source_hash"], "d7873ce8c0b25e1012fb151811c9d502533bad00c5c439f82f1ad6628303d0d4")
+        self.assertEqual(lock["version"], "0.10.0")
+        self.assertEqual(lock["abi"], "9")
+        self.assertEqual(lock["source_hash"], "a01b2ccdcb198f1105187d1350c1381857663c5ad85451ecdb8f1e8e496b5ef7")
 
     def test_extracts_one_rooted_source_tree(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -85,7 +85,7 @@ class RenderCoreBootstrapTests(unittest.TestCase):
                 BOOTSTRAP.extract_source_archive(link_archive, root / "link-out", ROOT_NAME)
             wrong_root = root / "wrong-root.tar.gz"
             self.archive(wrong_root, "other-core/src/file.cpp")
-            with self.assertRaisesRegex(ValueError, "outside jellyframe-render-core-0.9.0"):
+            with self.assertRaisesRegex(ValueError, f"outside {ROOT_NAME}"):
                 BOOTSTRAP.extract_source_archive(wrong_root, root / "wrong-out", ROOT_NAME)
 
     def test_rejects_archive_checksum_before_creating_workspace(self):

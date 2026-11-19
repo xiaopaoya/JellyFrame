@@ -1,26 +1,28 @@
 # Render Core ABI4 Integration Plan
 
-> Last updated: 2026-11-16; Applies to: 0.6.0-dev. Core released version: 0.9.0 / ABI4.
+> Last updated: 2026-11-19; Applies to: 0.6.0-dev. Historical ABI4 integration record.
 
-> **Latest checkpoint (2026-11-16):** Runtime PR #116 (`f2169d652e4e4c16a84935cd955f4524ace14db0`) merged the signed Core v0.9.0 / ABI4 production lock. PR #117 (`673f23a2778894287e292473980903fbe8e7cff3`) fixed WS147 ABI4 build boundaries. PR #119 recorded the lifecycle-image acceptance scope. PR #120 merged as `7dd34aea69e6163541132fe40dc130ea747be304` after 23/23 checks, completing provider manifest/profile and firmware provenance validation. Core release archive digest remains `8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628`. Release, production-lock and provider integration gates are complete.
+> **Follow-on migration (2026-11-19):** Core v0.10.0 / ABI9 has been signed and published. Runtime mainline `879cb366` includes the ABI9 consumer paths and passed [host qualification](abi9-paired-qualification.md). It pins v0.9.0 / ABI4 until this production dependency update merges. ABI9 acceptance must match the release and the concrete firmware identity; device observations on experimental frame13 do not cover the release frame10 path.
 
-The post-PR117 native image passed the recorded human Home/Activity/Weather and visible-button touch observations. The current board runs `0.6.2-abi4-pr116-inst1`, reflashed on COM19 with esptool hash verification. Typed JFDP info identifies Core 0.9.0 / ABI4 and Runtime source `d4ba0b846ca21a7d48d420651493133d8b1c209a`. Generation200 install was accepted and launch returned `ok`. Logs report `render_status=0`, `accepted_seq=1`, `presents_failed=0`. Human visual/touch confirmation for generation200 passed on 2026-11-16. The Installed script title, initial status, Tap interaction, counter progression and button color change were reported normal.
+> **ABI4 checkpoint (2026-11-16):** Runtime PR #116 (`f2169d652e4e4c16a84935cd955f4524ace14db0`) merged the signed Core v0.9.0 / ABI4 production lock. PR #117 (`673f23a2778894287e292473980903fbe8e7cff3`) fixed WS147 ABI4 build boundaries. PR #119 recorded the lifecycle-image acceptance scope. PR #120 merged as `7dd34aea69e6163541132fe40dc130ea747be304` after 23/23 checks, completing provider manifest/profile and firmware provenance validation. Core release archive digest remains `8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628`. Release, production-lock and provider integration gates are complete.
 
-This is the current execution plan. Earlier checkpoint narratives are preserved
+The post-PR117 native image passed the recorded human Home/Activity/Weather and visible-button touch observations. At that checkpoint the board ran `0.6.2-abi4-pr116-inst1`, reflashed on COM19 with esptool hash verification. Typed JFDP info identifies Core 0.9.0 / ABI4 and Runtime source `d4ba0b846ca21a7d48d420651493133d8b1c209a`. Generation200 install was accepted and launch returned `ok`. Logs report `render_status=0`, `accepted_seq=1`, `presents_failed=0`. Human visual/touch confirmation for generation200 passed on 2026-11-16. The Installed script title, initial status, Tap interaction, counter progression and button color change were reported normal.
+
+This document preserves the ABI4 integration and device acceptance evidence. Earlier checkpoint narratives are preserved
 in Git history and their linked PRs; they are not additional open tasks. The
 [consumer retirement inventory](render_core_text_consumer_retirement.md) records
 actual call sites and the exact native device candidate.
 
-## Current checkpoint
+## Final ABI4 checkpoint
 
-| Boundary | Current state | Remaining gate |
+| Boundary | State at checkpoint | Remaining gate |
 | --- | --- | --- |
 | Released dependency | Signed Core v0.9.0 / ABI4 archive and sidecar verified. | Complete. |
 | Core mainline | Core PR #67 (`16a83211ec0992f8e25ec0fc977eb6fd158716e3`) and ABI4 release gates are complete. | None; Runtime consumes the released package through #116. |
-| Runtime mainline | #116 production lock, #117 WS147 build fixes and #120 provider provenance validation are merged; current master `7dd34aea`. #120 checks passed 23/23. | Complete. |
+| Runtime mainline | #116 production lock, #117 WS147 build fixes and #120 provider provenance validation are merged; then-master `7dd34aea`. #120 checks passed 23/23. | Complete. |
 | Embedded host | PR #100 binds one TextSystem/JFFONT2 fixture to layout, layers and paint. Locked ABI3 and source ABI4 full/cropped tests pass. | No remaining provider callback in this example. |
 | Installed worker | Exact inst1 firmware is flashed; generation200 JFDP install accepted, launch ok and render telemetry successful. | Generation200 visual/touch acceptance passed on 2026-11-16 for the tested three-resource app. |
-| Native WS147 | Post-PR117 native1 image passed recorded Home/Activity/Weather and button touch observations. | Complete for that exact image and observed scope. Current board runs installed inst1. |
+| Native WS147 | Post-PR117 native1 image passed recorded Home/Activity/Weather and button touch observations. | Complete for that exact image and observed scope. |
 | ABI5 and shaping | Separate optional candidates; ABI5 tracked reuse has correctness/package evidence but no qualified performance gain. | Not enabled in Runtime and not an ABI4 release prerequisite. |
 
 The experimental source declares 0.6.2 / ABI9. Neither that number nor a count
@@ -116,7 +118,7 @@ missing-small-card-text report remains relevant to those other identities.
 Installed worker/BMP tests require their own named image and resource profile.
 The post-PR117 build manifest is `D:/CodexTemp/Runtime-pr116-ws147-build-20261116/build-manifest.json`. Runtime build source is `d4ba0b846ca21a7d48d420651493133d8b1c209a`, tree `2e0326369275400b03c75ee20740b91164fc2ea6`, matching PR117 master tree. Core is v0.9.0 / ABI4. Native1 BIN SHA-256 is `A87BBFDC95F6467A065A0A5A5B436E7CD1730D22C838BEE9D44590E40D148039`, ELF SHA-256 `68642F8BE62C606092F76DE1FDDE04D0E69D659DCC425C2A56DBAD27751B4F92`. Boot reported first_present_ok=1 at 580.297 ms. The user accepted Home text/cards, Activity title/body/return, Weather large card and four small-card labels, and a visible button touch response. These observations belong to native1.
 
-The current installed profile is `0.6.2-abi4-pr116-inst1`, BIN SHA-256 `511c6a48ad1bca5a80d1653ca71435cacabd92e2362a22eaf542c08f660252eb`, ELF prefix `2F34A22D`. Earlier idle blank-screen observations preceded app installation. On November16 this exact BIN was reflashed on COM19 with esptool hash verification. JFDP info confirmed Core0.9.0/ABI4 and source d4ba0b84. Bundle `org.jellyframe.fixture.installed-script-input` is 2420 bytes, SHA-256 `949f9904ef9dadc38926b6c8d433d4340e6218de9f908a0b8a70103370f264bc`. Generation200 install returned accepted and launch returned ok. Logs report render_status=0, accepted_seq=1 and presents_failed=0. Human confirmation of the Installed script / Ready: 0 / Tap screen and its tap progression passed on 2026-11-16; the observed display and touch behavior were normal. The fixture has three resources and no bitmap image. The first serial capture was empty, so current identity/runtime evidence comes from typed JFDP info/logs. Sampled resource telemetry retains its sampling scope.
+The ABI4 installed profile was `0.6.2-abi4-pr116-inst1`, BIN SHA-256 `511c6a48ad1bca5a80d1653ca71435cacabd92e2362a22eaf542c08f660252eb`, ELF prefix `2F34A22D`. Earlier idle blank-screen observations preceded app installation. On November16 this exact BIN was reflashed on COM19 with esptool hash verification. JFDP info confirmed Core0.9.0/ABI4 and source d4ba0b84. Bundle `org.jellyframe.fixture.installed-script-input` is 2420 bytes, SHA-256 `949f9904ef9dadc38926b6c8d433d4340e6218de9f908a0b8a70103370f264bc`. Generation200 install returned accepted and launch returned ok. Logs report render_status=0, accepted_seq=1 and presents_failed=0. Human confirmation of the Installed script / Ready: 0 / Tap screen and its tap progression passed on 2026-11-16; the observed display and touch behavior were normal. The fixture has three resources and no bitmap image. The first serial capture was empty, so its identity and runtime evidence comes from typed JFDP info/logs. Sampled resource telemetry retains its sampling scope.
 
 The shared IDF v5.3.1 checkout had 97 modified paths; the build manifest records isolated source files matching the fixed IDF tree. Its build-time flashed=false and physicalDeviceTested=false fields precede the later flash and observations above.
 
@@ -134,7 +136,7 @@ Host implementation/review, installed-package qualification and device build
 preparation can proceed in parallel. Default adoption follows property/resource
 gates. Optional ABI5 reuse and production shaping remain separate.
 
-## Immediate next actions
+## Completed ABI4 steps
 
 1. Completed: Runtime #111 merges the CoreText-default WS147 profile and the
    Win32 293-frame/27-flow property and incremental/full repaint matrix.

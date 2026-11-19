@@ -50,6 +50,15 @@ candidate.
 
 ## Remaining gates
 
+The signed Core `0.10.0` archive has no scalar snapshot rebind API. In the
+Windows scripting build using that package, Motion Lab rebuilds all 68
+updated layouts, but paints 67 updates locally after the first full frame.
+Route Tabs paints 3 updates locally and 4 full frames including startup;
+the other three full frames exceed the shell's 70% damage area limit.
+The released-package tests pin those counts. The independent route-state
+and incremental-versus-full pixel checks still run, as do the existing
+reuse expectations for the other Core configurations.
+
 Core `47229e42` (source hash `af853a23…`) resolves Band Shell's Grid source
 width query. The original launcher at 172×320 emits zero diagnostics and its
 BMP is byte-identical to the predecessor capture. Weather route pixel parity

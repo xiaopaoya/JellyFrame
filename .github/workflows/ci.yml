@@ -18,6 +18,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # Keep the release archive in sync with cmake/jellyframe_dependency_lock.cmake.
+  RELEASED_RENDER_CORE_VERSION: "0.10.0"
+  RELEASED_RENDER_CORE_ARCHIVE_SHA256: "754629b7bd3bdaf5c9c6ab9ba407b510df8a12da26461e01827d66d7cc6eecac"
+
 jobs:
   linux-sanitizers:
     name: Linux ASan and UBSan
@@ -75,14 +80,18 @@ jobs:
       - name: Install released Render Core package
         shell: pwsh
         run: |
+          $sourceName = "jellyframe-render-core-$env:RELEASED_RENDER_CORE_VERSION"
+          $archive = "build\$sourceName.tar.gz"
           New-Item -ItemType Directory -Force build\released-render-core-source | Out-Null
           curl.exe --fail --location --retry 3 `
-            --output build\jellyframe-render-core-0.9.0.tar.gz `
-            https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v0.9.0/jellyframe-render-core-0.9.0.tar.gz
-          $hash = (Get-FileHash build\jellyframe-render-core-0.9.0.tar.gz -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($hash -ne '8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628') { throw "Render Core archive SHA-256 mismatch: $hash" }
-          tar -xzf build\jellyframe-render-core-0.9.0.tar.gz -C build\released-render-core-source
-          cmake -S build\released-render-core-source\jellyframe-render-core-0.9.0 `
+            --output $archive `
+            "https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v$env:RELEASED_RENDER_CORE_VERSION/$sourceName.tar.gz"
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core archive download failed' }
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne $env:RELEASED_RENDER_CORE_ARCHIVE_SHA256) { throw "Render Core archive SHA-256 mismatch: $hash" }
+          tar -xzf $archive -C build\released-render-core-source
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core archive extraction failed' }
+          cmake -S "build\released-render-core-source\$sourceName" `
             -B build\released-render-core-build `
             -DJELLYFRAME_BUILD_TESTS=OFF
           if ($LASTEXITCODE -ne 0) { throw 'Render Core configure failed' }
@@ -317,14 +326,18 @@ jobs:
       - name: Install released Render Core package
         shell: pwsh
         run: |
+          $sourceName = "jellyframe-render-core-$env:RELEASED_RENDER_CORE_VERSION"
+          $archive = "build\$sourceName.tar.gz"
           New-Item -ItemType Directory -Force build\released-render-core-source | Out-Null
           curl.exe --fail --location --retry 3 `
-            --output build\jellyframe-render-core-0.9.0.tar.gz `
-            https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v0.9.0/jellyframe-render-core-0.9.0.tar.gz
-          $hash = (Get-FileHash build\jellyframe-render-core-0.9.0.tar.gz -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($hash -ne '8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628') { throw "Render Core archive SHA-256 mismatch: $hash" }
-          tar -xzf build\jellyframe-render-core-0.9.0.tar.gz -C build\released-render-core-source
-          cmake -S build\released-render-core-source\jellyframe-render-core-0.9.0 `
+            --output $archive `
+            "https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v$env:RELEASED_RENDER_CORE_VERSION/$sourceName.tar.gz"
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core archive download failed' }
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne $env:RELEASED_RENDER_CORE_ARCHIVE_SHA256) { throw "Render Core archive SHA-256 mismatch: $hash" }
+          tar -xzf $archive -C build\released-render-core-source
+          if ($LASTEXITCODE -ne 0) { throw 'Render Core archive extraction failed' }
+          cmake -S "build\released-render-core-source\$sourceName" `
             -B build\released-render-core-build `
             -DJELLYFRAME_BUILD_TESTS=OFF
           if ($LASTEXITCODE -ne 0) { throw 'Render Core configure failed' }
@@ -958,16 +971,18 @@ jobs:
 
       - name: Download released Render Core source package
         run: |
-          curl --fail --location --retry 3 \
-            --output build/jellyframe-render-core-0.9.0.tar.gz \
-            https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v0.9.0/jellyframe-render-core-0.9.0.tar.gz
-          echo "8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628  build/jellyframe-render-core-0.9.0.tar.gz" | sha256sum --check --status
+          source_name="jellyframe-render-core-$RELEASED_RENDER_CORE_VERSION"
+          archive="build/$source_name.tar.gz"
           mkdir -p build/released-render-core-source
-          tar -xzf build/jellyframe-render-core-0.9.0.tar.gz -C build/released-render-core-source
+          curl --fail --location --retry 3 \
+            --output "$archive" \
+            "https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/download/v$RELEASED_RENDER_CORE_VERSION/$source_name.tar.gz"
+          echo "$RELEASED_RENDER_CORE_ARCHIVE_SHA256  $archive" | sha256sum --check
+          tar -xzf "$archive" -C build/released-render-core-source
 
       - name: Install released Render Core package
         run: |
-          cmake -S build/released-render-core-source/jellyframe-render-core-0.9.0 \
+          cmake -S "build/released-render-core-source/jellyframe-render-core-$RELEASED_RENDER_CORE_VERSION" \
             -B build/released-render-core-build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DJELLYFRAME_BUILD_TESTS=OFF
@@ -1068,10 +1083,12 @@ jobs:
 
       - name: Configure Runtime against installed released Core
         run: |
+          lock_file=cmake/jellyframe_render_core_abi4_qualification_lock.cmake
           args=(
             -S . -B build/runtime-released-core-${{ matrix.profile }} -G Ninja
             -DCMAKE_BUILD_TYPE=Release
             -DJELLYFRAME_RENDER_CORE_PROVIDER=package
+            "-DJELLYFRAME_RENDER_CORE_QUALIFICATION_LOCK_FILE=$lock_file"
             -DJELLYFRAME_RENDER_CORE_PACKAGE_DIR=${{ github.workspace }}/build/core-install-${{ matrix.profile }}
             -DJELLYFRAME_BUILD_RENDER_CORE_TESTS=OFF
             -DJELLYFRAME_BUILD_SCRIPTING=OFF
@@ -1089,13 +1106,15 @@ jobs:
             )
           fi
           cmake "${args[@]}"
-          python - build/runtime-released-core-${{ matrix.profile }}/generated '${{ matrix.profile_id }}' <<'PY'
+          python - build/runtime-released-core-${{ matrix.profile }}/generated '${{ matrix.profile_id }}' "$lock_file" <<'PY'
+          import hashlib
           import json
           import pathlib
           import sys
 
           generated = pathlib.Path(sys.argv[1])
           expected_profile = sys.argv[2]
+          expected_lock = pathlib.Path(sys.argv[3]).resolve()
           with (generated / "jellyframe_render_core_profile.json").open(encoding="utf-8") as stream:
               profile = json.load(stream)
           with (generated / "jellyframe_render_core_provenance.json").open(encoding="utf-8") as stream:
@@ -1105,6 +1124,12 @@ jobs:
               raise SystemExit(f"Unexpected Runtime Core profile: {profile}")
           if provenance.get("provider") != "package" or provenance.get("engineAbi") != 4 or provenance.get("packageVersion") != "0.9.0" or provenance.get("sourceHash") != expected_source or provenance.get("lockEnforced") is not True:
               raise SystemExit(f"Unexpected Runtime Core package provenance: {provenance}")
+          if (provenance.get("lockKind"), provenance.get("lockedEngineAbi"),
+              provenance.get("lockedVersion"), provenance.get("lockedSourceHash"),
+              pathlib.Path(provenance.get("lockFile", "")).resolve(), provenance.get("lockFileSha256")) != (
+              "qualification", 4, "0.9.0", expected_source,
+              expected_lock, hashlib.sha256(expected_lock.read_bytes()).hexdigest()):
+              raise SystemExit(f"Unexpected Runtime Core qualification lock: {provenance}")
           PY
 
       - name: Build and run installed Runtime consumers
@@ -1158,8 +1183,8 @@ jobs:
               $provenance.provider -ne 'source-override' -or
               $provenance.lockEnforced -ne $false -or
               $provenance.sourceHash -ne 'fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795' -or
-              $provenance.lockedVersion -ne '0.9.0' -or $provenance.lockedEngineAbi -ne 4 -or
-              $provenance.lockedSourceHash -ne 'd7873ce8c0b25e1012fb151811c9d502533bad00c5c439f82f1ad6628303d0d4') {
+              $provenance.lockedVersion -ne $env:RELEASED_RENDER_CORE_VERSION -or $provenance.lockedEngineAbi -ne 9 -or
+              $provenance.lockedSourceHash -ne 'a01b2ccdcb198f1105187d1350c1381857663c5ad85451ecdb8f1e8e496b5ef7') {
             throw "Unexpected ABI3 source-override provenance: $($provenance | ConvertTo-Json -Compress)"
           }
           cmake --build build\abi3-default --config Release --target jellyframe_desktop_shell --parallel
@@ -1228,8 +1253,8 @@ jobs:
               $provenance.lockEnforced -ne $false -or
               $provenance.sourceHash -ne '8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186' -or
               $provenance.sourceFileCount -ne 159 -or
-              $provenance.lockedVersion -ne '0.9.0' -or $provenance.lockedEngineAbi -ne 4 -or
-              $provenance.lockedSourceHash -ne 'd7873ce8c0b25e1012fb151811c9d502533bad00c5c439f82f1ad6628303d0d4') {
+              $provenance.lockedVersion -ne $env:RELEASED_RENDER_CORE_VERSION -or $provenance.lockedEngineAbi -ne 9 -or
+              $provenance.lockedSourceHash -ne 'a01b2ccdcb198f1105187d1350c1381857663c5ad85451ecdb8f1e8e496b5ef7') {
             throw "Unexpected Core source-override provenance: $($provenance | ConvertTo-Json -Compress)"
           }
 

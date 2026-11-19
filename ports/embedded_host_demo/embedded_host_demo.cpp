@@ -151,7 +151,7 @@ Pipeline build_pipeline(const TextSystem& text_system, const HostBudgets& budget
     auto options = layout_engine_options_from_budgets(budgets);
     options.text_system = &text_system;
     TextSystemStatus text_status = TextSystemStatus::Ok;
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION) && defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED
     options.text_status = &text_status;
 #endif
 #if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
@@ -178,7 +178,7 @@ FrameBuffer render_to_rgba(const LayerNode& layer_tree, const TextSystem& text_s
 #else
     SoftwareCompositor compositor(TextPainter{}, ImagePainter{}, options);
 #endif
-#if defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED)
+#if !defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION) && defined(JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED) && JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED
     FrameBuffer target(kViewportWidth, kViewportHeight, Color{0, 0, 0, 255});
     const auto result = compositor.render_into_checked(layer_tree, target, Color{0, 0, 0, 255});
     if (!result.complete()) throw std::runtime_error("Core paint refused (status=" +
