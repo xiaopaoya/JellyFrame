@@ -7,13 +7,16 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'project_tools'))
-from qualify_contextual_installed_packages import parse_ctest_passed_count
+from qualify_contextual_installed_packages import parse_ctest_passed_count, test_assertions_enabled
 
 
 assert parse_ctest_passed_count('0 tests failed out of 41') == 41
 assert parse_ctest_passed_count('100% tests passed, 0 tests failed out of 41') == 41
 assert parse_ctest_passed_count('100% tests passed (0 tests failed out of 41)') == 41
 assert parse_ctest_passed_count('100% tests passed out of 41') == 41
+assert test_assertions_enabled('clang++ -UNDEBUG -o probe.cpp')
+assert test_assertions_enabled('clang-cl.exe /UNDEBUG /Fo probe.obj')
+assert not test_assertions_enabled('clang-cl.exe /DNDEBUG /Fo probe.obj')
 
 try:
     parse_ctest_passed_count('95% tests passed, 2 tests failed out of 41')
@@ -44,3 +47,4 @@ else:
     raise AssertionError('missing CTest summary was accepted')
 
 print('installed qualification CTest summary parser tests passed')
+

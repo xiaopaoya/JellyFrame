@@ -43,6 +43,9 @@ def parse_ctest_passed_count(log):
     raise RuntimeError('CTest output has no recognized final summary')
 
 
+def test_assertions_enabled(command):
+    return re.search(r'(?<!\S)(?:-UNDEBUG|/UNDEBUG)(?=\s|$)', command) is not None
+
 def audit_installed_package(build, runtime, probe, prefix, identity, production_lock_sha256):
     provenance = json.loads((build / 'runtime/generated/jellyframe_render_core_provenance.json').read_text())
     assert provenance['engineAbi'] == 9 and provenance['lockEnforced'], 'package lock not enforced'
@@ -60,7 +63,7 @@ def audit_installed_package(build, runtime, probe, prefix, identity, production_
     assert tests, 'no consumer test compilation records'
     always_on = []
     for row in tests:
-        if '-UNDEBUG' in row['command']:
+        if test_assertions_enabled(row['command']):
             continue
         # This existing independent timing test uses explicit throws throughout,
         # rather than assert. Audit that one exception instead of treating
@@ -278,3 +281,4 @@ def main():
 
 if __name__ == '__main__':
     raise SystemExit(main())
+
