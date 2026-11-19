@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { createDefaultModel, defaultNode, recipeRegistry, instantiateRecipe, renderBody, renderCss } = require("../../tools/vscode-jellyframe/visual_editor_model");
+const { runtime: templateRuntime } = require("../../tools/templates/apps/blank/jellyframe.app.json");
 const shell = path.resolve(process.argv[2]);
 const output = path.resolve("build/test_outputs/visual_editor/runtime");
 
@@ -14,7 +15,7 @@ function capture(name, model, extra = []) {
   fs.writeFileSync(path.join(root, "jellyframe.app.json"), JSON.stringify({
     format: "jellyframe.app", formatVersion: 0, id: "org.jellyframe.editor-test", name,
     version: { name: "0.1.0", code: 1 }, entry: "/index.html",
-    runtime: { minJellyFrame: "0.6.0", minRenderCore: "0.10.0", script: "none" },
+    runtime: { ...templateRuntime, script: "none" },
     viewport: { designWidth: model.viewport.width, designHeight: model.viewport.height, shape: model.viewport.shape }
   }));
   fs.writeFileSync(path.join(root, "index.html"), `<!doctype html><html><head><link rel="stylesheet" href="app.css"></head><body>${renderBody(model)}</body></html>`);

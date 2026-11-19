@@ -10,6 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { chromium } = require("playwright");
 const { createDefaultModel, defaultNode, renderBody, renderCss } = require("../../tools/vscode-jellyframe/visual_editor_model");
+const { runtime: templateRuntime } = require("../../tools/templates/apps/blank/jellyframe.app.json");
 
 const shell = path.resolve(process.argv[2]);
 assert(fs.existsSync(shell), `Native Runtime shell not found: ${shell}`);
@@ -76,7 +77,7 @@ function nativeMetrics(model, name) {
   fs.writeFileSync(path.join(root, "jellyframe.app.json"), JSON.stringify({
     format: "jellyframe.app", formatVersion: 0, id: "org.jellyframe.editor-alignment", name,
     version: { name: "0.1.0", code: 1 }, entry: "/index.html",
-    runtime: { minJellyFrame: "0.6.0", minRenderCore: "0.10.0", script: "none" },
+    runtime: { ...templateRuntime, script: "none" },
     viewport: { designWidth: 300, designHeight: 300, shape: "rect" }
   }));
   fs.writeFileSync(path.join(root, "index.html"), `<!doctype html><html><head><link rel="stylesheet" href="app.css"></head><body>${renderBody(model)}</body></html>`);
