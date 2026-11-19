@@ -1498,7 +1498,7 @@ void worker_shaped_dom_layout_and_input() {
     render_checked(clicked);
 #if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
     check(worker.eval_with_supervisor(supervisor,
-        "first.style.width='140px';first.textContent='office AV \u4e2d e\u0301';").ok && !worker.fatal(),
+        "first.style.width='140px';first.textContent='office AV \\u4e2d e\\u0301';").ok && !worker.fatal(),
         "contextual mixed Latin/CJK and combining-source mutation");
     check(worker.publish_frame(supervisor).accepted(), "mixed contextual source publishes");
     ScriptTaskAcceptedAppFrame contextual;
