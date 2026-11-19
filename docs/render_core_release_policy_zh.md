@@ -1,6 +1,6 @@
 # Render Core 发布与拆仓政策
 
-> 最后更新：2026-11-14；适用版本：0.6.0-dev；Core 0.9.0-dev / ABI 4 验收、Runtime 0.8.0 / ABI 3 生产锁
+> 最后更新：2026-11-19；适用版本：0.6.0-dev；ABI9 生产依赖升级
 
 本政策规定当前 monorepo 边界迁移到独立 `jellyframe-render-core` 工程的方式。它补充 [engine_architecture_zh.md](engine_architecture_zh.md)，不是面向 App 作者的兼容性承诺。ABI4 集成与旧文本 API 退役的协同任务见[迁移计划](render_core_abi4_migration_plan_zh.md)。
 
@@ -14,13 +14,14 @@
 
 ## 迁移状态
 
-保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库保留现有许可证和贡献者历史。
-首个带签名的 `v0.6.0` release 建立了确定性 source archive 和 SHA-256 sidecar。最新带签名发布为 `v0.8.0` / ABI 3；Runtime 生产 package mode 仍锁定该发布，其 source manifest identity 为
-`fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795`，archive SHA-256 为
-`b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`。Core `master` 当前为
-`0.9.0-dev` / ABI 4 当前 master 为 `de9733d2`。最新提交增加离线 shaping-closure 工具、测试和文档，没有增加 package implementation inputs，也没有改变 Runtime 行为。Runtime PR #71 已合并为 `50170381`，其 full/cropped ABI4 matrix 验收的是前一实现提交 `b0bfd834`，其中包含 shared-inline list ordinal 生成文本和 native decimal/disc list marker overlays。该 matrix 使用的 CMake package source identity 为 `aa908e3852afd4a06ed6df6b26a5cc759cfefcd7d39c02270d1304aa633d18c4`，覆盖 165 个实现输入。PR 与合并后的 master workflow 均已通过。目前尚无带签名 ABI4 release；在已检查的工作区中也未找到 Device OS 镜像验收 artifact。ABI4 仍不是生产依赖。
-这不表示许可证、贡献者政策或开源意向的改变。Runtime 只能通过显式 dependency-lock 更新接纳 release。
-CI 会校验已发布 archive 的 SHA-256、安装并运行锁定 package-consumer regression，避免误把 monorepo export 当成已发布 dependency。
+保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库保留原许可证与贡献历史。首个签名发布 `v0.6.0` 建立了确定性的源码归档和 SHA-256 sidecar。最新的签名发布 [`v0.10.0` / ABI 9](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.10.0) 指向 `bcb0cba4bd492b74348684d6c68578fced149b43`。源码身份为
+`a01b2ccdcb198f1105187d1350c1381857663c5ad85451ecdb8f1e8e496b5ef7`，发布归档 SHA-256 为
+`754629b7bd3bdaf5c9c6ab9ba407b510df8a12da26461e01827d66d7cc6eecac`。
+
+本次升级前，Runtime 主线 `879cb366` 仍锁定已签名的 `v0.9.0` / ABI 4，发布归档 SHA-256 为
+`8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628`。Runtime #123–#127 合入 ABI9 消费路径；合入后[主机资格验证](abi9-paired-qualification.md)覆盖 full、cropped、off。本次依赖升级在合入后切换生产锁，并保留独立的 ABI4 兼容测试。
+
+Runtime 通过显式更新依赖锁接纳发布包。CI 校验已发布归档的 SHA-256，再安装并测试锁定的包，避免将单体仓库的导出与正式发布包混用。WS147 实机证据单独按固件身份和测试范围记录。
 
 ## 发布单元
 
@@ -91,4 +92,4 @@ python project_tools\rehearse_render_core_history_export.py `
 
 ## 拆仓门槛
 
-Core 已完成物理拆分：Runtime 当前通过 `v0.8.0` / ABI 3 签名发布包和 package-consumer CI 验证生产边界。ABI4 仍处于验收轨道；发布签名包、同步更新 Runtime 锁与 archive 校验，并在命名 Device OS profile 记录 ABI4 provenance 后，才可切换生产依赖。Device OS 镜像验收前不得声明设备能力。下一个高价值 Core 能力包必须在该受治理边界上开发；大量新 CSS 工作不得回流到过渡 monorepo。
+Core 已完成物理拆分。Runtime 通过签名发布包、精确依赖锁和 package-consumer CI 维护这一边界。ABI4 的 WS147 结果见 [ABI4 集成计划](render_core_abi4_migration_plan_zh.md)，仅覆盖所记录的镜像和观察项。ABI9 实机验收须绑定正式发布依赖构建的同一固件；主机验证或实验固件结果不能作为 Device OS 镜像验收。迁移到 Device OS 前，仍需在命名 profile 上验证消费路径和记录 provenance；Core 不得引入 Runtime 或移植侧私有头文件。新的 Core 能力在独立仓库中开发。

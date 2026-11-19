@@ -5,7 +5,8 @@ Last updated: 2026-11-19; Applies to: 0.6.0-dev
 The independent, manually dispatched ABI9 qualification takes a full Core
 commit, its exact numeric version and the source SHA-256 from the independently
 reviewed Core source manifest. The selected Runtime revision is the workflow
-revision. The ordinary ABI4 workflow and production lock stay in place.
+revision. The separate qualification lock leaves the production lock and
+the released ABI4 compatibility job unchanged during a qualification run.
 
 The matrix builds and installs Core from the supplied commit. It checks that
 the checkout declares ABI9 and matches the supplied version and source hash;
