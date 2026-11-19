@@ -63,15 +63,15 @@ or target heap failures and is not a peak-memory/leak measurement. See
 [allocation recovery](../../../../docs/evaluation/2026-11-17-shaped-worker-allocation-recovery.md)
 for measured indices, the confirmed exception-boundary fixes and remaining gates.
 
-## ABI9 contextual qualification
+## Contextual qualification
 
 The same harness also selects `jfsp2-block-v12` explicitly when contextual
-text/layout/JFSP2 are all enabled on matching Core ABI9. It checks that the
+text, layout and JFSP2 are all enabled on Core ABI 9 or later. It checks that the
 compiled API matches that requested route. Capture uses the owned contextual
 API; packet/pixel comparison and retained-owner release checks run in both
 routes. It never paints contextual geometry through scalar JFTP.
 
-For ABI9, use a separate Runtime snapshot with an exact candidate dependency
+For a candidate Core, use a separate Runtime snapshot with an exact dependency
 lock and matching `samples/apps/packages/jelly_font_policy/jellyframe.app.json`
 minimum Core line. Do not edit production source policy or bypass the signing
 tool's strict validation. The generator's `--candidate-core-version` checks
@@ -98,8 +98,9 @@ Cropping additionally disables Canvas2D, modern paint, flex/grid, advanced
 forms and length math, using the matching cropped installed prefix.
 
 ABI9 installed full/cropped and ABI4 compatibility each pass17/17. ABI9
-complete resource package size remains1550043B. The provider test derives the
-exact pipeline from fixture evidence and checks wrong ABI, partial capability,
+complete resource package size remains1550043B. The fixture evidence records the
+selected Core ABI, which the provider test compares with the configured ABI
+before exercising the route. It checks incompatible ABI, partial capability,
 cross-route and capacity refusal before Begin. These are host mocked wire/NOR
 results with actual mbedTLS verification, not physical installation or VM/heap
 qualification. See [ABI9 execution evidence](../../../../docs/evaluation/2026-11-17-abi9-signed-resource-execution.md).

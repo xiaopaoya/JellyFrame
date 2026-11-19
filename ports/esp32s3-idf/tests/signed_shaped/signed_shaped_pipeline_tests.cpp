@@ -178,7 +178,8 @@ int main(int argc,char** argv) {
     CHECK(binding->launch(host,app_id).launched());
     DeviceBundleInspectionWorkspace workspace;
     auto selected=measured("binding",[&] { return binding->select_active_text_pipeline(workspace,2*1024*1024); });
-    std::printf("selected pipeline status=%u\n",unsigned(selected.status));
+    std::printf("selected pipeline status=%u core_abi=%u\n", unsigned(selected.status),
+                unsigned(JFSG_QUALIFICATION_CORE_ABI));
     CHECK(selected.status==AppInstalledTextPipelineStatus::Ready);
     CHECK(selected.frame_version==kRuntimeShapedFrameVersion && selected.binding && selected.binding->valid());
     CHECK(installed_text_pipeline_supported(selected));

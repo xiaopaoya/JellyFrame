@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / 'tools'))
 import package_app
 import sign_app_package
 from device_install_package import inspect_install_bytes
+from device_render_core_capabilities import supported_text_pipelines
 
 
 def sha(data):
@@ -23,7 +24,7 @@ def sha(data):
 
 
 def build(core_fixtures, font, output, capacity, public_test_signature=False,
-          pipeline='jfsp1-block-v11', candidate_core_version=None):
+          pipeline='jfsp1-block-v11', candidate_core_version=None, core_abi=4):
     core_fixtures, font, output = Path(core_fixtures), Path(font), Path(output)
     if output.exists() and (not output.is_dir() or any(output.iterdir())):
         raise ValueError('output already exists; preserve previous package evidence')
@@ -31,6 +32,10 @@ def build(core_fixtures, font, output, capacity, public_test_signature=False,
         raise ValueError('invalid explicit package capacity')
     if pipeline not in ('jfsp1-block-v11', 'jfsp2-block-v12'):
         raise ValueError('invalid explicit text pipeline')
+    text_families = (['text.contextual-jfsp2', 'text.contextual-layout']
+                     if pipeline == 'jfsp2-block-v12' else ['text.shaping'])
+    if pipeline not in supported_text_pipelines(core_abi, ['core.document', 'core.paint'] + text_families):
+        raise ValueError('Core ABI does not support the fixture text pipeline')
     if candidate_core_version is not None and (
             pipeline != 'jfsp2-block-v12' or
             not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', candidate_core_version)):
@@ -115,7 +120,7 @@ def build(core_fixtures, font, output, capacity, public_test_signature=False,
               'publicTestKey':public_test_signature,'sourceIdentity':records['sourceSha256'],
               'profileIdentity':records['profileSha256'],'fontGlyphs':struct.unpack_from('<I',raw_font,20)[0],
               'catalogRasterGids':records['rasterGids'], 'omittedOriginalAssets':[],
-              'textPipeline':pipeline,'candidateCoreVersion':candidate_core_version,
+              'textPipeline':pipeline,'coreAbi':core_abi,'candidateCoreVersion':candidate_core_version,
               'toolCoreVersion':production_core_version,
               'candidateLockChecked':candidate_core_version is not None,
               'executionVerified':False}
@@ -135,11 +140,12 @@ def main():
     parser.add_argument('--max-package-bytes',type=int,required=True)
     parser.add_argument('--public-test-signature',action='store_true')
     parser.add_argument('--text-pipeline',choices=('jfsp1-block-v11','jfsp2-block-v12'),default='jfsp1-block-v11')
+    parser.add_argument('--core-abi', type=int, default=4, help='Exact ABI of the Core selected for qualification')
     parser.add_argument('--candidate-core-version',help='Explicit contextual qualification manifest line; production lock unchanged')
     args=parser.parse_args()
     try:
         report=build(args.core_fixtures,args.font,args.output,args.max_package_bytes,args.public_test_signature,
-                     args.text_pipeline,args.candidate_core_version)
+                     args.text_pipeline,args.candidate_core_version,args.core_abi)
     except (ValueError,OSError,KeyError,struct.error) as error:
         parser.exit(1,f'prepare_signed_shaped_fixture: {error}\n')
     print(json.dumps(report,indent=2))
