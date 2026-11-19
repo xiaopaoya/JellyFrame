@@ -10,6 +10,25 @@
 namespace jellyframe_esp32s3 {
 namespace {
 
+const jellyframe::Node* document_child(const jellyframe::Node& parent, std::string_view tag) {
+    for (const auto& child : parent.children) {
+        if (child && child->type == jellyframe::NodeType::Element && child->tag_name == tag)
+            return child.get();
+    }
+    return nullptr;
+}
+
+bool has_background_image(const jellyframe::Style& style) {
+#if defined(JELLYFRAME_RENDER_CORE_CANONICAL_VALUE_API_VERSION)
+    for (const auto& layer : style.background_layers)
+        if (layer.kind != jellyframe::BackgroundLayerKind::None) return true;
+    return false;
+#else
+    return style.background_paint != jellyframe::BackgroundPaintKind::Solid ||
+           style.background_overlay_packed != 0;
+#endif
+}
+
 bool starts_with(std::string_view value, std::string_view prefix) {
     return value.size() >= prefix.size() && value.substr(0, prefix.size()) == prefix;
 }
@@ -101,6 +120,28 @@ void record_success(ResourceBundleContext* context, std::size_t bytes) {
 }
 
 } // namespace
+
+jellyframe::Color installed_canvas_background(const jellyframe::Node& document,
+    const jellyframe::StyleResolver& resolver, int width, int height, jellyframe::Color fallback) {
+    jellyframe::StyleResolveContext context;
+    context.viewport_width = width;
+    context.viewport_height = height;
+    const auto* html = document_child(document, "html");
+    if (html) {
+        const auto style = resolver.resolve(*html, context);
+        if (style.display == jellyframe::Display::None || has_background_image(style)) return fallback;
+        if (style.background_color.a != 0)
+            return style.background_color.a == 255 ? style.background_color : fallback;
+    }
+    const auto* body = document_child(html ? *html : document, "body");
+    if (body) {
+        const auto style = resolver.resolve(*body, context);
+        if (style.display != jellyframe::Display::None && !has_background_image(style) &&
+            style.background_color.a == 255)
+            return style.background_color;
+    }
+    return fallback;
+}
 
 bool InstalledResourceSnapshot::rebuild_views() {
     try {
