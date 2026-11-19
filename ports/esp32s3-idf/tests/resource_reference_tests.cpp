@@ -2,8 +2,10 @@
 
 #include <iostream>
 #include <cassert>
+#include "render_core/css_parser.h"
 #include "render_core/document_style.h"
 #include "render_core/html_parser.h"
+#include "render_core/software_renderer.h"
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -18,7 +20,35 @@ const ResourceBundle& generated_resource_bundle() {
 
 } // namespace jellyframe_esp32s3
 
+namespace {
+
+void installed_canvas_fills_the_unoccupied_viewport() {
+    const auto document = jellyframe::HtmlParser{}.parse("<html><body><p>Short page</p></body></html>");
+    assert(document);
+    const jellyframe::Color fallback{248, 250, 252, 255};
+    const auto canvas = [&](const char* css) {
+        const jellyframe::StyleResolver resolver(jellyframe::CssParser{}.parse(css));
+        return jellyframe_esp32s3::installed_canvas_background(*document, resolver, 172, 320, fallback);
+    };
+    const auto background = canvas("body { background: #14252b; }");
+    jellyframe::LayerNode root;
+    root.bounds = root.clip_rect = {0, 0, 172, 320};
+    jellyframe::FrameBuffer frame(172, 320, fallback);
+    const jellyframe::Rect dirty{0, 260, 172, 60};
+    jellyframe::SoftwareCompositor compositor;
+    compositor.render_into(root, frame, background, &dirty, 1);
+    const auto bottom = frame.pixel(86, 319);
+    assert(bottom.r == 20 && bottom.g == 37 && bottom.b == 43 && bottom.a == 255);
+    assert(canvas("html { background: #ff0000; } body { background: #14252b; }").r == 255);
+    assert(canvas("html { background: rgba(0, 0, 0, 0.5); } body { background: #14252b; }").r == fallback.r);
+    assert(canvas("body { display: none; background: #14252b; }").r == fallback.r);
+    assert(canvas("body { background: #14252b; background-image: linear-gradient(red, blue); }").r == fallback.r);
+}
+
+} // namespace
+
 int main() {
+    installed_canvas_fills_the_unoccupied_viewport();
     std::ifstream fixture(JELLYFRAME_RESOURCE_REFERENCE_FIXTURE, std::ios::binary);
     if (!fixture.good()) {
         std::cerr << "FAIL resource_reference_tests: cannot open nested stylesheet fixture: "

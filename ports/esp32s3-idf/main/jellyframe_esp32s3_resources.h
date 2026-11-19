@@ -10,7 +10,14 @@
 #include <string_view>
 #include <vector>
 
+namespace jellyframe {
+class StyleResolver;
+}
+
 namespace jellyframe_esp32s3 {
+
+jellyframe::Color installed_canvas_background(const jellyframe::Node& document,
+    const jellyframe::StyleResolver& resolver, int width, int height, jellyframe::Color fallback);
 
 inline constexpr std::size_t kInstalledResourceMaxBytes = 48u * 1024u;
 inline constexpr std::size_t kInstalledResourceSnapshotMaxBytes = 96u * 1024u;

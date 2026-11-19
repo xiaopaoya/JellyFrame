@@ -61,6 +61,7 @@
 #include <new>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -510,6 +511,7 @@ struct TimerUiTaskContext {
     std::unique_ptr<std::uint16_t[]> packed_rgb565_scratch;
     Rgb565Panel panel;
     PortTelemetry telemetry;
+    jellyframe::Color presented_background = kBackground;
     int width = 0;
     int height = 0;
     std::uint32_t elapsed_seconds = 0;
@@ -1906,6 +1908,12 @@ bool render_and_present(TimerUiTaskContext& context,
         bind_input_controller(context, input_state);
     }
 
+    const jellyframe::Color background = context.installed_bundle_app
+        ? installed_canvas_background(*context.document, style_resolver, context.width, context.height, kBackground)
+        : kBackground;
+    const bool background_changed =
+        std::tie(background.r, background.g, background.b) !=
+        std::tie(context.presented_background.r, context.presented_background.g, context.presented_background.b);
     std::size_t dirty_count = 0;
     const jellyframe::Rect* dirty_rects = choose_dirty_rects(context,
                                                               update_plan,
@@ -1913,11 +1921,16 @@ bool render_and_present(TimerUiTaskContext& context,
                                                               previous_layer_snapshot.get(),
                                                               context.pipeline.layer_tree.get(),
                                                               layer_snapshot_failed);
+    const jellyframe::Rect full_viewport{0, 0, context.width, context.height};
+    if (background_changed) {
+        dirty_rects = &full_viewport;
+        dirty_count = 1;
+        context.frame_scratch.dirty_region.mode = jellyframe::DirtyRegionMode::FullFrame;
+    }
     if (dirty_rects == nullptr || dirty_count == 0) {
         return true;
     }
 
-    const jellyframe::Rect full_viewport{0, 0, context.width, context.height};
     const bool inject_panel_scroll_fallback =
         CONFIG_JELLYFRAME_WS147_PANEL_SCROLL_FALLBACK_PROBE &&
         context.telemetry.panel_scroll_probe_injections == 0 &&
@@ -1928,13 +1941,13 @@ bool render_and_present(TimerUiTaskContext& context,
                  "panel_scroll_fallback_probe phase=inject step=%u mapped_before=1 reason=forced-ineligible-frame",
                  static_cast<unsigned>(context.telemetry.panel_scroll_steps));
     }
-    const bool use_panel_scroll = !inject_panel_scroll_fallback &&
+    const bool use_panel_scroll = !background_changed && !inject_panel_scroll_fallback &&
         panel_scroll_candidate(context, dirty_count);
     // A panel-scroll frame intentionally leaves most framebuffer rows stale.
     // Rebuild before a normal present can observe those rows again.
     const bool rebuild_framebuffer_for_normal_present =
         context.panel.packed_scroll_mapped && !use_panel_scroll;
-    const bool can_reuse_scroll_pixels = context.has_framebuffer_scroll_blit &&
+    const bool can_reuse_scroll_pixels = !background_changed && context.has_framebuffer_scroll_blit &&
         context.frame_buffer != nullptr && context.pipeline.layer_tree != nullptr &&
         !rebuild_framebuffer_for_normal_present;
     std::array<jellyframe::Rect, 2> scroll_reuse_dirty_rects{};
@@ -1998,14 +2011,14 @@ bool render_and_present(TimerUiTaskContext& context,
     if (rebuild_framebuffer_for_normal_present) {
         compositor.render_into(*context.pipeline.layer_tree,
                                *context.frame_buffer,
-                               kBackground,
+                               background,
                                &full_viewport,
                                1,
                                &context.compositor_scratch);
     } else {
         compositor.render_into(*context.pipeline.layer_tree,
                                *context.frame_buffer,
-                               kBackground,
+                               background,
                                compose_dirty_rects,
                                compose_dirty_count,
                                &context.compositor_scratch);
@@ -2076,7 +2089,7 @@ bool render_and_present(TimerUiTaskContext& context,
                 const std::uint64_t recovery_compose_start = esp_timer_get_time();
                 compositor.render_into(*context.pipeline.layer_tree,
                                        *context.frame_buffer,
-                                       kBackground,
+                                       background,
                                        &full_viewport,
                                        1,
                                        &context.compositor_scratch);
@@ -2137,6 +2150,7 @@ bool render_and_present(TimerUiTaskContext& context,
     } else {
         ++context.telemetry.full_frames;
     }
+    if (ok) context.presented_background = background;
     return ok;
 }
 
