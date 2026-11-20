@@ -1,6 +1,6 @@
 # Component Compatibility Matrix
 
-> Last updated: 2026-11-19; Applies to: 0.6.0-dev; ABI9 production dependency update
+> Last updated: 2026-11-20; Applies to: 0.6.0-dev.
 
 This matrix records compatibility evidence across the three planned product
 boundaries. It is intentionally narrower than the HTML/CSS capability tables:
@@ -12,14 +12,15 @@ build artifact may consume which other artifact.
 | Consumer | Provider | Version / ABI | Status | Evidence and limitation |
 | --- | --- | --- | --- | --- |
 | JellyFrame App Runtime | in-tree `jellyframe_render_core` | same checkout | `verified` | Default desktop Release/Debug and non-scripting CI CTest. Use for synchronized Core/Runtime changes. |
-| JellyFrame App Runtime | unpacked Core source archive | `0.6.2` source profile | `verified` | `JELLYFRAME_RENDER_CORE_SOURCE_DIR` selects the unpacked archive for a separate Runtime build and App Runtime CTest; package mode remains mutually exclusive. |
-| Render Core standalone tests | no Runtime or JerryScript | `0.6.2` / ABI `1` | `verified` | Standalone configure, build, CTest and install path. The package contains the Core target, headers and capability profile only. |
+| JellyFrame App Runtime | unpacked Core source archive | `0.12.0` / ABI `11` | `verified` | PR #143 verified the source override with the release archive. `JELLYFRAME_RENDER_CORE_SOURCE_DIR` is mutually exclusive with package mode. |
+| Render Core standalone tests | no Runtime or JerryScript | `0.12.0` / ABI `11` | `verified` | The extracted release built, passed 42/42 tests and installed successfully. |
 | Render Core source archive | no Runtime or JerryScript | `0.8.0` / ABI `3` | `released` | Signed `v0.8.0` source archive; SHA-256 `b650866d6fcf453e6b2cb54b3a685bbe9df1be07dd9d9825060651ec1e6c4240`. |
 | Render Core source archive | no Runtime or JerryScript | `0.9.0` / ABI `4` | `released` | Signed `v0.9.0`; adopted by Runtime #116. The [ABI4 integration plan](render_core_abi4_migration_plan.md) records native and installed-worker WS147 acceptance. |
 | Render Core source archive | no Runtime or JerryScript | `0.10.0` / ABI `9` | `released` | Signed `v0.10.0` release with a source archive and SHA-256 sidecar. |
 | Render Core source archive | no Runtime or JerryScript | `0.6.2` / ABI `1` | `released` | Signed `v0.6.2` release archive plus SHA-256 sidecar. Declared text members are normalized to LF while binary members remain opaque; CI proves equal archive bytes from equivalent CRLF/LF trees, then extracts, builds, runs CTest, installs and configures the Runtime package consumer. |
-| JellyFrame App Runtime | installed Render Core package | `0.9.0` / ABI `4` | `verified` | Production lock from #116 through #127; retained with a separate exact lock for compatibility tests after this update. |
-| JellyFrame App Runtime | installed Render Core package | `0.10.0` / ABI `9` | `verified (host)` | [Host qualification](abi9-paired-qualification.md) covers full, cropped and off. This dependency update pins package mode in this checkout; mainline adopts the new lock on merge. WS147 acceptance is tracked separately. |
+| JellyFrame App Runtime | installed Render Core package | `0.9.0` / ABI `4` | `verified` | Historical production lock from #116 through #127. The ABI4 CI lane retains its own exact lock. |
+| JellyFrame App Runtime | installed Render Core package | `0.10.0` / ABI `9` | `verified (host)` | Historical lock adopted in #128. [Host qualification](abi9-paired-qualification.md) covers full, cropped and off for the recorded ABI9 pair. |
+| JellyFrame App Runtime | installed Render Core package | `0.12.0` / ABI `11` | `verified (host)` | Current production lock, adopted in [PR #143](https://github.com/xiaopaoya/JellyFrame/pull/143). The package passed focused consumer, desktop and scripting tests. |
 | JellyFrame App Runtime | installed Render Core package | wrong version, ABI or source identity | `rejected` | Configure-time exact version, engine-ABI and source-hash checks. No fallback to source Core is allowed in package mode. |
 | App package preflight | generated Render Core capability profile | schema `1` / selected Core engine ABI | `verified` | `package_app.py` validates profile schema, known feature IDs and dependency closure before resources are read; missing required families reject the package. |
 | JellyFrame Script bridge | in-tree Render Core | `0.6.0-dev` source line | `verified separately` | One script backend is selected at build time; the current implementation is JerryScript and remains an optional App Runtime dependency. This does not prove a package-mode scripting build. |
@@ -33,19 +34,16 @@ The Runtime package consumer reads these values from
 `cmake/jellyframe_dependency_lock.cmake`:
 
 ```text
-JELLYFRAME_RENDER_CORE_LOCKED_VERSION = 0.10.0
-JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI = 9
-JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = a01b2ccdcb198f1105187d1350c1381857663c5ad85451ecdb8f1e8e496b5ef7
+JELLYFRAME_RENDER_CORE_LOCKED_VERSION = 0.12.0
+JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI = 11
+JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = dfb4723c72679f2a7a7bdfa71360c8055e03ba5d795a9afac73cab3076be3849
 ```
 
 The lock is consumer policy. Core can publish independently; Runtime adopts a
 release through a reviewed lock update, installed-package builds and capability
-profile review. Before this update, Runtime mainline `879cb366` pins
-[`v0.9.0` / ABI 4](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.9.0)
-with source identity `d7873ce8c0b25e1012fb151811c9d502533bad00c5c439f82f1ad6628303d0d4`.
-This update moves the production lock to
-[`v0.10.0` / ABI 9](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.10.0),
-whose source archive SHA-256 is `754629b7bd3bdaf5c9c6ab9ba407b510df8a12da26461e01827d66d7cc6eecac`.
+profile review. The signed
+[`v0.12.0` release](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.12.0)
+has archive SHA-256 `6c948474a30817fa6488a69382c986c18d4d0c882554ca4e9715e225294e5f53`.
 The archive checksum is recorded separately from the source manifest; an
 installed CMake package exposes the source identity only.
 

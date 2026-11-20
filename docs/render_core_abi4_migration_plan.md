@@ -2,7 +2,7 @@
 
 > Last updated: 2026-11-19; Applies to: 0.6.0-dev. Historical ABI4 integration record.
 
-> **Follow-on migration (2026-11-19):** Core v0.10.0 / ABI9 has been signed and published. Runtime mainline `879cb366` includes the ABI9 consumer paths and passed [host qualification](abi9-paired-qualification.md). It pins v0.9.0 / ABI4 until this production dependency update merges. ABI9 acceptance must match the release and the concrete firmware identity; device observations on experimental frame13 do not cover the release frame10 path.
+> Runtime later adopted Core v0.10.0 / ABI9 in #128 and v0.12.0 / ABI11 in #143. For the current dependency lock, see the [compatibility matrix](component_compatibility_matrix.md).
 
 > **ABI4 checkpoint (2026-11-16):** Runtime PR #116 (`f2169d652e4e4c16a84935cd955f4524ace14db0`) merged the signed Core v0.9.0 / ABI4 production lock. PR #117 (`673f23a2778894287e292473980903fbe8e7cff3`) fixed WS147 ABI4 build boundaries. PR #119 recorded the lifecycle-image acceptance scope. PR #120 merged as `7dd34aea69e6163541132fe40dc130ea747be304` after 23/23 checks, completing provider manifest/profile and firmware provenance validation. Core release archive digest remains `8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628`. Release, production-lock and provider integration gates are complete.
 

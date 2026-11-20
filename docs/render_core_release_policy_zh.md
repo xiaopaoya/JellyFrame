@@ -1,6 +1,6 @@
 # Render Core 发布与拆仓政策
 
-> 最后更新：2026-11-19；适用版本：0.6.0-dev；ABI9 生产依赖升级
+> 最后更新：2026-11-20；适用版本：0.6.0-dev。
 
 本政策规定当前 monorepo 边界迁移到独立 `jellyframe-render-core` 工程的方式。它补充 [engine_architecture_zh.md](engine_architecture_zh.md)，不是面向 App 作者的兼容性承诺。ABI4 集成与旧文本 API 退役的协同任务见[迁移计划](render_core_abi4_migration_plan_zh.md)。
 
@@ -14,12 +14,13 @@
 
 ## 迁移状态
 
-保留历史的 `xiaopaoya/JellyFrame-Render-Core` 仓库保留原许可证与贡献历史。首个签名发布 `v0.6.0` 建立了确定性的源码归档和 SHA-256 sidecar。最新的签名发布 [`v0.10.0` / ABI 9](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.10.0) 指向 `bcb0cba4bd492b74348684d6c68578fced149b43`。源码身份为
-`a01b2ccdcb198f1105187d1350c1381857663c5ad85451ecdb8f1e8e496b5ef7`，发布归档 SHA-256 为
-`754629b7bd3bdaf5c9c6ab9ba407b510df8a12da26461e01827d66d7cc6eecac`。
+`xiaopaoya/JellyFrame-Render-Core` 仓库保留原许可证与贡献历史。首个签名发布 `v0.6.0`
+建立了确定性的源码归档和 SHA-256 sidecar。带签名的 v0.12.0 / ABI11 发布指向
+`5dbaac63ee368d326a90e0e57ebb11e11d327ab1`。源码和归档校验值见[兼容性矩阵](component_compatibility_matrix_zh.md)。
 
-本次升级前，Runtime 主线 `879cb366` 仍锁定已签名的 `v0.9.0` / ABI 4，发布归档 SHA-256 为
-`8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628`。Runtime #123–#127 合入 ABI9 消费路径；合入后[主机资格验证](abi9-paired-qualification.md)覆盖 full、cropped、off。本次依赖升级在合入后切换生产锁，并保留独立的 ABI4 兼容测试。
+Runtime PR #143 在合并提交 `724ca36e` 采用该版本。PR 和合并后的 CI 均通过 23/23，
+包含已发布包的消费者检查。ABI3 和 ABI4 分别保留兼容 CI。跟踪式计算样式复用仍需显式选择。
+[PR #143](https://github.com/xiaopaoya/JellyFrame/pull/143)
 
 Runtime 通过显式更新依赖锁接纳发布包。CI 校验已发布归档的 SHA-256，再安装并测试锁定的包，避免将单体仓库的导出与正式发布包混用。WS147 实机证据单独按固件身份和测试范围记录。
 
@@ -92,4 +93,4 @@ python project_tools\rehearse_render_core_history_export.py `
 
 ## 拆仓门槛
 
-Core 已完成物理拆分。Runtime 通过签名发布包、精确依赖锁和 package-consumer CI 维护这一边界。ABI4 的 WS147 结果见 [ABI4 集成计划](render_core_abi4_migration_plan_zh.md)，仅覆盖所记录的镜像和观察项。ABI9 实机验收须绑定正式发布依赖构建的同一固件；主机验证或实验固件结果不能作为 Device OS 镜像验收。迁移到 Device OS 前，仍需在命名 profile 上验证消费路径和记录 provenance；Core 不得引入 Runtime 或移植侧私有头文件。新的 Core 能力在独立仓库中开发。
+Core 已完成物理拆分。Runtime 通过签名发布包、精确依赖锁和 package-consumer CI 维护这一边界。实机验收须绑定正式发布依赖构建的精确固件。迁移到 Device OS 前，仍需在命名 profile 上验证消费路径和记录 provenance。Core 不得引入 Runtime 或移植侧私有头文件。新的 Core 能力在独立仓库中开发。ABI4 的 WS147 结果及其适用镜像见 [ABI4 集成计划](render_core_abi4_migration_plan_zh.md)。

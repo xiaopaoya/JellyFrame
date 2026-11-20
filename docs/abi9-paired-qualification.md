@@ -1,13 +1,14 @@
 # Core and Runtime paired host qualification
 
-Last updated: 2026-11-19; Applies to: 0.6.0-dev
+Last updated: 2026-11-20; Applies to: 0.6.0-dev.
 
 The manually dispatched qualification takes a full Core commit, its exact
 numeric version, its positive ABI (`core_abi`), and the source SHA-256 from the
 independently reviewed Core source manifest. The selected Runtime revision is
 the workflow revision. The qualification lock applies to these test consumers.
 The workflow and scripts retain their historical names, and omission of the ABI
-input selects ABI9. Set it explicitly when qualifying an ABI10 candidate.
+input selects ABI9. Pass `core_abi=11` in the workflow or `--core-abi 11`
+on the command line for Core v0.12.0.
 
 The matrix builds and installs Core from the supplied commit. The checkout,
 installed package, qualification lock, and Runtime consumer provenance must
@@ -46,3 +47,19 @@ Keep the receipt and logs for all three profiles before treating a combination
 as host qualified. An earlier receipt does not qualify a different commit or
 source hash. Release artifact verification and physical WS147 acceptance
 remain separate gates.
+
+## Core 0.12.0 / ABI11 baseline
+
+Runtime `724ca36e086ec8695fed939124154a56b2c92f6a` passed against installed
+packages built from Core `5dbaac63ee368d326a90e0e57ebb11e11d327ab1`.
+The Core source identity matched the production lock. Repacking that checkout
+also reproduced the signed release archive's SHA-256.
+
+| Profile | Installed Runtime | Signed scalar frame10 | Signed contextual frame12 | Win32 route |
+| --- | ---: | ---: | ---: | ---: |
+| full | 41/41 | 7/7 | 20/20 | 1/1 |
+| cropped | 41/41 | 7/7 | 20/20 | 1/1 |
+| off | 41/41 | 7/7 | Disabled by profile | 1/1 |
+
+These counts cover the installed-package and host suites selected by this
+driver. The device path has its own firmware and workload acceptance.

@@ -1,6 +1,6 @@
 # Render Core Release And Extraction Policy
 
-> Last updated: 2026-11-19; Applies to: 0.6.0-dev; ABI9 production dependency update
+> Last updated: 2026-11-20; Applies to: 0.6.0-dev.
 
 This policy governs the transition from the current monorepo boundary to an independently governed `jellyframe-render-core` project. It complements [engine_architecture.md](engine_architecture.md); it is not a user-facing app compatibility promise. The coordinated ABI4 integration and legacy text API retirement work is tracked in the [migration plan](render_core_abi4_migration_plan.md).
 
@@ -17,19 +17,14 @@ This policy governs the transition from the current monorepo boundary to an inde
 The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository retains
 the existing license and contributor history. Its first signed `v0.6.0`
 release established the deterministic source archive and SHA-256 sidecar.
-The latest signed release, [`v0.10.0` / ABI 9](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.10.0), points to
-`bcb0cba4bd492b74348684d6c68578fced149b43`. Its source identity is
-`a01b2ccdcb198f1105187d1350c1381857663c5ad85451ecdb8f1e8e496b5ef7`;
-the release archive SHA-256 is
-`754629b7bd3bdaf5c9c6ab9ba407b510df8a12da26461e01827d66d7cc6eecac`.
+The signed v0.12.0 / ABI11 release points to
+`5dbaac63ee368d326a90e0e57ebb11e11d327ab1`. Source and archive digests are
+recorded in the [compatibility matrix](component_compatibility_matrix.md).
 
-Before this update, Runtime mainline `879cb366` still pins signed `v0.9.0` /
-ABI 4, whose source archive SHA-256 is
-`8a0568b548a7e30956c515bba753ad7fe7f0fbb501e319cbef926eec2b855628`.
-Runtime #123–#127 merged the ABI9 consumer path, and post-merge
-[host qualification](abi9-paired-qualification.md) covered full, cropped and
-off. This dependency update advances the production lock on merge and
-retains a separate ABI4 compatibility test.
+Runtime PR #143 adopted that release at merge commit `724ca36e`. Its PR and
+post-merge CI both passed 23/23 checks, including the released-package consumer.
+ABI3 and ABI4 compatibility run in separate lanes. Tracked computed-style
+reuse remains opt-in. [PR #143](https://github.com/xiaopaoya/JellyFrame/pull/143)
 
 Runtime adopts a release through an explicit dependency-lock update. CI
 verifies the published archive SHA-256, installs the archive and tests the
@@ -150,9 +145,8 @@ actual signed repository publication.
 Core physical extraction is complete. Runtime maintains the boundary with
 signed release packages, exact dependency locks and package-consumer CI. The
 [ABI4 integration plan](render_core_abi4_migration_plan.md) records its WS147
-results for the named images and observations. ABI9 device acceptance requires
-results tied to the exact firmware built against the released dependency;
-host qualification and experimental firmware cannot qualify a Device OS
-image. Before Device OS migration, a named profile must pass its consumer
+results for the named images and observations. Device acceptance requires
+results tied to the exact firmware built against the released dependency.
+Before Device OS migration, a named profile must pass its consumer
 checks and record provenance. Core must not depend on private Runtime or
 port headers. Develop new Core capabilities in the independent repository.

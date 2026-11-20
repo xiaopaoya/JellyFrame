@@ -2,7 +2,7 @@
 
 > 最后更新：2026-11-19；适用版本：0.6.0-dev。ABI4 集成历史记录。
 
-> **后续迁移（2026-11-19）：** Core v0.10.0 / ABI9 已签名发布。Runtime 主线 `879cb366` 已合入 ABI9 消费路径并通过[主机资格验证](abi9-paired-qualification.md)，在本次生产依赖升级合入前仍锁定 v0.9.0 / ABI4。ABI9 验收须匹配正式包和实际固件身份；实验 frame13 的实机观察不覆盖正式包的 frame10 路径。
+> Runtime 后续通过 #128 采用 Core v0.10.0 / ABI9，通过 #143 采用 v0.12.0 / ABI11。当前依赖锁见[兼容性矩阵](component_compatibility_matrix_zh.md)。
 
 > **ABI4 检查点（2026-11-16）：**Runtime PR #99–#117 已合并；PR #120 已在 23/23 检查通过后合并为 `7dd34aea69e6163541132fe40dc130ea747be304`，完成 provider manifest/profile 与固件 provenance 校验。PR #116（`f2169d652e4e4c16a84935cd955f4524ace14db0`）将生产依赖锁定到签名发布的 Render Core v0.9.0 / ABI4；PR #117（`673f23a2778894287e292473980903fbe8e7cff3`）修复 ABI4 WS147 移植构建边界，当时的 Runtime master 为 `7dd34aea`。Core v0.9.0 / ABI4 已签名发布，归档及 sidecar digest 已核验。PR #116/#117 CI 均通过。
 
