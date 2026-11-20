@@ -1,13 +1,14 @@
 # Core and Runtime paired host qualification
 
-Last updated: 2026-11-19; Applies to: 0.6.0-dev
+Last updated: 2026-11-20. Applies to: 0.6.0-dev.
 
 The manually dispatched qualification takes a full Core commit, its exact
 numeric version, its positive ABI (`core_abi`), and the source SHA-256 from the
 independently reviewed Core source manifest. The selected Runtime revision is
 the workflow revision. The qualification lock applies to these test consumers.
 The workflow and scripts retain their historical names, and omission of the ABI
-input selects ABI9. Set it explicitly when qualifying an ABI10 candidate.
+input selects ABI9. Pass `core_abi=11` in the workflow or `--core-abi 11`
+on the command line for Core v0.12.0.
 
 The matrix builds and installs Core from the supplied commit. The checkout,
 installed package, qualification lock, and Runtime consumer provenance must
