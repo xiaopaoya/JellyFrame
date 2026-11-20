@@ -41,6 +41,20 @@ ctest --test-dir E:/Builds/runtime-jfsg-installed-host-20261117 -V
 Requires Python cryptography, a native C/C++ compiler, and llvm-nm on PATH.
 No device, serial port, production key or release secret is used.
 
+## Configured public trust through the store
+
+`jfsg_install_configured_public_trust` compiles the store and signature callback
+with the ESP32-S3 build's public-trust CMake helper. Configure generates two
+ephemeral signing keys in memory and writes only a public manifest and signed
+fixture envelopes to the build directory. The test installs v1, reconstructs
+the store and checks the authenticated signer, resource digest and bundle
+bytes. It verifies a v2 update signed by the configured key and then rejects
+the same bundle signed by the other key with the same key ID. The active v1
+and its registry generation survive the refusal and a second reconstruction.
+The configured symbol test checks both store and verifier objects for test
+injection symbols. Run both cases with
+`ctest -R "^jfsg_(install_configured_public_trust|configured_store_symbol_boundary)$" -V`.
+
 Initial qualification 2026-11-17:18/18 CTest cases pass. The later explicit
 capacity extension passes22/22; see
 [capacity evidence](../../../../docs/evaluation/2026-11-17-signed-install-capacity.md).
@@ -78,4 +92,4 @@ profile is host-tested/IDF-built but its provider transport is not adapted yet; 
 qualify the larger real shaping catalog. Anti-rollback remains relative to the
 recovered active version, not a monotonic trusted counter.
 
-Last updated: 2026-11-17; Applies to: 0.6.0-dev.
+Last updated: 2026-11-20; Applies to: 0.6.0-dev.
