@@ -13,6 +13,7 @@ def main():
     old_v1 = str(fixtures / "trusted-v1.jfsg")
     old_v2 = str(fixtures / "rotation-old-v2.jfsg")
     new_v2 = str(fixtures / "rotation-new-v2.jfsg")
+    new_v3 = str(fixtures / "rotation-new-v3.jfsg")
 
     def readback(label, firmware, nor, version, generation, invalid=False, *,
                  package="-", install=None, rollback=False):
@@ -56,6 +57,30 @@ def main():
         if primary.read_bytes() != before:
             raise AssertionError("trusted fallback or refused rollback changed NOR")
         readback("New-only reads v2 again", new, primary, 2, 2, package=new_v2)
+        seeded = root / "both-copies-seeded.bin"
+        copyfile(primary, seeded)
+        readback("Overlap installs a second new-signed update as v3",
+                 overlap, seeded, 3, 3, package=new_v3, install=new_v3)
+        seeded_bytes = seeded.read_bytes()
+        readback("New-only reads v3 after both copies were seeded", new, seeded, 3, 3, package=new_v3)
+        if seeded.read_bytes() != seeded_bytes:
+            raise AssertionError("new-only reconstruction changed the seeded NOR")
+
+        # Model one unavailable registry sector at a time in independent NOR
+        # copies. All bundle slots and the surviving registry sector are intact.
+        registry_sector_bytes = 4096
+        for generation, package in ((2, new_v2), (3, new_v3)):
+            other_sector_offset = (1 - generation % 2) * registry_sector_bytes
+            one_survivor = root / f"only-generation-{generation}.bin"
+            one_survivor.write_bytes(seeded_bytes[:other_sector_offset]
+                                     + b"\xff" * registry_sector_bytes
+                                     + seeded_bytes[other_sector_offset + registry_sector_bytes:])
+            isolated_bytes = one_survivor.read_bytes()
+            readback(f"New-only reads independently from registry generation {generation}",
+                     new, one_survivor, generation, generation, package=package)
+            if one_survivor.read_bytes() != isolated_bytes:
+                raise AssertionError("independent registry reconstruction changed NOR")
+
         readback("Empty trust publishes an empty registry when neither copy validates",
                  empty, primary, 0, 0, invalid=True)
         readback("Restoring overlap cannot recover overwritten v2",

@@ -98,6 +98,8 @@ add_test(NAME jfsg_configured_store_symbol_boundary COMMAND "${Python3_EXECUTABL
 
 function(jfsg_add_rotation_target target)
     add_executable(${target} "${rotation_source}" ${install_contracts} ${ARGN})
+    # Match the 1 MiB storage partition in the standard WS147 image layout.
+    target_compile_definitions(${target} PRIVATE JFSG_HOST_PARTITION_BYTES=1048576)
     target_include_directories(${target} PRIVATE "${signed_install_root}" "${signed_install_root}/stubs"
         "${runtime_root}/src" "${runtime_root}/ports/esp32s3-idf/main" "${JFSG_CORE_INCLUDE_DIR}")
     target_compile_features(${target} PRIVATE cxx_std_17)

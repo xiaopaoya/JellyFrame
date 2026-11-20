@@ -37,12 +37,14 @@ def main():
         prior = fixture(Path(scratch), version=1)
         update = fixture(Path(scratch), version=2)
         rotation_update = fixture(Path(scratch), shaped=True, version=2)
+        rotation_followup = fixture(Path(scratch), shaped=True, version=3)
     for name, bundle, key, signer_id in (
         ("trusted-v1", prior, trusted, key_id),
         ("trusted-v2", update, trusted, key_id),
         ("untrusted-v2", update, next_key, key_id),
         ("rotation-old-v2", rotation_update, trusted, key_id),
         ("rotation-new-v2", rotation_update, next_key, rotated_id),
+        ("rotation-new-v3", rotation_followup, next_key, rotated_id),
     ):
         (destination / f"{name}.jfsg").write_bytes(sign_app_package.sign_bundle(bundle, key, signer_id))
     old = (key_id, trusted)
