@@ -1,6 +1,6 @@
 # Component Compatibility Matrix
 
-> Last updated: 2026-11-20. Applies to: 0.6.0-dev.
+> Last updated: 2026-11-20; Applies to: 0.6.0-dev.
 
 This matrix records compatibility evidence across the three planned product
 boundaries. It is intentionally narrower than the HTML/CSS capability tables:

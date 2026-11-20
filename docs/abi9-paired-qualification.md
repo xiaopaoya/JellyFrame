@@ -1,6 +1,6 @@
 # Core and Runtime paired host qualification
 
-Last updated: 2026-11-20. Applies to: 0.6.0-dev.
+Last updated: 2026-11-20; Applies to: 0.6.0-dev.
 
 The manually dispatched qualification takes a full Core commit, its exact
 numeric version, its positive ABI (`core_abi`), and the source SHA-256 from the
