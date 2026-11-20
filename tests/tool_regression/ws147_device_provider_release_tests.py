@@ -293,7 +293,11 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             with self.subTest(abi=abi):
                 self._exercise_build_dir(abi, custom_sdkconfig=True)
 
-    def _exercise_build_dir(self, abi: int, *, custom_sdkconfig: bool = False) -> None:
+    def test_package_trust_receipt_is_archived_and_must_match_generated_table(self) -> None:
+        self._exercise_build_dir(11, custom_sdkconfig=True, trust_receipt=True)
+
+    def _exercise_build_dir(self, abi: int, *, custom_sdkconfig: bool = False,
+                            trust_receipt: bool = False) -> None:
         with tempfile.TemporaryDirectory(prefix="jellyframe-ws147-build-dir-") as directory:
             root = Path(directory)
             build = root / "build"
@@ -374,6 +378,15 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 "--factory-image", str(factory), *identity_args(build_manifest, generated_profile),
                 "--build-dir", str(build),
             ]
+            trust = build / "esp-idf/main/jfsg-package-trust"
+            if trust_receipt:
+                port = PACKAGER.parents[2]
+                subprocess.run([
+                    sys.executable, str(port / "tools/generate_package_trust.py"),
+                    "--manifest", str(port / "tests/package_signature/configured_public_trust.json"),
+                    "--output-dir", str(trust),
+                ], cwd=ROOT, check=True)
+                generated_receipt = json.loads((trust / "jfsg_package_trust_receipt.json").read_text(encoding="utf-8"))
             completed = subprocess.run([*common, "--output", str(root / "release")], cwd=ROOT,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr.decode("utf-8", errors="replace"))
@@ -396,6 +409,26 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
                 "storagePartitionOffset": 0xc10000, "storagePartitionBytes": 3145728,
             })
             self.assertEqual(manifest["storage"]["maxBundleBytes"], 1044480)
+            receipt_path = release / "developer-image/jfsg-package-trust.receipt.json"
+            if trust_receipt:
+                self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8")), {
+                    "imageVersion": manifest["imageVersion"],
+                    "firmwareSha256": sha256(firmware),
+                    "trustBuild": generated_receipt,
+                })
+                checksums = (release / "SHA256SUMS.txt").read_text(encoding="ascii")
+                self.assertIn(f"{sha256(receipt_path)}  developer-image/{receipt_path.name}\n", checksums)
+                header = trust / "jfsg_trusted_public_keys.inc"
+                original = header.read_bytes()
+                header.write_bytes(original + b"\n")
+                tampered = subprocess.run([*common, "--output", str(root / "bad-trust")],
+                                          cwd=ROOT, capture_output=True, check=False)
+                self.assertNotEqual(tampered.returncode, 0)
+                self.assertIn(b"package trust receipt and generated table hash differ", tampered.stderr)
+                self.assertFalse((root / "bad-trust").exists())
+                header.write_bytes(original)
+            else:
+                self.assertFalse(receipt_path.exists())
             if custom_sdkconfig:
                 description["config_file"] = str(build / "sdkconfig")
                 description_path.write_text(json.dumps(description), encoding="utf-8")

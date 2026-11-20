@@ -24,9 +24,18 @@ published test-scalar points fail configuration.
 The build generates the table and `jfsg_package_trust_receipt.json` under
 `esp-idf/main/jfsg-package-trust/` in the build directory. The receipt records
 the sorted key ids and hashes of the canonical trust configuration and generated
-table. Keep it with the firmware digest and build evidence. Firmware trust is
-fixed at build time. Use separate reviewed manifests for lab and production
-images. Keep the private signing key with the signer and outside the build inputs.
+table. Developer Image packaging with `--build-dir` records this alongside the
+exact firmware digest in `developer-image/jfsg-package-trust.receipt.json`.
+Firmware trust is fixed at build time. Use separate reviewed manifests for
+lab and production images. Keep the private signing key with the signer.
+
+For a production image, record the approved key IDs and canonical manifest
+digest beside the firmware and recovery hashes. Verify a package from the
+approved signer on that exact firmware, then verify its availability after a
+restart. Exercise rejection of a tampered update and recovery to a valid
+installed package. During key rotation, consider both the active and fallback
+packages before withdrawing an older public key because boot reauthenticates
+each envelope with the image's current table.
 
 Signed-package downgrade authorization is not represented by the unsigned
 JFDP `allow_downgrade` flag. The device rejects a package whose signed

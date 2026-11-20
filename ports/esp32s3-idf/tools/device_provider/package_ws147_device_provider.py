@@ -45,6 +45,35 @@ def copy(source: Path, destination: Path) -> None:
     shutil.copy2(source, destination)
 
 
+def read_package_trust_receipt(build_dir: Path) -> dict[str, object] | None:
+    generated = build_dir / "esp-idf/main/jfsg-package-trust"
+    receipt_path = generated / "jfsg_package_trust_receipt.json"
+    header = generated / "jfsg_trusted_public_keys.inc"
+    if not receipt_path.exists() and not header.exists():
+        return None
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        header_digest = sha256(header)
+    except (OSError, UnicodeError, ValueError) as error:
+        raise SystemExit("invalid or incomplete ESP-IDF package trust evidence") from error
+    if (not isinstance(receipt, dict) or
+            set(receipt) != {"format", "formatVersion", "trustSha256", "headerSha256", "keyIds"} or
+            receipt["format"] != "jellyframe.jfsg-public-trust-build" or
+            type(receipt["formatVersion"]) is not int or receipt["formatVersion"] != 1 or
+            not isinstance(receipt["trustSha256"], str) or
+            re.fullmatch(r"[0-9a-f]{64}", receipt["trustSha256"]) is None):
+        raise SystemExit("invalid ESP-IDF package trust receipt")
+    keys = receipt["keyIds"]
+    if (not isinstance(keys, list) or len(keys) > 8 or
+            any(not isinstance(key, str) or key == "0" * 32 or
+                re.fullmatch(r"[0-9a-f]{32}", key) is None for key in keys) or
+            keys != sorted(set(keys))):
+        raise SystemExit("invalid ESP-IDF package trust key IDs")
+    if receipt["headerSha256"] != header_digest:
+        raise SystemExit("ESP-IDF package trust receipt and generated table hash differ")
+    return receipt
+
+
 def _identity_from_build_evidence(build_manifest_path: Path, profile_path: Path, firmware: Path,
                                   build_profile: str) -> tuple[str, str, str, int, list[str], dict[str, object]]:
     try:
@@ -380,6 +409,7 @@ def main() -> int:
      feature_families, build_provenance) = _identity_from_build_evidence(
         args.build_manifest.resolve(), args.render_core_profile.resolve(), firmware, args.build_profile)
     max_bundle_bytes = 327680  # Historical scalar releases without build-dir evidence.
+    package_trust = None
     if any(family.startswith('text.') for family in feature_families) and args.build_dir is None:
         raise SystemExit("text pipeline provider release requires --build-dir capacity evidence")
     if args.build_dir is not None:
@@ -406,6 +436,7 @@ def main() -> int:
             args.build_dir.resolve(), firmware, factory, sdkconfig_path=sdkconfig_path)
         build_provenance.update(idf_provenance)
         build_provenance.update(capacity_provenance)
+        package_trust = read_package_trust_receipt(args.build_dir.resolve())
 
     output = args.output.resolve()
     archive_name = f"jellyframe-ws147-developer-{image_version}-provider-{PROVIDER_VERSION}"
@@ -458,6 +489,12 @@ def main() -> int:
         })
         copy(firmware, image / "jellyframe_esp32s3_bench.bin")
         write_json(image / "ws147-developer-image.manifest.json", manifest)
+        if package_trust is not None:
+            write_json(image / "jfsg-package-trust.receipt.json", {
+                "imageVersion": image_version,
+                "firmwareSha256": manifest["source"]["firmwareSha256"],
+                "trustBuild": package_trust,
+            })
         copy(factory, recovery / "ws147-factory-16mb.bin")
         copy(PROVIDER_SOURCE / "RECOVERY.md", recovery / "RECOVERY.md")
         (staging / "README.md").write_text(
