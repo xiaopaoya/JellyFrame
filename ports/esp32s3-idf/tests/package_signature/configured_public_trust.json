@@ -1,0 +1,11 @@
+{
+  "format": "jellyframe.jfsg-public-trust",
+  "formatVersion": 1,
+  "keys": [
+    {
+      "keyId": "101112131415161718191a1b1c1d1e1f",
+      "x": "a356552de44c7bb2d7571b9311ad4174b2a72cfe79ff127a023f978b4a9bcf72",
+      "y": "2ce22af6dfcf98cc3272964b93158e393ce7e651aeac384c72ae192cba3e7a5f"
+    }
+  ]
+}
