@@ -95,3 +95,26 @@ add_test(NAME jfsg_install_configured_public_trust
 add_test(NAME jfsg_configured_store_symbol_boundary COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/check_production_symbols.py" "${JFSG_LLVM_NM}"
     $<TARGET_OBJECTS:jfsg_configured_store> COMMAND_EXPAND_LISTS)
+
+function(jfsg_add_rotation_target target)
+    add_executable(${target} "${rotation_source}" ${install_contracts} ${ARGN})
+    target_include_directories(${target} PRIVATE "${signed_install_root}" "${signed_install_root}/stubs"
+        "${runtime_root}/src" "${runtime_root}/ports/esp32s3-idf/main" "${JFSG_CORE_INCLUDE_DIR}")
+    target_compile_features(${target} PRIVATE cxx_std_17)
+    target_link_libraries(${target} PRIVATE jfsg_mbedcrypto)
+endfunction()
+
+set(signed_install_root "${CMAKE_CURRENT_SOURCE_DIR}")
+set(rotation_source "${signed_install_root}/trust_rotation/rotation_store.cpp")
+jfsg_add_rotation_target(jfsg_rotation_old $<TARGET_OBJECTS:jfsg_configured_store>)
+# The shared helper writes one trust header per CMake binary directory.
+set(overlap_manifest "${configured_fixtures}/overlap-trust.json")
+set(new_manifest "${configured_fixtures}/rotated-trust.json")
+set(empty_manifest "")
+foreach(rotation IN ITEMS overlap new empty)
+    add_subdirectory(trust_rotation rotation-${rotation})
+endforeach()
+add_test(NAME jfsg_install_trust_rotation
+    COMMAND "${Python3_EXECUTABLE}" -B "${signed_install_root}/trust_rotation/rotation_trace.py"
+        "${configured_fixtures}" $<TARGET_FILE:jfsg_rotation_old> $<TARGET_FILE:jfsg_rotation_overlap>
+        $<TARGET_FILE:jfsg_rotation_new> $<TARGET_FILE:jfsg_rotation_empty>)
