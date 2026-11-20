@@ -15,10 +15,10 @@
 ## 迁移状态
 
 `xiaopaoya/JellyFrame-Render-Core` 仓库保留原许可证与贡献历史。首个签名发布 `v0.6.0`
-建立了确定性的源码归档和 SHA-256 sidecar。带签名的 v0.12.0 / ABI11 发布指向
-`5dbaac63ee368d326a90e0e57ebb11e11d327ab1`。源码和归档校验值见[兼容性矩阵](component_compatibility_matrix_zh.md)。
+建立了确定性的源码归档和 SHA-256 sidecar。带签名的 v0.12.1 / ABI11 发布指向
+`bad06c5c20919725e8d3ddd5a985949afd328cf3`。源码和归档校验值见[兼容性矩阵](component_compatibility_matrix_zh.md)。
 
-Runtime PR #143 在合并提交 `724ca36e` 采用该版本。PR 和合并后的 CI 均通过 23/23，
+Runtime PR #143 在合并提交 `724ca36e` 采用 v0.12.0。PR 和合并后的 CI 均通过 23/23，
 包含已发布包的消费者检查。ABI3 和 ABI4 分别保留兼容 CI。跟踪式计算样式复用仍需显式选择。
 [PR #143](https://github.com/xiaopaoya/JellyFrame/pull/143)
 

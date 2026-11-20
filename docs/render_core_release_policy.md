@@ -17,11 +17,11 @@ This policy governs the transition from the current monorepo boundary to an inde
 The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository retains
 the existing license and contributor history. Its first signed `v0.6.0`
 release established the deterministic source archive and SHA-256 sidecar.
-The signed v0.12.0 / ABI11 release points to
-`5dbaac63ee368d326a90e0e57ebb11e11d327ab1`. Source and archive digests are
+The signed v0.12.1 / ABI11 release points to
+`bad06c5c20919725e8d3ddd5a985949afd328cf3`. Source and archive digests are
 recorded in the [compatibility matrix](component_compatibility_matrix.md).
 
-Runtime PR #143 adopted that release at merge commit `724ca36e`. Its PR and
+Runtime PR #143 adopted v0.12.0 at merge commit `724ca36e`. Its PR and
 post-merge CI both passed 23/23 checks, including the released-package consumer.
 ABI3 and ABI4 compatibility run in separate lanes. Tracked computed-style
 reuse remains opt-in. [PR #143](https://github.com/xiaopaoya/JellyFrame/pull/143)

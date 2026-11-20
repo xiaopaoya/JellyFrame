@@ -20,8 +20,8 @@ permissions:
 
 env:
   # Keep the release archive in sync with cmake/jellyframe_dependency_lock.cmake.
-  RELEASED_RENDER_CORE_VERSION: "0.12.0"
-  RELEASED_RENDER_CORE_ARCHIVE_SHA256: "6c948474a30817fa6488a69382c986c18d4d0c882554ca4e9715e225294e5f53"
+  RELEASED_RENDER_CORE_VERSION: "0.12.1"
+  RELEASED_RENDER_CORE_ARCHIVE_SHA256: "9662b269b86239a1b93a80405dbf67466237c13c2ecab9d7e4eec2935551c521"
 
 jobs:
   linux-sanitizers:
@@ -1188,7 +1188,7 @@ jobs:
               $provenance.lockEnforced -ne $false -or
               $provenance.sourceHash -ne 'fa5914ce1559da5b12522fa28775287a535543d1be64da19a985e3d3f84cd795' -or
               $provenance.lockedVersion -ne $env:RELEASED_RENDER_CORE_VERSION -or $provenance.lockedEngineAbi -ne 11 -or
-              $provenance.lockedSourceHash -ne 'dfb4723c72679f2a7a7bdfa71360c8055e03ba5d795a9afac73cab3076be3849') {
+              $provenance.lockedSourceHash -ne 'd74b28ca238774b6f3b400a5d264b376a8c9dc02ef1e2f65c33c75305f4c254e') {
             throw "Unexpected ABI3 source-override provenance: $($provenance | ConvertTo-Json -Compress)"
           }
           cmake --build build\abi3-default --config Release --target jellyframe_desktop_shell --parallel
@@ -1258,7 +1258,7 @@ jobs:
               $provenance.sourceHash -ne '8328dbf1c236354a75f9b9cf7a868298178ac5b74560cf4836e20b33a02d1186' -or
               $provenance.sourceFileCount -ne 159 -or
               $provenance.lockedVersion -ne $env:RELEASED_RENDER_CORE_VERSION -or $provenance.lockedEngineAbi -ne 11 -or
-              $provenance.lockedSourceHash -ne 'dfb4723c72679f2a7a7bdfa71360c8055e03ba5d795a9afac73cab3076be3849') {
+              $provenance.lockedSourceHash -ne 'd74b28ca238774b6f3b400a5d264b376a8c9dc02ef1e2f65c33c75305f4c254e') {
             throw "Unexpected Core source-override provenance: $($provenance | ConvertTo-Json -Compress)"
           }
 
