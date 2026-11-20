@@ -53,9 +53,9 @@ class RenderCoreBootstrapTests(unittest.TestCase):
 
     def test_lock_values_match_current_runtime_pin(self):
         lock = BOOTSTRAP.read_lock(SCRIPT.parents[1] / "cmake/jellyframe_dependency_lock.cmake")
-        self.assertEqual(lock["version"], "0.11.0")
-        self.assertEqual(lock["abi"], "10")
-        self.assertEqual(lock["source_hash"], "f71e637c92c3d5e031fe11f49700aa80cf05bdd77700629f9c40fcc93b4c7cb4")
+        self.assertEqual(lock["version"], "0.12.0")
+        self.assertEqual(lock["abi"], "11")
+        self.assertEqual(lock["source_hash"], "dfb4723c72679f2a7a7bdfa71360c8055e03ba5d795a9afac73cab3076be3849")
 
     def test_extracts_one_rooted_source_tree(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -123,7 +123,7 @@ my_app/
 
 `1.0` 前，`runtime.minJellyFrame` 必须等于由 `VERSION` 推导出的活跃 release line，
 `runtime.minRenderCore` 必须等于此 Runtime 锁定的 Render Core 版本（当前 checkout 均为
-`0.11.0`）。两者共同标识当前 app 契约，不承诺继续支持历史预发布 app。
+`0.12.0`）。两者共同标识当前 app 契约，不承诺继续支持历史预发布 app。
 
 ```json
 {
@@ -140,7 +140,7 @@ my_app/
   "entry": "/index.html",
   "runtime": {
     "minJellyFrame": "0.6.0",
-    "minRenderCore": "0.11.0",
+    "minRenderCore": "0.12.0",
     "script": "classic"
   },
   "viewport": {
