@@ -17,9 +17,12 @@ struct PublicKey {
     std::array<std::uint8_t, 32> y;
 };
 
-// Product release tooling must provision reviewed public keys here. An empty
-// table rejects every signature by design; no CRC or test key grants trust.
+#if defined(JELLYFRAME_ESP32S3_GENERATED_PACKAGE_TRUST)
+#include "jfsg_trusted_public_keys.inc"
+#else
+// Standalone consumers without a build manifest have no trusted keys.
 constexpr std::array<PublicKey, 0> kProductionKeys{};
+#endif
 
 bool verify_with_key(
     const PublicKey& key,

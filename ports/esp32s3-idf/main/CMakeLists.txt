@@ -51,6 +51,8 @@ endif()
 # a distinct version through their isolated CMake configuration.
 set(JELLYFRAME_ESP32S3_IMAGE_VERSION "0.6.2-ws147.1" CACHE STRING
     "WS147 Developer Image version attested over JFDP")
+set(JELLYFRAME_ESP32S3_PACKAGE_TRUST_MANIFEST "" CACHE FILEPATH
+    "Reviewed JFSG public-key manifest for this firmware build")
 
 set(JELLYFRAME_ESP32S3_SCRIPT_REQUIRES)
 if(CONFIG_JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME)
@@ -172,6 +174,11 @@ idf_component_register(
         jellyframe_render_core
         ${JELLYFRAME_ESP32S3_SCRIPT_REQUIRES}
 )
+
+if(NOT CMAKE_BUILD_EARLY_EXPANSION)
+    include("${CMAKE_CURRENT_LIST_DIR}/../cmake/jfsg_package_trust.cmake")
+    jfsg_configure_package_trust(${COMPONENT_LIB} "${JELLYFRAME_ESP32S3_PACKAGE_TRUST_MANIFEST}")
+endif()
 
 # Identity is emitted by the JFDP endpoint from the compiled image, not copied
 # from a host manifest. The manifest is generated only after this candidate is

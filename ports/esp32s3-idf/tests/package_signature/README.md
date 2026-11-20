@@ -6,15 +6,21 @@ It does not substitute a fake signature callback. It runs on Windows; ESP
 hardware acceleration, flash recovery and device allocation behavior are not
 qualified here.
 
-The production allowlist remains empty. Test-only key injection calls the
+The default firmware allowlist is empty. Test-only key injection calls the
 same private hash/ECDSA implementation and is compiled only in this executable.
 A separate object target compiles the production translation unit without the
 test macro; its symbol table must not expose the injection function. The
 production callback rejects even the valid test vector, regardless of context.
 
+The configured-trust executable uses the public manifest and matching signature
+from a separate disposable fixture. It checks production callback acceptance
+and refusal for a wrong id, a changed signature, and a mismatched public point.
+The Python test exercises manifest validation and deterministic regeneration,
+including empty trust after clearing a previously configured manifest.
+
 `generate_vectors.py` uses cryptography/OpenSSL deterministic ECDSA with public
 scalars 1 and 2. These are deliberately public test keys, never provisioning
-material. The checked-in header lets C++ tests run without Python dependencies.
+material. The checked-in header requires no Python cryptography dependency.
 Its parser payload is a bounded synthetic parser fixture, not an installable
 JFAPP application. Device bundle hashing and boot recovery require separate
 end-to-end tests.

@@ -12,13 +12,21 @@ loads each scalar as a 32-byte big-endian MPI and calls the mbedTLS ECDSA
 verification API; DER encoding is not accepted. Keys are selected by the
 16-byte key id.
 
-The production public-key allowlist is currently empty because no product
-public key has been provisioned. Therefore every signed-package install fails
-closed until reviewed product public keys and key ids are added to
-`jellyframe_esp32s3_package_signature.cpp`. This build does not provide signed
-package authenticity. Do not place production private keys in device firmware
-or this repository. Any test vector key must remain test-only and must not be
-added to the production allowlist.
+Set the CMake FILEPATH `JELLYFRAME_ESP32S3_PACKAGE_TRUST_MANIFEST` to the
+reviewed public-key manifest for this image. An unset value compiles an empty
+allowlist and rejects every signature. The manifest uses format
+`jellyframe.jfsg-public-trust`, integer `formatVersion` 1, and a `keys`
+array of 1 to 8 objects. Each object contains only `keyId`, `x` and `y`.
+Use exactly 32 lowercase hex digits for the nonzero envelope key id and 64
+for each P-256 coordinate. Bad points, duplicate ids or points, and the
+published test-scalar points fail configuration.
+
+The build generates the table and `jfsg_package_trust_receipt.json` under
+`esp-idf/main/jfsg-package-trust/` in the build directory. The receipt records
+the sorted key ids and hashes of the canonical trust configuration and generated
+table. Keep it with the firmware digest and build evidence. Firmware trust is
+fixed at build time. Use separate reviewed manifests for lab and production
+images. Keep the private signing key with the signer and outside the build inputs.
 
 Signed-package downgrade authorization is not represented by the unsigned
 JFDP `allow_downgrade` flag. The device rejects a package whose signed
@@ -49,9 +57,13 @@ host qualification now compiles the actual adapter and parser against IDF5.3.1's
 mbedTLS 3.6.0 software primitives: 6/6 cases, 289 checks pass, including valid
 raw `r || s`, byte mutations, wrong keys, invalid scalars, domain NUL and
 transactional parser rejection. Test keys enter only through a test-build
-function; the production allowlist remains empty and rejects them. See
-[qualification](../tests/package_signature/README.md) for exact scope and source
-identity. ESP hardware crypto, positive install/reboot/tamper and registry
-fallback probes remain unrun. Product keys still require reviewed provisioning.
+function. The host suite separately configures a disposable, public-only
+fixture through the firmware build input and verifies the actual adapter's
+matching signature, wrong id and tamper checks. Default builds refuse the
+published test keys. The matching Worker lab image accepted and replaced a
+signed app, refused a tampered signature, and completed an explicit rollback
+and relaunch on WS147. Production identity, reboot and registry fallback
+remain separate acceptance items.
+[Host qualification](../tests/package_signature/README.md)
 
-Last updated: 2026-11-17; Applies to: 0.6.0-dev.
+Last updated: 2026-11-20; Applies to: 0.6.0-dev.

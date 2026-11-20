@@ -28,3 +28,15 @@ target_link_libraries(jfsg_signature_production PRIVATE jfsg_mbedcrypto)
 foreach(case valid tamper wrong_key invalid_scalars arguments parser)
   add_test(NAME jfsg_crypto_${case} COMMAND jfsg_signature_tests ${case})
 endforeach()
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/jfsg_package_trust.cmake")
+add_executable(jfsg_configured_signature_tests signature_configured_tests.cpp "${adapter}")
+target_compile_features(jfsg_configured_signature_tests PRIVATE cxx_std_17)
+target_include_directories(jfsg_configured_signature_tests PRIVATE
+    "${runtime_root}/src" "${runtime_root}/ports/esp32s3-idf/main")
+target_link_libraries(jfsg_configured_signature_tests PRIVATE jfsg_mbedcrypto)
+jfsg_configure_package_trust(jfsg_configured_signature_tests "${CMAKE_CURRENT_SOURCE_DIR}/configured_public_trust.json")
+add_test(NAME jfsg_crypto_configured_public_trust COMMAND jfsg_configured_signature_tests)
+add_test(NAME jfsg_public_trust_generator
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/package_trust_tests.py")
