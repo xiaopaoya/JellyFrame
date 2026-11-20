@@ -1,8 +1,10 @@
 #pragma once
-// Shared host NOR/test-key harness; never linked into target firmware.
+// Shared host NOR harness; never linked into target firmware.
 #include "jellyframe_esp32s3_device_image_store.h"
 #include "jellyframe_esp32s3_package_signature.h"
+#if defined(JELLYFRAME_PACKAGE_SIGNATURE_TESTING)
 #include "signature_vectors.h"
+#endif
 #include "esp_rom_crc.h"
 #include "mbedtls/sha256.h"
 #include <algorithm>
@@ -23,8 +25,12 @@ namespace {
 #endif
 std::vector<std::uint8_t> flash(JFSG_HOST_PARTITION_BYTES, 0xff);
 esp_partition_t partition{static_cast<std::uint32_t>(flash.size())};
-bool trust_test_key = true, wrong_test_key = false, refuse_allocation = false;
-unsigned checks = 0, crypto_calls = 0;
+bool refuse_allocation = false;
+unsigned checks = 0;
+#if defined(JELLYFRAME_PACKAGE_SIGNATURE_TESTING)
+bool trust_test_key = true, wrong_test_key = false;
+unsigned crypto_calls = 0;
+#endif
 constexpr const char* app_id = "org.jellyframe.signed-test";
 void check(bool result, const char* expression, int line) {
     ++checks;
@@ -67,14 +73,25 @@ void assert_version(DeviceImageStore& store, unsigned version) {
     CHECK(list.entry_count == (version ? 1 : 0));
     if (version) CHECK(list.entries[0].version_code == version);
 }
-void assert_lease(DeviceImageStore& store, const std::vector<std::uint8_t>& package, unsigned version) {
+void assert_lease(DeviceImageStore& store, const std::vector<std::uint8_t>& package, unsigned version,
+    const std::array<std::uint8_t, kDeviceSignedPackageKeyIdBytes>& expected_key
+#if defined(JELLYFRAME_PACKAGE_SIGNATURE_TESTING)
+        = signature_vectors::kKeyId
+#endif
+) {
     AppInstalledBundleLease* lease = nullptr;
+#if defined(JELLYFRAME_PACKAGE_SIGNATURE_TESTING)
     const auto before = crypto_calls;
+#endif
     CHECK(store.acquire_installed_bundle(app_id, lease) == DeviceBundleStatus::Ok);
+#if defined(JELLYFRAME_PACKAGE_SIGNATURE_TESTING)
     CHECK(lease != nullptr && crypto_calls > before);
+#else
+    CHECK(lease != nullptr);
+#endif
     CHECK(lease->descriptor().summary.version_code == version);
     std::array<std::uint8_t, 16> key{};
-    CHECK(lease->copy_authenticated_signer_key_id(key) && key == signature_vectors::kKeyId);
+    CHECK(lease->copy_authenticated_signer_key_id(key) && key == expected_key);
     std::array<std::uint8_t, 32> hash{}, expected{};
     CHECK(lease->copy_authenticated_resource_sha256("/index.html", hash));
     const char content[] = "<body>signed app</body>";
@@ -124,6 +141,7 @@ std::int64_t esp_timer_get_time() {
 void* heap_caps_malloc(std::size_t bytes, unsigned) { return refuse_allocation ? nullptr : std::malloc(bytes); }
 void heap_caps_free(void* memory) { std::free(memory); }
 
+#if defined(JELLYFRAME_PACKAGE_SIGNATURE_TESTING)
 namespace jellyframe_esp32s3 {
 bool verify_host_fixture_signature(void*, const std::uint8_t* id, const std::uint8_t* signature,
     const std::uint8_t* domain, std::size_t domain_size, const std::uint8_t* header,
@@ -136,3 +154,4 @@ bool verify_host_fixture_signature(void*, const std::uint8_t* id, const std::uin
         wrong_test_key ? kOtherY : kY, id, signature, domain, domain_size, header, header_size, manifest, manifest_size);
 }
 } // namespace jellyframe_esp32s3
+#endif

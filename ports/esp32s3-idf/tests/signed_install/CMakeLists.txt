@@ -6,6 +6,11 @@ get_filename_component(runtime_root "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." AB
 set(JFSG_CORE_INCLUDE_DIR "${runtime_root}/src" CACHE PATH "Core public include directory")
 add_subdirectory(../package_signature signature)
 set(store "${runtime_root}/ports/esp32s3-idf/main/jellyframe_esp32s3_device_image_store.cpp")
+set(adapter "${runtime_root}/ports/esp32s3-idf/main/jellyframe_esp32s3_package_signature.cpp")
+set(install_contracts
+    "${runtime_root}/src/device_runtime_contracts/device_bundle.cpp"
+    "${runtime_root}/src/device_runtime_contracts/device_install_transaction.cpp"
+    "${runtime_root}/src/device_runtime_contracts/device_signed_package.cpp")
 add_library(jfsg_host_store OBJECT "${store}")
 # Redirect only this separately compiled test object to the fixture key router.
 # The production adapter translation unit is compiled unchanged, with its empty allowlist.
@@ -15,10 +20,7 @@ target_include_directories(jfsg_host_store PRIVATE stubs "${runtime_root}/src" "
 target_compile_features(jfsg_host_store PRIVATE cxx_std_17)
 target_link_libraries(jfsg_host_store PRIVATE jfsg_mbedcrypto)
 add_executable(jfsg_installed_tests signed_install_tests.cpp $<TARGET_OBJECTS:jfsg_host_store>
-    "${runtime_root}/ports/esp32s3-idf/main/jellyframe_esp32s3_package_signature.cpp"
-    "${runtime_root}/src/device_runtime_contracts/device_bundle.cpp"
-    "${runtime_root}/src/device_runtime_contracts/device_install_transaction.cpp"
-    "${runtime_root}/src/device_runtime_contracts/device_signed_package.cpp")
+    "${adapter}" ${install_contracts})
 target_include_directories(jfsg_installed_tests PRIVATE stubs ../package_signature
     "${runtime_root}/src" "${runtime_root}/ports/esp32s3-idf/main" "${JFSG_CORE_INCLUDE_DIR}")
 target_compile_definitions(jfsg_installed_tests PRIVATE JELLYFRAME_PACKAGE_SIGNATURE_TESTING=1)
@@ -46,10 +48,7 @@ target_include_directories(jfsg_host_store_large PRIVATE stubs "${runtime_root}/
 target_compile_features(jfsg_host_store_large PRIVATE cxx_std_17)
 target_link_libraries(jfsg_host_store_large PRIVATE jfsg_mbedcrypto)
 add_executable(jfsg_installed_large_tests signed_install_tests.cpp $<TARGET_OBJECTS:jfsg_host_store_large>
-    "${runtime_root}/ports/esp32s3-idf/main/jellyframe_esp32s3_package_signature.cpp"
-    "${runtime_root}/src/device_runtime_contracts/device_bundle.cpp"
-    "${runtime_root}/src/device_runtime_contracts/device_install_transaction.cpp"
-    "${runtime_root}/src/device_runtime_contracts/device_signed_package.cpp")
+    "${adapter}" ${install_contracts})
 target_include_directories(jfsg_installed_large_tests PRIVATE stubs ../package_signature
     "${runtime_root}/src" "${runtime_root}/ports/esp32s3-idf/main" "${JFSG_CORE_INCLUDE_DIR}")
 target_compile_definitions(jfsg_installed_large_tests PRIVATE JELLYFRAME_PACKAGE_SIGNATURE_TESTING=1
@@ -66,3 +65,33 @@ find_program(JFSG_LLVM_NM NAMES llvm-nm REQUIRED)
 add_test(NAME jfsg_production_symbol_boundary COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/check_production_symbols.py" "${JFSG_LLVM_NM}"
     $<TARGET_OBJECTS:jfsg_signature_production>)
+
+# Generate a public manifest before invoking the same helper as the IDF
+# component. The fixture generator never persists the signing keys.
+set(configured_fixtures "${CMAKE_CURRENT_BINARY_DIR}/configured-install-fixtures")
+set(configured_generator "${CMAKE_CURRENT_SOURCE_DIR}/generate_configured_fixtures.py")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${configured_generator}"
+    "${runtime_root}/tools/sign_app_package.py" "${runtime_root}/tests/tool_regression/signed_package_tests.py"
+    "${runtime_root}/tools/package_app.py" "${runtime_root}/tools/app_registry.py"
+    "${runtime_root}/cmake/jellyframe_dependency_lock.cmake"
+    "${runtime_root}/samples/apps/packages/jelly_font_policy/jellyframe.app.json")
+execute_process(COMMAND "${Python3_EXECUTABLE}" -B "${configured_generator}" "${configured_fixtures}"
+    COMMAND_ERROR_IS_FATAL ANY)
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/jfsg_package_trust.cmake")
+add_library(jfsg_configured_store OBJECT "${store}" "${adapter}")
+target_include_directories(jfsg_configured_store PRIVATE stubs "${runtime_root}/src" "${JFSG_CORE_INCLUDE_DIR}")
+target_compile_features(jfsg_configured_store PRIVATE cxx_std_17)
+target_link_libraries(jfsg_configured_store PRIVATE jfsg_mbedcrypto)
+jfsg_configure_package_trust(jfsg_configured_store "${configured_fixtures}/public-trust.json")
+add_executable(jfsg_configured_install_tests configured_install_tests.cpp
+    $<TARGET_OBJECTS:jfsg_configured_store> ${install_contracts})
+target_include_directories(jfsg_configured_install_tests PRIVATE stubs
+    "${runtime_root}/src" "${runtime_root}/ports/esp32s3-idf/main" "${JFSG_CORE_INCLUDE_DIR}")
+target_compile_features(jfsg_configured_install_tests PRIVATE cxx_std_17)
+target_link_libraries(jfsg_configured_install_tests PRIVATE jfsg_mbedcrypto)
+add_test(NAME jfsg_install_configured_public_trust
+    COMMAND jfsg_configured_install_tests "${configured_fixtures}")
+add_test(NAME jfsg_configured_store_symbol_boundary COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/check_production_symbols.py" "${JFSG_LLVM_NM}"
+    $<TARGET_OBJECTS:jfsg_configured_store> COMMAND_EXPAND_LISTS)
