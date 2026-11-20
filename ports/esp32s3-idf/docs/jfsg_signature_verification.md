@@ -37,6 +37,16 @@ installed package. During key rotation, consider both the active and fallback
 packages before withdrawing an older public key because boot reauthenticates
 each envelope with the image's current table.
 
+With overlapping trust, the store can install a higher-version envelope
+signed by the new key. Before retiring the old key, verify that both the
+active package and the intended fallback authenticate with the remaining
+keys. A fallback still signed by the old key will be rejected after
+retirement. If neither registry copy points to a package the firmware
+can authenticate and neither copy is a valid empty record, boot publishes
+an empty generation 0. This can replace a registry copy, so restoring
+the old trust table later may recover only the surviving version.
+[Host rotation qualification](../tests/signed_install/README.md)
+
 Signed-package downgrade authorization is not represented by the unsigned
 JFDP `allow_downgrade` flag. The device rejects a package whose signed
 `version_code` is below the active package for the same app. A future rollback

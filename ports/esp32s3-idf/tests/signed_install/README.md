@@ -55,6 +55,22 @@ The configured symbol test checks both store and verifier objects for test
 injection symbols. Run both cases with
 `ctest -R "^jfsg_(install_configured_public_trust|configured_store_symbol_boundary)$" -V`.
 
+## Trust rotation and registry recovery
+
+`ctest -R "^jfsg_install_trust_rotation$" -V` runs separately compiled old-only,
+old-plus-new, new-only and empty trust configurations. Each invocation starts a
+fresh process and reads the same simulated NOR image. The trace checks the
+active version, registry generation and recovery reason. For each available
+app it checks authenticated signer identity, resource digest and exact bytes.
+
+| Simulated NOR state | Trust at reconstruction | Observed store behavior |
+| --- | --- | --- |
+| Only v1 signed by the old key and an older empty registry copy | New-only or empty | The library is empty. NOR bytes stay intact and old-only trust exposes v1 again. |
+| Two registry copies whose active apps are both signed by the old key | New-only | Recovery publishes empty generation 0. Restoring old trust then reads v1 from the surviving registry copy. |
+| Old-signed v1 followed by new-signed v2 installed under overlap | New-only | The store reads v2. Explicit rollback to v1 returns `IntegrityFailed`. |
+| Same old-signed v1 and new-signed v2 | Old-only | The store reads v1 from the older registry copy. NOR bytes stay intact and new-only trust can still read v2. |
+| Same old-signed v1 and new-signed v2 | Empty | Recovery publishes empty generation 0, replacing the registry copy that publishes v2. Restoring overlap exposes v1 from the surviving copy. |
+
 Initial qualification 2026-11-17:18/18 CTest cases pass. The later explicit
 capacity extension passes22/22; see
 [capacity evidence](../../../../docs/evaluation/2026-11-17-signed-install-capacity.md).
