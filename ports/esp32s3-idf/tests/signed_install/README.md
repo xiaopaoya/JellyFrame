@@ -92,4 +92,4 @@ profile is host-tested/IDF-built but its provider transport is not adapted yet; 
 qualify the larger real shaping catalog. Anti-rollback remains relative to the
 recovered active version, not a monotonic trusted counter.
 
-Last updated: 2026-11-20. Applies to Runtime 0.6.0-dev.
+Last updated: 2026-11-20; Applies to: 0.6.0-dev.
