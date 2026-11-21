@@ -394,10 +394,18 @@ def main() -> int:
                         help="named profile in the build manifest, such as native or installedWorker")
     parser.add_argument("--build-dir", type=Path,
                         help="optional ESP-IDF build directory for additional provenance cross-checks")
+    parser.add_argument("--expected-package-trust-sha256",
+                        help="require a nonempty package trust receipt matching the reviewed canonical SHA-256")
     parser.add_argument("--requires-signed-bundle", action="store_true",
                         help="declare that this firmware's install store requires signed JFSG bundles")
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
+    expected_trust = args.expected_package_trust_sha256
+    if expected_trust is not None:
+        if re.fullmatch(r"[0-9a-f]{64}", expected_trust) is None:
+            parser.error("--expected-package-trust-sha256 must be 64 lowercase hex digits")
+        if args.build_dir is None:
+            parser.error("--expected-package-trust-sha256 requires --build-dir")
 
     firmware = args.firmware.resolve()
     factory = args.factory_image.resolve()
@@ -437,6 +445,12 @@ def main() -> int:
         build_provenance.update(idf_provenance)
         build_provenance.update(capacity_provenance)
         package_trust = read_package_trust_receipt(args.build_dir.resolve())
+
+    if expected_trust is not None:
+        if package_trust is None or not package_trust["keyIds"]:
+            raise SystemExit("expected package trust requires a verified receipt with a nonempty key list")
+        if package_trust["trustSha256"] != expected_trust:
+            raise SystemExit("package trust receipt does not match the expected canonical SHA-256")
 
     output = args.output.resolve()
     archive_name = f"jellyframe-ws147-developer-{image_version}-provider-{PROVIDER_VERSION}"

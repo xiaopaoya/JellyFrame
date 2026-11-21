@@ -381,12 +381,51 @@ class Ws147DeviceProviderReleaseTests(unittest.TestCase):
             trust = build / "esp-idf/main/jfsg-package-trust"
             if trust_receipt:
                 port = PACKAGER.parents[2]
+                generator = [sys.executable, str(port / "tools/generate_package_trust.py"),
+                             "--output-dir", str(trust)]
+                receipt = trust / "jfsg_package_trust_receipt.json"
+                expected_option = "--expected-package-trust-sha256"
+                placeholder_digest = "0" * 64
+                missing_build_dir = [*common[:-2], expected_option, placeholder_digest]
+                rejected = subprocess.run([*missing_build_dir, "--output", str(root / "missing-build-dir")],
+                                          cwd=ROOT, capture_output=True, check=False)
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertIn(b"--expected-package-trust-sha256 requires --build-dir", rejected.stderr)
+                self.assertFalse((root / "missing-build-dir").exists())
+
+                cases = [("malformed-digest", "ABC", b"must be 64 lowercase hex digits"),
+                         ("missing-receipt", placeholder_digest, b"requires a verified receipt with a nonempty key list")]
+                for name, digest, diagnostic in cases:
+                    with self.subTest(name=name):
+                        output = root / name
+                        rejected = subprocess.run([*common, expected_option, digest, "--output", str(output)],
+                                                  cwd=ROOT, capture_output=True, check=False)
+                        self.assertNotEqual(rejected.returncode, 0)
+                        self.assertIn(diagnostic, rejected.stderr)
+                        self.assertFalse(output.exists())
+
+                subprocess.run(generator, cwd=ROOT, check=True)
+                empty_receipt = json.loads(receipt.read_text(encoding="utf-8"))
+                self.assertEqual(empty_receipt["keyIds"], [])
+                output = root / "empty-trust"
+                rejected = subprocess.run([*common, expected_option, empty_receipt["trustSha256"],
+                                           "--output", str(output)], cwd=ROOT, capture_output=True, check=False)
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertIn(b"requires a verified receipt with a nonempty key list", rejected.stderr)
+                self.assertFalse(output.exists())
+
                 subprocess.run([
-                    sys.executable, str(port / "tools/generate_package_trust.py"),
+                    *generator,
                     "--manifest", str(port / "tests/package_signature/configured_public_trust.json"),
-                    "--output-dir", str(trust),
                 ], cwd=ROOT, check=True)
-                generated_receipt = json.loads((trust / "jfsg_package_trust_receipt.json").read_text(encoding="utf-8"))
+                generated_receipt = json.loads(receipt.read_text(encoding="utf-8"))
+                output = root / "mismatched-trust"
+                rejected = subprocess.run([*common, expected_option, placeholder_digest,
+                                           "--output", str(output)], cwd=ROOT, capture_output=True, check=False)
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertIn(b"package trust receipt does not match the expected canonical SHA-256", rejected.stderr)
+                self.assertFalse(output.exists())
+                common += [expected_option, generated_receipt["trustSha256"]]
             completed = subprocess.run([*common, "--output", str(root / "release")], cwd=ROOT,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
             self.assertEqual(completed.returncode, 0, completed.stderr.decode("utf-8", errors="replace"))
