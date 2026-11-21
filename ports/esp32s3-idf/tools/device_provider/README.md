@@ -1,6 +1,6 @@
 # WS147 Device Provider
 
-> Last updated: 2026-11-20; Applies to: 0.6.0-dev
+> Last updated: 2026-11-21; Applies to: 0.6.0-dev
 
 `jellyframe-device.cmd` is the explicitly configured WS147 Device OS provider.
 It is a host-side adapter for JFDP/1 over the board's native USB Serial/JTAG
@@ -21,6 +21,12 @@ covered by `SHA256SUMS.txt`. Check its key IDs and canonical configuration
 hash against the reviewed allowlist for the image.
 The canonical digest is computed from the sorted, normalized manifest. A
 file digest for the original manifest also includes its whitespace.
+
+For production packaging, pass `--expected-package-trust-sha256 <reviewed-digest>`
+with the independently reviewed canonical configuration hash as 64 lowercase
+hex digits. This option requires `--build-dir` and refuses to create a release
+unless the generated receipt passes verification, lists at least one key, and
+matches the supplied hash.
 
 The archive is intentionally board-specific. It contains no serial-port scan,
 serial-console parser or fallback provider. Its provider release record is
