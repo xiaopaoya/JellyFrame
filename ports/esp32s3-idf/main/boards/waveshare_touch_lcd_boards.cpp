@@ -231,6 +231,9 @@ bool IRAM_ATTR ws147_lcd_color_done_callback(esp_lcd_panel_io_handle_t,
     }
     BaseType_t high_priority_task_woken = pdFALSE;
     xSemaphoreGiveFromISR(display->lcd_color_done, &high_priority_task_woken);
+    if (high_priority_task_woken == pdTRUE) {
+        portYIELD_FROM_ISR();
+    }
     return high_priority_task_woken == pdTRUE;
 }
 
