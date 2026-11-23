@@ -54,8 +54,9 @@ constexpr const char* kTag = "JellyFrameInstalledScript";
 constexpr std::size_t kMaxCommands = 384;
 constexpr std::size_t kMaxFrameBytes = 64u * 1024u;
 constexpr std::size_t kMaxScriptBytes = 48u * 1024u;
-constexpr std::uint32_t kWorkerPollMs = 4;
-constexpr std::uint32_t kSupervisorPollMs = 8;
+// A zero-tick delay only yields to peers and can starve lower-priority tasks.
+constexpr TickType_t kWorkerPollTicks = std::max<TickType_t>(1, pdMS_TO_TICKS(4));
+constexpr TickType_t kSupervisorPollTicks = std::max<TickType_t>(1, pdMS_TO_TICKS(8));
 constexpr std::size_t kSupervisorStackBytes = 12u * 1024u;
 
 jellyframe::HostBudgets installed_script_budgets(int width, int height) {
@@ -334,7 +335,7 @@ void worker_entry(void* raw) {
         state->js_mutation_seq.store(telemetry.js_mutation_seq);
         state->published_frame_seq.store(telemetry.published_frame_seq);
         if (input.fatal || callbacks.fatal) break;
-        vTaskDelay(pdMS_TO_TICKS(kWorkerPollMs));
+        vTaskDelay(kWorkerPollTicks);
     }
     if (runtime.fatal()) {
         state->fatal_seen.store(true);
@@ -523,7 +524,7 @@ void run_installed_bundle_ui(InstalledBundleScriptSession* state) {
             state->malformed_v4_probe_rejected.store(true);
             ESP_LOGI(kTag, "v4 malformed probe rejected app=%s", state->app_id.c_str());
         }
-        vTaskDelay(pdMS_TO_TICKS(kWorkerPollMs));
+        vTaskDelay(kWorkerPollTicks);
     }
     scratch.release();
     boards::release_board_runtime(board);
@@ -616,7 +617,7 @@ void supervisor_entry(void* raw) {
             ESP_LOGE(kTag, "fatal app=%s generation=%u payload=%u", state->app_id.c_str(),
                      static_cast<unsigned>(state->generation), static_cast<unsigned>(fatal.payload.size()));
         }
-        vTaskDelay(pdMS_TO_TICKS(kSupervisorPollMs));
+        vTaskDelay(kSupervisorPollTicks);
     }
     // Stop accepting input and pumping services. Wait for cooperative worker
     // and UI exit before touching the protocol in teardown: a VM fatal may
@@ -624,7 +625,7 @@ void supervisor_entry(void* raw) {
     state->stop.store(true);
     while (!state->worker_done.load() || !state->ui_done.load()) {
         quarantine_on_vm_fatal(*state, worker);
-        vTaskDelay(pdMS_TO_TICKS(kSupervisorPollMs));
+        vTaskDelay(kSupervisorPollTicks);
     }
     (void)protocol.begin_teardown(state->script_session);
     (void)bridge.begin_teardown(state->script_session);
