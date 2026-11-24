@@ -42,6 +42,117 @@ static const std::string contextual_flex_css =
     "#first,#second,#third{width:40px;height:28px;font-size:16px;line-height:20px;color:#000000}"
     "#first{background:#e02020}#second{background:#20c040}#third{background:#2040e0}";
 
+static const std::string contextual_flex_column_css =
+    "*{margin:0;padding:0;font-weight:400}"
+    "body{background:#ffffff}"
+    "#column{display:flex;flex-direction:column;flex-wrap:nowrap;width:40px;height:84px}"
+    "#first,#second,#third{width:40px;height:28px;font-size:16px;line-height:20px;color:#000000}"
+    "#first{background:#e02020}#second{background:#20c040}#third{background:#2040e0}";
+static const std::string contextual_flex_column_html =
+    "<body><div id='column'><div id='first'>A</div><div id='second'>B</div>"
+    "<div id='third'>C</div></div></body>";
+
+static void installed_contextual_flex_column_worker_test() {
+    runtime_test_shaped_text::Assets assets("regular", 7602);
+    const auto binding = runtime_test_shaped_text::create_binding(assets);
+    const runtime_test_fonts::Fonts fonts;
+    auto supervisor = ScriptTaskSupervisor{};
+    const auto session = supervisor.begin(762, fonts.catalog, {}, binding);
+    auto options = contextual_flex_options(fonts.catalog, binding);
+    options.viewport = {0, 0, 160, 96};
+    ScriptTaskWorkerRuntime worker(session, options);
+#if !JELLYFRAME_RENDER_CORE_FLEX_GRID_ENABLED
+    assert(worker.initialize(supervisor, contextual_flex_column_html, contextual_flex_column_css) !=
+        ScriptTaskWorkerRuntimeInitStatus::Accepted);
+    assert(!worker.publish_frame(supervisor).accepted());
+    return;
+#else
+    assert(worker.initialize(supervisor, contextual_flex_column_html, contextual_flex_column_css) ==
+        ScriptTaskWorkerRuntimeInitStatus::Accepted);
+    assert(worker.publish_frame(supervisor).accepted());
+    ScriptTaskAcceptedAppFrame accepted;
+    assert(take_installed_core_text_frame(supervisor, session, options.frame_codec, accepted) ==
+        ScriptTaskAppFrameTakeStatus::Accepted);
+    assert(accepted.shaped_text_binding() == binding);
+    assert(accepted.frame().shaped_text.size() == 3);
+    for (const auto& text : accepted.frame().shaped_text) assert(text.baseline_x_q1000 == 0);
+    assert(accepted.frame().shaped_text[0].baseline_y_q1000 == 16000);
+    assert(accepted.frame().shaped_text[1].baseline_y_q1000 == 44000);
+    assert(accepted.frame().shaped_text[2].baseline_y_q1000 == 72000);
+
+    auto document = HtmlParser{}.parse(contextual_flex_column_html);
+    StyleResolver styles(CssParser{}.parse(contextual_flex_column_css));
+    auto render_tree = RenderTreeBuilder(styles).build(*document);
+    LayoutEngine engine(styles);
+    runtime_shaped::LayoutOptions layout_options;
+    layout_options.binding = binding->core_binding();
+    std::uint64_t work = binding->work_limit();
+    runtime_shaped::LayoutResult layout;
+    assert(engine.layout_contextual(*render_tree, 160, 96, layout_options, work, layout) ==
+        runtime_shaped::Status::ok);
+    assert(layout.valid());
+    const auto find_box = [](const LayoutBox* root, const char* id) {
+        const LayoutBox* found = nullptr;
+        const auto visit = [&](const auto& self, const LayoutBox* box) -> void {
+            if (box == nullptr || found != nullptr) return;
+            if (box->node != nullptr && box->node->attribute("id") == id) {
+                found = box;
+                return;
+            }
+            for (const auto& child : box->children) self(self, child.get());
+        };
+        visit(visit, root);
+        return found;
+    };
+    const auto* column = find_box(layout.tree(), "column");
+    const auto* first = find_box(layout.tree(), "first");
+    const auto* second = find_box(layout.tree(), "second");
+    const auto* third = find_box(layout.tree(), "third");
+    assert(column != nullptr && column->rect.x == 0 && column->rect.y == 0 &&
+        column->rect.width == 40 && column->rect.height == 84);
+    assert(first != nullptr && first->rect.x == 0 && first->rect.y == 0 &&
+        first->rect.width == 40 && first->rect.height == 28);
+    assert(second != nullptr && second->rect.x == 0 && second->rect.y == 28 &&
+        second->rect.width == 40 && second->rect.height == 28);
+    assert(third != nullptr && third->rect.x == 0 && third->rect.y == 56 &&
+        third->rect.width == 40 && third->rect.height == 28);
+
+    ScriptTaskFrameRendererOptions renderer_options;
+    renderer_options.shaped_text_binding = binding;
+    ScriptTaskFrameRenderStatus render_status;
+    const auto pixels = ScriptTaskFrameRenderer(renderer_options).render(
+        accepted.frame(), {255,255,255,255}, &render_status);
+    assert(render_status == ScriptTaskFrameRenderStatus::Accepted);
+    assert(pixels.pixels[10 * pixels.width + 10].r == 224 &&
+        pixels.pixels[10 * pixels.width + 10].g == 32 &&
+        pixels.pixels[10 * pixels.width + 10].b == 32);
+    assert(pixels.pixels[38 * pixels.width + 10].r == 32 &&
+        pixels.pixels[38 * pixels.width + 10].g == 192 &&
+        pixels.pixels[38 * pixels.width + 10].b == 64);
+    assert(pixels.pixels[66 * pixels.width + 10].r == 32 &&
+        pixels.pixels[66 * pixels.width + 10].g == 64 &&
+        pixels.pixels[66 * pixels.width + 10].b == 224);
+    const auto retained_pixels = pixels;
+
+    ScriptTaskSupervisor rejected_supervisor;
+    const auto rejected_session = rejected_supervisor.begin(763, fonts.catalog, {}, binding);
+    auto rejected_options = contextual_flex_options(fonts.catalog, binding);
+    ScriptTaskWorkerRuntime rejected_worker(rejected_session, rejected_options);
+    assert(rejected_worker.initialize(rejected_supervisor, contextual_flex_column_html,
+        contextual_flex_column_css + "#column{height:auto}") !=
+        ScriptTaskWorkerRuntimeInitStatus::Accepted);
+    assert(!rejected_worker.publish_frame(rejected_supervisor).accepted());
+
+    worker.stop();
+    assert(supervisor.begin_teardown(session).session == session);
+    assert(supervisor.complete_teardown(session).session == session);
+    ScriptTaskFrameRenderStatus replay_status;
+    const auto replay = ScriptTaskFrameRenderer(renderer_options).render(
+        accepted.frame(), {255,255,255,255}, &replay_status);
+    assert(replay_status == ScriptTaskFrameRenderStatus::Accepted && same_pixels(retained_pixels, replay));
+#endif
+}
+
 static void installed_contextual_flex_row_worker_test() {
     runtime_test_shaped_text::Assets assets("regular", 7601);
     const auto binding = runtime_test_shaped_text::create_binding(assets);
@@ -127,12 +238,14 @@ static void installed_contextual_flex_row_worker_test() {
 
     for (const auto& rejected_css : {
             contextual_flex_css + "#row{flex-wrap:wrap}",
-            contextual_flex_css + "#row{flex-direction:column}"}) {
+            contextual_flex_column_css + "#column{height:auto}"}) {
         ScriptTaskSupervisor rejected_supervisor;
         const auto rejected_session = rejected_supervisor.begin(761, fonts.catalog, {}, binding);
         auto rejected_options = contextual_flex_options(fonts.catalog, binding);
         ScriptTaskWorkerRuntime rejected_worker(rejected_session, rejected_options);
-        assert(rejected_worker.initialize(rejected_supervisor, contextual_flex_html, rejected_css) !=
+        const auto& rejected_html = rejected_css.find("#column") != std::string::npos
+            ? contextual_flex_column_html : contextual_flex_html;
+        assert(rejected_worker.initialize(rejected_supervisor, rejected_html, rejected_css) !=
             ScriptTaskWorkerRuntimeInitStatus::Accepted);
         assert(!rejected_worker.publish_frame(rejected_supervisor).accepted());
     }
@@ -210,6 +323,7 @@ inline int run_installed_contextual_text_tests() {
     scalar_frame = {}; scalar_options = {};
 #if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
     installed_contextual_flex_row_worker_test();
+    installed_contextual_flex_column_worker_test();
     runtime_test_shaped_text::Assets assets("regular", 7501);
     auto binding = runtime_test_shaped_text::create_binding(assets);
     auto shaped = std::make_shared<InstalledAppResources>(*resources);
