@@ -952,7 +952,9 @@ jobs:
       - name: Patch and build pinned JerryScript
         run: |
           python tools/dependencies/patch_jerryscript.py --source-root third_party/jerryscript
-          python third_party/jerryscript/tools/build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+          python third_party/jerryscript/tools/build.py --clean \
+            --cmake-param=-DJERRY_VM_HALT=ON \
+            --compile-flag=-Wno-error=unterminated-string-initialization
 
       - name: Qualify exact installed Core package and Runtime consumers
         run: |
