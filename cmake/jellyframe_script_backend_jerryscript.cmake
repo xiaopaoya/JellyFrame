@@ -22,6 +22,7 @@ if(JERRYSCRIPT_ROOT)
 
     if(NOT JERRYSCRIPT_LIBRARIES)
         set(_JELLYFRAME_JERRYSCRIPT_LIBRARY_DIRS
+            "${JERRYSCRIPT_ROOT}/build/lib"
             "${JERRYSCRIPT_ROOT}/build/lib/Release"
             "${JERRYSCRIPT_ROOT}/build/lib/MinSizeRel"
             "${JERRYSCRIPT_ROOT}/build/lib/RelWithDebInfo"

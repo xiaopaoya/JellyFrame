@@ -30,6 +30,15 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def installed_core_archive(prefix):
+    candidates = (prefix / 'lib/jellyframe_render_core.lib',
+                  prefix / 'lib/libjellyframe_render_core.a')
+    matches = [path for path in candidates if path.is_file()]
+    if len(matches) != 1:
+        raise ValueError('installed package must contain exactly one supported Core static archive')
+    return matches[0]
+
+
 def check_core_identity(profile, manifest, identity, label):
     if (type(profile['engineAbi']) is not int or
             (profile['packageVersion'], profile['engineAbi'], manifest['sourceHash']) !=
@@ -71,7 +80,7 @@ def inspect_package(prefix, name, identity, scalar_frame):
     assert hashlib.sha256(joined).hexdigest() == manifest['sourceHash']
     assert manifest['sourceFileCount'] == len(manifest['files'])
     return {**identity, 'features': sorted(features), 'sourceFileCount': manifest['sourceFileCount'],
-            'archiveSha256': sha(prefix / 'lib/jellyframe_render_core.lib')}
+            'archiveSha256': sha(installed_core_archive(prefix))}
 
 
 def parse_ctest_passed_count(log):
@@ -128,7 +137,7 @@ def audit_installed_package(build, runtime, probe, prefix, identity, lock_sha256
         assert 'throw std::runtime_error(' in text, 'timing test lost always-on checks'
         always_on.append(str(path.relative_to(runtime)))
     ninja = (build / 'build.ninja').read_text().replace('$:', ':').replace('\\', '/')
-    archive = prefix / 'lib/jellyframe_render_core.lib'
+    archive = installed_core_archive(prefix)
     assert archive.as_posix() in ninja, 'installed archive not linked'
     assert sha(archive) == identity['archiveSha256'], 'installed archive changed'
     assert sha(runtime / 'cmake/jellyframe_dependency_lock.cmake') == production_lock_sha256, 'production tooling lock changed'

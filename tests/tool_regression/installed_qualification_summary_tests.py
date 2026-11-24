@@ -13,7 +13,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'project_tools'))
 from qualify_contextual_installed_packages import (
-    DEFAULT_CORE_ABI, check_qualification_provenance, inspect_package,
+    DEFAULT_CORE_ABI, check_qualification_provenance, inspect_package, installed_core_archive,
     parse_ctest_passed_count, positive_core_abi, test_assertions_enabled,
 )
 
@@ -88,6 +88,11 @@ with tempfile.TemporaryDirectory() as temporary:
         (share / 'jellyframe_render_core_profile.json').write_text(json.dumps(profile), encoding='utf-8')
         identity = {'version': version, 'abi': abi, 'sourceHash': source_hash}
         assert inspect_package(prefix, 'full', identity, 10)['abi'] == abi
+        archive.rename(prefix / 'lib/libjellyframe_render_core.a')
+        assert installed_core_archive(prefix).suffix == '.a'
+        assert inspect_package(prefix, 'full', identity, 10)['archiveSha256'] == hashlib.sha256(b'fixture library').hexdigest()
+        (prefix / 'lib/jellyframe_render_core.lib').write_bytes(b'fixture library')
+        (prefix / 'lib/libjellyframe_render_core.a').unlink()
         for field, wrong in (('abi', other_abi), ('version', '0.0.0'), ('sourceHash', '2' * 64)):
             must_refuse(lambda: inspect_package(prefix, 'full', {**identity, field: wrong}, 10),
                         ValueError, 'differs from the selected candidate')

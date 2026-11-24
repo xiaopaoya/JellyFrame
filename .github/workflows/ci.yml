@@ -906,6 +906,83 @@ jobs:
             build/core-qualified-${{ matrix.profile }}/generated/jellyframe_render_core_profile.json
           if-no-files-found: warn
 
+  contextual-flex-wrap-candidate:
+    name: Contextual Flex Wrap Candidate (${{ matrix.profile }})
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [full, cropped, off]
+
+    steps:
+      - name: Checkout JellyFrame Runtime
+        uses: actions/checkout@v5
+
+      - name: Checkout qualified Render Core candidate
+        uses: actions/checkout@v5
+        with:
+          repository: xiaopaoya/JellyFrame-Render-Core
+          ref: dd7d57b04e0d7d8a8df850e64bb4e5610416ed4c
+          path: third_party/render-core-source
+
+      - name: Checkout pinned JerryScript
+        uses: actions/checkout@v5
+        with:
+          repository: jerryscript-project/jerryscript
+          ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
+          path: third_party/jerryscript
+
+      - name: Checkout ESP-IDF 5.3.1 mbedTLS
+        uses: actions/checkout@v5
+        with:
+          repository: Mbed-TLS/mbedtls
+          ref: 72aa687352a469044cbb946f3fdb261430e41ce1
+          path: third_party/mbedtls
+
+      - name: Keep qualification checkouts outside Runtime source status
+        run: |
+          printf '\n/third_party/render-core-source/\n/third_party/mbedtls/\n' >> .git/info/exclude
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install host signing fixture dependency
+        run: python -m pip install cryptography==50.0.2
+
+      - name: Patch and build pinned JerryScript
+        run: |
+          python tools/dependencies/patch_jerryscript.py --source-root third_party/jerryscript
+          python third_party/jerryscript/tools/build.py --clean \
+            --cmake-param=-DJERRY_VM_HALT=ON \
+            --lto=OFF \
+            --compile-flag=-Wno-error=unterminated-string-initialization
+
+      - name: Qualify exact installed Core package and Runtime consumers
+        run: |
+          python project_tools/qualify_abi9_pair.py \
+            --core third_party/render-core-source \
+            --core-commit dd7d57b04e0d7d8a8df850e64bb4e5610416ed4c \
+            --core-version 0.12.1 \
+            --core-abi 11 \
+            --core-source-hash ff9e0ac52a701191dce6a90b508b682b9a9abb8750d432865d779c0ef954abce \
+            --profile '${{ matrix.profile }}' \
+            --scalar-frame 10 \
+            --jerry third_party/jerryscript \
+            --mbedtls third_party/mbedtls \
+            --output '${{ runner.temp }}/contextual-flex-wrap-${{ matrix.profile }}' \
+            --jobs 4
+
+      - name: Upload contextual wrap qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextual-flex-wrap-${{ matrix.profile }}
+          path: ${{ runner.temp }}/contextual-flex-wrap-${{ matrix.profile }}
+          if-no-files-found: warn
+
   render-core-standalone:
     name: Standalone Render Core
     if: github.event_name != 'workflow_dispatch'
