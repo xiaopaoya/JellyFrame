@@ -968,7 +968,7 @@ jobs:
             --scalar-frame 10 \
             --jerry third_party/jerryscript \
             --mbedtls third_party/mbedtls \
-            --output 'build/contextual-flex-wrap-${{ matrix.profile }}' \
+            --output '${{ runner.temp }}/contextual-flex-wrap-${{ matrix.profile }}' \
             --jobs 4
 
       - name: Upload contextual wrap qualification evidence
@@ -976,7 +976,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: contextual-flex-wrap-${{ matrix.profile }}
-          path: build/contextual-flex-wrap-${{ matrix.profile }}
+          path: ${{ runner.temp }}/contextual-flex-wrap-${{ matrix.profile }}
           if-no-files-found: warn
 
   render-core-standalone:
