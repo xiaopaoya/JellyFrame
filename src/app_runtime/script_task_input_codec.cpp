@@ -65,10 +65,12 @@ ScriptTaskInputPostResult post_script_task_input(ScriptTaskSupervisor& superviso
                                                   const ScriptAppSession& session,
                                                   std::uint32_t sequence,
                                                   const ScriptTaskInputEvent& input,
-                                                  const ScriptTaskInputCodecOptions& options) {
+                                                  const ScriptTaskInputCodecOptions& options,
+                                                  std::uint32_t input_frame_sequence) {
     ScriptTaskInputPostResult result;
     ScriptTaskPacket packet;
     packet.kind = ScriptTaskPacketKind::Input; packet.session = session; packet.sequence = sequence;
+    packet.input_frame_sequence = input_frame_sequence;
     result.codec_status = encode_script_task_input(input, options, packet.payload);
     if (result.codec_status == ScriptTaskInputCodecStatus::Accepted) result.mailbox_status = supervisor.post_input(packet);
     return result;

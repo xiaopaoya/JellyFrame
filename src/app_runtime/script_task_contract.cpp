@@ -64,9 +64,10 @@ bool ScriptTaskMailbox::packet_is_valid(const ScriptTaskPacket& packet) const {
         return false;
     }
     if (packet.kind == ScriptTaskPacketKind::FrameReady) {
-        return packet.frame_lease_id != 0 && packet.payload.empty();
+        return packet.frame_lease_id != 0 && packet.payload.empty() && packet.input_frame_sequence == 0;
     }
-    return packet.frame_lease_id == 0;
+    return packet.frame_lease_id == 0 &&
+           (packet.kind == ScriptTaskPacketKind::Input || packet.input_frame_sequence == 0);
 }
 
 void ScriptTaskMailbox::clear_slot(Slot& slot) {
@@ -74,6 +75,7 @@ void ScriptTaskMailbox::clear_slot(Slot& slot) {
     slot.session = {};
     slot.sequence = 0;
     slot.frame_lease_id = 0;
+    slot.input_frame_sequence = 0;
     slot.payload.clear();
 }
 
@@ -101,6 +103,7 @@ ScriptTaskMailboxPostStatus ScriptTaskMailbox::post(const ScriptTaskPacket& pack
     slot.session = packet.session;
     slot.sequence = packet.sequence;
     slot.frame_lease_id = packet.frame_lease_id;
+    slot.input_frame_sequence = packet.input_frame_sequence;
     slot.payload.assign(packet.payload.begin(), packet.payload.end());
     ++size_;
     ++statistics_.posted;
@@ -125,6 +128,7 @@ bool ScriptTaskMailbox::pop_for(const ScriptAppSession& session, ScriptTaskPacke
         output.session = slot.session;
         output.sequence = slot.sequence;
         output.frame_lease_id = slot.frame_lease_id;
+        output.input_frame_sequence = slot.input_frame_sequence;
         output.payload.assign(slot.payload.begin(), slot.payload.end());
         clear_slot(slot);
         head_ = (head_ + 1) % slots_.size();

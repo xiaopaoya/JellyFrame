@@ -65,6 +65,9 @@ struct ScriptTaskPacket {
     // this at zero; service payload leases are encoded in their own packet.
     ScriptTaskLeaseId frame_lease_id = 0;
     std::vector<std::uint8_t> payload;
+    // Input only. Identifies the UI frame visible when the event was captured.
+    // Zero denotes a producer that has no frame identity.
+    std::uint32_t input_frame_sequence = 0;
 };
 
 struct ScriptTaskMailboxOptions {
@@ -111,6 +114,7 @@ private:
         std::uint32_t sequence = 0;
         ScriptTaskLeaseId frame_lease_id = 0;
         std::vector<std::uint8_t> payload;
+        std::uint32_t input_frame_sequence = 0;
     };
 
     bool packet_is_valid(const ScriptTaskPacket& packet) const;

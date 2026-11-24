@@ -34,6 +34,15 @@ The worker dispatches JS, mutates its DOM and publishes a new frame. Neither tas
 DOM or renderer state. A sealed frame is immutable;
 the supervisor owns its bounded lease lifecycle and records coalescing or queue-full drops.
 
+With Core's strict layer build API, scalar frame v10 keeps the last UI-presented frame
+when a later build exceeds the layer or paint command limit. The worker discards the old
+layout and hit-test state, continues timers and service completions, and retries when
+the DOM changes. A budget refusal before the first presented frame is terminal.
+To resume input, the port reports the last successfully presented frame's sequence
+to the worker through `set_ui_accepted_frame_sequence()` and passes each input's
+capture-time frame sequence to `post_script_task_input()`. The worker drops queued
+input from before the replacement frame and touch releases without a fresh press.
+
 The supervisor is also the only owner of `AppRuntimeHost`, host queues and handle table. Service
 requests use a dedicated worker-to-supervisor mailbox and completions use the worker input mailbox;
 frame traffic never shares either service consumer. Both directions are bounded value packets.

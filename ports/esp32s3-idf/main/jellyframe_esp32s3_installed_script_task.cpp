@@ -327,6 +327,7 @@ void worker_entry(void* raw) {
         if (state->accepted_frame_seq.load() != 0 && state->input_queue.dequeue(event)) {
             post_board_input(*state, event, input_sequence);
         }
+        runtime.set_ui_accepted_frame_sequence(state->accepted_frame_seq.load());
         const auto input = runtime.process_one(*state->protocol);
         const auto callbacks = runtime.pump_callbacks(
             static_cast<std::uint64_t>(esp_timer_get_time() / 1000), *state->protocol);
@@ -393,7 +394,7 @@ void post_board_input(InstalledBundleScriptSession& state,
         return;
     }
     const auto posted = jellyframe::post_script_task_input(
-        *state.protocol, state.script_session, next_sequence++, input, {32, 256});
+        *state.protocol, state.script_session, next_sequence++, input, {32, 256}, event.frame_sequence);
     if (posted.accepted()) {
         state.input_posted.fetch_add(1);
     } else {
@@ -510,6 +511,7 @@ void run_installed_bundle_ui(InstalledBundleScriptSession* state) {
 #endif
             if (presented || unchanged) {
                 state->accepted_frame_seq.store(packet_sequence);
+                state->input_queue.set_frame_sequence(packet_sequence);
                 if (presented && state->malformed_v4_probe_rejected.load()) {
                     state->accepted_after_malformed_v4_probe.fetch_add(1);
                 }

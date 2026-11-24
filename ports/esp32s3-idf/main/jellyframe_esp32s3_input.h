@@ -28,6 +28,7 @@ struct BoardInputEvent {
     int delta_x = 0;
     int delta_y = 0;
     char text[16] = {};
+    std::uint32_t frame_sequence = 0;
 };
 
 class BoardInputQueue {
@@ -35,6 +36,7 @@ public:
     bool enqueue(const BoardInputEvent& event);
     bool dequeue(BoardInputEvent& event);
     void clear();
+    void set_frame_sequence(std::uint32_t sequence);
 
     std::size_t size() const;
     std::size_t capacity() const;
@@ -53,6 +55,7 @@ private:
     std::size_t count_ = 0;
     std::uint32_t dropped_count_ = 0;
     std::uint32_t coalesced_move_count_ = 0;
+    std::uint32_t frame_sequence_ = 0;
 };
 
 struct BoardInputDispatchStats {

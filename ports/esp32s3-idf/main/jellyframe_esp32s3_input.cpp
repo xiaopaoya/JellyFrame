@@ -39,13 +39,15 @@ bool BoardInputQueue::discard_oldest_move_locked() {
 
 bool BoardInputQueue::enqueue(const BoardInputEvent& event) {
     portENTER_CRITICAL(&lock_);
+    BoardInputEvent captured = event;
+    captured.frame_sequence = frame_sequence_;
     // Pointer moves are state samples, not discrete actions. Retaining the
     // newest adjacent sample prevents a slow render/present cycle from making
     // a drag replay stale coordinates after the finger has stopped moving.
     if (event.kind == BoardInputKind::PointerMove && count_ != 0) {
         const std::size_t previous = (tail_ + kCapacity - 1) % kCapacity;
         if (events_[previous].kind == BoardInputKind::PointerMove) {
-            events_[previous] = event;
+            events_[previous] = captured;
             ++coalesced_move_count_;
             portEXIT_CRITICAL(&lock_);
             return true;
@@ -60,11 +62,17 @@ bool BoardInputQueue::enqueue(const BoardInputEvent& event) {
             return false;
         }
     }
-    events_[tail_] = event;
+    events_[tail_] = captured;
     tail_ = (tail_ + 1) % kCapacity;
     ++count_;
     portEXIT_CRITICAL(&lock_);
     return true;
+}
+
+void BoardInputQueue::set_frame_sequence(std::uint32_t sequence) {
+    portENTER_CRITICAL(&lock_);
+    frame_sequence_ = sequence;
+    portEXIT_CRITICAL(&lock_);
 }
 
 bool BoardInputQueue::dequeue(BoardInputEvent& event) {

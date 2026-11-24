@@ -1689,6 +1689,120 @@ void worker_canonical_uses_catalog_for_layout_and_publishes_group_frame(std::uin
     check(has_prepared_text(accepted.frame()), "updated canonical frame retains prepared text output");
 }
 
+#if defined(JELLYFRAME_RENDER_CORE_STRICT_LAYER_BUILD_API_VERSION) && JELLYFRAME_RENDER_CORE_STRICT_LAYER_BUILD_API_VERSION >= 1
+void worker_v10_recovers_after_layer_budget_refusal() {
+    ScriptTaskSupervisor supervisor = make_frame_backpressure_supervisor();
+    const runtime_test_fonts::Fonts fonts;
+    const ScriptAppSession session = supervisor.begin(26, fonts.catalog);
+    auto options = runtime_options_v3();
+    options.frame_codec.version = 10;
+    options.frame_codec.max_groups = 2;
+    options.frame_codec.max_group_depth = 4;
+    options.text_catalog = fonts.catalog;
+    options.budgets.max_layers = 2;
+    constexpr auto html = "<body><div id='target' class='panel'></div></body>";
+    constexpr auto css = "body { margin: 0; } .panel { display: block; width: 100px; height: 30px; "
+                         "opacity: 0.9; background-color: #0000ff; }";
+    constexpr auto storm = "<body><div class='panel'></div><div class='panel'></div></body>";
+    {
+        ScriptTaskWorkerRuntime first_frame(session, options);
+        check(first_frame.initialize(supervisor, storm, css) ==
+                  ScriptTaskWorkerRuntimeInitStatus::BudgetRejected &&
+              first_frame.fatal_record().reason == ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded,
+              "v10 first layout over the layer limit is terminal");
+        check(!first_frame.publish_frame(supervisor).accepted(), "over-budget first layout publishes no frame");
+        ScriptTaskPacket fatal;
+        check(supervisor.take_fatal(fatal), "first-frame refusal publishes a fatal record");
+    }
+    ScriptTaskWorkerRuntime runtime(session, options);
+    check(runtime.initialize(supervisor, html, css) == ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "v10 layer limit fixture initializes");
+    const auto initial = runtime.publish_frame(supervisor);
+    check(initial.accepted(), "v10 publishes the frame on the exact layer boundary");
+    ScriptTaskAcceptedAppFrame original;
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, original) ==
+              ScriptTaskAppFrameTakeStatus::Accepted && original.sequence() == initial.lease.frame_sequence,
+          "the UI owns the original frame");
+    runtime.set_ui_accepted_frame_sequence(original.sequence());
+    auto post = [&](std::uint32_t sequence, ScriptTaskInputKind kind, std::uint32_t frame) {
+        const int buttons = kind == ScriptTaskInputKind::PointerDown ? 1 : 0;
+        check(post_script_task_input(supervisor, session, sequence,
+                  {kind, 1, 1, 0, 0, 0, buttons, 0, 0, {}}, options.input_codec, frame).accepted(),
+              "test gesture reaches the Worker mailbox");
+    };
+    check(runtime.eval_with_supervisor(supervisor,
+              "var releases = 0; var repaired = 0; "
+              "document.getElementById('target').addEventListener('pointerdown', function () {"
+              "document.body.textContent = '';"
+              "for (var i = 0; i < 2; i++) {"
+              "  var panel = document.createElement('div');"
+              "  panel.setAttribute('class', 'panel');"
+              "  document.body.appendChild(panel);"
+              "}"
+              "setTimeout(function () { repaired++; }, 5);"
+              "setTimeout(function () {"
+              "document.body.textContent = '';"
+              "var panel = document.createElement('div');"
+              "panel.setAttribute('class', 'panel');"
+              "panel.addEventListener('pointerup', function () { releases++; });"
+              "document.body.appendChild(panel);"
+              "}, 10); });").ok, "recovery fixture listeners install");
+    post(1, ScriptTaskInputKind::PointerDown, original.sequence());
+    const auto refused = runtime.process_one(supervisor);
+    check(refused.input_accepted && refused.dom_mutated && !refused.fatal && !refused.frame_published,
+          "an input callback may destroy its target and then exceed the budget");
+    ScriptTaskPacket packet;
+    check(!supervisor.take_fatal(packet) && !supervisor.take_frame_packet(session, packet),
+          "recovery emits neither a partial frame nor a terminal record");
+    const auto attempts = runtime.telemetry().frame_publish_attempts;
+    post(2, ScriptTaskInputKind::PointerUp, original.sequence());
+    check(!runtime.process_one(supervisor).input_accepted, "suspended Worker drops input");
+    check(!runtime.process_one(supervisor).frame_published &&
+              runtime.telemetry().frame_publish_attempts == attempts,
+          "idle Worker does not repeat a refused build");
+    check(!runtime.pump_callbacks(5, supervisor).frame_published &&
+              runtime.eval_with_supervisor(supervisor, "repaired").value == "1",
+          "the script realm and timer processing remain live");
+    // Consume a supervisor sequence and occupy the only publication slot.
+    // Recovery must retry and wait for the accepted sequence of its own lease.
+    const auto filler = supervisor.publish_frame(session, {0});
+    check(filler.accepted(), "a concurrent diagnostic frame fills the mailbox");
+    const auto repair = runtime.pump_callbacks(10, supervisor);
+    check(repair.dom_mutated && !repair.frame_published && !repair.fatal,
+          "a repaired document survives publication backpressure");
+    check(supervisor.take_frame_packet(session, packet) &&
+              supervisor.release_frame(session, packet.frame_lease_id) == ScriptTaskFrameLeaseStatus::Accepted,
+          "the blocked mailbox slot can be retired");
+    const auto retry = runtime.process_one(supervisor);
+    check(retry.frame_published && retry.frame.lease.frame_sequence != original.sequence() + 1,
+          "the first recovery publication uses its actual supervisor sequence");
+    post(3, ScriptTaskInputKind::PointerDown, retry.frame.lease.frame_sequence);
+    check(!runtime.process_one(supervisor).input_accepted,
+          "publication alone cannot resume input before the UI accepts the frame");
+    ScriptTaskAcceptedAppFrame replacement;
+    check(take_script_task_app_frame(supervisor, session, options.frame_codec, replacement) ==
+              ScriptTaskAppFrameTakeStatus::Accepted, "UI takes the complete recovery frame");
+    runtime.set_ui_accepted_frame_sequence(replacement.sequence());
+    post(4, ScriptTaskInputKind::PointerDown, original.sequence());
+    check(!runtime.process_one(supervisor).input_accepted, "queued input on the old frame is discarded after recovery");
+    post(5, ScriptTaskInputKind::PointerUp, replacement.sequence());
+    check(!runtime.process_one(supervisor).input_accepted, "release on the restored frame needs a fresh press");
+    post(6, ScriptTaskInputKind::PointerDown, replacement.sequence());
+    check(runtime.process_one(supervisor).input_accepted, "input resumes on the accepted recovery frame");
+    post(7, ScriptTaskInputKind::PointerUp, replacement.sequence());
+    check(runtime.process_one(supervisor).input_accepted &&
+              runtime.eval_with_supervisor(supervisor, "releases").value == "1",
+          "a fresh gesture targets the rebuilt tree");
+    ScriptTaskFrameRendererOptions render_options;
+    render_options.text_catalog = original.text_catalog();
+    ScriptTaskFrameRenderer renderer(render_options);
+    ScriptTaskFrameRenderStatus status;
+    renderer.render(original.frame(), {255, 255, 255, 255}, &status);
+    check(status == ScriptTaskFrameRenderStatus::Accepted,
+          "an old UI-held frame remains replayable after Worker tree destruction");
+}
+#endif
+
 template<class Command> void worker_v10_mutation_publishes_changed_packed_axes() {
     if constexpr (detail::canonical::has_radius_y_fields<Command>::value) {
         ScriptTaskSupervisor supervisor = make_supervisor();
@@ -2218,6 +2332,10 @@ int script_task_worker_runtime_tests_main() {
 #endif
         if (script_task_app_frame_codec_supports_version(10))
             worker_v10_mutation_publishes_changed_packed_axes<DisplayCommand>();
+#if defined(JELLYFRAME_RENDER_CORE_STRICT_LAYER_BUILD_API_VERSION) && JELLYFRAME_RENDER_CORE_STRICT_LAYER_BUILD_API_VERSION >= 1
+        if (script_task_app_frame_codec_supports_version(10))
+            worker_v10_recovers_after_layer_budget_refusal();
+#endif
 #endif
         worker_fatal_publishes_once_as_a_supervisor_value();
         worker_c_safe_fatal_boundary_publishes_value_record();
