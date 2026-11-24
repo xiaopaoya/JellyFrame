@@ -22,10 +22,10 @@ void input_value_round_trips_and_posts_to_worker_inbox() {
 
     ScriptTaskSupervisor supervisor({{2, 48}, {1, 0}, {1, 64, 64}, 0, 0});
     const ScriptAppSession session = supervisor.begin(90);
-    assert(post_script_task_input(supervisor, session, 4, expected, limits()).accepted());
+    assert(post_script_task_input(supervisor, session, 4, expected, limits(), 7).accepted());
     ScriptTaskPacket packet;
     assert(supervisor.take_worker_packet(session, packet));
-    assert(packet.kind == ScriptTaskPacketKind::Input && packet.sequence == 4);
+    assert(packet.kind == ScriptTaskPacketKind::Input && packet.sequence == 4 && packet.input_frame_sequence == 7);
     assert(decode_script_task_input(packet.payload, limits(), decoded) == ScriptTaskInputCodecStatus::Accepted);
     assert(decoded.x == expected.x);
 }

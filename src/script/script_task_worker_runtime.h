@@ -174,6 +174,8 @@ public:
                                                      std::size_t max_timer_callbacks = 32,
                                                      std::size_t max_animation_callbacks = 4);
 
+    // Called on the worker task with the latest frame confirmed by the UI.
+    // Recovering input also needs the frame current at event capture time.
     void set_ui_accepted_frame_sequence(std::uint32_t sequence);
     ScriptTaskWorkerRuntimeTelemetry telemetry() const;
     bool service_gateway_available() const;

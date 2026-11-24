@@ -81,6 +81,11 @@ ScriptTaskInputCodecOptions input_options_from(const ScriptTaskWorkerRuntimeOpti
     return result;
 }
 
+bool frame_at_or_after(std::uint32_t sequence, std::uint32_t minimum) {
+    // Supervisor sequences wrap at 32 bits and reserve zero.
+    return sequence != 0 && sequence - minimum < (std::uint32_t{1} << 31);
+}
+
 } // namespace
 
 struct ScriptTaskWorkerRuntime::State {
@@ -127,9 +132,6 @@ public:
                                                      std::size_t max_timer_callbacks = 32,
                                                      std::size_t max_animation_callbacks = 4);
 
-    void set_ui_accepted_frame_sequence(std::uint32_t sequence) {
-        telemetry_.ui_accepted_frame_seq = sequence;
-    }
     ScriptTaskWorkerRuntimeTelemetry telemetry() const { return telemetry_; }
     bool service_gateway_available() const { return service_gateway_available_; }
 
@@ -179,6 +181,10 @@ public:
     void set_fatal(ScriptTaskWorkerRuntimeFatalReason reason, std::uint32_t diagnostic_code = 0);
     bool consume_callback_failure();
     bool rebuild_pipeline();
+    void rebuild_after_mutation(ScriptTaskSupervisor& supervisor, ScriptTaskWorkerRuntimeStepResult& result);
+    void release_pipeline();
+    bool admits_input(std::uint32_t frame_sequence) const;
+    bool admits_recovered_gesture(const ScriptTaskInputEvent& input);
     bool has_dirty_document() const;
     bool supervisor_matches(const ScriptTaskSupervisor& supervisor) const;
     static bool retain_owner(void* context) noexcept {
@@ -231,6 +237,9 @@ public:
     ScriptTaskWorkerRuntimeTelemetry telemetry_;
     // Tracks rebuilt output after DOM dirty flags are cleared for Core capture.
     bool pending_frame_publication_ = false;
+    bool recovering_frame_ = false;
+    std::uint32_t recovery_frame_sequence_ = 0;
+    bool recovery_pointer_down_ = false;
     ScriptTaskSupervisor* active_supervisor_ = nullptr;
     std::uint32_t service_request_sequence_ = 1;
     bool service_gateway_available_ = false;
@@ -283,6 +292,12 @@ void ScriptTaskWorkerRuntime::State::stop() {
 
 void ScriptTaskWorkerRuntime::State::drain() {
     runtime_.reset();
+    release_pipeline();
+    style_resolver_.reset();
+    document_owner_.set_root(nullptr);
+}
+
+void ScriptTaskWorkerRuntime::State::release_pipeline() {
     input_controller_.reset();
     layer_tree_.reset();
 #if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
@@ -291,8 +306,6 @@ void ScriptTaskWorkerRuntime::State::drain() {
 #endif
     layout_tree_.reset();
     render_tree_.reset();
-    style_resolver_.reset();
-    document_owner_.set_root(nullptr);
 }
 
 void ScriptTaskWorkerRuntime::State::release_operation() {
@@ -506,7 +519,7 @@ ScriptEvaluationResult ScriptTaskWorkerRuntime::State::eval(std::string_view sou
     } else if (consume_callback_failure()) {
         // A callback failure is terminal even when the selected backend returned a
         // successful value for the surrounding worker operation.
-    } else if (has_dirty_document() && !rebuild_pipeline()) {
+    } else if (subtree_dirty_flags(*document_owner_.root()) != DomDirtyNone && !rebuild_pipeline()) {
         set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
     }
     return result;
@@ -565,7 +578,11 @@ ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::State::publish_frame(Sc
     }
     result = frame_publisher_.publish(supervisor, session_, frame);
     if (result.accepted()) {
-        ++telemetry_.published_frame_seq;
+        telemetry_.published_frame_seq = result.lease.frame_sequence;
+        if (recovering_frame_) {
+            recovery_frame_sequence_ = result.lease.frame_sequence;
+            recovering_frame_ = false;
+        }
     } else {
         ++telemetry_.frame_publish_rejections;
     }
@@ -594,10 +611,7 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::State::process_one(Sc
     }
     ScriptTaskPacket packet;
     if (!supervisor.take_worker_packet(session_, packet)) {
-        if (has_dirty_document()) {
-            result.frame = publish_frame(supervisor);
-            result.frame_published = result.frame.accepted();
-        }
+        if (has_dirty_document()) rebuild_after_mutation(supervisor, result);
         return finish(result);
     }
     result.packet_consumed = true;
@@ -643,16 +657,7 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::State::process_one(Sc
         result.dom_mutated = before != after || after != DomDirtyNone;
         if (result.dom_mutated) {
             ++telemetry_.js_mutation_seq;
-            const Node* hovered = input_controller_->hovered_node();
-            const Node* active = input_controller_->active_node();
-            const Node* focused = input_controller_->focused_node();
-            style_resolver_->set_interaction_state(hovered, active, focused);
-            if (!rebuild_pipeline()) {
-                set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
-                return finish(result);
-            }
-            result.frame = publish_frame(supervisor);
-            result.frame_published = result.frame.accepted();
+            rebuild_after_mutation(supervisor, result);
         }
         return finish(result);
     }
@@ -660,8 +665,20 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::State::process_one(Sc
         ++telemetry_.rejected_input_packets;
         return result;
     }
+    if (!admits_input(packet.input_frame_sequence)) {
+        ++telemetry_.rejected_input_packets;
+        if (pending_frame_publication_) {
+            result.frame = publish_frame(supervisor);
+            result.frame_published = result.frame.accepted();
+        }
+        return finish(result);
+    }
     ScriptTaskInputEvent input;
     if (decode_script_task_input(packet.payload, options_.input_codec, input) != ScriptTaskInputCodecStatus::Accepted) {
+        ++telemetry_.rejected_input_packets;
+        return result;
+    }
+    if (recovery_frame_sequence_ != 0 && !admits_recovered_gesture(input)) {
         ++telemetry_.rejected_input_packets;
         return result;
     }
@@ -678,16 +695,7 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::State::process_one(Sc
     result.dom_mutated = before != after || after != DomDirtyNone;
     if (result.dom_mutated) {
         ++telemetry_.js_mutation_seq;
-        const Node* hovered = input_controller_->hovered_node();
-        const Node* active = input_controller_->active_node();
-        const Node* focused = input_controller_->focused_node();
-        style_resolver_->set_interaction_state(hovered, active, focused);
-        if (!rebuild_pipeline()) {
-            set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
-            return finish(result);
-        }
-        result.frame = publish_frame(supervisor);
-        result.frame_published = result.frame.accepted();
+        rebuild_after_mutation(supervisor, result);
     }
     return finish(result);
 }
@@ -798,17 +806,46 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::State::pump_callbacks
     }
 
     ++telemetry_.js_mutation_seq;
-    const Node* hovered = input_controller_->hovered_node();
-    const Node* active = input_controller_->active_node();
-    const Node* focused = input_controller_->focused_node();
-    style_resolver_->set_interaction_state(hovered, active, focused);
-    if (!rebuild_pipeline()) {
+    rebuild_after_mutation(supervisor, result);
+    return finish(result);
+}
+
+void ScriptTaskWorkerRuntime::State::rebuild_after_mutation(
+    ScriptTaskSupervisor& supervisor, ScriptTaskWorkerRuntimeStepResult& result) {
+    if (subtree_dirty_flags(*document_owner_.root()) != DomDirtyNone && !rebuild_pipeline()) {
         set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
-        return finish(result);
+        return;
     }
+    if (!pending_frame_publication_) return;
     result.frame = publish_frame(supervisor);
     result.frame_published = result.frame.accepted();
-    return finish(result);
+}
+
+bool ScriptTaskWorkerRuntime::State::admits_input(std::uint32_t frame_sequence) const {
+    if (recovering_frame_ || !input_controller_) return false;
+    if (recovery_frame_sequence_ == 0) return true;
+    const auto accepted = telemetry_.ui_accepted_frame_seq;
+    return frame_at_or_after(frame_sequence, recovery_frame_sequence_) &&
+           frame_at_or_after(accepted, frame_sequence);
+}
+
+bool ScriptTaskWorkerRuntime::State::admits_recovered_gesture(const ScriptTaskInputEvent& input) {
+    // A touch can span the rejected and recovered frames. Never dispatch its
+    // tail to the replacement DOM if its down event was dropped.
+    switch (input.kind) {
+    case ScriptTaskInputKind::PointerDown:
+        recovery_pointer_down_ = true;
+        return true;
+    case ScriptTaskInputKind::PointerUp: {
+        const bool accepted = recovery_pointer_down_;
+        recovery_pointer_down_ = false;
+        return accepted;
+    }
+    case ScriptTaskInputKind::PointerMove:
+        return input.buttons == 0 || recovery_pointer_down_;
+    default:
+        return true;
+    }
 }
 
 void ScriptTaskWorkerRuntime::State::set_fatal(ScriptTaskWorkerRuntimeFatalReason reason,
@@ -837,6 +874,10 @@ bool ScriptTaskWorkerRuntime::State::consume_callback_failure() {
 
 bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
     if (!document_owner_.root() || !style_resolver_) return false;
+    const Node* hovered = input_controller_ ? input_controller_->hovered_node() : nullptr;
+    const Node* active = input_controller_ ? input_controller_->active_node() : nullptr;
+    const Node* focused = input_controller_ ? input_controller_->focused_node() : nullptr;
+    style_resolver_->set_interaction_state(hovered, active, focused);
     RenderTreeOptions render_options = render_tree_options_from_budgets(options_.budgets);
     render_options.viewport_width = options_.viewport.width;
     render_options.viewport_height = options_.viewport.height;
@@ -968,25 +1009,45 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
 #endif
     } else
 #endif
-        layer_tree = layer_builder.build(*layout_tree);
+    {
+#if defined(JELLYFRAME_RENDER_CORE_STRICT_LAYER_BUILD_API_VERSION) && JELLYFRAME_RENDER_CORE_STRICT_LAYER_BUILD_API_VERSION >= 1
+        if (options_.frame_codec.version == 10) {
+            const auto status = layer_builder.build_strict(*layout_tree, layer_tree);
+            if (status == LayerTreeBuildStatus::LayerLimit || status == LayerTreeBuildStatus::CommandLimit) {
+                if (telemetry_.published_frame_seq == 0 || telemetry_.ui_accepted_frame_seq == 0)
+                    return false;
+                // The UI owns its accepted snapshot. The worker's old layout
+                // and hit targets may borrow DOM nodes removed by the script.
+                release_pipeline();
+                style_resolver_->set_interaction_state(nullptr, nullptr, nullptr);
+                pending_frame_publication_ = false;
+                recovering_frame_ = true;
+                recovery_pointer_down_ = false;
+                return true;
+            }
+            if (status != LayerTreeBuildStatus::Success) return false;
+        } else
+#endif
+        {
+            layer_tree = layer_builder.build(*layout_tree);
+        }
+    }
     if (!layer_tree) return false;
 
-    const Node* hovered = input_controller_ != nullptr ? input_controller_->hovered_node() : nullptr;
-    const Node* active = input_controller_ != nullptr ? input_controller_->active_node() : nullptr;
-    const Node* focused = input_controller_ != nullptr ? input_controller_->focused_node() : nullptr;
     // Rebuilding the layer tree must restore the existing focus silently;
     // autofocus is an initialization action, not a layout-change event.
     const auto interaction_hints = style_resolver_->interaction_invalidation_hints();
     std::unique_ptr<InputController> input_controller = std::make_unique<InputController>(
         *layer_tree, InteractionInvalidationOptions{
             interaction_hints.hover, interaction_hints.active, interaction_hints.focus},
-        input_controller_ == nullptr);
+        input_controller_ == nullptr && !recovering_frame_);
     if (input_controller_) {
         input_controller->set_interaction_state(hovered, active, focused);
     }
-    render_tree_ = std::move(render_tree);
-    layout_tree_ = std::move(layout_tree);
+    input_controller_ = std::move(input_controller);
     layer_tree_ = std::move(layer_tree);
+    layout_tree_ = std::move(layout_tree);
+    render_tree_ = std::move(render_tree);
 #if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
     shaped_layout_ = std::move(shaped_layout);
     #if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
@@ -995,7 +1056,6 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
     shaped_positions_ = std::move(shaped_capture.after_command_counts);
 #endif
 #endif
-    input_controller_ = std::move(input_controller);
     pending_frame_publication_ = true;
     return true;
 }

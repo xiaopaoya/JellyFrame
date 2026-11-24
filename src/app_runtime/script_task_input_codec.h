@@ -67,6 +67,7 @@ ScriptTaskInputPostResult post_script_task_input(ScriptTaskSupervisor& superviso
                                                   const ScriptAppSession& session,
                                                   std::uint32_t sequence,
                                                   const ScriptTaskInputEvent& input,
-                                                  const ScriptTaskInputCodecOptions& options);
+                                                  const ScriptTaskInputCodecOptions& options,
+                                                  std::uint32_t input_frame_sequence = 0);
 
 } // namespace jellyframe

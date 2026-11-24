@@ -113,6 +113,12 @@ ID、`DisplayCommand*` 或 worker 侧 target 地址。
 和 bridge teardown。重复调用不得产生多个 fatal packet，也不得把 fatal packet 放入 frame 或 service mailbox。
 初始化在任何 supervisor 入口之外失败时，port 必须显式调用 `publish_fatal()`；随后仍按本节的停止顺序处理。
 
+Core 提供严格层树构建接口时，标量帧 v10 在首帧呈现后的层数或绘制命令超限可恢复。
+UI 保留上一次成功呈现的帧，worker 释放旧布局和命中测试状态，继续处理 timer 和服务回调，
+并在 DOM 再次变化时重试。移植端通过 `set_ui_accepted_frame_sequence()` 向 worker
+报告 UI 最近成功呈现的帧序号，并在 `post_script_task_input()` 传入采集输入时的帧序号。
+恢复帧呈现前排队的输入会被丢弃。触控须重新按下，抬手事件才会发往恢复后的页面。
+
 ## 当前证据与边界
 
 桌面 `jellyframe_script_task_runtime_tests` 覆盖值协议、请求/完成/取消/拒绝、worker inbox 与
