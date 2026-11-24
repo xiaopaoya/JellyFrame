@@ -160,16 +160,22 @@ def main():
         f'-DCMAKE_C_COMPILER={args.c_compiler}', *desktop_parameters])
     desktop_provenance = json.loads((desktop_build / 'generated/jellyframe_render_core_provenance.json').read_text())
     check_qualification_provenance(desktop_provenance, expected_identity, candidate_lock_sha256, 'desktop consumers')
+    desktop_targets = ['jellyframe_pseudo_browser']
+    if os.name == 'nt':
+        desktop_targets.insert(0, 'jellyframe_desktop_shell')
     run('desktop-consumer-build', ['cmake', '--build', desktop_build, '--target',
-        'jellyframe_desktop_shell', 'jellyframe_pseudo_browser', '--parallel', args.jobs])
-    desktop_inventory = json.loads(run('desktop-consumer-inventory',
-        ['ctest', '--test-dir', desktop_build, '--show-only=json-v1']))
-    if 'jellyframe_native_core_text_route' not in {test['name'] for test in desktop_inventory['tests']}:
-        raise RuntimeError('desktop consumer build is missing jellyframe_native_core_text_route')
-    desktop_test_log = run('desktop-consumer-route-test', ['ctest', '--test-dir', desktop_build,
-        '-R', '^jellyframe_native_core_text_route$', '--output-on-failure', '--no-tests=error'])
-    if 'Skipped' in desktop_test_log or 'Not Run' in desktop_test_log:
-        raise RuntimeError('desktop consumer route test did not complete')
+        *desktop_targets, '--parallel', args.jobs])
+    desktop_route_test = None
+    if os.name == 'nt':
+        desktop_inventory = json.loads(run('desktop-consumer-inventory',
+            ['ctest', '--test-dir', desktop_build, '--show-only=json-v1']))
+        if 'jellyframe_native_core_text_route' not in {test['name'] for test in desktop_inventory['tests']}:
+            raise RuntimeError('desktop consumer build is missing jellyframe_native_core_text_route')
+        desktop_test_log = run('desktop-consumer-route-test', ['ctest', '--test-dir', desktop_build,
+            '-R', '^jellyframe_native_core_text_route$', '--output-on-failure', '--no-tests=error'])
+        if 'Skipped' in desktop_test_log or 'Not Run' in desktop_test_log:
+            raise RuntimeError('desktop consumer route test did not complete')
+        desktop_route_test = 'jellyframe_native_core_text_route'
 
     check_commit(core, args.core_commit)
     check_commit(RUNTIME, runtime_commit)
@@ -179,15 +185,15 @@ def main():
         raise RuntimeError('candidate lock changed during candidate qualification')
     test_result, = json.loads((installed / 'result.json').read_text())
     evidence = {'schemaVersion': 1,
-                'scope': 'installed Runtime, signed host tests and Win32 desktop consumers; no target execution',
+                'scope': 'installed Runtime, signed host tests and platform-available desktop consumers; no target execution',
                 'coreCommit': args.core_commit, 'runtimeCommit': runtime_commit, 'profile': args.profile,
                 'scalarFrame': args.scalar_frame,
                 'candidateLockSha256': candidate_lock_sha256, 'productionLockSha256': lock_hash,
                 'jerryCommit': JERRY_COMMIT, 'mbedtlsCommit': MBEDTLS_COMMIT,
                 'installed': test_result, 'signedTestsPassed': route_tests,
                 'desktopConsumers': {'provenance': desktop_provenance,
-                                    'targets': ['jellyframe_desktop_shell', 'jellyframe_pseudo_browser'],
-                                    'routeTest': 'jellyframe_native_core_text_route'}}
+                                    'targets': desktop_targets,
+                                    'routeTest': desktop_route_test}}
     (output / 'receipt.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
     print(f'{args.profile}: {test_result["passed"]} installed tests, {route_tests}; {output / "receipt.json"}')
 
