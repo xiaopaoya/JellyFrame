@@ -514,6 +514,14 @@ if(JELLYFRAME_BUILD_TESTS)
             target_compile_definitions(${_text_target} PRIVATE
                 CONFIG_JELLYFRAME_ESP32S3_ENABLE_CORE_TEXT_SYSTEM=1
                 CONFIG_JELLYFRAME_ESP32S3_ENABLE_BMP_IMAGE_ADAPTER=${_bmp})
+            if(JELLYFRAME_ENABLE_FLEX_GRID AND
+               JELLYFRAME_RENDER_CORE_SOURCE_HASH STREQUAL
+                   "ff9e0ac52a701191dce6a90b508b682b9a9abb8750d432865d779c0ef954abce" AND
+               "JELLYFRAME_RENDER_CORE_CONTEXTUAL_TEXT_ENABLED=1" IN_LIST _native_core_definitions AND
+               "JELLYFRAME_RENDER_CORE_CONTEXTUAL_LAYOUT_ENABLED=1" IN_LIST _native_core_definitions)
+                target_compile_definitions(${_text_target} PRIVATE
+                    JELLYFRAME_TEST_CONTEXTUAL_FLEX_WRAP=1)
+            endif()
             jellyframe_enable_test_asserts(${_text_target})
             jellyframe_stage_sanitizer_runtime(${_text_target})
             add_test(NAME ${_text_target} COMMAND ${_text_target})

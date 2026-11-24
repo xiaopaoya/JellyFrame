@@ -41,6 +41,12 @@ static const std::string contextual_flex_css =
     "#row{display:flex;flex-direction:row;flex-wrap:nowrap;width:120px;height:28px}"
     "#first,#second,#third{width:40px;height:28px;font-size:16px;line-height:20px;color:#000000}"
     "#first{background:#e02020}#second{background:#20c040}#third{background:#2040e0}";
+static const std::string contextual_flex_wrap_css =
+    "*{margin:0;padding:0;font-weight:400}"
+    "body{background:#ffffff}"
+    "#row{display:flex;flex-direction:row;flex-wrap:wrap;width:80px;height:56px}"
+    "#first,#second,#third{width:40px;height:28px;flex-grow:0;flex-shrink:0;font-size:16px;line-height:20px;color:#000000}"
+    "#first{background:#e02020}#second{background:#20c040}#third{background:#2040e0}";
 
 static const std::string contextual_flex_column_css =
     "*{margin:0;padding:0;font-weight:400}"
@@ -264,11 +270,134 @@ static void installed_contextual_flex_row_worker_test() {
     const auto session = supervisor.begin(760, fonts.catalog, {}, binding);
     auto options = contextual_flex_options(fonts.catalog, binding);
     ScriptTaskWorkerRuntime worker(session, options);
-    assert(worker.initialize(supervisor, contextual_flex_html, contextual_flex_css) !=
+    assert(worker.initialize(supervisor, contextual_flex_html, contextual_flex_wrap_css) !=
         ScriptTaskWorkerRuntimeInitStatus::Accepted);
     assert(!worker.publish_frame(supervisor).accepted());
 #endif
 }
+
+#if JELLYFRAME_TEST_CONTEXTUAL_FLEX_WRAP
+static void installed_contextual_flex_wrapped_worker_test() {
+    runtime_test_shaped_text::Assets assets("regular", 7601);
+    const auto binding = runtime_test_shaped_text::create_binding(assets);
+    const runtime_test_fonts::Fonts fonts;
+
+    auto supervisor = ScriptTaskSupervisor{};
+    const auto session = supervisor.begin(760, fonts.catalog, {}, binding);
+    auto options = contextual_flex_options(fonts.catalog, binding);
+    assert(options.frame_codec.version == 12 && script_task_app_frame_codec_supports_version(12));
+    ScriptTaskWorkerRuntime worker(session, options);
+    assert(worker.initialize(supervisor, contextual_flex_html, contextual_flex_wrap_css) ==
+        ScriptTaskWorkerRuntimeInitStatus::Accepted);
+    assert(worker.publish_frame(supervisor).accepted());
+    ScriptTaskAcceptedAppFrame accepted;
+    assert(take_installed_core_text_frame(supervisor, session, options.frame_codec, accepted) ==
+        ScriptTaskAppFrameTakeStatus::Accepted);
+    assert(accepted.shaped_text_binding() == binding);
+    assert(accepted.frame().shaped_text.size() == 3);
+    assert(accepted.frame().shaped_text[0].baseline_x_q1000 == 0);
+    assert(accepted.frame().shaped_text[1].baseline_x_q1000 == 40000);
+    assert(accepted.frame().shaped_text[2].baseline_x_q1000 == 0);
+    assert(accepted.frame().shaped_text[0].baseline_y_q1000 == 16000);
+    assert(accepted.frame().shaped_text[1].baseline_y_q1000 == 16000);
+    assert(accepted.frame().shaped_text[2].baseline_y_q1000 == 44000);
+    for (const auto& command : accepted.frame().display_list) {
+        const auto type = detail::command_type(command);
+        assert(type != DisplayCommandType::Text);
+        assert(!detail::is_prepared_command_type(type));
+        assert(!detail::has_prepared_text_packet(command));
+    }
+
+    auto document = HtmlParser{}.parse(contextual_flex_html);
+    StyleResolver styles(CssParser{}.parse(contextual_flex_wrap_css));
+    auto render_tree = RenderTreeBuilder(styles).build(*document);
+    LayoutEngine engine(styles);
+    runtime_shaped::LayoutOptions layout_options;
+    layout_options.binding = binding->core_binding();
+    std::uint64_t work = binding->work_limit();
+    runtime_shaped::LayoutResult layout;
+    assert(engine.layout_contextual(*render_tree, 160, 64, layout_options, work, layout) ==
+        runtime_shaped::Status::ok);
+    assert(layout.valid());
+
+    const auto find_box = [](const LayoutBox* root, const char* id) {
+        const LayoutBox* found = nullptr;
+        const auto visit = [&](const auto& self, const LayoutBox* box) -> void {
+            if (box == nullptr || found != nullptr) return;
+            if (box->node != nullptr && box->node->attribute("id") == id) {
+                found = box;
+                return;
+            }
+            for (const auto& child : box->children) self(self, child.get());
+        };
+        visit(visit, root);
+        return found;
+    };
+    const auto* row = find_box(layout.tree(), "row");
+    const auto* first = find_box(layout.tree(), "first");
+    const auto* second = find_box(layout.tree(), "second");
+    const auto* third = find_box(layout.tree(), "third");
+    assert(row != nullptr && row->rect.x == 0 && row->rect.y == 0 &&
+        row->rect.width == 80 && row->rect.height == 56);
+    assert(first != nullptr && first->rect.x == 0 && first->rect.y == 0 &&
+        first->rect.width == 40 && first->rect.height == 28);
+    assert(second != nullptr && second->rect.x == 40 && second->rect.y == 0 &&
+        second->rect.width == 40 && second->rect.height == 28);
+    assert(third != nullptr && third->rect.x == 0 && third->rect.y == 28 &&
+        third->rect.width == 40 && third->rect.height == 28);
+
+    assert(layout.paragraphs().size() == accepted.frame().shaped_text.size());
+    for (std::size_t i = 0; i < layout.paragraphs().size(); ++i) {
+        const auto& paragraph = layout.paragraphs()[i];
+        const auto& text = accepted.frame().shaped_text[i];
+        assert(text.baseline_x_q1000 == paragraph.origin_x_q1000);
+        assert(paragraph.paragraph.lines().size() == 1);
+        assert(text.baseline_y_q1000 == paragraph.origin_y_q1000 +
+            paragraph.paragraph.lines()[0].baseline_y_q1000);
+        assert(text.packet == paragraph.paragraph.lines()[0].packet);
+    }
+
+    ScriptTaskFrameRendererOptions renderer_options;
+    renderer_options.shaped_text_binding = binding;
+    ScriptTaskFrameRenderer renderer(renderer_options);
+    ScriptTaskFrameRenderStatus render_status;
+    auto pixels = renderer.render(accepted.frame(), {255,255,255,255}, &render_status);
+    assert(render_status == ScriptTaskFrameRenderStatus::Accepted);
+    assert(pixels.pixels[10 * pixels.width + 10].r == 224 &&
+        pixels.pixels[10 * pixels.width + 10].g == 32 &&
+        pixels.pixels[10 * pixels.width + 10].b == 32);
+    assert(pixels.pixels[10 * pixels.width + 50].r == 32 &&
+        pixels.pixels[10 * pixels.width + 50].g == 192 &&
+        pixels.pixels[10 * pixels.width + 50].b == 64);
+    assert(pixels.pixels[38 * pixels.width + 10].r == 32 &&
+        pixels.pixels[38 * pixels.width + 10].g == 64 &&
+        pixels.pixels[38 * pixels.width + 10].b == 224);
+    const auto retained_pixels = pixels;
+
+    for (const auto& rejected_css : {
+            contextual_flex_column_css + "#column{height:auto}"}) {
+        ScriptTaskSupervisor rejected_supervisor;
+        const auto rejected_session = rejected_supervisor.begin(761, fonts.catalog, {}, binding);
+        auto rejected_options = contextual_flex_options(fonts.catalog, binding);
+        ScriptTaskWorkerRuntime rejected_worker(rejected_session, rejected_options);
+        const auto& rejected_html = rejected_css.find("#column") != std::string::npos
+            ? contextual_flex_column_html : contextual_flex_html;
+        assert(rejected_worker.initialize(rejected_supervisor, rejected_html, rejected_css) !=
+            ScriptTaskWorkerRuntimeInitStatus::Accepted);
+        assert(!rejected_worker.publish_frame(rejected_supervisor).accepted());
+    }
+
+    worker.stop();
+    assert(supervisor.begin_teardown(session).session == session);
+    assert(supervisor.complete_teardown(session).session == session);
+    ScriptTaskFrameRendererOptions replay_options;
+    replay_options.shaped_text_binding = binding;
+    ScriptTaskFrameRenderStatus replay_status;
+    const auto replay = ScriptTaskFrameRenderer(replay_options).render(
+        accepted.frame(), {255,255,255,255}, &replay_status);
+    assert(replay_status == ScriptTaskFrameRenderStatus::Accepted && same_pixels(retained_pixels, replay));
+}
+#endif
 } // namespace
 #endif
 
@@ -323,6 +452,9 @@ inline int run_installed_contextual_text_tests() {
     scalar_frame = {}; scalar_options = {};
 #if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API && defined(JELLYFRAME_SHAPED_TEST_FIXTURES_ROOT)
     installed_contextual_flex_row_worker_test();
+#if JELLYFRAME_TEST_CONTEXTUAL_FLEX_WRAP
+    installed_contextual_flex_wrapped_worker_test();
+#endif
     installed_contextual_flex_column_worker_test();
     runtime_test_shaped_text::Assets assets("regular", 7501);
     auto binding = runtime_test_shaped_text::create_binding(assets);

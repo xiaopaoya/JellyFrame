@@ -906,6 +906,77 @@ jobs:
             build/core-qualified-${{ matrix.profile }}/generated/jellyframe_render_core_profile.json
           if-no-files-found: warn
 
+  contextual-flex-wrap-candidate:
+    name: Contextual Flex Wrap Candidate (${{ matrix.profile }})
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [full, cropped, off]
+
+    steps:
+      - name: Checkout JellyFrame Runtime
+        uses: actions/checkout@v5
+
+      - name: Checkout qualified Render Core candidate
+        uses: actions/checkout@v5
+        with:
+          repository: xiaopaoya/JellyFrame-Render-Core
+          ref: 2ae16b2f190c54ccc0aa0803b0f53a2fd254c7f2
+          path: third_party/render-core-source
+
+      - name: Checkout pinned JerryScript
+        uses: actions/checkout@v5
+        with:
+          repository: jerryscript-project/jerryscript
+          ref: b7069350c2e52e7dc721dfb75f067147bd79b39b
+          path: third_party/jerryscript
+
+      - name: Checkout ESP-IDF 5.3.1 mbedTLS
+        uses: actions/checkout@v5
+        with:
+          repository: Mbed-TLS/mbedtls
+          ref: 72aa687352a469044cbb946f3fdb261430e41ce1
+          path: third_party/mbedtls
+
+      - name: Keep qualification checkouts outside Runtime source status
+        run: |
+          printf '\n/third_party/render-core-source/\n/third_party/mbedtls/\n' >> .git/info/exclude
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Patch and build pinned JerryScript
+        run: |
+          python tools/dependencies/patch_jerryscript.py --source-root third_party/jerryscript
+          python third_party/jerryscript/tools/build.py --clean --cmake-param=-DJERRY_VM_HALT=ON
+
+      - name: Qualify exact installed Core package and Runtime consumers
+        run: |
+          python project_tools/qualify_abi9_pair.py \
+            --core third_party/render-core-source \
+            --core-commit 2ae16b2f190c54ccc0aa0803b0f53a2fd254c7f2 \
+            --core-version 0.12.1 \
+            --core-abi 11 \
+            --core-source-hash ff9e0ac52a701191dce6a90b508b682b9a9abb8750d432865d779c0ef954abce \
+            --profile '${{ matrix.profile }}' \
+            --scalar-frame 10 \
+            --jerry third_party/jerryscript \
+            --mbedtls third_party/mbedtls \
+            --output 'build/contextual-flex-wrap-${{ matrix.profile }}' \
+            --jobs 4
+
+      - name: Upload contextual wrap qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextual-flex-wrap-${{ matrix.profile }}
+          path: build/contextual-flex-wrap-${{ matrix.profile }}
+          if-no-files-found: warn
+
   render-core-standalone:
     name: Standalone Render Core
     if: github.event_name != 'workflow_dispatch'
