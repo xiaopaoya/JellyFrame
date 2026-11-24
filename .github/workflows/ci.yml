@@ -965,6 +965,9 @@ jobs:
           for archive in third_party/jerryscript/build/lib/libjerry-*.a; do
             nm -A -g --defined-only "$archive"
           done > '${{ runner.temp }}/contextual-flex-wrap-symbols/defined-symbols.txt' 2>&1 || true
+          for archive in third_party/jerryscript/build/lib/libjerry-*.a; do
+            nm -s "$archive"
+          done > '${{ runner.temp }}/contextual-flex-wrap-symbols/archive-index.txt' 2>&1 || true
           rg 'jerry_value_is_object|jerry_init\b|jerry_undefined\b' \
             '${{ runner.temp }}/contextual-flex-wrap-symbols/defined-symbols.txt' || true
 
@@ -991,6 +994,7 @@ jobs:
           path: |
             ${{ runner.temp }}/contextual-flex-wrap-${{ matrix.profile }}
             ${{ runner.temp }}/contextual-flex-wrap-symbols
+            third_party/jerryscript/build/lib/libjerry-*.a
           if-no-files-found: warn
 
   render-core-standalone:
