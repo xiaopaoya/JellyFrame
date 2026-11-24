@@ -923,7 +923,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: xiaopaoya/JellyFrame-Render-Core
-          ref: 2ae16b2f190c54ccc0aa0803b0f53a2fd254c7f2
+          ref: dd7d57b04e0d7d8a8df850e64bb4e5610416ed4c
           path: third_party/render-core-source
 
       - name: Checkout pinned JerryScript
@@ -960,7 +960,7 @@ jobs:
         run: |
           python project_tools/qualify_abi9_pair.py \
             --core third_party/render-core-source \
-            --core-commit 2ae16b2f190c54ccc0aa0803b0f53a2fd254c7f2 \
+            --core-commit dd7d57b04e0d7d8a8df850e64bb4e5610416ed4c \
             --core-version 0.12.1 \
             --core-abi 11 \
             --core-source-hash ff9e0ac52a701191dce6a90b508b682b9a9abb8750d432865d779c0ef954abce \
@@ -1391,3 +1391,4 @@ jobs:
           name: browser-natural-image-abi4-windows
           path: build/browser-natural-image-evidence
           if-no-files-found: warn
+
