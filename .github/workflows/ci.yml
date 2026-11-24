@@ -956,6 +956,18 @@ jobs:
             --cmake-param=-DJERRY_VM_HALT=ON \
             --compile-flag=-Wno-error=unterminated-string-initialization
 
+      - name: Capture JerryScript archive symbols
+        if: always()
+        run: |
+          mkdir -p '${{ runner.temp }}/contextual-flex-wrap-symbols'
+          find third_party/jerryscript/build/lib -maxdepth 1 -type f -name 'libjerry-*.a' -print -exec ls -l {} \; \
+            > '${{ runner.temp }}/contextual-flex-wrap-symbols/archive-files.txt'
+          for archive in third_party/jerryscript/build/lib/libjerry-*.a; do
+            nm -A -g --defined-only "$archive"
+          done > '${{ runner.temp }}/contextual-flex-wrap-symbols/defined-symbols.txt' 2>&1 || true
+          rg 'jerry_value_is_object|jerry_init\b|jerry_undefined\b' \
+            '${{ runner.temp }}/contextual-flex-wrap-symbols/defined-symbols.txt' || true
+
       - name: Qualify exact installed Core package and Runtime consumers
         run: |
           python project_tools/qualify_abi9_pair.py \
@@ -976,7 +988,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: contextual-flex-wrap-${{ matrix.profile }}
-          path: ${{ runner.temp }}/contextual-flex-wrap-${{ matrix.profile }}
+          path: |
+            ${{ runner.temp }}/contextual-flex-wrap-${{ matrix.profile }}
+            ${{ runner.temp }}/contextual-flex-wrap-symbols
           if-no-files-found: warn
 
   render-core-standalone:
