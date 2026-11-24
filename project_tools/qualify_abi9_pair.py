@@ -144,7 +144,7 @@ def main():
             '-DJELLYFRAME_RENDER_CORE_PROVIDER=package', *parameters, *profile_flags])
         provenance = json.loads((build / 'runtime/generated/jellyframe_render_core_provenance.json').read_text())
         check_qualification_provenance(provenance, expected_identity, candidate_lock_sha256, route)
-        run(route + '-build', ['cmake', '--build', build, '--parallel', args.jobs])
+        run(route + '-build', ['cmake', '--build', build, '--verbose', '--parallel', args.jobs])
         route_tests[route] = checked_ctest(run, route + '-ctest', build, required)
 
     desktop_build = output / 'desktop-consumer-build'
