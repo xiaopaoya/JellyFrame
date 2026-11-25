@@ -1,6 +1,6 @@
 # CSSWG Support Table
 
-> Generated from: `csswg_support_table.csv`; source SHA-256: `b2d7c72f4cee270492579c133551d37c37a8b38e8ddeda6b494dc49421b8e2a3`.
+> Generated from: `csswg_support_table.csv`; source SHA-256: `6269f5ea00ca72017dd93548afb9eb14cf97d90cca7a839f8918a6d7365b28e6`.
 > Do not edit this generated table by hand.
 > Source audit: 2026-07-22; Applies to: 0.6.0-dev.
 
@@ -24,8 +24,8 @@ For exact subset behavior, degradation and performance limits, use [developer_ca
 | --- | ---: |
 | `supported` | 75 |
 | `partial` | 842 |
-| `host_dependent` | 0 |
-| `unsupported` | 3353 |
+| `host_dependent` | 4 |
+| `unsupported` | 3349 |
 | `out_of_scope` | 229 |
 
 ## Full Table
@@ -356,9 +356,9 @@ For exact subset behavior, degradation and performance limits, use [developer_ca
 | csswg:property:corner-top-right:css-borders-4:1 | property | css-borders-4 | corner-top-right |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-borders-4/#propdef-corner-top-right) |
 | csswg:property:corner-top-right-shape:css-borders-4:1 | property | css-borders-4 | corner-top-right-shape |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-borders-4/#propdef-corner-top-right-shape) |
 | csswg:property:corner-top-shape:css-borders-4:1 | property | css-borders-4 | corner-top-shape |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-borders-4/#propdef-corner-top-shape) |
-| csswg:property:counter-increment:css-lists-3:1 | property | css-lists-3 | counter-increment |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-lists-3/#propdef-counter-increment) |
-| csswg:property:counter-reset:css-lists-3:1 | property | css-lists-3 | counter-reset |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-lists-3/#propdef-counter-reset) |
-| csswg:property:counter-set:css-lists-3:1 | property | css-lists-3 | counter-set |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-lists-3/#propdef-counter-set) |
+| csswg:property:counter-increment:css-lists-3:1 | property | css-lists-3 | counter-increment |  | `host_dependent` | Opt-in Core feature. Enable JELLYFRAME_ENABLE_CSS_COUNTERS for bounded decimal counters in ordinary block-flow trees. Flex, Grid and display: contents counter interactions are refused. | [link](https://drafts.csswg.org/css-lists-3/#propdef-counter-increment) |
+| csswg:property:counter-reset:css-lists-3:1 | property | css-lists-3 | counter-reset |  | `host_dependent` | Opt-in Core feature. Enable JELLYFRAME_ENABLE_CSS_COUNTERS for bounded decimal counters in ordinary block-flow trees. Flex, Grid and display: contents counter interactions are refused. | [link](https://drafts.csswg.org/css-lists-3/#propdef-counter-reset) |
+| csswg:property:counter-set:css-lists-3:1 | property | css-lists-3 | counter-set |  | `host_dependent` | Opt-in Core feature. Enable JELLYFRAME_ENABLE_CSS_COUNTERS for bounded decimal counters in ordinary block-flow trees. Flex, Grid and display: contents counter interactions are refused. | [link](https://drafts.csswg.org/css-lists-3/#propdef-counter-set) |
 | csswg:property:cue:css-speech-1:1 | property | css-speech-1 | cue | property, in css-speech-1 | `out_of_scope` | Legacy compatibility syntax, specification detail, or browser-scale machinery outside the public JellyFrame CSS contract. | [link](https://drafts.csswg.org/css-speech-1/#propdef-cue) |
 | csswg:property:cue:css2:2 | property | CSS2 | cue | property, in css2 | `out_of_scope` | Legacy compatibility syntax, specification detail, or browser-scale machinery outside the public JellyFrame CSS contract. | [link](https://www.w3.org/TR/CSS2/aural.html#propdef-cue) |
 | csswg:property:cue-after:css-speech-1:1 | property | css-speech-1 | cue-after | property, in css-speech-1 | `out_of_scope` | Legacy compatibility syntax, specification detail, or browser-scale machinery outside the public JellyFrame CSS contract. | [link](https://drafts.csswg.org/css-speech-1/#propdef-cue-after) |
@@ -4112,7 +4112,7 @@ For exact subset behavior, degradation and performance limits, use [developer_ca
 | csswg:function:contrast-color:css-color-6:1 | function | css-color-6 | contrast-color() |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-color-6/#funcdef-contrast-color) |
 | csswg:function:control-value:css-forms-1:1 | function | css-forms-1 | control-value() |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-forms-1/#funcdef-control-value) |
 | csswg:function:cos:css-values-4:1 | function | css-values-4 | cos() |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-values-4/#funcdef-cos) |
-| csswg:function:counter:css-lists-3:1 | function | css-lists-3 | counter() |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-lists-3/#funcdef-counter) |
+| csswg:function:counter:css-lists-3:1 | function | css-lists-3 | counter() |  | `host_dependent` | Opt-in Core feature. Enable JELLYFRAME_ENABLE_CSS_COUNTERS for bounded decimal counters in ordinary block-flow trees. Flex, Grid and display: contents counter interactions are refused. | [link](https://drafts.csswg.org/css-lists-3/#funcdef-counter) |
 | csswg:function:counters:css-lists-3:1 | function | css-lists-3 | counters() |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-lists-3/#funcdef-counters) |
 | csswg:function:cross-fade:css-images-4:1 | function | css-images-4 | cross-fade() |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-images-4/#funcdef-cross-fade) |
 | csswg:function:cross-origin:css-values-5:1 | function | css-values-5 | cross-origin() |  | `unsupported` | Not in the documented JellyFrame CSS subset; do not rely on it in an app. | [link](https://drafts.csswg.org/css-values-5/#funcdef-request-url-modifier-cross-origin) |

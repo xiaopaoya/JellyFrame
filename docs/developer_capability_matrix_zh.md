@@ -1,6 +1,6 @@
 # 开发者能力矩阵
 
-> 最后更新：2026-11-15；适用版本：0.6.0-dev；当前开发线：0.6.0
+> 最后更新：2026-11-26；适用版本：0.6.0-dev；当前开发线：0.6.0
 
 
 这份文档是 JellyFrame 面向应用开发者的实际能力契约。开发者在使用某个 HTML
@@ -254,8 +254,9 @@ Shadow DOM、Custom Elements 生命周期、Microdata export 和 XML/XHTML 语�
 | 简单固定 grid 列 | 子集 | 支持 `grid-template-columns: <length> 1fr`、`repeat(N, 1fr)`、`repeat(N, minmax(0, 1fr))` 及相近的 2-4 列 length/`fr` 模板，适合描述列表、设置表单和紧凑键盘。 |
 | `grid-auto-rows` | 子集 | 长度或 `minmax(<length>, auto)` 最小行高。 |
 | `grid-column` / `grid-row` | 有界子集 | 支持正整数 start、`span N`、`start / end`、`start / span N`；span 有上限。显式 placement 覆盖已文档化的模板轨道，隐式 tracked row 最多 128 行。超出该行/span 上限的项会以 `grid-placement-budget` 放到 grid 之后的非重叠 block flow，而不是钳回最后一行。没有负 line、named line、`auto` grammar、`grid-*-start/end` longhand、dense packing 或浏览器 overlap resolution。 |
+| CSS 计数器 | 可选有界子集 | 启用 Core 的 `JELLYFRAME_ENABLE_CSS_COUNTERS` CMake 功能后，普通 block-flow 树支持 `counter-reset`、`counter-set`、`counter-increment`，以及由 `::before` / `::after` 输出十进制 `counter(name)`。生成文本绘制在所属元素盒内，计入 display command 预算，不是真实 DOM 节点。Flex、Grid 和 `display: contents` 中涉及计数器的交互会诊断并拒绝。`counters()`、reversed/list-item 计数器、非十进制样式和完整 generated-content layout 不支持。 |
 | `list-style` / `list-style-type` | 子集 | `none`、disc-like 和 decimal-like 值。`li` 会绘制轻量原生列表标记。 |
-| `content` on `::before` / `::after` | 子集 | 支持纯文本和 `counter(name) "suffix"`，用于轻量列表计数、单位和角标。Generated content 被绘制在元素盒内，并计入 display command 预算，不是真实 DOM 节点。完整 generated-content layout 延后。 |
+| `content` on `::before` / `::after` | 子集 | 纯文本以及可选的十进制 `counter(name) "suffix"` 形式，可用于计数、单位和角标。Generated content 绘制在元素盒内，并计入 display command 预算，不是真实 DOM 节点。完整 generated-content layout 延后。 |
 | `box-shadow` | 子集 | `none` 可清空阴影。一条外部 `<offset-x> <offset-y> [blur-radius] [spread-radius] [color]` shadow 会生成有界、圆角、二次衰减的软阴影命令。作者写入的 `hex`/`rgb`/`rgba`/`color-mix()` RGB 与 alpha 会被保留；未写颜色时使用 `currentColor`。blur 上限为 24 px，超过会输出 `layer-box-shadow-blur-clamped`。Inset、负 spread、多 shadow 和 blend mode 仍延后。只有声明 shadow 的元素才产生绘制工作；面积过大仍输出 `layer-box-shadow-area-budget`。 |
 | `object-fit` / `object-position` | 子集 | `object-fit` 支持 `fill`、`contain`、`cover`、`none`、`scale-down`。`object-position` 支持关键词和百分比的一/二值子集，例如 `center`、`right top`、`25% 80%`；复杂四值和长度偏移延后。 |
 | `image-rendering` | 子集 | 支持标准关键词 `auto`、`pixelated`、`crisp-edges`。`auto` 允许宿主 image painter 使用双线性/平滑采样；`pixelated` 和 `crisp-edges` 保持 nearest-neighbor，适合像素图标。 |
