@@ -20,8 +20,8 @@ permissions:
 
 env:
   # Keep the release archive in sync with cmake/jellyframe_dependency_lock.cmake.
-  RELEASED_RENDER_CORE_VERSION: "0.12.1"
-  RELEASED_RENDER_CORE_ARCHIVE_SHA256: "9662b269b86239a1b93a80405dbf67466237c13c2ecab9d7e4eec2935551c521"
+  RELEASED_RENDER_CORE_VERSION: "0.13.0"
+  RELEASED_RENDER_CORE_ARCHIVE_SHA256: "ec1773ad7d35b88f5e84903259433a6e5ceb922b6a391caec2cdcf2c453cf1f9"
 
 jobs:
   linux-sanitizers:
