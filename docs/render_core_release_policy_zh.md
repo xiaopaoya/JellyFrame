@@ -22,6 +22,10 @@ Runtime PR #143 在合并提交 `724ca36e` 采用 v0.12.0。PR 和合并后的 C
 包含已发布包的消费者检查。ABI3 和 ABI4 分别保留兼容 CI。跟踪式计算样式复用仍需显式选择。
 [PR #143](https://github.com/xiaopaoya/JellyFrame/pull/143)
 
+Runtime PR #159 在合并提交 `216a5976` 接纳已签名的 Render Core v0.13.0 / ABI11 发布。
+精确归档消费者矩阵的 full、cropped 和关闭可选特性配置各通过 41/41 项测试；PR CI
+及合并后的 master CI 均通过 26/26 项。[PR #159](https://github.com/xiaopaoya/JellyFrame/pull/159)
+
 Runtime 通过显式更新依赖锁接纳发布包。CI 校验已发布归档的 SHA-256，再安装并测试锁定的包，避免将单体仓库的导出与正式发布包混用。WS147 实机证据单独按固件身份和测试范围记录。
 
 ## 发布单元
