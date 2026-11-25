@@ -61,6 +61,7 @@ class RenderCoreBootstrapTests(unittest.TestCase):
         workflow = (SCRIPT.parents[1] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertRegex(workflow, rf'RELEASED_RENDER_CORE_VERSION: "{lock["version"]}"')
         self.assertRegex(workflow, rf'RELEASED_RENDER_CORE_ARCHIVE_SHA256: "{LOCKED_ARCHIVE_SHA256}"')
+        self.assertGreaterEqual(workflow.count(lock["source_hash"]), 2)
 
     def test_extracts_one_rooted_source_tree(self):
         with tempfile.TemporaryDirectory() as temporary:
