@@ -1,6 +1,6 @@
 # Developer Capability Matrix
 
-> Last updated: 2026-11-15; Applies to: 0.6.0-dev; active development line: 0.6.0
+> Last updated: 2026-11-26; Applies to: 0.6.0-dev; active development line: 0.6.0
 
 
 This document is the practical contract for application authors using JellyFrame.
@@ -269,8 +269,9 @@ clear older supported fallback declarations.
 | simple fixed grid columns | Subset | `grid-template-columns: <length> 1fr`, `repeat(N, 1fr)`, `repeat(N, minmax(0, 1fr))` and similar 2-4 column length/`fr` templates are supported for definition lists, settings forms and compact keypads. |
 | `grid-auto-rows` | Subset | Length or `minmax(<length>, auto)` minimum row height. |
 | `grid-column` / `grid-row` | Bounded subset | Positive integer start, `span N`, `start / end`, or `start / span N`; spans are bounded. Explicit placement covers the documented template tracks and at most 128 tracked implicit rows. A row/span beyond that bound is laid out after the grid in non-overlapping block flow with `grid-placement-budget`, rather than clamped onto the final row. No negative lines, named lines, `auto` grammar, `grid-*-start/end` longhands, dense packing or browser overlap resolution. |
+| CSS counters | Opt-in bounded subset | Enable Core's `JELLYFRAME_ENABLE_CSS_COUNTERS` CMake feature. Ordinary block-flow trees support `counter-reset`, `counter-set`, `counter-increment` and decimal `counter(name)` output from `::before` / `::after`. Generated counter text is painted inside the originating element box and is budgeted as display commands, not a real DOM node. Flex, Grid and `display: contents` counter interactions are refused with a diagnostic. `counters()`, reversed/list-item counters, non-decimal styles and full generated-content layout are unsupported. |
 | `list-style` / `list-style-type` | Subset | `none`, disc-like values and decimal-like values. Native-lite list markers are painted for `li`. |
-| `content` on `::before` / `::after` | Subset | Plain text and `counter(name) "suffix"` for lightweight list counters, units and badges. Generated content is painted inside the element box and is budgeted as display commands, not real DOM nodes. Full generated-content layout is deferred. |
+| `content` on `::before` / `::after` | Subset | Plain text and the opt-in decimal `counter(name) "suffix"` form for counters, units and badges. Generated content is painted inside the element box and is budgeted as display commands, not real DOM nodes. Full generated-content layout is deferred. |
 | `box-shadow` | Subset | `none` clears the shadow. One outer `<offset-x> <offset-y> [blur-radius] [spread-radius] [color]` shadow emits a bounded, rounded soft-shadow command with quadratic falloff. Authored `hex`/`rgb`/`rgba`/`color-mix()` RGB and alpha are retained; omitted color uses `currentColor`. Blur is capped at 24 px and larger values emit `layer-box-shadow-blur-clamped`. Inset, negative spread, multiple shadows and blend modes remain deferred. Shadow work is emitted only when declared; oversized areas emit `layer-box-shadow-area-budget`. |
 | `object-fit` / `object-position` | Subset | `object-fit` supports `fill`, `contain`, `cover`, `none` and `scale-down`. `object-position` supports the one/two-value keyword and percentage subset, such as `center`, `right top` and `25% 80%`; complex four-value and length-offset syntax is deferred. |
 | `image-rendering` | Subset | Supports the standard keywords `auto`, `pixelated` and `crisp-edges`. `auto` allows host image painters to use bilinear/smooth sampling; `pixelated` and `crisp-edges` keep nearest-neighbor sampling for pixel art. |
