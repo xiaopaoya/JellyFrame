@@ -1,6 +1,6 @@
 # Render Core 发布与拆仓政策
 
-> 最后更新：2026-11-20；适用版本：0.6.0-dev。
+> 最后更新：2026-11-25；适用版本：0.6.0-dev。
 
 本政策规定当前 monorepo 边界迁移到独立 `jellyframe-render-core` 工程的方式。它补充 [engine_architecture_zh.md](engine_architecture_zh.md)，不是面向 App 作者的兼容性承诺。ABI4 集成与旧文本 API 退役的协同任务见[迁移计划](render_core_abi4_migration_plan_zh.md)。
 
@@ -15,8 +15,8 @@
 ## 迁移状态
 
 `xiaopaoya/JellyFrame-Render-Core` 仓库保留原许可证与贡献历史。首个签名发布 `v0.6.0`
-建立了确定性的源码归档和 SHA-256 sidecar。带签名的 v0.12.1 / ABI11 发布指向
-`bad06c5c20919725e8d3ddd5a985949afd328cf3`。源码和归档校验值见[兼容性矩阵](component_compatibility_matrix_zh.md)。
+建立了确定性的源码归档和 SHA-256 sidecar。带签名的 v0.13.0 / ABI11 发布指向
+`0861c451ff5cb81ea23e0b523b19f57aa0048f79`。源码和归档校验值见[兼容性矩阵](component_compatibility_matrix_zh.md)。
 
 Runtime PR #143 在合并提交 `724ca36e` 采用 v0.12.0。PR 和合并后的 CI 均通过 23/23，
 包含已发布包的消费者检查。ABI3 和 ABI4 分别保留兼容 CI。跟踪式计算样式复用仍需显式选择。

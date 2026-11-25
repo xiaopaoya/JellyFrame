@@ -1,6 +1,6 @@
 # Render Core Release And Extraction Policy
 
-> Last updated: 2026-11-20; Applies to: 0.6.0-dev.
+> Last updated: 2026-11-25; Applies to: 0.6.0-dev.
 
 This policy governs the transition from the current monorepo boundary to an independently governed `jellyframe-render-core` project. It complements [engine_architecture.md](engine_architecture.md); it is not a user-facing app compatibility promise. The coordinated ABI4 integration and legacy text API retirement work is tracked in the [migration plan](render_core_abi4_migration_plan.md).
 
@@ -17,8 +17,8 @@ This policy governs the transition from the current monorepo boundary to an inde
 The history-preserving `xiaopaoya/JellyFrame-Render-Core` repository retains
 the existing license and contributor history. Its first signed `v0.6.0`
 release established the deterministic source archive and SHA-256 sidecar.
-The signed v0.12.1 / ABI11 release points to
-`bad06c5c20919725e8d3ddd5a985949afd328cf3`. Source and archive digests are
+The signed v0.13.0 / ABI11 release points to
+`0861c451ff5cb81ea23e0b523b19f57aa0048f79`. Source and archive digests are
 recorded in the [compatibility matrix](component_compatibility_matrix.md).
 
 Runtime PR #143 adopted v0.12.0 at merge commit `724ca36e`. Its PR and
