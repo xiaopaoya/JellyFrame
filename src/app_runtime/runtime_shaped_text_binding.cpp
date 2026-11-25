@@ -125,6 +125,16 @@ runtime_shaped::Status RuntimeShapedTextBinding::layout_document(const LayoutEng
     return engine.layout_shaped(root, width, height, options, work, output, usage);
 #endif
 }
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+runtime_shaped::Status RuntimeShapedTextBinding::layout_inline_document(const LayoutEngine& engine,
+    const RenderObject& root, int width, int height, const runtime_shaped::LayoutOptions& requested,
+    std::uint64_t& work, runtime_shaped::LayoutResult& output) const noexcept {
+    auto options = requested;
+    options.binding = binding_;
+    options.paragraph.shaping = bounded_limits(options.paragraph.shaping, limits_);
+    return engine.layout_contextual_inline(root, width, height, options, work, output);
+}
+#endif
 #endif
 
 runtime_shaped::Status RuntimeShapedTextBinding::validate_packet(

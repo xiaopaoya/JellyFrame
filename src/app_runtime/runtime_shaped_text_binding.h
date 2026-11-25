@@ -11,6 +11,7 @@
 #include "render_core/contextual_text_paragraph.h"
 #if JELLYFRAME_RENDER_CORE_CONTEXTUAL_LAYOUT_ENABLED
 #include "render_core/contextual_text_layout.h"
+#include "render_core/input.h"
 #endif
 #define JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API 1
 #define JELLYFRAME_RUNTIME_SHAPED_TEXT_API 1
@@ -41,6 +42,15 @@
 #define JELLYFRAME_RUNTIME_SHAPED_TEXT_API 0
 #define JELLYFRAME_RUNTIME_SHAPED_PARAGRAPH_API 0
 #define JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API 0
+#endif
+
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API && \
+    defined(JELLYFRAME_CONTEXTUAL_SHARED_INLINE_API_VERSION) && JELLYFRAME_CONTEXTUAL_SHARED_INLINE_API_VERSION == 1 && \
+    defined(JELLYFRAME_CONTEXTUAL_HIT_TEST_API_VERSION) && JELLYFRAME_CONTEXTUAL_HIT_TEST_API_VERSION == 1 && \
+    defined(JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION) && JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION == 1
+#define JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API 1
+#else
+#define JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API 0
 #endif
 
 namespace jellyframe {
@@ -128,6 +138,11 @@ public:
     runtime_shaped::Status layout_document(const LayoutEngine&, const RenderObject&,
         int width, int height, const runtime_shaped::LayoutOptions&, std::uint64_t& work,
         runtime_shaped::LayoutResult&, runtime_shaped::LayoutUsage* usage = nullptr) const noexcept;
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+    runtime_shaped::Status layout_inline_document(const LayoutEngine&, const RenderObject&,
+        int width, int height, const runtime_shaped::LayoutOptions&, std::uint64_t& work,
+        runtime_shaped::LayoutResult&) const noexcept;
+#endif
 #endif
     runtime_shaped::Status validate_packet(std::string_view packet,
                                         std::uint64_t& work) const noexcept;

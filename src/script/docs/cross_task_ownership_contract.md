@@ -43,6 +43,15 @@ to the worker through `set_ui_accepted_frame_sequence()` and passes each input's
 capture-time frame sequence to `post_script_task_input()`. The worker drops queued
 input from before the replacement frame and touch releases without a fresh press.
 
+With `ScriptTaskWorkerRuntimeOptions::contextual_inline_input`, the Worker
+publishes shaped frame v12 with a private Core capture for glyph hit testing.
+The port reports successful presentation and tags input at acquisition using
+the same sequence. The Worker dispatches new presses against the acknowledged
+capture while its DOM version is current. A queued release may finish against
+the capture already selected by its press. Failed publication never grants
+input authority to the draft. The WS147 acceptance switch is
+`CONFIG_JELLYFRAME_ESP32S3_INSTALLED_CONTEXTUAL_INLINE_INPUT`.
+
 The supervisor is also the only owner of `AppRuntimeHost`, host queues and handle table. Service
 requests use a dedicated worker-to-supervisor mailbox and completions use the worker input mailbox;
 frame traffic never shares either service consumer. Both directions are bounded value packets.

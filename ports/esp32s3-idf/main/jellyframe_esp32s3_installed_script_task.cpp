@@ -200,6 +200,9 @@ jellyframe::ScriptTaskWorkerRuntimeOptions worker_options(const InstalledBundleS
     options.prepare_document_user = const_cast<InstalledBundleScriptSession*>(&state);
     options.viewport = {0, 0, state.width, state.height};
     options.frame_codec = frame_codec_options(state.text_pipeline);
+#if defined(CONFIG_JELLYFRAME_ESP32S3_INSTALLED_CONTEXTUAL_INLINE_INPUT) && CONFIG_JELLYFRAME_ESP32S3_INSTALLED_CONTEXTUAL_INLINE_INPUT
+    options.contextual_inline_input = state.text_pipeline.status == jellyframe::AppInstalledTextPipelineStatus::Ready;
+#endif
     options.input_codec = {32, 256};
     options.service_request_codec = {64};
     options.text_system = state.host != nullptr

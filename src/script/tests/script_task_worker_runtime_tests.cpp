@@ -1526,6 +1526,131 @@ void worker_shaped_dom_layout_and_input() {
     }
 }
 
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+void worker_contextual_inline_input_uses_presented_frame() {
+    runtime_test_shaped_text::Assets assets("regular", 7410);
+    const auto binding = runtime_test_shaped_text::create_binding(assets);
+    runtime_test_fonts::Fonts fonts;
+    auto supervisor = make_frame_backpressure_supervisor();
+    const auto session = supervisor.begin(741, fonts.catalog, {}, binding);
+    auto options = runtime_options_v3();
+    options.frame_codec.version = kRuntimeShapedFrameVersion;
+    options.frame_codec.max_groups = 32;
+    options.text_catalog = fonts.catalog;
+    options.shaped_text_binding = binding;
+    options.contextual_inline_input = true;
+    const std::string html = "<body><div id='run'>of<span id='ink'>fice</span></div></body>";
+    const std::string css = "*{margin:0;padding:0;font-weight:400}div{width:140px;font-size:16px}"
+        "#run:active{background:#ffeeaa}";
+    ScriptTaskWorkerRuntime worker(session, options);
+    check(worker.initialize(supervisor, html, css) == ScriptTaskWorkerRuntimeInitStatus::Accepted,
+          "shared inline initializes with explicit input opt-in");
+    check(worker.eval_with_supervisor(supervisor,
+        "var clicks=0;var ink=document.getElementById('ink');"
+        "ink.addEventListener('click',function(){clicks++;});").ok, "register span callback");
+    check(worker.publish_frame(supervisor).accepted(), "publish shared inline frame");
+    ScriptTaskAcceptedAppFrame initial, pressed, released, replacement;
+    const auto take = [&](ScriptTaskAcceptedAppFrame& frame) {
+        check(take_script_task_app_frame(supervisor, session, options.frame_codec, frame) ==
+            ScriptTaskAppFrameTakeStatus::Accepted, "take shared inline frame");
+    };
+    take(initial);
+
+    auto dom = HtmlParser{}.parse(html);
+    StyleResolver styles(CssParser{}.parse(css));
+    auto render = RenderTreeBuilder(styles).build(*dom);
+    LayoutEngine engine(styles);
+    auto work = binding->work_limit();
+    runtime_shaped::LayoutResult layout;
+    runtime_shaped::LayerCapture capture;
+    check(binding->layout_inline_document(engine, *render, 160, 100, options.shaped_layout, work, layout) ==
+          runtime_shaped::Status::ok &&
+          LayerTreeBuilder{}.build_contextual(layout, runtime_shaped::TextHitCaptureOptions{}, capture),
+          "independent Core capture locates the shared glyph");
+    check(initial.frame().shaped_text.size() == 1 &&
+          initial.frame().shaped_text.front().packet == layout.paragraphs().front().paragraph.lines().front().packet,
+          "worker transports one jointly shaped line");
+    const auto& hits = capture.text_hit_fragments();
+    const auto shared = std::adjacent_find(hits.begin(), hits.end(), [](const auto& left, const auto& right) {
+        return left.owner_index == 0 && right.owner_index == 1 &&
+               left.cluster_index == right.cluster_index && left.glyph_index == right.glyph_index;
+    });
+    check(shared != hits.end(), "fixture includes a ligature spanning both owners");
+    const Rect ink = shared->ink;
+    std::uint32_t input_sequence = 0;
+    const auto send = [&](ScriptTaskInputKind kind, std::uint32_t frame) {
+        check(post_script_task_input(supervisor, session, ++input_sequence,
+              {kind, ink.x, ink.y, 0, 0, 0, kind == ScriptTaskInputKind::PointerDown ? 1 : 0, 0, 0, {}},
+              options.input_codec, frame).accepted(), "post tagged contextual input");
+        return worker.process_one(supervisor);
+    };
+    check(!send(ScriptTaskInputKind::PointerDown, initial.sequence()).input_accepted,
+          "publication alone grants no input authority");
+    worker.set_ui_accepted_frame_sequence(initial.sequence());
+    check(!send(ScriptTaskInputKind::PointerDown, 0).input_accepted, "untagged input is refused");
+    check(worker.publish_frame(supervisor).accepted(), "fill the frame mailbox");
+    const auto rejected_publish = send(ScriptTaskInputKind::PointerDown, initial.sequence());
+    check(rejected_publish.input_accepted && !rejected_publish.frame_published && !rejected_publish.fatal,
+          "press handling survives a full frame mailbox");
+    check(send(ScriptTaskInputKind::PointerUp, initial.sequence()).input_accepted,
+          "failed publication leaves the displayed geometry usable for release");
+    take(pressed);
+    check(worker.process_one(supervisor).frame_published, "worker retries the current frame after backpressure");
+    take(released);
+    check(worker.eval_with_supervisor(supervisor, "clicks").value == "1",
+          "one click arrives despite publication failure");
+    worker.set_ui_accepted_frame_sequence(released.sequence());
+    const auto displayed_after_retry = released.sequence();
+    const auto down = send(ScriptTaskInputKind::PointerDown, displayed_after_retry);
+    check(down.input_accepted && down.frame_published && !down.dom_mutated,
+          "active styling publishes a frame while preserving the source DOM version");
+    take(pressed);
+    check(post_script_task_input(supervisor, session, input_sequence,
+          {ScriptTaskInputKind::PointerDown, ink.x, ink.y, 0, 0, 0, 1, 0, 0, {}},
+          options.input_codec, displayed_after_retry).accepted() &&
+          !worker.process_one(supervisor).input_accepted,
+          "replayed pointer packet does not restart the active gesture");
+    check(send(ScriptTaskInputKind::PointerUp, displayed_after_retry).input_accepted,
+          "release can still use the displayed frame while the press frame is pending");
+    take(released);
+    check(worker.eval_with_supervisor(supervisor, "clicks").value == "2",
+          "release on the ligature dispatched one click to the span");
+    worker.set_ui_accepted_frame_sequence(released.sequence());
+    check(send(ScriptTaskInputKind::PointerDown, released.sequence()).frame_published,
+          "a second press publishes active styling");
+    take(pressed);
+    worker.set_ui_accepted_frame_sequence(pressed.sequence());
+    check(send(ScriptTaskInputKind::PointerUp, pressed.sequence()).frame_published,
+          "release also dispatches after the press frame is presented");
+    take(released);
+    check(worker.eval_with_supervisor(supervisor, "clicks").value == "3",
+          "the active span survives the acknowledged frame switch");
+    worker.set_ui_accepted_frame_sequence(released.sequence());
+    const auto acquired_release = released.sequence();
+    check(send(ScriptTaskInputKind::PointerDown, acquired_release).frame_published,
+          "press queues its next frame");
+    take(pressed);
+    worker.set_ui_accepted_frame_sequence(pressed.sequence());
+    check(send(ScriptTaskInputKind::PointerUp, acquired_release).frame_published,
+          "a queued release retains the already admitted press capture");
+    take(released);
+    check(worker.eval_with_supervisor(supervisor, "clicks").value == "4",
+          "a presentation racing with the queued release does not lose the click");
+    worker.set_ui_accepted_frame_sequence(released.sequence());
+    check(worker.eval_with_supervisor(supervisor, "ink.textContent='A';").ok,
+          "source mutation builds a replacement");
+    check(!send(ScriptTaskInputKind::PointerDown, released.sequence()).input_accepted,
+          "a DOM edit invalidates input against displayed old source geometry");
+    take(replacement);
+    worker.set_ui_accepted_frame_sequence(replacement.sequence());
+    check(!send(ScriptTaskInputKind::PointerDown, released.sequence()).input_accepted,
+          "an earlier acknowledged frame no longer admits input");
+    worker.stop();
+    check(initial.shaped_text_binding() == binding && initial.frame().shaped_text.size() == 1,
+          "accepted frame retains its authenticated shaped data after worker stop");
+}
+#endif
+
 void worker_shaped_dom_refuses_incomplete_paths() {
     runtime_test_shaped_text::Assets assets("regular", 7402);
     const auto binding = runtime_test_shaped_text::create_binding(assets);
@@ -2263,6 +2388,17 @@ void worker_scalar_v13_owns_nbsp_and_natural_images() {
 
 int script_task_worker_runtime_tests_main() {
     try {
+#if !JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+        {
+            auto supervisor = make_supervisor();
+            auto options = runtime_options();
+            options.contextual_inline_input = true;
+            ScriptTaskWorkerRuntime worker(supervisor.begin(742), options);
+            check(worker.initialize(supervisor, "<body></body>", "") ==
+                  ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration,
+                  "explicit contextual inline input fails closed on older or disabled Core builds");
+        }
+#endif
         worker_owner_teardown_during_callbacks();
         worker_owner_admission_refusal();
         worker_initialization_admission_preserves_session();
@@ -2317,6 +2453,9 @@ int script_task_worker_runtime_tests_main() {
 #if JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
         if (script_task_app_frame_codec_supports_version(kRuntimeShapedFrameVersion)) {
             worker_shaped_dom_layout_and_input();
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+            worker_contextual_inline_input_uses_presented_frame();
+#endif
             worker_shaped_dom_refuses_incomplete_paths();
             std::cout << "shaped DOM worker v" << unsigned(kRuntimeShapedFrameVersion)
                       << ": Core packet/pixel oracle, JS mutation, pointer input and retained lifetime passed\n";
