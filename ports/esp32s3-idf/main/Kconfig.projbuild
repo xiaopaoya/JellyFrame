@@ -251,6 +251,14 @@ config JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
         disabled for ordinary firmware so no script-task mailbox, lease
         registry, bridge, or JavaScript engine is linked.
 
+config JELLYFRAME_ESP32S3_INSTALLED_CONTEXTUAL_INLINE_INPUT
+    bool "Enable shared contextual inline layout and input for installed shaped apps"
+    depends on JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME
+    default n
+    help
+        Use the presented contextual frame for glyph hit testing in shaped
+        apps. Requires a Render Core build with contextual inline input.
+
 config JELLYFRAME_ESP32S3_INSTALLED_SCRIPT_FRAME_V4_MALFORMED_PROBE
     bool "Inject one malformed v3/v4 installed ScriptTask frame"
     depends on JELLYFRAME_ESP32S3_ENABLE_SCRIPT_TASK_RUNTIME

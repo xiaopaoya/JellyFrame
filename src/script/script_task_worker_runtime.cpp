@@ -11,6 +11,7 @@
 #include "app_runtime/script_task_worker_inbox.h"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <new>
 #include <stdexcept>
@@ -184,6 +185,11 @@ public:
     void rebuild_after_mutation(ScriptTaskSupervisor& supervisor, ScriptTaskWorkerRuntimeStepResult& result);
     void release_pipeline();
     bool admits_input(std::uint32_t frame_sequence) const;
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+    void acknowledge_contextual_frame(std::uint32_t frame_sequence);
+    bool select_contextual_input_frame(std::uint32_t frame_sequence, ScriptTaskInputKind kind);
+    void record_contextual_publication(std::uint32_t frame_sequence);
+#endif
     bool admits_recovered_gesture(const ScriptTaskInputEvent& input);
     bool has_dirty_document() const;
     bool supervisor_matches(const ScriptTaskSupervisor& supervisor) const;
@@ -230,6 +236,23 @@ public:
 #if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
     runtime_shaped::LayoutResult shaped_layout_;
     std::vector<std::uint32_t> shaped_positions_;
+#endif
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+    struct ContextualFrames {
+        struct Published {
+            std::uint32_t sequence = 0;
+            runtime_shaped::LayerCapture capture;
+        };
+        runtime_shaped::LayerCapture draft;
+        runtime_shaped::LayerCapture input;
+        std::uint32_t input_frame_sequence = 0;
+        // The WS147 port can have four queued leases, one frame being
+        // presented and one already displayed. Input outside the retained
+        // window is rejected even if the port acknowledges that sequence.
+        std::array<Published, 6> published;
+        std::size_t next_slot = 0;
+    };
+    std::unique_ptr<ContextualFrames> contextual_frames_;
 #endif
     std::unique_ptr<InputController> input_controller_;
     ScriptTaskAppFramePublisher frame_publisher_;
@@ -299,6 +322,9 @@ void ScriptTaskWorkerRuntime::State::drain() {
 
 void ScriptTaskWorkerRuntime::State::release_pipeline() {
     input_controller_.reset();
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+    contextual_frames_.reset();
+#endif
     layer_tree_.reset();
 #if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
     shaped_layout_ = {};
@@ -384,6 +410,12 @@ ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::State::initialize(std
     if (fatal()) return ScriptTaskWorkerRuntimeInitStatus::Fatal;
     if (initialized_) return ScriptTaskWorkerRuntimeInitStatus::AlreadyInitialized;
     if (!session_.valid()) return ScriptTaskWorkerRuntimeInitStatus::InvalidSession;
+    if (options_.contextual_inline_input &&
+        (!JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API ||
+         options_.frame_codec.version != kRuntimeShapedFrameVersion)) {
+        set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
+        return ScriptTaskWorkerRuntimeInitStatus::InvalidConfiguration;
+    }
     if (uses_owned_frame_resources(options_.frame_codec.version)) {
 #if JELLYFRAME_SCRIPT_TASK_TEXT_RESOURCE_API
         if (!options_.text_catalog ||
@@ -545,7 +577,11 @@ ScriptEvaluationResult ScriptTaskWorkerRuntime::State::eval_with_supervisor(
 ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::State::publish_frame(ScriptTaskSupervisor& supervisor) {
     ScriptTaskAppFramePublishResult result;
     ++telemetry_.frame_publish_attempts;
-    if (!initialized_ || fatal() || !layer_tree_ || !supervisor_matches(supervisor)) {
+    const auto* frame_tree = layer_tree_.get();
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+    if (contextual_frames_) frame_tree = contextual_frames_->draft.layer_tree();
+#endif
+    if (!initialized_ || fatal() || !frame_tree || !supervisor_matches(supervisor)) {
         if (initialized_ && !fatal() && !supervisor_matches(supervisor))
             set_fatal(ScriptTaskWorkerRuntimeFatalReason::ResourceMismatch);
         ++telemetry_.frame_publish_rejections;
@@ -555,7 +591,7 @@ ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::State::publish_frame(Sc
     ScriptTaskAppFrame frame;
     if (options_.frame_codec.version == kRuntimeShapedFrameVersion) {
 #if JELLYFRAME_RUNTIME_SHAPED_TEXT_API && JELLYFRAME_RUNTIME_SHAPED_LAYOUT_API
-        const auto status = make_script_task_shaped_frame(*layer_tree_, shaped_layout_, shaped_positions_,
+        const auto status = make_script_task_shaped_frame(*frame_tree, shaped_layout_, shaped_positions_,
             options_.viewport, options_.frame_codec, frame);
         if (status != ScriptTaskAppFrameCodecStatus::Accepted) {
             ++telemetry_.frame_publish_rejections;
@@ -579,6 +615,9 @@ ScriptTaskAppFramePublishResult ScriptTaskWorkerRuntime::State::publish_frame(Sc
     result = frame_publisher_.publish(supervisor, session_, frame);
     if (result.accepted()) {
         telemetry_.published_frame_seq = result.lease.frame_sequence;
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+        if (contextual_frames_) record_contextual_publication(result.lease.frame_sequence);
+#endif
         if (recovering_frame_) {
             recovery_frame_sequence_ = result.lease.frame_sequence;
             recovering_frame_ = false;
@@ -665,18 +704,27 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::State::process_one(Sc
         ++telemetry_.rejected_input_packets;
         return result;
     }
-    if (!admits_input(packet.input_frame_sequence)) {
+    ScriptTaskInputEvent input;
+    if (decode_script_task_input(packet.payload, options_.input_codec, input) != ScriptTaskInputCodecStatus::Accepted) {
+        ++telemetry_.rejected_input_packets;
+        return result;
+    }
+    bool input_frame_admitted = admits_input(packet.input_frame_sequence);
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+    if (contextual_frames_) {
+        const auto last_input = telemetry_.input_packet_seq;
+        input_frame_admitted = packet.sequence != 0 && packet.sequence != last_input &&
+            (last_input == 0 || frame_at_or_after(packet.sequence, last_input)) &&
+            select_contextual_input_frame(packet.input_frame_sequence, input.kind);
+    }
+#endif
+    if (!input_frame_admitted) {
         ++telemetry_.rejected_input_packets;
         if (pending_frame_publication_) {
             result.frame = publish_frame(supervisor);
             result.frame_published = result.frame.accepted();
         }
         return finish(result);
-    }
-    ScriptTaskInputEvent input;
-    if (decode_script_task_input(packet.payload, options_.input_codec, input) != ScriptTaskInputCodecStatus::Accepted) {
-        ++telemetry_.rejected_input_packets;
-        return result;
     }
     if (recovery_frame_sequence_ != 0 && !admits_recovered_gesture(input)) {
         ++telemetry_.rejected_input_packets;
@@ -685,7 +733,24 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::State::process_one(Sc
     ++telemetry_.input_packets;
     telemetry_.input_packet_seq = packet.sequence;
     const DomDirtyFlags before = subtree_dirty_flags(*document_owner_.root());
-    result.input_status = dispatch_script_task_input(*input_controller_, input).status;
+    bool interaction_style_changed = false;
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+    if (contextual_frames_) {
+        const auto* hovered = input_controller_->hovered_node();
+        const auto* active = input_controller_->active_node();
+        const auto* focused = input_controller_->focused_node();
+        const auto hints = style_resolver_->interaction_invalidation_hints();
+        result.input_status = dispatch_script_task_input(*input_controller_, input, contextual_frames_->input).status;
+        if (!stopped_) {
+            interaction_style_changed = (hints.hover && input_controller_->hovered_node() != hovered) ||
+                (hints.active && input_controller_->active_node() != active) ||
+                (hints.focus && input_controller_->focused_node() != focused);
+        }
+    } else
+#endif
+    {
+        result.input_status = dispatch_script_task_input(*input_controller_, input).status;
+    }
     result.input_accepted = result.input_status == ScriptTaskInputDispatchStatus::Accepted;
     if (stopped_) return result;
     if (consume_callback_failure()) {
@@ -696,6 +761,13 @@ ScriptTaskWorkerRuntimeStepResult ScriptTaskWorkerRuntime::State::process_one(Sc
     if (result.dom_mutated) {
         ++telemetry_.js_mutation_seq;
         rebuild_after_mutation(supervisor, result);
+    } else if (interaction_style_changed) {
+        if (!rebuild_pipeline()) {
+            set_fatal(ScriptTaskWorkerRuntimeFatalReason::BudgetExceeded);
+            return finish(result);
+        }
+        result.frame = publish_frame(supervisor);
+        result.frame_published = result.frame.accepted();
     }
     return finish(result);
 }
@@ -829,6 +901,63 @@ bool ScriptTaskWorkerRuntime::State::admits_input(std::uint32_t frame_sequence) 
            frame_at_or_after(accepted, frame_sequence);
 }
 
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+void ScriptTaskWorkerRuntime::State::acknowledge_contextual_frame(std::uint32_t sequence) {
+    if (!sequence || !telemetry_.published_frame_seq ||
+        !frame_at_or_after(telemetry_.published_frame_seq, sequence) ||
+        (telemetry_.ui_accepted_frame_seq != 0 &&
+         (sequence == telemetry_.ui_accepted_frame_seq ||
+          !frame_at_or_after(sequence, telemetry_.ui_accepted_frame_seq)))) return;
+    telemetry_.ui_accepted_frame_seq = sequence;
+    for (auto& frame : contextual_frames_->published) {
+        if (!frame_at_or_after(frame.sequence, sequence)) frame = {};
+    }
+}
+
+bool ScriptTaskWorkerRuntime::State::select_contextual_input_frame(std::uint32_t sequence,
+                                                                  ScriptTaskInputKind kind) {
+    if (sequence == 0) return false;
+    if (sequence != telemetry_.ui_accepted_frame_seq) {
+        // A release may have been queued just before a newer presentation
+        // was acknowledged. Complete that gesture using the live capture
+        // already selected by its press.
+        return kind == ScriptTaskInputKind::PointerUp && input_controller_ && input_controller_->active_node() &&
+               sequence == contextual_frames_->input_frame_sequence &&
+               contextual_frames_->input.source_is_current();
+    }
+    for (const auto& frame : contextual_frames_->published) {
+        if (frame.sequence != sequence || !frame.capture.source_is_current()) continue;
+        if (frame.capture.layer_tree() != contextual_frames_->input.layer_tree()) {
+            // The resolver has its own interaction generation. Rebuilding for a
+            // pseudo-class must not invalidate the on-screen DOM capture.
+            auto controller = std::make_unique<InputController>(*frame.capture.layer_tree(),
+                InteractionInvalidationOptions{false, false, false}, false);
+            if (input_controller_) {
+                const auto* active = contextual_frames_->input.source_is_current()
+                    ? input_controller_->active_node() : nullptr;
+                controller->set_interaction_state(input_controller_->hovered_node(),
+                    active, input_controller_->focused_node(), frame.capture);
+            }
+            input_controller_ = std::move(controller);
+            contextual_frames_->input = frame.capture;
+        }
+        contextual_frames_->input_frame_sequence = sequence;
+        return true;
+    }
+    return false;
+}
+
+void ScriptTaskWorkerRuntime::State::record_contextual_publication(std::uint32_t sequence) {
+    auto& frames = *contextual_frames_;
+    if (frames.published[frames.next_slot].sequence != 0 &&
+        frames.published[frames.next_slot].sequence == telemetry_.ui_accepted_frame_seq) {
+        frames.next_slot = (frames.next_slot + 1) % frames.published.size();
+    }
+    frames.published[frames.next_slot] = {sequence, frames.draft};
+    frames.next_slot = (frames.next_slot + 1) % frames.published.size();
+}
+#endif
+
 bool ScriptTaskWorkerRuntime::State::admits_recovered_gesture(const ScriptTaskInputEvent& input) {
     // A touch can span the rejected and recovered frames. Never dispatch its
     // tail to the replacement DOM if its down event was dropped.
@@ -931,6 +1060,13 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
     runtime_shaped::LayoutResult shaped_layout;
     if (options_.frame_codec.version == kRuntimeShapedFrameVersion) {
         auto work = std::min(options_.shaped_text_binding->work_limit(), options_.shaped_layout.paragraph.shaping.work);
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+        if (options_.contextual_inline_input) {
+            if (options_.shaped_text_binding->layout_inline_document(layout_engine, *render_tree,
+                    options_.viewport.width, options_.viewport.height, options_.shaped_layout, work,
+                    shaped_layout) != runtime_shaped::Status::ok) return false;
+        } else
+#endif
         if (options_.shaped_text_binding->layout_document(layout_engine, *render_tree,
                 options_.viewport.width, options_.viewport.height, options_.shaped_layout, work,
                 shaped_layout) != runtime_shaped::Status::ok) return false;
@@ -997,6 +1133,19 @@ bool ScriptTaskWorkerRuntime::State::rebuild_pipeline() {
     runtime_shaped::LayerCapture shaped_capture;
     if (options_.frame_codec.version == kRuntimeShapedFrameVersion) {
 #if JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+        if (options_.contextual_inline_input) {
+            if (!layer_builder.build_contextual(shaped_layout, runtime_shaped::TextHitCaptureOptions{},
+                                               shaped_capture)) return false;
+            if (!contextual_frames_) contextual_frames_ = std::make_unique<ContextualFrames>();
+            shaped_positions_ = shaped_capture.after_command_counts();
+            shaped_layout_ = std::move(shaped_layout);
+            contextual_frames_->draft = std::move(shaped_capture);
+            render_tree_ = std::move(render_tree);
+            pending_frame_publication_ = true;
+            return true;
+        }
+#endif
         if (!layer_builder.build_contextual(shaped_layout, shaped_capture)) return false;
         layer_tree=LayerNodePtr(new LayerNode);
         layer_tree->type=LayerType::Root;layer_tree->reasons=LayerReasonRoot;
@@ -1107,7 +1256,14 @@ bool ScriptTaskWorkerRuntime::service_gateway_available() const {
 }
 void ScriptTaskWorkerRuntime::set_ui_accepted_frame_sequence(std::uint32_t sequence) {
     OperationPin pin(state_);
-    if (pin) pin->telemetry_.ui_accepted_frame_seq = sequence;
+    if (!pin) return;
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+    if (pin->contextual_frames_) {
+        pin->acknowledge_contextual_frame(sequence);
+        return;
+    }
+#endif
+    pin->telemetry_.ui_accepted_frame_seq = sequence;
 }
 
 ScriptTaskWorkerRuntimeInitStatus ScriptTaskWorkerRuntime::initialize(std::string_view html, std::string_view css) {

@@ -22,23 +22,43 @@ bool key_code(std::uint32_t value, KeyCode& output) {
     }
     return false;
 }
-}
 
-ScriptTaskInputDispatchResult dispatch_script_task_input(InputController& controller,
-                                                         const ScriptTaskInputEvent& input) {
+ScriptTaskInputDispatchResult dispatch(InputController& controller, const ScriptTaskInputEvent& input
+#if defined(JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION) && JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION == 1
+    , const contextual_text::LayerCapture* capture
+#endif
+) {
     const InputModifiers input_modifiers = modifiers(input.modifiers);
+    const PointerInput pointer{input.x, input.y, button(input.button), input.buttons, input_modifiers};
+    const WheelInput wheel{input.x, input.y, input.delta_x, input.delta_y, input_modifiers};
     switch (input.kind) {
     case ScriptTaskInputKind::PointerMove:
-        controller.pointer_move({input.x, input.y, button(input.button), input.buttons, input_modifiers});
+#if defined(JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION) && JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION == 1
+        if (capture) controller.pointer_move(pointer, *capture);
+        else
+#endif
+        controller.pointer_move(pointer);
         return {ScriptTaskInputDispatchStatus::Accepted, true};
     case ScriptTaskInputKind::PointerDown:
-        controller.pointer_down({input.x, input.y, button(input.button), input.buttons, input_modifiers});
+#if defined(JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION) && JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION == 1
+        if (capture) controller.pointer_down(pointer, *capture);
+        else
+#endif
+        controller.pointer_down(pointer);
         return {ScriptTaskInputDispatchStatus::Accepted, true};
     case ScriptTaskInputKind::PointerUp:
-        controller.pointer_up({input.x, input.y, button(input.button), input.buttons, input_modifiers});
+#if defined(JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION) && JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION == 1
+        if (capture) controller.pointer_up(pointer, *capture);
+        else
+#endif
+        controller.pointer_up(pointer);
         return {ScriptTaskInputDispatchStatus::Accepted, true};
     case ScriptTaskInputKind::Wheel:
-        controller.wheel({input.x, input.y, input.delta_x, input.delta_y, input_modifiers});
+#if defined(JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION) && JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION == 1
+        if (capture) controller.wheel(wheel, *capture);
+        else
+#endif
+        controller.wheel(wheel);
         return {ScriptTaskInputDispatchStatus::Accepted, true};
     case ScriptTaskInputKind::KeyDown: {
         KeyCode code;
@@ -50,6 +70,23 @@ ScriptTaskInputDispatchResult dispatch_script_task_input(InputController& contro
     }
     return {ScriptTaskInputDispatchStatus::EventRejected, false};
 }
+} // namespace
+
+ScriptTaskInputDispatchResult dispatch_script_task_input(InputController& controller,
+                                                         const ScriptTaskInputEvent& input) {
+#if defined(JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION) && JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION == 1
+    return dispatch(controller, input, nullptr);
+#else
+    return dispatch(controller, input);
+#endif
+}
+
+#if defined(JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION) && JELLYFRAME_CONTEXTUAL_INPUT_CONTROLLER_API_VERSION == 1
+ScriptTaskInputDispatchResult dispatch_script_task_input(InputController& controller,
+    const ScriptTaskInputEvent& input, const contextual_text::LayerCapture& capture) {
+    return dispatch(controller, input, &capture);
+}
+#endif
 
 ScriptTaskInputDispatchResult dispatch_script_task_input_packet(
     InputController& controller,

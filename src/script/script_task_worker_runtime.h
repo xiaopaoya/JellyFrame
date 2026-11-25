@@ -62,6 +62,8 @@ struct ScriptTaskWorkerRuntimeOptions {
     ScriptTaskInputCodecOptions input_codec;
     ScriptTaskServiceRequestCodecOptions service_request_codec;
     const TextSystem* text_system = nullptr;
+    // Requires shaped frame v12 and input tagged with the presented frame sequence.
+    bool contextual_inline_input = false;
     // Synchronous worker-thread preparation before document publication. A
     // refusal rejects initialization; user must outlive initialization.
     bool (*prepare_document)(Node&, void*) = nullptr;
