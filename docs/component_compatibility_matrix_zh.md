@@ -22,7 +22,7 @@
 | JellyFrame App Runtime | 已安装 Render Core package | `0.10.0` / ABI `9` | `verified (host)` | #128 纳入的历史生产锁。[主机资格验证](abi9-paired-qualification.md)覆盖记录中的 ABI9 组合的 full、cropped、off。 |
 | JellyFrame App Runtime | 已安装 Render Core package | `0.12.0` / ABI `11` | `verified (host)` | [PR #143](https://github.com/xiaopaoya/JellyFrame/pull/143) 纳入的历史生产锁。已安装包通过消费者专项、桌面和脚本测试。 |
 | JellyFrame App Runtime | 已安装 Render Core package | `0.12.1` / ABI `11` | `verified (host)` | 上一个生产锁。 |
-| JellyFrame App Runtime | 已安装 Render Core package | `0.13.0` / ABI `11` | `verified (host)` | 当前生产锁候选。full、cropped 和关闭可选特性的已安装包各通过 41/41 项消费者测试。 |
+| JellyFrame App Runtime | 已安装 Render Core package | `0.13.0` / ABI `11` | `verified (host)` | 当前生产锁，由 [PR #159](https://github.com/xiaopaoya/JellyFrame/pull/159) 接纳。full、cropped 和关闭可选特性的已安装包各通过 41/41 项消费者测试；合并后 CI 通过 26/26 项。 |
 | JellyFrame App Runtime | 已安装 Render Core package | 错误版本、ABI 或 source identity | `rejected` | 配置阶段执行精确版本、engine ABI 和 source hash 检查；package 模式不允许偷偷回退到源码 Core。 |
 | App package 预检 | 生成的 Render Core capability profile | schema `1` / 所选 Core engine ABI | `verified` | `package_app.py` 会在读取资源前校验 profile schema、已知 feature ID 和依赖闭包；缺失必需能力族会拒绝 package。 |
 | JellyFrame Script bridge | 源码内 Render Core | `0.6.0-dev` 源码线 | `独立验证` | 构建期选择一个脚本后端；当前实现为 JerryScript，仍是可选的 App Runtime 依赖；这不等于 package-mode scripting 已验证。 |
