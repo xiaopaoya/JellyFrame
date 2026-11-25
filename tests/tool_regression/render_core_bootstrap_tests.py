@@ -14,7 +14,7 @@ SPEC = importlib.util.spec_from_file_location("render_core_bootstrap", SCRIPT)
 BOOTSTRAP = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BOOTSTRAP)
 ROOT_NAME = "jellyframe-render-core-0.10.0"
-LOCKED_ARCHIVE_SHA256 = "ec1773ad7d35b88f5e84903259433a6e5ceb922b6a391caec2cdcf2c453cf1f9"
+LOCKED_ARCHIVE_SHA256 = "dd186659b5aedc184291cb82a5dfb7da87d21b8a64d573103622298838aa3d4b"
 
 
 class RenderCoreBootstrapTests(unittest.TestCase):
@@ -54,9 +54,9 @@ class RenderCoreBootstrapTests(unittest.TestCase):
 
     def test_lock_values_match_current_runtime_pin(self):
         lock = BOOTSTRAP.read_lock(SCRIPT.parents[1] / "cmake/jellyframe_dependency_lock.cmake")
-        self.assertEqual(lock["version"], "0.13.0")
+        self.assertEqual(lock["version"], "0.14.0")
         self.assertEqual(lock["abi"], "11")
-        self.assertEqual(lock["source_hash"], "290ff2ded3619d8be23e1320ad9530c07c81593cd5b94a8ff25faccb745e4dfd")
+        self.assertEqual(lock["source_hash"], "398f427102fdc9c4694025a65c07ee5430a083e72fb563449c10571e9046f480")
 
         workflow = (SCRIPT.parents[1] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertRegex(workflow, rf'RELEASED_RENDER_CORE_VERSION: "{lock["version"]}"')

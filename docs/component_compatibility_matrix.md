@@ -22,8 +22,9 @@ build artifact may consume which other artifact.
 | JellyFrame App Runtime | installed Render Core package | `0.9.0` / ABI `4` | `verified` | Historical production lock from #116 through #127. The ABI4 CI lane retains its own exact lock. |
 | JellyFrame App Runtime | installed Render Core package | `0.10.0` / ABI `9` | `verified (host)` | Historical lock adopted in #128. [Host qualification](abi9-paired-qualification.md) covers full, cropped and off for the recorded ABI9 pair. |
 | JellyFrame App Runtime | installed Render Core package | `0.12.0` / ABI `11` | `verified (host)` | Historical lock adopted in [PR #143](https://github.com/xiaopaoya/JellyFrame/pull/143). The package passed focused consumer, desktop and scripting tests. |
-| JellyFrame App Runtime | installed Render Core package | `0.12.1` / ABI `11` | `verified (host)` | Previous production lock. |
-| JellyFrame App Runtime | installed Render Core package | `0.13.0` / ABI `11` | `verified (host)` | Current production lock, adopted in [PR #159](https://github.com/xiaopaoya/JellyFrame/pull/159). Runtime package consumption passed 41/41 tests for full, cropped and disabled-feature packages; post-merge CI passed 26/26 jobs. |
+| JellyFrame App Runtime | installed Render Core package | `0.12.1` / ABI `11` | `verified (host)` | Earlier production lock. |
+| JellyFrame App Runtime | installed Render Core package | `0.13.0` / ABI `11` | `verified (host)` | Previous production lock, adopted in [PR #159](https://github.com/xiaopaoya/JellyFrame/pull/159). Runtime package consumption passed 41/41 tests for full, cropped and disabled-feature packages; post-merge CI passed 26/26 jobs. |
+| JellyFrame App Runtime | installed Render Core package | `0.14.0` / ABI `11` | `verified (host)` | Full, cropped and off pass 41 installed tests each. The signed scalar route passes 9 tests each. The signed shaped route passes 22 each on full and cropped. |
 | JellyFrame App Runtime | installed Render Core package | wrong version, ABI or source identity | `rejected` | Configure-time exact version, engine-ABI and source-hash checks. No fallback to source Core is allowed in package mode. |
 | App package preflight | generated Render Core capability profile | schema `1` / selected Core engine ABI | `verified` | `package_app.py` validates profile schema, known feature IDs and dependency closure before resources are read; missing required families reject the package. |
 | JellyFrame Script bridge | in-tree Render Core | `0.6.0-dev` source line | `verified separately` | One script backend is selected at build time; the current implementation is JerryScript and remains an optional App Runtime dependency. This does not prove a package-mode scripting build. |
@@ -37,16 +38,16 @@ The Runtime package consumer reads these values from
 `cmake/jellyframe_dependency_lock.cmake`:
 
 ```text
-JELLYFRAME_RENDER_CORE_LOCKED_VERSION = 0.13.0
+JELLYFRAME_RENDER_CORE_LOCKED_VERSION = 0.14.0
 JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI = 11
-JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = 290ff2ded3619d8be23e1320ad9530c07c81593cd5b94a8ff25faccb745e4dfd
+JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = 398f427102fdc9c4694025a65c07ee5430a083e72fb563449c10571e9046f480
 ```
 
 The lock is consumer policy. Core can publish independently; Runtime adopts a
 release through a reviewed lock update, installed-package builds and capability
 profile review. The signed
-[`v0.13.0` release](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.13.0)
-has archive SHA-256 `ec1773ad7d35b88f5e84903259433a6e5ceb922b6a391caec2cdcf2c453cf1f9`.
+[`v0.14.0` release](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.14.0)
+has archive SHA-256 `dd186659b5aedc184291cb82a5dfb7da87d21b8a64d573103622298838aa3d4b`.
 The archive checksum is recorded separately from the source manifest; an
 installed CMake package exposes the source identity only.
 

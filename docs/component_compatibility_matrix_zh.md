@@ -21,8 +21,9 @@
 | JellyFrame App Runtime | 已安装 Render Core package | `0.9.0` / ABI `4` | `verified` | #116 至 #127 的历史生产锁。ABI4 兼容 CI 使用独立的精确锁。 |
 | JellyFrame App Runtime | 已安装 Render Core package | `0.10.0` / ABI `9` | `verified (host)` | #128 纳入的历史生产锁。[主机资格验证](abi9-paired-qualification.md)覆盖记录中的 ABI9 组合的 full、cropped、off。 |
 | JellyFrame App Runtime | 已安装 Render Core package | `0.12.0` / ABI `11` | `verified (host)` | [PR #143](https://github.com/xiaopaoya/JellyFrame/pull/143) 纳入的历史生产锁。已安装包通过消费者专项、桌面和脚本测试。 |
-| JellyFrame App Runtime | 已安装 Render Core package | `0.12.1` / ABI `11` | `verified (host)` | 上一个生产锁。 |
-| JellyFrame App Runtime | 已安装 Render Core package | `0.13.0` / ABI `11` | `verified (host)` | 当前生产锁，由 [PR #159](https://github.com/xiaopaoya/JellyFrame/pull/159) 接纳。full、cropped 和关闭可选特性的已安装包各通过 41/41 项消费者测试；合并后 CI 通过 26/26 项。 |
+| JellyFrame App Runtime | 已安装 Render Core package | `0.12.1` / ABI `11` | `verified (host)` | 历史生产锁。 |
+| JellyFrame App Runtime | 已安装 Render Core package | `0.13.0` / ABI `11` | `verified (host)` | 上一版生产锁，由 [PR #159](https://github.com/xiaopaoya/JellyFrame/pull/159) 接纳。full、cropped 和关闭可选特性的已安装包各通过 41/41 项消费者测试；合并后 CI 通过 26/26 项。 |
+| JellyFrame App Runtime | 已安装 Render Core package | `0.14.0` / ABI `11` | `verified (host)` | full、cropped 和 off 各通过 41 项安装包测试。签名 scalar 各通过 9 项，full 和 cropped 的签名 shaped 各通过 22 项。 |
 | JellyFrame App Runtime | 已安装 Render Core package | 错误版本、ABI 或 source identity | `rejected` | 配置阶段执行精确版本、engine ABI 和 source hash 检查；package 模式不允许偷偷回退到源码 Core。 |
 | App package 预检 | 生成的 Render Core capability profile | schema `1` / 所选 Core engine ABI | `verified` | `package_app.py` 会在读取资源前校验 profile schema、已知 feature ID 和依赖闭包；缺失必需能力族会拒绝 package。 |
 | JellyFrame Script bridge | 源码内 Render Core | `0.6.0-dev` 源码线 | `独立验证` | 构建期选择一个脚本后端；当前实现为 JerryScript，仍是可选的 App Runtime 依赖；这不等于 package-mode scripting 已验证。 |
@@ -35,14 +36,14 @@
 Runtime package consumer 从 `cmake/jellyframe_dependency_lock.cmake` 读取：
 
 ```text
-JELLYFRAME_RENDER_CORE_LOCKED_VERSION = 0.13.0
+JELLYFRAME_RENDER_CORE_LOCKED_VERSION = 0.14.0
 JELLYFRAME_RENDER_CORE_LOCKED_ENGINE_ABI = 11
-JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = 290ff2ded3619d8be23e1320ad9530c07c81593cd5b94a8ff25faccb745e4dfd
+JELLYFRAME_RENDER_CORE_LOCKED_SOURCE_HASH = 398f427102fdc9c4694025a65c07ee5430a083e72fb563449c10571e9046f480
 ```
 
 这份锁是消费者策略。Core 可以独立发布；Runtime 通过独立评审、已安装包构建和能力 profile 核对采用新版本。
-已签名的 [`v0.13.0` 发布](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.13.0)
-的源码归档 SHA-256 为 `ec1773ad7d35b88f5e84903259433a6e5ceb922b6a391caec2cdcf2c453cf1f9`。
+已签名的 [`v0.14.0` 发布](https://github.com/xiaopaoya/JellyFrame-Render-Core/releases/tag/v0.14.0)
+的源码归档 SHA-256 为 `dd186659b5aedc184291cb82a5dfb7da87d21b8a64d573103622298838aa3d4b`。
 归档校验值与 source manifest 分开记录；已安装的 CMake package 只能证明源码身份。
 
 每次配置都会在复制或生成的 profile 旁写出
