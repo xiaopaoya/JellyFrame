@@ -26,6 +26,11 @@ post-merge CI both passed 23/23 checks, including the released-package consumer.
 ABI3 and ABI4 compatibility run in separate lanes. Tracked computed-style
 reuse remains opt-in. [PR #143](https://github.com/xiaopaoya/JellyFrame/pull/143)
 
+Runtime PR #159 adopted the signed Render Core v0.13.0 / ABI11 release at merge
+commit `216a5976`. The exact archive consumer matrix passed 41/41 tests in full,
+cropped and disabled-feature profiles. PR CI and post-merge master CI passed
+26/26 jobs. [PR #159](https://github.com/xiaopaoya/JellyFrame/pull/159)
+
 Runtime adopts a release through an explicit dependency-lock update. CI
 verifies the published archive SHA-256, installs the archive and tests the
 locked package consumer so a monorepo export cannot stand in for the release.
