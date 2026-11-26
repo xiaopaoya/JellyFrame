@@ -446,9 +446,13 @@ void run_installed_bundle_ui(InstalledBundleScriptSession* state) {
     panel.packed_pixel_capacity = pixel_count;
     auto packed_sink = make_rgb565_sink(panel);
     auto region_sink = make_packed_rgb565_sink(panel);
-#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED && JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API
+#if JELLYFRAME_ESP32S3_INSTALLED_TEXT_ENABLED
+    const auto frame_version = installed_text_pipeline_frame_version(state->text_pipeline);
+    const bool partial_frame_supported =
+        (JELLYFRAME_SCRIPT_TASK_CANONICAL_TEXT_API && frame_version == 10) ||
+        (JELLYFRAME_RUNTIME_CONTEXTUAL_TEXT_API && frame_version == jellyframe::kRuntimeShapedFrameVersion);
     const bool partial_enabled = board.profile.id == boards::BoardId::WaveshareEsp32s3TouchLcd147 &&
-        board.hardware_display_ready && installed_text_pipeline_frame_version(state->text_pipeline) == 10;
+        board.hardware_display_ready && board.packed_flush != nullptr && partial_frame_supported;
 #else
     constexpr bool partial_enabled = false;
 #endif
@@ -490,6 +494,9 @@ void run_installed_bundle_ui(InstalledBundleScriptSession* state) {
             if (partial_enabled && previous.valid() &&
                 previous.session() == frame.session() &&
                 previous.text_catalog() == frame.text_catalog() &&
+#if JELLYFRAME_RUNTIME_SHAPED_TEXT_API
+                previous.shaped_text_binding() == frame.shaped_text_binding() &&
+#endif
                 previous.image_provider() == frame.image_provider()) {
                 damage = jellyframe::plan_script_task_group_damage(renderer, previous.frame(), frame.frame());
             }

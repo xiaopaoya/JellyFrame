@@ -244,6 +244,7 @@ int main(int argc,char** argv) {
     options.frame_codec.version=kRuntimeShapedFrameVersion;options.frame_codec.max_groups=64;
     options.input_codec={32,256};
     options.shaped_layout.font_family_hash=selected.font_family_hash;
+    options.contextual_inline_input = mode == "inline_input";
     if (mode=="worker_init_oom") {
         auto measured=std::make_unique<ScriptTaskWorkerRuntime>(session,options);
         allocation_fault::begin();
@@ -409,13 +410,106 @@ int main(int argc,char** argv) {
         ScriptTaskFrameRenderStatus status;
         CHECK(render_installed_core_text_frame(renderer,accepted,pixels,{255,255,255,255},nullptr,0,nullptr,&status));
         CHECK(status==ScriptTaskFrameRenderStatus::Accepted);
-        CHECK(std::any_of(pixels.pixels.begin(),pixels.pixels.end(),[](Color c){return c.r<100 && c.g<100;}));
+        if (mode != "inline_input")
+            CHECK(std::any_of(pixels.pixels.begin(),pixels.pixels.end(),[](Color c){return c.r<100 && c.g<100;}));
         return pixels;
         });
     };
     CHECK(measured("publish",[&] { return worker->publish_frame(supervisor); }).accepted());
     take(initial);
     const auto original=render(initial);
+#if JELLYFRAME_RUNTIME_CONTEXTUAL_INLINE_INPUT_API
+    if (mode == "inline_input") {
+        auto dom = HtmlParser{}.parse(html);
+        StyleResolver styles(CssParser{}.parse(css));
+        auto tree = RenderTreeBuilder(styles).build(*dom);
+        LayoutEngine engine(styles);
+        runtime_shaped::LayoutResult layout;
+        runtime_shaped::LayerCapture capture;
+        auto work = selected.binding->work_limit();
+        CHECK(selected.binding->layout_inline_document(engine, *tree, 172, 320,
+                  options.shaped_layout, work, layout) == runtime_shaped::Status::ok);
+        CHECK(LayerTreeBuilder{}.build_contextual(layout, runtime_shaped::TextHitCaptureOptions{}, capture));
+        const auto& hits = capture.text_hit_fragments();
+        const auto shared = std::adjacent_find(hits.begin(), hits.end(), [](const auto& first, const auto& second) {
+            return first.paragraph_index == second.paragraph_index && first.line_index == second.line_index &&
+                   first.cluster_index == second.cluster_index && first.glyph_index == second.glyph_index &&
+                   first.owner_index == 0 && second.owner_index == 1;
+        });
+        CHECK(shared != hits.end());
+        CHECK(initial.frame().shaped_text.size() == 4);
+        CHECK(original.pixels.back().r == 27 && original.pixels.back().g == 36 && original.pixels.back().b == 51);
+        CHECK(std::any_of(original.pixels.begin() + 30 * 172, original.pixels.begin() + 106 * 172,
+            [](Color pixel) { return pixel.r >= 240 && pixel.g >= 240 && pixel.b >= 240; }));
+
+        const Rect ink = shared->ink;
+        const int x = ink.x + ink.width / 2;
+        const int y = ink.y + ink.height / 2;
+        worker->set_ui_accepted_frame_sequence(initial.sequence());
+        CHECK(post_script_task_input(supervisor, session, 1,
+            {ScriptTaskInputKind::PointerDown, x, y, 0, 0, 0, 1, 0, 0, {}},
+            options.input_codec, initial.sequence()).accepted());
+        const auto down = worker->process_one(supervisor);
+        CHECK(down.input_accepted && down.frame_published && !down.fatal);
+        ScriptTaskAcceptedAppFrame pressed;
+        take(pressed);
+        const auto pressed_pixels = render(pressed);
+        CHECK(!equal(original, pressed_pixels));
+        const auto verify_damage = [&](const ScriptTaskAcceptedAppFrame& previous,
+                                      const ScriptTaskAcceptedAppFrame& current,
+                                      FrameBuffer retained, const FrameBuffer& expected) {
+            const auto damage = plan_script_task_group_damage(renderer, previous.frame(), current.frame());
+            CHECK(damage.kind == ScriptTaskFrameDamageKind::Partial);
+            CHECK(damage.rect.width > 0 && damage.rect.height > 0 && damage.rect.height < 320);
+            CHECK(render_installed_core_text_frame(renderer, current, retained, {255,255,255,255},
+                &damage.rect, 1, nullptr, nullptr));
+            CHECK(equal(retained, expected));
+            std::printf("inline partial update bounds=%d,%d,%d,%d\n",
+                damage.rect.x, damage.rect.y, damage.rect.width, damage.rect.height);
+        };
+        verify_damage(initial, pressed, original, pressed_pixels);
+
+        worker->set_ui_accepted_frame_sequence(pressed.sequence());
+        CHECK(post_script_task_input(supervisor, session, 2,
+            {ScriptTaskInputKind::PointerUp, x, y, 0, 0, 0, 0, 0, 0, {}},
+            options.input_codec, pressed.sequence()).accepted());
+        const auto up = worker->process_one(supervisor);
+        CHECK(up.input_accepted && up.frame_published && !up.fatal);
+        take(changed);
+        CHECK(worker->eval_with_supervisor(supervisor, "count").value == "1");
+        CHECK(changed.frame().shaped_text.size() == 4);
+        CHECK(changed.frame().shaped_text[1].packet == initial.frame().shaped_text[1].packet);
+        CHECK(changed.frame().shaped_text[2].packet == initial.frame().shaped_text[2].packet);
+        CHECK(changed.frame().shaped_text[3].packet != initial.frame().shaped_text[3].packet);
+        const auto control = std::find_if(hits.begin(), hits.end(), [](const auto& fragment) {
+            return fragment.paragraph_index == 2;
+        });
+        CHECK(control != hits.end());
+        worker->set_ui_accepted_frame_sequence(changed.sequence());
+        CHECK(post_script_task_input(supervisor, session, 3,
+            {ScriptTaskInputKind::PointerDown, control->ink.x, control->ink.y, 0, 0, 0, 1, 0, 0, {}},
+            options.input_codec, changed.sequence()).accepted());
+        CHECK(worker->process_one(supervisor).input_accepted);
+        CHECK(post_script_task_input(supervisor, session, 4,
+            {ScriptTaskInputKind::PointerUp, control->ink.x, control->ink.y, 0, 0, 0, 0, 0, 0, {}},
+            options.input_codec, changed.sequence()).accepted());
+        CHECK(worker->process_one(supervisor).input_accepted);
+        CHECK(worker->eval_with_supervisor(supervisor, "count").value == "1");
+        const auto clicked = render(changed);
+        CHECK(!equal(original, clicked));
+        verify_damage(pressed, changed, pressed_pixels, clicked);
+        worker->stop();
+        CHECK(supervisor.begin_teardown(session).session == session);
+        CHECK(supervisor.complete_teardown(session).session == session);
+        CHECK(binding->terminate_current(host, AppTeardownReason::NormalExit).app_instance_id != 0);
+        CHECK(equal(render(initial), original));
+        CHECK(equal(render(changed), clicked));
+        image(fixture / "inline-initial.ppm", original);
+        image(fixture / "inline-clicked.ppm", clicked);
+        std::printf("signed inline input PASS x=%d y=%d bytes=%zu\n", x, y, package_bytes);
+        return 0;
+    }
+#endif
     auto button=compare_direct_core(initial,selected.binding,html,css,original,options.shaped_layout);
     if (mode=="pipeline") image(fixture/"initial.ppm",original);
     std::uint32_t seq=0;

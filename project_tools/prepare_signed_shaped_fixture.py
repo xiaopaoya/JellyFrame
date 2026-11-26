@@ -24,7 +24,8 @@ def sha(data):
 
 
 def build(core_fixtures, font, output, capacity, public_test_signature=False,
-          pipeline='jfsp1-block-v11', candidate_core_version=None, core_abi=4):
+          pipeline='jfsp1-block-v11', candidate_core_version=None, core_abi=4,
+          inline_input=False):
     core_fixtures, font, output = Path(core_fixtures), Path(font), Path(output)
     if output.exists() and (not output.is_dir() or any(output.iterdir())):
         raise ValueError('output already exists; preserve previous package evidence')
@@ -78,6 +79,21 @@ def build(core_fixtures, font, output, capacity, public_test_signature=False,
               "count++;document.getElementById('label').textContent=count%2?'AV office fi 中文':'office AV fi 中 e\\u0301';"
               "document.getElementById('label').style.width=count%2?'104px':'148px';"
               "document.getElementById('button').textContent='NEXT '+count;});")
+    if inline_input:
+        if pipeline != 'jfsp2-block-v12':
+            raise ValueError('inline input fixture requires the contextual text pipeline')
+        html = ('<html><head><link rel="stylesheet" href="/app.css"></head><body>'
+                '<div id="title">INLINE INPUT</div><div id="run">of<span id="owner">fice</span></div>'
+                '<div id="control">AV</div><div id="count">CLICKS 0</div>'
+                '<script src="/app.js"></script></body></html>')
+        css = ('*{margin:0;padding:0;font-weight:400}body{background:#1b2433}'
+               'div{display:block;width:172px;color:#ffffff;font-size:16px;line-height:30px}'
+               '#title{text-align:center}'
+               '#run{line-height:76px;text-align:center;background:#443568;font-size:48px}'
+               '#run:active{background:#265e75}'
+               '#control{line-height:48px;text-align:center;font-size:28px}#count{text-align:center}')
+        script = ("var count=0;document.getElementById('owner').addEventListener('click',function(){"
+                  "document.getElementById('count').textContent='CLICKS '+(++count);});")
     assets.update({'/index.html': html.encode('utf-8'), '/app.css': css.encode(), '/app.js': script.encode()})
     manifest = package_app.read_manifest(ROOT / 'samples/apps/packages/jelly_font_policy')
     manifest['id'] = 'org.jellyframe.signed-test'
@@ -142,10 +158,12 @@ def main():
     parser.add_argument('--text-pipeline',choices=('jfsp1-block-v11','jfsp2-block-v12'),default='jfsp1-block-v11')
     parser.add_argument('--core-abi', type=int, default=4, help='Exact ABI of the Core selected for qualification')
     parser.add_argument('--candidate-core-version',help='Explicit contextual qualification manifest line; production lock unchanged')
+    parser.add_argument('--inline-input', action='store_true',
+                        help='Use the contextual shared ligature and click counter workload')
     args=parser.parse_args()
     try:
         report=build(args.core_fixtures,args.font,args.output,args.max_package_bytes,args.public_test_signature,
-                     args.text_pipeline,args.candidate_core_version,args.core_abi)
+                     args.text_pipeline,args.candidate_core_version,args.core_abi,args.inline_input)
     except (ValueError,OSError,KeyError,struct.error) as error:
         parser.exit(1,f'prepare_signed_shaped_fixture: {error}\n')
     print(json.dumps(report,indent=2))
