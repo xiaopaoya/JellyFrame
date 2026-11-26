@@ -138,6 +138,19 @@ add_test(NAME jfsg_allocation_ledger COMMAND jfsg_allocation_fault_tests)
 foreach(case pipeline reboot tamper capacity resource_budget binding_oom worker_init_oom worker_mutation_oom worker_input_oom worker_fatal_oom resource_cost)
     add_test(NAME jfsg_shaped_${case} COMMAND jfsg_shaped_pipeline_tests ${case} "${fixtures}")
 endforeach()
+if(qualification_contextual AND qualification_core_version VERSION_GREATER_EQUAL "0.14.0")
+    set(inline_fixtures "${fixtures}-inline-input")
+    add_custom_command(OUTPUT "${inline_fixtures}/package-evidence.json"
+        COMMAND ${fixture_command} "${runtime_root}/project_tools/prepare_signed_shaped_fixture.py"
+            --core-fixtures "${JFSG_CORE_FIXTURES_DIR}" --font "${fixture_font}"
+            --text-pipeline "${fixture_pipeline}" --core-abi "${qualification_core_abi}"
+            ${fixture_candidate_args} --inline-input
+            --output "${inline_fixtures}" --max-package-bytes 1744896 --public-test-signature
+        DEPENDS ${fixture_inputs})
+    add_custom_target(jfsg_inline_input_fixture DEPENDS "${inline_fixtures}/package-evidence.json")
+    add_dependencies(jfsg_shaped_pipeline_tests jfsg_inline_input_fixture)
+    add_test(NAME jfsg_shaped_inline_input COMMAND jfsg_shaped_pipeline_tests inline_input "${inline_fixtures}")
+endif()
 add_test(NAME jfsg_vm_fatal_boundary COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/vm_exhaustion_test.py" "$<TARGET_FILE:jfsg_shaped_pipeline_tests>" "${fixtures}")
 set_tests_properties(jfsg_vm_fatal_boundary PROPERTIES TIMEOUT 40)
